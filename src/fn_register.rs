@@ -1,13 +1,13 @@
 use std::any::TypeId;
 
-use crate::any::Any;
-use crate::engine::{Engine, EvalAltResult};
+use crate::any::{Any, Dynamic};
+use crate::engine::{Engine, EvalAltResult, FnCallArgs};
 
 pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN);
 }
 pub trait RegisterBoxFn<FN, ARGS> {
-    fn register_box_fn(&mut self, name: &str, f: FN);
+    fn register_dynamic_fn(&mut self, name: &str, f: FN);
 }
 
 pub struct Ref<A>(A);
@@ -23,14 +23,14 @@ macro_rules! def_register {
         def_register!(imp);
     };
     (imp $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
-        impl<$($par,)* FN, RET> RegisterFn<FN, ($($mark,)*), RET> for Engine
-        where
+        impl<
             $($par: Any + Clone,)*
             FN: Fn($($param),*) -> RET + 'static,
-            RET: Any,
+            RET: Any
+        > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
-                let fun = move |mut args: Vec<&mut dyn Any>| {
+                let fun = move |mut args: FnCallArgs| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
                     if args.len() != count_args!($($par)*) {
@@ -48,19 +48,19 @@ macro_rules! def_register {
                     // Call the user-supplied function using ($clone) to
                     // potentially clone the value, otherwise pass the reference.
                     let r = f($(($clone)($par)),*);
-                    Ok(Box::new(r) as Box<dyn Any>)
+                    Ok(Box::new(r) as Dynamic)
                 };
                 self.register_fn_raw(name.to_owned(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }
         }
 
-        impl<$($par,)* FN> RegisterBoxFn<FN, ($($mark,)*)> for Engine
-        where
+        impl<
             $($par: Any + Clone,)*
-            FN: Fn($($param),*) -> Box<dyn Any> + 'static
+            FN: Fn($($param),*) -> Dynamic + 'static,
+        > RegisterBoxFn<FN, ($($mark,)*)> for Engine
         {
-            fn register_box_fn(&mut self, name: &str, f: FN) {
-                let fun = move |mut args: Vec<&mut dyn Any>| {
+            fn register_dynamic_fn(&mut self, name: &str, f: FN) {
+                let fun = move |mut args: FnCallArgs| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
                     if args.len() != count_args!($($par)*) {

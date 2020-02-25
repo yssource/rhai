@@ -6,13 +6,14 @@ use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub};
 use std::{convert::TryInto, sync::Arc};
 
-use crate::any::{Any, AnyExt};
+use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::call::FunArgs;
 use crate::fn_register::{RegisterBoxFn, RegisterFn};
 use crate::parser::{lex, parse, Expr, FnDef, ParseError, Stmt, AST};
 use fmt::{Debug, Display};
 
-type Array = Vec<Box<dyn Any>>;
+pub type Array = Vec<Dynamic>;
+pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
 
 #[derive(Debug, Clone)]
 pub enum EvalAltResult {
@@ -30,7 +31,7 @@ pub enum EvalAltResult {
     ErrorCantOpenScriptFile(String),
     ErrorMalformedDotExpression,
     LoopBreak,
-    Return(Box<dyn Any>),
+    Return(Dynamic),
 }
 
 impl EvalAltResult {
@@ -131,7 +132,7 @@ pub struct FnSpec {
     args: Option<Vec<TypeId>>,
 }
 
-type IteratorFn = dyn Fn(&Box<dyn Any>) -> Box<dyn Iterator<Item = Box<dyn Any>>>;
+type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 /// Rhai's engine type. This is what you use to run Rhai scripts
 ///
@@ -160,7 +161,7 @@ pub enum FnIntExt {
     Int(FnDef),
 }
 
-pub type FnAny = dyn Fn(Vec<&mut dyn Any>) -> Result<Box<dyn Any>, EvalAltResult>;
+pub type FnAny = dyn Fn(FnCallArgs) -> Result<Dynamic, EvalAltResult>;
 
 /// A type containing information about current scope.
 /// Useful for keeping state between `Engine` runs
@@ -176,7 +177,7 @@ pub type FnAny = dyn Fn(Vec<&mut dyn Any>) -> Result<Box<dyn Any>, EvalAltResult
 /// ```
 ///
 /// Between runs, `Engine` only remembers functions when not using own `Scope`.
-pub type Scope = Vec<(String, Box<dyn Any>)>;
+pub type Scope = Vec<(String, Dynamic)>;
 
 impl Engine {
     pub fn call_fn<'a, I, A, T>(&self, ident: I, args: A) -> Result<T, EvalAltResult>
@@ -195,11 +196,7 @@ impl Engine {
 
     /// Universal method for calling functions, that are either
     /// registered with the `Engine` or written in Rhai
-    pub fn call_fn_raw(
-        &self,
-        ident: String,
-        args: Vec<&mut dyn Any>,
-    ) -> Result<Box<dyn Any>, EvalAltResult> {
+    pub fn call_fn_raw(&self, ident: String, args: FnCallArgs) -> Result<Dynamic, EvalAltResult> {
         debug_println!(
             "Trying to call function {:?} with args {:?}",
             ident,
@@ -225,7 +222,7 @@ impl Engine {
             .ok_or_else(|| {
                 let typenames = args
                     .iter()
-                    .map(|x| (*(&**x).box_clone()).type_name())
+                    .map(|x| (*(&**x).into_dynamic()).type_name())
                     .collect::<Vec<_>>();
                 EvalAltResult::ErrorFunctionNotFound(format!(
                     "{} ({})",
@@ -260,7 +257,7 @@ impl Engine {
                         f.params
                             .iter()
                             .cloned()
-                            .zip(args.iter().map(|x| (&**x).box_clone())),
+                            .zip(args.iter().map(|x| (&**x).into_dynamic())),
                     );
 
                     match self.eval_stmt(&mut scope, &*f.body) {
@@ -288,13 +285,13 @@ impl Engine {
     /// Register an iterator adapter for a type.
     pub fn register_iterator<T: Any, F>(&mut self, f: F)
     where
-        F: 'static + Fn(&Box<dyn Any>) -> Box<dyn Iterator<Item = Box<dyn Any>>>,
+        F: 'static + Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>,
     {
         self.type_iterators.insert(TypeId::of::<T>(), Arc::new(f));
     }
 
     /// Register a get function for a member of a registered type
-    pub fn register_get<T: Clone + Any, U: Clone + Any, F>(&mut self, name: &str, get_fn: F)
+    pub fn register_get<T: Any + Clone, U: Any + Clone, F>(&mut self, name: &str, get_fn: F)
     where
         F: 'static + Fn(&mut T) -> U,
     {
@@ -303,7 +300,7 @@ impl Engine {
     }
 
     /// Register a set function for a member of a registered type
-    pub fn register_set<T: Clone + Any, U: Clone + Any, F>(&mut self, name: &str, set_fn: F)
+    pub fn register_set<T: Any + Clone, U: Any + Clone, F>(&mut self, name: &str, set_fn: F)
     where
         F: 'static + Fn(&mut T, U) -> (),
     {
@@ -312,7 +309,7 @@ impl Engine {
     }
 
     /// Shorthand for registering both getters and setters
-    pub fn register_get_set<T: Clone + Any, U: Clone + Any, F, G>(
+    pub fn register_get_set<T: Any + Clone, U: Any + Clone, F, G>(
         &mut self,
         name: &str,
         get_fn: F,
@@ -328,9 +325,9 @@ impl Engine {
     fn get_dot_val_helper(
         &self,
         scope: &mut Scope,
-        this_ptr: &mut dyn Any,
+        this_ptr: &mut Variant,
         dot_rhs: &Expr,
-    ) -> Result<Box<dyn Any>, EvalAltResult> {
+    ) -> Result<Dynamic, EvalAltResult> {
         use std::iter::once;
 
         match *dot_rhs {
@@ -389,7 +386,7 @@ impl Engine {
         map: F,
     ) -> Result<(usize, T), EvalAltResult>
     where
-        F: FnOnce(&'a mut dyn Any) -> Result<T, EvalAltResult>,
+        F: FnOnce(&'a mut Variant) -> Result<T, EvalAltResult>,
     {
         scope
             .iter_mut()
@@ -405,7 +402,7 @@ impl Engine {
         scope: &mut Scope,
         id: &str,
         idx: &Expr,
-    ) -> Result<(usize, usize, Box<dyn Any>), EvalAltResult> {
+    ) -> Result<(usize, usize, Dynamic), EvalAltResult> {
         let idx_boxed = self
             .eval_expr(scope, idx)?
             .downcast::<i64>()
@@ -433,10 +430,10 @@ impl Engine {
         scope: &mut Scope,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
-    ) -> Result<Box<dyn Any>, EvalAltResult> {
+    ) -> Result<Dynamic, EvalAltResult> {
         match *dot_lhs {
             Expr::Identifier(ref id) => {
-                let (sc_idx, mut target) = Self::search_scope(scope, id, |x| Ok(x.box_clone()))?;
+                let (sc_idx, mut target) = Self::search_scope(scope, id, |x| Ok(x.into_dynamic()))?;
                 let value = self.get_dot_val_helper(scope, target.as_mut(), dot_rhs);
 
                 // In case the expression mutated `target`, we need to reassign it because
@@ -461,10 +458,10 @@ impl Engine {
 
     fn set_dot_val_helper(
         &self,
-        this_ptr: &mut dyn Any,
+        this_ptr: &mut Variant,
         dot_rhs: &Expr,
-        mut source_val: Box<dyn Any>,
-    ) -> Result<Box<dyn Any>, EvalAltResult> {
+        mut source_val: Dynamic,
+    ) -> Result<Dynamic, EvalAltResult> {
         match *dot_rhs {
             Expr::Identifier(ref id) => {
                 let set_fn_name = "set$".to_string() + id;
@@ -495,11 +492,11 @@ impl Engine {
         scope: &mut Scope,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
-        source_val: Box<dyn Any>,
-    ) -> Result<Box<dyn Any>, EvalAltResult> {
+        source_val: Dynamic,
+    ) -> Result<Dynamic, EvalAltResult> {
         match *dot_lhs {
             Expr::Identifier(ref id) => {
-                let (sc_idx, mut target) = Self::search_scope(scope, id, |x| Ok(x.box_clone()))?;
+                let (sc_idx, mut target) = Self::search_scope(scope, id, |x| Ok(x.into_dynamic()))?;
                 let value = self.set_dot_val_helper(target.as_mut(), dot_rhs, source_val);
 
                 // In case the expression mutated `target`, we need to reassign it because
@@ -522,7 +519,7 @@ impl Engine {
         }
     }
 
-    fn eval_expr(&self, scope: &mut Scope, expr: &Expr) -> Result<Box<dyn Any>, EvalAltResult> {
+    fn eval_expr(&self, scope: &mut Scope, expr: &Expr) -> Result<Dynamic, EvalAltResult> {
         match *expr {
             Expr::IntegerConstant(i) => Ok(Box::new(i)),
             Expr::FloatConstant(i) => Ok(Box::new(i)),
@@ -616,12 +613,12 @@ impl Engine {
         }
     }
 
-    fn eval_stmt(&self, scope: &mut Scope, stmt: &Stmt) -> Result<Box<dyn Any>, EvalAltResult> {
+    fn eval_stmt(&self, scope: &mut Scope, stmt: &Stmt) -> Result<Dynamic, EvalAltResult> {
         match *stmt {
             Stmt::Expr(ref e) => self.eval_expr(scope, e),
             Stmt::Block(ref b) => {
                 let prev_len = scope.len();
-                let mut last_result: Result<Box<dyn Any>, EvalAltResult> = Ok(Box::new(()));
+                let mut last_result: Result<Dynamic, EvalAltResult> = Ok(Box::new(()));
 
                 for s in b.iter() {
                     last_result = self.eval_stmt(scope, s);
@@ -801,7 +798,7 @@ impl Engine {
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
         let AST(os, fns) = ast;
-        let mut x: Result<Box<dyn Any>, EvalAltResult> = Ok(Box::new(()));
+        let mut x: Result<Dynamic, EvalAltResult> = Ok(Box::new(()));
 
         for f in fns {
             let name = f.name.clone();
@@ -1093,8 +1090,14 @@ impl Engine {
         reg_func2x!(engine, "push", push, &mut Array, (), f32, f64, bool);
         reg_func2x!(engine, "push", push, &mut Array, (), String, Array, ());
 
-        engine.register_box_fn("pop", |list: &mut Array| list.pop().unwrap());
-        engine.register_box_fn("shift", |list: &mut Array| list.remove(0));
+        engine.register_dynamic_fn("pop", |list: &mut Array| list.pop().unwrap_or(Box::new(())));
+        engine.register_dynamic_fn("shift", |list: &mut Array| {
+            if list.len() > 0 {
+                list.remove(0)
+            } else {
+                Box::new(())
+            }
+        });
         engine.register_fn("len", |list: &mut Array| -> i64 {
             list.len().try_into().unwrap()
         });
@@ -1127,7 +1130,7 @@ impl Engine {
                 a.downcast_ref::<Range<i64>>()
                     .unwrap()
                     .clone()
-                    .map(|n| Box::new(n) as Box<dyn Any>),
+                    .map(|n| Box::new(n) as Dynamic),
             )
         });
 
