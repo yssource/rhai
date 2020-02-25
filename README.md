@@ -11,16 +11,18 @@ Rhai's current feature set:
 * Support for overloaded functions
 * No additional dependencies
 
-**Note:** Currently, the version is 0.9.1, so the language and APIs may change before they stabilize.*
+**Note:** Currently, the version is 0.10.0-alpha1, so the language and APIs may change before they stabilize.*
 
 ## Installation
 
-You can install Rhai using crates by adding this line to your dependences:
+You can install Rhai using crates by adding this line to your dependencies:
 
 ```toml
 [dependencies]
-rhai = "0.8.1"
+rhai = "0.10.0-alpha1"
 ```
+
+Beware that to use pre-releases (alpha and beta) you need to specify the exact version in your `Cargo.toml`.
 
 ## Related
 
