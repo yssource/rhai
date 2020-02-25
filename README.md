@@ -27,44 +27,51 @@ Beware that to use pre-releases (alpha and beta) you need to specify the exact v
 ## Related
 
 Other cool projects to check out:
+
 * [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
 * You can also check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
 
 ## Examples
+
 The repository contains several examples in the `examples` folder:
-- `arrays_and_structs` demonstrates registering a new type to Rhai and the usage of arrays on it
-- `custom_types_and_methods` shows how to register a type and methods for it
-- `hello` simple example that evaluates an expression and prints the result
-- `reuse_scope` evaluates two pieces of code in separate runs, but using a common scope
-- `rhai_runner` runs each filename passed to it as a Rhai script
-- `simple_fn` shows how to register a Rust function to a Rhai engine
-- `repl` a simple REPL, see source code for what it can do at the moment
+
+* `arrays_and_structs` demonstrates registering a new type to Rhai and the usage of arrays on it
+* `custom_types_and_methods` shows how to register a type and methods for it
+* `hello` simple example that evaluates an expression and prints the result
+* `reuse_scope` evaluates two pieces of code in separate runs, but using a common scope
+* `rhai_runner` runs each filename passed to it as a Rhai script
+* `simple_fn` shows how to register a Rust function to a Rhai engine
+* `repl` a simple REPL, see source code for what it can do at the moment
 
 Examples can be run with the following command:
+
 ```bash
 cargo run --example name
 ```
 
 ## Example Scripts
+
 We also have a few examples scripts that showcase Rhai's features, all stored in the `scripts` folder:
-- `array.rhai` - arrays in Rhai
-- `assignment.rhai` - variable declarations
-- `comments.rhai` - just comments
-- `for1.rhai` - for loops
-- `function_decl1.rhai` - a function without parameters
-- `function_decl2.rhai` - a function with two parameters
-- `function_decl3.rhai` - a function with many parameters
-- `if1.rhai` - if example
-- `loop.rhai` - endless loop in Rhai, this example emulates a do..while cycle
-- `op1.rhai` - just a simple addition
-- `op2.rhai` - simple addition and multiplication
-- `op3.rhai` - change evaluation order with parenthesis
-- `speed_test.rhai` - a simple program to measure the speed of Rhai's interpreter
-- `string.rhai`- string operations
-- `while.rhai` - while loop
+
+* `array.rhai` - arrays in Rhai
+* `assignment.rhai` - variable declarations
+* `comments.rhai` - just comments
+* `for1.rhai` - for loops
+* `function_decl1.rhai` - a function without parameters
+* `function_decl2.rhai` - a function with two parameters
+* `function_decl3.rhai` - a function with many parameters
+* `if1.rhai` - if example
+* `loop.rhai` - endless loop in Rhai, this example emulates a do..while cycle
+* `op1.rhai` - just a simple addition
+* `op2.rhai` - simple addition and multiplication
+* `op3.rhai` - change evaluation order with parenthesis
+* `speed_test.rhai` - a simple program to measure the speed of Rhai's interpreter
+* `string.rhai`- string operations
+* `while.rhai` - while loop
 
 To run the scripts, you can either make your own tiny program, or make use of the `rhai_runner`
 example program:
+
 ```bash
 cargo run --example rhai_runner scripts/any_script.rhai
 ```
@@ -95,7 +102,8 @@ if let Ok(result) = engine.eval_file::<i64>("hello_world.rhai") { ... }
 If you want to repeatedly evaluate a script, you can compile it first into an AST form:
 
 ```rust
-let ast = Engine::compile("40 + 2").unwrap();   // AST generated can be stored for later evaluations
+// Compile to an AST and store it for later evaluations
+let ast = Engine::compile("40 + 2").unwrap();
 
 for _ in 0..42 {
     if let Ok(result) = engine.eval_ast::<i64>(&ast) {
@@ -116,15 +124,15 @@ Rhai's scripting engine is very lightweight.  It gets its ability from the funct
 
 ```rust
 extern crate rhai;
-use rhai::{Engine, RegisterFn};
+use rhai::{Dynamic, Engine, RegisterFn};
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
     x + y
 }
 
-// Function that returns a dynamic value (i.e. Box<dyn Any>)
-fn get_an_any() -> Box<dyn Any> {
+// Function that returns a Dynamic value
+fn get_an_any() -> Dynamic {
     Box::new(42_i64)
 }
 
@@ -137,8 +145,8 @@ fn main() {
        println!("Answer: {}", result);  // prints 42
     }
 
-    // Functions that return dynamic values (i.e. Box<any Any>) must use register_box_fn()
-    engine.register_box_fn("get_an_any", get_an_any);
+    // Functions that return Dynamic values must use register_dynamic_fn()
+    engine.register_dynamic_fn("get_an_any", get_an_any);
 
     if let Ok(result) = engine.eval::<i64>("get_an_any()") {
        println!("Answer: {}", result);  // prints 42
@@ -218,6 +226,7 @@ struct TestStruct {
 ```
 
 Next, we create a few methods that we'll later use in our scripts.  Notice that we register our custom type with the engine.
+
 ```rust
 impl TestStruct {
     fn update(&mut self) {
@@ -244,11 +253,27 @@ engine.register_fn("new_ts", TestStruct::new);
 ```
 
 Finally, we call our script.  The script can see the function and method we registered earlier.  We need to get the result back out from script land just as before, this time casting to our custom struct type.
+
 ```rust
 if let Ok(result) = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x") {
     println!("result: {}", result.x); // prints 1001
 }
 ```
+
+In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method-call on that type because internally they are the same thing: methods on a type is implemented as a functions taking an first argument.
+
+```rust
+fn foo(ts: &mut TestStruct) -> i64 {
+    ts.x
+}
+
+engine.register_fn("foo", foo);
+
+if let Ok(result) = engine.eval::<i64>("let x = new_ts(); x.foo()") {
+    println!("result: {}", result); // prints 1
+}
+```
+
 
 # Getters and setters
 
@@ -325,6 +350,7 @@ let x = (1 + 2) * (6 - 4) / 2;
 ```
 
 ## If
+
 ```rust
 if true {
     print("it's true!");
@@ -335,6 +361,7 @@ else {
 ```
 
 ## While
+
 ```rust
 let x = 10;
 while x > 0 {
@@ -347,6 +374,7 @@ while x > 0 {
 ```
 
 ## Loop
+
 ```rust
 let x = 10;
 
@@ -379,10 +407,10 @@ fn add(x, y) {
 print(add(2, 3))
 ```
 
-To return a dynamic value, box it and return it as `Box<dyn Any>`.
+To return a `Dynamic` value, simply box it and return it.
 
 ```rust
-fn decide(yes_no: bool) -> Box<dyn Any> {
+fn decide(yes_no: bool) -> Dynamic {
     if yes_no {
         Box::new(42_i64)
     } else {
@@ -417,11 +445,15 @@ last == 5;
 
 `push` is only defined for standard built-in types.  If you want to use `push` with
 your own custom type, you need to define a specific override:
+
 ```rust
-engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(item)));
+engine.register_fn("push", |list: &mut rhai::Array, item: MyType| list.push(Box::new(item)));
 ```
 
-## For
+The type of a Rhai array is `rhai::Array`.
+
+## For loops
+
 ```rust
 let array = [1, 3, 5, 7, 9, 42];
 
@@ -461,6 +493,7 @@ name_and_age == "Bob C. Davis: age 42";
 ```
 
 ## Print and Debug
+
 ```rust
 print("hello");         // prints hello to stdout
 print(1 + 2 + 3);       // prints 6 to stdout
@@ -468,7 +501,8 @@ print("hello" + 42);    // prints hello42 to stdout
 debug("world!");        // prints "world!" to stdout using debug formatting
 ```
 
-## Overriding Print and Debug
+### Overriding Print and Debug with Callback functions
+
 ```rust
 // Any function that takes a &str argument can be used to override print and debug
 engine.on_print(|x: &str| println!("hello: {}", x));
