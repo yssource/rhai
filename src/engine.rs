@@ -951,6 +951,14 @@ impl Engine {
             )
         }
 
+        macro_rules! reg_func3 {
+            ($engine:expr, $x:expr, $op:expr, $v:ty, $w:ty, $r:ty, $( $y:ty ),*) => (
+                $(
+                    $engine.register_fn($x, $op as fn(x: $v, y: $w, z: $y)->$r);
+                )*
+            )
+        }
+
         fn add<T: Add>(x: T, y: T) -> <T as Add>::Output {
             x + y
         }
@@ -1095,13 +1103,24 @@ impl Engine {
         reg_func1!(engine, "debug", print_debug, String, Array, ());
 
         // Register array functions
-        fn push<T: Any + 'static>(list: &mut Array, item: T) {
+        fn push<T: Any>(list: &mut Array, item: T) {
             list.push(Box::new(item));
+        }
+        fn pad<T: Any + Clone>(list: &mut Array, len: i64, item: T) {
+            if len >= 0 {
+                while list.len() < len as usize {
+                    push(list, item.clone());
+                }
+            }
         }
 
         reg_func2x!(engine, "push", push, &mut Array, (), i32, i64, u32, u64);
         reg_func2x!(engine, "push", push, &mut Array, (), f32, f64, bool);
         reg_func2x!(engine, "push", push, &mut Array, (), String, Array, ());
+        reg_func3!(engine, "pad", pad, &mut Array, i64, (), i32, i64);
+        reg_func3!(engine, "pad", pad, &mut Array, i64, (), u32, u64);
+        reg_func3!(engine, "pad", pad, &mut Array, i64, (), f32, f64, bool);
+        reg_func3!(engine, "pad", pad, &mut Array, i64, (), String, Array, ());
 
         engine.register_dynamic_fn("pop", |list: &mut Array| list.pop().unwrap_or(Box::new(())));
         engine.register_dynamic_fn("shift", |list: &mut Array| {
@@ -1113,6 +1132,11 @@ impl Engine {
         });
         engine.register_fn("len", |list: &mut Array| -> i64 {
             list.len().try_into().unwrap()
+        });
+        engine.register_fn("truncate", |list: &mut Array, len: i64| {
+            if len >= 0 {
+                list.truncate(len as usize);
+            }
         });
 
         // Register string concatenate functions

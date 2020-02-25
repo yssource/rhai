@@ -444,8 +444,15 @@ fn decide(yes_no: bool) -> Dynamic {
 ## Arrays
 
 You can create arrays of values, and then access them with numeric indices.
-The functions `push`, `pop` and `shift` can be used to insert and remove elements
-to/from arrays.
+
+The following standard functions operate on arrays:
+
+* `push` - inserts an element at the end
+* `pop` - removes the last element and returns it (() if empty)
+* `shift` - removes the first element and returns it (() if empty)
+* `len` - returns the number of elements
+* `pad` - pads the array with an element until a specified length
+* `truncate` - cuts off the array at exactly a specified length (discarding all subsequent elements)
 
 ```rust
 let y = [1, 2, 3];      // 3 elements
@@ -463,9 +470,19 @@ first == 1;
 
 let last = y.pop();     // remove the last element, 3 elements remaining
 last == 5;
+
+print(y.len());         // prints 3
+
+y.pad(10, "hello");     // pad the array up to 10 elements
+
+print(y.len());         // prints 10
+
+y.truncate(5);          // truncate the array to 5 elements
+
+print(y.len());         // prints 5
 ```
 
-`push` is only defined for standard built-in types.  If you want to use `push` with
+`push` and `pad` are only defined for standard built-in types.  If you want to use them with
 your own custom type, you need to define a specific override:
 
 ```rust
