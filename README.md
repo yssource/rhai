@@ -90,6 +90,24 @@ You can also evaluate a script file:
 if let Ok(result) = engine.eval_file::<i64>("hello_world.rhai") { ... }
 ```
 
+If you want to repeatedly evaluate a script, you can compile it first into an AST form:
+
+```rust
+let ast = Engine::compile("40 + 2").unwrap();   // AST generated can be stored for later evaluations
+
+for _ in 0..42 {
+    if let Ok(result) = engine.eval_ast::<i64>(&ast) {
+        println!("Answer: {}", result);  // prints 42
+    }
+}
+```
+
+Compiling a script file into AST is also supported:
+
+```rust
+let ast = Engine::compile_file("hello_world.rhai").unwrap();
+```
+
 # Working with functions
 
 Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.
