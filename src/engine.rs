@@ -147,11 +147,12 @@ type IteratorFn = dyn Fn(&Box<dyn Any>) -> Box<dyn Iterator<Item = Box<dyn Any>>
 ///     }
 /// }
 /// ```
-#[derive(Clone)]
 pub struct Engine {
     /// A hashmap containing all functions known to the engine
     pub fns: HashMap<FnSpec, Arc<FnIntExt>>,
     pub type_iterators: HashMap<TypeId, Arc<IteratorFn>>,
+    on_print: Box<dyn Fn(&str)>,
+    on_debug: Box<dyn Fn(&str)>,
 }
 
 pub enum FnIntExt {
@@ -233,7 +234,26 @@ impl Engine {
                 ))
             })
             .and_then(move |f| match **f {
-                FnIntExt::Ext(ref f) => f(args),
+                FnIntExt::Ext(ref f) => {
+                    let r = f(args);
+                    if r.is_err() {
+                        return r;
+                    }
+
+                    let callback = match ident.as_str() {
+                        "print" => &self.on_print,
+                        "debug" => &self.on_debug,
+                        _ => return r,
+                    };
+
+                    Ok(Box::new(callback(
+                        r.unwrap()
+                            .downcast::<String>()
+                            .map(|x| *x)
+                            .unwrap_or("error: not a string".into())
+                            .as_str(),
+                    )))
+                }
                 FnIntExt::Int(ref f) => {
                     let mut scope = Scope::new();
                     scope.extend(
@@ -1048,21 +1068,21 @@ impl Engine {
         // (*ent).push(FnType::ExternalFn2(Box::new(idx)));
 
         // Register print and debug
-        fn print_debug<T: Debug>(x: T) {
-            println!("{:?}", x);
+        fn print_debug<T: Debug>(x: T) -> String {
+            format!("{:?}", x)
         }
-        fn print<T: Display>(x: T) {
-            println!("{}", x);
+        fn print<T: Display>(x: T) -> String {
+            format!("{}", x)
         }
 
-        reg_func1!(engine, "print", print, (), i32, i64, u32, u64);
-        reg_func1!(engine, "print", print, (), f32, f64, bool, String);
-        reg_func1!(engine, "print", print_debug, (), Array);
+        reg_func1!(engine, "print", print, String, i32, i64, u32, u64);
+        reg_func1!(engine, "print", print, String, f32, f64, bool, String);
+        reg_func1!(engine, "print", print_debug, String, Array);
         engine.register_fn("print", |_: ()| println!());
 
-        reg_func1!(engine, "debug", print_debug, (), i32, i64, u32, u64);
-        reg_func1!(engine, "debug", print_debug, (), f32, f64, bool, String);
-        reg_func1!(engine, "debug", print_debug, (), Array, ());
+        reg_func1!(engine, "debug", print_debug, String, i32, i64, u32, u64);
+        reg_func1!(engine, "debug", print_debug, String, f32, f64, bool, String);
+        reg_func1!(engine, "debug", print_debug, String, Array, ());
 
         // Register array functions
         fn push<T: Any + 'static>(list: &mut Array, item: T) {
@@ -1119,10 +1139,22 @@ impl Engine {
         let mut engine = Engine {
             fns: HashMap::new(),
             type_iterators: HashMap::new(),
+            on_print: Box::new(|x: &str| println!("{}", x)),
+            on_debug: Box::new(|x: &str| println!("{}", x)),
         };
 
         Engine::register_default_lib(&mut engine);
 
         engine
+    }
+
+    /// Overrides `on_print`
+    pub fn on_print(&mut self, callback: impl Fn(&str) + 'static) {
+        self.on_print = Box::new(callback);
+    }
+
+    /// Overrides `on_debug`
+    pub fn on_debug(&mut self, callback: impl Fn(&str) + 'static) {
+        self.on_debug = Box::new(callback);
     }
 }
