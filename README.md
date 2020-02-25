@@ -118,6 +118,28 @@ Compiling a script file into AST is also supported:
 let ast = Engine::compile_file("hello_world.rhai").unwrap();
 ```
 
+# Values and types
+
+The following primitive types are supported natively:
+
+* Integer: `i32`, `u32`, `i64` (default), `u64`
+* Floating-point: `f32`, `f64` (default)
+* Boolean: `bool`
+* Array: `rhai::Array`
+* Dynamic (i.e. can be anything): `rhai::Dynamic`
+
+# Value conversions
+
+All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
+
+There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it. For other conversions you can register your own conversion functions.
+
+```rust
+let x = 42;
+let y = x * 100.0;              // error: cannot multiply i64 with f64
+let y = x.to_float() * 100.0;   // works
+```
+
 # Working with functions
 
 Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.

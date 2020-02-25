@@ -1064,6 +1064,19 @@ impl Engine {
         // directly let ent = engine.fns.entry("[]".to_string()).or_insert_with(Vec::new);
         // (*ent).push(FnType::ExternalFn2(Box::new(idx)));
 
+        // Register conversion functions
+        engine.register_fn("to_float", |x: i32| x as f64);
+        engine.register_fn("to_float", |x: u32| x as f64);
+        engine.register_fn("to_float", |x: i64| x as f64);
+        engine.register_fn("to_float", |x: u64| x as f64);
+        engine.register_fn("to_float", |x: f32| x as f64);
+
+        engine.register_fn("to_int", |x: i32| x as i64);
+        engine.register_fn("to_int", |x: u32| x as i64);
+        engine.register_fn("to_int", |x: u64| x as i64);
+        engine.register_fn("to_int", |x: f32| x as i64);
+        engine.register_fn("to_int", |x: f64| x as i64);
+
         // Register print and debug
         fn print_debug<T: Debug>(x: T) -> String {
             format!("{:?}", x)
