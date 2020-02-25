@@ -48,6 +48,7 @@ We also have a few examples scripts that showcase Rhai's features, all stored in
 - `array.rhai` - arrays in Rhai
 - `assignment.rhai` - variable declarations
 - `comments.rhai` - just comments
+- `for1.rhai` - for loops
 - `function_decl1.rhai` - a function without parameters
 - `function_decl2.rhai` - a function with two parameters
 - `function_decl3.rhai` - a function with many parameters
@@ -97,8 +98,14 @@ Rhai's scripting engine is very lightweight.  It gets its ability from the funct
 extern crate rhai;
 use rhai::{Engine, RegisterFn};
 
+// Normal function
 fn add(x: i64, y: i64) -> i64 {
     x + y
+}
+
+// Function that returns a dynamic value (i.e. Box<dyn Any>)
+fn get_an_any() -> Box<dyn Any> {
+    Box::new(42_i64)
 }
 
 fn main() {
@@ -107,6 +114,13 @@ fn main() {
     engine.register_fn("add", add);
 
     if let Ok(result) = engine.eval::<i64>("add(40, 2)") {
+       println!("Answer: {}", result);  // prints 42
+    }
+
+    // Functions that return dynamic values (i.e. Box<any Any>) must use register_box_fn()
+    engine.register_box_fn("get_an_any", get_an_any);
+
+    if let Ok(result) = engine.eval::<i64>("get_an_any()") {
        println!("Answer: {}", result);  // prints 42
     }
 }
@@ -344,15 +358,63 @@ fn add(x, y) {
 
 print(add(2, 3))
 ```
+
+To return a dynamic value, box it and return it as `Box<dyn Any>`.
+
+```rust
+fn decide(yes_no: bool) -> Box<dyn Any> {
+    if yes_no {
+        Box::new(42_i64)
+    } else {
+        Box::new("hello world!".to_string())    // remember &str is not supported
+    }
+}
+```
+
 ## Arrays
 
 You can create arrays of values, and then access them with numeric indices.
+The functions `push`, `pop` and `shift` can be used to insert and remove elements
+to/from arrays.
 
 ```rust
-let y = [1, 2, 3];
-y[1] = 5;
+let y = [1, 2, 3];      // 3 elements
+y[1] = 42;
 
-print(y[1]);
+print(y[1]);            // prints 42
+
+y.push(4);              // 4 elements
+y.push(5);              // 5 elements
+
+print(y.len());         // prints 5
+
+let first = y.shift();  // remove the first element, 4 elements remaining
+first == 1;
+
+let last = y.pop();     // remove the last element, 3 elements remaining
+last == 5;
+```
+
+`push` is only defined for standard built-in types.  If you want to use `push` with
+your own custom type, you need to define a specific override:
+```rust
+engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(item)));
+```
+
+## For
+```rust
+let array = [1, 3, 5, 7, 9, 42];
+
+for x in array {
+    print(x);
+    if x == 42 { break; }
+}
+
+// The range function allows iterating from first..last-1
+for x in range(0,50) {
+    print(x);
+    if x == 42 { break; }
+}
 ```
 
 ## Members and methods
@@ -368,6 +430,29 @@ a.update();
 ```rust
 let name = "Bob";
 let middle_initial = 'C';
+let last = 'Davis';
+
+let full_name = name + " " + middle_initial + ". " + last;
+full_name == "Bob C. Davis";
+
+let age = 42;
+let name_and_age = full_name + ": age " + age;      // String building with different types
+name_and_age == "Bob C. Davis: age 42";
+```
+
+## Print and Debug
+```rust
+print("hello");         // prints hello to stdout
+print(1 + 2 + 3);       // prints 6 to stdout
+print("hello" + 42);    // prints hello42 to stdout
+debug("world!");        // prints "world!" to stdout using debug formatting
+```
+
+## Overriding Print and Debug
+```rust
+// Any function that takes a &str argument can be used to override print and debug
+engine.on_print(|x: &str| println!("hello: {}", x));
+engine.on_debug(|x: &str| println!("DEBUG: {}", x));
 ```
 
 ## Comments
@@ -412,6 +497,7 @@ The `+=` operator can also be used to build strings:
 ```rust
 let my_str = "abc";
 my_str += "ABC";
+my_str += 12345;
 
-my_str == "abcABC"
+my_str == "abcABC12345"
 ```
