@@ -6,7 +6,7 @@ use crate::engine::{Engine, EvalAltResult, FnCallArgs};
 pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN);
 }
-pub trait RegisterBoxFn<FN, ARGS> {
+pub trait RegisterDynamicFn<FN, ARGS> {
     fn register_dynamic_fn(&mut self, name: &str, f: FN);
 }
 
@@ -57,7 +57,7 @@ macro_rules! def_register {
         impl<
             $($par: Any + Clone,)*
             FN: Fn($($param),*) -> Dynamic + 'static,
-        > RegisterBoxFn<FN, ($($mark,)*)> for Engine
+        > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
         {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
                 let fun = move |mut args: FnCallArgs| {

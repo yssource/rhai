@@ -47,5 +47,5 @@ mod parser;
 
 pub use any::Dynamic;
 pub use engine::{Array, Engine, EvalAltResult, Scope};
-pub use fn_register::{RegisterBoxFn, RegisterFn};
+pub use fn_register::{RegisterDynamicFn, RegisterFn};
 pub use parser::{ParseError, ParseErrorType, AST};

@@ -8,7 +8,7 @@ use std::{convert::TryInto, sync::Arc};
 
 use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::call::FunArgs;
-use crate::fn_register::{RegisterBoxFn, RegisterFn};
+use crate::fn_register::{RegisterDynamicFn, RegisterFn};
 use crate::parser::{lex, parse, Expr, FnDef, ParseError, Stmt, AST};
 use fmt::{Debug, Display};
 
