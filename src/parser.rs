@@ -1074,11 +1074,11 @@ fn parse_array_expr<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr,
 fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
     match input.next() {
         Some((token, line, pos)) => match token {
-            Token::IntegerConstant(ref x) => Ok(Expr::IntegerConstant(*x)),
-            Token::FloatConstant(ref x) => Ok(Expr::FloatConstant(*x)),
-            Token::StringConst(ref s) => Ok(Expr::StringConstant(s.clone())),
-            Token::CharConstant(ref c) => Ok(Expr::CharConstant(*c)),
-            Token::Identifier(ref s) => parse_ident_expr(s.clone(), input),
+            Token::IntegerConstant(x) => Ok(Expr::IntegerConstant(x)),
+            Token::FloatConstant(x) => Ok(Expr::FloatConstant(x)),
+            Token::StringConst(s) => Ok(Expr::StringConstant(s)),
+            Token::CharConstant(c) => Ok(Expr::CharConstant(c)),
+            Token::Identifier(s) => parse_ident_expr(s, input),
             Token::LeftParen => parse_paren_expr(input),
             Token::LeftBracket => parse_array_expr(input),
             Token::True => Ok(Expr::True),
@@ -1312,7 +1312,7 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
     input.next();
 
     let name = match input.next() {
-        Some((Token::Identifier(ref s), _, _)) => s.clone(),
+        Some((Token::Identifier(s), _, _)) => s,
         Some((token, line, pos)) => {
             return Err(ParseError(PERR::VarExpectsIdentifier(token), line, pos))
         }
@@ -1338,7 +1338,7 @@ fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
     input.next();
 
     let name = match input.next() {
-        Some((Token::Identifier(ref s), _, _)) => s.clone(),
+        Some((Token::Identifier(s), _, _)) => s,
         Some((token, line, pos)) => {
             return Err(ParseError(PERR::VarExpectsIdentifier(token), line, pos))
         }
@@ -1429,7 +1429,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     input.next();
 
     let name = match input.next() {
-        Some((Token::Identifier(ref s), _, _)) => s.clone(),
+        Some((Token::Identifier(s), _, _)) => s,
         Some((token, line, pos)) => return Err(ParseError(PERR::FnMissingName(token), line, pos)),
         None => return Err(ParseError(PERR::FnMissingName(Token::None), 0, 0)),
     };
@@ -1457,8 +1457,8 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
             match input.next() {
                 Some((Token::RightParen, _, _)) => break,
                 Some((Token::Comma, _, _)) => (),
-                Some((Token::Identifier(ref s), _, _)) => {
-                    params.push(s.clone());
+                Some((Token::Identifier(s), _, _)) => {
+                    params.push(s);
                 }
                 Some((_, line, pos)) => return Err(ParseError(PERR::MalformedCallExpr, line, pos)),
                 None => return Err(ParseError(PERR::MalformedCallExpr, 0, 0)),

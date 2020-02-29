@@ -36,7 +36,7 @@ pub enum EvalAltResult {
 
 impl EvalAltResult {
     fn as_str(&self) -> Option<&str> {
-        Some(match *self {
+        Some(match self {
             EvalAltResult::ErrorCantOpenScriptFile(ref s)
             | EvalAltResult::ErrorVariableNotFound(ref s)
             | EvalAltResult::ErrorFunctionNotFound(ref s)
@@ -51,22 +51,22 @@ impl PartialEq for EvalAltResult {
         use EvalAltResult::*;
 
         match (self, other) {
-            (&ErrorParseError(ref a), &ErrorParseError(ref b)) => a == b,
-            (&ErrorFunctionNotFound(ref a), &ErrorFunctionNotFound(ref b)) => a == b,
-            (&ErrorFunctionArgMismatch, &ErrorFunctionArgMismatch) => true,
-            (&ErrorIndexMismatch, &ErrorIndexMismatch) => true,
-            (&ErrorArrayMismatch, &ErrorArrayMismatch) => true,
-            (&ErrorArrayOutOfBounds(max1, index1), &ErrorArrayOutOfBounds(max2, index2)) => {
+            (ErrorParseError(ref a), ErrorParseError(ref b)) => a == b,
+            (ErrorFunctionNotFound(ref a), ErrorFunctionNotFound(ref b)) => a == b,
+            (ErrorFunctionArgMismatch, ErrorFunctionArgMismatch) => true,
+            (ErrorIndexMismatch, ErrorIndexMismatch) => true,
+            (ErrorArrayMismatch, ErrorArrayMismatch) => true,
+            (ErrorArrayOutOfBounds(max1, index1), ErrorArrayOutOfBounds(max2, index2)) => {
                 max1 == max2 && index1 == index2
             }
-            (&ErrorIfGuardMismatch, &ErrorIfGuardMismatch) => true,
-            (&ErrorForMismatch, &ErrorForMismatch) => true,
-            (&ErrorVariableNotFound(ref a), &ErrorVariableNotFound(ref b)) => a == b,
-            (&ErrorAssignmentToUnknownLHS, &ErrorAssignmentToUnknownLHS) => true,
-            (&ErrorMismatchOutputType(ref a), &ErrorMismatchOutputType(ref b)) => a == b,
-            (&ErrorCantOpenScriptFile(ref a), &ErrorCantOpenScriptFile(ref b)) => a == b,
-            (&ErrorMalformedDotExpression, &ErrorMalformedDotExpression) => true,
-            (&LoopBreak, &LoopBreak) => true,
+            (ErrorIfGuardMismatch, ErrorIfGuardMismatch) => true,
+            (ErrorForMismatch, ErrorForMismatch) => true,
+            (ErrorVariableNotFound(ref a), ErrorVariableNotFound(ref b)) => a == b,
+            (ErrorAssignmentToUnknownLHS, ErrorAssignmentToUnknownLHS) => true,
+            (ErrorMismatchOutputType(ref a), ErrorMismatchOutputType(ref b)) => a == b,
+            (ErrorCantOpenScriptFile(ref a), ErrorCantOpenScriptFile(ref b)) => a == b,
+            (ErrorMalformedDotExpression, ErrorMalformedDotExpression) => true,
+            (LoopBreak, LoopBreak) => true,
             _ => false,
         }
     }
@@ -74,16 +74,18 @@ impl PartialEq for EvalAltResult {
 
 impl Error for EvalAltResult {
     fn description(&self) -> &str {
-        match *self {
+        match self {
             EvalAltResult::ErrorParseError(ref p) => p.description(),
             EvalAltResult::ErrorFunctionNotFound(_) => "Function not found",
             EvalAltResult::ErrorFunctionArgMismatch => "Function argument types do not match",
             EvalAltResult::ErrorIndexMismatch => "Array access expects integer index",
             EvalAltResult::ErrorArrayMismatch => "Indexing can only be performed on an array",
-            EvalAltResult::ErrorArrayOutOfBounds(_, index) if index < 0 => {
+            EvalAltResult::ErrorArrayOutOfBounds(_, ref index) if *index < 0 => {
                 "Array access expects non-negative index"
             }
-            EvalAltResult::ErrorArrayOutOfBounds(max, _) if max == 0 => "Access of empty array",
+            EvalAltResult::ErrorArrayOutOfBounds(ref max, _) if *max == 0 => {
+                "Access of empty array"
+            }
             EvalAltResult::ErrorArrayOutOfBounds(_, _) => "Array index out of bounds",
             EvalAltResult::ErrorIfGuardMismatch => "If guards expect boolean expression",
             EvalAltResult::ErrorForMismatch => "For loops expect array",
@@ -330,8 +332,8 @@ impl Engine {
     ) -> Result<Dynamic, EvalAltResult> {
         use std::iter::once;
 
-        match *dot_rhs {
-            Expr::FunctionCall(ref fn_name, ref args) => {
+        match dot_rhs {
+            Expr::FunctionCall(fn_name, args) => {
                 let mut args: Array = args
                     .iter()
                     .map(|arg| self.eval_expr(scope, arg))
@@ -342,12 +344,12 @@ impl Engine {
 
                 self.call_fn_raw(fn_name.to_owned(), args)
             }
-            Expr::Identifier(ref id) => {
+            Expr::Identifier(id) => {
                 let get_fn_name = "get$".to_string() + id;
 
                 self.call_fn_raw(get_fn_name, vec![this_ptr])
             }
-            Expr::Index(ref id, ref idx_raw) => {
+            Expr::Index(id, idx_raw) => {
                 let idx = self.eval_expr(scope, idx_raw)?;
                 let get_fn_name = "get$".to_string() + id;
 
@@ -368,7 +370,7 @@ impl Engine {
                             .ok_or(EvalAltResult::ErrorArrayOutOfBounds(arr.len(), x)),
                     })
             }
-            Expr::Dot(ref inner_lhs, ref inner_rhs) => match **inner_lhs {
+            Expr::Dot(inner_lhs, inner_rhs) => match **inner_lhs {
                 Expr::Identifier(ref id) => {
                     let get_fn_name = "get$".to_string() + id;
                     self.call_fn_raw(get_fn_name, vec![this_ptr])
@@ -392,7 +394,7 @@ impl Engine {
             .iter_mut()
             .enumerate()
             .rev()
-            .find(|&(_, &mut (ref name, _))| *id == *name)
+            .find(|&(_, &mut (ref name, _))| id == name)
             .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(id.to_owned()))
             .and_then(move |(idx, &mut (_, ref mut val))| map(val.as_mut()).map(|val| (idx, val)))
     }
@@ -431,8 +433,8 @@ impl Engine {
         dot_lhs: &Expr,
         dot_rhs: &Expr,
     ) -> Result<Dynamic, EvalAltResult> {
-        match *dot_lhs {
-            Expr::Identifier(ref id) => {
+        match dot_lhs {
+            Expr::Identifier(id) => {
                 let (sc_idx, mut target) = Self::search_scope(scope, id, |x| Ok(x.into_dynamic()))?;
                 let value = self.get_dot_val_helper(scope, target.as_mut(), dot_rhs);
 
@@ -442,7 +444,7 @@ impl Engine {
 
                 value
             }
-            Expr::Index(ref id, ref idx_raw) => {
+            Expr::Index(id, idx_raw) => {
                 let (sc_idx, idx, mut target) = self.array_value(scope, id, idx_raw)?;
                 let value = self.get_dot_val_helper(scope, target.as_mut(), dot_rhs);
 
@@ -462,12 +464,12 @@ impl Engine {
         dot_rhs: &Expr,
         mut source_val: Dynamic,
     ) -> Result<Dynamic, EvalAltResult> {
-        match *dot_rhs {
-            Expr::Identifier(ref id) => {
+        match dot_rhs {
+            Expr::Identifier(id) => {
                 let set_fn_name = "set$".to_string() + id;
                 self.call_fn_raw(set_fn_name, vec![this_ptr, source_val.as_mut()])
             }
-            Expr::Dot(ref inner_lhs, ref inner_rhs) => match **inner_lhs {
+            Expr::Dot(inner_lhs, inner_rhs) => match **inner_lhs {
                 Expr::Identifier(ref id) => {
                     let get_fn_name = "get$".to_string() + id;
                     self.call_fn_raw(get_fn_name, vec![this_ptr])
@@ -494,8 +496,8 @@ impl Engine {
         dot_rhs: &Expr,
         source_val: Dynamic,
     ) -> Result<Dynamic, EvalAltResult> {
-        match *dot_lhs {
-            Expr::Identifier(ref id) => {
+        match dot_lhs {
+            Expr::Identifier(id) => {
                 let (sc_idx, mut target) = Self::search_scope(scope, id, |x| Ok(x.into_dynamic()))?;
                 let value = self.set_dot_val_helper(target.as_mut(), dot_rhs, source_val);
 
@@ -505,7 +507,7 @@ impl Engine {
 
                 value
             }
-            Expr::Index(ref id, ref idx_raw) => {
+            Expr::Index(id, idx_raw) => {
                 let (sc_idx, idx, mut target) = self.array_value(scope, id, idx_raw)?;
                 let value = self.set_dot_val_helper(target.as_mut(), dot_rhs, source_val);
 
@@ -520,29 +522,27 @@ impl Engine {
     }
 
     fn eval_expr(&self, scope: &mut Scope, expr: &Expr) -> Result<Dynamic, EvalAltResult> {
-        match *expr {
-            Expr::IntegerConstant(i) => Ok(Box::new(i)),
-            Expr::FloatConstant(i) => Ok(Box::new(i)),
-            Expr::StringConstant(ref s) => Ok(Box::new(s.clone())),
-            Expr::CharConstant(ref c) => Ok(Box::new(*c)),
-            Expr::Identifier(ref id) => {
+        match expr {
+            Expr::IntegerConstant(i) => Ok(Box::new(*i)),
+            Expr::FloatConstant(i) => Ok(Box::new(*i)),
+            Expr::StringConstant(s) => Ok(Box::new(s.clone())),
+            Expr::CharConstant(c) => Ok(Box::new(*c)),
+            Expr::Identifier(id) => {
                 for &mut (ref name, ref mut val) in &mut scope.iter_mut().rev() {
-                    if *id == *name {
+                    if id == name {
                         return Ok(val.clone());
                     }
                 }
                 Err(EvalAltResult::ErrorVariableNotFound(id.clone()))
             }
-            Expr::Index(ref id, ref idx_raw) => {
-                self.array_value(scope, id, idx_raw).map(|(_, _, x)| x)
-            }
-            Expr::Assignment(ref id, ref rhs) => {
+            Expr::Index(id, idx_raw) => self.array_value(scope, id, idx_raw).map(|(_, _, x)| x),
+            Expr::Assignment(ref id, rhs) => {
                 let rhs_val = self.eval_expr(scope, rhs)?;
 
                 match **id {
                     Expr::Identifier(ref n) => {
                         for &mut (ref name, ref mut val) in &mut scope.iter_mut().rev() {
-                            if *n == *name {
+                            if n == name {
                                 *val = rhs_val;
 
                                 return Ok(Box::new(()));
@@ -551,10 +551,10 @@ impl Engine {
                         Err(EvalAltResult::ErrorVariableNotFound(n.clone()))
                     }
                     Expr::Index(ref id, ref idx_raw) => {
-                        let idx = self.eval_expr(scope, idx_raw)?;
+                        let idx = self.eval_expr(scope, &idx_raw)?;
 
                         for &mut (ref name, ref mut val) in &mut scope.iter_mut().rev() {
-                            if *id == *name {
+                            if id == name {
                                 return if let Some(&i) = idx.downcast_ref::<i64>() {
                                     if let Some(arr_typed) =
                                         (*val).downcast_mut() as Option<&mut Array>
@@ -587,8 +587,8 @@ impl Engine {
                     _ => Err(EvalAltResult::ErrorAssignmentToUnknownLHS),
                 }
             }
-            Expr::Dot(ref lhs, ref rhs) => self.get_dot_val(scope, lhs, rhs),
-            Expr::Array(ref contents) => {
+            Expr::Dot(lhs, rhs) => self.get_dot_val(scope, lhs, rhs),
+            Expr::Array(contents) => {
                 let mut arr = Vec::new();
 
                 for item in &(*contents) {
@@ -598,7 +598,7 @@ impl Engine {
 
                 Ok(Box::new(arr))
             }
-            Expr::FunctionCall(ref fn_name, ref args) => self.call_fn_raw(
+            Expr::FunctionCall(fn_name, args) => self.call_fn_raw(
                 fn_name.to_owned(),
                 args.iter()
                     .map(|ex| self.eval_expr(scope, ex))
@@ -614,9 +614,9 @@ impl Engine {
     }
 
     fn eval_stmt(&self, scope: &mut Scope, stmt: &Stmt) -> Result<Dynamic, EvalAltResult> {
-        match *stmt {
-            Stmt::Expr(ref e) => self.eval_expr(scope, e),
-            Stmt::Block(ref b) => {
+        match stmt {
+            Stmt::Expr(e) => self.eval_expr(scope, e),
+            Stmt::Block(b) => {
                 let prev_len = scope.len();
                 let mut last_result: Result<Dynamic, EvalAltResult> = Ok(Box::new(()));
 
@@ -634,7 +634,7 @@ impl Engine {
 
                 last_result
             }
-            Stmt::If(ref guard, ref body) => {
+            Stmt::If(guard, body) => {
                 let guard_result = self.eval_expr(scope, guard)?;
                 match guard_result.downcast::<bool>() {
                     Ok(g) => {
@@ -647,7 +647,7 @@ impl Engine {
                     Err(_) => Err(EvalAltResult::ErrorIfGuardMismatch),
                 }
             }
-            Stmt::IfElse(ref guard, ref body, ref else_body) => {
+            Stmt::IfElse(guard, body, else_body) => {
                 let guard_result = self.eval_expr(scope, guard)?;
                 match guard_result.downcast::<bool>() {
                     Ok(g) => {
@@ -660,7 +660,7 @@ impl Engine {
                     Err(_) => Err(EvalAltResult::ErrorIfGuardMismatch),
                 }
             }
-            Stmt::While(ref guard, ref body) => loop {
+            Stmt::While(guard, body) => loop {
                 let guard_result = self.eval_expr(scope, guard)?;
                 match guard_result.downcast::<bool>() {
                     Ok(g) => {
@@ -677,14 +677,14 @@ impl Engine {
                     Err(_) => return Err(EvalAltResult::ErrorIfGuardMismatch),
                 }
             },
-            Stmt::Loop(ref body) => loop {
+            Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, body) {
                     Err(EvalAltResult::LoopBreak) => return Ok(Box::new(())),
                     Err(x) => return Err(x),
                     _ => (),
                 }
             },
-            Stmt::For(ref name, ref expr, ref body) => {
+            Stmt::For(name, expr, body) => {
                 let arr = self.eval_expr(scope, expr)?;
                 let tid = Any::type_id(&*arr);
                 if let Some(iter_fn) = self.type_iterators.get(&tid) {
@@ -706,13 +706,13 @@ impl Engine {
             }
             Stmt::Break => Err(EvalAltResult::LoopBreak),
             Stmt::Return => Err(EvalAltResult::Return(Box::new(()))),
-            Stmt::ReturnWithVal(ref a) => {
+            Stmt::ReturnWithVal(a) => {
                 let result = self.eval_expr(scope, a)?;
                 Err(EvalAltResult::Return(result))
             }
-            Stmt::Let(ref name, ref init) => {
-                match *init {
-                    Some(ref v) => {
+            Stmt::Let(name, init) => {
+                match init {
+                    Some(v) => {
                         let i = self.eval_expr(scope, v)?;
                         scope.push((name.clone(), i));
                     }
