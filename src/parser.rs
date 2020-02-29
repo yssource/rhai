@@ -7,6 +7,7 @@ use std::str::Chars;
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum LexError {
     UnexpectedChar(char),
+    UnterminatedString,
     MalformedEscapeSequence,
     MalformedNumber,
     MalformedChar,
@@ -19,6 +20,7 @@ impl Error for LexError {
     fn description(&self) -> &str {
         match *self {
             LERR::UnexpectedChar(_) => "Unexpected character",
+            LERR::UnterminatedString => "Open string is not terminated",
             LERR::MalformedEscapeSequence => "Unexpected values in escape sequence",
             LERR::MalformedNumber => "Unexpected characters in number",
             LERR::MalformedChar => "Char constant not a single character",
@@ -61,6 +63,10 @@ pub struct Position {
 impl Position {
     fn advance(&mut self) {
         self.pos += 1;
+    }
+    fn rewind(&mut self) {
+        // Beware, should not rewind at zero position
+        self.pos -= 1;
     }
     fn new_line(&mut self) {
         self.line += 1;
@@ -132,7 +138,7 @@ impl fmt::Display for ParseError {
         if self.line() > 0 {
             write!(f, " at line {}, position {}", self.line(), self.position())
         } else {
-            write!(f, " but script is incomplete")
+            write!(f, " at the end of the script but there is no more input")
         }
     }
 }
@@ -354,6 +360,9 @@ impl<'a> TokenIterator<'a> {
     fn advance(&mut self) {
         self.pos.advance();
     }
+    fn rewind(&mut self) {
+        self.pos.rewind();
+    }
     fn new_line(&mut self) {
         self.pos.new_line();
     }
@@ -365,10 +374,16 @@ impl<'a> TokenIterator<'a> {
         let mut result = Vec::new();
         let mut escape = false;
 
-        while let Some(look_ahead) = self.char_stream.next() {
+        loop {
+            let next_char = self.char_stream.next();
+
+            if next_char.is_none() {
+                return Err((LERR::UnterminatedString, Position::eof()));
+            }
+
             self.advance();
 
-            match look_ahead {
+            match next_char.unwrap() {
                 '\\' if !escape => escape = true,
                 '\\' if escape => {
                     escape = false;
@@ -458,10 +473,11 @@ impl<'a> TokenIterator<'a> {
                 x if enclosing_char == x && escape => result.push(x),
                 x if enclosing_char == x && !escape => break,
                 _ if escape => return Err((LERR::MalformedEscapeSequence, self.pos)),
+                '\n' => {
+                    self.rewind();
+                    return Err((LERR::UnterminatedString, self.pos));
+                }
                 x => {
-                    if look_ahead == '\n' {
-                        self.new_line();
-                    }
                     escape = false;
                     result.push(x);
                 }
@@ -983,13 +999,7 @@ fn parse_call_expr<'a>(
     }
 
     loop {
-        match parse_expr(input) {
-            Ok(arg) => args.push(arg),
-            Err(mut err) => {
-                err.0 = PERR::MalformedCallExpr;
-                return Err(err);
-            }
-        }
+        args.push(parse_expr(input)?);
 
         match input.peek() {
             Some(&(Token::RightParen, _)) => {
