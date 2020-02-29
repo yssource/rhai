@@ -939,7 +939,7 @@ pub fn lex(input: &str) -> TokenIterator<'_> {
     }
 }
 
-fn get_precedence(token: &Token) -> i32 {
+fn get_precedence(token: &Token) -> i8 {
     match *token {
         Token::Equals
         | Token::PlusAssign
@@ -1130,7 +1130,7 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 
 fn parse_binop<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    prec: i32,
+    prec: i8,
     lhs: Expr,
 ) -> Result<Expr, ParseError> {
     let mut lhs_curr = lhs;
