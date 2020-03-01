@@ -54,6 +54,8 @@ pub enum ParseErrorType {
     FnMissingParams,
 }
 
+type PERR = ParseErrorType;
+
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
     line: usize,
@@ -77,13 +79,11 @@ impl Position {
     }
 }
 
-type PERR = ParseErrorType;
-
 #[derive(Debug, PartialEq, Clone)]
-pub struct ParseError(ParseErrorType, Position);
+pub struct ParseError(PERR, Position);
 
 impl ParseError {
-    pub fn error_type(&self) -> &ParseErrorType {
+    pub fn error_type(&self) -> &PERR {
         &self.0
     }
     pub fn line(&self) -> usize {

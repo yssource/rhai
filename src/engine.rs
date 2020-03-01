@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub};
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
 use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::call::FunArgs;
@@ -20,16 +20,17 @@ pub enum EvalAltResult {
     ErrorParseError(ParseError),
     ErrorFunctionNotFound(String),
     ErrorFunctionArgMismatch,
-    ErrorArrayOutOfBounds(usize, i64),
-    ErrorArrayMismatch,
-    ErrorIndexMismatch,
-    ErrorIfGuardMismatch,
-    ErrorForMismatch,
+    ErrorArrayBounds(usize, i64),
+    ErrorStringBounds(usize, i64),
+    ErrorIndexing,
+    ErrorIndexExpr,
+    ErrorIfGuard,
+    ErrorFor,
     ErrorVariableNotFound(String),
     ErrorAssignmentToUnknownLHS,
     ErrorMismatchOutputType(String),
     ErrorCantOpenScriptFile(String),
-    ErrorMalformedDotExpression,
+    ErrorDotExpr,
     LoopBreak,
     Return(Dynamic),
 }
@@ -54,18 +55,21 @@ impl PartialEq for EvalAltResult {
             (ErrorParseError(ref a), ErrorParseError(ref b)) => a == b,
             (ErrorFunctionNotFound(ref a), ErrorFunctionNotFound(ref b)) => a == b,
             (ErrorFunctionArgMismatch, ErrorFunctionArgMismatch) => true,
-            (ErrorIndexMismatch, ErrorIndexMismatch) => true,
-            (ErrorArrayMismatch, ErrorArrayMismatch) => true,
-            (ErrorArrayOutOfBounds(max1, index1), ErrorArrayOutOfBounds(max2, index2)) => {
+            (ErrorIndexExpr, ErrorIndexExpr) => true,
+            (ErrorIndexing, ErrorIndexing) => true,
+            (ErrorArrayBounds(max1, index1), ErrorArrayBounds(max2, index2)) => {
                 max1 == max2 && index1 == index2
             }
-            (ErrorIfGuardMismatch, ErrorIfGuardMismatch) => true,
-            (ErrorForMismatch, ErrorForMismatch) => true,
+            (ErrorStringBounds(max1, index1), ErrorStringBounds(max2, index2)) => {
+                max1 == max2 && index1 == index2
+            }
+            (ErrorIfGuard, ErrorIfGuard) => true,
+            (ErrorFor, ErrorFor) => true,
             (ErrorVariableNotFound(ref a), ErrorVariableNotFound(ref b)) => a == b,
             (ErrorAssignmentToUnknownLHS, ErrorAssignmentToUnknownLHS) => true,
             (ErrorMismatchOutputType(ref a), ErrorMismatchOutputType(ref b)) => a == b,
             (ErrorCantOpenScriptFile(ref a), ErrorCantOpenScriptFile(ref b)) => a == b,
-            (ErrorMalformedDotExpression, ErrorMalformedDotExpression) => true,
+            (ErrorDotExpr, ErrorDotExpr) => true,
             (LoopBreak, LoopBreak) => true,
             _ => false,
         }
@@ -75,29 +79,32 @@ impl PartialEq for EvalAltResult {
 impl Error for EvalAltResult {
     fn description(&self) -> &str {
         match self {
-            EvalAltResult::ErrorParseError(ref p) => p.description(),
-            EvalAltResult::ErrorFunctionNotFound(_) => "Function not found",
-            EvalAltResult::ErrorFunctionArgMismatch => "Function argument types do not match",
-            EvalAltResult::ErrorIndexMismatch => "Array access expects integer index",
-            EvalAltResult::ErrorArrayMismatch => "Indexing can only be performed on an array",
-            EvalAltResult::ErrorArrayOutOfBounds(_, ref index) if *index < 0 => {
+            Self::ErrorParseError(ref p) => p.description(),
+            Self::ErrorFunctionNotFound(_) => "Function not found",
+            Self::ErrorFunctionArgMismatch => "Function argument types do not match",
+            Self::ErrorIndexExpr => "Indexing into an array or string expects an integer index",
+            Self::ErrorIndexing => "Indexing can only be performed on an array or a string",
+            Self::ErrorArrayBounds(_, ref index) if *index < 0 => {
                 "Array access expects non-negative index"
             }
-            EvalAltResult::ErrorArrayOutOfBounds(ref max, _) if *max == 0 => {
-                "Access of empty array"
+            Self::ErrorArrayBounds(ref max, _) if *max == 0 => "Access of empty array",
+            Self::ErrorArrayBounds(_, _) => "Array index out of bounds",
+            Self::ErrorStringBounds(_, ref index) if *index < 0 => {
+                "Indexing a string expects a non-negative index"
             }
-            EvalAltResult::ErrorArrayOutOfBounds(_, _) => "Array index out of bounds",
-            EvalAltResult::ErrorIfGuardMismatch => "If guards expect boolean expression",
-            EvalAltResult::ErrorForMismatch => "For loops expect array",
-            EvalAltResult::ErrorVariableNotFound(_) => "Variable not found",
-            EvalAltResult::ErrorAssignmentToUnknownLHS => {
+            Self::ErrorStringBounds(ref max, _) if *max == 0 => "Indexing of empty string",
+            Self::ErrorStringBounds(_, _) => "String index out of bounds",
+            Self::ErrorIfGuard => "If guards expect boolean expression",
+            Self::ErrorFor => "For loops expect array",
+            Self::ErrorVariableNotFound(_) => "Variable not found",
+            Self::ErrorAssignmentToUnknownLHS => {
                 "Assignment to an unsupported left-hand side expression"
             }
-            EvalAltResult::ErrorMismatchOutputType(_) => "Output type is incorrect",
-            EvalAltResult::ErrorCantOpenScriptFile(_) => "Cannot open script file",
-            EvalAltResult::ErrorMalformedDotExpression => "Malformed dot expression",
-            EvalAltResult::LoopBreak => "[Not Error] Breaks out of loop",
-            EvalAltResult::Return(_) => "[Not Error] Function returns value",
+            Self::ErrorMismatchOutputType(_) => "Output type is incorrect",
+            Self::ErrorCantOpenScriptFile(_) => "Cannot open script file",
+            Self::ErrorDotExpr => "Malformed dot expression",
+            Self::LoopBreak => "[Not Error] Breaks out of loop",
+            Self::Return(_) => "[Not Error] Function returns value",
         }
     }
 
@@ -113,13 +120,22 @@ impl fmt::Display for EvalAltResult {
         } else {
             match self {
                 EvalAltResult::ErrorParseError(ref p) => write!(f, "Syntax error: {}", p),
-                EvalAltResult::ErrorArrayOutOfBounds(_, index) if *index < 0 => {
+                EvalAltResult::ErrorArrayBounds(_, index) if *index < 0 => {
                     write!(f, "{}: {} < 0", self.description(), index)
                 }
-                EvalAltResult::ErrorArrayOutOfBounds(max, _) if *max == 0 => {
+                EvalAltResult::ErrorArrayBounds(max, _) if *max == 0 => {
                     write!(f, "{}", self.description())
                 }
-                EvalAltResult::ErrorArrayOutOfBounds(max, index) => {
+                EvalAltResult::ErrorArrayBounds(max, index) => {
+                    write!(f, "{} (max {}): {}", self.description(), max - 1, index)
+                }
+                EvalAltResult::ErrorStringBounds(_, index) if *index < 0 => {
+                    write!(f, "{}: {} < 0", self.description(), index)
+                }
+                EvalAltResult::ErrorStringBounds(max, _) if *max == 0 => {
+                    write!(f, "{}", self.description())
+                }
+                EvalAltResult::ErrorStringBounds(max, index) => {
                     write!(f, "{} (max {}): {}", self.description(), max - 1, index)
                 }
                 err => write!(f, "{}", err.description()),
@@ -222,14 +238,14 @@ impl Engine {
                 self.fns.get(&spec1)
             })
             .ok_or_else(|| {
-                let typenames = args
+                let type_names = args
                     .iter()
                     .map(|x| (*(&**x).into_dynamic()).type_name())
                     .collect::<Vec<_>>();
                 EvalAltResult::ErrorFunctionNotFound(format!(
                     "{} ({})",
                     ident,
-                    typenames.join(", ")
+                    type_names.join(", ")
                 ))
             })
             .and_then(move |f| match **f {
@@ -350,35 +366,65 @@ impl Engine {
                 self.call_fn_raw(get_fn_name, vec![this_ptr])
             }
             Expr::Index(id, idx_raw) => {
-                let idx = self.eval_expr(scope, idx_raw)?;
+                let idx = self
+                    .eval_expr(scope, idx_raw)?
+                    .downcast_ref::<i64>()
+                    .map(|i| *i)
+                    .ok_or(EvalAltResult::ErrorIndexExpr)?;
+
                 let get_fn_name = "get$".to_string() + id;
 
                 let mut val = self.call_fn_raw(get_fn_name, vec![this_ptr])?;
 
-                ((*val).downcast_mut() as Option<&mut Array>)
-                    .ok_or(EvalAltResult::ErrorArrayMismatch)
-                    .and_then(|arr| {
-                        idx.downcast_ref::<i64>()
-                            .map(|idx| (arr, *idx))
-                            .ok_or(EvalAltResult::ErrorIndexMismatch)
-                    })
-                    .and_then(|(arr, idx)| match idx {
-                        x if x < 0 => Err(EvalAltResult::ErrorArrayOutOfBounds(0, x)),
-                        x => arr
-                            .get(x as usize)
+                if let Some(arr) = (*val).downcast_mut() as Option<&mut Array> {
+                    if idx < 0 {
+                        Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx))
+                    } else {
+                        arr.get(idx as usize)
                             .cloned()
-                            .ok_or(EvalAltResult::ErrorArrayOutOfBounds(arr.len(), x)),
-                    })
+                            .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), idx))
+                    }
+                } else if let Some(s) = (*val).downcast_mut() as Option<&mut String> {
+                    if idx < 0 {
+                        Err(EvalAltResult::ErrorStringBounds(s.chars().count(), idx))
+                    } else {
+                        s.chars()
+                            .nth(idx as usize)
+                            .map(|ch| Box::new(ch) as Dynamic)
+                            .ok_or_else(|| EvalAltResult::ErrorStringBounds(s.chars().count(), idx))
+                    }
+                } else {
+                    Err(EvalAltResult::ErrorIndexing)
+                }
             }
             Expr::Dot(inner_lhs, inner_rhs) => match **inner_lhs {
                 Expr::Identifier(ref id) => {
                     let get_fn_name = "get$".to_string() + id;
-                    self.call_fn_raw(get_fn_name, vec![this_ptr])
-                        .and_then(|mut v| self.get_dot_val_helper(scope, v.as_mut(), inner_rhs))
+                    let value = self
+                        .call_fn_raw(get_fn_name, vec![this_ptr])
+                        .and_then(|mut v| self.get_dot_val_helper(scope, v.as_mut(), inner_rhs))?;
+
+                    // TODO - Should propagate changes back in this scenario:
+                    //
+                    //     fn update(p) { p = something_else; }
+                    //     obj.prop.update();
+                    //
+                    // Right now, a copy of the object's property value is mutated, but not propagated
+                    // back to the property via $set.
+
+                    Ok(value)
                 }
-                _ => Err(EvalAltResult::ErrorMalformedDotExpression),
+                Expr::Index(_, _) => {
+                    // TODO - Handle Expr::Index for these scenarios:
+                    //
+                    //    let x = obj.prop[2].x;
+                    //    obj.prop[3] = 42;
+                    //
+                    Err(EvalAltResult::ErrorDotExpr)
+                }
+                _ => Err(EvalAltResult::ErrorDotExpr),
             },
-            _ => Err(EvalAltResult::ErrorMalformedDotExpression),
+            _ => Err(EvalAltResult::ErrorDotExpr),
         }
     }
 
@@ -399,32 +445,64 @@ impl Engine {
             .and_then(move |(idx, &mut (_, ref mut val))| map(val.as_mut()).map(|val| (idx, val)))
     }
 
-    fn array_value(
+    fn indexed_value(
         &self,
         scope: &mut Scope,
         id: &str,
         idx: &Expr,
-    ) -> Result<(usize, usize, Dynamic), EvalAltResult> {
-        let idx_boxed = self
+    ) -> Result<(bool, usize, usize, Dynamic), EvalAltResult> {
+        let idx = *self
             .eval_expr(scope, idx)?
             .downcast::<i64>()
-            .map_err(|_| EvalAltResult::ErrorIndexMismatch)?;
-        let idx_raw = *idx_boxed;
-        let idx = match idx_raw {
-            x if x < 0 => return Err(EvalAltResult::ErrorArrayOutOfBounds(0, x)),
-            x => x as usize,
-        };
-        let (idx_sc, val) = Self::search_scope(scope, id, |val| {
-            ((*val).downcast_mut() as Option<&mut Array>)
-                .ok_or(EvalAltResult::ErrorArrayMismatch)
-                .and_then(|arr| {
-                    arr.get(idx)
-                        .cloned()
-                        .ok_or(EvalAltResult::ErrorArrayOutOfBounds(arr.len(), idx_raw))
-                })
-        })?;
+            .map_err(|_| EvalAltResult::ErrorIndexExpr)?;
 
-        Ok((idx_sc, idx, val))
+        let mut is_array = false;
+
+        Self::search_scope(scope, id, |val| {
+            if let Some(arr) = (*val).downcast_mut() as Option<&mut Array> {
+                is_array = true;
+
+                return if idx < 0 {
+                    Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx))
+                } else {
+                    arr.get(idx as usize)
+                        .cloned()
+                        .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), idx))
+                };
+            }
+
+            if let Some(s) = (*val).downcast_mut() as Option<&mut String> {
+                is_array = false;
+
+                return if idx < 0 {
+                    Err(EvalAltResult::ErrorStringBounds(s.chars().count(), idx))
+                } else {
+                    s.chars()
+                        .nth(idx as usize)
+                        .map(|ch| Box::new(ch) as Dynamic)
+                        .ok_or_else(|| EvalAltResult::ErrorStringBounds(s.chars().count(), idx))
+                };
+            }
+
+            Err(EvalAltResult::ErrorIndexing)
+        })
+        .map(|(idx_sc, val)| (is_array, idx_sc, idx as usize, val))
+    }
+
+    fn str_replace_char(s: &mut String, idx: usize, new_ch: char) {
+        // The new character
+        let ch = s.chars().nth(idx).unwrap();
+
+        // See if changed - if so, update the String
+        if ch == new_ch {
+            return;
+        }
+
+        // Collect all the characters after the index
+        let mut chars: Vec<char> = s.chars().collect();
+        chars[idx] = new_ch;
+        s.truncate(0);
+        chars.iter().for_each(|&ch| s.push(ch));
     }
 
     fn get_dot_val(
@@ -445,16 +523,27 @@ impl Engine {
                 value
             }
             Expr::Index(id, idx_raw) => {
-                let (sc_idx, idx, mut target) = self.array_value(scope, id, idx_raw)?;
+                let (is_array, sc_idx, idx, mut target) = self.indexed_value(scope, id, idx_raw)?;
                 let value = self.get_dot_val_helper(scope, target.as_mut(), dot_rhs);
 
                 // In case the expression mutated `target`, we need to reassign it because
                 // of the above `clone`.
-                scope[sc_idx].1.downcast_mut::<Array>().unwrap()[idx] = target;
+
+                if is_array {
+                    scope[sc_idx].1.downcast_mut::<Array>().unwrap()[idx] = target;
+                } else {
+                    // Target should be a char
+                    let new_ch = *target.downcast::<char>().unwrap();
+
+                    // Root should be a String
+                    let s = scope[sc_idx].1.downcast_mut::<String>().unwrap();
+
+                    Self::str_replace_char(s, idx, new_ch);
+                }
 
                 value
             }
-            _ => Err(EvalAltResult::ErrorMalformedDotExpression),
+            _ => Err(EvalAltResult::ErrorDotExpr),
         }
     }
 
@@ -483,9 +572,9 @@ impl Engine {
                             self.call_fn_raw(set_fn_name, vec![this_ptr, v.as_mut()])
                         })
                 }
-                _ => Err(EvalAltResult::ErrorMalformedDotExpression),
+                _ => Err(EvalAltResult::ErrorDotExpr),
             },
-            _ => Err(EvalAltResult::ErrorMalformedDotExpression),
+            _ => Err(EvalAltResult::ErrorDotExpr),
         }
     }
 
@@ -508,16 +597,26 @@ impl Engine {
                 value
             }
             Expr::Index(id, idx_raw) => {
-                let (sc_idx, idx, mut target) = self.array_value(scope, id, idx_raw)?;
+                let (is_array, sc_idx, idx, mut target) = self.indexed_value(scope, id, idx_raw)?;
                 let value = self.set_dot_val_helper(target.as_mut(), dot_rhs, source_val);
 
                 // In case the expression mutated `target`, we need to reassign it because
                 // of the above `clone`.
-                scope[sc_idx].1.downcast_mut::<Array>().unwrap()[idx] = target;
+                if is_array {
+                    scope[sc_idx].1.downcast_mut::<Array>().unwrap()[idx] = target;
+                } else {
+                    // Target should be a char
+                    let new_ch = *target.downcast::<char>().unwrap();
+
+                    // Root should be a String
+                    let s = scope[sc_idx].1.downcast_mut::<String>().unwrap();
+
+                    Self::str_replace_char(s, idx, new_ch);
+                }
 
                 value
             }
-            _ => Err(EvalAltResult::ErrorMalformedDotExpression),
+            _ => Err(EvalAltResult::ErrorDotExpr),
         }
     }
 
@@ -528,58 +627,72 @@ impl Engine {
             Expr::StringConstant(s) => Ok(Box::new(s.clone())),
             Expr::CharConstant(c) => Ok(Box::new(*c)),
             Expr::Identifier(id) => {
-                for &mut (ref name, ref mut val) in &mut scope.iter_mut().rev() {
-                    if id == name {
-                        return Ok(val.clone());
-                    }
+                match scope.iter().rev().filter(|(name, _)| id == name).next() {
+                    Some((_, val)) => Ok(val.clone()),
+                    _ => Err(EvalAltResult::ErrorVariableNotFound(id.clone())),
                 }
-                Err(EvalAltResult::ErrorVariableNotFound(id.clone()))
             }
-            Expr::Index(id, idx_raw) => self.array_value(scope, id, idx_raw).map(|(_, _, x)| x),
+            Expr::Index(id, idx_raw) => {
+                self.indexed_value(scope, id, idx_raw).map(|(_, _, _, x)| x)
+            }
             Expr::Assignment(ref id, rhs) => {
                 let rhs_val = self.eval_expr(scope, rhs)?;
 
                 match **id {
                     Expr::Identifier(ref n) => {
-                        for &mut (ref name, ref mut val) in &mut scope.iter_mut().rev() {
-                            if n == name {
+                        match scope.iter_mut().rev().filter(|(name, _)| n == name).next() {
+                            Some((_, val)) => {
                                 *val = rhs_val;
-
-                                return Ok(Box::new(()));
+                                Ok(Box::new(()))
                             }
+                            _ => Err(EvalAltResult::ErrorVariableNotFound(n.clone())),
                         }
-                        Err(EvalAltResult::ErrorVariableNotFound(n.clone()))
                     }
                     Expr::Index(ref id, ref idx_raw) => {
-                        let idx = self.eval_expr(scope, &idx_raw)?;
+                        let idx = *match self.eval_expr(scope, &idx_raw)?.downcast_ref::<i64>() {
+                            Some(x) => x,
+                            _ => return Err(EvalAltResult::ErrorIndexExpr),
+                        };
 
-                        for &mut (ref name, ref mut val) in &mut scope.iter_mut().rev() {
-                            if id == name {
-                                return if let Some(&i) = idx.downcast_ref::<i64>() {
-                                    if let Some(arr_typed) =
-                                        (*val).downcast_mut() as Option<&mut Array>
-                                    {
-                                        if i < 0 {
-                                            Err(EvalAltResult::ErrorArrayOutOfBounds(0, i))
-                                        } else if i as usize >= arr_typed.len() {
-                                            Err(EvalAltResult::ErrorArrayOutOfBounds(
-                                                arr_typed.len(),
-                                                i,
-                                            ))
-                                        } else {
-                                            arr_typed[i as usize] = rhs_val;
-                                            Ok(Box::new(()))
-                                        }
-                                    } else {
-                                        Err(EvalAltResult::ErrorIndexMismatch)
-                                    }
-                                } else {
-                                    Err(EvalAltResult::ErrorIndexMismatch)
-                                };
-                            }
+                        let variable = &mut scope
+                            .iter_mut()
+                            .rev()
+                            .filter(|(name, _)| id == name)
+                            .map(|(_, val)| val)
+                            .next();
+
+                        let val = match variable {
+                            Some(v) => v,
+                            _ => return Err(EvalAltResult::ErrorVariableNotFound(id.clone())),
+                        };
+
+                        if let Some(arr) = val.downcast_mut() as Option<&mut Array> {
+                            return if idx < 0 {
+                                Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx))
+                            } else if idx as usize >= arr.len() {
+                                Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx))
+                            } else {
+                                arr[idx as usize] = rhs_val;
+                                Ok(Box::new(()))
+                            };
                         }
 
-                        Err(EvalAltResult::ErrorVariableNotFound(id.clone()))
+                        if let Some(s) = val.downcast_mut() as Option<&mut String> {
+                            let s_len = s.chars().count();
+
+                            return if idx < 0 {
+                                Err(EvalAltResult::ErrorStringBounds(s_len, idx))
+                            } else if idx as usize >= s_len {
+                                Err(EvalAltResult::ErrorStringBounds(s_len, idx))
+                            } else {
+                                // Should be a char
+                                let new_ch = *rhs_val.downcast::<char>().unwrap();
+                                Self::str_replace_char(s, idx as usize, new_ch);
+                                Ok(Box::new(()))
+                            };
+                        }
+
+                        return Err(EvalAltResult::ErrorIndexExpr);
                     }
                     Expr::Dot(ref dot_lhs, ref dot_rhs) => {
                         self.set_dot_val(scope, dot_lhs, dot_rhs, rhs_val)
@@ -591,10 +704,11 @@ impl Engine {
             Expr::Array(contents) => {
                 let mut arr = Vec::new();
 
-                for item in &(*contents) {
+                contents.iter().try_for_each(|item| {
                     let arg = self.eval_expr(scope, item)?;
                     arr.push(arg);
-                }
+                    Ok(())
+                })?;
 
                 Ok(Box::new(arr))
             }
@@ -615,13 +729,13 @@ impl Engine {
 
     fn eval_stmt(&self, scope: &mut Scope, stmt: &Stmt) -> Result<Dynamic, EvalAltResult> {
         match stmt {
-            Stmt::Expr(e) => self.eval_expr(scope, e),
-            Stmt::Block(b) => {
+            Stmt::Expr(expr) => self.eval_expr(scope, expr),
+            Stmt::Block(block) => {
                 let prev_len = scope.len();
                 let mut last_result: Result<Dynamic, EvalAltResult> = Ok(Box::new(()));
 
-                for s in b.iter() {
-                    last_result = self.eval_stmt(scope, s);
+                for block_stmt in block.iter() {
+                    last_result = self.eval_stmt(scope, block_stmt);
                     if let Err(x) = last_result {
                         last_result = Err(x);
                         break;
@@ -634,37 +748,32 @@ impl Engine {
 
                 last_result
             }
-            Stmt::If(guard, body) => {
-                let guard_result = self.eval_expr(scope, guard)?;
-                match guard_result.downcast::<bool>() {
-                    Ok(g) => {
-                        if *g {
-                            self.eval_stmt(scope, body)
-                        } else {
-                            Ok(Box::new(()))
-                        }
+            Stmt::If(guard, body) => self
+                .eval_expr(scope, guard)?
+                .downcast::<bool>()
+                .map_err(|_| EvalAltResult::ErrorIfGuard)
+                .and_then(|guard_val| {
+                    if *guard_val {
+                        self.eval_stmt(scope, body)
+                    } else {
+                        Ok(Box::new(()))
                     }
-                    Err(_) => Err(EvalAltResult::ErrorIfGuardMismatch),
-                }
-            }
-            Stmt::IfElse(guard, body, else_body) => {
-                let guard_result = self.eval_expr(scope, guard)?;
-                match guard_result.downcast::<bool>() {
-                    Ok(g) => {
-                        if *g {
-                            self.eval_stmt(scope, body)
-                        } else {
-                            self.eval_stmt(scope, else_body)
-                        }
+                }),
+            Stmt::IfElse(guard, body, else_body) => self
+                .eval_expr(scope, guard)?
+                .downcast::<bool>()
+                .map_err(|_| EvalAltResult::ErrorIfGuard)
+                .and_then(|guard_val| {
+                    if *guard_val {
+                        self.eval_stmt(scope, body)
+                    } else {
+                        self.eval_stmt(scope, else_body)
                     }
-                    Err(_) => Err(EvalAltResult::ErrorIfGuardMismatch),
-                }
-            }
+                }),
             Stmt::While(guard, body) => loop {
-                let guard_result = self.eval_expr(scope, guard)?;
-                match guard_result.downcast::<bool>() {
-                    Ok(g) => {
-                        if *g {
+                match self.eval_expr(scope, guard)?.downcast::<bool>() {
+                    Ok(guard_val) => {
+                        if *guard_val {
                             match self.eval_stmt(scope, body) {
                                 Err(EvalAltResult::LoopBreak) => return Ok(Box::new(())),
                                 Err(x) => return Err(x),
@@ -674,7 +783,7 @@ impl Engine {
                             return Ok(Box::new(()));
                         }
                     }
-                    Err(_) => return Err(EvalAltResult::ErrorIfGuardMismatch),
+                    Err(_) => return Err(EvalAltResult::ErrorIfGuard),
                 }
             },
             Stmt::Loop(body) => loop {
@@ -701,7 +810,7 @@ impl Engine {
                     scope.remove(idx);
                     Ok(Box::new(()))
                 } else {
-                    return Err(EvalAltResult::ErrorForMismatch);
+                    return Err(EvalAltResult::ErrorFor);
                 }
             }
             Stmt::Break => Err(EvalAltResult::LoopBreak),
@@ -711,13 +820,12 @@ impl Engine {
                 Err(EvalAltResult::Return(result))
             }
             Stmt::Let(name, init) => {
-                match init {
-                    Some(v) => {
-                        let i = self.eval_expr(scope, v)?;
-                        scope.push((name.clone(), i));
-                    }
-                    None => scope.push((name.clone(), Box::new(()))),
-                };
+                if let Some(v) = init {
+                    let i = self.eval_expr(scope, v)?;
+                    scope.push((name.clone(), i));
+                } else {
+                    scope.push((name.clone(), Box::new(())));
+                }
                 Ok(Box::new(()))
             }
         }
@@ -734,38 +842,38 @@ impl Engine {
     }
 
     /// Compile a file into an AST
-    pub fn compile_file(fname: &str) -> Result<AST, EvalAltResult> {
+    pub fn compile_file(filename: &str) -> Result<AST, EvalAltResult> {
         use std::fs::File;
         use std::io::prelude::*;
 
-        if let Ok(mut f) = File::open(fname) {
+        if let Ok(mut f) = File::open(filename) {
             let mut contents = String::new();
 
             if f.read_to_string(&mut contents).is_ok() {
                 Self::compile(&contents).map_err(|err| EvalAltResult::ErrorParseError(err))
             } else {
-                Err(EvalAltResult::ErrorCantOpenScriptFile(fname.to_owned()))
+                Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
             }
         } else {
-            Err(EvalAltResult::ErrorCantOpenScriptFile(fname.to_owned()))
+            Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
         }
     }
 
     /// Evaluate a file
-    pub fn eval_file<T: Any + Clone>(&mut self, fname: &str) -> Result<T, EvalAltResult> {
+    pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
         use std::fs::File;
         use std::io::prelude::*;
 
-        if let Ok(mut f) = File::open(fname) {
+        if let Ok(mut f) = File::open(filename) {
             let mut contents = String::new();
 
             if f.read_to_string(&mut contents).is_ok() {
                 self.eval::<T>(&contents)
             } else {
-                Err(EvalAltResult::ErrorCantOpenScriptFile(fname.to_owned()))
+                Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
             }
         } else {
-            Err(EvalAltResult::ErrorCantOpenScriptFile(fname.to_owned()))
+            Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
         }
     }
 
@@ -830,11 +938,11 @@ impl Engine {
     /// Evaluate a file, but only return errors, if there are any.
     /// Useful for when you don't need the result, but still need
     /// to keep track of possible errors
-    pub fn consume_file(&mut self, fname: &str) -> Result<(), EvalAltResult> {
+    pub fn consume_file(&mut self, filename: &str) -> Result<(), EvalAltResult> {
         use std::fs::File;
         use std::io::prelude::*;
 
-        if let Ok(mut f) = File::open(fname) {
+        if let Ok(mut f) = File::open(filename) {
             let mut contents = String::new();
 
             if f.read_to_string(&mut contents).is_ok() {
@@ -844,10 +952,10 @@ impl Engine {
                     Ok(())
                 }
             } else {
-                Err(EvalAltResult::ErrorCantOpenScriptFile(fname.to_owned()))
+                Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
             }
         } else {
-            Err(EvalAltResult::ErrorCantOpenScriptFile(fname.to_owned()))
+            Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
         }
     }
 
@@ -1040,12 +1148,12 @@ impl Engine {
         reg_op!(engine, "*", mul, i32, i64, u32, u64, f32, f64);
         reg_op!(engine, "/", div, i32, i64, u32, u64, f32, f64);
 
-        reg_cmp!(engine, "<", lt, i32, i64, u32, u64, String, f64);
-        reg_cmp!(engine, "<=", lte, i32, i64, u32, u64, String, f64);
-        reg_cmp!(engine, ">", gt, i32, i64, u32, u64, String, f64);
-        reg_cmp!(engine, ">=", gte, i32, i64, u32, u64, String, f64);
-        reg_cmp!(engine, "==", eq, i32, i64, u32, u64, bool, String, f64);
-        reg_cmp!(engine, "!=", ne, i32, i64, u32, u64, bool, String, f64);
+        reg_cmp!(engine, "<", lt, i32, i64, u32, u64, String, char, f32, f64);
+        reg_cmp!(engine, "<=", lte, i32, i64, u32, u64, String, char, f32, f64);
+        reg_cmp!(engine, ">", gt, i32, i64, u32, u64, String, char, f32, f64);
+        reg_cmp!(engine, ">=", gte, i32, i64, u32, u64, String, char, f32, f64);
+        reg_cmp!(engine, "==", eq, i32, i64, u32, u64, bool, String, char, f32, f64);
+        reg_cmp!(engine, "!=", ne, i32, i64, u32, u64, bool, String, char, f32, f64);
 
         reg_op!(engine, "||", or, bool);
         reg_op!(engine, "&&", and, bool);
@@ -1084,6 +1192,7 @@ impl Engine {
         engine.register_fn("to_int", |x: u64| x as i64);
         engine.register_fn("to_int", |x: f32| x as i64);
         engine.register_fn("to_int", |x: f64| x as i64);
+        engine.register_fn("to_int", |ch: char| ch as i64);
 
         // Register print and debug
         fn print_debug<T: Debug>(x: T) -> String {
@@ -1094,15 +1203,15 @@ impl Engine {
         }
 
         reg_func1!(engine, "print", print, String, i32, i64, u32, u64);
-        reg_func1!(engine, "print", print, String, f32, f64, bool, String);
+        reg_func1!(engine, "print", print, String, f32, f64, bool, char, String);
         reg_func1!(engine, "print", print_debug, String, Array);
         engine.register_fn("print", |_: ()| println!());
 
         reg_func1!(engine, "debug", print_debug, String, i32, i64, u32, u64);
-        reg_func1!(engine, "debug", print_debug, String, f32, f64, bool, String);
-        reg_func1!(engine, "debug", print_debug, String, Array, ());
+        reg_func1!(engine, "debug", print_debug, String, f32, f64, bool, char);
+        reg_func1!(engine, "debug", print_debug, String, String, Array, ());
 
-        // Register array functions
+        // Register array utility functions
         fn push<T: Any>(list: &mut Array, item: T) {
             list.push(Box::new(item));
         }
@@ -1115,11 +1224,11 @@ impl Engine {
         }
 
         reg_func2x!(engine, "push", push, &mut Array, (), i32, i64, u32, u64);
-        reg_func2x!(engine, "push", push, &mut Array, (), f32, f64, bool);
+        reg_func2x!(engine, "push", push, &mut Array, (), f32, f64, bool, char);
         reg_func2x!(engine, "push", push, &mut Array, (), String, Array, ());
-        reg_func3!(engine, "pad", pad, &mut Array, i64, (), i32, i64);
-        reg_func3!(engine, "pad", pad, &mut Array, i64, (), u32, u64);
-        reg_func3!(engine, "pad", pad, &mut Array, i64, (), f32, f64, bool);
+        reg_func3!(engine, "pad", pad, &mut Array, i64, (), i32, u32, f32);
+        reg_func3!(engine, "pad", pad, &mut Array, i64, (), i64, u64, f64);
+        reg_func3!(engine, "pad", pad, &mut Array, i64, (), bool, char);
         reg_func3!(engine, "pad", pad, &mut Array, i64, (), String, Array, ());
 
         engine.register_dynamic_fn("pop", |list: &mut Array| list.pop().unwrap_or(Box::new(())));
@@ -1130,9 +1239,7 @@ impl Engine {
                 Box::new(())
             }
         });
-        engine.register_fn("len", |list: &mut Array| -> i64 {
-            list.len().try_into().unwrap()
-        });
+        engine.register_fn("len", |list: &mut Array| -> i64 { list.len() as i64 });
         engine.register_fn("truncate", |list: &mut Array, len: i64| {
             if len >= 0 {
                 list.truncate(len as usize);
@@ -1147,13 +1254,36 @@ impl Engine {
             format!("{}{}", x, y)
         }
 
-        reg_func2x!(engine, "+", append, String, String, i32, i64, u32, u64, f32, f64, bool);
+        reg_func2x!(engine, "+", append, String, String, i32, i64, u32, u64, f32, f64, bool, char);
         engine.register_fn("+", |x: String, y: Array| format!("{}{:?}", x, y));
         engine.register_fn("+", |x: String, _: ()| format!("{}", x));
 
-        reg_func2y!(engine, "+", prepend, String, String, i32, i64, u32, u64, f32, f64, bool);
+        reg_func2y!(engine, "+", prepend, String, String, i32, i64, u32, u64, f32, f64, bool, char);
         engine.register_fn("+", |x: Array, y: String| format!("{:?}{}", x, y));
         engine.register_fn("+", |_: (), y: String| format!("{}", y));
+
+        // Register string utility functions
+        engine.register_fn("len", |s: &mut String| -> i64 { s.chars().count() as i64 });
+        engine.register_fn("truncate", |s: &mut String, len: i64| {
+            if len >= 0 {
+                s.truncate(len as usize);
+            }
+        });
+        engine.register_fn("pad", |s: &mut String, len: i64, ch: char| {
+            let gap = s.chars().count() - len as usize;
+
+            for _ in 0..gap {
+                s.push(ch);
+            }
+        });
+        engine.register_fn(
+            "replace",
+            |s: &mut String, pattern: String, replace: String| {
+                let new_str = s.replace(&pattern, &replace);
+                s.truncate(0);
+                s.push_str(&new_str);
+            },
+        );
 
         // Register array iterator
         engine.register_iterator::<Array, _>(|a| {

@@ -124,6 +124,7 @@ The following primitive types are supported natively:
 
 * Integer: `i32`, `u32`, `i64` (default), `u64`
 * Floating-point: `f32`, `f64` (default)
+* Character: `char`
 * Boolean: `bool`
 * Array: `rhai::Array`
 * Dynamic (i.e. can be anything): `rhai::Dynamic`
@@ -138,6 +139,10 @@ There is a `to_float` function to convert a supported number to an `f64`, and a 
 let x = 42;
 let y = x * 100.0;              // error: cannot multiply i64 with f64
 let y = x.to_float() * 100.0;   // works
+let z = y.to_int() + x;         // works
+
+let c = 'X';                    // character
+print("c is '" + c + "' and its code is " + c.to_int());
 ```
 
 # Working with functions
@@ -335,6 +340,23 @@ if let Ok(result) = engine.eval::<i64>("let a = new_ts(); a.x = 500; a.x") {
 }
 ```
 
+### WARNING: Gotcha's with Getters
+
+When you _get_ a property, the value is cloned.  Any update to it downstream will **NOT** be reflected back to the custom type.
+
+This can introduce subtle bugs.  For example:
+
+```rust
+fn change(s) {
+    s = 42;
+}
+
+let a = new_ts();
+a.x = 500;
+a.x.change();   // Only a COPY of 'a.x' is changed. 'a.x' is NOT changed.
+a.x == 500;
+```
+
 # Maintaining state
 
 By default, Rhai treats each engine invocation as a fresh one, persisting only the functions that have been defined but no top-level state.  This gives each one a fairly clean starting place.  Sometimes, though, you want to continue using the same top-level state from one invocation to the next.
@@ -460,6 +482,10 @@ y[1] = 42;
 
 print(y[1]);            // prints 42
 
+let foo = [1, 2, 3][0]; // a syntax error for now - cannot index into literals
+let foo = ts.list[0];   // a syntax error for now - cannot index into properties
+let foo = y[0];         // this works
+
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
 
@@ -526,9 +552,46 @@ let last = 'Davis';
 let full_name = name + " " + middle_initial + ". " + last;
 full_name == "Bob C. Davis";
 
+// String building with different types
 let age = 42;
-let name_and_age = full_name + ": age " + age;      // String building with different types
-name_and_age == "Bob C. Davis: age 42";
+let record = full_name + ": age " + age;
+record == "Bob C. Davis: age 42";
+
+// Strings can be indexed to get a character
+let c = record[4];
+c == 'C';
+
+let c = "foo"[0];   // a syntax error for now - cannot index into literals
+let c = ts.s[0];    // a syntax error for now - cannot index into properties
+let c = record[0];  // this works
+
+// Unlike Rust, Rhai strings can be modified
+record[4] = 'Z';
+record == "Bob Z. Davis: age 42";
+```
+
+The following standard functions operate on strings:
+
+* `len` - returns the number of characters (not number of bytes) in the string
+* `pad` - pads the string with an character until a specified number of characters
+* `truncate` - cuts off the string at exactly a specified number of characters
+* `replace` - replaces a substring with another
+
+```rust
+let full_name == "Bob C. Davis";
+full_name.len() == 12;
+
+full_name.pad(15, '$');
+full_name.len() = 15;
+full_name == "Bob C. Davis$$$";
+
+full_name.truncate(6);
+full_name.len() = 6;
+full_name == "Bob C.";
+
+full_name.replace("Bob", "John");
+full_name.len() = 7;
+full_name = "John C.";
 ```
 
 ## Print and Debug
