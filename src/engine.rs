@@ -307,39 +307,38 @@ impl Engine {
     /// Register an iterator adapter for a type.
     pub fn register_iterator<T: Any, F>(&mut self, f: F)
     where
-        F: 'static + Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>,
+        F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static,
     {
         self.type_iterators.insert(TypeId::of::<T>(), Arc::new(f));
     }
 
     /// Register a get function for a member of a registered type
-    pub fn register_get<T: Any + Clone, U: Any + Clone, F>(&mut self, name: &str, get_fn: F)
-    where
-        F: 'static + Fn(&mut T) -> U,
-    {
+    pub fn register_get<T: Any + Clone, U: Any + Clone>(
+        &mut self,
+        name: &str,
+        get_fn: impl Fn(&mut T) -> U + 'static,
+    ) {
         let get_name = "get$".to_string() + name;
         self.register_fn(&get_name, get_fn);
     }
 
     /// Register a set function for a member of a registered type
-    pub fn register_set<T: Any + Clone, U: Any + Clone, F>(&mut self, name: &str, set_fn: F)
-    where
-        F: 'static + Fn(&mut T, U) -> (),
-    {
+    pub fn register_set<T: Any + Clone, U: Any + Clone>(
+        &mut self,
+        name: &str,
+        set_fn: impl Fn(&mut T, U) -> () + 'static,
+    ) {
         let set_name = "set$".to_string() + name;
         self.register_fn(&set_name, set_fn);
     }
 
     /// Shorthand for registering both getters and setters
-    pub fn register_get_set<T: Any + Clone, U: Any + Clone, F, G>(
+    pub fn register_get_set<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
-        get_fn: F,
-        set_fn: G,
-    ) where
-        F: 'static + Fn(&mut T) -> U,
-        G: 'static + Fn(&mut T, U) -> (),
-    {
+        get_fn: impl Fn(&mut T) -> U + 'static,
+        set_fn: impl Fn(&mut T, U) -> () + 'static,
+    ) {
         self.register_get(name, get_fn);
         self.register_set(name, set_fn);
     }
@@ -432,14 +431,11 @@ impl Engine {
         }
     }
 
-    fn search_scope<'a, F, T>(
+    fn search_scope<'a, T>(
         scope: &'a mut Scope,
         id: &str,
-        map: F,
-    ) -> Result<(usize, T), EvalAltResult>
-    where
-        F: FnOnce(&'a mut Variant) -> Result<T, EvalAltResult>,
-    {
+        map: impl FnOnce(&'a mut Variant) -> Result<T, EvalAltResult>,
+    ) -> Result<(usize, T), EvalAltResult> {
         scope
             .iter_mut()
             .enumerate()

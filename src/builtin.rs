@@ -1,6 +1,6 @@
 use crate::{any::Any, Array, Dynamic, Engine, RegisterDynamicFn, RegisterFn};
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub};
 
 macro_rules! reg_op {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
@@ -297,7 +297,6 @@ impl Engine {
         });
 
         // Register range function
-        use std::ops::Range;
         self.register_iterator::<Range<i64>, _>(|a| {
             Box::new(
                 a.downcast_ref::<Range<i64>>()
