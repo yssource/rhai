@@ -474,6 +474,7 @@ The following standard functions operate on arrays:
 * `shift` - removes the first element and returns it (() if empty)
 * `len` - returns the number of elements
 * `pad` - pads the array with an element until a specified length
+* `clear` - empties the array
 * `truncate` - cuts off the array at exactly a specified length (discarding all subsequent elements)
 
 ```rust
@@ -506,6 +507,10 @@ print(y.len());         // prints 10
 y.truncate(5);          // truncate the array to 5 elements
 
 print(y.len());         // prints 5
+
+y.clear();              // empty the array
+
+print(y.len());         // prints 0
 ```
 
 `push` and `pad` are only defined for standard built-in types.  If you want to use them with
@@ -574,24 +579,36 @@ The following standard functions operate on strings:
 
 * `len` - returns the number of characters (not number of bytes) in the string
 * `pad` - pads the string with an character until a specified number of characters
+* `clear` - empties the string
 * `truncate` - cuts off the string at exactly a specified number of characters
+* `contains` - checks if a certain character or sub-string occurs in the string
 * `replace` - replaces a substring with another
+* `trim` - trims the string
 
 ```rust
-let full_name == "Bob C. Davis";
+let full_name == " Bob C. Davis ";
+full_name.len() == 14;
+
+full_name.trim();
 full_name.len() == 12;
 
 full_name.pad(15, '$');
-full_name.len() = 15;
+full_name.len() == 15;
 full_name == "Bob C. Davis$$$";
 
 full_name.truncate(6);
-full_name.len() = 6;
+full_name.len() == 6;
 full_name == "Bob C.";
 
 full_name.replace("Bob", "John");
-full_name.len() = 7;
+full_name.len() == 7;
 full_name = "John C.";
+
+full_name.contains('C') == true;
+full_name.contains("John") == true;
+
+full_name.clear();
+full_name.len() == 0;
 ```
 
 ## Print and Debug

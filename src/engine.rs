@@ -3,14 +3,13 @@ use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub};
 use std::sync::Arc;
 
 use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::call::FunArgs;
-use crate::fn_register::{RegisterDynamicFn, RegisterFn};
+use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, Expr, FnDef, ParseError, Stmt, AST};
-use fmt::{Debug, Display};
+use fmt::Debug;
 
 pub type Array = Vec<Dynamic>;
 pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
@@ -214,7 +213,7 @@ impl Engine {
 
     /// Universal method for calling functions, that are either
     /// registered with the `Engine` or written in Rhai
-    pub fn call_fn_raw(&self, ident: String, args: FnCallArgs) -> Result<Dynamic, EvalAltResult> {
+    fn call_fn_raw(&self, ident: String, args: FnCallArgs) -> Result<Dynamic, EvalAltResult> {
         debug_println!(
             "Trying to call function {:?} with args {:?}",
             ident,
@@ -286,7 +285,12 @@ impl Engine {
             })
     }
 
-    pub fn register_fn_raw(&mut self, ident: String, args: Option<Vec<TypeId>>, f: Box<FnAny>) {
+    pub(crate) fn register_fn_raw(
+        &mut self,
+        ident: String,
+        args: Option<Vec<TypeId>>,
+        f: Box<FnAny>,
+    ) {
         debug_println!("Register; {:?} with args {:?}", ident, args);
 
         let spec = FnSpec { ident, args };
@@ -501,7 +505,7 @@ impl Engine {
         // Collect all the characters after the index
         let mut chars: Vec<char> = s.chars().collect();
         chars[idx] = new_ch;
-        s.truncate(0);
+        s.clear();
         chars.iter().for_each(|&ch| s.push(ch));
     }
 
@@ -1008,302 +1012,6 @@ impl Engine {
         }
     }
 
-    /// Register the default library. That means, numeric types, char, bool
-    /// String, arithmetics and string concatenations.
-    pub fn register_default_lib(engine: &mut Engine) {
-        macro_rules! reg_op {
-            ($engine:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-                $(
-                    $engine.register_fn($x, $op as fn(x: $y, y: $y)->$y);
-                )*
-            )
-        }
-
-        macro_rules! reg_un {
-            ($engine:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-                $(
-                    $engine.register_fn($x, $op as fn(x: $y)->$y);
-                )*
-            )
-        }
-
-        macro_rules! reg_cmp {
-            ($engine:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-                $(
-                    $engine.register_fn($x, $op as fn(x: $y, y: $y)->bool);
-                )*
-            )
-        }
-
-        macro_rules! reg_func1 {
-            ($engine:expr, $x:expr, $op:expr, $r:ty, $( $y:ty ),*) => (
-                $(
-                    $engine.register_fn($x, $op as fn(x: $y)->$r);
-                )*
-            )
-        }
-
-        macro_rules! reg_func2x {
-            ($engine:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
-                $(
-                    $engine.register_fn($x, $op as fn(x: $v, y: $y)->$r);
-                )*
-            )
-        }
-
-        macro_rules! reg_func2y {
-            ($engine:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
-                $(
-                    $engine.register_fn($x, $op as fn(y: $y, x: $v)->$r);
-                )*
-            )
-        }
-
-        macro_rules! reg_func3 {
-            ($engine:expr, $x:expr, $op:expr, $v:ty, $w:ty, $r:ty, $( $y:ty ),*) => (
-                $(
-                    $engine.register_fn($x, $op as fn(x: $v, y: $w, z: $y)->$r);
-                )*
-            )
-        }
-
-        fn add<T: Add>(x: T, y: T) -> <T as Add>::Output {
-            x + y
-        }
-        fn sub<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
-            x - y
-        }
-        fn mul<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
-            x * y
-        }
-        fn div<T: Div>(x: T, y: T) -> <T as Div>::Output {
-            x / y
-        }
-        fn neg<T: Neg>(x: T) -> <T as Neg>::Output {
-            -x
-        }
-        fn lt<T: PartialOrd>(x: T, y: T) -> bool {
-            x < y
-        }
-        fn lte<T: PartialOrd>(x: T, y: T) -> bool {
-            x <= y
-        }
-        fn gt<T: PartialOrd>(x: T, y: T) -> bool {
-            x > y
-        }
-        fn gte<T: PartialOrd>(x: T, y: T) -> bool {
-            x >= y
-        }
-        fn eq<T: PartialEq>(x: T, y: T) -> bool {
-            x == y
-        }
-        fn ne<T: PartialEq>(x: T, y: T) -> bool {
-            x != y
-        }
-        fn and(x: bool, y: bool) -> bool {
-            x && y
-        }
-        fn or(x: bool, y: bool) -> bool {
-            x || y
-        }
-        fn not(x: bool) -> bool {
-            !x
-        }
-        fn concat(x: String, y: String) -> String {
-            x + &y
-        }
-        fn binary_and<T: BitAnd>(x: T, y: T) -> <T as BitAnd>::Output {
-            x & y
-        }
-        fn binary_or<T: BitOr>(x: T, y: T) -> <T as BitOr>::Output {
-            x | y
-        }
-        fn binary_xor<T: BitXor>(x: T, y: T) -> <T as BitXor>::Output {
-            x ^ y
-        }
-        fn left_shift<T: Shl<T>>(x: T, y: T) -> <T as Shl<T>>::Output {
-            x.shl(y)
-        }
-        fn right_shift<T: Shr<T>>(x: T, y: T) -> <T as Shr<T>>::Output {
-            x.shr(y)
-        }
-        fn modulo<T: Rem<T>>(x: T, y: T) -> <T as Rem<T>>::Output {
-            x % y
-        }
-        fn pow_i64_i64(x: i64, y: i64) -> i64 {
-            x.pow(y as u32)
-        }
-        fn pow_f64_f64(x: f64, y: f64) -> f64 {
-            x.powf(y)
-        }
-        fn pow_f64_i64(x: f64, y: i64) -> f64 {
-            x.powi(y as i32)
-        }
-        fn unit_eq(_a: (), _b: ()) -> bool {
-            true
-        }
-
-        reg_op!(engine, "+", add, i32, i64, u32, u64, f32, f64);
-        reg_op!(engine, "-", sub, i32, i64, u32, u64, f32, f64);
-        reg_op!(engine, "*", mul, i32, i64, u32, u64, f32, f64);
-        reg_op!(engine, "/", div, i32, i64, u32, u64, f32, f64);
-
-        reg_cmp!(engine, "<", lt, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(engine, "<=", lte, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(engine, ">", gt, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(engine, ">=", gte, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(engine, "==", eq, i32, i64, u32, u64, bool, String, char, f32, f64);
-        reg_cmp!(engine, "!=", ne, i32, i64, u32, u64, bool, String, char, f32, f64);
-
-        reg_op!(engine, "||", or, bool);
-        reg_op!(engine, "&&", and, bool);
-        reg_op!(engine, "|", binary_or, i32, i64, u32, u64);
-        reg_op!(engine, "|", or, bool);
-        reg_op!(engine, "&", binary_and, i32, i64, u32, u64);
-        reg_op!(engine, "&", and, bool);
-        reg_op!(engine, "^", binary_xor, i32, i64, u32, u64);
-        reg_op!(engine, "<<", left_shift, i32, i64, u32, u64);
-        reg_op!(engine, ">>", right_shift, i32, i64, u32, u64);
-        reg_op!(engine, "%", modulo, i32, i64, u32, u64);
-        engine.register_fn("~", pow_i64_i64);
-        engine.register_fn("~", pow_f64_f64);
-        engine.register_fn("~", pow_f64_i64);
-
-        reg_un!(engine, "-", neg, i32, i64, f32, f64);
-        reg_un!(engine, "!", not, bool);
-
-        engine.register_fn("+", concat);
-        engine.register_fn("==", unit_eq);
-
-        // engine.register_fn("[]", idx);
-        // FIXME?  Registering array lookups are a special case because we want to return boxes
-        // directly let ent = engine.fns.entry("[]".to_string()).or_insert_with(Vec::new);
-        // (*ent).push(FnType::ExternalFn2(Box::new(idx)));
-
-        // Register conversion functions
-        engine.register_fn("to_float", |x: i32| x as f64);
-        engine.register_fn("to_float", |x: u32| x as f64);
-        engine.register_fn("to_float", |x: i64| x as f64);
-        engine.register_fn("to_float", |x: u64| x as f64);
-        engine.register_fn("to_float", |x: f32| x as f64);
-
-        engine.register_fn("to_int", |x: i32| x as i64);
-        engine.register_fn("to_int", |x: u32| x as i64);
-        engine.register_fn("to_int", |x: u64| x as i64);
-        engine.register_fn("to_int", |x: f32| x as i64);
-        engine.register_fn("to_int", |x: f64| x as i64);
-        engine.register_fn("to_int", |ch: char| ch as i64);
-
-        // Register print and debug
-        fn print_debug<T: Debug>(x: T) -> String {
-            format!("{:?}", x)
-        }
-        fn print<T: Display>(x: T) -> String {
-            format!("{}", x)
-        }
-
-        reg_func1!(engine, "print", print, String, i32, i64, u32, u64);
-        reg_func1!(engine, "print", print, String, f32, f64, bool, char, String);
-        reg_func1!(engine, "print", print_debug, String, Array);
-        engine.register_fn("print", |_: ()| println!());
-
-        reg_func1!(engine, "debug", print_debug, String, i32, i64, u32, u64);
-        reg_func1!(engine, "debug", print_debug, String, f32, f64, bool, char);
-        reg_func1!(engine, "debug", print_debug, String, String, Array, ());
-
-        // Register array utility functions
-        fn push<T: Any>(list: &mut Array, item: T) {
-            list.push(Box::new(item));
-        }
-        fn pad<T: Any + Clone>(list: &mut Array, len: i64, item: T) {
-            if len >= 0 {
-                while list.len() < len as usize {
-                    push(list, item.clone());
-                }
-            }
-        }
-
-        reg_func2x!(engine, "push", push, &mut Array, (), i32, i64, u32, u64);
-        reg_func2x!(engine, "push", push, &mut Array, (), f32, f64, bool, char);
-        reg_func2x!(engine, "push", push, &mut Array, (), String, Array, ());
-        reg_func3!(engine, "pad", pad, &mut Array, i64, (), i32, u32, f32);
-        reg_func3!(engine, "pad", pad, &mut Array, i64, (), i64, u64, f64);
-        reg_func3!(engine, "pad", pad, &mut Array, i64, (), bool, char);
-        reg_func3!(engine, "pad", pad, &mut Array, i64, (), String, Array, ());
-
-        engine.register_dynamic_fn("pop", |list: &mut Array| list.pop().unwrap_or(Box::new(())));
-        engine.register_dynamic_fn("shift", |list: &mut Array| {
-            if list.len() > 0 {
-                list.remove(0)
-            } else {
-                Box::new(())
-            }
-        });
-        engine.register_fn("len", |list: &mut Array| -> i64 { list.len() as i64 });
-        engine.register_fn("truncate", |list: &mut Array, len: i64| {
-            if len >= 0 {
-                list.truncate(len as usize);
-            }
-        });
-
-        // Register string concatenate functions
-        fn prepend<T: Display>(x: T, y: String) -> String {
-            format!("{}{}", x, y)
-        }
-        fn append<T: Display>(x: String, y: T) -> String {
-            format!("{}{}", x, y)
-        }
-
-        reg_func2x!(engine, "+", append, String, String, i32, i64, u32, u64, f32, f64, bool, char);
-        engine.register_fn("+", |x: String, y: Array| format!("{}{:?}", x, y));
-        engine.register_fn("+", |x: String, _: ()| format!("{}", x));
-
-        reg_func2y!(engine, "+", prepend, String, String, i32, i64, u32, u64, f32, f64, bool, char);
-        engine.register_fn("+", |x: Array, y: String| format!("{:?}{}", x, y));
-        engine.register_fn("+", |_: (), y: String| format!("{}", y));
-
-        // Register string utility functions
-        engine.register_fn("len", |s: &mut String| -> i64 { s.chars().count() as i64 });
-        engine.register_fn("truncate", |s: &mut String, len: i64| {
-            if len >= 0 {
-                s.truncate(len as usize);
-            }
-        });
-        engine.register_fn("pad", |s: &mut String, len: i64, ch: char| {
-            let gap = s.chars().count() - len as usize;
-
-            for _ in 0..gap {
-                s.push(ch);
-            }
-        });
-        engine.register_fn(
-            "replace",
-            |s: &mut String, pattern: String, replace: String| {
-                let new_str = s.replace(&pattern, &replace);
-                s.truncate(0);
-                s.push_str(&new_str);
-            },
-        );
-
-        // Register array iterator
-        engine.register_iterator::<Array, _>(|a| {
-            Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
-        });
-
-        // Register range function
-        use std::ops::Range;
-        engine.register_iterator::<Range<i64>, _>(|a| {
-            Box::new(
-                a.downcast_ref::<Range<i64>>()
-                    .unwrap()
-                    .clone()
-                    .map(|n| Box::new(n) as Dynamic),
-            )
-        });
-
-        engine.register_fn("range", |i1: i64, i2: i64| (i1..i2));
-    }
-
     /// Make a new engine
     pub fn new() -> Engine {
         let mut engine = Engine {
@@ -1313,7 +1021,7 @@ impl Engine {
             on_debug: Box::new(|x: &str| println!("{}", x)),
         };
 
-        Engine::register_default_lib(&mut engine);
+        engine.register_builtins();
 
         engine
     }

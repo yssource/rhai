@@ -40,6 +40,7 @@ macro_rules! debug_println {
 }
 
 mod any;
+mod builtin;
 mod call;
 mod engine;
 mod fn_register;
