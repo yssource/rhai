@@ -155,8 +155,7 @@ pub struct FnDef {
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    If(Box<Expr>, Box<Stmt>),
-    IfElse(Box<Expr>, Box<Stmt>, Box<Stmt>),
+    IfElse(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
     While(Box<Expr>, Box<Stmt>),
     Loop(Box<Stmt>),
     For(String, Box<Expr>, Box<Stmt>),
@@ -1308,14 +1307,19 @@ fn parse_if<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseEr
     match input.peek() {
         Some(&(Token::Else, _)) => {
             input.next();
-            let else_body = parse_block(input)?;
+
+            let else_body = match input.peek() {
+                Some(&(Token::If, _)) => parse_if(input)?,
+                _ => parse_block(input)?,
+            };
+
             Ok(Stmt::IfElse(
                 Box::new(guard),
                 Box::new(body),
-                Box::new(else_body),
+                Some(Box::new(else_body)),
             ))
         }
-        _ => Ok(Stmt::If(Box::new(guard), Box::new(body))),
+        _ => Ok(Stmt::IfElse(Box::new(guard), Box::new(body), None)),
     }
 }
 

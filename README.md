@@ -190,6 +190,18 @@ fn main() {
 }
 ```
 
+To return a `Dynamic` value, simply `Box` it and return it.
+
+```rust
+fn decide(yes_no: bool) -> Dynamic {
+    if yes_no {
+        Box::new(42_i64)
+    } else {
+        Box::new("hello world!".to_string())    // remember &str is not supported
+    }
+}
+```
+
 # Working with generic functions
 
 Generic functions can be used in Rhai, but you'll need to register separate instances for each concrete type:
@@ -217,7 +229,7 @@ You can also see in this example how you can register multiple functions (or in 
 
 # Override built-in functions
 
-Any similarly-named function defined in a script with the correct argument types overrides any built-in function.
+Any similarly-named function defined in a script overrides any built-in function.
 
 ```rust
 // Override the built-in function 'to_int'
@@ -445,9 +457,10 @@ this() & that();    // both this() and that() are evaluated
 
 ```rust
 if true {
-    print("it's true!");
-}
-else {
+    print("It's true!");
+} else if true {
+    print("It's true again!");
+} else {
     print("It's false!");
 }
 ```
@@ -456,11 +469,10 @@ else {
 
 ```rust
 let x = 10;
+
 while x > 0 {
     print(x);
-    if x == 5 {
-        break;
-    }
+    if x == 5 { break; }
     x = x - 1;
 }
 ```
@@ -497,18 +509,6 @@ fn add(x, y) {
 }
 
 print(add(2, 3))
-```
-
-To return a `Dynamic` value, simply `Box` it and return it.
-
-```rust
-fn decide(yes_no: bool) -> Dynamic {
-    if yes_no {
-        Box::new(42_i64)
-    } else {
-        Box::new("hello world!".to_string())    // remember &str is not supported
-    }
-}
 ```
 
 ## Arrays

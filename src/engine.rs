@@ -818,18 +818,6 @@ impl Engine {
                 last_result
             }
 
-            Stmt::If(guard, body) => self
-                .eval_expr(scope, guard)?
-                .downcast::<bool>()
-                .map_err(|_| EvalAltResult::ErrorIfGuard)
-                .and_then(|guard_val| {
-                    if *guard_val {
-                        self.eval_stmt(scope, body)
-                    } else {
-                        Ok(Box::new(()))
-                    }
-                }),
-
             Stmt::IfElse(guard, body, else_body) => self
                 .eval_expr(scope, guard)?
                 .downcast::<bool>()
@@ -837,8 +825,10 @@ impl Engine {
                 .and_then(|guard_val| {
                     if *guard_val {
                         self.eval_stmt(scope, body)
+                    } else if else_body.is_some() {
+                        self.eval_stmt(scope, else_body.as_ref().unwrap())
                     } else {
-                        self.eval_stmt(scope, else_body)
+                        Ok(Box::new(()))
                     }
                 }),
 
