@@ -137,33 +137,38 @@ impl Engine {
             true
         }
 
-        reg_op!(self, "+", add, i32, i64, u32, u64, f32, f64);
-        reg_op!(self, "-", sub, i32, i64, u32, u64, f32, f64);
-        reg_op!(self, "*", mul, i32, i64, u32, u64, f32, f64);
-        reg_op!(self, "/", div, i32, i64, u32, u64, f32, f64);
+        reg_op!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
+        reg_op!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
+        reg_op!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
+        reg_op!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
 
-        reg_cmp!(self, "<", lt, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(self, "<=", lte, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(self, ">", gt, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(self, ">=", gte, i32, i64, u32, u64, String, char, f32, f64);
-        reg_cmp!(self, "==", eq, i32, i64, u32, u64, bool, String, char, f32, f64);
-        reg_cmp!(self, "!=", ne, i32, i64, u32, u64, bool, String, char, f32, f64);
+        reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
+        reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
+        reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
+        reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
+        reg_cmp!(
+            self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, bool, f32, f64, String, char
+        );
+        reg_cmp!(
+            self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, bool, f32, f64, String, char
+        );
 
         //reg_op!(self, "||", or, bool);
         //reg_op!(self, "&&", and, bool);
-        reg_op!(self, "|", binary_or, i32, i64, u32, u64);
+        reg_op!(self, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64);
         reg_op!(self, "|", or, bool);
-        reg_op!(self, "&", binary_and, i32, i64, u32, u64);
+        reg_op!(self, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64);
         reg_op!(self, "&", and, bool);
-        reg_op!(self, "^", binary_xor, i32, i64, u32, u64);
-        reg_op!(self, "<<", left_shift, i32, i64, u32, u64);
+        reg_op!(self, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op!(self, "<<", left_shift, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op!(self, ">>", right_shift, i8, u8, i16, u16);
         reg_op!(self, ">>", right_shift, i32, i64, u32, u64);
-        reg_op!(self, "%", modulo, i32, i64, u32, u64);
+        reg_op!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64);
         self.register_fn("~", pow_i64_i64);
         self.register_fn("~", pow_f64_f64);
         self.register_fn("~", pow_f64_i64);
 
-        reg_un!(self, "-", neg, i32, i64, f32, f64);
+        reg_un!(self, "-", neg, i8, i16, i32, i64, f32, f64);
         reg_un!(self, "!", not, bool);
 
         self.register_fn("+", concat);
@@ -175,17 +180,26 @@ impl Engine {
         // (*ent).push(FnType::ExternalFn2(Box::new(idx)));
 
         // Register conversion functions
+        self.register_fn("to_float", |x: i8| x as f64);
+        self.register_fn("to_float", |x: u8| x as f64);
+        self.register_fn("to_float", |x: i16| x as f64);
+        self.register_fn("to_float", |x: u16| x as f64);
         self.register_fn("to_float", |x: i32| x as f64);
         self.register_fn("to_float", |x: u32| x as f64);
         self.register_fn("to_float", |x: i64| x as f64);
         self.register_fn("to_float", |x: u64| x as f64);
         self.register_fn("to_float", |x: f32| x as f64);
 
+        self.register_fn("to_int", |x: i8| x as i64);
+        self.register_fn("to_int", |x: u8| x as i64);
+        self.register_fn("to_int", |x: i16| x as i64);
+        self.register_fn("to_int", |x: u16| x as i64);
         self.register_fn("to_int", |x: i32| x as i64);
         self.register_fn("to_int", |x: u32| x as i64);
         self.register_fn("to_int", |x: u64| x as i64);
         self.register_fn("to_int", |x: f32| x as i64);
         self.register_fn("to_int", |x: f64| x as i64);
+
         self.register_fn("to_int", |ch: char| ch as i64);
 
         // Register print and debug
@@ -196,12 +210,14 @@ impl Engine {
             format!("{}", x)
         }
 
+        reg_func1!(self, "print", print, String, i8, u8, i16, u16);
         reg_func1!(self, "print", print, String, i32, i64, u32, u64);
         reg_func1!(self, "print", print, String, f32, f64, bool, char, String);
         reg_func1!(self, "print", print_debug, String, Array);
         self.register_fn("print", || "".to_string());
         self.register_fn("print", |_: ()| "".to_string());
 
+        reg_func1!(self, "debug", print_debug, String, i8, u8, i16, u16);
         reg_func1!(self, "debug", print_debug, String, i32, i64, u32, u64);
         reg_func1!(self, "debug", print_debug, String, f32, f64, bool, char);
         reg_func1!(self, "debug", print_debug, String, String, Array, ());
@@ -218,9 +234,11 @@ impl Engine {
             }
         }
 
+        reg_func2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
         reg_func2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
         reg_func2x!(self, "push", push, &mut Array, (), f32, f64, bool, char);
         reg_func2x!(self, "push", push, &mut Array, (), String, Array, ());
+        reg_func3!(self, "pad", pad, &mut Array, i64, (), i8, u8, i16, u16);
         reg_func3!(self, "pad", pad, &mut Array, i64, (), i32, u32, f32);
         reg_func3!(self, "pad", pad, &mut Array, i64, (), i64, u64, f64);
         reg_func3!(self, "pad", pad, &mut Array, i64, (), bool, char);
@@ -250,11 +268,17 @@ impl Engine {
             format!("{}{}", x, y)
         }
 
-        reg_func2x!(self, "+", append, String, String, i32, i64, u32, u64, f32, f64, bool, char);
+        reg_func2x!(
+            self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64,
+            bool, char
+        );
         self.register_fn("+", |x: String, y: Array| format!("{}{:?}", x, y));
         self.register_fn("+", |x: String, _: ()| format!("{}", x));
 
-        reg_func2y!(self, "+", prepend, String, String, i32, i64, u32, u64, f32, f64, bool, char);
+        reg_func2y!(
+            self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64,
+            bool, char
+        );
         self.register_fn("+", |x: Array, y: String| format!("{:?}{}", x, y));
         self.register_fn("+", |_: (), y: String| format!("{}", y));
 
