@@ -8,11 +8,7 @@ impl Engine {
     /// Compile a string into an AST
     pub fn compile(input: &str) -> Result<AST, ParseError> {
         let tokens = lex(input);
-
-        let mut peekables = tokens.peekable();
-        let tree = parse(&mut peekables);
-
-        tree
+        parse(&mut tokens.peekable())
     }
 
     /// Compile a file into an AST
@@ -21,12 +17,12 @@ impl Engine {
         use std::io::prelude::*;
 
         let mut f = File::open(filename)
-            .map_err(|_| EvalAltResult::ErrorCantOpenScriptFile(filename.into()))?;
+            .map_err(|err| EvalAltResult::ErrorCantOpenScriptFile(filename.into(), err))?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|_| EvalAltResult::ErrorCantOpenScriptFile(filename.into()))
+            .map_err(|err| EvalAltResult::ErrorCantOpenScriptFile(filename.into(), err))
             .and_then(|_| Self::compile(&contents).map_err(EvalAltResult::ErrorParsing))
     }
 
@@ -36,12 +32,12 @@ impl Engine {
         use std::io::prelude::*;
 
         let mut f = File::open(filename)
-            .map_err(|_| EvalAltResult::ErrorCantOpenScriptFile(filename.into()))?;
+            .map_err(|err| EvalAltResult::ErrorCantOpenScriptFile(filename.into(), err))?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|_| EvalAltResult::ErrorCantOpenScriptFile(filename.into()))
+            .map_err(|err| EvalAltResult::ErrorCantOpenScriptFile(filename.into(), err))
             .and_then(|_| self.eval::<T>(&contents))
     }
 
@@ -107,12 +103,12 @@ impl Engine {
         use std::io::prelude::*;
 
         let mut f = File::open(filename)
-            .map_err(|_| EvalAltResult::ErrorCantOpenScriptFile(filename.into()))?;
+            .map_err(|err| EvalAltResult::ErrorCantOpenScriptFile(filename.into(), err))?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|_| EvalAltResult::ErrorCantOpenScriptFile(filename.into()))
+            .map_err(|err| EvalAltResult::ErrorCantOpenScriptFile(filename.into(), err))
             .and_then(|_| self.consume(&contents))
     }
 

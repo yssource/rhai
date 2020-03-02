@@ -12,7 +12,7 @@ use crate::parser::{Expr, FnDef, ParseError, Stmt};
 pub type Array = Vec<Dynamic>;
 pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum EvalAltResult {
     ErrorParsing(ParseError),
     ErrorFunctionNotFound(String),
@@ -27,7 +27,7 @@ pub enum EvalAltResult {
     ErrorVariableNotFound(String),
     ErrorAssignmentToUnknownLHS,
     ErrorMismatchOutputType(String),
-    ErrorCantOpenScriptFile(String),
+    ErrorCantOpenScriptFile(String, std::io::Error),
     ErrorDotExpr,
     ErrorArithmetic(String),
     LoopBreak,
@@ -37,8 +37,7 @@ pub enum EvalAltResult {
 impl EvalAltResult {
     fn as_str(&self) -> Option<&str> {
         Some(match self {
-            Self::ErrorCantOpenScriptFile(s)
-            | Self::ErrorVariableNotFound(s)
+            Self::ErrorVariableNotFound(s)
             | Self::ErrorFunctionNotFound(s)
             | Self::ErrorMismatchOutputType(s)
             | Self::ErrorArithmetic(s) => s,
@@ -71,7 +70,7 @@ impl PartialEq for EvalAltResult {
             (ErrorVariableNotFound(a), ErrorVariableNotFound(b)) => a == b,
             (ErrorAssignmentToUnknownLHS, ErrorAssignmentToUnknownLHS) => true,
             (ErrorMismatchOutputType(a), ErrorMismatchOutputType(b)) => a == b,
-            (ErrorCantOpenScriptFile(a), ErrorCantOpenScriptFile(b)) => a == b,
+            (ErrorCantOpenScriptFile(a, _), ErrorCantOpenScriptFile(b, _)) => a == b,
             (ErrorDotExpr, ErrorDotExpr) => true,
             (ErrorArithmetic(a), ErrorArithmetic(b)) => a == b,
             (LoopBreak, LoopBreak) => true,
@@ -106,7 +105,7 @@ impl Error for EvalAltResult {
                 "Assignment to an unsupported left-hand side expression"
             }
             Self::ErrorMismatchOutputType(_) => "Output type is incorrect",
-            Self::ErrorCantOpenScriptFile(_) => "Cannot open script file",
+            Self::ErrorCantOpenScriptFile(_, _) => "Cannot open script file",
             Self::ErrorDotExpr => "Malformed dot expression",
             Self::ErrorArithmetic(_) => "Arithmetic error",
             Self::LoopBreak => "[Not Error] Breaks out of loop",
@@ -125,29 +124,28 @@ impl std::fmt::Display for EvalAltResult {
             write!(f, "{}: {}", self.description(), s)
         } else {
             match self {
-                EvalAltResult::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
-                EvalAltResult::ErrorFunctionArgsMismatch(fun, n) => {
+                Self::ErrorCantOpenScriptFile(filename, err) => {
+                    write!(f, "Cannot open script file '{}': {}", filename, err)
+                }
+                Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
+                Self::ErrorFunctionArgsMismatch(fun, n) => {
                     write!(f, "Function '{}' expects {} argument(s)", fun, n)
                 }
-                EvalAltResult::ErrorBooleanArgMismatch(op) => {
+                Self::ErrorBooleanArgMismatch(op) => {
                     write!(f, "Boolean {} operator expects boolean operands", op)
                 }
-                EvalAltResult::ErrorArrayBounds(_, index) if *index < 0 => {
+                Self::ErrorArrayBounds(_, index) if *index < 0 => {
                     write!(f, "{}: {} < 0", self.description(), index)
                 }
-                EvalAltResult::ErrorArrayBounds(max, _) if *max == 0 => {
-                    write!(f, "{}", self.description())
-                }
-                EvalAltResult::ErrorArrayBounds(max, index) => {
+                Self::ErrorArrayBounds(max, _) if *max == 0 => write!(f, "{}", self.description()),
+                Self::ErrorArrayBounds(max, index) => {
                     write!(f, "{} (max {}): {}", self.description(), max - 1, index)
                 }
-                EvalAltResult::ErrorStringBounds(_, index) if *index < 0 => {
+                Self::ErrorStringBounds(_, index) if *index < 0 => {
                     write!(f, "{}: {} < 0", self.description(), index)
                 }
-                EvalAltResult::ErrorStringBounds(max, _) if *max == 0 => {
-                    write!(f, "{}", self.description())
-                }
-                EvalAltResult::ErrorStringBounds(max, index) => {
+                Self::ErrorStringBounds(max, _) if *max == 0 => write!(f, "{}", self.description()),
+                Self::ErrorStringBounds(max, index) => {
                     write!(f, "{} (max {}): {}", self.description(), max - 1, index)
                 }
                 err => write!(f, "{}", err.description()),
