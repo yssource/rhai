@@ -244,29 +244,17 @@ impl Engine {
                 .collect::<Vec<_>>()
         );
 
-        let spec = FnSpec {
+        let mut spec = FnSpec {
             ident: ident.clone(),
-            args: Some(args.iter().map(|a| Any::type_id(&**a)).collect()),
+            args: None,
         };
 
         // First search in script-defined functions (can override built-in),
-        // then in built-in's, then retry again with no arguments
-        let fn_def = self
-            .script_fns
-            .get(&spec)
-            .or_else(|| self.fns.get(&spec))
-            .or_else(|| {
-                self.script_fns.get(&FnSpec {
-                    ident: ident.clone(),
-                    args: None,
-                })
-            })
-            .or_else(|| {
-                self.fns.get(&FnSpec {
-                    ident: ident.clone(),
-                    args: None,
-                })
-            });
+        // then in built-in's
+        let fn_def = self.script_fns.get(&spec).or_else(|| {
+            spec.args = Some(args.iter().map(|a| Any::type_id(&**a)).collect());
+            self.fns.get(&spec)
+        });
 
         if let Some(f) = fn_def {
             match **f {
