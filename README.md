@@ -19,10 +19,19 @@ You can install Rhai using crates by adding this line to your dependencies:
 
 ```toml
 [dependencies]
-rhai = "0.10.0-alpha1"
+rhai = "0.10.0"
 ```
 
-Beware that to use pre-releases (alpha and beta) you need to specify the exact version in your `Cargo.toml`.
+or simply:
+
+```toml
+[dependencies]
+rhai = "*"
+```
+
+to use the latest version.
+
+Beware that in order to use pre-releases (alpha and beta) you need to specify the exact version in your `Cargo.toml`.
 
 ## Related
 
@@ -205,6 +214,19 @@ fn main() {
 ```
 
 You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions and call the correct one, based on the types of the arguments, from your script.
+
+# Override built-in functions
+
+Any similarly-named function defined in a script with the correct argument types overrides any built-in function.
+
+```rust
+// Override the built-in function 'to_int'
+fn to_int(num) {
+    print("Ha! Gotcha!" + num);
+}
+
+print(to_int(123));     // what will happen?
+```
 
 # Custom types and methods
 
@@ -477,7 +499,7 @@ fn add(x, y) {
 print(add(2, 3))
 ```
 
-To return a `Dynamic` value, simply box it and return it.
+To return a `Dynamic` value, simply `Box` it and return it.
 
 ```rust
 fn decide(yes_no: bool) -> Dynamic {
@@ -543,7 +565,9 @@ print(y.len());         // prints 0
 your own custom type, you need to define a specific override:
 
 ```rust
-engine.register_fn("push", |list: &mut rhai::Array, item: MyType| list.push(Box::new(item)));
+engine.register_fn("push",
+    |list: &mut Array, item: MyType| list.push(Box::new(item))
+);
 ```
 
 The type of a Rhai array is `rhai::Array`.
