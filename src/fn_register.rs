@@ -2,6 +2,7 @@ use std::any::TypeId;
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{Engine, EvalAltResult, FnCallArgs};
+use crate::parser::Position;
 
 pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN);
@@ -32,13 +33,13 @@ macro_rules! def_register {
             fn register_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
 
-                let fun = move |mut args: FnCallArgs| {
+                let fun = move |mut args: FnCallArgs, pos: Position| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS));
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, pos));
                     }
 
                     #[allow(unused_variables, unused_mut)]
@@ -65,13 +66,13 @@ macro_rules! def_register {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
 
-                let fun = move |mut args: FnCallArgs| {
+                let fun = move |mut args: FnCallArgs, pos: Position| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS));
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, pos));
                     }
 
                     #[allow(unused_variables, unused_mut)]

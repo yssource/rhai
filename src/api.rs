@@ -1,7 +1,6 @@
-use crate::any::{Any, AnyExt};
-use crate::engine::{FnIntExt, FnSpec};
-use crate::parser::{lex, parse};
-use crate::{Dynamic, Engine, EvalAltResult, ParseError, Scope, AST};
+use crate::any::{Any, AnyExt, Dynamic};
+use crate::engine::{Engine, EvalAltResult, FnIntExt, FnSpec, Scope};
+use crate::parser::{lex, parse, ParseError, Position, AST};
 use std::sync::Arc;
 
 impl Engine {
@@ -88,9 +87,14 @@ impl Engine {
         self.script_fns.clear(); // Clean up engine
 
         match result {
-            Err(EvalAltResult::Return(out)) | Ok(out) => Ok(*out
+            Err(EvalAltResult::Return(out, pos)) => Ok(*out
                 .downcast::<T>()
-                .map_err(|err| EvalAltResult::ErrorMismatchOutputType((*err).type_name()))?),
+                .map_err(|a| EvalAltResult::ErrorMismatchOutputType((*a).type_name(), pos))?),
+
+            Ok(out) => Ok(*out.downcast::<T>().map_err(|a| {
+                EvalAltResult::ErrorMismatchOutputType((*a).type_name(), Position::eof())
+            })?),
+
             Err(err) => Err(err),
         }
     }
