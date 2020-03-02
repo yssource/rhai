@@ -387,10 +387,24 @@ fn main() {
 let x = 3;
 ```
 
-## Operators
+## Numeric operators
 
 ```rust
 let x = (1 + 2) * (6 - 4) / 2;
+```
+
+## Boolean operators
+
+Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated if the first one already proves the condition wrong.
+
+Single boolean operators `&` and `|` always evaluate both operands.
+
+```rust
+this() || that();   // that() is not evaluated if this() is true
+this() && that();   // that() is not evaluated if this() is false
+
+this() | that();    // both this() and that() are evaluated
+this() & that();    // both this() and that() are evaluated
 ```
 
 ## If

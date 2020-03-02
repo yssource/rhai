@@ -179,6 +179,8 @@ pub enum Expr {
     Dot(Box<Expr>, Box<Expr>),
     Index(String, Box<Expr>),
     Array(Vec<Expr>),
+    And(Box<Expr>, Box<Expr>),
+    Or(Box<Expr>, Box<Expr>),
     True,
     False,
     Unit,
@@ -618,7 +620,7 @@ impl<'a> TokenIterator<'a> {
                     let out: String = result.iter().cloned().collect();
 
                     return Some((
-                        match out.as_ref() {
+                        match out.as_str() {
                             "true" => Token::True,
                             "false" => Token::False,
                             "let" => Token::Let,
@@ -1189,8 +1191,8 @@ fn parse_binop<'a>(
                 Token::LessThanEqualsTo => Expr::FunctionCall("<=".into(), vec![lhs_curr, rhs]),
                 Token::GreaterThan => Expr::FunctionCall(">".into(), vec![lhs_curr, rhs]),
                 Token::GreaterThanEqualsTo => Expr::FunctionCall(">=".into(), vec![lhs_curr, rhs]),
-                Token::Or => Expr::FunctionCall("||".into(), vec![lhs_curr, rhs]),
-                Token::And => Expr::FunctionCall("&&".into(), vec![lhs_curr, rhs]),
+                Token::Or => Expr::Or(Box::new(lhs_curr), Box::new(rhs)),
+                Token::And => Expr::And(Box::new(lhs_curr), Box::new(rhs)),
                 Token::XOr => Expr::FunctionCall("^".into(), vec![lhs_curr, rhs]),
                 Token::OrAssign => {
                     let lhs_copy = lhs_curr.clone();

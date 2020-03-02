@@ -14,9 +14,10 @@ pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
 
 #[derive(Debug, Clone)]
 pub enum EvalAltResult {
-    ErrorParseError(ParseError),
+    ErrorParsing(ParseError),
     ErrorFunctionNotFound(String),
-    ErrorFunctionArgMismatch,
+    ErrorFunctionArgsMismatch(String, usize),
+    ErrorBooleanArgMismatch(String),
     ErrorArrayBounds(usize, i64),
     ErrorStringBounds(usize, i64),
     ErrorIndexing,
@@ -28,6 +29,7 @@ pub enum EvalAltResult {
     ErrorMismatchOutputType(String),
     ErrorCantOpenScriptFile(String),
     ErrorDotExpr,
+    ErrorArithmetic(String),
     LoopBreak,
     Return(Dynamic),
 }
@@ -35,10 +37,12 @@ pub enum EvalAltResult {
 impl EvalAltResult {
     fn as_str(&self) -> Option<&str> {
         Some(match self {
-            EvalAltResult::ErrorCantOpenScriptFile(ref s)
-            | EvalAltResult::ErrorVariableNotFound(ref s)
-            | EvalAltResult::ErrorFunctionNotFound(ref s)
-            | EvalAltResult::ErrorMismatchOutputType(ref s) => s,
+            Self::ErrorCantOpenScriptFile(s)
+            | Self::ErrorVariableNotFound(s)
+            | Self::ErrorFunctionNotFound(s)
+            | Self::ErrorMismatchOutputType(s)
+            | Self::ErrorCantOpenScriptFile(s)
+            | Self::ErrorArithmetic(s) => s,
             _ => return None,
         })
     }
@@ -49,9 +53,12 @@ impl PartialEq for EvalAltResult {
         use EvalAltResult::*;
 
         match (self, other) {
-            (ErrorParseError(ref a), ErrorParseError(ref b)) => a == b,
-            (ErrorFunctionNotFound(ref a), ErrorFunctionNotFound(ref b)) => a == b,
-            (ErrorFunctionArgMismatch, ErrorFunctionArgMismatch) => true,
+            (ErrorParsing(a), ErrorParsing(b)) => a == b,
+            (ErrorFunctionNotFound(a), ErrorFunctionNotFound(b)) => a == b,
+            (ErrorFunctionArgsMismatch(f1, n1), ErrorFunctionArgsMismatch(f2, n2)) => {
+                f1 == f2 && *n1 == *n2
+            }
+            (ErrorBooleanArgMismatch(a), ErrorBooleanArgMismatch(b)) => a == b,
             (ErrorIndexExpr, ErrorIndexExpr) => true,
             (ErrorIndexing, ErrorIndexing) => true,
             (ErrorArrayBounds(max1, index1), ErrorArrayBounds(max2, index2)) => {
@@ -62,11 +69,12 @@ impl PartialEq for EvalAltResult {
             }
             (ErrorIfGuard, ErrorIfGuard) => true,
             (ErrorFor, ErrorFor) => true,
-            (ErrorVariableNotFound(ref a), ErrorVariableNotFound(ref b)) => a == b,
+            (ErrorVariableNotFound(a), ErrorVariableNotFound(b)) => a == b,
             (ErrorAssignmentToUnknownLHS, ErrorAssignmentToUnknownLHS) => true,
-            (ErrorMismatchOutputType(ref a), ErrorMismatchOutputType(ref b)) => a == b,
-            (ErrorCantOpenScriptFile(ref a), ErrorCantOpenScriptFile(ref b)) => a == b,
+            (ErrorMismatchOutputType(a), ErrorMismatchOutputType(b)) => a == b,
+            (ErrorCantOpenScriptFile(a), ErrorCantOpenScriptFile(b)) => a == b,
             (ErrorDotExpr, ErrorDotExpr) => true,
+            (ErrorArithmetic(a), ErrorArithmetic(b)) => a == b,
             (LoopBreak, LoopBreak) => true,
             _ => false,
         }
@@ -76,20 +84,21 @@ impl PartialEq for EvalAltResult {
 impl Error for EvalAltResult {
     fn description(&self) -> &str {
         match self {
-            Self::ErrorParseError(ref p) => p.description(),
+            Self::ErrorParsing(p) => p.description(),
             Self::ErrorFunctionNotFound(_) => "Function not found",
-            Self::ErrorFunctionArgMismatch => "Function argument types do not match",
+            Self::ErrorFunctionArgsMismatch(_, _) => "Function call with wrong number of arguments",
+            Self::ErrorBooleanArgMismatch(_) => "Boolean operator expects boolean operands",
             Self::ErrorIndexExpr => "Indexing into an array or string expects an integer index",
             Self::ErrorIndexing => "Indexing can only be performed on an array or a string",
-            Self::ErrorArrayBounds(_, ref index) if *index < 0 => {
+            Self::ErrorArrayBounds(_, index) if *index < 0 => {
                 "Array access expects non-negative index"
             }
-            Self::ErrorArrayBounds(ref max, _) if *max == 0 => "Access of empty array",
+            Self::ErrorArrayBounds(max, _) if *max == 0 => "Access of empty array",
             Self::ErrorArrayBounds(_, _) => "Array index out of bounds",
-            Self::ErrorStringBounds(_, ref index) if *index < 0 => {
+            Self::ErrorStringBounds(_, index) if *index < 0 => {
                 "Indexing a string expects a non-negative index"
             }
-            Self::ErrorStringBounds(ref max, _) if *max == 0 => "Indexing of empty string",
+            Self::ErrorStringBounds(max, _) if *max == 0 => "Indexing of empty string",
             Self::ErrorStringBounds(_, _) => "String index out of bounds",
             Self::ErrorIfGuard => "If guards expect boolean expression",
             Self::ErrorFor => "For loops expect array",
@@ -100,6 +109,7 @@ impl Error for EvalAltResult {
             Self::ErrorMismatchOutputType(_) => "Output type is incorrect",
             Self::ErrorCantOpenScriptFile(_) => "Cannot open script file",
             Self::ErrorDotExpr => "Malformed dot expression",
+            Self::ErrorArithmetic(_) => "Arithmetic error",
             Self::LoopBreak => "[Not Error] Breaks out of loop",
             Self::Return(_) => "[Not Error] Function returns value",
         }
@@ -116,7 +126,13 @@ impl std::fmt::Display for EvalAltResult {
             write!(f, "{}: {}", self.description(), s)
         } else {
             match self {
-                EvalAltResult::ErrorParseError(ref p) => write!(f, "Syntax error: {}", p),
+                EvalAltResult::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
+                EvalAltResult::ErrorFunctionArgsMismatch(fun, n) => {
+                    write!(f, "Function '{}' expects {} argument(s)", fun, n)
+                }
+                EvalAltResult::ErrorBooleanArgMismatch(op) => {
+                    write!(f, "Boolean {} operator expects boolean operands", op)
+                }
                 EvalAltResult::ErrorArrayBounds(_, index) if *index < 0 => {
                     write!(f, "{}: {} < 0", self.description(), index)
                 }
@@ -704,9 +720,11 @@ impl Engine {
                             Err(EvalAltResult::ErrorIndexExpr)
                         }
                     }
+
                     Expr::Dot(ref dot_lhs, ref dot_rhs) => {
                         self.set_dot_val(scope, dot_lhs, dot_rhs, rhs_val)
                     }
+
                     _ => Err(EvalAltResult::ErrorAssignmentToUnknownLHS),
                 }
             }
@@ -728,12 +746,34 @@ impl Engine {
             Expr::FunctionCall(fn_name, args) => self.call_fn_raw(
                 fn_name.to_owned(),
                 args.iter()
-                    .map(|ex| self.eval_expr(scope, ex))
+                    .map(|expr| self.eval_expr(scope, expr))
                     .collect::<Result<Array, _>>()?
                     .iter_mut()
                     .map(|b| b.as_mut())
                     .collect(),
             ),
+
+            Expr::And(lhs, rhs) => Ok(Box::new(
+                *self
+                    .eval_expr(scope, &*lhs)?
+                    .downcast::<bool>()
+                    .map_err(|_| EvalAltResult::ErrorBooleanArgMismatch("AND".into()))?
+                    && *self
+                        .eval_expr(scope, &*rhs)?
+                        .downcast::<bool>()
+                        .map_err(|_| EvalAltResult::ErrorBooleanArgMismatch("AND".into()))?,
+            )),
+
+            Expr::Or(lhs, rhs) => Ok(Box::new(
+                *self
+                    .eval_expr(scope, &*lhs)?
+                    .downcast::<bool>()
+                    .map_err(|_| EvalAltResult::ErrorBooleanArgMismatch("OR".into()))?
+                    || *self
+                        .eval_expr(scope, &*rhs)?
+                        .downcast::<bool>()
+                        .map_err(|_| EvalAltResult::ErrorBooleanArgMismatch("OR".into()))?,
+            )),
 
             Expr::True => Ok(Box::new(true)),
             Expr::False => Ok(Box::new(false)),
@@ -878,7 +918,7 @@ impl Engine {
             let mut contents = String::new();
 
             if f.read_to_string(&mut contents).is_ok() {
-                Self::compile(&contents).map_err(|err| EvalAltResult::ErrorParseError(err))
+                Self::compile(&contents).map_err(|err| EvalAltResult::ErrorParsing(err))
             } else {
                 Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
             }
@@ -917,7 +957,7 @@ impl Engine {
         scope: &mut Scope,
         input: &str,
     ) -> Result<T, EvalAltResult> {
-        let ast = Self::compile(input).map_err(|err| EvalAltResult::ErrorParseError(err))?;
+        let ast = Self::compile(input).map_err(|err| EvalAltResult::ErrorParsing(err))?;
         self.eval_ast_with_scope(scope, &ast)
     }
 
@@ -1005,9 +1045,8 @@ impl Engine {
         let tokens = lex(input);
 
         let mut peekables = tokens.peekable();
-        let tree = parse(&mut peekables);
 
-        match tree {
+        match parse(&mut peekables) {
             Ok(AST(ref os, ref fns)) => {
                 for f in fns {
                     if f.params.len() > 6 {
@@ -1032,7 +1071,7 @@ impl Engine {
 
                 Ok(())
             }
-            Err(_) => Err(EvalAltResult::ErrorFunctionArgMismatch),
+            Err(err) => Err(EvalAltResult::ErrorParsing(err)),
         }
     }
 

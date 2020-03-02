@@ -30,19 +30,22 @@ macro_rules! def_register {
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
+                let fn_name = name.to_string();
+
                 let fun = move |mut args: FnCallArgs| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
-                    if args.len() != count_args!($($par)*) {
-                        return Err(EvalAltResult::ErrorFunctionArgMismatch);
+                    const NUM_ARGS: usize = count_args!($($par)*);
+
+                    if args.len() != NUM_ARGS {
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS));
                     }
 
                     #[allow(unused_variables, unused_mut)]
                     let mut drain = args.drain(..);
                     $(
                     // Downcast every element, return in case of a type mismatch
-                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>)
-                        .ok_or(EvalAltResult::ErrorFunctionArgMismatch)?;
+                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>).unwrap();
                     )*
 
                     // Call the user-supplied function using ($clone) to
@@ -60,19 +63,22 @@ macro_rules! def_register {
         > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
         {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
+                let fn_name = name.to_string();
+
                 let fun = move |mut args: FnCallArgs| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
-                    if args.len() != count_args!($($par)*) {
-                        return Err(EvalAltResult::ErrorFunctionArgMismatch);
+                    const NUM_ARGS: usize = count_args!($($par)*);
+
+                    if args.len() != NUM_ARGS {
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS));
                     }
 
                     #[allow(unused_variables, unused_mut)]
                     let mut drain = args.drain(..);
                     $(
                     // Downcast every element, return in case of a type mismatch
-                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>)
-                        .ok_or(EvalAltResult::ErrorFunctionArgMismatch)?;
+                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>).unwrap();
                     )*
 
                     // Call the user-supplied function using ($clone) to

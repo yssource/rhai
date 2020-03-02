@@ -149,8 +149,8 @@ impl Engine {
         reg_cmp!(self, "==", eq, i32, i64, u32, u64, bool, String, char, f32, f64);
         reg_cmp!(self, "!=", ne, i32, i64, u32, u64, bool, String, char, f32, f64);
 
-        reg_op!(self, "||", or, bool);
-        reg_op!(self, "&&", and, bool);
+        //reg_op!(self, "||", or, bool);
+        //reg_op!(self, "&&", and, bool);
         reg_op!(self, "|", binary_or, i32, i64, u32, u64);
         reg_op!(self, "|", or, bool);
         reg_op!(self, "&", binary_and, i32, i64, u32, u64);
