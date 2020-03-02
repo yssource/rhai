@@ -25,7 +25,7 @@
 //!
 //! let mut engine = Engine::new();
 //! engine.register_fn("compute_something", compute_something);
-//! assert_eq!(engine.eval_file::<bool>("my_script.rhai"), Ok(true));
+//! assert_eq!(engine.eval_file::<bool>("my_script.rhai").unwrap(), true);
 //! ```
 //!
 //! [Check out the README on GitHub for more information!](https://github.com/jonathandturner/rhai)

@@ -1,7 +1,7 @@
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_for() {
+fn test_for() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     let script = r"
@@ -20,5 +20,7 @@ fn test_for() {
         sum1 + sum2
     ";
 
-    assert_eq!(engine.eval::<i64>(script).unwrap(), 30);
+    assert_eq!(engine.eval::<i64>(script)?, 30);
+
+    Ok(())
 }

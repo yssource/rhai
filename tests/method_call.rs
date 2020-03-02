@@ -1,8 +1,7 @@
-use rhai::Engine;
-use rhai::RegisterFn;
+use rhai::{Engine, EvalAltResult, RegisterFn};
 
 #[test]
-fn test_method_call() {
+fn test_method_call() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {
         x: i64,
@@ -25,9 +24,9 @@ fn test_method_call() {
     engine.register_fn("update", TestStruct::update);
     engine.register_fn("new_ts", TestStruct::new);
 
-    if let Ok(result) = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x") {
-        assert_eq!(result.x, 1001);
-    } else {
-        assert!(false);
-    }
+    let ts = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
+
+    assert_eq!(ts.x, 1001);
+
+    Ok(())
 }

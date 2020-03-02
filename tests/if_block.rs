@@ -1,15 +1,15 @@
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_if() {
+fn test_if() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    assert_eq!(engine.eval::<i64>("if true { 55 }"), Ok(55));
-    assert_eq!(engine.eval::<i64>("if false { 55 } else { 44 }"), Ok(44));
-    assert_eq!(engine.eval::<i64>("if true { 55 } else { 44 }"), Ok(55));
+    assert_eq!(engine.eval::<i64>("if true { 55 }")?, 55);
+    assert_eq!(engine.eval::<i64>("if false { 55 } else { 44 }")?, 44);
+    assert_eq!(engine.eval::<i64>("if true { 55 } else { 44 }")?, 55);
     assert_eq!(
-        engine.eval::<i64>("if false { 55 } else if true { 33 } else { 44 }"),
-        Ok(33)
+        engine.eval::<i64>("if false { 55 } else if true { 33 } else { 44 }")?,
+        33
     );
     assert_eq!(
         engine.eval::<i64>(
@@ -21,7 +21,9 @@ fn test_if() {
                 else if false { 88 }
                 else { 44 }
         "
-        ),
-        Ok(44)
+        )?,
+        44
     );
+
+    Ok(())
 }

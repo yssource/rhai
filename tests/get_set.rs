@@ -1,8 +1,7 @@
-use rhai::Engine;
-use rhai::RegisterFn;
+use rhai::{Engine, EvalAltResult, RegisterFn};
 
 #[test]
-fn test_get_set() {
+fn test_get_set() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {
         x: i64,
@@ -29,14 +28,13 @@ fn test_get_set() {
     engine.register_get_set("x", TestStruct::get_x, TestStruct::set_x);
     engine.register_fn("new_ts", TestStruct::new);
 
-    assert_eq!(
-        engine.eval::<i64>("let a = new_ts(); a.x = 500; a.x"),
-        Ok(500)
-    );
+    assert_eq!(engine.eval::<i64>("let a = new_ts(); a.x = 500; a.x")?, 500);
+
+    Ok(())
 }
 
 #[test]
-fn test_big_get_set() {
+fn test_big_get_set() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestChild {
         x: i64,
@@ -88,7 +86,9 @@ fn test_big_get_set() {
     engine.register_fn("new_tp", TestParent::new);
 
     assert_eq!(
-        engine.eval::<i64>("let a = new_tp(); a.child.x = 500; a.child.x"),
-        Ok(500)
+        engine.eval::<i64>("let a = new_tp(); a.child.x = 500; a.child.x")?,
+        500
     );
+
+    Ok(())
 }
