@@ -71,15 +71,15 @@ impl Engine {
     ) -> Result<T, EvalAltResult> {
         let AST(os, fns) = ast;
 
-        for f in fns {
-            let spec = FnSpec {
-                ident: f.name.clone(),
-                args: None,
-            };
-
-            self.script_fns
-                .insert(spec, Arc::new(FnIntExt::Int(f.clone())));
-        }
+        fns.iter().for_each(|f| {
+            self.script_fns.insert(
+                FnSpec {
+                    ident: f.name.clone(),
+                    args: None,
+                },
+                Arc::new(FnIntExt::Int(f.clone())),
+            );
+        });
 
         let result = os
             .iter()
@@ -133,17 +133,18 @@ impl Engine {
             .map_err(|err| EvalAltResult::ErrorParsing(err))
             .and_then(|AST(ref os, ref fns)| {
                 for f in fns {
+                    // FIX - Why are functions limited to 6 parameters?
                     if f.params.len() > 6 {
                         return Ok(());
                     }
 
-                    let spec = FnSpec {
-                        ident: f.name.clone(),
-                        args: None,
-                    };
-
-                    self.script_fns
-                        .insert(spec, Arc::new(FnIntExt::Int(f.clone())));
+                    self.script_fns.insert(
+                        FnSpec {
+                            ident: f.name.clone(),
+                            args: None,
+                        },
+                        Arc::new(FnIntExt::Int(f.clone())),
+                    );
                 }
 
                 let val = os
