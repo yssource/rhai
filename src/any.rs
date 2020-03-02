@@ -73,7 +73,7 @@ impl Variant {
 
 impl Clone for Dynamic {
     fn clone(&self) -> Self {
-        Any::into_dynamic(self.as_ref() as &Variant)
+        Any::into_dynamic(self.as_ref())
     }
 }
 

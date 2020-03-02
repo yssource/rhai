@@ -1,3 +1,4 @@
+use crate::Dynamic;
 use std::char;
 use std::error::Error;
 use std::fmt;
@@ -145,14 +146,14 @@ impl fmt::Display for ParseError {
 
 pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef>);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct FnDef {
     pub name: String,
     pub params: Vec<String>,
     pub body: Box<Stmt>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     If(Box<Expr>, Box<Stmt>),
     IfElse(Box<Expr>, Box<Stmt>, Box<Stmt>),
@@ -167,14 +168,14 @@ pub enum Stmt {
     ReturnWithVal(Box<Expr>),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     IntegerConstant(i64),
     FloatConstant(f64),
     Identifier(String),
     CharConstant(char),
     StringConstant(String),
-    FunctionCall(String, Vec<Expr>),
+    FunctionCall(String, Vec<Expr>, Option<Dynamic>),
     Assignment(Box<Expr>, Box<Expr>),
     Dot(Box<Expr>, Box<Expr>),
     Index(String, Box<Expr>),
@@ -997,7 +998,7 @@ fn parse_call_expr<'a>(
 
     if let Some(&(Token::RightParen, _)) = input.peek() {
         input.next();
-        return Ok(Expr::FunctionCall(id, args));
+        return Ok(Expr::FunctionCall(id, args, None));
     }
 
     loop {
@@ -1006,7 +1007,7 @@ fn parse_call_expr<'a>(
         match input.peek() {
             Some(&(Token::RightParen, _)) => {
                 input.next();
-                return Ok(Expr::FunctionCall(id, args));
+                return Ok(Expr::FunctionCall(id, args, None));
             }
             Some(&(Token::Comma, _)) => (),
             Some(&(_, pos)) => return Err(ParseError(PERR::MalformedCallExpr, pos)),
@@ -1116,7 +1117,11 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
     match token {
         Token::UnaryMinus => {
             input.next();
-            Ok(Expr::FunctionCall("-".into(), vec![parse_primary(input)?]))
+            Ok(Expr::FunctionCall(
+                "-".into(),
+                vec![parse_primary(input)?],
+                None,
+            ))
         }
         Token::UnaryPlus => {
             input.next();
@@ -1124,7 +1129,11 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
         }
         Token::Bang => {
             input.next();
-            Ok(Expr::FunctionCall("!".into(), vec![parse_primary(input)?]))
+            Ok(Expr::FunctionCall(
+                "!".into(),
+                vec![parse_primary(input)?],
+                Some(Box::new(false)), // NOT operator, when operating on invalid operand, defaults to false
+            ))
         }
         _ => parse_primary(input),
     }
@@ -1165,102 +1174,118 @@ fn parse_binop<'a>(
             }
 
             lhs_curr = match op_token {
-                Token::Plus => Expr::FunctionCall("+".into(), vec![lhs_curr, rhs]),
-                Token::Minus => Expr::FunctionCall("-".into(), vec![lhs_curr, rhs]),
-                Token::Multiply => Expr::FunctionCall("*".into(), vec![lhs_curr, rhs]),
-                Token::Divide => Expr::FunctionCall("/".into(), vec![lhs_curr, rhs]),
+                Token::Plus => Expr::FunctionCall("+".into(), vec![lhs_curr, rhs], None),
+                Token::Minus => Expr::FunctionCall("-".into(), vec![lhs_curr, rhs], None),
+                Token::Multiply => Expr::FunctionCall("*".into(), vec![lhs_curr, rhs], None),
+                Token::Divide => Expr::FunctionCall("/".into(), vec![lhs_curr, rhs], None),
+
                 Token::Equals => Expr::Assignment(Box::new(lhs_curr), Box::new(rhs)),
                 Token::PlusAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("+".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("+".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 Token::MinusAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("-".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("-".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 Token::Period => Expr::Dot(Box::new(lhs_curr), Box::new(rhs)),
-                Token::EqualsTo => Expr::FunctionCall("==".into(), vec![lhs_curr, rhs]),
-                Token::NotEqualsTo => Expr::FunctionCall("!=".into(), vec![lhs_curr, rhs]),
-                Token::LessThan => Expr::FunctionCall("<".into(), vec![lhs_curr, rhs]),
-                Token::LessThanEqualsTo => Expr::FunctionCall("<=".into(), vec![lhs_curr, rhs]),
-                Token::GreaterThan => Expr::FunctionCall(">".into(), vec![lhs_curr, rhs]),
-                Token::GreaterThanEqualsTo => Expr::FunctionCall(">=".into(), vec![lhs_curr, rhs]),
+
+                // Comparison operators default to false when passed invalid operands
+                Token::EqualsTo => {
+                    Expr::FunctionCall("==".into(), vec![lhs_curr, rhs], Some(Box::new(false)))
+                }
+                Token::NotEqualsTo => {
+                    Expr::FunctionCall("!=".into(), vec![lhs_curr, rhs], Some(Box::new(false)))
+                }
+                Token::LessThan => {
+                    Expr::FunctionCall("<".into(), vec![lhs_curr, rhs], Some(Box::new(false)))
+                }
+                Token::LessThanEqualsTo => {
+                    Expr::FunctionCall("<=".into(), vec![lhs_curr, rhs], Some(Box::new(false)))
+                }
+                Token::GreaterThan => {
+                    Expr::FunctionCall(">".into(), vec![lhs_curr, rhs], Some(Box::new(false)))
+                }
+                Token::GreaterThanEqualsTo => {
+                    Expr::FunctionCall(">=".into(), vec![lhs_curr, rhs], Some(Box::new(false)))
+                }
+
                 Token::Or => Expr::Or(Box::new(lhs_curr), Box::new(rhs)),
                 Token::And => Expr::And(Box::new(lhs_curr), Box::new(rhs)),
-                Token::XOr => Expr::FunctionCall("^".into(), vec![lhs_curr, rhs]),
+                Token::XOr => Expr::FunctionCall("^".into(), vec![lhs_curr, rhs], None),
                 Token::OrAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("|".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("|".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 Token::AndAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("&".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("&".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 Token::XOrAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("^".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("^".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 Token::MultiplyAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("*".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("*".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 Token::DivideAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("/".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("/".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
-                Token::Pipe => Expr::FunctionCall("|".into(), vec![lhs_curr, rhs]),
-                Token::LeftShift => Expr::FunctionCall("<<".into(), vec![lhs_curr, rhs]),
-                Token::RightShift => Expr::FunctionCall(">>".into(), vec![lhs_curr, rhs]),
+                Token::Pipe => Expr::FunctionCall("|".into(), vec![lhs_curr, rhs], None),
+                Token::LeftShift => Expr::FunctionCall("<<".into(), vec![lhs_curr, rhs], None),
+                Token::RightShift => Expr::FunctionCall(">>".into(), vec![lhs_curr, rhs], None),
                 Token::LeftShiftAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("<<".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("<<".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 Token::RightShiftAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall(">>".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall(">>".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
-                Token::Ampersand => Expr::FunctionCall("&".into(), vec![lhs_curr, rhs]),
-                Token::Modulo => Expr::FunctionCall("%".into(), vec![lhs_curr, rhs]),
+                Token::Ampersand => Expr::FunctionCall("&".into(), vec![lhs_curr, rhs], None),
+                Token::Modulo => Expr::FunctionCall("%".into(), vec![lhs_curr, rhs], None),
                 Token::ModuloAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("%".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("%".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
-                Token::PowerOf => Expr::FunctionCall("~".into(), vec![lhs_curr, rhs]),
+                Token::PowerOf => Expr::FunctionCall("~".into(), vec![lhs_curr, rhs], None),
                 Token::PowerOfAssign => {
                     let lhs_copy = lhs_curr.clone();
                     Expr::Assignment(
                         Box::new(lhs_curr),
-                        Box::new(Expr::FunctionCall("~".into(), vec![lhs_copy, rhs])),
+                        Box::new(Expr::FunctionCall("~".into(), vec![lhs_copy, rhs], None)),
                     )
                 }
                 _ => return Err(ParseError(PERR::UnknownOperator, pos)),

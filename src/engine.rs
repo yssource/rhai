@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::call::FunArgs;
 use crate::fn_register::RegisterFn;
-use crate::parser::{lex, parse, Expr, FnDef, ParseError, Stmt, AST};
+use crate::parser::{Expr, FnDef, ParseError, Stmt};
 
 pub type Array = Vec<Dynamic>;
 pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
@@ -41,7 +41,6 @@ impl EvalAltResult {
             | Self::ErrorVariableNotFound(s)
             | Self::ErrorFunctionNotFound(s)
             | Self::ErrorMismatchOutputType(s)
-            | Self::ErrorCantOpenScriptFile(s)
             | Self::ErrorArithmetic(s) => s,
             _ => return None,
         })
@@ -159,8 +158,8 @@ impl std::fmt::Display for EvalAltResult {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct FnSpec {
-    ident: String,
-    args: Option<Vec<TypeId>>,
+    pub ident: String,
+    pub args: Option<Vec<TypeId>>,
 }
 
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
@@ -180,11 +179,15 @@ type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 /// }
 /// ```
 pub struct Engine {
-    /// A hashmap containing all functions known to the engine
-    pub fns: HashMap<FnSpec, Arc<FnIntExt>>,
-    pub type_iterators: HashMap<TypeId, Arc<IteratorFn>>,
-    on_print: Box<dyn Fn(&str)>,
-    on_debug: Box<dyn Fn(&str)>,
+    /// A hashmap containing all compiled functions known to the engine
+    fns: HashMap<FnSpec, Arc<FnIntExt>>,
+    /// A hashmap containing all script-defined functions
+    pub(crate) script_fns: HashMap<FnSpec, Arc<FnIntExt>>,
+    /// A hashmap containing all iterators known to the engine
+    type_iterators: HashMap<TypeId, Arc<IteratorFn>>,
+
+    pub(crate) on_print: Box<dyn Fn(&str)>,
+    pub(crate) on_debug: Box<dyn Fn(&str)>,
 }
 
 pub enum FnIntExt {
@@ -217,7 +220,7 @@ impl Engine {
         A: FunArgs<'a>,
         T: Any + Clone,
     {
-        self.call_fn_raw(ident.into(), args.into_vec())
+        self.call_fn_raw(ident.into(), args.into_vec(), None)
             .and_then(|b| {
                 b.downcast()
                     .map(|b| *b)
@@ -227,7 +230,12 @@ impl Engine {
 
     /// Universal method for calling functions, that are either
     /// registered with the `Engine` or written in Rhai
-    fn call_fn_raw(&self, ident: String, args: FnCallArgs) -> Result<Dynamic, EvalAltResult> {
+    fn call_fn_raw(
+        &self,
+        ident: String,
+        args: FnCallArgs,
+        def_value: Option<&Dynamic>,
+    ) -> Result<Dynamic, EvalAltResult> {
         debug_println!(
             "Trying to call function {:?} with args {:?}",
             ident,
@@ -241,28 +249,27 @@ impl Engine {
             args: Some(args.iter().map(|a| Any::type_id(&**a)).collect()),
         };
 
-        self.fns
+        // First search in script-defined functions (can override built-in),
+        // then in built-in's, then retry again with no arguments
+        let fn_def = self
+            .script_fns
             .get(&spec)
+            .or_else(|| self.fns.get(&spec))
             .or_else(|| {
-                let spec1 = FnSpec {
+                self.script_fns.get(&FnSpec {
                     ident: ident.clone(),
                     args: None,
-                };
-                self.fns.get(&spec1)
+                })
             })
-            .ok_or_else(|| {
-                let type_names = args
-                    .iter()
-                    .map(|x| (*(&**x).into_dynamic()).type_name())
-                    .collect::<Vec<_>>();
+            .or_else(|| {
+                self.fns.get(&FnSpec {
+                    ident: ident.clone(),
+                    args: None,
+                })
+            });
 
-                EvalAltResult::ErrorFunctionNotFound(format!(
-                    "{} ({})",
-                    ident,
-                    type_names.join(", ")
-                ))
-            })
-            .and_then(move |f| match **f {
+        if let Some(f) = fn_def {
+            match **f {
                 FnIntExt::Ext(ref f) => {
                     let r = f(args);
 
@@ -299,7 +306,22 @@ impl Engine {
                         other => other,
                     }
                 }
-            })
+            }
+        } else if let Some(val) = def_value {
+            // Return default value
+            Ok(val.clone())
+        } else {
+            let type_names = args
+                .iter()
+                .map(|x| (*(&**x).into_dynamic()).type_name())
+                .collect::<Vec<_>>();
+
+            Err(EvalAltResult::ErrorFunctionNotFound(format!(
+                "{} ({})",
+                ident,
+                type_names.join(", ")
+            )))
+        }
     }
 
     pub(crate) fn register_fn_raw(
@@ -369,7 +391,7 @@ impl Engine {
         use std::iter::once;
 
         match dot_rhs {
-            Expr::FunctionCall(fn_name, args) => {
+            Expr::FunctionCall(fn_name, args, def_value) => {
                 let mut args: Array = args
                     .iter()
                     .map(|arg| self.eval_expr(scope, arg))
@@ -379,13 +401,13 @@ impl Engine {
                     .chain(args.iter_mut().map(|b| b.as_mut()))
                     .collect();
 
-                self.call_fn_raw(fn_name.to_owned(), args)
+                self.call_fn_raw(fn_name.into(), args, def_value.as_ref())
             }
 
             Expr::Identifier(id) => {
                 let get_fn_name = "get$".to_string() + id;
 
-                self.call_fn_raw(get_fn_name, vec![this_ptr])
+                self.call_fn_raw(get_fn_name, vec![this_ptr], None)
             }
 
             Expr::Index(id, idx_raw) => {
@@ -397,7 +419,7 @@ impl Engine {
 
                 let get_fn_name = "get$".to_string() + id;
 
-                let mut val = self.call_fn_raw(get_fn_name, vec![this_ptr])?;
+                let mut val = self.call_fn_raw(get_fn_name, vec![this_ptr], None)?;
 
                 if let Some(arr) = (*val).downcast_mut() as Option<&mut Array> {
                     if idx >= 0 {
@@ -425,7 +447,7 @@ impl Engine {
                 Expr::Identifier(ref id) => {
                     let get_fn_name = "get$".to_string() + id;
                     let value = self
-                        .call_fn_raw(get_fn_name, vec![this_ptr])
+                        .call_fn_raw(get_fn_name, vec![this_ptr], None)
                         .and_then(|mut v| self.get_dot_val_helper(scope, v.as_mut(), inner_rhs))?;
 
                     // TODO - Should propagate changes back in this scenario:
@@ -462,7 +484,7 @@ impl Engine {
             .enumerate()
             .rev()
             .find(|&(_, &mut (ref name, _))| id == name)
-            .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(id.to_owned()))
+            .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(id.into()))
             .and_then(move |(idx, &mut (_, ref mut val))| map(val.as_mut()).map(|val| (idx, val)))
     }
 
@@ -575,14 +597,14 @@ impl Engine {
             Expr::Identifier(id) => {
                 let set_fn_name = "set$".to_string() + id;
 
-                self.call_fn_raw(set_fn_name, vec![this_ptr, source_val.as_mut()])
+                self.call_fn_raw(set_fn_name, vec![this_ptr, source_val.as_mut()], None)
             }
 
             Expr::Dot(inner_lhs, inner_rhs) => match **inner_lhs {
                 Expr::Identifier(ref id) => {
                     let get_fn_name = "get$".to_string() + id;
 
-                    self.call_fn_raw(get_fn_name, vec![this_ptr])
+                    self.call_fn_raw(get_fn_name, vec![this_ptr], None)
                         .and_then(|mut v| {
                             self.set_dot_val_helper(v.as_mut(), inner_rhs, source_val)
                                 .map(|_| v) // Discard Ok return value
@@ -590,7 +612,7 @@ impl Engine {
                         .and_then(|mut v| {
                             let set_fn_name = "set$".to_string() + id;
 
-                            self.call_fn_raw(set_fn_name, vec![this_ptr, v.as_mut()])
+                            self.call_fn_raw(set_fn_name, vec![this_ptr, v.as_mut()], None)
                         })
                 }
                 _ => Err(EvalAltResult::ErrorDotExpr),
@@ -743,14 +765,15 @@ impl Engine {
                 Ok(Box::new(arr))
             }
 
-            Expr::FunctionCall(fn_name, args) => self.call_fn_raw(
-                fn_name.to_owned(),
+            Expr::FunctionCall(fn_name, args, def_value) => self.call_fn_raw(
+                fn_name.into(),
                 args.iter()
                     .map(|expr| self.eval_expr(scope, expr))
                     .collect::<Result<Array, _>>()?
                     .iter_mut()
                     .map(|b| b.as_mut())
                     .collect(),
+                def_value.as_ref(),
             ),
 
             Expr::And(lhs, rhs) => Ok(Box::new(
@@ -781,7 +804,11 @@ impl Engine {
         }
     }
 
-    fn eval_stmt(&self, scope: &mut Scope, stmt: &Stmt) -> Result<Dynamic, EvalAltResult> {
+    pub(crate) fn eval_stmt(
+        &self,
+        scope: &mut Scope,
+        stmt: &Stmt,
+    ) -> Result<Dynamic, EvalAltResult> {
         match stmt {
             Stmt::Expr(expr) => self.eval_expr(scope, expr),
 
@@ -899,186 +926,11 @@ impl Engine {
         }
     }
 
-    /// Compile a string into an AST
-    pub fn compile(input: &str) -> Result<AST, ParseError> {
-        let tokens = lex(input);
-
-        let mut peekables = tokens.peekable();
-        let tree = parse(&mut peekables);
-
-        tree
-    }
-
-    /// Compile a file into an AST
-    pub fn compile_file(filename: &str) -> Result<AST, EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
-        if let Ok(mut f) = File::open(filename) {
-            let mut contents = String::new();
-
-            if f.read_to_string(&mut contents).is_ok() {
-                Self::compile(&contents).map_err(|err| EvalAltResult::ErrorParsing(err))
-            } else {
-                Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
-            }
-        } else {
-            Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
-        }
-    }
-
-    /// Evaluate a file
-    pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
-        if let Ok(mut f) = File::open(filename) {
-            let mut contents = String::new();
-
-            if f.read_to_string(&mut contents).is_ok() {
-                self.eval::<T>(&contents)
-            } else {
-                Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
-            }
-        } else {
-            Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
-        }
-    }
-
-    /// Evaluate a string
-    pub fn eval<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
-        let mut scope = Scope::new();
-        self.eval_with_scope(&mut scope, input)
-    }
-
-    /// Evaluate a string with own scope
-    pub fn eval_with_scope<T: Any + Clone>(
-        &mut self,
-        scope: &mut Scope,
-        input: &str,
-    ) -> Result<T, EvalAltResult> {
-        let ast = Self::compile(input).map_err(|err| EvalAltResult::ErrorParsing(err))?;
-        self.eval_ast_with_scope(scope, &ast)
-    }
-
-    /// Evaluate an AST
-    pub fn eval_ast<T: Any + Clone>(&mut self, ast: &AST) -> Result<T, EvalAltResult> {
-        let mut scope = Scope::new();
-        self.eval_ast_with_scope(&mut scope, ast)
-    }
-
-    /// Evaluate an AST with own scope
-    pub fn eval_ast_with_scope<T: Any + Clone>(
-        &mut self,
-        scope: &mut Scope,
-        ast: &AST,
-    ) -> Result<T, EvalAltResult> {
-        let AST(os, fns) = ast;
-        let mut x: Result<Dynamic, EvalAltResult> = Ok(Box::new(()));
-
-        for f in fns {
-            let name = f.name.clone();
-            let local_f = f.clone();
-
-            let spec = FnSpec {
-                ident: name,
-                args: None,
-            };
-
-            self.fns.insert(spec, Arc::new(FnIntExt::Int(local_f)));
-        }
-
-        for o in os {
-            x = match self.eval_stmt(scope, o) {
-                Ok(v) => Ok(v),
-                Err(e) => return Err(e),
-            }
-        }
-
-        let x = x?;
-
-        match x.downcast::<T>() {
-            Ok(out) => Ok(*out),
-            Err(a) => Err(EvalAltResult::ErrorMismatchOutputType((*a).type_name())),
-        }
-    }
-
-    /// Evaluate a file, but only return errors, if there are any.
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
-    pub fn consume_file(&mut self, filename: &str) -> Result<(), EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
-        if let Ok(mut f) = File::open(filename) {
-            let mut contents = String::new();
-
-            if f.read_to_string(&mut contents).is_ok() {
-                if let e @ Err(_) = self.consume(&contents) {
-                    e
-                } else {
-                    Ok(())
-                }
-            } else {
-                Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
-            }
-        } else {
-            Err(EvalAltResult::ErrorCantOpenScriptFile(filename.to_owned()))
-        }
-    }
-
-    /// Evaluate a string, but only return errors, if there are any.
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
-    pub fn consume(&mut self, input: &str) -> Result<(), EvalAltResult> {
-        self.consume_with_scope(&mut Scope::new(), input)
-    }
-
-    /// Evaluate a string with own scope, but only return errors, if there are any.
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
-    pub fn consume_with_scope(
-        &mut self,
-        scope: &mut Scope,
-        input: &str,
-    ) -> Result<(), EvalAltResult> {
-        let tokens = lex(input);
-
-        let mut peekables = tokens.peekable();
-
-        match parse(&mut peekables) {
-            Ok(AST(ref os, ref fns)) => {
-                for f in fns {
-                    if f.params.len() > 6 {
-                        return Ok(());
-                    }
-                    let name = f.name.clone();
-                    let local_f = f.clone();
-
-                    let spec = FnSpec {
-                        ident: name,
-                        args: None,
-                    };
-
-                    self.fns.insert(spec, Arc::new(FnIntExt::Int(local_f)));
-                }
-
-                for o in os {
-                    if let Err(e) = self.eval_stmt(scope, o) {
-                        return Err(e);
-                    }
-                }
-
-                Ok(())
-            }
-            Err(err) => Err(EvalAltResult::ErrorParsing(err)),
-        }
-    }
-
     /// Make a new engine
     pub fn new() -> Engine {
         let mut engine = Engine {
             fns: HashMap::new(),
+            script_fns: HashMap::new(),
             type_iterators: HashMap::new(),
             on_print: Box::new(|x: &str| println!("{}", x)),
             on_debug: Box::new(|x: &str| println!("{}", x)),
@@ -1087,15 +939,5 @@ impl Engine {
         engine.register_builtins();
 
         engine
-    }
-
-    /// Overrides `on_print`
-    pub fn on_print(&mut self, callback: impl Fn(&str) + 'static) {
-        self.on_print = Box::new(callback);
-    }
-
-    /// Overrides `on_debug`
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + 'static) {
-        self.on_debug = Box::new(callback);
     }
 }

@@ -53,7 +53,7 @@ macro_rules! def_register {
                     let r = f($(($clone)($par)),*);
                     Ok(Box::new(r) as Dynamic)
                 };
-                self.register_fn_raw(name.to_owned(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
+                self.register_fn_raw(name.into(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }
         }
 
@@ -85,7 +85,7 @@ macro_rules! def_register {
                     // potentially clone the value, otherwise pass the reference.
                     Ok(f($(($clone)($par)),*))
                 };
-                self.register_fn_raw(name.to_owned(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
+                self.register_fn_raw(name.into(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }
         }
 

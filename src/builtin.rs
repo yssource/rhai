@@ -195,11 +195,14 @@ impl Engine {
         fn print<T: Display>(x: T) -> String {
             format!("{}", x)
         }
+        fn println() -> String {
+            "\n".to_string()
+        }
 
         reg_func1!(self, "print", print, String, i32, i64, u32, u64);
         reg_func1!(self, "print", print, String, f32, f64, bool, char, String);
         reg_func1!(self, "print", print_debug, String, Array);
-        self.register_fn("print", |_: ()| println!());
+        self.register_fn("print", println);
 
         reg_func1!(self, "debug", print_debug, String, i32, i64, u32, u64);
         reg_func1!(self, "debug", print_debug, String, f32, f64, bool, char);

@@ -393,6 +393,18 @@ let x = 3;
 let x = (1 + 2) * (6 - 4) / 2;
 ```
 
+## Comparison operators
+
+You can compare most values of the same data type.  If you compare two values of _different_ data types, the result is always `false`.
+
+```rust
+42 == 42;           // true
+42 > 42;            // false
+"hello" > "foo";    // true
+"42" == 42;         // false
+42 == 42.0;         // false - i64 is different from f64
+```
+
 ## Boolean operators
 
 Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated if the first one already proves the condition wrong.
