@@ -149,6 +149,7 @@ pub struct Engine {
     pub(crate) script_fns: HashMap<FnSpec, Arc<FnIntExt>>,
     /// A hashmap containing all iterators known to the engine
     type_iterators: HashMap<TypeId, Arc<IteratorFn>>,
+    type_names: HashMap<String, String>,
 
     pub(crate) on_print: Box<dyn Fn(&str)>,
     pub(crate) on_debug: Box<dyn Fn(&str)>,
@@ -188,9 +189,10 @@ impl Engine {
 
         self.call_fn_raw(ident.into(), args.into_vec(), None, pos)
             .and_then(|b| {
-                b.downcast()
-                    .map(|b| *b)
-                    .map_err(|a| EvalAltResult::ErrorMismatchOutputType((*a).type_name(), pos))
+                b.downcast().map(|b| *b).map_err(|a| {
+                    let name = self.map_type_name((*a).type_name());
+                    EvalAltResult::ErrorMismatchOutputType(name, pos)
+                })
             })
     }
 
@@ -207,7 +209,7 @@ impl Engine {
             "Trying to call function {:?} with args {:?}",
             ident,
             args.iter()
-                .map(|x| Any::type_name(&**x))
+                .map(|x| { self.map_type_name((**x).type_name()) })
                 .collect::<Vec<_>>()
         );
 
@@ -266,13 +268,14 @@ impl Engine {
             // Return default value
             Ok(val.clone())
         } else {
-            let type_names = args
+            let types_list = args
                 .iter()
                 .map(|x| (*(&**x).into_dynamic()).type_name())
+                .map(|name| self.map_type_name(name))
                 .collect::<Vec<_>>();
 
             Err(EvalAltResult::ErrorFunctionNotFound(
-                format!("{} ({})", ident, type_names.join(", ")),
+                format!("{} ({})", ident, types_list.join(", ")),
                 pos,
             ))
         }
@@ -908,12 +911,33 @@ impl Engine {
         }
     }
 
+    pub(crate) fn map_type_name(&self, name: String) -> String {
+        self.type_names
+            .get(&name)
+            .map(|x| x.clone())
+            .unwrap_or(name.to_string())
+    }
+
     /// Make a new engine
     pub fn new() -> Engine {
+        // User-friendly names for built-in types
+        let type_names = [
+            ("alloc::string::String", "string"),
+            (
+                "alloc::vec::Vec<alloc::boxed::Box<dyn rhai::any::Any>>",
+                "array",
+            ),
+            ("alloc::boxed::Box<dyn rhai::any::Any>", "dynamic"),
+        ]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
         let mut engine = Engine {
             fns: HashMap::new(),
             script_fns: HashMap::new(),
             type_iterators: HashMap::new(),
+            type_names,
             on_print: Box::new(|x: &str| println!("{}", x)),
             on_debug: Box::new(|x: &str| println!("{}", x)),
         };

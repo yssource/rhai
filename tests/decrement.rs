@@ -9,7 +9,7 @@ fn test_decrement() -> Result<(), EvalAltResult> {
     let r = engine.eval::<String>("let s = \"test\"; s -= \"ing\"; s");
 
     match r {
-        Err(EvalAltResult::ErrorFunctionNotFound(err, _)) if err.starts_with("- ") => (),
+        Err(EvalAltResult::ErrorFunctionNotFound(err, _)) if err == "- (string, string)" => (),
         _ => panic!(),
     }
 

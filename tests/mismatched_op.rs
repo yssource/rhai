@@ -7,7 +7,7 @@ fn test_mismatched_op() {
     let r = engine.eval::<i64>("60 + \"hello\"");
 
     match r {
-        Err(EvalAltResult::ErrorMismatchOutputType(err, _)) if err == "alloc::string::String" => (),
+        Err(EvalAltResult::ErrorMismatchOutputType(err, _)) if err == "string" => (),
         _ => panic!(),
     }
 }
