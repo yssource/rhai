@@ -1,6 +1,7 @@
 use crate::any::{Any, AnyExt, Dynamic};
-use crate::engine::{Engine, EvalAltResult, FnIntExt, FnSpec, Scope};
+use crate::engine::{Engine, EvalAltResult, FnIntExt, FnSpec};
 use crate::parser::{lex, parse, ParseError, Position, AST};
+use crate::scope::Scope;
 use std::sync::Arc;
 
 impl Engine {

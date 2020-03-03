@@ -174,11 +174,6 @@ impl Engine {
         self.register_fn("+", concat);
         self.register_fn("==", unit_eq);
 
-        // self.register_fn("[]", idx);
-        // FIXME?  Registering array lookups are a special case because we want to return boxes
-        // directly let ent = self.fns.entry("[]".to_string()).or_insert_with(Vec::new);
-        // (*ent).push(FnType::ExternalFn2(Box::new(idx)));
-
         // Register conversion functions
         self.register_fn("to_float", |x: i8| x as f64);
         self.register_fn("to_float", |x: u8| x as f64);

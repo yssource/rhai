@@ -46,8 +46,10 @@ mod call;
 mod engine;
 mod fn_register;
 mod parser;
+mod scope;
 
 pub use any::Dynamic;
-pub use engine::{Array, Engine, EvalAltResult, Scope};
+pub use engine::{Array, Engine, EvalAltResult};
+pub use scope::Scope;
 pub use fn_register::{RegisterDynamicFn, RegisterFn};
 pub use parser::{ParseError, ParseErrorType, AST};

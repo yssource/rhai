@@ -391,11 +391,11 @@ a.x.change();   // Only a COPY of 'a.x' is changed. 'a.x' is NOT changed.
 a.x == 500;
 ```
 
-# Maintaining state
+# Initializing and maintaining state
 
 By default, Rhai treats each engine invocation as a fresh one, persisting only the functions that have been defined but no top-level state.  This gives each one a fairly clean starting place.  Sometimes, though, you want to continue using the same top-level state from one invocation to the next.
 
-In this example, we thread the same state through multiple invocations:
+In this example, we first create a state with a few initialized variables, then thread the same state through multiple invocations:
 
 ```rust
 extern crate rhai;
@@ -403,13 +403,29 @@ use rhai::{Engine, Scope};
 
 fn main() {
     let mut engine = Engine::new();
+
+    // First create the state
     let mut scope = Scope::new();
 
-    if let Ok(_) = engine.eval_with_scope::<()>(&mut scope, "let x = 4 + 5") { } else { assert!(false); }
+    // Then push some initialized variables into the state
+    // NOTE: Remember the default numbers used by Rhai are i64 and f64.
+    //       Better stick to them or it gets hard to work with other variables in the script.
+    scope.push("y".into(), 42_i64);
+    scope.push("z".into(), 999_i64);
 
+    // First invocation
+    engine.eval_with_scope::<()>(&mut scope, r"
+        let x = 4 + 5 - y + z;
+        y = 1;
+    ").expect("y and z not found?");
+
+    // Second invocation using the same state
     if let Ok(result) = engine.eval_with_scope::<i64>(&mut scope, "x") {
-       println!("result: {}", result);
+       println!("result: {}", result);  // should print 966
     }
+
+    // Variable y is changed in the script
+    assert_eq!(scope.get_value::<i64>("y").unwrap(), 1);
 }
 ```
 

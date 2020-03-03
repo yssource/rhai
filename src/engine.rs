@@ -8,6 +8,7 @@ use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::call::FunArgs;
 use crate::fn_register::RegisterFn;
 use crate::parser::{Expr, FnDef, ParseError, Position, Stmt};
+use crate::scope::Scope;
 
 pub type Array = Vec<Dynamic>;
 pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
@@ -162,22 +163,6 @@ pub enum FnIntExt {
 
 pub type FnAny = dyn Fn(FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
 
-/// A type containing information about current scope.
-/// Useful for keeping state between `Engine` runs
-///
-/// ```rust
-/// use rhai::{Engine, Scope};
-///
-/// let mut engine = Engine::new();
-/// let mut my_scope = Scope::new();
-///
-/// assert!(engine.eval_with_scope::<()>(&mut my_scope, "let x = 5;").is_ok());
-/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1").unwrap(), 6);
-/// ```
-///
-/// Between runs, `Engine` only remembers functions when not using own `Scope`.
-pub type Scope = Vec<(String, Dynamic)>;
-
 impl Engine {
     pub fn call_fn<'a, I, A, T>(&self, ident: I, args: A) -> Result<T, EvalAltResult>
     where
@@ -185,7 +170,7 @@ impl Engine {
         A: FunArgs<'a>,
         T: Any + Clone,
     {
-        let pos = Position { line: 0, pos: 0 };
+        let pos = Position::new();
 
         self.call_fn_raw(ident.into(), args.into_vec(), None, pos)
             .and_then(|b| {
@@ -438,19 +423,16 @@ impl Engine {
         }
     }
 
-    fn search_scope<'a, T>(
-        scope: &'a mut Scope,
+    fn search_scope<T>(
+        scope: &Scope,
         id: &str,
-        map: impl FnOnce(&'a mut Variant) -> Result<T, EvalAltResult>,
+        map: impl FnOnce(&Variant) -> Result<T, EvalAltResult>,
         begin: Position,
     ) -> Result<(usize, T), EvalAltResult> {
         scope
-            .iter_mut()
-            .enumerate()
-            .rev()
-            .find(|&(_, &mut (ref name, _))| id == name)
+            .get(id)
             .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(id.into(), begin))
-            .and_then(move |(idx, &mut (_, ref mut val))| map(val.as_mut()).map(|val| (idx, val)))
+            .and_then(move |(idx, _, val)| map(val.as_ref()).map(|v| (idx, v)))
     }
 
     fn indexed_value(
@@ -471,7 +453,7 @@ impl Engine {
             scope,
             id,
             |val| {
-                if let Some(arr) = (*val).downcast_mut() as Option<&mut Array> {
+                if let Some(arr) = (*val).downcast_ref() as Option<&Array> {
                     is_array = true;
 
                     if idx >= 0 {
@@ -481,7 +463,7 @@ impl Engine {
                     } else {
                         Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx, begin))
                     }
-                } else if let Some(s) = (*val).downcast_mut() as Option<&mut String> {
+                } else if let Some(s) = (*val).downcast_ref() as Option<&String> {
                     is_array = false;
 
                     if idx >= 0 {
@@ -537,7 +519,7 @@ impl Engine {
 
                 // In case the expression mutated `target`, we need to reassign it because
                 // of the above `clone`.
-                scope[sc_idx].1 = target;
+                *scope.get_mut(id, sc_idx) = target;
 
                 value
             }
@@ -551,10 +533,10 @@ impl Engine {
                 // of the above `clone`.
 
                 if is_array {
-                    scope[sc_idx].1.downcast_mut::<Array>().unwrap()[idx] = target;
+                    scope.get_mut(id, sc_idx).downcast_mut::<Array>().unwrap()[idx] = target;
                 } else {
                     Self::str_replace_char(
-                        scope[sc_idx].1.downcast_mut::<String>().unwrap(), // Root is a string
+                        scope.get_mut(id, sc_idx).downcast_mut::<String>().unwrap(), // Root is a string
                         idx,
                         *target.downcast::<char>().unwrap(), // Target should be a char
                     );
@@ -617,7 +599,7 @@ impl Engine {
 
                 // In case the expression mutated `target`, we need to reassign it because
                 // of the above `clone`.
-                scope[sc_idx].1 = target;
+                *scope.get_mut(id, sc_idx) = target;
 
                 value
             }
@@ -630,10 +612,10 @@ impl Engine {
                 // In case the expression mutated `target`, we need to reassign it because
                 // of the above `clone`.
                 if is_array {
-                    scope[sc_idx].1.downcast_mut::<Array>().unwrap()[idx] = target;
+                    scope.get_mut(id, sc_idx).downcast_mut::<Array>().unwrap()[idx] = target;
                 } else {
                     Self::str_replace_char(
-                        scope[sc_idx].1.downcast_mut::<String>().unwrap(), // Root is a string
+                        scope.get_mut(id, sc_idx).downcast_mut::<String>().unwrap(), // Root is a string
                         idx,
                         *target.downcast::<char>().unwrap(), // Target should be a char
                     );
@@ -871,11 +853,11 @@ impl Engine {
                 let tid = Any::type_id(&*arr);
 
                 if let Some(iter_fn) = self.type_iterators.get(&tid) {
-                    scope.push((name.clone(), Box::new(())));
+                    scope.push(name.clone(), ());
                     let idx = scope.len() - 1;
 
                     for a in iter_fn(&arr) {
-                        scope[idx].1 = a;
+                        *scope.get_mut(name, idx) = a;
 
                         match self.eval_stmt(scope, body) {
                             Err(EvalAltResult::LoopBreak) => break,
@@ -883,7 +865,7 @@ impl Engine {
                             _ => (),
                         }
                     }
-                    scope.remove(idx);
+                    scope.pop();
                     Ok(Box::new(()))
                 } else {
                     return Err(EvalAltResult::ErrorFor(expr.position()));
@@ -901,10 +883,10 @@ impl Engine {
 
             Stmt::Let(name, init, _) => {
                 if let Some(v) = init {
-                    let i = self.eval_expr(scope, v)?;
-                    scope.push((name.clone(), i));
+                    let val = self.eval_expr(scope, v)?;
+                    scope.push_dynamic(name.clone(), val);
                 } else {
-                    scope.push((name.clone(), Box::new(())));
+                    scope.push(name.clone(), ());
                 }
                 Ok(Box::new(()))
             }
