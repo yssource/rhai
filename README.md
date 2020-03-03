@@ -11,7 +11,7 @@ Rhai's current feature set:
 * Support for overloaded functions
 * No additional dependencies
 
-**Note:** Currently, the version is 0.10.0-alpha1, so the language and APIs may change before they stabilize.*
+**Note:** Currently, the version is 0.10.1, so the language and APIs may change before they stabilize.*
 
 ## Installation
 
@@ -19,7 +19,7 @@ You can install Rhai using crates by adding this line to your dependencies:
 
 ```toml
 [dependencies]
-rhai = "0.10.0"
+rhai = "0.10.1"
 ```
 
 or simply:
@@ -190,7 +190,7 @@ fn main() {
 }
 ```
 
-To return a `Dynamic` value, simply `Box` it and return it.
+To return a [`Dynamic`] value, simply `Box` it and return it.
 
 ```rust
 fn decide(yes_no: bool) -> Dynamic {
@@ -514,7 +514,7 @@ fn add(x, y) {
     return x + y;
 }
 
-print(add(2, 3))
+print(add(2, 3));
 ```
 
 Just like in Rust, you can also use an implicit return.
@@ -524,8 +524,28 @@ fn add(x, y) {
     x + y
 }
 
-print(add(2, 3))
+print(add(2, 3));
 ```
+
+Remember that functions defined in script always take [`Dynamic`] arguments (i.e. the arguments can be of any type).
+Furthermore, functions can only be defined at the top level, never inside a block or another function.
+
+```rust
+// Top level is OK
+fn add(x, y) {
+    x + y
+}
+
+// The following will not compile
+fn do_addition(x) {
+    fn add_y(n) {   // functions cannot be defined inside another function
+        n + y
+    }
+
+    add_y(x)
+}
+```
+
 
 ## Arrays
 
@@ -740,3 +760,6 @@ my_str += 12345;
 
 my_str == "abcABC12345"
 ```
+
+
+[`Dynamic`]: #values-and-types
