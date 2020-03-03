@@ -175,8 +175,10 @@ impl Engine {
         self.call_fn_raw(ident.into(), args.into_vec(), None, pos)
             .and_then(|b| {
                 b.downcast().map(|b| *b).map_err(|a| {
-                    let name = self.map_type_name((*a).type_name());
-                    EvalAltResult::ErrorMismatchOutputType(name, pos)
+                    EvalAltResult::ErrorMismatchOutputType(
+                        self.map_type_name((*a).type_name()).into(),
+                        pos,
+                    )
                 })
             })
     }
@@ -191,17 +193,16 @@ impl Engine {
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
         debug_println!(
-            "Trying to call function {:?} with args {:?}",
+            "Calling {}({})",
             ident,
             args.iter()
-                .map(|x| { self.map_type_name((**x).type_name()) })
+                .map(|x| (*x).type_name())
+                .map(|name| self.map_type_name(name))
                 .collect::<Vec<_>>()
+                .join(", ")
         );
 
-        let mut spec = FnSpec {
-            ident: ident.clone(),
-            args: None,
-        };
+        let mut spec = FnSpec { ident, args: None };
 
         // First search in script-defined functions (can override built-in),
         // then in built-in's
@@ -219,7 +220,7 @@ impl Engine {
                         return r;
                     }
 
-                    let callback = match ident.as_str() {
+                    let callback = match spec.ident.as_str() {
                         "print" => &self.on_print,
                         "debug" => &self.on_debug,
                         _ => return r,
@@ -240,7 +241,7 @@ impl Engine {
                         f.params
                             .iter()
                             .cloned()
-                            .zip(args.iter().map(|x| (&**x).into_dynamic())),
+                            .zip(args.iter().map(|x| (*x).into_dynamic())),
                     );
 
                     match self.eval_stmt(&mut scope, &*f.body) {
@@ -255,12 +256,12 @@ impl Engine {
         } else {
             let types_list = args
                 .iter()
-                .map(|x| (*(&**x).into_dynamic()).type_name())
+                .map(|x| (*x).type_name())
                 .map(|name| self.map_type_name(name))
                 .collect::<Vec<_>>();
 
             Err(EvalAltResult::ErrorFunctionNotFound(
-                format!("{} ({})", ident, types_list.join(", ")),
+                format!("{} ({})", spec.ident, types_list.join(", ")),
                 pos,
             ))
         }
@@ -363,7 +364,7 @@ impl Engine {
 
                 let mut val = self.call_fn_raw(get_fn_name, vec![this_ptr], None, *pos)?;
 
-                if let Some(arr) = (*val).downcast_mut() as Option<&mut Array> {
+                if let Some(arr) = val.downcast_mut() as Option<&mut Array> {
                     if idx >= 0 {
                         arr.get(idx as usize)
                             .cloned()
@@ -371,7 +372,7 @@ impl Engine {
                     } else {
                         Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx, *pos))
                     }
-                } else if let Some(s) = (*val).downcast_mut() as Option<&mut String> {
+                } else if let Some(s) = val.downcast_mut() as Option<&mut String> {
                     if idx >= 0 {
                         s.chars()
                             .nth(idx as usize)
@@ -453,7 +454,7 @@ impl Engine {
             scope,
             id,
             |val| {
-                if let Some(arr) = (*val).downcast_ref() as Option<&Array> {
+                if let Some(arr) = val.downcast_ref() as Option<&Array> {
                     is_array = true;
 
                     if idx >= 0 {
@@ -463,7 +464,7 @@ impl Engine {
                     } else {
                         Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx, begin))
                     }
-                } else if let Some(s) = (*val).downcast_ref() as Option<&String> {
+                } else if let Some(s) = val.downcast_ref() as Option<&String> {
                     is_array = false;
 
                     if idx >= 0 {
@@ -636,11 +637,8 @@ impl Engine {
             Expr::CharConstant(c, _) => Ok(Box::new(*c)),
 
             Expr::Identifier(id, pos) => scope
-                .iter()
-                .rev()
-                .filter(|(name, _)| id == name)
-                .next()
-                .map(|(_, val)| val.clone())
+                .get(id)
+                .map(|(_, _, val)| val)
                 .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(id.clone(), *pos)),
 
             Expr::Index(id, idx_raw, pos) => self
@@ -651,17 +649,14 @@ impl Engine {
                 let rhs_val = self.eval_expr(scope, rhs)?;
 
                 match **id {
-                    Expr::Identifier(ref n, pos) => scope
-                        .iter_mut()
-                        .rev()
-                        .filter(|(name, _)| n == name)
-                        .next()
-                        .map(|(_, val)| {
-                            *val = rhs_val;
-                            Box::new(()) as Dynamic
-                        })
-                        .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(n.clone(), pos)),
-
+                    Expr::Identifier(ref name, pos) => {
+                        if let Some((idx, _, _)) = scope.get(name) {
+                            *scope.get_mut(name, idx) = rhs_val;
+                            Ok(Box::new(()) as Dynamic)
+                        } else {
+                            Err(EvalAltResult::ErrorVariableNotFound(name.clone(), pos))
+                        }
+                    }
                     Expr::Index(ref id, ref idx_raw, pos) => {
                         let idx_pos = idx_raw.position();
 
@@ -893,11 +888,11 @@ impl Engine {
         }
     }
 
-    pub(crate) fn map_type_name(&self, name: String) -> String {
+    pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
-            .get(&name)
-            .map(|x| x.clone())
-            .unwrap_or(name.to_string())
+            .get(name)
+            .map(|s| s.as_str())
+            .unwrap_or(name)
     }
 
     /// Make a new engine

@@ -7,7 +7,7 @@ pub type Dynamic = Box<Variant>;
 pub trait Any: StdAny {
     fn type_id(&self) -> TypeId;
 
-    fn type_name(&self) -> String;
+    fn type_name(&self) -> &'static str;
 
     fn into_dynamic(&self) -> Dynamic;
 
@@ -25,8 +25,8 @@ where
         TypeId::of::<T>()
     }
 
-    fn type_name(&self) -> String {
-        type_name::<T>().to_string()
+    fn type_name(&self) -> &'static str {
+        type_name::<T>()
     }
 
     #[inline]

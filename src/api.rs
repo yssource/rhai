@@ -88,15 +88,19 @@ impl Engine {
         self.script_fns.clear(); // Clean up engine
 
         match result {
-            Err(EvalAltResult::Return(out, pos)) => Ok(*out.downcast::<T>().map_err(|a| {
-                let name = self.map_type_name((*a).type_name());
-                EvalAltResult::ErrorMismatchOutputType(name, pos)
-            })?),
+            Err(EvalAltResult::Return(out, pos)) => out.downcast::<T>().map(|v| *v).map_err(|a| {
+                EvalAltResult::ErrorMismatchOutputType(
+                    self.map_type_name((*a).type_name()).to_string(),
+                    pos,
+                )
+            }),
 
-            Ok(out) => Ok(*out.downcast::<T>().map_err(|a| {
-                let name = self.map_type_name((*a).type_name());
-                EvalAltResult::ErrorMismatchOutputType(name, Position::eof())
-            })?),
+            Ok(out) => out.downcast::<T>().map(|v| *v).map_err(|a| {
+                EvalAltResult::ErrorMismatchOutputType(
+                    self.map_type_name((*a).type_name()).to_string(),
+                    Position::eof(),
+                )
+            }),
 
             Err(err) => Err(err),
         }
