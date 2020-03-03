@@ -1,11 +1,7 @@
 pre 1.0:
-	- binary ops
 	- basic threads
 	- stdlib
-	- floats
-	- REPL (consume functions)
 1.0:
 	- decide on postfix/prefix operators
-	- ranges, rustic for-loop
 	- advanced threads + actors
 	- more literals

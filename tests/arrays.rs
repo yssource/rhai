@@ -1,19 +1,17 @@
-use rhai::Engine;
-use rhai::RegisterFn;
+use rhai::{Engine, EvalAltResult, RegisterFn};
 
 #[test]
-fn test_arrays() {
+fn test_arrays() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    assert_eq!(engine.eval::<i64>("let x = [1, 2, 3]; x[1]"), Ok(2));
-    assert_eq!(
-        engine.eval::<i64>("let y = [1, 2, 3]; y[1] = 5; y[1]"),
-        Ok(5)
-    );
+    assert_eq!(engine.eval::<i64>("let x = [1, 2, 3]; x[1]")?, 2);
+    assert_eq!(engine.eval::<i64>("let y = [1, 2, 3]; y[1] = 5; y[1]")?, 5);
+
+    Ok(())
 }
 
 #[test]
-fn test_array_with_structs() {
+fn test_array_with_structs() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {
         x: i64,
@@ -45,7 +43,7 @@ fn test_array_with_structs() {
     engine.register_fn("update", TestStruct::update);
     engine.register_fn("new_ts", TestStruct::new);
 
-    assert_eq!(engine.eval::<i64>("let a = [new_ts()]; a[0].x"), Ok(1));
+    assert_eq!(engine.eval::<i64>("let a = [new_ts()]; a[0].x")?, 1);
 
     assert_eq!(
         engine.eval::<i64>(
@@ -53,7 +51,9 @@ fn test_array_with_structs() {
              a[0].x = 100;           \
              a[0].update();          \
              a[0].x",
-        ),
-        Ok(1100)
+        )?,
+        1100
     );
+
+    Ok(())
 }

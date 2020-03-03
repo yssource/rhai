@@ -4,12 +4,12 @@ use rhai::{Engine, EvalAltResult, RegisterFn};
 fn test_mismatched_op() {
     let mut engine = Engine::new();
 
-    assert_eq!(
-        engine.eval::<i64>("60 + \"hello\""),
-        Err(EvalAltResult::ErrorMismatchOutputType(
-            "alloc::string::String".into()
-        ))
-    );
+    let r = engine.eval::<i64>("60 + \"hello\"");
+
+    match r {
+        Err(EvalAltResult::ErrorMismatchOutputType(err, _)) if err == "string" => (),
+        _ => panic!(),
+    }
 }
 
 #[test]
@@ -29,10 +29,14 @@ fn test_mismatched_op_custom_type() {
     engine.register_type::<TestStruct>();
     engine.register_fn("new_ts", TestStruct::new);
 
-    assert_eq!(
-        engine.eval::<i64>("60 + new_ts()"),
-        Err(EvalAltResult::ErrorFunctionNotFound(
-            "+ (i64, mismatched_op::test_mismatched_op_custom_type::TestStruct)".into()
-        ))
-    );
+    let r = engine.eval::<i64>("60 + new_ts()");
+
+    match r {
+        Err(EvalAltResult::ErrorFunctionNotFound(err, _))
+            if err == "+ (i64, mismatched_op::test_mismatched_op_custom_type::TestStruct)" =>
+        {
+            ()
+        }
+        _ => panic!(),
+    }
 }

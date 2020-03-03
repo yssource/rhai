@@ -1,23 +1,24 @@
-use rhai::Engine;
-use rhai::RegisterFn;
+use rhai::{Engine, EvalAltResult, RegisterFn};
 
 #[test]
-fn test_float() {
+fn test_float() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     assert_eq!(
-        engine.eval::<bool>("let x = 0.0; let y = 1.0; x < y"),
-        Ok(true)
+        engine.eval::<bool>("let x = 0.0; let y = 1.0; x < y")?,
+        true
     );
     assert_eq!(
-        engine.eval::<bool>("let x = 0.0; let y = 1.0; x > y"),
-        Ok(false)
+        engine.eval::<bool>("let x = 0.0; let y = 1.0; x > y")?,
+        false
     );
-    assert_eq!(engine.eval::<f64>("let x = 9.9999; x"), Ok(9.9999));
+    assert_eq!(engine.eval::<f64>("let x = 9.9999; x")?, 9.9999);
+
+    Ok(())
 }
 
 #[test]
-fn struct_with_float() {
+fn struct_with_float() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {
         x: f64,
@@ -50,11 +51,13 @@ fn struct_with_float() {
     engine.register_fn("new_ts", TestStruct::new);
 
     assert_eq!(
-        engine.eval::<f64>("let ts = new_ts(); ts.update(); ts.x"),
-        Ok(6.789)
+        engine.eval::<f64>("let ts = new_ts(); ts.update(); ts.x")?,
+        6.789
     );
     assert_eq!(
-        engine.eval::<f64>("let ts = new_ts(); ts.x = 10.1001; ts.x"),
-        Ok(10.1001)
+        engine.eval::<f64>("let ts = new_ts(); ts.x = 10.1001; ts.x")?,
+        10.1001
     );
+
+    Ok(())
 }

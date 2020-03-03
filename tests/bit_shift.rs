@@ -1,15 +1,15 @@
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_left_shift() {
+fn test_left_shift() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
-
-    assert_eq!(engine.eval::<i64>("4 << 2"), Ok(16));
+    assert_eq!(engine.eval::<i64>("4 << 2")?, 16);
+    Ok(())
 }
 
 #[test]
-fn test_right_shift() {
+fn test_right_shift() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
-
-    assert_eq!(engine.eval::<i64>("9 >> 1"), Ok(4));
+    assert_eq!(engine.eval::<i64>("9 >> 1")?, 4);
+    Ok(())
 }

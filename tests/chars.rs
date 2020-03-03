@@ -1,14 +1,19 @@
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_chars() {
+fn test_chars() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    assert_eq!(engine.eval::<char>("'y'"), Ok('y'));
-    assert_eq!(engine.eval::<char>("'\\u2764'"), Ok('❤'));
+    assert_eq!(engine.eval::<char>("'y'")?, 'y');
+    assert_eq!(engine.eval::<char>("'\\u2764'")?, '❤');
+    assert_eq!(engine.eval::<char>(r#"let x="hello"; x[2]"#)?, 'l');
+    assert_eq!(
+        engine.eval::<String>(r#"let x="hello"; x[2]='$'; x"#)?,
+        "he$lo".to_string()
+    );
 
-    match engine.eval::<char>("''") {
-        Err(_) => (),
-        _ => assert!(false),
-    }
+    assert!(engine.eval::<char>("'\\uhello'").is_err());
+    assert!(engine.eval::<char>("''").is_err());
+
+    Ok(())
 }

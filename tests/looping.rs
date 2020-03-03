@@ -1,12 +1,11 @@
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_loop() {
+fn test_loop() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    assert!(engine
-        .eval::<bool>(
-            "
+    assert!(engine.eval::<bool>(
+        r"
 			let x = 0;
 			let i = 0;
 
@@ -22,6 +21,7 @@ fn test_loop() {
 
 			x == 45
 		"
-        )
-        .unwrap())
+    )?);
+
+    Ok(())
 }

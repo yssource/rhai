@@ -1,13 +1,14 @@
 use std::any::TypeId;
 
-use crate::any::Any;
-use crate::engine::{Engine, EvalAltResult};
+use crate::any::{Any, Dynamic};
+use crate::engine::{Engine, EvalAltResult, FnCallArgs};
+use crate::parser::Position;
 
 pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN);
 }
-pub trait RegisterBoxFn<FN, ARGS> {
-    fn register_box_fn(&mut self, name: &str, f: FN);
+pub trait RegisterDynamicFn<FN, ARGS> {
+    fn register_dynamic_fn(&mut self, name: &str, f: FN);
 }
 
 pub struct Ref<A>(A);
@@ -23,63 +24,69 @@ macro_rules! def_register {
         def_register!(imp);
     };
     (imp $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
-        impl<$($par,)* FN, RET> RegisterFn<FN, ($($mark,)*), RET> for Engine
-        where
+        impl<
             $($par: Any + Clone,)*
             FN: Fn($($param),*) -> RET + 'static,
-            RET: Any,
+            RET: Any
+        > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
-                let fun = move |mut args: Vec<&mut dyn Any>| {
+                let fn_name = name.to_string();
+
+                let fun = move |mut args: FnCallArgs, pos: Position| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
-                    if args.len() != count_args!($($par)*) {
-                        return Err(EvalAltResult::ErrorFunctionArgMismatch);
+                    const NUM_ARGS: usize = count_args!($($par)*);
+
+                    if args.len() != NUM_ARGS {
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, pos));
                     }
 
                     #[allow(unused_variables, unused_mut)]
                     let mut drain = args.drain(..);
                     $(
                     // Downcast every element, return in case of a type mismatch
-                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>)
-                        .ok_or(EvalAltResult::ErrorFunctionArgMismatch)?;
+                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>).unwrap();
                     )*
 
                     // Call the user-supplied function using ($clone) to
                     // potentially clone the value, otherwise pass the reference.
                     let r = f($(($clone)($par)),*);
-                    Ok(Box::new(r) as Box<dyn Any>)
+                    Ok(Box::new(r) as Dynamic)
                 };
-                self.register_fn_raw(name.to_owned(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
+                self.register_fn_raw(name.into(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }
         }
 
-        impl<$($par,)* FN> RegisterBoxFn<FN, ($($mark,)*)> for Engine
-        where
+        impl<
             $($par: Any + Clone,)*
-            FN: Fn($($param),*) -> Box<dyn Any> + 'static
+            FN: Fn($($param),*) -> Dynamic + 'static,
+        > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
         {
-            fn register_box_fn(&mut self, name: &str, f: FN) {
-                let fun = move |mut args: Vec<&mut dyn Any>| {
+            fn register_dynamic_fn(&mut self, name: &str, f: FN) {
+                let fn_name = name.to_string();
+
+                let fun = move |mut args: FnCallArgs, pos: Position| {
                     // Check for length at the beginning to avoid
                     // per-element bound checks.
-                    if args.len() != count_args!($($par)*) {
-                        return Err(EvalAltResult::ErrorFunctionArgMismatch);
+                    const NUM_ARGS: usize = count_args!($($par)*);
+
+                    if args.len() != NUM_ARGS {
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, pos));
                     }
 
                     #[allow(unused_variables, unused_mut)]
                     let mut drain = args.drain(..);
                     $(
                     // Downcast every element, return in case of a type mismatch
-                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>)
-                        .ok_or(EvalAltResult::ErrorFunctionArgMismatch)?;
+                    let $par = ((*drain.next().unwrap()).downcast_mut() as Option<&mut $par>).unwrap();
                     )*
 
                     // Call the user-supplied function using ($clone) to
                     // potentially clone the value, otherwise pass the reference.
                     Ok(f($(($clone)($par)),*))
                 };
-                self.register_fn_raw(name.to_owned(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
+                self.register_fn_raw(name.into(), Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }
         }
 

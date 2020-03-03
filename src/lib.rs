@@ -25,7 +25,7 @@
 //!
 //! let mut engine = Engine::new();
 //! engine.register_fn("compute_something", compute_something);
-//! assert_eq!(engine.eval_file::<bool>("my_script.rhai"), Ok(true));
+//! assert_eq!(engine.eval_file::<bool>("my_script.rhai").unwrap(), true);
 //! ```
 //!
 //! [Check out the README on GitHub for more information!](https://github.com/jonathandturner/rhai)
@@ -40,12 +40,14 @@ macro_rules! debug_println {
 }
 
 mod any;
+mod api;
+mod builtin;
 mod call;
 mod engine;
 mod fn_register;
 mod parser;
 
-pub use any::Any;
-pub use engine::{Engine, EvalAltResult, Scope};
-pub use fn_register::{RegisterBoxFn, RegisterFn};
+pub use any::Dynamic;
+pub use engine::{Array, Engine, EvalAltResult, Scope};
+pub use fn_register::{RegisterDynamicFn, RegisterFn};
 pub use parser::{ParseError, ParseErrorType, AST};
