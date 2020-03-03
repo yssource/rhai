@@ -5,6 +5,9 @@ use std::fmt;
 use std::iter::Peekable;
 use std::str::Chars;
 
+const MAX_LINES: u16 = 65535;
+const MAX_POS: u16 = 65535;
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum LexError {
     UnexpectedChar(char),
@@ -47,7 +50,7 @@ impl fmt::Display for LexError {
 pub enum ParseErrorType {
     BadInput(String),
     InputPastEndOfFile,
-    UnknownOperator,
+    UnknownOperator(String),
     MissingRightParen,
     MissingLeftBrace,
     MissingRightBrace,
@@ -57,13 +60,10 @@ pub enum ParseErrorType {
     VarExpectsIdentifier,
     WrongFnDefinition,
     FnMissingName,
-    FnMissingParams,
+    FnMissingParams(String),
 }
 
 type PERR = ParseErrorType;
-
-const MAX_LINES: u16 = 65535;
-const MAX_POS: u16 = 65535;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
@@ -171,7 +171,7 @@ impl Error for ParseError {
         match self.0 {
             PERR::BadInput(ref p) => p,
             PERR::InputPastEndOfFile => "Script is incomplete",
-            PERR::UnknownOperator => "Unknown operator",
+            PERR::UnknownOperator(_) => "Unknown operator",
             PERR::MissingRightParen => "Expecting ')'",
             PERR::MissingLeftBrace => "Expecting '{'",
             PERR::MissingRightBrace => "Expecting '}'",
@@ -180,7 +180,7 @@ impl Error for ParseError {
             PERR::MalformedIndexExpr => "Invalid index in indexing expression",
             PERR::VarExpectsIdentifier => "Expecting name of a variable",
             PERR::FnMissingName => "Expecting name in function declaration",
-            PERR::FnMissingParams => "Expecting parameters in function declaration",
+            PERR::FnMissingParams(_) => "Expecting parameters in function declaration",
             PERR::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
         }
     }
@@ -194,6 +194,8 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             PERR::BadInput(ref s) => write!(f, "{}", s)?,
+            PERR::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
+            PERR::FnMissingParams(ref s) => write!(f, "Missing parameters for function '{}'", s)?,
             _ => write!(f, "{}", self.description())?,
         }
 
@@ -1648,7 +1650,12 @@ fn parse_binary_op<'a>(
                         )),
                     )
                 }
-                _ => return Err(ParseError(PERR::UnknownOperator, pos)),
+                token => {
+                    return Err(ParseError(
+                        PERR::UnknownOperator(token.syntax().to_string()),
+                        pos,
+                    ))
+                }
             };
         }
     }
@@ -1844,22 +1851,17 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
         Some(&(Token::LeftParen, _)) => {
             input.next();
         }
-        Some(&(_, pos)) => return Err(ParseError(PERR::FnMissingParams, pos)),
-        None => return Err(ParseError(PERR::FnMissingParams, Position::eof())),
+        Some(&(_, pos)) => return Err(ParseError(PERR::FnMissingParams(name), pos)),
+        None => return Err(ParseError(PERR::FnMissingParams(name), Position::eof())),
     }
 
     let mut params = Vec::new();
 
-    let skip_params = match input.peek() {
+    match input.peek() {
         Some(&(Token::RightParen, _)) => {
             input.next();
-            true
         }
-        _ => false,
-    };
-
-    if !skip_params {
-        loop {
+        _ => loop {
             match input.next() {
                 Some((Token::RightParen, _)) => break,
                 Some((Token::Comma, _)) => (),
@@ -1869,7 +1871,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
                 Some((_, pos)) => return Err(ParseError(PERR::MalformedCallExpr, pos)),
                 None => return Err(ParseError(PERR::MalformedCallExpr, Position::eof())),
             }
-        }
+        },
     }
 
     let body = parse_block(input)?;
