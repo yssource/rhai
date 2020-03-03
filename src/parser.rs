@@ -222,8 +222,7 @@ pub enum Stmt {
     Block(Vec<Stmt>),
     Expr(Box<Expr>),
     Break(Position),
-    Return(Position),
-    ReturnWithVal(Box<Expr>, Position),
+    ReturnWithVal(Option<Box<Expr>>, bool, Position),
 }
 
 #[derive(Debug, Clone)]
@@ -310,6 +309,7 @@ pub enum Token {
     Fn,
     Break,
     Return,
+    Throw,
     PlusAssign,
     MinusAssign,
     MultiplyAssign,
@@ -382,6 +382,7 @@ impl Token {
                 Fn => "fn",
                 Break => "break",
                 Return => "return",
+                Throw => "throw",
                 PlusAssign => "+=",
                 MinusAssign => "-=",
                 MultiplyAssign => "*=",
@@ -456,6 +457,7 @@ impl Token {
             Modulo           |
             ModuloAssign     |
             Return           |
+            Throw            |
             PowerOf          |
             In               |
             PowerOfAssign => true,
@@ -498,7 +500,7 @@ impl Token {
         use self::Token::*;
 
         match *self {
-            UnaryPlus | UnaryMinus | Equals | Bang | Return => true,
+            UnaryPlus | UnaryMinus | Equals | Bang | Return | Throw => true,
             _ => false,
         }
     }
@@ -816,6 +818,7 @@ impl<'a> TokenIterator<'a> {
                             "loop" => Token::Loop,
                             "break" => Token::Break,
                             "return" => Token::Return,
+                            "throw" => Token::Throw,
                             "fn" => Token::Fn,
                             "for" => Token::For,
                             "in" => Token::In,
@@ -1743,6 +1746,7 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
                 // Parse statements inside the block
                 statements.push(parse_stmt(input)?);
 
+                // Notice semicolons are optional
                 if let Some(&(Token::SemiColon, _)) = input.peek() {
                     input.next();
                 }
@@ -1778,15 +1782,25 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
             input.next();
             Ok(Stmt::Break(pos))
         }
-        Some(&(Token::Return, _)) => {
+        Some(&(ref token @ Token::Return, _)) | Some(&(ref token @ Token::Throw, _)) => {
+            let is_return = match token {
+                Token::Return => true,
+                Token::Throw => false,
+                _ => panic!(),
+            };
+
             input.next();
+
             match input.peek() {
-                Some(&(Token::SemiColon, pos)) => Ok(Stmt::Return(pos)),
+                // return; or throw;
+                Some(&(Token::SemiColon, pos)) => Ok(Stmt::ReturnWithVal(None, is_return, pos)),
+                // Just a return/throw without anything at the end of script
+                None => Ok(Stmt::ReturnWithVal(None, is_return, Position::eof())),
+                // return or throw with expression
                 Some(&(_, pos)) => {
                     let ret = parse_expr(input)?;
-                    Ok(Stmt::ReturnWithVal(Box::new(ret), pos))
+                    Ok(Stmt::ReturnWithVal(Some(Box::new(ret)), is_return, pos))
                 }
-                _ => parse_expr_stmt(input),
             }
         }
         Some(&(Token::LeftBrace, _)) => parse_block(input),
@@ -1859,6 +1873,7 @@ fn parse_top_level<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<AST, P
             _ => statements.push(parse_stmt(input)?),
         }
 
+        // Notice semicolons are optional
         if let Some(&(Token::SemiColon, _)) = input.peek() {
             input.next();
         }

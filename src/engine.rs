@@ -35,6 +35,7 @@ pub enum EvalAltResult {
     ErrorCantOpenScriptFile(String, std::io::Error),
     ErrorDotExpr(Position),
     ErrorArithmetic(String, Position),
+    ErrorRuntime(String, Position),
     LoopBreak,
     Return(Dynamic, Position),
 }
@@ -70,6 +71,7 @@ impl Error for EvalAltResult {
             Self::ErrorCantOpenScriptFile(_, _) => "Cannot open script file",
             Self::ErrorDotExpr(_) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
+            Self::ErrorRuntime(_, _) => "Runtime error",
             Self::LoopBreak => "[Not Error] Breaks out of loop",
             Self::Return(_, _) => "[Not Error] Function returns value",
         }
@@ -95,6 +97,8 @@ impl std::fmt::Display for EvalAltResult {
             Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
             Self::ErrorDotExpr(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorArithmetic(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
+            Self::ErrorRuntime(s, pos) if s.is_empty() => write!(f, "{} ({})", desc, pos),
+            Self::ErrorRuntime(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
             Self::LoopBreak => write!(f, "{}", desc),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorCantOpenScriptFile(filename, err) => {
@@ -879,11 +883,31 @@ impl Engine {
 
             Stmt::Break(_) => Err(EvalAltResult::LoopBreak),
 
-            Stmt::Return(pos) => Err(EvalAltResult::Return(().into_dynamic(), *pos)),
+            // Empty return
+            Stmt::ReturnWithVal(None, true, pos) => {
+                Err(EvalAltResult::Return(().into_dynamic(), *pos))
+            }
 
-            Stmt::ReturnWithVal(a, pos) => {
-                let result = self.eval_expr(scope, a)?;
-                Err(EvalAltResult::Return(result, *pos))
+            // Return value
+            Stmt::ReturnWithVal(Some(a), true, pos) => {
+                Err(EvalAltResult::Return(self.eval_expr(scope, a)?, *pos))
+            }
+
+            // Empty throw
+            Stmt::ReturnWithVal(None, false, pos) => {
+                Err(EvalAltResult::ErrorRuntime("".into(), *pos))
+            }
+
+            // Throw value
+            Stmt::ReturnWithVal(Some(a), false, pos) => {
+                let val = self.eval_expr(scope, a)?;
+                Err(EvalAltResult::ErrorRuntime(
+                    (val.downcast_ref() as Option<&String>)
+                        .map(|s| s.as_ref())
+                        .unwrap_or("")
+                        .to_string(),
+                    *pos,
+                ))
             }
 
             Stmt::Let(name, init, _) => {

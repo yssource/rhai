@@ -563,6 +563,40 @@ fn do_addition(x) {
 }
 ```
 
+## Return
+
+```rust
+return;
+
+return 123 + 456;
+```
+
+## Errors and Exceptions
+
+```rust
+if error != "" {
+    throw error;  // `throw` takes a string to form the exception text
+}
+
+throw;  // no exception text
+```
+
+All of `Engine`'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
+
+Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(reason, position))` with the exception text captured by the `reason` parameter.
+
+```rust
+let result = engine.eval::<i64>(&mut scope, r#"
+    let x = 42;
+
+    if x > 0 {
+        throw x + " is too large!";
+    }
+"#);
+
+println!(result);   // prints "Runtime error: 42 is too large! (line 5, position 15)"
+```
+
 ## Arrays
 
 You can create arrays of values, and then access them with numeric indices.
