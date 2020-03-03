@@ -545,6 +545,9 @@ print(add(2, 3));
 ```
 
 Remember that functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
+
+Arguments are passed by value, so all functions are _pure_ (i.e. they never modify their arguments).
+
 Furthermore, functions can only be defined at the top level, never inside a block or another function.
 
 ```rust

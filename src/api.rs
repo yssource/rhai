@@ -144,11 +144,6 @@ impl Engine {
             .map_err(|err| EvalAltResult::ErrorParsing(err))
             .and_then(|AST(ref os, ref fns)| {
                 for f in fns {
-                    // FIX - Why are functions limited to 6 parameters?
-                    if f.params.len() > 6 {
-                        return Ok(());
-                    }
-
                     self.script_fns.insert(
                         FnSpec {
                             ident: f.name.clone(),

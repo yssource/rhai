@@ -39,7 +39,7 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, pos))
+                        Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos))
                     } else {
                         #[allow(unused_variables, unused_mut)]
                         let mut drain = args.drain(..);
@@ -72,7 +72,7 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, pos))
+                        Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos))
                     } else {
                         #[allow(unused_variables, unused_mut)]
                         let mut drain = args.drain(..);

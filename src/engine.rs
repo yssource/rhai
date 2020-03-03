@@ -21,7 +21,7 @@ const KEYWORD_TYPE_OF: &'static str = "type_of";
 pub enum EvalAltResult {
     ErrorParsing(ParseError),
     ErrorFunctionNotFound(String, Position),
-    ErrorFunctionArgsMismatch(String, usize, Position),
+    ErrorFunctionArgsMismatch(String, usize, usize, Position),
     ErrorBooleanArgMismatch(String, Position),
     ErrorArrayBounds(usize, i64, Position),
     ErrorStringBounds(usize, i64, Position),
@@ -45,7 +45,7 @@ impl Error for EvalAltResult {
         match self {
             Self::ErrorParsing(p) => p.description(),
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
-            Self::ErrorFunctionArgsMismatch(_, _, _) => {
+            Self::ErrorFunctionArgsMismatch(_, _, _, _) => {
                 "Function call with wrong number of arguments"
             }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
@@ -105,9 +105,11 @@ impl std::fmt::Display for EvalAltResult {
                 write!(f, "{} '{}': {}", desc, filename, err)
             }
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
-            Self::ErrorFunctionArgsMismatch(fun, n, pos) => {
-                write!(f, "Function '{}' expects {} argument(s) ({})", fun, n, pos)
-            }
+            Self::ErrorFunctionArgsMismatch(fun, need, n, pos) => write!(
+                f,
+                "Function '{}' expects {} argument(s) but {} found ({})",
+                fun, need, n, pos
+            ),
             Self::ErrorBooleanArgMismatch(op, pos) => {
                 write!(f, "{} operator expects boolean operands ({})", op, pos)
             }
@@ -244,6 +246,15 @@ impl Engine {
                     .into_dynamic())
                 }
                 FnIntExt::Int(ref f) => {
+                    if f.params.len() != args.len() {
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(
+                            spec.ident,
+                            f.params.len(),
+                            args.len(),
+                            pos,
+                        ));
+                    }
+
                     let mut scope = Scope::new();
 
                     scope.extend(
