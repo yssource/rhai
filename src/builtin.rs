@@ -1,4 +1,4 @@
-use crate::{any::Any, Array, Dynamic, Engine, RegisterDynamicFn, RegisterFn};
+use crate::{any::Any, Array, Engine, RegisterDynamicFn, RegisterFn};
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub};
 
@@ -239,12 +239,14 @@ impl Engine {
         reg_func3!(self, "pad", pad, &mut Array, i64, (), bool, char);
         reg_func3!(self, "pad", pad, &mut Array, i64, (), String, Array, ());
 
-        self.register_dynamic_fn("pop", |list: &mut Array| list.pop().unwrap_or(Box::new(())));
+        self.register_dynamic_fn("pop", |list: &mut Array| {
+            list.pop().unwrap_or(().into_dynamic())
+        });
         self.register_dynamic_fn("shift", |list: &mut Array| {
             if list.len() > 0 {
                 list.remove(0)
             } else {
-                Box::new(())
+                ().into_dynamic()
             }
         });
         self.register_fn("len", |list: &mut Array| list.len() as i64);
@@ -322,7 +324,7 @@ impl Engine {
                 a.downcast_ref::<Range<i64>>()
                     .unwrap()
                     .clone()
-                    .map(|n| Box::new(n) as Dynamic),
+                    .map(|n| n.into_dynamic()),
             )
         });
 

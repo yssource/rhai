@@ -1,4 +1,4 @@
-# Rhai - embedded scripting for Rust
+# Rhai - Embedded Scripting for Rust
 
 Rhai is an embedded scripting language for Rust that gives you a safe and easy way to add scripting to your applications.
 
@@ -7,11 +7,11 @@ Rhai's current feature set:
 * Easy integration with Rust functions and data types
 * Fairly efficient (1 mil iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
-* Easy-to-use language based on JS+Rust
+* Easy-to-use language similar to JS+Rust
 * Support for overloaded functions
 * No additional dependencies
 
-**Note:** Currently, the version is 0.10.1, so the language and APIs may change before they stabilize.*
+**Note:** Currently, the version is 0.10.1, so the language and API may change before they stabilize.
 
 ## Installation
 
@@ -144,6 +144,8 @@ All types are treated strictly separate by Rhai, meaning that `i32` and `i64` an
 
 There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it. For other conversions you can register your own conversion functions.
 
+There is also a `type_of` function to detect the type of a value.
+
 ```rust
 let x = 42;
 let y = x * 100.0;              // error: cannot multiply i64 with f64
@@ -151,7 +153,16 @@ let y = x.to_float() * 100.0;   // works
 let z = y.to_int() + x;         // works
 
 let c = 'X';                    // character
-print("c is '" + c + "' and its code is " + c.to_int());
+print("c is '" + c + "' and its code is " + c.to_int());    // prints "c is 'X' and its code is 88"
+
+// Use 'type_of' to get the type of variables
+type_of(c) == "char";
+type_of(x) == "i64";
+y.type_of() == "f64";
+
+if z.type_of() == "string" {
+    do_something_with_strong(z);
+}
 ```
 
 # Working with functions
@@ -190,7 +201,7 @@ fn main() {
 }
 ```
 
-To return a [`Dynamic`] value, simply `Box` it and return it.
+To return a `Dynamic` value, simply `Box` it and return it.
 
 ```rust
 fn decide(yes_no: bool) -> Dynamic {
@@ -335,6 +346,12 @@ if let Ok(result) = engine.eval::<i64>("let x = new_ts(); x.foo()") {
 }
 ```
 
+`type_of` works fine with custom types and returns the name of the type:
+
+```rust
+let x = new_ts();
+print(x.type_of());     // prints "foo::bar::TestStruct"
+```
 
 # Getters and setters
 
@@ -527,7 +544,7 @@ fn add(x, y) {
 print(add(2, 3));
 ```
 
-Remember that functions defined in script always take [`Dynamic`] arguments (i.e. the arguments can be of any type).
+Remember that functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
 Furthermore, functions can only be defined at the top level, never inside a block or another function.
 
 ```rust
@@ -545,7 +562,6 @@ fn do_addition(x) {
     add_y(x)
 }
 ```
-
 
 ## Arrays
 
@@ -606,7 +622,7 @@ engine.register_fn("push",
 );
 ```
 
-The type of a Rhai array is `rhai::Array`.
+The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
 
 ## For loops
 
@@ -760,6 +776,3 @@ my_str += 12345;
 
 my_str == "abcABC12345"
 ```
-
-
-[`Dynamic`]: #values-and-types

@@ -13,6 +13,10 @@ use crate::scope::Scope;
 pub type Array = Vec<Dynamic>;
 pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
 
+const KEYWORD_PRINT: &'static str = "print";
+const KEYWORD_DEBUG: &'static str = "debug";
+const KEYWORD_TYPE_OF: &'static str = "type_of";
+
 #[derive(Debug)]
 pub enum EvalAltResult {
     ErrorParsing(ParseError),
@@ -221,18 +225,19 @@ impl Engine {
                     }
 
                     let callback = match spec.ident.as_str() {
-                        "print" => &self.on_print,
-                        "debug" => &self.on_debug,
+                        KEYWORD_PRINT => &self.on_print,
+                        KEYWORD_DEBUG => &self.on_debug,
                         _ => return r,
                     };
 
-                    Ok(Box::new(callback(
+                    Ok(callback(
                         r.unwrap()
                             .downcast::<String>()
                             .map(|x| *x)
                             .unwrap_or("error: not a string".into())
                             .as_str(),
-                    )))
+                    )
+                    .into_dynamic())
                 }
                 FnIntExt::Int(ref f) => {
                     let mut scope = Scope::new();
@@ -250,6 +255,11 @@ impl Engine {
                     }
                 }
             }
+        } else if spec.ident == KEYWORD_TYPE_OF && args.len() == 1 {
+            Ok(self
+                .map_type_name(args[0].type_name())
+                .to_string()
+                .into_dynamic())
         } else if let Some(val) = def_value {
             // Return default value
             Ok(val.clone())
@@ -376,7 +386,7 @@ impl Engine {
                     if idx >= 0 {
                         s.chars()
                             .nth(idx as usize)
-                            .map(|ch| Box::new(ch) as Dynamic)
+                            .map(|ch| ch.into_dynamic())
                             .ok_or_else(|| {
                                 EvalAltResult::ErrorStringBounds(s.chars().count(), idx, *pos)
                             })
@@ -470,7 +480,7 @@ impl Engine {
                     if idx >= 0 {
                         s.chars()
                             .nth(idx as usize)
-                            .map(|ch| Box::new(ch) as Dynamic)
+                            .map(|ch| ch.into_dynamic())
                             .ok_or_else(|| {
                                 EvalAltResult::ErrorStringBounds(s.chars().count(), idx, begin)
                             })
@@ -631,10 +641,10 @@ impl Engine {
 
     fn eval_expr(&self, scope: &mut Scope, expr: &Expr) -> Result<Dynamic, EvalAltResult> {
         match expr {
-            Expr::IntegerConstant(i, _) => Ok(Box::new(*i)),
-            Expr::FloatConstant(i, _) => Ok(Box::new(*i)),
-            Expr::StringConstant(s, _) => Ok(Box::new(s.clone())),
-            Expr::CharConstant(c, _) => Ok(Box::new(*c)),
+            Expr::IntegerConstant(i, _) => Ok((*i).into_dynamic()),
+            Expr::FloatConstant(i, _) => Ok((*i).into_dynamic()),
+            Expr::StringConstant(s, _) => Ok(s.into_dynamic()),
+            Expr::CharConstant(c, _) => Ok((*c).into_dynamic()),
 
             Expr::Identifier(id, pos) => scope
                 .get(id)
@@ -652,7 +662,7 @@ impl Engine {
                     Expr::Identifier(ref name, pos) => {
                         if let Some((idx, _, _)) = scope.get(name) {
                             *scope.get_mut(name, idx) = rhs_val;
-                            Ok(Box::new(()) as Dynamic)
+                            Ok(().into_dynamic())
                         } else {
                             Err(EvalAltResult::ErrorVariableNotFound(name.clone(), pos))
                         }
@@ -684,7 +694,7 @@ impl Engine {
                                 Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx, idx_pos))
                             } else {
                                 arr[idx as usize] = rhs_val;
-                                Ok(Box::new(()))
+                                Ok(().into_dynamic())
                             }
                         } else if let Some(s) = val.downcast_mut() as Option<&mut String> {
                             let s_len = s.chars().count();
@@ -699,7 +709,7 @@ impl Engine {
                                     idx as usize,
                                     *rhs_val.downcast::<char>().unwrap(),
                                 );
-                                Ok(Box::new(()))
+                                Ok(().into_dynamic())
                             }
                         } else {
                             Err(EvalAltResult::ErrorIndexExpr(idx_pos))
@@ -770,9 +780,9 @@ impl Engine {
                         })?,
             )),
 
-            Expr::True(_) => Ok(Box::new(true)),
-            Expr::False(_) => Ok(Box::new(false)),
-            Expr::Unit(_) => Ok(Box::new(())),
+            Expr::True(_) => Ok(true.into_dynamic()),
+            Expr::False(_) => Ok(false.into_dynamic()),
+            Expr::Unit(_) => Ok(().into_dynamic()),
         }
     }
 
@@ -786,7 +796,7 @@ impl Engine {
 
             Stmt::Block(block) => {
                 let prev_len = scope.len();
-                let mut last_result: Result<Dynamic, EvalAltResult> = Ok(Box::new(()));
+                let mut last_result: Result<Dynamic, EvalAltResult> = Ok(().into_dynamic());
 
                 for block_stmt in block.iter() {
                     last_result = self.eval_stmt(scope, block_stmt);
@@ -814,7 +824,7 @@ impl Engine {
                     } else if else_body.is_some() {
                         self.eval_stmt(scope, else_body.as_ref().unwrap())
                     } else {
-                        Ok(Box::new(()))
+                        Ok(().into_dynamic())
                     }
                 }),
 
@@ -823,12 +833,12 @@ impl Engine {
                     Ok(guard_val) => {
                         if *guard_val {
                             match self.eval_stmt(scope, body) {
-                                Err(EvalAltResult::LoopBreak) => return Ok(Box::new(())),
+                                Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
                                 Err(x) => return Err(x),
                                 _ => (),
                             }
                         } else {
-                            return Ok(Box::new(()));
+                            return Ok(().into_dynamic());
                         }
                     }
                     Err(_) => return Err(EvalAltResult::ErrorIfGuard(guard.position())),
@@ -837,7 +847,7 @@ impl Engine {
 
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, body) {
-                    Err(EvalAltResult::LoopBreak) => return Ok(Box::new(())),
+                    Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
                     Err(x) => return Err(x),
                     _ => (),
                 }
@@ -861,7 +871,7 @@ impl Engine {
                         }
                     }
                     scope.pop();
-                    Ok(Box::new(()))
+                    Ok(().into_dynamic())
                 } else {
                     return Err(EvalAltResult::ErrorFor(expr.position()));
                 }
@@ -869,7 +879,7 @@ impl Engine {
 
             Stmt::Break(_) => Err(EvalAltResult::LoopBreak),
 
-            Stmt::Return(pos) => Err(EvalAltResult::Return(Box::new(()), *pos)),
+            Stmt::Return(pos) => Err(EvalAltResult::Return(().into_dynamic(), *pos)),
 
             Stmt::ReturnWithVal(a, pos) => {
                 let result = self.eval_expr(scope, a)?;
@@ -883,7 +893,7 @@ impl Engine {
                 } else {
                     scope.push(name.clone(), ());
                 }
-                Ok(Box::new(()))
+                Ok(().into_dynamic())
             }
         }
     }

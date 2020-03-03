@@ -1,4 +1,4 @@
-use crate::any::{Any, AnyExt, Dynamic};
+use crate::any::{Any, AnyExt};
 use crate::engine::{Engine, EvalAltResult, FnIntExt, FnSpec};
 use crate::parser::{lex, parse, ParseError, Position, AST};
 use crate::scope::Scope;
@@ -83,7 +83,7 @@ impl Engine {
 
         let result = os
             .iter()
-            .try_fold(Box::new(()) as Dynamic, |_, o| self.eval_stmt(scope, o));
+            .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o));
 
         self.script_fns.clear(); // Clean up engine
 
@@ -160,7 +160,7 @@ impl Engine {
 
                 let val = os
                     .iter()
-                    .try_fold(Box::new(()) as Dynamic, |_, o| self.eval_stmt(scope, o))
+                    .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
                     .map(|_| ());
 
                 self.script_fns.clear(); // Clean up engine
