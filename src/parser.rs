@@ -5,14 +5,14 @@ use std::fmt;
 use std::iter::Peekable;
 use std::str::Chars;
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum LexError {
     UnexpectedChar(char),
     UnterminatedString,
     MalformedEscapeSequence,
     MalformedNumber,
     MalformedChar,
-    Nothing,
+    InputError(String),
 }
 
 type LERR = LexError;
@@ -25,7 +25,7 @@ impl Error for LexError {
             LERR::MalformedEscapeSequence => "Unexpected values in escape sequence",
             LERR::MalformedNumber => "Unexpected characters in number",
             LERR::MalformedChar => "Char constant not a single character",
-            LERR::Nothing => "This error is for internal use only",
+            LERR::InputError(_) => "Imput error",
         }
     }
 }
@@ -34,6 +34,7 @@ impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LERR::UnexpectedChar(c) => write!(f, "Unexpected '{}'", c),
+            LERR::InputError(s) => write!(f, "{}", s),
             _ => write!(f, "{}", self.description()),
         }
     }
@@ -57,27 +58,67 @@ pub enum ParseErrorType {
 
 type PERR = ParseErrorType;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+const MAX_LINES: u16 = 65535;
+const MAX_POS: u16 = 65535;
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
-    pub line: usize,
-    pub pos: usize,
+    line: u16,
+    pos: u16,
 }
 
 impl Position {
-    pub fn advance(&mut self) {
-        self.pos += 1;
+    pub fn new() -> Self {
+        Self { line: 1, pos: 0 }
     }
-    pub fn rewind(&mut self) {
-        // Beware, should not rewind at zero position
-        self.pos -= 1;
+
+    pub fn line(&self) -> u16 {
+        self.line
     }
-    pub fn new_line(&mut self) {
-        self.line += 1;
-        self.pos = 0;
+
+    pub fn position(&self) -> u16 {
+        self.pos
     }
+
+    pub(crate) fn advance(&mut self) -> Result<u16, LexError> {
+        if self.pos >= MAX_POS {
+            Err(LERR::InputError(format!(
+                "cannot advance beyond maximum line length ({})",
+                MAX_POS
+            )))
+        } else {
+            self.pos += 1;
+            Ok(self.pos)
+        }
+    }
+
+    pub(crate) fn rewind(&mut self) -> Result<u16, LexError> {
+        if self.pos == 0 {
+            Err(LERR::InputError("cannot rewind at position 0".into()))
+        } else {
+            self.pos -= 1;
+            Ok(self.pos)
+        }
+    }
+
+    pub(crate) fn new_line(&mut self) -> Result<u16, LexError> {
+        if self.line > MAX_LINES {
+            Err(LERR::InputError(format!(
+                "reached maximum number of lines ({})",
+                MAX_LINES
+            )))
+        } else {
+            self.line += 1;
+            self.pos = 0;
+
+            Ok(self.pos)
+        }
+    }
+
     pub fn eof() -> Self {
         Self { line: 0, pos: 0 }
     }
+
     pub fn is_eof(&self) -> bool {
         self.line == 0
     }
@@ -85,9 +126,20 @@ impl Position {
 
 impl std::fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.line {
-            0 => write!(f, "EOF"),
-            _ => write!(f, "line {}, position {}", self.line, self.pos),
+        if self.is_eof() {
+            write!(f, "EOF")
+        } else {
+            write!(f, "line {}, position {}", self.line, self.pos)
+        }
+    }
+}
+
+impl std::fmt::Debug for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_eof() {
+            write!(f, "(EOF)")
+        } else {
+            write!(f, "({}:{})", self.line, self.pos)
         }
     }
 }
@@ -99,11 +151,11 @@ impl ParseError {
     pub fn error_type(&self) -> &PERR {
         &self.0
     }
-    pub fn line(&self) -> usize {
-        self.1.line
+    pub fn line(&self) -> u16 {
+        self.1.line()
     }
-    pub fn position(&self) -> usize {
-        self.1.pos
+    pub fn position(&self) -> u16 {
+        self.1.position()
     }
     pub fn is_eof(&self) -> bool {
         self.1.is_eof()
@@ -383,14 +435,21 @@ pub struct TokenIterator<'a> {
 }
 
 impl<'a> TokenIterator<'a> {
-    fn advance(&mut self) {
-        self.pos.advance();
+    fn advance(&mut self) -> Result<u16, (LexError, Position)> {
+        self.pos.advance().map_err(|err| (err, self.pos))
     }
-    fn rewind(&mut self) {
-        self.pos.rewind();
+    fn rewind(&mut self) -> Result<u16, (LexError, Position)> {
+        self.pos.rewind().map_err(|err| (err, self.pos))
     }
-    fn new_line(&mut self) {
-        self.pos.new_line();
+    fn new_line(&mut self) -> Result<u16, (LexError, Position)> {
+        self.pos.new_line().map_err(|err| (err, self.pos))
+    }
+
+    fn advance_token(&mut self) -> Result<u16, (Token, Position)> {
+        self.advance().map_err(|err| (Token::LexErr(err.0), err.1))
+    }
+    fn new_line_token(&mut self) -> Result<u16, (Token, Position)> {
+        self.new_line().map_err(|err| (Token::LexErr(err.0), err.1))
     }
 
     pub fn parse_string_const(
@@ -407,7 +466,7 @@ impl<'a> TokenIterator<'a> {
                 return Err((LERR::UnterminatedString, Position::eof()));
             }
 
-            self.advance();
+            self.advance()?;
 
             match next_char.unwrap() {
                 '\\' if !escape => escape = true,
@@ -441,7 +500,7 @@ impl<'a> TokenIterator<'a> {
                         } else {
                             return Err((LERR::MalformedEscapeSequence, self.pos));
                         }
-                        self.advance();
+                        self.advance()?;
                     }
 
                     if let Some(r) = char::from_u32(out_val) {
@@ -464,7 +523,7 @@ impl<'a> TokenIterator<'a> {
                         } else {
                             return Err((LERR::MalformedEscapeSequence, self.pos));
                         }
-                        self.advance();
+                        self.advance()?;
                     }
 
                     if let Some(r) = char::from_u32(out_val) {
@@ -487,7 +546,7 @@ impl<'a> TokenIterator<'a> {
                         } else {
                             return Err((LERR::MalformedEscapeSequence, self.pos));
                         }
-                        self.advance();
+                        self.advance()?;
                     }
 
                     if let Some(r) = char::from_u32(out_val) {
@@ -500,7 +559,7 @@ impl<'a> TokenIterator<'a> {
                 x if enclosing_char == x && !escape => break,
                 _ if escape => return Err((LERR::MalformedEscapeSequence, self.pos)),
                 '\n' => {
-                    self.rewind();
+                    self.rewind()?;
                     return Err((LERR::UnterminatedString, self.pos));
                 }
                 x => {
@@ -516,49 +575,65 @@ impl<'a> TokenIterator<'a> {
 
     fn inner_next(&mut self) -> Option<(Token, Position)> {
         while let Some(c) = self.char_stream.next() {
-            self.advance();
+            if let Err(err) = self.advance_token() {
+                return Some(err);
+            }
 
             let pos = self.pos;
 
             match c {
-                '\n' => self.new_line(),
+                '\n' => {
+                    if let Err(err) = self.new_line_token() {
+                        return Some(err);
+                    }
+                }
                 '0'..='9' => {
                     let mut result = Vec::new();
                     let mut radix_base: Option<u32> = None;
                     result.push(c);
 
-                    while let Some(&nxt) = self.char_stream.peek() {
-                        match nxt {
+                    while let Some(&next_char) = self.char_stream.peek() {
+                        match next_char {
                             '0'..='9' => {
-                                result.push(nxt);
+                                result.push(next_char);
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                             }
                             '.' => {
-                                result.push(nxt);
+                                result.push(next_char);
                                 self.char_stream.next();
-                                self.advance();
-                                while let Some(&nxt_float) = self.char_stream.peek() {
-                                    match nxt_float {
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
+                                while let Some(&next_char_in_float) = self.char_stream.peek() {
+                                    match next_char_in_float {
                                         '0'..='9' => {
-                                            result.push(nxt_float);
+                                            result.push(next_char_in_float);
                                             self.char_stream.next();
-                                            self.advance();
+                                            if let Err(err) = self.advance_token() {
+                                                return Some(err);
+                                            }
                                         }
                                         _ => break,
                                     }
                                 }
                             }
                             'x' | 'X' => {
-                                result.push(nxt);
+                                result.push(next_char);
                                 self.char_stream.next();
-                                self.advance();
-                                while let Some(&nxt_hex) = self.char_stream.peek() {
-                                    match nxt_hex {
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
+                                while let Some(&next_char_in_hex) = self.char_stream.peek() {
+                                    match next_char_in_hex {
                                         '0'..='9' | 'a'..='f' | 'A'..='F' => {
-                                            result.push(nxt_hex);
+                                            result.push(next_char_in_hex);
                                             self.char_stream.next();
-                                            self.advance();
+                                            if let Err(err) = self.advance_token() {
+                                                return Some(err);
+                                            }
                                         }
                                         _ => break,
                                     }
@@ -566,15 +641,19 @@ impl<'a> TokenIterator<'a> {
                                 radix_base = Some(16);
                             }
                             'o' | 'O' => {
-                                result.push(nxt);
+                                result.push(next_char);
                                 self.char_stream.next();
-                                self.advance();
-                                while let Some(&nxt_oct) = self.char_stream.peek() {
-                                    match nxt_oct {
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
+                                while let Some(&next_char_in_oct) = self.char_stream.peek() {
+                                    match next_char_in_oct {
                                         '0'..='8' => {
-                                            result.push(nxt_oct);
+                                            result.push(next_char_in_oct);
                                             self.char_stream.next();
-                                            self.advance();
+                                            if let Err(err) = self.advance_token() {
+                                                return Some(err);
+                                            }
                                         }
                                         _ => break,
                                     }
@@ -582,15 +661,19 @@ impl<'a> TokenIterator<'a> {
                                 radix_base = Some(8);
                             }
                             'b' | 'B' => {
-                                result.push(nxt);
+                                result.push(next_char);
                                 self.char_stream.next();
-                                self.advance();
-                                while let Some(&nxt_bin) = self.char_stream.peek() {
-                                    match nxt_bin {
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
+                                while let Some(&next_char_in_binary) = self.char_stream.peek() {
+                                    match next_char_in_binary {
                                         '0' | '1' | '_' => {
-                                            result.push(nxt_bin);
+                                            result.push(next_char_in_binary);
                                             self.char_stream.next();
-                                            self.advance();
+                                            if let Err(err) = self.advance_token() {
+                                                return Some(err);
+                                            }
                                         }
                                         _ => break,
                                     }
@@ -608,6 +691,7 @@ impl<'a> TokenIterator<'a> {
                             .skip(2)
                             .filter(|c| c != &'_')
                             .collect();
+
                         if let Ok(val) = i64::from_str_radix(&out, radix) {
                             return Some((Token::IntegerConstant(val), pos));
                         }
@@ -630,12 +714,14 @@ impl<'a> TokenIterator<'a> {
                     let mut result = Vec::new();
                     result.push(c);
 
-                    while let Some(&nxt) = self.char_stream.peek() {
-                        match nxt {
-                            x if x.is_alphanumeric() || x == '_' => {
+                    while let Some(&next_char) = self.char_stream.peek() {
+                        match next_char {
+                            x if x.is_ascii_alphanumeric() || x == '_' => {
                                 result.push(x);
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                             }
                             _ => break,
                         }
@@ -673,11 +759,11 @@ impl<'a> TokenIterator<'a> {
                         let mut chars = result.chars();
 
                         return Some((
-                            if let Some(out) = chars.next() {
+                            if let Some(first_char) = chars.next() {
                                 if chars.count() != 0 {
                                     Token::LexErr(LERR::MalformedChar)
                                 } else {
-                                    Token::CharConstant(out)
+                                    Token::CharConstant(first_char)
                                 }
                             } else {
                                 Token::LexErr(LERR::MalformedChar)
@@ -698,7 +784,9 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::PlusAssign
                             }
                             _ if self.last.is_next_unary() => Token::UnaryPlus,
@@ -712,7 +800,9 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::MinusAssign
                             }
                             _ if self.last.is_next_unary() => Token::UnaryMinus,
@@ -726,7 +816,9 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::MultiplyAssign
                             }
                             _ => Token::Multiply,
@@ -737,37 +829,58 @@ impl<'a> TokenIterator<'a> {
                 '/' => match self.char_stream.peek() {
                     Some(&'/') => {
                         self.char_stream.next();
-                        self.advance();
+                        if let Err(err) = self.advance_token() {
+                            return Some(err);
+                        }
                         while let Some(c) = self.char_stream.next() {
-                            if c == '\n' {
-                                self.new_line();
-                                break;
-                            } else {
-                                self.advance();
+                            match c {
+                                '\n' => {
+                                    if let Err(err) = self.new_line_token() {
+                                        return Some(err);
+                                    }
+                                    break;
+                                }
+                                _ => {
+                                    if let Err(err) = self.advance_token() {
+                                        return Some(err);
+                                    }
+                                }
                             }
                         }
                     }
                     Some(&'*') => {
                         let mut level = 1;
                         self.char_stream.next();
-                        self.advance();
+                        if let Err(err) = self.advance_token() {
+                            return Some(err);
+                        }
                         while let Some(c) = self.char_stream.next() {
-                            self.advance();
+                            if let Err(err) = self.advance_token() {
+                                return Some(err);
+                            }
 
                             match c {
                                 '/' => {
                                     if let Some('*') = self.char_stream.next() {
                                         level += 1;
                                     }
-                                    self.advance();
+                                    if let Err(err) = self.advance_token() {
+                                        return Some(err);
+                                    }
                                 }
                                 '*' => {
                                     if let Some('/') = self.char_stream.next() {
                                         level -= 1;
                                     }
-                                    self.advance();
+                                    if let Err(err) = self.advance_token() {
+                                        return Some(err);
+                                    }
                                 }
-                                '\n' => self.new_line(),
+                                '\n' => {
+                                    if let Err(err) = self.new_line_token() {
+                                        return Some(err);
+                                    }
+                                }
                                 _ => (),
                             }
 
@@ -778,7 +891,9 @@ impl<'a> TokenIterator<'a> {
                     }
                     Some(&'=') => {
                         self.char_stream.next();
-                        self.advance();
+                        if let Err(err) = self.advance_token() {
+                            return Some(err);
+                        }
                         return Some((Token::DivideAssign, pos));
                     }
                     _ => return Some((Token::Divide, pos)),
@@ -790,7 +905,9 @@ impl<'a> TokenIterator<'a> {
                 '=' => match self.char_stream.peek() {
                     Some(&'=') => {
                         self.char_stream.next();
-                        self.advance();
+                        if let Err(err) = self.advance_token() {
+                            return Some(err);
+                        }
                         return Some((Token::EqualsTo, pos));
                     }
                     _ => return Some((Token::Equals, pos)),
@@ -798,21 +915,29 @@ impl<'a> TokenIterator<'a> {
                 '<' => match self.char_stream.peek() {
                     Some(&'=') => {
                         self.char_stream.next();
-                        self.advance();
+                        if let Err(err) = self.advance_token() {
+                            return Some(err);
+                        }
                         return Some((Token::LessThanEqualsTo, pos));
                     }
                     Some(&'<') => {
                         self.char_stream.next();
-                        self.advance();
+                        if let Err(err) = self.advance_token() {
+                            return Some(err);
+                        }
                         return match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Some((Token::LeftShiftAssign, pos))
                             }
                             _ => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Some((Token::LeftShift, pos))
                             }
                         };
@@ -824,21 +949,29 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::GreaterThanEqualsTo
                             }
                             Some(&'>') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 match self.char_stream.peek() {
                                     Some(&'=') => {
                                         self.char_stream.next();
-                                        self.advance();
+                                        if let Err(err) = self.advance_token() {
+                                            return Some(err);
+                                        }
                                         Token::RightShiftAssign
                                     }
                                     _ => {
                                         self.char_stream.next();
-                                        self.advance();
+                                        if let Err(err) = self.advance_token() {
+                                            return Some(err);
+                                        }
                                         Token::RightShift
                                     }
                                 }
@@ -853,7 +986,9 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::NotEqualsTo
                             }
                             _ => Token::Bang,
@@ -866,12 +1001,16 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'|') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::Or
                             }
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::OrAssign
                             }
                             _ => Token::Pipe,
@@ -884,12 +1023,16 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'&') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::And
                             }
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::AndAssign
                             }
                             _ => Token::Ampersand,
@@ -902,7 +1045,9 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::XOrAssign
                             }
                             _ => Token::XOr,
@@ -915,7 +1060,9 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::ModuloAssign
                             }
                             _ => Token::Modulo,
@@ -928,7 +1075,9 @@ impl<'a> TokenIterator<'a> {
                         match self.char_stream.peek() {
                             Some(&'=') => {
                                 self.char_stream.next();
-                                self.advance();
+                                if let Err(err) = self.advance_token() {
+                                    return Some(err);
+                                }
                                 Token::PowerOfAssign
                             }
                             _ => Token::PowerOf,
@@ -959,7 +1108,7 @@ impl<'a> Iterator for TokenIterator<'a> {
 
 pub fn lex(input: &str) -> TokenIterator<'_> {
     TokenIterator {
-        last: Token::LexErr(LERR::Nothing),
+        last: Token::LexErr(LERR::InputError("".into())),
         pos: Position { line: 1, pos: 0 },
         char_stream: input.chars().peekable(),
     }
