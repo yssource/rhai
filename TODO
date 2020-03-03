@@ -1,7 +1,0 @@
-pre 1.0:
-	- basic threads
-	- stdlib
-1.0:
-	- decide on postfix/prefix operators
-	- advanced threads + actors
-	- more literals
