@@ -9,9 +9,9 @@ use std::str::Chars;
 pub enum LexError {
     UnexpectedChar(char),
     UnterminatedString,
-    MalformedEscapeSequence,
-    MalformedNumber,
-    MalformedChar,
+    MalformedEscapeSequence(String),
+    MalformedNumber(String),
+    MalformedChar(String),
     InputError(String),
 }
 
@@ -22,9 +22,9 @@ impl Error for LexError {
         match *self {
             LERR::UnexpectedChar(_) => "Unexpected character",
             LERR::UnterminatedString => "Open string is not terminated",
-            LERR::MalformedEscapeSequence => "Unexpected values in escape sequence",
-            LERR::MalformedNumber => "Unexpected characters in number",
-            LERR::MalformedChar => "Char constant not a single character",
+            LERR::MalformedEscapeSequence(_) => "Unexpected values in escape sequence",
+            LERR::MalformedNumber(_) => "Unexpected characters in number",
+            LERR::MalformedChar(_) => "Char constant not a single character",
             LERR::InputError(_) => "Input error",
         }
     }
@@ -34,6 +34,9 @@ impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LERR::UnexpectedChar(c) => write!(f, "Unexpected '{}'", c),
+            LERR::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
+            LERR::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
+            LERR::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
             LERR::InputError(s) => write!(f, "{}", s),
             _ => write!(f, "{}", self.description()),
         }
@@ -535,7 +538,7 @@ impl<'a> TokenIterator<'a> {
         enclosing_char: char,
     ) -> Result<String, (LexError, Position)> {
         let mut result = Vec::new();
-        let mut escape = false;
+        let mut escape = String::with_capacity(12);
 
         loop {
             let next_char = self.char_stream.next();
@@ -547,107 +550,123 @@ impl<'a> TokenIterator<'a> {
             self.advance()?;
 
             match next_char.unwrap() {
-                '\\' if !escape => escape = true,
-                '\\' if escape => {
-                    escape = false;
+                '\\' if escape.is_empty() => {
+                    escape.push('\\');
+                }
+                '\\' if !escape.is_empty() => {
+                    escape.clear();
                     result.push('\\');
                 }
-                't' if escape => {
-                    escape = false;
+                't' if !escape.is_empty() => {
+                    escape.clear();
                     result.push('\t');
                 }
-                'n' if escape => {
-                    escape = false;
+                'n' if !escape.is_empty() => {
+                    escape.clear();
                     result.push('\n');
                 }
-                'r' if escape => {
-                    escape = false;
+                'r' if !escape.is_empty() => {
+                    escape.clear();
                     result.push('\r');
                 }
-                'x' if escape => {
-                    escape = false;
+                'x' if !escape.is_empty() => {
+                    let mut seq = escape.clone();
+                    seq.push('x');
+                    escape.clear();
                     let mut out_val: u32 = 0;
                     for _ in 0..2 {
                         if let Some(c) = self.char_stream.next() {
+                            seq.push(c);
+                            self.advance()?;
+
                             if let Some(d1) = c.to_digit(16) {
                                 out_val *= 16;
                                 out_val += d1;
                             } else {
-                                return Err((LERR::MalformedEscapeSequence, self.pos));
+                                return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                             }
                         } else {
-                            return Err((LERR::MalformedEscapeSequence, self.pos));
+                            return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                         }
-                        self.advance()?;
                     }
 
                     if let Some(r) = char::from_u32(out_val) {
                         result.push(r);
                     } else {
-                        return Err((LERR::MalformedEscapeSequence, self.pos));
+                        return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                     }
                 }
-                'u' if escape => {
-                    escape = false;
+                'u' if !escape.is_empty() => {
+                    let mut seq = escape.clone();
+                    seq.push('u');
+                    escape.clear();
                     let mut out_val: u32 = 0;
                     for _ in 0..4 {
                         if let Some(c) = self.char_stream.next() {
+                            seq.push(c);
+                            self.advance()?;
+
                             if let Some(d1) = c.to_digit(16) {
                                 out_val *= 16;
                                 out_val += d1;
                             } else {
-                                return Err((LERR::MalformedEscapeSequence, self.pos));
+                                return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                             }
                         } else {
-                            return Err((LERR::MalformedEscapeSequence, self.pos));
+                            return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                         }
-                        self.advance()?;
                     }
 
                     if let Some(r) = char::from_u32(out_val) {
                         result.push(r);
                     } else {
-                        return Err((LERR::MalformedEscapeSequence, self.pos));
+                        return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                     }
                 }
-                'U' if escape => {
-                    escape = false;
+                'U' if !escape.is_empty() => {
+                    let mut seq = escape.clone();
+                    seq.push('U');
+                    escape.clear();
                     let mut out_val: u32 = 0;
                     for _ in 0..8 {
                         if let Some(c) = self.char_stream.next() {
+                            seq.push(c);
+                            self.advance()?;
+
                             if let Some(d1) = c.to_digit(16) {
                                 out_val *= 16;
                                 out_val += d1;
                             } else {
-                                return Err((LERR::MalformedEscapeSequence, self.pos));
+                                return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                             }
                         } else {
-                            return Err((LERR::MalformedEscapeSequence, self.pos));
+                            return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                         }
-                        self.advance()?;
                     }
 
                     if let Some(r) = char::from_u32(out_val) {
                         result.push(r);
                     } else {
-                        return Err((LERR::MalformedEscapeSequence, self.pos));
+                        return Err((LERR::MalformedEscapeSequence(seq), self.pos));
                     }
                 }
-                x if enclosing_char == x && escape => result.push(x),
-                x if enclosing_char == x && !escape => break,
-                _ if escape => return Err((LERR::MalformedEscapeSequence, self.pos)),
+                x if enclosing_char == x && !escape.is_empty() => result.push(x),
+                x if enclosing_char == x && escape.is_empty() => break,
+                _ if !escape.is_empty() => {
+                    return Err((LERR::MalformedEscapeSequence(escape), self.pos))
+                }
                 '\n' => {
                     self.rewind()?;
                     return Err((LERR::UnterminatedString, self.pos));
                 }
                 x => {
-                    escape = false;
+                    escape.clear();
                     result.push(x);
                 }
             }
         }
 
-        let out: String = result.iter().cloned().collect();
+        let out: String = result.iter().collect();
         Ok(out)
     }
 
@@ -672,7 +691,7 @@ impl<'a> TokenIterator<'a> {
 
                     while let Some(&next_char) = self.char_stream.peek() {
                         match next_char {
-                            '0'..='9' => {
+                            '0'..='9' | '_' => {
                                 result.push(next_char);
                                 self.char_stream.next();
                                 if let Err(err) = self.advance_token() {
@@ -687,7 +706,7 @@ impl<'a> TokenIterator<'a> {
                                 }
                                 while let Some(&next_char_in_float) = self.char_stream.peek() {
                                     match next_char_in_float {
-                                        '0'..='9' => {
+                                        '0'..='9' | '_' => {
                                             result.push(next_char_in_float);
                                             self.char_stream.next();
                                             if let Err(err) = self.advance_token() {
@@ -698,7 +717,7 @@ impl<'a> TokenIterator<'a> {
                                     }
                                 }
                             }
-                            'x' | 'X' => {
+                            'x' | 'X' if c == '0' => {
                                 result.push(next_char);
                                 self.char_stream.next();
                                 if let Err(err) = self.advance_token() {
@@ -706,7 +725,7 @@ impl<'a> TokenIterator<'a> {
                                 }
                                 while let Some(&next_char_in_hex) = self.char_stream.peek() {
                                     match next_char_in_hex {
-                                        '0'..='9' | 'a'..='f' | 'A'..='F' => {
+                                        '0'..='9' | 'a'..='f' | 'A'..='F' | '_' => {
                                             result.push(next_char_in_hex);
                                             self.char_stream.next();
                                             if let Err(err) = self.advance_token() {
@@ -718,7 +737,7 @@ impl<'a> TokenIterator<'a> {
                                 }
                                 radix_base = Some(16);
                             }
-                            'o' | 'O' => {
+                            'o' | 'O' if c == '0' => {
                                 result.push(next_char);
                                 self.char_stream.next();
                                 if let Err(err) = self.advance_token() {
@@ -726,7 +745,7 @@ impl<'a> TokenIterator<'a> {
                                 }
                                 while let Some(&next_char_in_oct) = self.char_stream.peek() {
                                     match next_char_in_oct {
-                                        '0'..='8' => {
+                                        '0'..='8' | '_' => {
                                             result.push(next_char_in_oct);
                                             self.char_stream.next();
                                             if let Err(err) = self.advance_token() {
@@ -738,7 +757,7 @@ impl<'a> TokenIterator<'a> {
                                 }
                                 radix_base = Some(8);
                             }
-                            'b' | 'B' => {
+                            'b' | 'B' if c == '0' => {
                                 result.push(next_char);
                                 self.char_stream.next();
                                 if let Err(err) = self.advance_token() {
@@ -763,19 +782,19 @@ impl<'a> TokenIterator<'a> {
                     }
 
                     if let Some(radix) = radix_base {
-                        let out: String = result
-                            .iter()
-                            .cloned()
-                            .skip(2)
-                            .filter(|c| c != &'_')
-                            .collect();
+                        let out: String = result.iter().skip(2).filter(|&&c| c != '_').collect();
 
-                        if let Ok(val) = i64::from_str_radix(&out, radix) {
-                            return Some((Token::IntegerConstant(val), pos));
-                        }
+                        return Some((
+                            if let Ok(val) = i64::from_str_radix(&out, radix) {
+                                Token::IntegerConstant(val)
+                            } else {
+                                Token::LexErr(LERR::MalformedNumber(result.iter().collect()))
+                            },
+                            pos,
+                        ));
                     }
 
-                    let out: String = result.iter().cloned().collect();
+                    let out: String = result.iter().filter(|&&c| c != '_').collect();
 
                     return Some((
                         if let Ok(val) = out.parse::<i64>() {
@@ -783,7 +802,7 @@ impl<'a> TokenIterator<'a> {
                         } else if let Ok(val) = out.parse::<f64>() {
                             Token::FloatConstant(val)
                         } else {
-                            Token::LexErr(LERR::MalformedNumber)
+                            Token::LexErr(LERR::MalformedNumber(result.iter().collect()))
                         },
                         pos,
                     ));
@@ -805,7 +824,7 @@ impl<'a> TokenIterator<'a> {
                         }
                     }
 
-                    let out: String = result.iter().cloned().collect();
+                    let out: String = result.iter().collect();
 
                     return Some((
                         match out.as_str() {
@@ -840,12 +859,12 @@ impl<'a> TokenIterator<'a> {
                         return Some((
                             if let Some(first_char) = chars.next() {
                                 if chars.count() != 0 {
-                                    Token::LexErr(LERR::MalformedChar)
+                                    Token::LexErr(LERR::MalformedChar(format!("'{}'", result)))
                                 } else {
                                     Token::CharConstant(first_char)
                                 }
                             } else {
-                                Token::LexErr(LERR::MalformedChar)
+                                Token::LexErr(LERR::MalformedChar(format!("'{}'", result)))
                             },
                             pos,
                         ));

@@ -683,12 +683,29 @@ a.x = 500;
 a.update();
 ```
 
+## Numbers
+
+```rust
+let x = 123;            // i64
+let x = 123.4;          // f64
+let x = 123_456_789;    // separators can be put anywhere inside the number
+
+let x = 0x12abcd;       // i64 in hex
+let x = 0o777;          // i64 in oct
+let x = 0b1010_1111;    // i64 in binary
+```
+
+Conversion functions:
+
+* `to_int` - converts an `f32` or `f64` to `i64`
+* `to_float` - converts an integer type to `f64`
+
 ## Strings and Chars
 
 ```rust
 let name = "Bob";
 let middle_initial = 'C';
-let last = 'Davis';
+let last = "Davis";
 
 let full_name = name + " " + middle_initial + ". " + last;
 full_name == "Bob C. Davis";
@@ -706,9 +723,13 @@ let c = "foo"[0];   // a syntax error for now - cannot index into literals
 let c = ts.s[0];    // a syntax error for now - cannot index into properties
 let c = record[0];  // this works
 
+// Escape sequences in strings
+record += " \u2764\n";                  // escape sequence of '❤' in Unicode 
+record == "Bob C. Davis: age 42 ❤\n";  // '\n' = new-line
+
 // Unlike Rust, Rhai strings can be modified
-record[4] = 'Z';
-record == "Bob Z. Davis: age 42";
+record[4] = '\x58'; // 0x58 = 'X'
+record == "Bob X. Davis: age 42 ❤\n";
 ```
 
 The following standard functions operate on strings:
@@ -727,6 +748,7 @@ full_name.len() == 14;
 
 full_name.trim();
 full_name.len() == 12;
+full_name == "Bob C. Davis";
 
 full_name.pad(15, '$');
 full_name.len() == 15;
