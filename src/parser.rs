@@ -51,11 +51,8 @@ impl Position {
     /// Panics if already at beginning of a line - cannot rewind to a previous line.
     ///
     pub(crate) fn rewind(&mut self) {
-        if self.pos == 0 {
-            panic!("cannot rewind at position 0");
-        } else {
-            self.pos -= 1;
-        }
+        assert!(self.pos > 0, "cannot rewind at position 0");
+        self.pos -= 1;
     }
 
     /// Advance to the next line.
@@ -159,7 +156,9 @@ impl Expr {
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Assignment(_, _) | Expr::Dot(_, _) | Expr::And(_, _) | Expr::Or(_, _) => panic!(),
+            Expr::Assignment(e, _) | Expr::Dot(e, _) | Expr::And(e, _) | Expr::Or(e, _) => {
+                e.position()
+            }
         }
     }
 }

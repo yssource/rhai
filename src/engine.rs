@@ -41,9 +41,9 @@ type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 /// ```
 pub struct Engine<'a> {
     /// A hashmap containing all compiled functions known to the engine
-    pub(crate) fns: HashMap<FnSpec<'a>, Arc<FnIntExt>>,
+    pub(crate) external_functions: HashMap<FnSpec<'a>, Arc<FnIntExt>>,
     /// A hashmap containing all script-defined functions
-    pub(crate) script_fns: HashMap<FnSpec<'a>, Arc<FnIntExt>>,
+    pub(crate) script_functions: HashMap<FnSpec<'a>, Arc<FnIntExt>>,
     /// A hashmap containing all iterators known to the engine
     pub(crate) type_iterators: HashMap<TypeId, Arc<IteratorFn>>,
     pub(crate) type_names: HashMap<String, String>,
@@ -87,11 +87,11 @@ impl Engine<'_> {
         // First search in script-defined functions (can override built-in),
         // then in built-in's
         let fn_def = self
-            .script_fns
+            .script_functions
             .get(&spec)
             .or_else(|| {
                 spec.args = Some(args.iter().map(|a| Any::type_id(&**a)).collect());
-                self.fns.get(&spec)
+                self.external_functions.get(&spec)
             })
             .map(|f| f.clone());
 
@@ -741,8 +741,8 @@ impl Engine<'_> {
 
         // Create the new scripting Engine
         let mut engine = Engine {
-            fns: HashMap::new(),
-            script_fns: HashMap::new(),
+            external_functions: HashMap::new(),
+            script_functions: HashMap::new(),
             type_iterators: HashMap::new(),
             type_names,
             on_print: Box::new(|x| println!("{}", x)), // default print/debug implementations

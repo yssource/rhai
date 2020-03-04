@@ -1,6 +1,6 @@
 [package]
 name = "rhai"
-version = "0.10.1"
+version = "0.10.2"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung"]
 description = "Embedded scripting for Rust"

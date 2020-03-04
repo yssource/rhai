@@ -61,8 +61,8 @@ impl Scope {
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find(|(_, (n, _))| n == key)
-            .map(|(i, (n, v))| (i, n.clone(), v.clone()))
+            .find(|(_, (name, _))| name == key)
+            .map(|(i, (name, value))| (i, name.clone(), value.clone()))
     }
 
     /// Get the value of a variable in the Scope, starting from the last.
@@ -71,18 +71,16 @@ impl Scope {
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find(|(_, (n, _))| n == key)
-            .and_then(|(_, (_, v))| v.downcast_ref::<T>())
-            .map(|v| v.clone())
+            .find(|(_, (name, _))| name == key)
+            .and_then(|(_, (_, value))| value.downcast_ref::<T>())
+            .map(|value| value.clone())
     }
 
     /// Get a mutable reference to a variable in the Scope.
     pub(crate) fn get_mut(&mut self, key: &str, index: usize) -> &mut Dynamic {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
 
-        if entry.0 != key {
-            panic!("incorrect key at Scope entry");
-        }
+        assert_eq!(entry.0, key, "incorrect key at Scope entry");
 
         &mut entry.1
     }
@@ -92,7 +90,7 @@ impl Scope {
         self.0
             .iter()
             .rev() // Always search a Scope in reverse order
-            .map(|(key, val)| (key.as_str(), val))
+            .map(|(key, value)| (key.as_str(), value))
     }
 
     /// Get a mutable iterator to variables in the Scope.
@@ -100,7 +98,7 @@ impl Scope {
         self.0
             .iter_mut()
             .rev() // Always search a Scope in reverse order
-            .map(|(key, val)| (key.as_str(), val))
+            .map(|(key, value)| (key.as_str(), value))
     }
 }
 

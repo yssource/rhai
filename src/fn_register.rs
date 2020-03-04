@@ -61,8 +61,8 @@ pub struct Ref<A>(A);
 pub struct Mut<A>(A);
 
 macro_rules! count_args {
-    () => {0usize};
-    ($head:ident $($tail:ident)*) => {1usize + count_args!($($tail)*)};
+    () => { 0_usize };
+    ( $head:ident $($tail:ident)* ) => { 1_usize + count_args!($($tail)*) };
 }
 
 macro_rules! def_register {
@@ -80,8 +80,7 @@ macro_rules! def_register {
                 let fn_name = name.to_string();
 
                 let fun = move |mut args: FnCallArgs, pos: Position| {
-                    // Check for length at the beginning to avoid
-                    // per-element bound checks.
+                    // Check for length at the beginning to avoid per-element bound checks.
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
@@ -113,8 +112,7 @@ macro_rules! def_register {
                 let fn_name = name.to_string();
 
                 let fun = move |mut args: FnCallArgs, pos: Position| {
-                    // Check for length at the beginning to avoid
-                    // per-element bound checks.
+                    // Check for length at the beginning to avoid per-element bound checks.
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {

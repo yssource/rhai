@@ -31,7 +31,8 @@ impl<'a> Engine<'a> {
             args,
         };
 
-        self.fns.insert(spec, Arc::new(FnIntExt::Ext(f)));
+        self.external_functions
+            .insert(spec, Arc::new(FnIntExt::Ext(f)));
     }
 
     /// Register a custom type for use with the `Engine`.
@@ -62,20 +63,20 @@ impl<'a> Engine<'a> {
     pub fn register_get<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
-        get_fn: impl Fn(&mut T) -> U + 'static,
+        callback: impl Fn(&mut T) -> U + 'static,
     ) {
         let get_name = "get$".to_string() + name;
-        self.register_fn(&get_name, get_fn);
+        self.register_fn(&get_name, callback);
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
     pub fn register_set<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
-        set_fn: impl Fn(&mut T, U) -> () + 'static,
+        callback: impl Fn(&mut T, U) -> () + 'static,
     ) {
         let set_name = "set$".to_string() + name;
-        self.register_fn(&set_name, set_fn);
+        self.register_fn(&set_name, callback);
     }
 
     /// Shorthand for registering both getter and setter functions
@@ -154,10 +155,10 @@ impl<'a> Engine<'a> {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
-        let AST(os, fns) = ast;
+        let AST(statements, functions) = ast;
 
-        fns.iter().for_each(|f| {
-            self.script_fns.insert(
+        functions.iter().for_each(|f| {
+            self.script_functions.insert(
                 FnSpec {
                     name: f.name.clone().into(),
                     args: None,
@@ -166,11 +167,11 @@ impl<'a> Engine<'a> {
             );
         });
 
-        let result = os
+        let result = statements
             .iter()
             .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o));
 
-        self.script_fns.clear(); // Clean up engine
+        self.script_functions.clear(); // Clean up engine
 
         match result {
             Err(EvalAltResult::Return(out, pos)) => out.downcast::<T>().map(|v| *v).map_err(|a| {
@@ -227,9 +228,9 @@ impl<'a> Engine<'a> {
 
         parse(&mut tokens.peekable())
             .map_err(|err| EvalAltResult::ErrorParsing(err))
-            .and_then(|AST(ref os, ref fns)| {
-                for f in fns {
-                    self.script_fns.insert(
+            .and_then(|AST(ref statements, ref functions)| {
+                for f in functions {
+                    self.script_functions.insert(
                         FnSpec {
                             name: f.name.clone().into(),
                             args: None,
@@ -238,12 +239,12 @@ impl<'a> Engine<'a> {
                     );
                 }
 
-                let val = os
+                let val = statements
                     .iter()
                     .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
                     .map(|_| ());
 
-                self.script_fns.clear(); // Clean up engine
+                self.script_functions.clear(); // Clean up engine
 
                 val
             })
@@ -275,7 +276,7 @@ impl<'a> Engine<'a> {
         let pos = Default::default();
 
         ast.1.iter().for_each(|f| {
-            self.script_fns.insert(
+            self.script_functions.insert(
                 FnSpec {
                     name: f.name.clone().into(),
                     args: None,
@@ -295,7 +296,7 @@ impl<'a> Engine<'a> {
                 })
             });
 
-        self.script_fns.clear(); // Clean up engine
+        self.script_functions.clear(); // Clean up engine
 
         result
     }
