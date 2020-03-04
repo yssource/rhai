@@ -90,7 +90,6 @@ cargo run --example rhai_runner scripts/any_script.rhai
 To get going with Rhai, you create an instance of the scripting engine and then run eval.
 
 ```rust
-extern crate rhai;
 use rhai::Engine;
 
 fn main() {
@@ -170,7 +169,6 @@ if z.type_of() == "string" {
 Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.
 
 ```rust
-extern crate rhai;
 use rhai::{Dynamic, Engine, RegisterFn};
 
 // Normal function
@@ -220,7 +218,6 @@ Generic functions can be used in Rhai, but you'll need to register separate inst
 ```rust
 use std::fmt::Display;
 
-extern crate rhai;
 use rhai::{Engine, RegisterFn};
 
 fn showit<T: Display>(x: &mut T) -> () {
@@ -256,7 +253,6 @@ print(to_int(123));     // what will happen?
 Here's an more complete example of working with Rust.  First the example, then we'll break it into parts:
 
 ```rust
-extern crate rhai;
 use rhai::{Engine, RegisterFn};
 
 #[derive(Clone)]
@@ -353,6 +349,8 @@ let x = new_ts();
 print(x.type_of());     // prints "foo::bar::TestStruct"
 ```
 
+If you use `register_type_with_name` to register the custom type with a special pretty-print name, `type_of` will return that instead.
+
 # Getters and setters
 
 Similarly, you can work with members of your custom types.  This works by registering a 'get' or a 'set' function for working with your struct.
@@ -415,7 +413,6 @@ By default, Rhai treats each engine invocation as a fresh one, persisting only t
 In this example, we first create a state with a few initialized variables, then thread the same state through multiple invocations:
 
 ```rust
-extern crate rhai;
 use rhai::{Engine, Scope};
 
 fn main() {
@@ -620,8 +617,12 @@ y[1] = 42;
 
 print(y[1]);            // prints 42
 
-let foo = [1, 2, 3][0]; // a syntax error for now - cannot index into literals
-let foo = ts.list[0];   // a syntax error for now - cannot index into properties
+ts.list = y;            // arrays can be assigned completely (by value copy)
+let foo = ts.list[1];   // indexing into properties is ok
+foo == 42;
+
+let foo = [1, 2, 3][0]; // a syntax error (for now) - cannot index into literals
+let foo = abc()[0];     // a syntax error (for now) - cannot index into function call return values
 let foo = y[0];         // this works
 
 y.push(4);              // 4 elements
@@ -722,9 +723,11 @@ record == "Bob C. Davis: age 42";
 let c = record[4];
 c == 'C';
 
-let c = "foo"[0];   // a syntax error for now - cannot index into literals
-let c = ts.s[0];    // a syntax error for now - cannot index into properties
-let c = record[0];  // this works
+ts.s = record;
+let c = ts.s[4];    // indexing into properties is ok
+c == 'C';
+
+let c = "foo"[0];   // a syntax error (for now) - cannot index into literals
 
 // Escape sequences in strings
 record += " \u2764\n";                  // escape sequence of '❤' in Unicode 
@@ -785,8 +788,17 @@ debug("world!");        // prints "world!" to stdout using debug formatting
 
 ```rust
 // Any function that takes a &str argument can be used to override print and debug
-engine.on_print(|x: &str| println!("hello: {}", x));
-engine.on_debug(|x: &str| println!("DEBUG: {}", x));
+engine.on_print(|x| println!("hello: {}", x));
+engine.on_debug(|x| println!("DEBUG: {}", x));
+
+// Redirect logging output to somewhere else
+let mut log: Vec<String> = Vec::new();
+engine.on_print(|x| log.push(format!("log: {}", x)));
+engine.on_debug(|x| log.push(format!("DEBUG: {}", x)));
+            :
+        eval script
+            :
+println!("{:?}", log);   // 'log' captures all the 'print' and 'debug' results.
 ```
 
 ## Comments

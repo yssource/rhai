@@ -1,4 +1,6 @@
-use crate::{any::Any, Array, Engine, RegisterDynamicFn, RegisterFn};
+use crate::any::Any;
+use crate::engine::{Array, Engine};
+use crate::fn_register::{RegisterDynamicFn, RegisterFn};
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub};
 
@@ -58,7 +60,7 @@ macro_rules! reg_func3 {
     )
 }
 
-impl Engine {
+impl Engine<'_> {
     /// Register the built-in library.
     pub(crate) fn register_builtins(&mut self) {
         fn add<T: Add>(x: T, y: T) -> <T as Add>::Output {

@@ -3,6 +3,8 @@ use crate::any::{Any, Dynamic};
 /// A type containing information about current scope.
 /// Useful for keeping state between `Engine` runs
 ///
+/// # Example
+///
 /// ```rust
 /// use rhai::{Engine, Scope};
 ///
@@ -13,8 +15,8 @@ use crate::any::{Any, Dynamic};
 /// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1").unwrap(), 6);
 /// ```
 ///
-/// Between runs, `Engine` only remembers functions when not using own `Scope`.
-
+/// When searching for variables, newly-added variables are found before similarly-named but older variables,
+/// allowing for automatic _shadowing_ of variables.
 pub struct Scope(Vec<(String, Dynamic)>);
 
 impl Scope {
@@ -58,7 +60,7 @@ impl Scope {
         self.0
             .iter()
             .enumerate()
-            .rev()
+            .rev() // Always search a Scope in reverse order
             .find(|(_, (n, _))| n == key)
             .map(|(i, (n, v))| (i, n.clone(), v.clone()))
     }
@@ -68,10 +70,10 @@ impl Scope {
         self.0
             .iter()
             .enumerate()
-            .rev()
+            .rev() // Always search a Scope in reverse order
             .find(|(_, (n, _))| n == key)
-            .map(|(_, (_, v))| v.downcast_ref() as Option<&T>)
-            .map(|v| v.unwrap().clone())
+            .and_then(|(_, (_, v))| v.downcast_ref::<T>())
+            .map(|v| v.clone())
     }
 
     /// Get a mutable reference to a variable in the Scope.
@@ -86,13 +88,19 @@ impl Scope {
     }
 
     /// Get an iterator to variables in the Scope.
-    pub fn iter(&self) -> std::slice::Iter<(String, Dynamic)> {
-        self.0.iter()
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
+        self.0
+            .iter()
+            .rev() // Always search a Scope in reverse order
+            .map(|(key, val)| (key.as_str(), val))
     }
 
     /// Get a mutable iterator to variables in the Scope.
-    pub(crate) fn iter_mut(&mut self) -> std::slice::IterMut<(String, Dynamic)> {
-        self.0.iter_mut()
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Dynamic)> {
+        self.0
+            .iter_mut()
+            .rev() // Always search a Scope in reverse order
+            .map(|(key, val)| (key.as_str(), val))
     }
 }
 

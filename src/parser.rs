@@ -1,67 +1,13 @@
-use crate::Dynamic;
+use crate::any::Dynamic;
+use crate::error::{LexError, ParseError, ParseErrorType};
 use std::char;
-use std::error::Error;
-use std::fmt;
 use std::iter::Peekable;
 use std::str::Chars;
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub enum LexError {
-    UnexpectedChar(char),
-    UnterminatedString,
-    MalformedEscapeSequence(String),
-    MalformedNumber(String),
-    MalformedChar(String),
-    InputError(String),
-}
-
 type LERR = LexError;
-
-impl Error for LexError {
-    fn description(&self) -> &str {
-        match *self {
-            LERR::UnexpectedChar(_) => "Unexpected character",
-            LERR::UnterminatedString => "Open string is not terminated",
-            LERR::MalformedEscapeSequence(_) => "Unexpected values in escape sequence",
-            LERR::MalformedNumber(_) => "Unexpected characters in number",
-            LERR::MalformedChar(_) => "Char constant not a single character",
-            LERR::InputError(_) => "Input error",
-        }
-    }
-}
-
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LERR::UnexpectedChar(c) => write!(f, "Unexpected '{}'", c),
-            LERR::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
-            LERR::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
-            LERR::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
-            LERR::InputError(s) => write!(f, "{}", s),
-            _ => write!(f, "{}", self.description()),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum ParseErrorType {
-    BadInput(String),
-    InputPastEndOfFile,
-    UnknownOperator(String),
-    MissingRightParen,
-    MissingLeftBrace,
-    MissingRightBrace,
-    MissingRightBracket,
-    MalformedCallExpr,
-    MalformedIndexExpr,
-    VarExpectsIdentifier,
-    WrongFnDefinition,
-    FnMissingName,
-    FnMissingParams(String),
-}
-
 type PERR = ParseErrorType;
 
+/// A location (line number + character position) in the input script.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
     line: usize,
@@ -69,22 +15,41 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn new() -> Self {
-        Self { line: 1, pos: 0 }
+    /// Create a new `Position`.
+    pub fn new(line: usize, position: usize) -> Self {
+        Self {
+            line,
+            pos: position,
+        }
     }
 
-    pub fn line(&self) -> usize {
-        self.line
+    /// Get the line number (1-based), or `None` if EOF.
+    pub fn line(&self) -> Option<usize> {
+        match self.line {
+            0 => None,
+            x => Some(x),
+        }
     }
 
-    pub fn position(&self) -> usize {
-        self.pos
+    /// Get the character position (1-based), or `None` if at beginning of a line.
+    pub fn position(&self) -> Option<usize> {
+        match self.pos {
+            0 => None,
+            x => Some(x),
+        }
     }
 
+    /// Advance by one character position.
     pub(crate) fn advance(&mut self) {
         self.pos += 1;
     }
 
+    /// Go backwards by one character position.
+    ///
+    /// # Panics
+    ///
+    /// Panics if already at beginning of a line - cannot rewind to a previous line.
+    ///
     pub(crate) fn rewind(&mut self) {
         if self.pos == 0 {
             panic!("cannot rewind at position 0");
@@ -93,22 +58,31 @@ impl Position {
         }
     }
 
+    /// Advance to the next line.
     pub(crate) fn new_line(&mut self) {
         self.line += 1;
         self.pos = 0;
     }
 
-    pub fn eof() -> Self {
+    /// Create a `Position` at EOF.
+    pub(crate) fn eof() -> Self {
         Self { line: 0, pos: 0 }
     }
 
+    /// Is the `Position` at EOF?
     pub fn is_eof(&self) -> bool {
         self.line == 0
     }
 }
 
+impl Default for Position {
+    fn default() -> Self {
+        Self::new(1, 0)
+    }
+}
+
 impl std::fmt::Display for Position {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_eof() {
             write!(f, "EOF")
         } else {
@@ -118,7 +92,7 @@ impl std::fmt::Display for Position {
 }
 
 impl std::fmt::Debug for Position {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_eof() {
             write!(f, "(EOF)")
         } else {
@@ -127,65 +101,7 @@ impl std::fmt::Debug for Position {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct ParseError(PERR, Position);
-
-impl ParseError {
-    pub fn error_type(&self) -> &PERR {
-        &self.0
-    }
-    pub fn line(&self) -> usize {
-        self.1.line()
-    }
-    pub fn position(&self) -> usize {
-        self.1.position()
-    }
-    pub fn is_eof(&self) -> bool {
-        self.1.is_eof()
-    }
-}
-
-impl Error for ParseError {
-    fn description(&self) -> &str {
-        match self.0 {
-            PERR::BadInput(ref p) => p,
-            PERR::InputPastEndOfFile => "Script is incomplete",
-            PERR::UnknownOperator(_) => "Unknown operator",
-            PERR::MissingRightParen => "Expecting ')'",
-            PERR::MissingLeftBrace => "Expecting '{'",
-            PERR::MissingRightBrace => "Expecting '}'",
-            PERR::MissingRightBracket => "Expecting ']'",
-            PERR::MalformedCallExpr => "Invalid expression in function call arguments",
-            PERR::MalformedIndexExpr => "Invalid index in indexing expression",
-            PERR::VarExpectsIdentifier => "Expecting name of a variable",
-            PERR::FnMissingName => "Expecting name in function declaration",
-            PERR::FnMissingParams(_) => "Expecting parameters in function declaration",
-            PERR::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            PERR::BadInput(ref s) => write!(f, "{}", s)?,
-            PERR::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
-            PERR::FnMissingParams(ref s) => write!(f, "Missing parameters for function '{}'", s)?,
-            _ => write!(f, "{}", self.description())?,
-        }
-
-        if !self.is_eof() {
-            write!(f, " ({})", self.1)
-        } else {
-            write!(f, " at the end of the script but there is no more input")
-        }
-    }
-}
-
+/// Compiled AST (abstract syntax tree) of a Rhai script.
 pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef>);
 
 #[derive(Debug, Clone)]
@@ -312,7 +228,7 @@ pub enum Token {
     PowerOfAssign,
     For,
     In,
-    LexErr(LexError),
+    LexError(LexError),
 }
 
 impl Token {
@@ -324,7 +240,7 @@ impl Token {
             FloatConstant(ref s) => s.to_string().into(),
             Identifier(ref s) => s.to_string().into(),
             CharConstant(ref s) => s.to_string().into(),
-            LexErr(ref err) => err.to_string().into(),
+            LexError(ref err) => err.to_string().into(),
 
             ref token => (match token {
                 StringConst(_) => "string",
@@ -450,37 +366,19 @@ impl Token {
     }
 
     #[allow(dead_code)]
-    pub fn is_bin_op(&self) -> bool {
+    pub fn is_binary_op(&self) -> bool {
         use self::Token::*;
 
         match *self {
-            RightBrace       |
-            RightParen       |
-            RightBracket     |
-            Plus             |
-            Minus            |
-            Multiply         |
-            Divide           |
-            Comma            |
-            // Period           | <- does period count?
-            Equals           |
-            LessThan         |
-            GreaterThan      |
-            LessThanEqualsTo |
-            GreaterThanEqualsTo |
-            EqualsTo         |
-            NotEqualsTo      |
-            Pipe             |
-            Or               |
-            Ampersand        |
-            And              |
-            PowerOf => true,
+            RightBrace | RightParen | RightBracket | Plus | Minus | Multiply | Divide | Comma
+            | Equals | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo
+            | EqualsTo | NotEqualsTo | Pipe | Or | Ampersand | And | PowerOf => true,
             _ => false,
         }
     }
 
     #[allow(dead_code)]
-    pub fn is_un_op(&self) -> bool {
+    pub fn is_unary_op(&self) -> bool {
         use self::Token::*;
 
         match *self {
@@ -738,7 +636,7 @@ impl<'a> TokenIterator<'a> {
                             if let Ok(val) = i64::from_str_radix(&out, radix) {
                                 Token::IntegerConstant(val)
                             } else {
-                                Token::LexErr(LERR::MalformedNumber(result.iter().collect()))
+                                Token::LexError(LERR::MalformedNumber(result.iter().collect()))
                             },
                             pos,
                         ));
@@ -752,7 +650,7 @@ impl<'a> TokenIterator<'a> {
                         } else if let Ok(val) = out.parse::<f64>() {
                             Token::FloatConstant(val)
                         } else {
-                            Token::LexErr(LERR::MalformedNumber(result.iter().collect()))
+                            Token::LexError(LERR::MalformedNumber(result.iter().collect()))
                         },
                         pos,
                     ));
@@ -797,7 +695,7 @@ impl<'a> TokenIterator<'a> {
                 '"' => {
                     return match self.parse_string_const('"') {
                         Ok(out) => Some((Token::StringConst(out), pos)),
-                        Err(e) => Some((Token::LexErr(e.0), e.1)),
+                        Err(e) => Some((Token::LexError(e.0), e.1)),
                     }
                 }
                 '\'' => match self.parse_string_const('\'') {
@@ -807,17 +705,17 @@ impl<'a> TokenIterator<'a> {
                         return Some((
                             if let Some(first_char) = chars.next() {
                                 if chars.count() != 0 {
-                                    Token::LexErr(LERR::MalformedChar(format!("'{}'", result)))
+                                    Token::LexError(LERR::MalformedChar(format!("'{}'", result)))
                                 } else {
                                     Token::CharConstant(first_char)
                                 }
                             } else {
-                                Token::LexErr(LERR::MalformedChar(format!("'{}'", result)))
+                                Token::LexError(LERR::MalformedChar(format!("'{}'", result)))
                             },
                             pos,
                         ));
                     }
-                    Err(e) => return Some((Token::LexErr(e.0), e.1)),
+                    Err(e) => return Some((Token::LexError(e.0), e.1)),
                 },
                 '{' => return Some((Token::LeftBrace, pos)),
                 '}' => return Some((Token::RightBrace, pos)),
@@ -873,7 +771,7 @@ impl<'a> TokenIterator<'a> {
                         while let Some(c) = self.char_stream.next() {
                             match c {
                                 '\n' => {
-                                    self.advance();
+                                    self.new_line();
                                     break;
                                 }
                                 _ => self.advance(),
@@ -900,7 +798,7 @@ impl<'a> TokenIterator<'a> {
                                     }
                                     self.advance();
                                 }
-                                '\n' => self.advance(),
+                                '\n' => self.new_line(),
                                 _ => (),
                             }
 
@@ -1070,7 +968,7 @@ impl<'a> TokenIterator<'a> {
                     ))
                 }
                 x if x.is_whitespace() => (),
-                x => return Some((Token::LexErr(LERR::UnexpectedChar(x)), pos)),
+                x => return Some((Token::LexError(LERR::UnexpectedChar(x)), pos)),
             }
         }
 
@@ -1092,8 +990,8 @@ impl<'a> Iterator for TokenIterator<'a> {
 
 pub fn lex(input: &str) -> TokenIterator<'_> {
     TokenIterator {
-        last: Token::LexErr(LERR::InputError("".into())),
-        pos: Position { line: 1, pos: 0 },
+        last: Token::LexError(LERR::InputError("".into())),
+        pos: Position::new(1, 0),
         char_stream: input.chars().peekable(),
     }
 }
@@ -1145,7 +1043,7 @@ fn parse_paren_expr<'a>(
 
     match input.next() {
         Some((Token::RightParen, _)) => Ok(expr),
-        _ => Err(ParseError(PERR::MissingRightParen, Position::eof())),
+        _ => Err(ParseError::new(PERR::MissingRightParen, Position::eof())),
     }
 }
 
@@ -1170,8 +1068,8 @@ fn parse_call_expr<'a>(
                 return Ok(Expr::FunctionCall(id, args, None, begin));
             }
             Some(&(Token::Comma, _)) => (),
-            Some(&(_, pos)) => return Err(ParseError(PERR::MalformedCallExpr, pos)),
-            None => return Err(ParseError(PERR::MalformedCallExpr, Position::eof())),
+            Some(&(_, pos)) => return Err(ParseError::new(PERR::MalformedCallExpr, pos)),
+            None => return Err(ParseError::new(PERR::MalformedCallExpr, Position::eof())),
         }
 
         input.next();
@@ -1189,13 +1087,10 @@ fn parse_index_expr<'a>(
                 input.next();
                 return Ok(Expr::Index(id, Box::new(idx), begin));
             }
-            Some(&(_, pos)) => return Err(ParseError(PERR::MalformedIndexExpr, pos)),
-            None => return Err(ParseError(PERR::MalformedIndexExpr, Position::eof())),
+            Some(&(_, pos)) => return Err(ParseError::new(PERR::MalformedIndexExpr, pos)),
+            None => return Err(ParseError::new(PERR::MalformedIndexExpr, Position::eof())),
         },
-        Err(mut err) => {
-            err.0 = PERR::MalformedIndexExpr;
-            return Err(err);
-        }
+        Err(err) => return Err(ParseError::new(PERR::MalformedIndexExpr, err.position())),
     }
 }
 
@@ -1205,13 +1100,13 @@ fn parse_ident_expr<'a>(
     begin: Position,
 ) -> Result<Expr, ParseError> {
     match input.peek() {
-        Some(&(Token::LeftParen, pos)) => {
+        Some(&(Token::LeftParen, _)) => {
             input.next();
-            parse_call_expr(id, input, pos)
+            parse_call_expr(id, input, begin)
         }
-        Some(&(Token::LeftBracket, pos)) => {
+        Some(&(Token::LeftBracket, _)) => {
             input.next();
-            parse_index_expr(id, input, pos)
+            parse_index_expr(id, input, begin)
         }
         Some(_) => Ok(Expr::Identifier(id, begin)),
         None => Ok(Expr::Identifier(id, Position::eof())),
@@ -1247,8 +1142,8 @@ fn parse_array_expr<'a>(
             input.next();
             Ok(Expr::Array(arr, begin))
         }
-        Some(&(_, pos)) => Err(ParseError(PERR::MissingRightBracket, pos)),
-        None => Err(ParseError(PERR::MissingRightBracket, Position::eof())),
+        Some(&(_, pos)) => Err(ParseError::new(PERR::MissingRightBracket, pos)),
+        None => Err(ParseError::new(PERR::MissingRightBracket, Position::eof())),
     }
 }
 
@@ -1263,12 +1158,14 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
         Some((Token::LeftBracket, pos)) => parse_array_expr(input, pos),
         Some((Token::True, pos)) => Ok(Expr::True(pos)),
         Some((Token::False, pos)) => Ok(Expr::False(pos)),
-        Some((Token::LexErr(le), pos)) => Err(ParseError(PERR::BadInput(le.to_string()), pos)),
-        Some((token, pos)) => Err(ParseError(
+        Some((Token::LexError(le), pos)) => {
+            Err(ParseError::new(PERR::BadInput(le.to_string()), pos))
+        }
+        Some((token, pos)) => Err(ParseError::new(
             PERR::BadInput(format!("Unexpected '{}'", token.syntax())),
             pos,
         )),
-        None => Err(ParseError(PERR::InputPastEndOfFile, Position::eof())),
+        None => Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
     }
 }
 
@@ -1535,7 +1432,7 @@ fn parse_binary_op<'a>(
                     )
                 }
                 token => {
-                    return Err(ParseError(
+                    return Err(ParseError::new(
                         PERR::UnknownOperator(token.syntax().to_string()),
                         pos,
                     ))
@@ -1597,14 +1494,14 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 
     let name = match input.next() {
         Some((Token::Identifier(s), _)) => s,
-        Some((_, pos)) => return Err(ParseError(PERR::VarExpectsIdentifier, pos)),
-        None => return Err(ParseError(PERR::VarExpectsIdentifier, Position::eof())),
+        Some((_, pos)) => return Err(ParseError::new(PERR::VarExpectsIdentifier, pos)),
+        None => return Err(ParseError::new(PERR::VarExpectsIdentifier, Position::eof())),
     };
 
     match input.next() {
         Some((Token::In, _)) => {}
-        Some((_, pos)) => return Err(ParseError(PERR::VarExpectsIdentifier, pos)),
-        None => return Err(ParseError(PERR::VarExpectsIdentifier, Position::eof())),
+        Some((_, pos)) => return Err(ParseError::new(PERR::VarExpectsIdentifier, pos)),
+        None => return Err(ParseError::new(PERR::VarExpectsIdentifier, Position::eof())),
     }
 
     let expr = parse_expr(input)?;
@@ -1617,13 +1514,13 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
-        _ => return Err(ParseError(PERR::InputPastEndOfFile, Position::eof())),
+        _ => return Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
     };
 
     let name = match input.next() {
         Some((Token::Identifier(s), _)) => s,
-        Some((_, pos)) => return Err(ParseError(PERR::VarExpectsIdentifier, pos)),
-        None => return Err(ParseError(PERR::VarExpectsIdentifier, Position::eof())),
+        Some((_, pos)) => return Err(ParseError::new(PERR::VarExpectsIdentifier, pos)),
+        None => return Err(ParseError::new(PERR::VarExpectsIdentifier, Position::eof())),
     };
 
     match input.peek() {
@@ -1639,8 +1536,8 @@ fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
     match input.peek() {
         Some(&(Token::LeftBrace, _)) => (),
-        Some(&(_, pos)) => return Err(ParseError(PERR::MissingLeftBrace, pos)),
-        None => return Err(ParseError(PERR::MissingLeftBrace, Position::eof())),
+        Some(&(_, pos)) => return Err(ParseError::new(PERR::MissingLeftBrace, pos)),
+        None => return Err(ParseError::new(PERR::MissingLeftBrace, Position::eof())),
     }
 
     input.next();
@@ -1649,7 +1546,7 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
 
     match input.peek() {
         Some(&(Token::RightBrace, _)) => (), // empty block
-        Some(&(Token::Fn, pos)) => return Err(ParseError(PERR::WrongFnDefinition, pos)),
+        Some(&(Token::Fn, pos)) => return Err(ParseError::new(PERR::WrongFnDefinition, pos)),
 
         _ => {
             while input.peek().is_some() {
@@ -1673,8 +1570,8 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
             input.next();
             Ok(Stmt::Block(statements))
         }
-        Some(&(_, pos)) => Err(ParseError(PERR::MissingRightBrace, pos)),
-        None => Err(ParseError(PERR::MissingRightBrace, Position::eof())),
+        Some(&(_, pos)) => Err(ParseError::new(PERR::MissingRightBrace, pos)),
+        None => Err(ParseError::new(PERR::MissingRightBrace, Position::eof())),
     }
 }
 
@@ -1722,21 +1619,26 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
 fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
-        _ => return Err(ParseError(PERR::InputPastEndOfFile, Position::eof())),
+        _ => return Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
     };
 
     let name = match input.next() {
         Some((Token::Identifier(s), _)) => s,
-        Some((_, pos)) => return Err(ParseError(PERR::FnMissingName, pos)),
-        None => return Err(ParseError(PERR::FnMissingName, Position::eof())),
+        Some((_, pos)) => return Err(ParseError::new(PERR::FnMissingName, pos)),
+        None => return Err(ParseError::new(PERR::FnMissingName, Position::eof())),
     };
 
     match input.peek() {
         Some(&(Token::LeftParen, _)) => {
             input.next();
         }
-        Some(&(_, pos)) => return Err(ParseError(PERR::FnMissingParams(name), pos)),
-        None => return Err(ParseError(PERR::FnMissingParams(name), Position::eof())),
+        Some(&(_, pos)) => return Err(ParseError::new(PERR::FnMissingParams(name), pos)),
+        None => {
+            return Err(ParseError::new(
+                PERR::FnMissingParams(name),
+                Position::eof(),
+            ))
+        }
     }
 
     let mut params = Vec::new();
@@ -1752,8 +1654,8 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
                 Some((Token::Identifier(s), _)) => {
                     params.push(s);
                 }
-                Some((_, pos)) => return Err(ParseError(PERR::MalformedCallExpr, pos)),
-                None => return Err(ParseError(PERR::MalformedCallExpr, Position::eof())),
+                Some((_, pos)) => return Err(ParseError::new(PERR::MalformedCallExpr, pos)),
+                None => return Err(ParseError::new(PERR::MalformedCallExpr, Position::eof())),
             }
         },
     }
