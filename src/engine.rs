@@ -745,12 +745,25 @@ impl Engine<'_> {
             script_functions: HashMap::new(),
             type_iterators: HashMap::new(),
             type_names,
-            on_print: Box::new(|x| println!("{}", x)), // default print/debug implementations
-            on_debug: Box::new(|x| println!("{}", x)),
+            on_print: Box::new(default_print), // default print/debug implementations
+            on_debug: Box::new(default_print),
         };
 
-        engine.register_builtins();
+        engine.register_core_lib();
+
+        #[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
+        engine.register_stdlib(); // Register the standard library when not no-std or stdlib is set
 
         engine
     }
 }
+
+/// Print/debug to stdout
+#[cfg(not(feature = "no-std"))]
+fn default_print(s: &str) {
+    println!("{}", s);
+}
+
+/// No-op
+#[cfg(feature = "no-std")]
+fn default_print(_: &str) {}

@@ -1,8 +1,11 @@
 use crate::any::Any;
 use crate::engine::{Array, Engine};
-use crate::fn_register::{RegisterDynamicFn, RegisterFn};
+use crate::fn_register::RegisterFn;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub};
+
+#[cfg(not(feature = "no-std"))]
+use crate::fn_register::RegisterDynamicFn;
 
 macro_rules! reg_op {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
@@ -36,6 +39,7 @@ macro_rules! reg_func1 {
     )
 }
 
+#[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
 macro_rules! reg_func2x {
     ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -44,6 +48,7 @@ macro_rules! reg_func2x {
     )
 }
 
+#[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
 macro_rules! reg_func2y {
     ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -52,6 +57,7 @@ macro_rules! reg_func2y {
     )
 }
 
+#[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
 macro_rules! reg_func3 {
     ($self:expr, $x:expr, $op:expr, $v:ty, $w:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -61,8 +67,8 @@ macro_rules! reg_func3 {
 }
 
 impl Engine<'_> {
-    /// Register the built-in library.
-    pub(crate) fn register_builtins(&mut self) {
+    /// Register the core built-in library.
+    pub(crate) fn register_core_lib(&mut self) {
         fn add<T: Add>(x: T, y: T) -> <T as Add>::Output {
             x + y
         }
@@ -176,6 +182,47 @@ impl Engine<'_> {
         self.register_fn("+", concat);
         self.register_fn("==", unit_eq);
 
+        // Register print and debug
+        fn print_debug<T: Debug>(x: T) -> String {
+            format!("{:?}", x)
+        }
+        fn print<T: Display>(x: T) -> String {
+            format!("{}", x)
+        }
+
+        reg_func1!(self, "print", print, String, i8, u8, i16, u16);
+        reg_func1!(self, "print", print, String, i32, i64, u32, u64);
+        reg_func1!(self, "print", print, String, f32, f64, bool, char, String);
+        reg_func1!(self, "print", print_debug, String, Array);
+        self.register_fn("print", || "".to_string());
+        self.register_fn("print", |_: ()| "".to_string());
+
+        reg_func1!(self, "debug", print_debug, String, i8, u8, i16, u16);
+        reg_func1!(self, "debug", print_debug, String, i32, i64, u32, u64);
+        reg_func1!(self, "debug", print_debug, String, f32, f64, bool, char);
+        reg_func1!(self, "debug", print_debug, String, String, Array, ());
+
+        // Register array iterator
+        self.register_iterator::<Array, _>(|a| {
+            Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
+        });
+
+        // Register range function
+        self.register_iterator::<Range<i64>, _>(|a| {
+            Box::new(
+                a.downcast_ref::<Range<i64>>()
+                    .unwrap()
+                    .clone()
+                    .map(|n| n.into_dynamic()),
+            )
+        });
+
+        self.register_fn("range", |i1: i64, i2: i64| (i1..i2));
+    }
+
+    /// Register the built-in library.
+    #[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
+    pub(crate) fn register_stdlib(&mut self) {
         // Register conversion functions
         self.register_fn("to_float", |x: i8| x as f64);
         self.register_fn("to_float", |x: u8| x as f64);
@@ -198,26 +245,6 @@ impl Engine<'_> {
         self.register_fn("to_int", |x: f64| x as i64);
 
         self.register_fn("to_int", |ch: char| ch as i64);
-
-        // Register print and debug
-        fn print_debug<T: Debug>(x: T) -> String {
-            format!("{:?}", x)
-        }
-        fn print<T: Display>(x: T) -> String {
-            format!("{}", x)
-        }
-
-        reg_func1!(self, "print", print, String, i8, u8, i16, u16);
-        reg_func1!(self, "print", print, String, i32, i64, u32, u64);
-        reg_func1!(self, "print", print, String, f32, f64, bool, char, String);
-        reg_func1!(self, "print", print_debug, String, Array);
-        self.register_fn("print", || "".to_string());
-        self.register_fn("print", |_: ()| "".to_string());
-
-        reg_func1!(self, "debug", print_debug, String, i8, u8, i16, u16);
-        reg_func1!(self, "debug", print_debug, String, i32, i64, u32, u64);
-        reg_func1!(self, "debug", print_debug, String, f32, f64, bool, char);
-        reg_func1!(self, "debug", print_debug, String, String, Array, ());
 
         // Register array utility functions
         fn push<T: Any>(list: &mut Array, item: T) {
@@ -242,14 +269,11 @@ impl Engine<'_> {
         reg_func3!(self, "pad", pad, &mut Array, i64, (), String, Array, ());
 
         self.register_dynamic_fn("pop", |list: &mut Array| {
-            list.pop().unwrap_or(().into_dynamic())
+            list.pop().unwrap_or_else(|| ().into_dynamic())
         });
-        self.register_dynamic_fn("shift", |list: &mut Array| {
-            if list.len() > 0 {
-                list.remove(0)
-            } else {
-                ().into_dynamic()
-            }
+        self.register_dynamic_fn("shift", |list: &mut Array| match list.len() {
+            0 => ().into_dynamic(),
+            _ => list.remove(0),
         });
         self.register_fn("len", |list: &mut Array| list.len() as i64);
         self.register_fn("clear", |list: &mut Array| list.clear());
@@ -314,22 +338,5 @@ impl Engine<'_> {
                 chars.iter().for_each(|&ch| s.push(ch));
             }
         });
-
-        // Register array iterator
-        self.register_iterator::<Array, _>(|a| {
-            Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
-        });
-
-        // Register range function
-        self.register_iterator::<Range<i64>, _>(|a| {
-            Box::new(
-                a.downcast_ref::<Range<i64>>()
-                    .unwrap()
-                    .clone()
-                    .map(|n| n.into_dynamic()),
-            )
-        });
-
-        self.register_fn("range", |i1: i64, i2: i64| (i1..i2));
     }
 }
