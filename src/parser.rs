@@ -1043,7 +1043,16 @@ fn parse_paren_expr<'a>(
 
     match input.next() {
         Some((Token::RightParen, _)) => Ok(expr),
-        _ => Err(ParseError::new(PERR::MissingRightParen, Position::eof())),
+        Some((_, pos)) => {
+            return Err(ParseError::new(
+                PERR::MissingRightParen("a matching ( in the expression".into()),
+                pos,
+            ))
+        }
+        None => Err(ParseError::new(
+            PERR::MissingRightParen("a matching ( in the expression".into()),
+            Position::eof(),
+        )),
     }
 }
 
@@ -1068,8 +1077,24 @@ fn parse_call_expr<'a>(
                 return Ok(Expr::FunctionCall(id, args, None, begin));
             }
             Some(&(Token::Comma, _)) => (),
-            Some(&(_, pos)) => return Err(ParseError::new(PERR::MalformedCallExpr, pos)),
-            None => return Err(ParseError::new(PERR::MalformedCallExpr, Position::eof())),
+            Some(&(_, pos)) => {
+                return Err(ParseError::new(
+                    PERR::MissingRightParen(format!(
+                        "closing the arguments list to function call of '{}'",
+                        id
+                    )),
+                    pos,
+                ))
+            }
+            None => {
+                return Err(ParseError::new(
+                    PERR::MissingRightParen(format!(
+                        "closing the arguments list to function call of '{}'",
+                        id
+                    )),
+                    Position::eof(),
+                ))
+            }
         }
 
         input.next();
@@ -1080,17 +1105,24 @@ fn parse_index_expr<'a>(
     lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
 ) -> Result<Expr, ParseError> {
-    match parse_expr(input) {
-        Ok(idx_expr) => match input.peek() {
-            Some(&(Token::RightBracket, _)) => {
-                input.next();
-                return Ok(Expr::Index(lhs, Box::new(idx_expr)));
-            }
-            Some(&(_, pos)) => return Err(ParseError::new(PERR::MalformedIndexExpr, pos)),
-            None => return Err(ParseError::new(PERR::MalformedIndexExpr, Position::eof())),
-        },
-        Err(err) => return Err(ParseError::new(PERR::MalformedIndexExpr, err.position())),
-    }
+    parse_expr(input).and_then(|idx_expr| match input.peek() {
+        Some(&(Token::RightBracket, _)) => {
+            input.next();
+            return Ok(Expr::Index(lhs, Box::new(idx_expr)));
+        }
+        Some(&(_, pos)) => {
+            return Err(ParseError::new(
+                PERR::MissingRightBracket("index expression".into()),
+                pos,
+            ))
+        }
+        None => {
+            return Err(ParseError::new(
+                PERR::MissingRightBracket("index expression".into()),
+                Position::eof(),
+            ))
+        }
+    })
 }
 
 fn parse_ident_expr<'a>(
@@ -1141,8 +1173,14 @@ fn parse_array_expr<'a>(
             input.next();
             Ok(Expr::Array(arr, begin))
         }
-        Some(&(_, pos)) => Err(ParseError::new(PERR::MissingRightBracket, pos)),
-        None => Err(ParseError::new(PERR::MissingRightBracket, Position::eof())),
+        Some(&(_, pos)) => Err(ParseError::new(
+            PERR::MissingRightBracket("the end of array literal".into()),
+            pos,
+        )),
+        None => Err(ParseError::new(
+            PERR::MissingRightBracket("the end of array literal".into()),
+            Position::eof(),
+        )),
     }
 }
 
@@ -1462,7 +1500,7 @@ fn parse_binary_op<'a>(
                 }
                 token => {
                     return Err(ParseError::new(
-                        PERR::UnknownOperator(token.syntax().to_string()),
+                        PERR::UnknownOperator(token.syntax().into()),
                         pos,
                     ))
                 }
@@ -1599,8 +1637,14 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
             input.next();
             Ok(Stmt::Block(statements))
         }
-        Some(&(_, pos)) => Err(ParseError::new(PERR::MissingRightBrace, pos)),
-        None => Err(ParseError::new(PERR::MissingRightBrace, Position::eof())),
+        Some(&(_, pos)) => Err(ParseError::new(
+            PERR::MissingRightBrace("end of block".into()),
+            pos,
+        )),
+        None => Err(ParseError::new(
+            PERR::MissingRightBrace("end of block".into()),
+            Position::eof(),
+        )),
     }
 }
 

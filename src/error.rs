@@ -56,13 +56,13 @@ pub enum ParseErrorType {
     /// An unknown operator is encountered. Wrapped value is the operator.
     UnknownOperator(String),
     /// An open `(` is missing the corresponding closing `)`.
-    MissingRightParen,
+    MissingRightParen(String),
     /// Expecting `(` but not finding one.
     MissingLeftBrace,
     /// An open `{` is missing the corresponding closing `}`.
-    MissingRightBrace,
+    MissingRightBrace(String),
     /// An open `[` is missing the corresponding closing `]`.
-    MissingRightBracket,
+    MissingRightBracket(String),
     /// An expression in function call arguments `()` has syntax error.
     MalformedCallExpr,
     /// An expression in indexing brackets `[]` has syntax error.
@@ -104,10 +104,10 @@ impl Error for ParseError {
             ParseErrorType::BadInput(ref p) => p,
             ParseErrorType::InputPastEndOfFile => "Script is incomplete",
             ParseErrorType::UnknownOperator(_) => "Unknown operator",
-            ParseErrorType::MissingRightParen => "Expecting ')'",
+            ParseErrorType::MissingRightParen(_) => "Expecting ')'",
             ParseErrorType::MissingLeftBrace => "Expecting '{'",
-            ParseErrorType::MissingRightBrace => "Expecting '}'",
-            ParseErrorType::MissingRightBracket => "Expecting ']'",
+            ParseErrorType::MissingRightBrace(_) => "Expecting '}'",
+            ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
             ParseErrorType::MalformedCallExpr => "Invalid expression in function call arguments",
             ParseErrorType::MalformedIndexExpr => "Invalid index in indexing expression",
             ParseErrorType::VarExpectsIdentifier => "Expecting name of a variable",
@@ -129,6 +129,11 @@ impl fmt::Display for ParseError {
             ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
             ParseErrorType::FnMissingParams(ref s) => {
                 write!(f, "Missing parameters for function '{}'", s)?
+            }
+            ParseErrorType::MissingRightParen(ref s)
+            | ParseErrorType::MissingRightBrace(ref s)
+            | ParseErrorType::MissingRightBracket(ref s) => {
+                write!(f, "{} for {}", self.description(), s)?
             }
             _ => write!(f, "{}", self.description())?,
         }
