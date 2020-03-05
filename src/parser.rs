@@ -132,7 +132,7 @@ pub enum Expr {
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
     Assignment(Box<Expr>, Box<Expr>),
     Dot(Box<Expr>, Box<Expr>),
-    Index(String, Box<Expr>, Position),
+    Index(Box<Expr>, Box<Expr>),
     Array(Vec<Expr>, Position),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
@@ -150,15 +150,16 @@ impl Expr {
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
             | Expr::FunctionCall(_, _, _, pos)
-            | Expr::Index(_, _, pos)
             | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Assignment(e, _) | Expr::Dot(e, _) | Expr::And(e, _) | Expr::Or(e, _) => {
-                e.position()
-            }
+            Expr::Index(e, _)
+            | Expr::Assignment(e, _)
+            | Expr::Dot(e, _)
+            | Expr::And(e, _)
+            | Expr::Or(e, _) => e.position(),
         }
     }
 }
@@ -1076,15 +1077,14 @@ fn parse_call_expr<'a>(
 }
 
 fn parse_index_expr<'a>(
-    id: String,
+    lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
-    begin: Position,
 ) -> Result<Expr, ParseError> {
     match parse_expr(input) {
-        Ok(idx) => match input.peek() {
+        Ok(idx_expr) => match input.peek() {
             Some(&(Token::RightBracket, _)) => {
                 input.next();
-                return Ok(Expr::Index(id, Box::new(idx), begin));
+                return Ok(Expr::Index(lhs, Box::new(idx_expr)));
             }
             Some(&(_, pos)) => return Err(ParseError::new(PERR::MalformedIndexExpr, pos)),
             None => return Err(ParseError::new(PERR::MalformedIndexExpr, Position::eof())),
@@ -1105,7 +1105,7 @@ fn parse_ident_expr<'a>(
         }
         Some(&(Token::LeftBracket, _)) => {
             input.next();
-            parse_index_expr(id, input, begin)
+            parse_index_expr(Box::new(Expr::Identifier(id, begin)), input)
         }
         Some(_) => Ok(Expr::Identifier(id, begin)),
         None => Ok(Expr::Identifier(id, Position::eof())),
@@ -1147,14 +1147,30 @@ fn parse_array_expr<'a>(
 }
 
 fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
-    match input.next() {
+    let token = input.next();
+
+    let mut follow_on = false;
+
+    let r = match token {
         Some((Token::IntegerConstant(x), pos)) => Ok(Expr::IntegerConstant(x, pos)),
         Some((Token::FloatConstant(x), pos)) => Ok(Expr::FloatConstant(x, pos)),
-        Some((Token::StringConst(s), pos)) => Ok(Expr::StringConstant(s, pos)),
         Some((Token::CharConstant(c), pos)) => Ok(Expr::CharConstant(c, pos)),
-        Some((Token::Identifier(s), pos)) => parse_ident_expr(s, input, pos),
-        Some((Token::LeftParen, pos)) => parse_paren_expr(input, pos),
-        Some((Token::LeftBracket, pos)) => parse_array_expr(input, pos),
+        Some((Token::StringConst(s), pos)) => {
+            follow_on = true;
+            Ok(Expr::StringConstant(s, pos))
+        }
+        Some((Token::Identifier(s), pos)) => {
+            follow_on = true;
+            parse_ident_expr(s, input, pos)
+        }
+        Some((Token::LeftParen, pos)) => {
+            follow_on = true;
+            parse_paren_expr(input, pos)
+        }
+        Some((Token::LeftBracket, pos)) => {
+            follow_on = true;
+            parse_array_expr(input, pos)
+        }
         Some((Token::True, pos)) => Ok(Expr::True(pos)),
         Some((Token::False, pos)) => Ok(Expr::False(pos)),
         Some((Token::LexError(le), pos)) => {
@@ -1165,6 +1181,20 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
             pos,
         )),
         None => Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
+    }?;
+
+    if !follow_on {
+        return Ok(r);
+    }
+
+    // Post processing
+    match input.peek() {
+        Some(&(Token::LeftBracket, _)) => {
+            // Possible indexing
+            input.next();
+            parse_index_expr(Box::new(r), input)
+        }
+        _ => Ok(r),
     }
 }
 

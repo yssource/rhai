@@ -132,16 +132,24 @@ impl std::fmt::Display for EvalAltResult {
                 write!(f, "{}: {} < 0 ({})", desc, index, pos)
             }
             Self::ErrorArrayBounds(max, _, pos) if *max == 0 => write!(f, "{} ({})", desc, pos),
-            Self::ErrorArrayBounds(max, index, pos) => {
-                write!(f, "{} (max {}): {} ({})", desc, max - 1, index, pos)
-            }
+            Self::ErrorArrayBounds(max, index, pos) => write!(
+                f,
+                "Array index {} is out of bounds: max {} elements ({})",
+                index,
+                max - 1,
+                pos
+            ),
             Self::ErrorStringBounds(_, index, pos) if *index < 0 => {
                 write!(f, "{}: {} < 0 ({})", desc, index, pos)
             }
             Self::ErrorStringBounds(max, _, pos) if *max == 0 => write!(f, "{} ({})", desc, pos),
-            Self::ErrorStringBounds(max, index, pos) => {
-                write!(f, "{} (max {}): {} ({})", desc, max - 1, index, pos)
-            }
+            Self::ErrorStringBounds(max, index, pos) => write!(
+                f,
+                "String index {} is out of bounds: max {} characters ({})",
+                index,
+                max - 1,
+                pos
+            ),
         }
     }
 }

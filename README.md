@@ -11,7 +11,7 @@ Rhai's current feature set:
 * Support for overloaded functions
 * No additional dependencies
 
-**Note:** Currently, the version is 0.10.1, so the language and API may change before they stabilize.
+**Note:** Currently, the version is 0.10.1, so the language and API's may change before they stabilize.
 
 ## Installation
 
@@ -585,7 +585,7 @@ return 123 + 456;
 
 ```rust
 if error != "" {
-    throw error;  // `throw` takes a string to form the exception text
+    throw error;  // 'throw' takes a string to form the exception text
 }
 
 throw;  // no exception text
@@ -628,12 +628,19 @@ y[1] = 42;
 print(y[1]);            // prints 42
 
 ts.list = y;            // arrays can be assigned completely (by value copy)
-let foo = ts.list[1];   // indexing into properties is ok
+let foo = ts.list[1];
 foo == 42;
 
-let foo = [1, 2, 3][0]; // a syntax error (for now) - cannot index into literals
-let foo = abc()[0];     // a syntax error (for now) - cannot index into function call return values
-let foo = y[0];         // this works
+let foo = [1, 2, 3][0];
+foo == 1;
+
+fn abc() { [42, 43, 44] }
+
+let foo = abc()[0];
+foo == 42;
+
+let foo = y[0];
+foo == 1;
 
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
@@ -734,14 +741,19 @@ let c = record[4];
 c == 'C';
 
 ts.s = record;
-let c = ts.s[4];    // indexing into properties is ok
+
+let c = ts.s[4];
 c == 'C';
 
-let c = "foo"[0];   // a syntax error (for now) - cannot index into literals
+let c = "foo"[0];
+c == 'f';
+
+let c = ("foo" + "bar")[5];
+c == 'r';
 
 // Escape sequences in strings
 record += " \u2764\n";                  // escape sequence of '❤' in Unicode 
-record == "Bob C. Davis: age 42 ❤\n";  // '\n' = new-line
+record == "Bob C. Davis: age 42 ❤\n";   // '\n' = new-line
 
 // Unlike Rust, Rhai strings can be modified
 record[4] = '\x58'; // 0x58 = 'X'
