@@ -4,9 +4,6 @@ use crate::fn_register::RegisterFn;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub};
 
-#[cfg(not(feature = "no-std"))]
-use crate::fn_register::RegisterDynamicFn;
-
 macro_rules! reg_op {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
         $(
@@ -39,7 +36,7 @@ macro_rules! reg_func1 {
     )
 }
 
-#[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
+#[cfg(not(feature = "no_stdlib"))]
 macro_rules! reg_func2x {
     ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -48,7 +45,7 @@ macro_rules! reg_func2x {
     )
 }
 
-#[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
+#[cfg(not(feature = "no_stdlib"))]
 macro_rules! reg_func2y {
     ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -57,7 +54,7 @@ macro_rules! reg_func2y {
     )
 }
 
-#[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
+#[cfg(not(feature = "no_stdlib"))]
 macro_rules! reg_func3 {
     ($self:expr, $x:expr, $op:expr, $v:ty, $w:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -111,9 +108,6 @@ impl Engine<'_> {
         fn not(x: bool) -> bool {
             !x
         }
-        fn concat(x: String, y: String) -> String {
-            x + &y
-        }
         fn binary_and<T: BitAnd>(x: T, y: T) -> <T as BitAnd>::Output {
             x & y
         }
@@ -140,9 +134,6 @@ impl Engine<'_> {
         }
         fn pow_f64_i64(x: f64, y: i64) -> f64 {
             x.powi(y as i32)
-        }
-        fn unit_eq(_a: (), _b: ()) -> bool {
-            true
         }
 
         reg_op!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
@@ -179,8 +170,8 @@ impl Engine<'_> {
         reg_un!(self, "-", neg, i8, i16, i32, i64, f32, f64);
         reg_un!(self, "!", not, bool);
 
-        self.register_fn("+", concat);
-        self.register_fn("==", unit_eq);
+        self.register_fn("+", |x: String, y: String| x + &y); // String + String
+        self.register_fn("==", |_: (), _: ()| true); // () == ()
 
         // Register print and debug
         fn print_debug<T: Debug>(x: T) -> String {
@@ -221,8 +212,10 @@ impl Engine<'_> {
     }
 
     /// Register the built-in library.
-    #[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
+    #[cfg(not(feature = "no_stdlib"))]
     pub(crate) fn register_stdlib(&mut self) {
+        use crate::fn_register::RegisterDynamicFn;
+
         // Register conversion functions
         self.register_fn("to_float", |x: i8| x as f64);
         self.register_fn("to_float", |x: u8| x as f64);

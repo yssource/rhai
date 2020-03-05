@@ -16,5 +16,4 @@ include = [
 
 [features]
 debug_msgs = []
-no-std = []
-stdlib = []
+no_stdlib = []

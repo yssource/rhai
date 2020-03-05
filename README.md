@@ -33,6 +33,16 @@ to use the latest version.
 
 Beware that in order to use pre-releases (alpha and beta) you need to specify the exact version in your `Cargo.toml`.
 
+## Optional Features
+
+### `debug_msgs`
+
+Print debug messages to stdout (using `println!`) related to function registrations and function calls.
+
+### `no_stdlib`
+
+Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities.
+
 ## Related
 
 Other cool projects to check out:
@@ -601,7 +611,7 @@ println!(result);   // prints "Runtime error: 42 is too large! (line 5, position
 
 You can create arrays of values, and then access them with numeric indices.
 
-The following standard functions operate on arrays:
+The following functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on arrays:
 
 * `push` - inserts an element at the end
 * `pop` - removes the last element and returns it (() if empty)
@@ -699,7 +709,7 @@ let x = 0o777;          // i64 in oct
 let x = 0b1010_1111;    // i64 in binary
 ```
 
-Conversion functions:
+Conversion functions (defined in the standard library but excluded if you use the `no_stdlib` feature):
 
 * `to_int` - converts an `f32` or `f64` to `i64`
 * `to_float` - converts an integer type to `f64`
@@ -714,7 +724,7 @@ let last = "Davis";
 let full_name = name + " " + middle_initial + ". " + last;
 full_name == "Bob C. Davis";
 
-// String building with different types
+// String building with different types (not available if 'no_stdlib' features is used)
 let age = 42;
 let record = full_name + ": age " + age;
 record == "Bob C. Davis: age 42";
@@ -738,7 +748,7 @@ record[4] = '\x58'; // 0x58 = 'X'
 record == "Bob X. Davis: age 42 ❤\n";
 ```
 
-The following standard functions operate on strings:
+The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on strings:
 
 * `len` - returns the number of characters (not number of bytes) in the string
 * `pad` - pads the string with an character until a specified number of characters

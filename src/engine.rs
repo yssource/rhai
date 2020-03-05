@@ -751,19 +751,19 @@ impl Engine<'_> {
 
         engine.register_core_lib();
 
-        #[cfg(any(not(feature = "no-std"), feature = "stdlib"))]
-        engine.register_stdlib(); // Register the standard library when not no-std or stdlib is set
+        #[cfg(not(feature = "no_stdlib"))]
+        engine.register_stdlib(); // Register the standard library when no_stdlib is not set
 
         engine
     }
 }
 
 /// Print/debug to stdout
-#[cfg(not(feature = "no-std"))]
+#[cfg(not(feature = "no_stdlib"))]
 fn default_print(s: &str) {
     println!("{}", s);
 }
 
 /// No-op
-#[cfg(feature = "no-std")]
+#[cfg(feature = "no_stdlib")]
 fn default_print(_: &str) {}
