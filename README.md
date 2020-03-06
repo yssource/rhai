@@ -11,7 +11,7 @@ Rhai's current feature set:
 * Support for overloaded functions
 * No additional dependencies
 
-**Note:** Currently, the version is 0.10.1, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
 
 ## Installation
 
@@ -19,7 +19,7 @@ You can install Rhai using crates by adding this line to your dependencies:
 
 ```toml
 [dependencies]
-rhai = "0.10.1"
+rhai = "0.10.2"
 ```
 
 or simply:
@@ -117,7 +117,7 @@ You can also evaluate a script file:
 if let Ok(result) = engine.eval_file::<i64>("hello_world.rhai") { ... }
 ```
 
-If you want to repeatedly evaluate a script, you can compile it first into an AST form:
+If you want to repeatedly evaluate a script, you can _compile_ it first into an AST (abstract syntax tree) form:
 
 ```rust
 // Compile to an AST and store it for later evaluations
@@ -130,10 +130,23 @@ for _ in 0..42 {
 }
 ```
 
-Compiling a script file into AST is also supported:
+Compiling a script file is also supported:
 
 ```rust
 let ast = Engine::compile_file("hello_world.rhai").unwrap();
+```
+
+Rhai also allows you to work _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust.
+You do this via `call_fn`, which takes a compiled AST (output from `compile`) and the
+function call arguments:
+
+```rust
+// Define a function in a script and compile to AST
+let ast = Engine::compile("fn hello(x, y) { x.len() + y }")?;
+
+// Evaluate the function in the AST, passing arguments into the script as a tuple
+// (beware, arguments must be of the correct types because Rhai does not have built-in type conversions)
+let result: i64 = engine.call_fn("hello", ast, (&mut String::from("abc"), &mut 123_i64))?;
 ```
 
 # Values and types
