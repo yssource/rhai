@@ -128,7 +128,7 @@ impl fmt::Display for ParseError {
             ParseErrorType::BadInput(ref s) => write!(f, "{}", s)?,
             ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
             ParseErrorType::FnMissingParams(ref s) => {
-                write!(f, "Missing parameters for function '{}'", s)?
+                write!(f, "Expecting parameters for function '{}'", s)?
             }
             ParseErrorType::MissingRightParen(ref s)
             | ParseErrorType::MissingRightBrace(ref s)

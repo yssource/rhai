@@ -26,7 +26,7 @@ pub enum EvalAltResult {
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, i64, Position),
     /// Trying to index into a type that is not an array and not a string.
-    ErrorIndexing(Position),
+    ErrorIndexingType(Position),
     /// Trying to index into an array or string with an index that is not `i64`.
     ErrorIndexExpr(Position),
     /// The guard expression in an `if` statement does not return a boolean value.
@@ -65,7 +65,7 @@ impl Error for EvalAltResult {
             }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorIndexExpr(_) => "Indexing into an array or string expects an integer index",
-            Self::ErrorIndexing(_) => "Indexing can only be performed on an array or a string",
+            Self::ErrorIndexingType(_) => "Indexing can only be performed on an array or a string",
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
@@ -104,7 +104,7 @@ impl std::fmt::Display for EvalAltResult {
         match self {
             Self::ErrorFunctionNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
             Self::ErrorVariableNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorIndexing(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorIndexingType(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorIndexExpr(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorIfGuard(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorFor(pos) => write!(f, "{} ({})", desc, pos),

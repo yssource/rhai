@@ -202,7 +202,7 @@ impl Engine<'_> {
             Expr::Index(lhs, idx_expr) => {
                 let idx = self.eval_index_value(scope, idx_expr)?;
 
-                let (lhs_value, pos) = match lhs.as_ref() {
+                let (lhs_value, _) = match lhs.as_ref() {
                     Expr::Identifier(id, pos) => {
                         let get_fn_name = format!("get${}", id);
                         (
@@ -213,7 +213,7 @@ impl Engine<'_> {
                     expr => return Err(EvalAltResult::ErrorDotExpr(expr.position())),
                 };
 
-                Self::get_indexed_value(lhs_value, idx, pos).map(|(v, _)| v)
+                Self::get_indexed_value(lhs_value, idx, idx_expr.position()).map(|(v, _)| v)
             }
 
             // xxx.lhs.rhs
@@ -229,7 +229,7 @@ impl Engine<'_> {
                 Expr::Index(lhs, idx_expr) => {
                     let idx = self.eval_index_value(scope, idx_expr)?;
 
-                    let (lhs_value, pos) = match lhs.as_ref() {
+                    let (lhs_value, _) = match lhs.as_ref() {
                         Expr::Identifier(id, pos) => {
                             let get_fn_name = format!("get${}", id);
                             (
@@ -240,9 +240,9 @@ impl Engine<'_> {
                         expr => return Err(EvalAltResult::ErrorDotExpr(expr.position())),
                     };
 
-                    Self::get_indexed_value(lhs_value, idx, pos).and_then(|(mut value, _)| {
-                        self.get_dot_val_helper(scope, value.as_mut(), rhs)
-                    })
+                    Self::get_indexed_value(lhs_value, idx, idx_expr.position()).and_then(
+                        |(mut value, _)| self.get_dot_val_helper(scope, value.as_mut(), rhs),
+                    )
                 }
                 // Syntax error
                 _ => Err(EvalAltResult::ErrorDotExpr(lhs.position())),
@@ -285,7 +285,7 @@ impl Engine<'_> {
         pos: Position,
     ) -> Result<(Dynamic, VariableType), EvalAltResult> {
         if val.is::<Array>() {
-            let arr = val.downcast::<Array>().expect("Array expected");
+            let arr = val.downcast::<Array>().expect("array expected");
 
             if idx >= 0 {
                 arr.get(idx as usize)
@@ -296,7 +296,7 @@ impl Engine<'_> {
                 Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx, pos))
             }
         } else if val.is::<String>() {
-            let s = val.downcast::<String>().expect("String expected");
+            let s = val.downcast::<String>().expect("string expected");
 
             if idx >= 0 {
                 s.chars()
@@ -311,7 +311,7 @@ impl Engine<'_> {
                 ))
             }
         } else {
-            Err(EvalAltResult::ErrorIndexing(pos))
+            Err(EvalAltResult::ErrorIndexingType(pos))
         }
     }
 
@@ -325,17 +325,19 @@ impl Engine<'_> {
         let idx = self.eval_index_value(scope, idx_expr)?;
 
         match lhs {
+            // id[idx_expr]
             Expr::Identifier(id, _) => Self::search_scope(
                 scope,
                 &id,
-                |val| Self::get_indexed_value(val, idx, lhs.position()),
+                |val| Self::get_indexed_value(val, idx, idx_expr.position()),
                 lhs.position(),
             )
             .map(|(src_idx, (val, source_type))| {
                 (source_type, Some((id.clone(), src_idx)), idx as usize, val)
             }),
 
-            expr => Self::get_indexed_value(self.eval_expr(scope, expr)?, idx, lhs.position())
+            // (expr)[idx_expr]
+            expr => Self::get_indexed_value(self.eval_expr(scope, expr)?, idx, idx_expr.position())
                 .map(|(val, _)| (VariableType::Expression, None, idx as usize, val)),
         }
     }
@@ -377,7 +379,7 @@ impl Engine<'_> {
                 // Value must be a character
                 let ch = *val
                     .downcast::<char>()
-                    .expect("value to update an index position in a string must be a char");
+                    .expect("char value expected to update an index position in a string");
                 Some(Self::str_replace_char(s, idx as usize, ch).into_dynamic())
             }
 
@@ -422,7 +424,7 @@ impl Engine<'_> {
                         idx,
                         target,
                     )
-                    .expect("source_type must be either Array or String");
+                    .expect("array or string source type expected for indexing");
                 }
 
                 value
@@ -516,7 +518,7 @@ impl Engine<'_> {
                         idx,
                         target,
                     )
-                    .expect("source_type must be either Array or String");
+                    .expect("array or string source_type expected for indexing");
                 }
 
                 value
