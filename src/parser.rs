@@ -1189,7 +1189,7 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
 
     let mut follow_on = false;
 
-    let r = match token {
+    let mut root_expr = match token {
         Some((Token::IntegerConstant(x), pos)) => Ok(Expr::IntegerConstant(x, pos)),
         Some((Token::FloatConstant(x), pos)) => Ok(Expr::FloatConstant(x, pos)),
         Some((Token::CharConstant(c), pos)) => Ok(Expr::CharConstant(c, pos)),
@@ -1222,18 +1222,16 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
     }?;
 
     if !follow_on {
-        return Ok(r);
+        return Ok(root_expr);
     }
 
-    // Post processing
-    match input.peek() {
-        Some(&(Token::LeftBracket, _)) => {
-            // Possible indexing
-            input.next();
-            parse_index_expr(Box::new(r), input)
-        }
-        _ => Ok(r),
+    // Tail processing all possible indexing
+    while let Some(&(Token::LeftBracket, _)) = input.peek() {
+        input.next();
+        root_expr = parse_index_expr(Box::new(root_expr), input)?;
     }
+
+    Ok(root_expr)
 }
 
 fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
