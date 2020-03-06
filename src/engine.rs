@@ -430,8 +430,13 @@ impl Engine<'_> {
                 value
             }
 
+            // {expr}.???
+            expr => {
+                let mut target = self.eval_expr(scope, expr)?;
+                self.get_dot_val_helper(scope, target.as_mut(), dot_rhs)
+            }
             // Syntax error
-            _ => Err(EvalAltResult::ErrorDotExpr(dot_lhs.position())),
+            //_ => Err(EvalAltResult::ErrorDotExpr(dot_lhs.position())),
         }
     }
 
