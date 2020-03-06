@@ -17,13 +17,13 @@ impl<'a> Engine<'a> {
         f: Box<FnAny>,
     ) {
         debug_println!(
-            "Register function: {} ({})",
+            "Register function: {} for {} parameter(s)",
             fn_name,
-            args.iter()
-                .map(|x| (*x).type_name())
-                .map(|name| self.map_type_name(name))
-                .collect::<Vec<_>>()
-                .join(", ")
+            if let Some(a) = &args {
+                format!("{}", a.len())
+            } else {
+                "no".to_string()
+            }
         );
 
         let spec = FnSpec {
