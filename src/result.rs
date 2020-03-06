@@ -134,9 +134,10 @@ impl std::fmt::Display for EvalAltResult {
             Self::ErrorArrayBounds(max, _, pos) if *max == 0 => write!(f, "{} ({})", desc, pos),
             Self::ErrorArrayBounds(max, index, pos) => write!(
                 f,
-                "Array index {} is out of bounds: max {} elements ({})",
+                "Array index {} is out of bounds: only {} element{} in the array ({})",
                 index,
-                max - 1,
+                max,
+                if *max > 1 { "s" } else { "" },
                 pos
             ),
             Self::ErrorStringBounds(_, index, pos) if *index < 0 => {
@@ -145,9 +146,10 @@ impl std::fmt::Display for EvalAltResult {
             Self::ErrorStringBounds(max, _, pos) if *max == 0 => write!(f, "{} ({})", desc, pos),
             Self::ErrorStringBounds(max, index, pos) => write!(
                 f,
-                "String index {} is out of bounds: max {} characters ({})",
+                "String index {} is out of bounds: only {} character{} in the string ({})",
                 index,
-                max - 1,
+                max,
+                if *max > 1 { "s" } else { "" },
                 pos
             ),
         }
