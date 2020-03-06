@@ -9,7 +9,7 @@ use crate::scope::Scope;
 use std::any::TypeId;
 use std::sync::Arc;
 
-impl<'a> Engine<'a> {
+impl<'e> Engine<'e> {
     pub(crate) fn register_fn_raw(
         &mut self,
         fn_name: &str,
@@ -169,7 +169,7 @@ impl<'a> Engine<'a> {
 
         let result = statements
             .iter()
-            .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o));
+            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt));
 
         self.script_functions.clear(); // Clean up engine
 
@@ -261,7 +261,7 @@ impl<'a> Engine<'a> {
     ///
     /// let ast = Engine::compile("fn add(x, y) { x.len() + y }")?;
     ///
-    /// let result: i64 = engine.call_fn("add", ast, (&mut String::from("abc"), &mut 123_i64))?;
+    /// let result: i64 = engine.call_fn("add", &ast, (&mut String::from("abc"), &mut 123_i64))?;
     ///
     /// assert_eq!(result, 126);
     /// # Ok(())
@@ -270,7 +270,7 @@ impl<'a> Engine<'a> {
     pub fn call_fn<'f, A: FuncArgs<'f>, T: Any + Clone>(
         &mut self,
         name: &str,
-        ast: AST,
+        ast: &AST,
         args: A,
     ) -> Result<T, EvalAltResult> {
         let pos = Default::default();
@@ -317,7 +317,7 @@ impl<'a> Engine<'a> {
     /// }
     /// assert_eq!(result, "42");
     /// ```
-    pub fn on_print(&mut self, callback: impl FnMut(&str) + 'a) {
+    pub fn on_print(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_print = Box::new(callback);
     }
 
@@ -337,7 +337,7 @@ impl<'a> Engine<'a> {
     /// }
     /// assert_eq!(result, "\"hello\"");
     /// ```
-    pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'a) {
+    pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_debug = Box::new(callback);
     }
 }

@@ -146,7 +146,7 @@ let ast = Engine::compile("fn hello(x, y) { x.len() + y }")?;
 
 // Evaluate the function in the AST, passing arguments into the script as a tuple
 // (beware, arguments must be of the correct types because Rhai does not have built-in type conversions)
-let result: i64 = engine.call_fn("hello", ast, (&mut String::from("abc"), &mut 123_i64))?;
+let result: i64 = engine.call_fn("hello", &ast, (&mut String::from("abc"), &mut 123_i64))?;
 ```
 
 # Values and types
