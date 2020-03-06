@@ -3,13 +3,27 @@
 
 use crate::any::{Any, Variant};
 
-pub trait FunArgs<'a> {
+/// Trait that represent arguments to a function call.
+pub trait FuncArgs<'a> {
+    /// Convert to a `Vec` of `Variant` arguments.
     fn into_vec(self) -> Vec<&'a mut Variant>;
+}
+
+impl<'a> FuncArgs<'a> for Vec<&'a mut Variant> {
+    fn into_vec(self) -> Self {
+        self
+    }
+}
+
+impl<'a, T: Any> FuncArgs<'a> for &'a mut Vec<T> {
+    fn into_vec(self) -> Vec<&'a mut Variant> {
+        self.iter_mut().map(|x| x as &mut Variant).collect()
+    }
 }
 
 macro_rules! impl_args {
     ($($p:ident),*) => {
-        impl<'a, $($p: Any + Clone),*> FunArgs<'a> for ($(&'a mut $p,)*)
+        impl<'a, $($p: Any + Clone),*> FuncArgs<'a> for ($(&'a mut $p,)*)
         {
             fn into_vec(self) -> Vec<&'a mut Variant> {
                 let ($($p,)*) = self;

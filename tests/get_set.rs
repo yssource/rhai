@@ -78,7 +78,7 @@ fn test_big_get_set() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     engine.register_type::<TestChild>();
-    engine.register_type::<TestParent>();
+    engine.register_type_with_name::<TestParent>("TestParent");
 
     engine.register_get_set("x", TestChild::get_x, TestChild::set_x);
     engine.register_get_set("child", TestParent::get_child, TestParent::set_child);
@@ -88,6 +88,11 @@ fn test_big_get_set() -> Result<(), EvalAltResult> {
     assert_eq!(
         engine.eval::<i64>("let a = new_tp(); a.child.x = 500; a.child.x")?,
         500
+    );
+
+    assert_eq!(
+        engine.eval::<String>("let a = new_tp(); a.type_of()")?,
+        "TestParent"
     );
 
     Ok(())

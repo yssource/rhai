@@ -1,4 +1,4 @@
-# Rhai - embedded scripting for Rust
+# Rhai - Embedded Scripting for Rust
 
 Rhai is an embedded scripting language for Rust that gives you a safe and easy way to add scripting to your applications.
 
@@ -7,11 +7,11 @@ Rhai's current feature set:
 * Easy integration with Rust functions and data types
 * Fairly efficient (1 mil iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
-* Easy-to-use language based on JS+Rust
+* Easy-to-use language similar to JS+Rust
 * Support for overloaded functions
 * No additional dependencies
 
-**Note:** Currently, the version is 0.10.0-alpha1, so the language and APIs may change before they stabilize.*
+**Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
 
 ## Installation
 
@@ -19,7 +19,7 @@ You can install Rhai using crates by adding this line to your dependencies:
 
 ```toml
 [dependencies]
-rhai = "0.10.0"
+rhai = "0.10.2"
 ```
 
 or simply:
@@ -32,6 +32,16 @@ rhai = "*"
 to use the latest version.
 
 Beware that in order to use pre-releases (alpha and beta) you need to specify the exact version in your `Cargo.toml`.
+
+## Optional Features
+
+### `debug_msgs`
+
+Print debug messages to stdout (using `println!`) related to function registrations and function calls.
+
+### `no_stdlib`
+
+Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities.
 
 ## Related
 
@@ -90,7 +100,6 @@ cargo run --example rhai_runner scripts/any_script.rhai
 To get going with Rhai, you create an instance of the scripting engine and then run eval.
 
 ```rust
-extern crate rhai;
 use rhai::Engine;
 
 fn main() {
@@ -108,7 +117,7 @@ You can also evaluate a script file:
 if let Ok(result) = engine.eval_file::<i64>("hello_world.rhai") { ... }
 ```
 
-If you want to repeatedly evaluate a script, you can compile it first into an AST form:
+If you want to repeatedly evaluate a script, you can _compile_ it first into an AST (abstract syntax tree) form:
 
 ```rust
 // Compile to an AST and store it for later evaluations
@@ -121,10 +130,23 @@ for _ in 0..42 {
 }
 ```
 
-Compiling a script file into AST is also supported:
+Compiling a script file is also supported:
 
 ```rust
 let ast = Engine::compile_file("hello_world.rhai").unwrap();
+```
+
+Rhai also allows you to work _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust.
+You do this via `call_fn`, which takes a compiled AST (output from `compile`) and the
+function call arguments:
+
+```rust
+// Define a function in a script and compile to AST
+let ast = Engine::compile("fn hello(x, y) { x.len() + y }")?;
+
+// Evaluate the function in the AST, passing arguments into the script as a tuple
+// (beware, arguments must be of the correct types because Rhai does not have built-in type conversions)
+let result: i64 = engine.call_fn("hello", ast, (&mut String::from("abc"), &mut 123_i64))?;
 ```
 
 # Values and types
@@ -144,6 +166,8 @@ All types are treated strictly separate by Rhai, meaning that `i32` and `i64` an
 
 There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it. For other conversions you can register your own conversion functions.
 
+There is also a `type_of` function to detect the type of a value.
+
 ```rust
 let x = 42;
 let y = x * 100.0;              // error: cannot multiply i64 with f64
@@ -151,7 +175,16 @@ let y = x.to_float() * 100.0;   // works
 let z = y.to_int() + x;         // works
 
 let c = 'X';                    // character
-print("c is '" + c + "' and its code is " + c.to_int());
+print("c is '" + c + "' and its code is " + c.to_int());    // prints "c is 'X' and its code is 88"
+
+// Use 'type_of' to get the type of variables
+type_of(c) == "char";
+type_of(x) == "i64";
+y.type_of() == "f64";
+
+if z.type_of() == "string" {
+    do_something_with_strong(z);
+}
 ```
 
 # Working with functions
@@ -159,7 +192,6 @@ print("c is '" + c + "' and its code is " + c.to_int());
 Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.
 
 ```rust
-extern crate rhai;
 use rhai::{Dynamic, Engine, RegisterFn};
 
 // Normal function
@@ -209,7 +241,6 @@ Generic functions can be used in Rhai, but you'll need to register separate inst
 ```rust
 use std::fmt::Display;
 
-extern crate rhai;
 use rhai::{Engine, RegisterFn};
 
 fn showit<T: Display>(x: &mut T) -> () {
@@ -245,7 +276,6 @@ print(to_int(123));     // what will happen?
 Here's an more complete example of working with Rust.  First the example, then we'll break it into parts:
 
 ```rust
-extern crate rhai;
 use rhai::{Engine, RegisterFn};
 
 #[derive(Clone)]
@@ -335,6 +365,14 @@ if let Ok(result) = engine.eval::<i64>("let x = new_ts(); x.foo()") {
 }
 ```
 
+`type_of` works fine with custom types and returns the name of the type:
+
+```rust
+let x = new_ts();
+print(x.type_of());     // prints "foo::bar::TestStruct"
+```
+
+If you use `register_type_with_name` to register the custom type with a special pretty-print name, `type_of` will return that instead.
 
 # Getters and setters
 
@@ -391,25 +429,40 @@ a.x.change();   // Only a COPY of 'a.x' is changed. 'a.x' is NOT changed.
 a.x == 500;
 ```
 
-# Maintaining state
+# Initializing and maintaining state
 
 By default, Rhai treats each engine invocation as a fresh one, persisting only the functions that have been defined but no top-level state.  This gives each one a fairly clean starting place.  Sometimes, though, you want to continue using the same top-level state from one invocation to the next.
 
-In this example, we thread the same state through multiple invocations:
+In this example, we first create a state with a few initialized variables, then thread the same state through multiple invocations:
 
 ```rust
-extern crate rhai;
 use rhai::{Engine, Scope};
 
 fn main() {
     let mut engine = Engine::new();
+
+    // First create the state
     let mut scope = Scope::new();
 
-    if let Ok(_) = engine.eval_with_scope::<()>(&mut scope, "let x = 4 + 5") { } else { assert!(false); }
+    // Then push some initialized variables into the state
+    // NOTE: Remember the default numbers used by Rhai are i64 and f64.
+    //       Better stick to them or it gets hard to work with other variables in the script.
+    scope.push("y".into(), 42_i64);
+    scope.push("z".into(), 999_i64);
 
+    // First invocation
+    engine.eval_with_scope::<()>(&mut scope, r"
+        let x = 4 + 5 - y + z;
+        y = 1;
+    ").expect("y and z not found?");
+
+    // Second invocation using the same state
     if let Ok(result) = engine.eval_with_scope::<i64>(&mut scope, "x") {
-       println!("result: {}", result);
+       println!("result: {}", result);  // should print 966
     }
+
+    // Variable y is changed in the script
+    assert_eq!(scope.get_value::<i64>("y").unwrap(), 1);
 }
 ```
 
@@ -498,7 +551,7 @@ fn add(x, y) {
     return x + y;
 }
 
-print(add(2, 3))
+print(add(2, 3));
 ```
 
 Just like in Rust, you can also use an implicit return.
@@ -508,14 +561,70 @@ fn add(x, y) {
     x + y
 }
 
-print(add(2, 3))
+print(add(2, 3));
+```
+
+Remember that functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
+
+Arguments are passed by value, so all functions are _pure_ (i.e. they never modify their arguments).
+
+Furthermore, functions can only be defined at the top level, never inside a block or another function.
+
+```rust
+// Top level is OK
+fn add(x, y) {
+    x + y
+}
+
+// The following will not compile
+fn do_addition(x) {
+    fn add_y(n) {   // functions cannot be defined inside another function
+        n + y
+    }
+
+    add_y(x)
+}
+```
+
+## Return
+
+```rust
+return;
+
+return 123 + 456;
+```
+
+## Errors and Exceptions
+
+```rust
+if error != "" {
+    throw error;  // 'throw' takes a string to form the exception text
+}
+
+throw;  // no exception text
+```
+
+All of `Engine`'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
+
+Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(reason, position))` with the exception text captured by the `reason` parameter.
+
+```rust
+let result = engine.eval::<i64>(&mut scope, r#"
+    let x = 42;
+
+    if x > 0 {
+        throw x + " is too large!";
+    }
+"#);
+
+println!(result);   // prints "Runtime error: 42 is too large! (line 5, position 15)"
 ```
 
 ## Arrays
 
 You can create arrays of values, and then access them with numeric indices.
 
-The following standard functions operate on arrays:
+The following functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on arrays:
 
 * `push` - inserts an element at the end
 * `pop` - removes the last element and returns it (() if empty)
@@ -531,9 +640,20 @@ y[1] = 42;
 
 print(y[1]);            // prints 42
 
-let foo = [1, 2, 3][0]; // a syntax error for now - cannot index into literals
-let foo = ts.list[0];   // a syntax error for now - cannot index into properties
-let foo = y[0];         // this works
+ts.list = y;            // arrays can be assigned completely (by value copy)
+let foo = ts.list[1];
+foo == 42;
+
+let foo = [1, 2, 3][0];
+foo == 1;
+
+fn abc() { [42, 43, 44] }
+
+let foo = abc()[0];
+foo == 42;
+
+let foo = y[0];
+foo == 1;
 
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
@@ -570,7 +690,7 @@ engine.register_fn("push",
 );
 ```
 
-The type of a Rhai array is `rhai::Array`.
+The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
 
 ## For loops
 
@@ -597,17 +717,34 @@ a.x = 500;
 a.update();
 ```
 
+## Numbers
+
+```rust
+let x = 123;            // i64
+let x = 123.4;          // f64
+let x = 123_456_789;    // separators can be put anywhere inside the number
+
+let x = 0x12abcd;       // i64 in hex
+let x = 0o777;          // i64 in oct
+let x = 0b1010_1111;    // i64 in binary
+```
+
+Conversion functions (defined in the standard library but excluded if you use the `no_stdlib` feature):
+
+* `to_int` - converts an `f32` or `f64` to `i64`
+* `to_float` - converts an integer type to `f64`
+
 ## Strings and Chars
 
 ```rust
 let name = "Bob";
 let middle_initial = 'C';
-let last = 'Davis';
+let last = "Davis";
 
 let full_name = name + " " + middle_initial + ". " + last;
 full_name == "Bob C. Davis";
 
-// String building with different types
+// String building with different types (not available if 'no_stdlib' features is used)
 let age = 42;
 let record = full_name + ": age " + age;
 record == "Bob C. Davis: age 42";
@@ -616,16 +753,27 @@ record == "Bob C. Davis: age 42";
 let c = record[4];
 c == 'C';
 
-let c = "foo"[0];   // a syntax error for now - cannot index into literals
-let c = ts.s[0];    // a syntax error for now - cannot index into properties
-let c = record[0];  // this works
+ts.s = record;
+
+let c = ts.s[4];
+c == 'C';
+
+let c = "foo"[0];
+c == 'f';
+
+let c = ("foo" + "bar")[5];
+c == 'r';
+
+// Escape sequences in strings
+record += " \u2764\n";                  // escape sequence of '❤' in Unicode 
+record == "Bob C. Davis: age 42 ❤\n";   // '\n' = new-line
 
 // Unlike Rust, Rhai strings can be modified
-record[4] = 'Z';
-record == "Bob Z. Davis: age 42";
+record[4] = '\x58'; // 0x58 = 'X'
+record == "Bob X. Davis: age 42 ❤\n";
 ```
 
-The following standard functions operate on strings:
+The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on strings:
 
 * `len` - returns the number of characters (not number of bytes) in the string
 * `pad` - pads the string with an character until a specified number of characters
@@ -641,6 +789,7 @@ full_name.len() == 14;
 
 full_name.trim();
 full_name.len() == 12;
+full_name == "Bob C. Davis";
 
 full_name.pad(15, '$');
 full_name.len() == 15;
@@ -674,8 +823,17 @@ debug("world!");        // prints "world!" to stdout using debug formatting
 
 ```rust
 // Any function that takes a &str argument can be used to override print and debug
-engine.on_print(|x: &str| println!("hello: {}", x));
-engine.on_debug(|x: &str| println!("DEBUG: {}", x));
+engine.on_print(|x| println!("hello: {}", x));
+engine.on_debug(|x| println!("DEBUG: {}", x));
+
+// Redirect logging output to somewhere else
+let mut log: Vec<String> = Vec::new();
+engine.on_print(|x| log.push(format!("log: {}", x)));
+engine.on_debug(|x| log.push(format!("DEBUG: {}", x)));
+            :
+        eval script
+            :
+println!("{:?}", log);   // 'log' captures all the 'print' and 'debug' results.
 ```
 
 ## Comments

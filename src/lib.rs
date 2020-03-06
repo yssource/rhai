@@ -34,9 +34,24 @@
 
 // needs to be here, because order matters for macros
 macro_rules! debug_println {
-    () => (#[cfg(feature = "debug_msgs")] {print!("\n")});
-    ($fmt:expr) => (#[cfg(feature = "debug_msgs")] {print!(concat!($fmt, "\n"))});
-    ($fmt:expr, $($arg:tt)*) => (#[cfg(feature = "debug_msgs")] {print!(concat!($fmt, "\n"), $($arg)*)});
+    () => (
+        #[cfg(feature = "debug_msgs")]
+        {
+            print!("\n");
+        }
+    );
+    ($fmt:expr) => (
+        #[cfg(feature = "debug_msgs")]
+        {
+            print!(concat!($fmt, "\n"));
+        }
+    );
+    ($fmt:expr, $($arg:tt)*) => (
+        #[cfg(feature = "debug_msgs")]
+        {
+            print!(concat!($fmt, "\n"), $($arg)*);
+        }
+    );
 }
 
 mod any;
@@ -44,10 +59,17 @@ mod api;
 mod builtin;
 mod call;
 mod engine;
+mod error;
 mod fn_register;
 mod parser;
+mod result;
+mod scope;
 
-pub use any::Dynamic;
-pub use engine::{Array, Engine, EvalAltResult, Scope};
+pub use any::{Any, AnyExt, Dynamic, Variant};
+pub use call::FuncArgs;
+pub use engine::{Array, Engine};
+pub use error::{ParseError, ParseErrorType};
 pub use fn_register::{RegisterDynamicFn, RegisterFn};
-pub use parser::{ParseError, ParseErrorType, AST};
+pub use parser::{Position, AST};
+pub use result::EvalAltResult;
+pub use scope::Scope;
