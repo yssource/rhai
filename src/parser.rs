@@ -1310,6 +1310,44 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
     }
 }
 
+fn parse_op_assignment(
+    function: &str,
+    lhs: Expr,
+    rhs: Expr,
+    pos: Position,
+) -> Result<Expr, ParseError> {
+    let lhs_copy = lhs.clone();
+
+    parse_assignment(
+        lhs,
+        Expr::FunctionCall(function.into(), vec![lhs_copy, rhs], None, pos),
+        pos,
+    )
+
+    /*
+    const LHS_VALUE: &'static str = "@LHS_VALUE@";
+
+    let lhs_pos = lhs.position();
+
+    Ok(Expr::Block(
+        Box::new(Stmt::Block(vec![
+            Stmt::Let(LHS_VALUE.to_string(), Some(Box::new(lhs)), lhs_pos),
+            Stmt::Expr(Box::new(parse_assignment(
+                lhs,
+                Expr::FunctionCall(
+                    function.into(),
+                    vec![Expr::Identifier(LHS_VALUE.to_string(), lhs_pos), rhs],
+                    None,
+                    pos,
+                ),
+                pos,
+            )?)),
+        ])),
+        pos,
+    ))
+    */
+}
+
 fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     precedence: i8,
@@ -1355,22 +1393,8 @@ fn parse_binary_op<'a>(
                 Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
 
                 Token::Equals => parse_assignment(current_lhs, rhs, pos)?,
-                Token::PlusAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("+".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
-                Token::MinusAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("-".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
+                Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
+                Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
                 Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs), pos),
 
                 // Comparison operators default to false when passed invalid operands
@@ -1414,46 +1438,11 @@ fn parse_binary_op<'a>(
                 Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs)),
                 Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs)),
                 Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
-                Token::OrAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("|".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
-                Token::AndAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("&".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
-                Token::XOrAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("^".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
-                Token::MultiplyAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("*".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
-                Token::DivideAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("/".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
+                Token::OrAssign => parse_op_assignment("|", current_lhs, rhs, pos)?,
+                Token::AndAssign => parse_op_assignment("&", current_lhs, rhs, pos)?,
+                Token::XOrAssign => parse_op_assignment("^", current_lhs, rhs, pos)?,
+                Token::MultiplyAssign => parse_op_assignment("*", current_lhs, rhs, pos)?,
+                Token::DivideAssign => parse_op_assignment("/", current_lhs, rhs, pos)?,
                 Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
                 Token::LeftShift => {
                     Expr::FunctionCall("<<".into(), vec![current_lhs, rhs], None, pos)
@@ -1461,43 +1450,15 @@ fn parse_binary_op<'a>(
                 Token::RightShift => {
                     Expr::FunctionCall(">>".into(), vec![current_lhs, rhs], None, pos)
                 }
-                Token::LeftShiftAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("<<".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
-                Token::RightShiftAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall(">>".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
+                Token::LeftShiftAssign => parse_op_assignment("<<", current_lhs, rhs, pos)?,
+                Token::RightShiftAssign => parse_op_assignment(">>", current_lhs, rhs, pos)?,
                 Token::Ampersand => {
                     Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos)
                 }
                 Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
-                Token::ModuloAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("%".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
+                Token::ModuloAssign => parse_op_assignment("%", current_lhs, rhs, pos)?,
                 Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
-                Token::PowerOfAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    parse_assignment(
-                        current_lhs,
-                        Expr::FunctionCall("~".into(), vec![lhs_copy, rhs], None, pos),
-                        pos,
-                    )?
-                }
+                Token::PowerOfAssign => parse_op_assignment("~", current_lhs, rhs, pos)?,
                 token => {
                     return Err(ParseError::new(
                         PERR::UnknownOperator(token.syntax().into()),
