@@ -1275,47 +1275,34 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 }
 
 fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
-    //println!("{:?} = {:?}", lhs, rhs);
-    fn all_dots(expr: &Expr) -> (bool, Position) {
+    fn valid_assignment_chain(expr: &Expr) -> (bool, Position) {
         match expr {
             Expr::Identifier(_, pos) => (true, *pos),
+
+            Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
+                Expr::Identifier(_, _) => (true, idx_lhs.position()),
+                _ => (false, idx_lhs.position()),
+            },
+
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
-                Expr::Identifier(_, _) => all_dots(dot_rhs),
+                Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
+                Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
+                    Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
+                    _ => (false, idx_lhs.position()),
+                },
                 _ => (false, dot_lhs.position()),
             },
+
             _ => (false, expr.position()),
         }
     }
 
-    match &lhs {
-        Expr::Identifier(_, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-        Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
-            Expr::Identifier(_, _) => {
-                return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
-            }
-            _ => (),
-        },
-        Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
-            Expr::Identifier(_, _) => match all_dots(&lhs) {
-                (true, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-                (false, pos) => return Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
-            },
-            Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
-                Expr::Identifier(_, _) => match all_dots(&dot_rhs) {
-                    (true, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-                    (false, pos) => return Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
-                },
-                _ => (),
-            },
-            _ => (),
-        },
-        _ => (),
-    }
+    //println!("{:?} = {:?}", lhs, rhs);
 
-    return Err(ParseError::new(
-        PERR::AssignmentToInvalidLHS,
-        lhs.position(),
-    ));
+    match valid_assignment_chain(&lhs) {
+        (true, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+        (false, pos) => Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
+    }
 }
 
 fn parse_op_assignment(

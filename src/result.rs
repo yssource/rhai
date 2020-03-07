@@ -19,6 +19,8 @@ pub enum EvalAltResult {
     ErrorFunctionArgsMismatch(String, usize, usize, Position),
     /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
     ErrorBooleanArgMismatch(String, Position),
+    /// Non-character value encountered where a character is required.
+    ErrorCharMismatch(Position),
     /// Array access out-of-bounds.
     /// Wrapped values are the current number of elements in the array and the index number.
     ErrorArrayBounds(usize, i64, Position),
@@ -64,6 +66,7 @@ impl Error for EvalAltResult {
                 "Function call with wrong number of arguments"
             }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
+            Self::ErrorCharMismatch(_) => "Character expected",
             Self::ErrorIndexExpr(_) => "Indexing into an array or string expects an integer index",
             Self::ErrorIndexingType(_, _) => {
                 "Indexing can only be performed on an array or a string"
@@ -130,6 +133,9 @@ impl std::fmt::Display for EvalAltResult {
             ),
             Self::ErrorBooleanArgMismatch(op, pos) => {
                 write!(f, "{} operator expects boolean operands ({})", op, pos)
+            }
+            Self::ErrorCharMismatch(pos) => {
+                write!(f, "string indexing expects a character value ({})", pos)
             }
             Self::ErrorArrayBounds(_, index, pos) if *index < 0 => {
                 write!(f, "{}: {} < 0 ({})", desc, index, pos)
