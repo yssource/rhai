@@ -155,10 +155,22 @@ impl Engine<'_> {
         } else if let Some(val) = def_value {
             // Return default value
             Ok(val.clone())
-        } else if spec.name.starts_with(FUNC_GETTER) || spec.name.starts_with(FUNC_SETTER) {
-            // Getter or setter
+        } else if spec.name.starts_with(FUNC_GETTER) {
+            // Getter
             Err(EvalAltResult::ErrorDotExpr(
-                "- invalid property access".to_string(),
+                format!(
+                    "- unknown property '{}' or it is write-only",
+                    &spec.name[FUNC_GETTER.len()..]
+                ),
+                pos,
+            ))
+        } else if spec.name.starts_with(FUNC_SETTER) {
+            // Setter
+            Err(EvalAltResult::ErrorDotExpr(
+                format!(
+                    "- unknown property '{}' or it is read-only",
+                    &spec.name[FUNC_SETTER.len()..]
+                ),
                 pos,
             ))
         } else {

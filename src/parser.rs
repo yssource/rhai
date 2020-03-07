@@ -1275,6 +1275,7 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 }
 
 fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
+    //println!("{:?} = {:?}", lhs, rhs);
     fn all_dots(expr: &Expr) -> (bool, Position) {
         match expr {
             Expr::Identifier(_, pos) => (true, *pos),
@@ -1294,9 +1295,19 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
             }
             _ => (),
         },
-        Expr::Dot(_, _, _) => match all_dots(&lhs) {
-            (true, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-            (false, pos) => return Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
+        Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
+            Expr::Identifier(_, _) => match all_dots(&lhs) {
+                (true, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+                (false, pos) => return Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
+            },
+            Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
+                Expr::Identifier(_, _) => match all_dots(&dot_rhs) {
+                    (true, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+                    (false, pos) => return Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
+                },
+                _ => (),
+            },
+            _ => (),
         },
         _ => (),
     }
