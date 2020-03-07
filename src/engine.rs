@@ -199,7 +199,7 @@ impl Engine<'_> {
             }
 
             // xxx.lhs[idx_expr]
-            Expr::Index(lhs, idx_expr) => {
+            Expr::Index(lhs, idx_expr, idx_pos) => {
                 let idx = self.eval_index_value(scope, idx_expr)?;
 
                 let (lhs_value, _) = match lhs.as_ref() {
@@ -213,11 +213,12 @@ impl Engine<'_> {
                     expr => return Err(EvalAltResult::ErrorDotExpr(expr.position())),
                 };
 
-                Self::get_indexed_value(lhs_value, idx, idx_expr.position()).map(|(v, _)| v)
+                Self::get_indexed_value(lhs_value, idx, idx_expr.position(), *idx_pos)
+                    .map(|(v, _)| v)
             }
 
             // xxx.lhs.rhs
-            Expr::Dot(lhs, rhs) => match lhs.as_ref() {
+            Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 // xxx.id.rhs
                 Expr::Identifier(id, pos) => {
                     let get_fn_name = format!("get${}", id);
@@ -226,7 +227,7 @@ impl Engine<'_> {
                         .and_then(|mut v| self.get_dot_val_helper(scope, v.as_mut(), rhs))
                 }
                 // xxx.lhs[idx_expr].rhs
-                Expr::Index(lhs, idx_expr) => {
+                Expr::Index(lhs, idx_expr, idx_pos) => {
                     let idx = self.eval_index_value(scope, idx_expr)?;
 
                     let (lhs_value, _) = match lhs.as_ref() {
@@ -240,7 +241,7 @@ impl Engine<'_> {
                         expr => return Err(EvalAltResult::ErrorDotExpr(expr.position())),
                     };
 
-                    Self::get_indexed_value(lhs_value, idx, idx_expr.position()).and_then(
+                    Self::get_indexed_value(lhs_value, idx, idx_expr.position(), *idx_pos).and_then(
                         |(mut value, _)| self.get_dot_val_helper(scope, value.as_mut(), rhs),
                     )
                 }
@@ -282,7 +283,8 @@ impl Engine<'_> {
     fn get_indexed_value(
         val: Dynamic,
         idx: i64,
-        pos: Position,
+        val_pos: Position,
+        idx_pos: Position,
     ) -> Result<(Dynamic, IndexSourceType), EvalAltResult> {
         if val.is::<Array>() {
             // val_array[idx]
@@ -292,9 +294,9 @@ impl Engine<'_> {
                 arr.get(idx as usize)
                     .cloned()
                     .map(|v| (v, IndexSourceType::Array))
-                    .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), idx, pos))
+                    .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), idx, val_pos))
             } else {
-                Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx, pos))
+                Err(EvalAltResult::ErrorArrayBounds(arr.len(), idx, val_pos))
             }
         } else if val.is::<String>() {
             // val_string[idx]
@@ -304,17 +306,19 @@ impl Engine<'_> {
                 s.chars()
                     .nth(idx as usize)
                     .map(|ch| (ch.into_dynamic(), IndexSourceType::String))
-                    .ok_or_else(|| EvalAltResult::ErrorStringBounds(s.chars().count(), idx, pos))
+                    .ok_or_else(|| {
+                        EvalAltResult::ErrorStringBounds(s.chars().count(), idx, val_pos)
+                    })
             } else {
                 Err(EvalAltResult::ErrorStringBounds(
                     s.chars().count(),
                     idx,
-                    pos,
+                    val_pos,
                 ))
             }
         } else {
             // Error - cannot be indexed
-            Err(EvalAltResult::ErrorIndexingType(pos))
+            Err(EvalAltResult::ErrorIndexingType(idx_pos))
         }
     }
 
@@ -324,6 +328,7 @@ impl Engine<'_> {
         scope: &mut Scope,
         lhs: &'a Expr,
         idx_expr: &Expr,
+        idx_pos: Position,
     ) -> Result<(IndexSourceType, Option<(&'a str, usize)>, usize, Dynamic), EvalAltResult> {
         let idx = self.eval_index_value(scope, idx_expr)?;
 
@@ -332,7 +337,7 @@ impl Engine<'_> {
             Expr::Identifier(id, _) => Self::search_scope(
                 scope,
                 &id,
-                |val| Self::get_indexed_value(val, idx, idx_expr.position()),
+                |val| Self::get_indexed_value(val, idx, idx_expr.position(), idx_pos),
                 lhs.position(),
             )
             .map(|(src_idx, (val, src_type))| {
@@ -340,8 +345,13 @@ impl Engine<'_> {
             }),
 
             // (expr)[idx_expr]
-            expr => Self::get_indexed_value(self.eval_expr(scope, expr)?, idx, idx_expr.position())
-                .map(|(val, _)| (IndexSourceType::Expression, None, idx as usize, val)),
+            expr => Self::get_indexed_value(
+                self.eval_expr(scope, expr)?,
+                idx,
+                idx_expr.position(),
+                idx_pos,
+            )
+            .map(|(val, _)| (IndexSourceType::Expression, None, idx as usize, val)),
         }
     }
 
@@ -412,9 +422,9 @@ impl Engine<'_> {
             }
 
             // lhs[idx_expr].???
-            Expr::Index(lhs, idx_expr) => {
+            Expr::Index(lhs, idx_expr, idx_pos) => {
                 let (src_type, src, idx, mut target) =
-                    self.eval_index_expr(scope, lhs, idx_expr)?;
+                    self.eval_index_expr(scope, lhs, idx_expr, *idx_pos)?;
                 let value = self.get_dot_val_helper(scope, target.as_mut(), dot_rhs);
 
                 // In case the expression mutated `target`, we need to reassign it because
@@ -457,7 +467,7 @@ impl Engine<'_> {
             }
 
             // xxx.lhs.rhs
-            Expr::Dot(lhs, rhs) => match lhs.as_ref() {
+            Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 Expr::Identifier(id, pos) => {
                     let get_fn_name = format!("get${}", id);
 
@@ -502,9 +512,9 @@ impl Engine<'_> {
             }
 
             // lhs[idx_expr].???
-            Expr::Index(lhs, idx_expr) => {
+            Expr::Index(lhs, idx_expr, idx_pos) => {
                 let (src_type, src, idx, mut target) =
-                    self.eval_index_expr(scope, lhs, idx_expr)?;
+                    self.eval_index_expr(scope, lhs, idx_expr, *idx_pos)?;
                 let value = self.set_dot_val_helper(target.as_mut(), dot_rhs, source_val);
 
                 // In case the expression mutated `target`, we need to reassign it because
@@ -534,12 +544,12 @@ impl Engine<'_> {
             Expr::Identifier(id, pos) => {
                 Self::search_scope(scope, id, Ok, *pos).map(|(_, val)| val)
             }
-            Expr::Index(lhs, idx_expr) => self
-                .eval_index_expr(scope, lhs, idx_expr)
+            Expr::Index(lhs, idx_expr, idx_pos) => self
+                .eval_index_expr(scope, lhs, idx_expr, *idx_pos)
                 .map(|(_, _, _, x)| x),
 
             // lhs = rhs
-            Expr::Assignment(lhs, rhs) => {
+            Expr::Assignment(lhs, rhs, _) => {
                 let rhs_val = self.eval_expr(scope, rhs)?;
 
                 match lhs.as_ref() {
@@ -554,9 +564,9 @@ impl Engine<'_> {
                     }
 
                     // idx_lhs[idx_expr] = rhs
-                    Expr::Index(idx_lhs, idx_expr) => {
+                    Expr::Index(idx_lhs, idx_expr, idx_pos) => {
                         let (src_type, src, idx, _) =
-                            self.eval_index_expr(scope, idx_lhs, idx_expr)?;
+                            self.eval_index_expr(scope, idx_lhs, idx_expr, *idx_pos)?;
 
                         if let Some((id, src_idx)) = src {
                             Ok(Self::update_indexed_variable_in_scope(
@@ -570,7 +580,7 @@ impl Engine<'_> {
                     }
 
                     // dot_lhs.dot_rhs = rhs
-                    Expr::Dot(dot_lhs, dot_rhs) => {
+                    Expr::Dot(dot_lhs, dot_rhs, _) => {
                         self.set_dot_val(scope, dot_lhs, dot_rhs, rhs_val)
                     }
 
@@ -579,7 +589,7 @@ impl Engine<'_> {
                 }
             }
 
-            Expr::Dot(lhs, rhs) => self.get_dot_val(scope, lhs, rhs),
+            Expr::Dot(lhs, rhs, _) => self.get_dot_val(scope, lhs, rhs),
 
             Expr::Array(contents, _) => {
                 let mut arr = Vec::new();

@@ -130,9 +130,9 @@ pub enum Expr {
     CharConstant(char, Position),
     StringConstant(String, Position),
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
-    Assignment(Box<Expr>, Box<Expr>),
-    Dot(Box<Expr>, Box<Expr>),
-    Index(Box<Expr>, Box<Expr>),
+    Assignment(Box<Expr>, Box<Expr>, Position),
+    Dot(Box<Expr>, Box<Expr>, Position),
+    Index(Box<Expr>, Box<Expr>, Position),
     Array(Vec<Expr>, Position),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
@@ -155,9 +155,9 @@ impl Expr {
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Index(e, _)
-            | Expr::Assignment(e, _)
-            | Expr::Dot(e, _)
+            Expr::Index(e, _, _)
+            | Expr::Assignment(e, _, _)
+            | Expr::Dot(e, _, _)
             | Expr::And(e, _)
             | Expr::Or(e, _) => e.position(),
         }
@@ -1103,11 +1103,12 @@ fn parse_call_expr<'a>(
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
+    pos: Position,
 ) -> Result<Expr, ParseError> {
     parse_expr(input).and_then(|idx_expr| match input.peek() {
         Some(&(Token::RightBracket, _)) => {
             input.next();
-            return Ok(Expr::Index(lhs, Box::new(idx_expr)));
+            return Ok(Expr::Index(lhs, Box::new(idx_expr), pos));
         }
         Some(&(_, pos)) => {
             return Err(ParseError::new(
@@ -1134,9 +1135,9 @@ fn parse_ident_expr<'a>(
             input.next();
             parse_call_expr(id, input, begin)
         }
-        Some(&(Token::LeftBracket, _)) => {
+        Some(&(Token::LeftBracket, pos)) => {
             input.next();
-            parse_index_expr(Box::new(Expr::Identifier(id, begin)), input)
+            parse_index_expr(Box::new(Expr::Identifier(id, begin)), input, pos)
         }
         Some(_) => Ok(Expr::Identifier(id, begin)),
         None => Ok(Expr::Identifier(id, Position::eof())),
@@ -1225,9 +1226,9 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
     }
 
     // Tail processing all possible indexing
-    while let Some(&(Token::LeftBracket, _)) = input.peek() {
+    while let Some(&(Token::LeftBracket, pos)) = input.peek() {
         input.next();
-        root_expr = parse_index_expr(Box::new(root_expr), input)?;
+        root_expr = parse_index_expr(Box::new(root_expr), input, pos)?;
     }
 
     Ok(root_expr)
@@ -1263,18 +1264,39 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
     }
 }
 
-fn parse_assignment(lhs: Expr, rhs: Expr) -> Result<Expr, ParseError> {
-    match lhs {
-        // Only assignments to a variable, and index erxpression and a dot expression is valid LHS
-        Expr::Identifier(_, _) | Expr::Index(_, _) | Expr::Dot(_, _) => {
-            Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs)))
+fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
+    fn all_identifiers(expr: &Expr) -> (bool, Position) {
+        match expr {
+            // variable
+            Expr::Identifier(_, pos) => (true, *pos),
+            // indexing
+            Expr::Index(lhs, _, idx_pos) => match lhs.as_ref() {
+                // variable[x]
+                &Expr::Identifier(_, pos) => (true, pos),
+                // all other indexing is invalid
+                _ => (false, *idx_pos),
+            },
+            // variable.prop.prop.prop...
+            Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
+                // variable.prop
+                &Expr::Identifier(_, pos) => {
+                    let r = all_identifiers(rhs);
+                    (r.0, if r.0 { pos } else { r.1 })
+                }
+                // all other property access is invalid
+                _ => (false, lhs.position()),
+            },
+            // everything else is invalid
+            _ => (false, expr.position()),
         }
+    }
 
-        // All other LHS cannot be assigned to
-        _ => Err(ParseError::new(
-            PERR::AssignmentToInvalidLHS,
-            lhs.position(),
-        )),
+    let r = all_identifiers(&lhs);
+
+    if r.0 {
+        Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
+    } else {
+        Err(ParseError::new(PERR::AssignmentToInvalidLHS, r.1))
     }
 }
 
@@ -1322,32 +1344,24 @@ fn parse_binary_op<'a>(
                 }
                 Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
 
-                Token::Equals => parse_assignment(current_lhs, rhs)?,
+                Token::Equals => parse_assignment(current_lhs, rhs, pos)?,
                 Token::PlusAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "+".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("+".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::MinusAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "-".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("-".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
-                Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs)),
+                Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs), pos),
 
                 // Comparison operators default to false when passed invalid operands
                 Token::EqualsTo => Expr::FunctionCall(
@@ -1392,63 +1406,43 @@ fn parse_binary_op<'a>(
                 Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
                 Token::OrAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "|".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("|".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::AndAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "&".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("&".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::XOrAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "^".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("^".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::MultiplyAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "*".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("*".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::DivideAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "/".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("/".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
                 Token::LeftShift => {
@@ -1459,27 +1453,19 @@ fn parse_binary_op<'a>(
                 }
                 Token::LeftShiftAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "<<".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("<<".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::RightShiftAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            ">>".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall(">>".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::Ampersand => {
                     Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos)
@@ -1487,28 +1473,20 @@ fn parse_binary_op<'a>(
                 Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
                 Token::ModuloAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "%".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("%".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
                 Token::PowerOfAssign => {
                     let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "~".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
+                    parse_assignment(
+                        current_lhs,
+                        Expr::FunctionCall("~".into(), vec![lhs_copy, rhs], None, pos),
+                        pos,
+                    )?
                 }
                 token => {
                     return Err(ParseError::new(
@@ -1605,8 +1583,8 @@ fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
     match input.peek() {
         Some(&(Token::Equals, _)) => {
             input.next();
-            let initializer = parse_expr(input)?;
-            Ok(Stmt::Let(name, Some(Box::new(initializer)), pos))
+            let init_value = parse_expr(input)?;
+            Ok(Stmt::Let(name, Some(Box::new(init_value)), pos))
         }
         _ => Ok(Stmt::Let(name, None, pos)),
     }
