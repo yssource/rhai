@@ -1,4 +1,5 @@
 use crate::any::{Any, Dynamic};
+use std::borrow::Cow;
 
 /// A type containing information about current scope.
 /// Useful for keeping state between `Engine` runs
@@ -17,9 +18,9 @@ use crate::any::{Any, Dynamic};
 ///
 /// When searching for variables, newly-added variables are found before similarly-named but older variables,
 /// allowing for automatic _shadowing_ of variables.
-pub struct Scope(Vec<(String, Dynamic)>);
+pub struct Scope<'a>(Vec<(Cow<'a, str>, Dynamic)>);
 
-impl Scope {
+impl<'a> Scope<'a> {
     /// Create a new Scope.
     pub fn new() -> Self {
         Self(Vec::new())
@@ -36,18 +37,18 @@ impl Scope {
     }
 
     /// Add (push) a new variable to the Scope.
-    pub fn push<T: Any>(&mut self, key: String, value: T) {
-        self.0.push((key, Box::new(value)));
+    pub fn push<K: Into<Cow<'a, str>>, T: Any>(&mut self, key: K, value: T) {
+        self.0.push((key.into(), Box::new(value)));
     }
 
     /// Add (push) a new variable to the Scope.
-    pub(crate) fn push_dynamic(&mut self, key: String, value: Dynamic) {
-        self.0.push((key, value));
+    pub(crate) fn push_dynamic<K: Into<Cow<'a, str>>>(&mut self, key: K, value: Dynamic) {
+        self.0.push((key.into(), value));
     }
 
     /// Remove (pop) the last variable from the Scope.
     pub fn pop(&mut self) -> Option<(String, Dynamic)> {
-        self.0.pop()
+        self.0.pop().map(|(key, value)| (key.to_string(), value))
     }
 
     /// Truncate (rewind) the Scope to a previous size.
@@ -56,13 +57,13 @@ impl Scope {
     }
 
     /// Find a variable in the Scope, starting from the last.
-    pub fn get(&self, key: &str) -> Option<(usize, String, Dynamic)> {
+    pub fn get(&self, key: &str) -> Option<(usize, &str, Dynamic)> {
         self.0
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
             .find(|(_, (name, _))| name == key)
-            .map(|(i, (name, value))| (i, name.clone(), value.clone()))
+            .map(|(i, (name, value))| (i, name.as_ref(), value.clone()))
     }
 
     /// Get the value of a variable in the Scope, starting from the last.
@@ -97,20 +98,26 @@ impl Scope {
         self.0
             .iter()
             .rev() // Always search a Scope in reverse order
-            .map(|(key, value)| (key.as_str(), value))
+            .map(|(key, value)| (key.as_ref(), value))
     }
 
+    /*
     /// Get a mutable iterator to variables in the Scope.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Dynamic)> {
         self.0
             .iter_mut()
             .rev() // Always search a Scope in reverse order
-            .map(|(key, value)| (key.as_str(), value))
+            .map(|(key, value)| (key.as_ref(), value))
     }
+    */
 }
 
-impl std::iter::Extend<(String, Dynamic)> for Scope {
-    fn extend<T: IntoIterator<Item = (String, Dynamic)>>(&mut self, iter: T) {
-        self.0.extend(iter);
+impl<'a, K> std::iter::Extend<(K, Dynamic)> for Scope<'a>
+where
+    K: Into<Cow<'a, str>>,
+{
+    fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
+        self.0
+            .extend(iter.into_iter().map(|(key, value)| (key.into(), value)));
     }
 }

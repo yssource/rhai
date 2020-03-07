@@ -46,22 +46,22 @@ type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 ///     }
 /// }
 /// ```
-pub struct Engine<'a> {
+pub struct Engine<'e> {
     /// A hashmap containing all compiled functions known to the engine
-    pub(crate) external_functions: HashMap<FnSpec<'a>, Arc<FnIntExt>>,
+    pub(crate) external_functions: HashMap<FnSpec<'e>, Arc<FnIntExt<'e>>>,
     /// A hashmap containing all script-defined functions
-    pub(crate) script_functions: HashMap<FnSpec<'a>, Arc<FnIntExt>>,
+    pub(crate) script_functions: HashMap<FnSpec<'e>, Arc<FnIntExt<'e>>>,
     /// A hashmap containing all iterators known to the engine
     pub(crate) type_iterators: HashMap<TypeId, Arc<IteratorFn>>,
     pub(crate) type_names: HashMap<String, String>,
 
-    pub(crate) on_print: Box<dyn FnMut(&str) + 'a>,
-    pub(crate) on_debug: Box<dyn FnMut(&str) + 'a>,
+    pub(crate) on_print: Box<dyn FnMut(&str) + 'e>,
+    pub(crate) on_debug: Box<dyn FnMut(&str) + 'e>,
 }
 
-pub enum FnIntExt {
+pub enum FnIntExt<'a> {
     Ext(Box<FnAny>),
-    Int(FnDef),
+    Int(FnDef<'a>),
 }
 
 pub type FnAny = dyn Fn(FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
@@ -104,27 +104,27 @@ impl Engine<'_> {
 
         if let Some(f) = fn_def {
             match *f {
-                FnIntExt::Ext(ref f) => {
-                    let r = f(args, pos)?;
+                FnIntExt::Ext(ref func) => {
+                    let result = func(args, pos)?;
 
                     let callback = match spec.name.as_ref() {
                         KEYWORD_PRINT => self.on_print.as_mut(),
                         KEYWORD_DEBUG => self.on_debug.as_mut(),
-                        _ => return Ok(r),
+                        _ => return Ok(result),
                     };
 
-                    Ok(callback(
-                        &r.downcast::<String>()
-                            .map(|s| *s)
-                            .unwrap_or("error: not a string".into()),
-                    )
-                    .into_dynamic())
+                    let val = &result
+                        .downcast::<String>()
+                        .map(|s| *s)
+                        .unwrap_or("error: not a string".into());
+
+                    Ok(callback(val).into_dynamic())
                 }
-                FnIntExt::Int(ref f) => {
-                    if f.params.len() != args.len() {
+                FnIntExt::Int(ref func) => {
+                    if func.params.len() != args.len() {
                         return Err(EvalAltResult::ErrorFunctionArgsMismatch(
                             spec.name.into(),
-                            f.params.len(),
+                            func.params.len(),
                             args.len(),
                             pos,
                         ));
@@ -133,13 +133,13 @@ impl Engine<'_> {
                     let mut scope = Scope::new();
 
                     scope.extend(
-                        f.params
+                        func.params
                             .iter()
-                            .cloned()
+                            .map(|s| s.clone())
                             .zip(args.iter().map(|x| (*x).into_dynamic())),
                     );
 
-                    match self.eval_stmt(&mut scope, &*f.body) {
+                    match self.eval_stmt(&mut scope, &*func.body) {
                         Err(EvalAltResult::Return(x, _)) => Ok(x),
                         other => other,
                     }
@@ -319,12 +319,12 @@ impl Engine<'_> {
     }
 
     /// Evaluate an index expression
-    fn eval_index_expr(
+    fn eval_index_expr<'a>(
         &mut self,
         scope: &mut Scope,
-        lhs: &Expr,
+        lhs: &'a Expr,
         idx_expr: &Expr,
-    ) -> Result<(IndexSourceType, Option<(String, usize)>, usize, Dynamic), EvalAltResult> {
+    ) -> Result<(IndexSourceType, Option<(&'a str, usize)>, usize, Dynamic), EvalAltResult> {
         let idx = self.eval_index_value(scope, idx_expr)?;
 
         match lhs {
@@ -336,7 +336,7 @@ impl Engine<'_> {
                 lhs.position(),
             )
             .map(|(src_idx, (val, src_type))| {
-                (src_type, Some((id.clone(), src_idx)), idx as usize, val)
+                (src_type, Some((id.as_str(), src_idx)), idx as usize, val)
             }),
 
             // (expr)[idx_expr]
@@ -371,7 +371,8 @@ impl Engine<'_> {
             // array_id[idx] = val
             IndexSourceType::Array => {
                 let arr = scope.get_mut_by_type::<Array>(id, src_idx);
-                (arr[idx as usize] = val).into_dynamic()
+                arr[idx as usize] = val;
+                ().into_dynamic()
             }
 
             // string_id[idx] = val
@@ -381,7 +382,8 @@ impl Engine<'_> {
                 let ch = *val
                     .downcast::<char>()
                     .expect("char value expected to update an index position in a string");
-                Self::str_replace_char(s, idx as usize, ch).into_dynamic()
+                Self::str_replace_char(s, idx as usize, ch);
+                ().into_dynamic()
             }
 
             // All other variable types should be an error
@@ -419,7 +421,7 @@ impl Engine<'_> {
                 // of the above `clone`.
                 if let Some((id, src_idx)) = src {
                     Self::update_indexed_variable_in_scope(
-                        src_type, scope, &id, src_idx, idx, target,
+                        src_type, scope, id, src_idx, idx, target,
                     );
                 }
 
@@ -510,7 +512,7 @@ impl Engine<'_> {
 
                 if let Some((id, src_idx)) = src {
                     Self::update_indexed_variable_in_scope(
-                        src_type, scope, &id, src_idx, idx, target,
+                        src_type, scope, id, src_idx, idx, target,
                     );
                 }
 
@@ -525,10 +527,10 @@ impl Engine<'_> {
     /// Evaluate an expression
     fn eval_expr(&mut self, scope: &mut Scope, expr: &Expr) -> Result<Dynamic, EvalAltResult> {
         match expr {
-            Expr::IntegerConstant(i, _) => Ok((*i).into_dynamic()),
-            Expr::FloatConstant(i, _) => Ok((*i).into_dynamic()),
+            Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
+            Expr::FloatConstant(f, _) => Ok(f.into_dynamic()),
             Expr::StringConstant(s, _) => Ok(s.into_dynamic()),
-            Expr::CharConstant(c, _) => Ok((*c).into_dynamic()),
+            Expr::CharConstant(c, _) => Ok(c.into_dynamic()),
             Expr::Identifier(id, pos) => {
                 Self::search_scope(scope, id, Ok, *pos).map(|(_, val)| val)
             }

@@ -2,7 +2,7 @@ use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
 use std::char;
 use std::iter::Peekable;
-use std::str::Chars;
+use std::{borrow::Cow, str::Chars};
 
 type LERR = LexError;
 type PERR = ParseErrorType;
@@ -99,12 +99,12 @@ impl std::fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
-pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef>);
+pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef<'static>>);
 
 #[derive(Debug, Clone)]
-pub struct FnDef {
-    pub name: String,
-    pub params: Vec<String>,
+pub struct FnDef<'a> {
+    pub name: Cow<'a, str>,
+    pub params: Vec<Cow<'a, str>>,
     pub body: Box<Stmt>,
     pub pos: Position,
 }
@@ -232,14 +232,14 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn syntax(&self) -> std::borrow::Cow<'static, str> {
+    pub fn syntax<'a>(&'a self) -> Cow<'a, str> {
         use self::Token::*;
 
         match *self {
-            IntegerConstant(ref s) => s.to_string().into(),
-            FloatConstant(ref s) => s.to_string().into(),
-            Identifier(ref s) => s.to_string().into(),
-            CharConstant(ref s) => s.to_string().into(),
+            IntegerConstant(ref i) => i.to_string().into(),
+            FloatConstant(ref f) => f.to_string().into(),
+            Identifier(ref s) => s.into(),
+            CharConstant(ref c) => c.to_string().into(),
             LexError(ref err) => err.to_string().into(),
 
             ref token => (match token {
@@ -301,7 +301,7 @@ impl Token {
                 PowerOfAssign => "~=",
                 For => "for",
                 In => "in",
-                _ => panic!(),
+                _ => panic!("operator should be match in outer scope"),
             })
             .into(),
         }
@@ -538,8 +538,7 @@ impl<'a> TokenIterator<'a> {
             }
         }
 
-        let out: String = result.iter().collect();
-        Ok(out)
+        Ok(result.iter().collect())
     }
 
     fn inner_next(&mut self) -> Option<(Token, Position)> {
@@ -640,20 +639,20 @@ impl<'a> TokenIterator<'a> {
                             },
                             pos,
                         ));
+                    } else {
+                        let out: String = result.iter().filter(|&&c| c != '_').collect();
+
+                        return Some((
+                            if let Ok(val) = out.parse::<i64>() {
+                                Token::IntegerConstant(val)
+                            } else if let Ok(val) = out.parse::<f64>() {
+                                Token::FloatConstant(val)
+                            } else {
+                                Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                            },
+                            pos,
+                        ));
                     }
-
-                    let out: String = result.iter().filter(|&&c| c != '_').collect();
-
-                    return Some((
-                        if let Ok(val) = out.parse::<i64>() {
-                            Token::IntegerConstant(val)
-                        } else if let Ok(val) = out.parse::<f64>() {
-                            Token::FloatConstant(val)
-                        } else {
-                            Token::LexError(LERR::MalformedNumber(result.iter().collect()))
-                        },
-                        pos,
-                    ));
                 }
                 'A'..='Z' | 'a'..='z' | '_' => {
                     let mut result = Vec::new();
@@ -687,7 +686,7 @@ impl<'a> TokenIterator<'a> {
                             "fn" => Token::Fn,
                             "for" => Token::For,
                             "in" => Token::In,
-                            x => Token::Identifier(x.into()),
+                            _ => Token::Identifier(out),
                         },
                         pos,
                     ));
@@ -1264,6 +1263,21 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
     }
 }
 
+fn parse_assignment(lhs: Expr, rhs: Expr) -> Result<Expr, ParseError> {
+    match lhs {
+        // Only assignments to a variable, and index erxpression and a dot expression is valid LHS
+        Expr::Identifier(_, _) | Expr::Index(_, _) | Expr::Dot(_, _) => {
+            Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs)))
+        }
+
+        // All other LHS cannot be assigned to
+        _ => Err(ParseError::new(
+            PERR::AssignmentToInvalidLHS,
+            lhs.position(),
+        )),
+    }
+}
+
 fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     precedence: i8,
@@ -1308,7 +1322,7 @@ fn parse_binary_op<'a>(
                 }
                 Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
 
-                Token::Equals => Expr::Assignment(Box::new(current_lhs), Box::new(rhs)),
+                Token::Equals => parse_assignment(current_lhs, rhs)?,
                 Token::PlusAssign => {
                     let lhs_copy = current_lhs.clone();
                     Expr::Assignment(
@@ -1687,7 +1701,7 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
     }
 }
 
-fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
+fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static>, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
         _ => return Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
@@ -1723,7 +1737,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
                 Some((Token::RightParen, _)) => break,
                 Some((Token::Comma, _)) => (),
                 Some((Token::Identifier(s), _)) => {
-                    params.push(s);
+                    params.push(s.into());
                 }
                 Some((_, pos)) => return Err(ParseError::new(PERR::MalformedCallExpr, pos)),
                 None => return Err(ParseError::new(PERR::MalformedCallExpr, Position::eof())),
@@ -1734,7 +1748,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     let body = parse_block(input)?;
 
     Ok(FnDef {
-        name: name,
+        name: name.into(),
         params: params,
         body: Box::new(body),
         pos: pos,

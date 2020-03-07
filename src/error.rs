@@ -75,6 +75,8 @@ pub enum ParseErrorType {
     FnMissingName,
     /// A function definition is missing the parameters list. Wrapped value is the function name.
     FnMissingParams(String),
+    /// Assignment to an inappropriate LHS (left-hand-side) expression.
+    AssignmentToInvalidLHS,
 }
 
 /// Error when parsing a script.
@@ -114,6 +116,7 @@ impl Error for ParseError {
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
+            ParseErrorType::AssignmentToInvalidLHS => "Assignment to an unsupported left-hand side expression"
         }
     }
 

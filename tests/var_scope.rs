@@ -25,8 +25,8 @@ fn test_scope_eval() -> Result<(), EvalAltResult> {
     // Then push some initialized variables into the state
     // NOTE: Remember the default numbers used by Rhai are i64 and f64.
     //       Better stick to them or it gets hard to work with other variables in the script.
-    scope.push("y".into(), 42_i64);
-    scope.push("z".into(), 999_i64);
+    scope.push("y", 42_i64);
+    scope.push("z", 999_i64);
 
     // First invocation
     engine
