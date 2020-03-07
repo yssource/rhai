@@ -544,9 +544,14 @@ impl Engine<'_> {
             Expr::Identifier(id, pos) => {
                 Self::search_scope(scope, id, Ok, *pos).map(|(_, val)| val)
             }
+
+            // lhs[idx_expr]
             Expr::Index(lhs, idx_expr, idx_pos) => self
                 .eval_index_expr(scope, lhs, idx_expr, *idx_pos)
                 .map(|(_, _, _, x)| x),
+
+            // Statement block
+            Expr::Block(block, _) => self.eval_stmt(scope, block),
 
             // lhs = rhs
             Expr::Assignment(lhs, rhs, _) => {

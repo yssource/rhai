@@ -129,6 +129,7 @@ pub enum Expr {
     Identifier(String, Position),
     CharConstant(char, Position),
     StringConstant(String, Position),
+    Block(Box<Stmt>, Position),
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
     Assignment(Box<Expr>, Box<Expr>, Position),
     Dot(Box<Expr>, Box<Expr>, Position),
@@ -150,6 +151,7 @@ impl Expr {
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
             | Expr::FunctionCall(_, _, _, pos)
+            | Expr::Block(_, pos)
             | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
@@ -1185,6 +1187,14 @@ fn parse_array_expr<'a>(
 }
 
 fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
+    // Block statement as expression
+    match input.peek() {
+        Some(&(Token::LeftBrace, pos)) => {
+            return parse_block(input).map(|block| Expr::Block(Box::new(block), pos))
+        }
+        _ => (),
+    }
+
     let token = input.next();
 
     let mut follow_on = false;
