@@ -1275,39 +1275,36 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 }
 
 fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
-    fn all_identifiers(expr: &Expr) -> (bool, Position) {
+    fn all_dots(expr: &Expr) -> (bool, Position) {
         match expr {
-            // variable
             Expr::Identifier(_, pos) => (true, *pos),
-            // indexing
-            Expr::Index(lhs, _, idx_pos) => match lhs.as_ref() {
-                // variable[x]
-                &Expr::Identifier(_, pos) => (true, pos),
-                // all other indexing is invalid
-                _ => (false, *idx_pos),
+            Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
+                Expr::Identifier(_, _) => all_dots(dot_rhs),
+                _ => (false, dot_lhs.position()),
             },
-            // variable.prop.prop.prop...
-            Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
-                // variable.prop
-                &Expr::Identifier(_, pos) => {
-                    let r = all_identifiers(rhs);
-                    (r.0, if r.0 { pos } else { r.1 })
-                }
-                // all other property access is invalid
-                _ => (false, lhs.position()),
-            },
-            // everything else is invalid
             _ => (false, expr.position()),
         }
     }
 
-    let r = all_identifiers(&lhs);
-
-    if r.0 {
-        Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
-    } else {
-        Err(ParseError::new(PERR::AssignmentToInvalidLHS, r.1))
+    match &lhs {
+        Expr::Identifier(_, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+        Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
+            Expr::Identifier(_, _) => {
+                return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
+            }
+            _ => (),
+        },
+        Expr::Dot(_, _, _) => match all_dots(&lhs) {
+            (true, _) => return Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+            (false, pos) => return Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
+        },
+        _ => (),
     }
+
+    return Err(ParseError::new(
+        PERR::AssignmentToInvalidLHS,
+        lhs.position(),
+    ));
 }
 
 fn parse_op_assignment(

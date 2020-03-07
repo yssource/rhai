@@ -26,7 +26,7 @@ pub enum EvalAltResult {
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, i64, Position),
     /// Trying to index into a type that is not an array and not a string.
-    ErrorIndexingType(Position),
+    ErrorIndexingType(String, Position),
     /// Trying to index into an array or string with an index that is not `i64`.
     ErrorIndexExpr(Position),
     /// The guard expression in an `if` statement does not return a boolean value.
@@ -43,7 +43,7 @@ pub enum EvalAltResult {
     /// Error reading from a script file. Wrapped value is the path of the script file.
     ErrorReadingScriptFile(String, std::io::Error),
     /// Inappropriate member access.
-    ErrorDotExpr(Position),
+    ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
     ErrorArithmetic(String, Position),
     /// Run-time error encountered. Wrapped value is the error message.
@@ -65,7 +65,9 @@ impl Error for EvalAltResult {
             }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorIndexExpr(_) => "Indexing into an array or string expects an integer index",
-            Self::ErrorIndexingType(_) => "Indexing can only be performed on an array or a string",
+            Self::ErrorIndexingType(_, _) => {
+                "Indexing can only be performed on an array or a string"
+            }
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
@@ -84,7 +86,7 @@ impl Error for EvalAltResult {
             }
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
             Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
-            Self::ErrorDotExpr(_) => "Malformed dot expression",
+            Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorRuntime(_, _) => "Runtime error",
             Self::LoopBreak => "[Not Error] Breaks out of loop",
@@ -104,13 +106,14 @@ impl std::fmt::Display for EvalAltResult {
         match self {
             Self::ErrorFunctionNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
             Self::ErrorVariableNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorIndexingType(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorIndexingType(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorIndexExpr(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorIfGuard(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorFor(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorAssignmentToUnknownLHS(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
-            Self::ErrorDotExpr(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
+            Self::ErrorDotExpr(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorArithmetic(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
             Self::ErrorRuntime(s, pos) if s.is_empty() => write!(f, "{} ({})", desc, pos),
             Self::ErrorRuntime(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),

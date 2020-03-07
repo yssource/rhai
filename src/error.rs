@@ -116,7 +116,7 @@ impl Error for ParseError {
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
-            ParseErrorType::AssignmentToInvalidLHS => "Assignment to an unsupported left-hand side expression"
+            ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression because it will only be changing a copy of the value"
         }
     }
 

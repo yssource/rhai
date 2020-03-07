@@ -17,6 +17,8 @@ pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
 const KEYWORD_PRINT: &'static str = "print";
 const KEYWORD_DEBUG: &'static str = "debug";
 const KEYWORD_TYPE_OF: &'static str = "type_of";
+const FUNC_GETTER: &'static str = "get$";
+const FUNC_SETTER: &'static str = "set$";
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 enum IndexSourceType {
@@ -153,6 +155,12 @@ impl Engine<'_> {
         } else if let Some(val) = def_value {
             // Return default value
             Ok(val.clone())
+        } else if spec.name.starts_with(FUNC_GETTER) || spec.name.starts_with(FUNC_SETTER) {
+            // Getter or setter
+            Err(EvalAltResult::ErrorDotExpr(
+                "- invalid property access".to_string(),
+                pos,
+            ))
         } else {
             let types_list = args
                 .iter()
@@ -193,7 +201,7 @@ impl Engine<'_> {
 
             // xxx.id
             Expr::Identifier(id, pos) => {
-                let get_fn_name = format!("get${}", id);
+                let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                 self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
             }
@@ -204,16 +212,18 @@ impl Engine<'_> {
 
                 let (lhs_value, _) = match lhs.as_ref() {
                     Expr::Identifier(id, pos) => {
-                        let get_fn_name = format!("get${}", id);
+                        let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                         (
                             self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
                             *pos,
                         )
                     }
-                    expr => return Err(EvalAltResult::ErrorDotExpr(expr.position())),
+                    expr => {
+                        return Err(EvalAltResult::ErrorDotExpr("".to_string(), expr.position()))
+                    }
                 };
 
-                Self::get_indexed_value(lhs_value, idx, idx_expr.position(), *idx_pos)
+                self.get_indexed_value(lhs_value, idx, idx_expr.position(), *idx_pos)
                     .map(|(v, _)| v)
             }
 
@@ -221,7 +231,7 @@ impl Engine<'_> {
             Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 // xxx.id.rhs
                 Expr::Identifier(id, pos) => {
-                    let get_fn_name = format!("get${}", id);
+                    let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                     self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
                         .and_then(|mut v| self.get_dot_val_helper(scope, v.as_mut(), rhs))
@@ -232,25 +242,34 @@ impl Engine<'_> {
 
                     let (lhs_value, _) = match lhs.as_ref() {
                         Expr::Identifier(id, pos) => {
-                            let get_fn_name = format!("get${}", id);
+                            let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                             (
                                 self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
                                 *pos,
                             )
                         }
-                        expr => return Err(EvalAltResult::ErrorDotExpr(expr.position())),
+                        expr => {
+                            return Err(EvalAltResult::ErrorDotExpr(
+                                "".to_string(),
+                                expr.position(),
+                            ))
+                        }
                     };
 
-                    Self::get_indexed_value(lhs_value, idx, idx_expr.position(), *idx_pos).and_then(
-                        |(mut value, _)| self.get_dot_val_helper(scope, value.as_mut(), rhs),
-                    )
+                    self.get_indexed_value(lhs_value, idx, idx_expr.position(), *idx_pos)
+                        .and_then(|(mut value, _)| {
+                            self.get_dot_val_helper(scope, value.as_mut(), rhs)
+                        })
                 }
                 // Syntax error
-                _ => Err(EvalAltResult::ErrorDotExpr(lhs.position())),
+                _ => Err(EvalAltResult::ErrorDotExpr("".to_string(), lhs.position())),
             },
 
             // Syntax error
-            _ => Err(EvalAltResult::ErrorDotExpr(dot_rhs.position())),
+            _ => Err(EvalAltResult::ErrorDotExpr(
+                "".to_string(),
+                dot_rhs.position(),
+            )),
         }
     }
 
@@ -281,6 +300,7 @@ impl Engine<'_> {
 
     /// Get the value at the indexed position of a base type
     fn get_indexed_value(
+        &self,
         val: Dynamic,
         idx: i64,
         val_pos: Position,
@@ -318,7 +338,10 @@ impl Engine<'_> {
             }
         } else {
             // Error - cannot be indexed
-            Err(EvalAltResult::ErrorIndexingType(idx_pos))
+            Err(EvalAltResult::ErrorIndexingType(
+                self.map_type_name(val.type_name()).to_string(),
+                idx_pos,
+            ))
         }
     }
 
@@ -337,7 +360,7 @@ impl Engine<'_> {
             Expr::Identifier(id, _) => Self::search_scope(
                 scope,
                 &id,
-                |val| Self::get_indexed_value(val, idx, idx_expr.position(), idx_pos),
+                |val| self.get_indexed_value(val, idx, idx_expr.position(), idx_pos),
                 lhs.position(),
             )
             .map(|(src_idx, (val, src_type))| {
@@ -345,13 +368,12 @@ impl Engine<'_> {
             }),
 
             // (expr)[idx_expr]
-            expr => Self::get_indexed_value(
-                self.eval_expr(scope, expr)?,
-                idx,
-                idx_expr.position(),
-                idx_pos,
-            )
-            .map(|(val, _)| (IndexSourceType::Expression, None, idx as usize, val)),
+            expr => {
+                let val = self.eval_expr(scope, expr)?;
+
+                self.get_indexed_value(val, idx, idx_expr.position(), idx_pos)
+                    .map(|(value, _)| (IndexSourceType::Expression, None, idx as usize, value))
+            }
         }
     }
 
@@ -456,7 +478,7 @@ impl Engine<'_> {
         match dot_rhs {
             // xxx.id
             Expr::Identifier(id, pos) => {
-                let set_fn_name = format!("set${}", id);
+                let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
                 self.call_fn_raw(
                     &set_fn_name,
@@ -469,7 +491,7 @@ impl Engine<'_> {
             // xxx.lhs.rhs
             Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 Expr::Identifier(id, pos) => {
-                    let get_fn_name = format!("get${}", id);
+                    let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                     self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
                         .and_then(|mut v| {
@@ -477,16 +499,22 @@ impl Engine<'_> {
                                 .map(|_| v) // Discard Ok return value
                         })
                         .and_then(|mut v| {
-                            let set_fn_name = format!("set${}", id);
+                            let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
                             self.call_fn_raw(&set_fn_name, vec![this_ptr, v.as_mut()], None, *pos)
                         })
                 }
-                _ => Err(EvalAltResult::ErrorDotExpr(lhs.position())),
+                _ => Err(EvalAltResult::ErrorDotExpr(
+                    "for assignment".to_string(),
+                    lhs.position(),
+                )),
             },
 
             // Syntax error
-            _ => Err(EvalAltResult::ErrorDotExpr(dot_rhs.position())),
+            _ => Err(EvalAltResult::ErrorDotExpr(
+                "for assignment".to_string(),
+                dot_rhs.position(),
+            )),
         }
     }
 
@@ -530,7 +558,10 @@ impl Engine<'_> {
             }
 
             // Syntax error
-            _ => Err(EvalAltResult::ErrorDotExpr(dot_lhs.position())),
+            _ => Err(EvalAltResult::ErrorDotExpr(
+                "for assignment".to_string(),
+                dot_lhs.position(),
+            )),
         }
     }
 
