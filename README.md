@@ -9,7 +9,7 @@ Rhai's current feature set:
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * Easy-to-use language similar to JS+Rust
 * Support for overloaded functions
-* No additional dependencies
+* Very few additional dependencies (right now only `num-traits` to do checked arithmetic operations)
 
 **Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
 
@@ -42,6 +42,10 @@ Print debug messages to stdout (using `println!`) related to function registrati
 ### `no_stdlib`
 
 Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities.
+
+### `unchecked`
+
+Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!
 
 ## Related
 

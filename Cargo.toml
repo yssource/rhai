@@ -20,3 +20,4 @@ num-traits = "*"
 [features]
 debug_msgs = []
 no_stdlib = []
+unchecked = []

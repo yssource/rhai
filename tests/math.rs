@@ -15,25 +15,28 @@ fn test_math() -> Result<(), EvalAltResult> {
     );
 
     // Overflow/underflow/division-by-zero errors
-    match engine.eval::<i64>("9223372036854775807 + 1") {
-        Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-        r => panic!("should return overflow error: {:?}", r),
-    }
-    match engine.eval::<i64>("(-9223372036854775807) - 2") {
-        Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-        r => panic!("should return underflow error: {:?}", r),
-    }
-    match engine.eval::<i64>("9223372036854775807 * 9223372036854775807") {
-        Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-        r => panic!("should return overflow error: {:?}", r),
-    }
-    match engine.eval::<i64>("9223372036854775807 / 0") {
-        Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-        r => panic!("should return division by zero error: {:?}", r),
-    }
-    match engine.eval::<i64>("9223372036854775807 % 0") {
-        Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-        r => panic!("should return division by zero error: {:?}", r),
+    #[cfg(not(feature = "unchecked"))]
+    {
+        match engine.eval::<i64>("9223372036854775807 + 1") {
+            Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
+            r => panic!("should return overflow error: {:?}", r),
+        }
+        match engine.eval::<i64>("(-9223372036854775807) - 2") {
+            Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
+            r => panic!("should return underflow error: {:?}", r),
+        }
+        match engine.eval::<i64>("9223372036854775807 * 9223372036854775807") {
+            Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
+            r => panic!("should return overflow error: {:?}", r),
+        }
+        match engine.eval::<i64>("9223372036854775807 / 0") {
+            Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
+            r => panic!("should return division by zero error: {:?}", r),
+        }
+        match engine.eval::<i64>("9223372036854775807 % 0") {
+            Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
+            r => panic!("should return division by zero error: {:?}", r),
+        }
     }
 
     Ok(())

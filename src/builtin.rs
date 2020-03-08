@@ -3,15 +3,23 @@
 
 use crate::any::Any;
 use crate::engine::{Array, Engine};
-use crate::fn_register::{RegisterFn, RegisterResultFn};
-use crate::parser::Position;
-use crate::result::EvalAltResult;
+use crate::fn_register::RegisterFn;
+use std::fmt::{Debug, Display};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
+
+#[cfg(feature = "unchecked")]
+use std::ops::{Shl, Shr};
+
+#[cfg(not(feature = "unchecked"))]
+use crate::{parser::Position, result::EvalAltResult, RegisterResultFn};
+
+#[cfg(not(feature = "unchecked"))]
+use std::convert::TryFrom;
+
+#[cfg(not(feature = "unchecked"))]
 use num_traits::{
     CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl, CheckedShr, CheckedSub,
 };
-use std::convert::TryFrom;
-use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
 
 macro_rules! reg_op {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
@@ -21,6 +29,7 @@ macro_rules! reg_op {
     )
 }
 
+#[cfg(not(feature = "unchecked"))]
 macro_rules! reg_op_result {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
         $(
@@ -29,6 +38,7 @@ macro_rules! reg_op_result {
     )
 }
 
+#[cfg(not(feature = "unchecked"))]
 macro_rules! reg_op_result1 {
     ($self:expr, $x:expr, $op:expr, $v:ty, $( $y:ty ),*) => (
         $(
@@ -45,6 +55,7 @@ macro_rules! reg_un {
     )
 }
 
+#[cfg(not(feature = "unchecked"))]
 macro_rules! reg_un_result {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
         $(
@@ -98,6 +109,7 @@ macro_rules! reg_func3 {
 impl Engine<'_> {
     /// Register the core built-in library.
     pub(crate) fn register_core_lib(&mut self) {
+        #[cfg(not(feature = "unchecked"))]
         fn add<T: Display + CheckedAdd>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_add(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -106,6 +118,7 @@ impl Engine<'_> {
                 )
             })
         }
+        #[cfg(not(feature = "unchecked"))]
         fn sub<T: Display + CheckedSub>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_sub(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -114,6 +127,7 @@ impl Engine<'_> {
                 )
             })
         }
+        #[cfg(not(feature = "unchecked"))]
         fn mul<T: Display + CheckedMul>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_mul(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -122,6 +136,7 @@ impl Engine<'_> {
                 )
             })
         }
+        #[cfg(not(feature = "unchecked"))]
         fn div<T>(x: T, y: T) -> Result<T, EvalAltResult>
         where
             T: Display + CheckedDiv + PartialEq + TryFrom<i8>,
@@ -143,6 +158,7 @@ impl Engine<'_> {
                 )
             })
         }
+        #[cfg(not(feature = "unchecked"))]
         fn neg<T: Display + CheckedNeg>(x: T) -> Result<T, EvalAltResult> {
             x.checked_neg().ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -151,6 +167,7 @@ impl Engine<'_> {
                 )
             })
         }
+        #[cfg(not(feature = "unchecked"))]
         fn abs<T: Display + CheckedNeg + PartialOrd + From<i8>>(x: T) -> Result<T, EvalAltResult> {
             if x >= 0.into() {
                 Ok(x)
@@ -163,22 +180,22 @@ impl Engine<'_> {
                 })
             }
         }
-        fn add_unchecked<T: Add>(x: T, y: T) -> <T as Add>::Output {
+        fn add_u<T: Add>(x: T, y: T) -> <T as Add>::Output {
             x + y
         }
-        fn sub_unchecked<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
+        fn sub_u<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
             x - y
         }
-        fn mul_unchecked<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
+        fn mul_u<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
             x * y
         }
-        fn div_unchecked<T: Div>(x: T, y: T) -> <T as Div>::Output {
+        fn div_u<T: Div>(x: T, y: T) -> <T as Div>::Output {
             x / y
         }
-        fn neg_unchecked<T: Neg>(x: T) -> <T as Neg>::Output {
+        fn neg_u<T: Neg>(x: T) -> <T as Neg>::Output {
             -x
         }
-        fn abs_unchecked<T: Neg + PartialOrd + From<i8>>(x: T) -> T
+        fn abs_u<T: Neg + PartialOrd + From<i8>>(x: T) -> T
         where
             <T as Neg>::Output: Into<T>,
         {
@@ -224,7 +241,8 @@ impl Engine<'_> {
         fn binary_xor<T: BitXor>(x: T, y: T) -> <T as BitXor>::Output {
             x ^ y
         }
-        fn left_shift<T: Display + CheckedShl>(x: T, y: i64) -> Result<T, EvalAltResult> {
+        #[cfg(not(feature = "unchecked"))]
+        fn shl<T: Display + CheckedShl>(x: T, y: i64) -> Result<T, EvalAltResult> {
             if y < 0 {
                 return Err(EvalAltResult::ErrorArithmetic(
                     format!("Left-shift by a negative number: {} << {}", x, y),
@@ -239,7 +257,8 @@ impl Engine<'_> {
                 )
             })
         }
-        fn right_shift<T: Display + CheckedShr>(x: T, y: i64) -> Result<T, EvalAltResult> {
+        #[cfg(not(feature = "unchecked"))]
+        fn shr<T: Display + CheckedShr>(x: T, y: i64) -> Result<T, EvalAltResult> {
             if y < 0 {
                 return Err(EvalAltResult::ErrorArithmetic(
                     format!("Right-shift by a negative number: {} >> {}", x, y),
@@ -254,6 +273,15 @@ impl Engine<'_> {
                 )
             })
         }
+        #[cfg(feature = "unchecked")]
+        fn shl_u<T: Shl<T>>(x: T, y: T) -> <T as Shl<T>>::Output {
+            x.shl(y)
+        }
+        #[cfg(feature = "unchecked")]
+        fn shr_u<T: Shr<T>>(x: T, y: T) -> <T as Shr<T>>::Output {
+            x.shr(y)
+        }
+        #[cfg(not(feature = "unchecked"))]
         fn modulo<T: Display + CheckedRem>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_rem(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -262,7 +290,7 @@ impl Engine<'_> {
                 )
             })
         }
-        fn modulo_unchecked<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
+        fn modulo_u<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
             x % y
         }
         fn pow_i64_i64(x: i64, y: i64) -> i64 {
@@ -275,15 +303,26 @@ impl Engine<'_> {
             x.powi(y as i32)
         }
 
-        reg_op_result!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op_result!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op_result!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op_result!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64);
+        #[cfg(not(feature = "unchecked"))]
+        {
+            reg_op_result!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op_result!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op_result!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op_result!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64);
+        }
 
-        reg_op!(self, "+", add_unchecked, f32, f64);
-        reg_op!(self, "-", sub_unchecked, f32, f64);
-        reg_op!(self, "*", mul_unchecked, f32, f64);
-        reg_op!(self, "/", div_unchecked, f32, f64);
+        #[cfg(feature = "unchecked")]
+        {
+            reg_op!(self, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op!(self, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op!(self, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op!(self, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64);
+        }
+
+        reg_op!(self, "+", add_u, f32, f64);
+        reg_op!(self, "-", sub_u, f32, f64);
+        reg_op!(self, "*", mul_u, f32, f64);
+        reg_op!(self, "/", div_u, f32, f64);
 
         reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
         reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
@@ -303,19 +342,43 @@ impl Engine<'_> {
         reg_op!(self, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64);
         reg_op!(self, "&", and, bool);
         reg_op!(self, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op_result1!(self, "<<", left_shift, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op_result1!(self, ">>", right_shift, i64, i8, u8, i16, u16);
-        reg_op_result1!(self, ">>", right_shift, i64, i32, i64, u32, u64);
-        reg_op_result!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op!(self, "%", modulo_unchecked, f32, f64);
+
+        #[cfg(not(feature = "unchecked"))]
+        {
+            reg_op_result1!(self, "<<", shl, i64, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op_result1!(self, ">>", shr, i64, i8, u8, i16, u16);
+            reg_op_result1!(self, ">>", shr, i64, i32, i64, u32, u64);
+            reg_op_result!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64);
+        }
+
+        #[cfg(feature = "unchecked")]
+        {
+            reg_op!(self, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op!(self, ">>", shr_u, i64, i8, u8, i16, u16);
+            reg_op!(self, ">>", shr_u, i64, i32, i64, u32, u64);
+            reg_op!(self, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64);
+        }
+
+        reg_op!(self, "%", modulo_u, f32, f64);
+
         self.register_fn("~", pow_i64_i64);
         self.register_fn("~", pow_f64_f64);
         self.register_fn("~", pow_f64_i64);
 
-        reg_un_result!(self, "-", neg, i8, i16, i32, i64);
-        reg_un!(self, "-", neg_unchecked, f32, f64);
-        reg_un_result!(self, "abs", abs, i8, i16, i32, i64);
-        reg_un!(self, "abs", abs_unchecked, f32, f64);
+        #[cfg(not(feature = "unchecked"))]
+        {
+            reg_un_result!(self, "-", neg, i8, i16, i32, i64);
+            reg_un_result!(self, "abs", abs, i8, i16, i32, i64);
+        }
+
+        #[cfg(feature = "unchecked")]
+        {
+            reg_un!(self, "-", neg_u, i8, i16, i32, i64);
+            reg_un!(self, "abs", abs_u, i8, i16, i32, i64);
+        }
+
+        reg_un!(self, "-", neg_u, f32, f64);
+        reg_un!(self, "abs", abs_u, f32, f64);
         reg_un!(self, "!", not, bool);
 
         self.register_fn("+", |x: String, y: String| x + &y); // String + String
