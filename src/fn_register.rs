@@ -1,9 +1,10 @@
-use std::any::TypeId;
+//! Module which defines the function registration mechanism.
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{Engine, FnCallArgs};
 use crate::parser::Position;
 use crate::result::EvalAltResult;
+use std::any::TypeId;
 
 /// A trait to register custom functions with the `Engine`.
 ///

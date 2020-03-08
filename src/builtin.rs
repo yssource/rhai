@@ -1,3 +1,6 @@
+//! Helper module that allows registration of the _core library_ and
+//! _standard library_ of utility functions.
+
 use crate::any::Any;
 use crate::engine::{Array, Engine};
 use crate::fn_register::RegisterFn;

@@ -1,8 +1,9 @@
-use std::error::Error;
+//! Module containing error definitions for the evaluation process.
 
 use crate::any::Dynamic;
 use crate::error::ParseError;
 use crate::parser::Position;
+use std::{error::Error, fmt};
 
 /// Evaluation result.
 ///
@@ -102,8 +103,8 @@ impl Error for EvalAltResult {
     }
 }
 
-impl std::fmt::Display for EvalAltResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for EvalAltResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let desc = self.description();
 
         match self {

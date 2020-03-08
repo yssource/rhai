@@ -1,5 +1,4 @@
-//! Helper module which defines `FnArgs`
-//! to make function calling easier.
+//! Helper module which defines `FnArgs` to make function calling easier.
 
 use crate::any::{Any, Variant};
 

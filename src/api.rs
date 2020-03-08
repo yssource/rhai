@@ -1,3 +1,5 @@
+//! Module that defines the extern API of `Engine`.
+
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
 use crate::engine::{Engine, FnAny, FnIntExt, FnSpec};
@@ -6,7 +8,7 @@ use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use std::any::TypeId;
+use std::any::{type_name, TypeId};
 use std::sync::Arc;
 
 impl<'e> Engine<'e> {
@@ -17,12 +19,16 @@ impl<'e> Engine<'e> {
         f: Box<FnAny>,
     ) {
         debug_println!(
-            "Register function: {} for {} parameter(s)",
+            "Register function: {} with {}",
             fn_name,
             if let Some(a) = &args {
-                format!("{}", a.len())
+                format!(
+                    "{} parameter{}",
+                    a.len(),
+                    if a.len() > 1 { "s" } else { "" }
+                )
             } else {
-                "no".to_string()
+                "no parameter".to_string()
             }
         );
 
@@ -31,24 +37,21 @@ impl<'e> Engine<'e> {
             args,
         };
 
-        self.external_functions
-            .insert(spec, Arc::new(FnIntExt::Ext(f)));
+        self.ext_functions.insert(spec, Arc::new(FnIntExt::Ext(f)));
     }
 
     /// Register a custom type for use with the `Engine`.
     /// The type must be `Clone`.
     pub fn register_type<T: Any + Clone>(&mut self) {
-        self.register_type_with_name::<T>(std::any::type_name::<T>());
+        self.register_type_with_name::<T>(type_name::<T>());
     }
 
     /// Register a custom type for use with the `Engine` with a name for the `type_of` function.
     /// The type must be `Clone`.
-    pub fn register_type_with_name<T: Any + Clone>(&mut self, type_name: &str) {
+    pub fn register_type_with_name<T: Any + Clone>(&mut self, name: &str) {
         // Add the pretty-print type name into the map
-        self.type_names.insert(
-            std::any::type_name::<T>().to_string(),
-            type_name.to_string(),
-        );
+        self.type_names
+            .insert(type_name::<T>().to_string(), name.to_string());
     }
 
     /// Register an iterator adapter for a type with the `Engine`.

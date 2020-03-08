@@ -1,3 +1,5 @@
+//! Helper module which defines the `Any` trait to to allow dynamic value handling.
+
 use std::any::{type_name, TypeId};
 use std::fmt;
 

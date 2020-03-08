@@ -1,8 +1,8 @@
+//! Main module defining the lexer and parser.
+
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use std::char;
-use std::iter::Peekable;
-use std::{borrow::Cow, str::Chars};
+use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars};
 
 type LERR = LexError;
 type PERR = ParseErrorType;
@@ -78,8 +78,8 @@ impl Default for Position {
     }
 }
 
-impl std::fmt::Display for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_eof() {
             write!(f, "EOF")
         } else {
@@ -88,8 +88,8 @@ impl std::fmt::Display for Position {
     }
 }
 
-impl std::fmt::Debug for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_eof() {
             write!(f, "(EOF)")
         } else {
