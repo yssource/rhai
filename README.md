@@ -192,7 +192,9 @@ if z.type_of() == "string" {
 Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.
 
 ```rust
-use rhai::{Dynamic, Engine, RegisterFn};
+use rhai::Engine;
+use rhai::RegisterFn;                       // include the `RegisterFn` trait to use `register_fn`
+use rhai::{Dynamic, RegisterDynamicFn};     // include the `RegisterDynamicFn` trait to use `register_dynamic_fn`
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -234,7 +236,7 @@ fn decide(yes_no: bool) -> Dynamic {
 }
 ```
 
-# Working with generic functions
+# Generic functions
 
 Generic functions can be used in Rhai, but you'll need to register separate instances for each concrete type:
 
@@ -258,7 +260,39 @@ fn main() {
 
 You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions and call the correct one, based on the types of the arguments, from your script.
 
-# Override built-in functions
+# Fallible functions
+
+If your function is _fallible_ (i.e. it returns a `Result<_, Error>`),  you can register it with `register_result_fn` (using the `RegisterResultFn` trait).
+
+Your function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements `From<&str>` and `From<String>` etc. and the error text gets converted into `EvalAltResult::ErrorRuntime`.
+
+```rust
+use rhai::{Engine, EvalAltResult, Position};
+use rhai::RegisterResultFn;     // include the `RegisterResultFn` trait to use `register_result_fn`
+
+// Function that may fail
+fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
+    if y == 0 {
+        // Return an error if y is zero
+        Err("Division by zero detected!".into())    // short-cut to create EvalAltResult
+    } else {
+        Ok(x / y)
+    }
+}
+
+fn main() {
+    let mut engine = Engine::new();
+
+    // Fallible functions that return Result values must use register_result_fn()
+    engine.register_result_fn("divide", safe_divide);
+
+    if let Err(error) = engine.eval::<i64>("divide(40, 0)") {
+       println!("Error: {:?}", error);  // prints ErrorRuntime("Division by zero detected!", (1, 1)")
+    }
+}
+```
+
+# Overriding built-in functions
 
 Any similarly-named function defined in a script overrides any built-in function.
 

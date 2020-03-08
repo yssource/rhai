@@ -2,7 +2,7 @@
 
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars};
+use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, usize};
 
 type LERR = LexError;
 type PERR = ParseErrorType;
@@ -17,25 +17,33 @@ pub struct Position {
 impl Position {
     /// Create a new `Position`.
     pub fn new(line: usize, position: usize) -> Self {
+        if line == 0 || (line == usize::MAX && position == usize::MAX) {
+            panic!("invalid position: ({}, {})", line, position);
+        }
+
         Self {
             line,
             pos: position,
         }
     }
 
-    /// Get the line number (1-based), or `None` if EOF.
+    /// Get the line number (1-based), or `None` if no position or EOF.
     pub fn line(&self) -> Option<usize> {
-        match self.line {
-            0 => None,
-            x => Some(x),
+        if self.is_none() || self.is_eof() {
+            None
+        } else {
+            Some(self.line)
         }
     }
 
     /// Get the character position (1-based), or `None` if at beginning of a line.
     pub fn position(&self) -> Option<usize> {
-        match self.pos {
-            0 => None,
-            x => Some(x),
+        if self.is_none() || self.is_eof() {
+            None
+        } else if self.pos == 0 {
+            None
+        } else {
+            Some(self.pos)
         }
     }
 
@@ -61,14 +69,27 @@ impl Position {
         self.pos = 0;
     }
 
+    /// Create a `Position` representing no position.
+    pub(crate) fn none() -> Self {
+        Self { line: 0, pos: 0 }
+    }
+
     /// Create a `Position` at EOF.
     pub(crate) fn eof() -> Self {
-        Self { line: 0, pos: 0 }
+        Self {
+            line: usize::MAX,
+            pos: usize::MAX,
+        }
+    }
+
+    /// Is there no `Position`?
+    pub fn is_none(&self) -> bool {
+        self.line == 0 && self.pos == 0
     }
 
     /// Is the `Position` at EOF?
     pub fn is_eof(&self) -> bool {
-        self.line == 0
+        self.line == usize::MAX && self.pos == usize::MAX
     }
 }
 
@@ -82,6 +103,8 @@ impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_eof() {
             write!(f, "EOF")
+        } else if self.is_none() {
+            write!(f, "none")
         } else {
             write!(f, "line {}, position {}", self.line, self.pos)
         }

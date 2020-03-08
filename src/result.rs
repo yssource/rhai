@@ -118,9 +118,10 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
             Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
             Self::ErrorDotExpr(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorArithmetic(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
-            Self::ErrorRuntime(s, pos) if s.is_empty() => write!(f, "{} ({})", desc, pos),
-            Self::ErrorRuntime(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
+            Self::ErrorArithmetic(s, pos) => write!(f, "{} ({})", s, pos),
+            Self::ErrorRuntime(s, pos) => {
+                write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
+            }
             Self::LoopBreak => write!(f, "{}", desc),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorReadingScriptFile(filename, err) => {
@@ -169,5 +170,39 @@ impl fmt::Display for EvalAltResult {
 impl From<ParseError> for EvalAltResult {
     fn from(err: ParseError) -> Self {
         Self::ErrorParsing(err)
+    }
+}
+
+impl EvalAltResult {
+    pub(crate) fn set_position(&mut self, new_position: Position) {
+        match self {
+            EvalAltResult::ErrorReadingScriptFile(_, _)
+            | EvalAltResult::LoopBreak
+            | EvalAltResult::ErrorParsing(_) => (),
+
+            EvalAltResult::ErrorFunctionNotFound(_, ref mut pos)
+            | EvalAltResult::ErrorFunctionArgsMismatch(_, _, _, ref mut pos)
+            | EvalAltResult::ErrorBooleanArgMismatch(_, ref mut pos)
+            | EvalAltResult::ErrorCharMismatch(ref mut pos)
+            | EvalAltResult::ErrorArrayBounds(_, _, ref mut pos)
+            | EvalAltResult::ErrorStringBounds(_, _, ref mut pos)
+            | EvalAltResult::ErrorIndexingType(_, ref mut pos)
+            | EvalAltResult::ErrorIndexExpr(ref mut pos)
+            | EvalAltResult::ErrorIfGuard(ref mut pos)
+            | EvalAltResult::ErrorFor(ref mut pos)
+            | EvalAltResult::ErrorVariableNotFound(_, ref mut pos)
+            | EvalAltResult::ErrorAssignmentToUnknownLHS(ref mut pos)
+            | EvalAltResult::ErrorMismatchOutputType(_, ref mut pos)
+            | EvalAltResult::ErrorDotExpr(_, ref mut pos)
+            | EvalAltResult::ErrorArithmetic(_, ref mut pos)
+            | EvalAltResult::ErrorRuntime(_, ref mut pos)
+            | EvalAltResult::Return(_, ref mut pos) => *pos = new_position,
+        }
+    }
+}
+
+impl<T: AsRef<str>> From<T> for EvalAltResult {
+    fn from(err: T) -> Self {
+        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
     }
 }

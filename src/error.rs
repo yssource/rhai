@@ -143,6 +143,9 @@ impl fmt::Display for ParseError {
 
         if !self.1.is_eof() {
             write!(f, " ({})", self.1)
+        } else if !self.1.is_none() {
+            // Do not write any position if None
+            Ok(())
         } else {
             write!(f, " at the end of the script but there is no more input")
         }

@@ -3,14 +3,36 @@
 
 use crate::any::Any;
 use crate::engine::{Array, Engine};
-use crate::fn_register::RegisterFn;
+use crate::fn_register::{RegisterFn, RegisterResultFn};
+use crate::parser::Position;
+use crate::result::EvalAltResult;
+use num_traits::{
+    CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl, CheckedShr, CheckedSub,
+};
+use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
 
 macro_rules! reg_op {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
         $(
             $self.register_fn($x, $op as fn(x: $y, y: $y)->$y);
+        )*
+    )
+}
+
+macro_rules! reg_op_result {
+    ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+        $(
+            $self.register_result_fn($x, $op as fn(x: $y, y: $y)->Result<$y,EvalAltResult>);
+        )*
+    )
+}
+
+macro_rules! reg_op_result1 {
+    ($self:expr, $x:expr, $op:expr, $v:ty, $( $y:ty ),*) => (
+        $(
+            $self.register_result_fn($x, $op as fn(x: $y, y: $v)->Result<$y,EvalAltResult>);
         )*
     )
 }
@@ -23,6 +45,13 @@ macro_rules! reg_un {
     )
 }
 
+macro_rules! reg_un_result {
+    ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+        $(
+            $self.register_result_fn($x, $op as fn(x: $y)->Result<$y,EvalAltResult>);
+        )*
+    )
+}
 macro_rules! reg_cmp {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
         $(
@@ -69,20 +98,95 @@ macro_rules! reg_func3 {
 impl Engine<'_> {
     /// Register the core built-in library.
     pub(crate) fn register_core_lib(&mut self) {
-        fn add<T: Add>(x: T, y: T) -> <T as Add>::Output {
+        fn add<T: Display + CheckedAdd>(x: T, y: T) -> Result<T, EvalAltResult> {
+            x.checked_add(&y).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Addition overflow: {} + {}", x, y),
+                    Position::none(),
+                )
+            })
+        }
+        fn sub<T: Display + CheckedSub>(x: T, y: T) -> Result<T, EvalAltResult> {
+            x.checked_sub(&y).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Subtraction underflow: {} - {}", x, y),
+                    Position::none(),
+                )
+            })
+        }
+        fn mul<T: Display + CheckedMul>(x: T, y: T) -> Result<T, EvalAltResult> {
+            x.checked_mul(&y).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Multiplication overflow: {} * {}", x, y),
+                    Position::none(),
+                )
+            })
+        }
+        fn div<T>(x: T, y: T) -> Result<T, EvalAltResult>
+        where
+            T: Display + CheckedDiv + PartialEq + TryFrom<i8>,
+        {
+            if y == <T as TryFrom<i8>>::try_from(0)
+                .map_err(|_| ())
+                .expect("zero should always succeed")
+            {
+                return Err(EvalAltResult::ErrorArithmetic(
+                    format!("Division by zero: {} / {}", x, y),
+                    Position::none(),
+                ));
+            }
+
+            x.checked_div(&y).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Division overflow: {} / {}", x, y),
+                    Position::none(),
+                )
+            })
+        }
+        fn neg<T: Display + CheckedNeg>(x: T) -> Result<T, EvalAltResult> {
+            x.checked_neg().ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Negation overflow: -{}", x),
+                    Position::none(),
+                )
+            })
+        }
+        fn abs<T: Display + CheckedNeg + PartialOrd + From<i8>>(x: T) -> Result<T, EvalAltResult> {
+            if x >= 0.into() {
+                Ok(x)
+            } else {
+                x.checked_neg().ok_or_else(|| {
+                    EvalAltResult::ErrorArithmetic(
+                        format!("Negation overflow: -{}", x),
+                        Position::none(),
+                    )
+                })
+            }
+        }
+        fn add_unchecked<T: Add>(x: T, y: T) -> <T as Add>::Output {
             x + y
         }
-        fn sub<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
+        fn sub_unchecked<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
             x - y
         }
-        fn mul<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
+        fn mul_unchecked<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
             x * y
         }
-        fn div<T: Div>(x: T, y: T) -> <T as Div>::Output {
+        fn div_unchecked<T: Div>(x: T, y: T) -> <T as Div>::Output {
             x / y
         }
-        fn neg<T: Neg>(x: T) -> <T as Neg>::Output {
+        fn neg_unchecked<T: Neg>(x: T) -> <T as Neg>::Output {
             -x
+        }
+        fn abs_unchecked<T: Neg + PartialOrd + From<i8>>(x: T) -> T
+        where
+            <T as Neg>::Output: Into<T>,
+        {
+            if x < 0.into() {
+                (-x).into()
+            } else {
+                x
+            }
         }
         fn lt<T: PartialOrd>(x: T, y: T) -> bool {
             x < y
@@ -120,13 +224,45 @@ impl Engine<'_> {
         fn binary_xor<T: BitXor>(x: T, y: T) -> <T as BitXor>::Output {
             x ^ y
         }
-        fn left_shift<T: Shl<T>>(x: T, y: T) -> <T as Shl<T>>::Output {
-            x.shl(y)
+        fn left_shift<T: Display + CheckedShl>(x: T, y: i64) -> Result<T, EvalAltResult> {
+            if y < 0 {
+                return Err(EvalAltResult::ErrorArithmetic(
+                    format!("Left-shift by a negative number: {} << {}", x, y),
+                    Position::none(),
+                ));
+            }
+
+            CheckedShl::checked_shl(&x, y as u32).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Left-shift overflow: {} << {}", x, y),
+                    Position::none(),
+                )
+            })
         }
-        fn right_shift<T: Shr<T>>(x: T, y: T) -> <T as Shr<T>>::Output {
-            x.shr(y)
+        fn right_shift<T: Display + CheckedShr>(x: T, y: i64) -> Result<T, EvalAltResult> {
+            if y < 0 {
+                return Err(EvalAltResult::ErrorArithmetic(
+                    format!("Right-shift by a negative number: {} >> {}", x, y),
+                    Position::none(),
+                ));
+            }
+
+            CheckedShr::checked_shr(&x, y as u32).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Right-shift overflow: {} % {}", x, y),
+                    Position::none(),
+                )
+            })
         }
-        fn modulo<T: Rem<T>>(x: T, y: T) -> <T as Rem<T>>::Output {
+        fn modulo<T: Display + CheckedRem>(x: T, y: T) -> Result<T, EvalAltResult> {
+            x.checked_rem(&y).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Modulo division overflow: {} % {}", x, y),
+                    Position::none(),
+                )
+            })
+        }
+        fn modulo_unchecked<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
             x % y
         }
         fn pow_i64_i64(x: i64, y: i64) -> i64 {
@@ -139,10 +275,15 @@ impl Engine<'_> {
             x.powi(y as i32)
         }
 
-        reg_op!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
-        reg_op!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
-        reg_op!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
-        reg_op!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64);
+        reg_op_result!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op_result!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op_result!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op_result!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64);
+
+        reg_op!(self, "+", add_unchecked, f32, f64);
+        reg_op!(self, "-", sub_unchecked, f32, f64);
+        reg_op!(self, "*", mul_unchecked, f32, f64);
+        reg_op!(self, "/", div_unchecked, f32, f64);
 
         reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
         reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
@@ -162,15 +303,19 @@ impl Engine<'_> {
         reg_op!(self, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64);
         reg_op!(self, "&", and, bool);
         reg_op!(self, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op!(self, "<<", left_shift, i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_op!(self, ">>", right_shift, i8, u8, i16, u16);
-        reg_op!(self, ">>", right_shift, i32, i64, u32, u64);
-        reg_op!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op_result1!(self, "<<", left_shift, i64, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op_result1!(self, ">>", right_shift, i64, i8, u8, i16, u16);
+        reg_op_result1!(self, ">>", right_shift, i64, i32, i64, u32, u64);
+        reg_op_result!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op!(self, "%", modulo_unchecked, f32, f64);
         self.register_fn("~", pow_i64_i64);
         self.register_fn("~", pow_f64_f64);
         self.register_fn("~", pow_f64_i64);
 
-        reg_un!(self, "-", neg, i8, i16, i32, i64, f32, f64);
+        reg_un_result!(self, "-", neg, i8, i16, i32, i64);
+        reg_un!(self, "-", neg_unchecked, f32, f64);
+        reg_un_result!(self, "abs", abs, i8, i16, i32, i64);
+        reg_un!(self, "abs", abs_unchecked, f32, f64);
         reg_un!(self, "!", not, bool);
 
         self.register_fn("+", |x: String, y: String| x + &y); // String + String

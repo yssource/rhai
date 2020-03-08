@@ -69,7 +69,7 @@ pub use any::{Any, AnyExt, Dynamic, Variant};
 pub use call::FuncArgs;
 pub use engine::{Array, Engine};
 pub use error::{ParseError, ParseErrorType};
-pub use fn_register::{RegisterDynamicFn, RegisterFn};
+pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 pub use parser::{Position, AST};
 pub use result::EvalAltResult;
 pub use scope::Scope;
