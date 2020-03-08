@@ -303,6 +303,8 @@ impl Engine<'_> {
         self.register_fn("contains", |s: &mut String, ch: char| s.contains(ch));
         self.register_fn("contains", |s: &mut String, find: String| s.contains(&find));
         self.register_fn("clear", |s: &mut String| s.clear());
+        self.register_fn("append", |s: &mut String, ch: char| s.push(ch));
+        self.register_fn("append", |s: &mut String, add: String| s.push_str(&add));
         self.register_fn("truncate", |s: &mut String, len: i64| {
             if len >= 0 {
                 let chars: Vec<_> = s.chars().take(len as usize).collect();

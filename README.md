@@ -777,6 +777,7 @@ The following standard functions (defined in the standard library but excluded i
 
 * `len` - returns the number of characters (not number of bytes) in the string
 * `pad` - pads the string with an character until a specified number of characters
+* `append` - Adds a character or a string to the end of another string
 * `clear` - empties the string
 * `truncate` - cuts off the string at exactly a specified number of characters
 * `contains` - checks if a certain character or sub-string occurs in the string
