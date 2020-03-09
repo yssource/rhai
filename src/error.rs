@@ -64,9 +64,9 @@ pub enum ParseErrorType {
     /// An open `[` is missing the corresponding closing `]`.
     MissingRightBracket(String),
     /// An expression in function call arguments `()` has syntax error.
-    MalformedCallExpr,
+    MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
-    MalformedIndexExpr,
+    MalformedIndexExpr(String),
     /// Missing a variable name after the `let` keyword.
     VarExpectsIdentifier,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
@@ -110,8 +110,8 @@ impl Error for ParseError {
             ParseErrorType::MissingLeftBrace => "Expecting '{'",
             ParseErrorType::MissingRightBrace(_) => "Expecting '}'",
             ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
-            ParseErrorType::MalformedCallExpr => "Invalid expression in function call arguments",
-            ParseErrorType::MalformedIndexExpr => "Invalid index in indexing expression",
+            ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
+            ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
             ParseErrorType::VarExpectsIdentifier => "Expecting name of a variable",
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
@@ -128,7 +128,11 @@ impl Error for ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            ParseErrorType::BadInput(ref s) => write!(f, "{}", s)?,
+            ParseErrorType::BadInput(ref s)
+            | ParseErrorType::MalformedIndexExpr(ref s)
+            | ParseErrorType::MalformedCallExpr(ref s) => {
+                write!(f, "{}", if s.is_empty() { self.description() } else { s })?
+            }
             ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
             ParseErrorType::FnMissingParams(ref s) => {
                 write!(f, "Expecting parameters for function '{}'", s)?

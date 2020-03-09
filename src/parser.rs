@@ -1146,7 +1146,66 @@ fn parse_index_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     pos: Position,
 ) -> Result<Expr, ParseError> {
-    parse_expr(input).and_then(|idx_expr| match input.peek() {
+    let idx_expr = parse_expr(input)?;
+
+    // Check type of indexing - must be integer
+    match &idx_expr {
+        Expr::IntegerConstant(i, pos) if *i < 0 => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(format!(
+                    "Array access expects non-negative index: {} < 0",
+                    i
+                )),
+                *pos,
+            ))
+        }
+        Expr::FloatConstant(_, pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr("Array access expects integer index, not a float".into()),
+                *pos,
+            ))
+        }
+        Expr::CharConstant(_, pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(
+                    "Array access expects integer index, not a character".into(),
+                ),
+                *pos,
+            ))
+        }
+        Expr::StringConstant(_, pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr("Array access expects integer index, not a string".into()),
+                *pos,
+            ))
+        }
+        Expr::Assignment(_, _, pos) | Expr::Unit(pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr("Array access expects integer index, not ()".into()),
+                *pos,
+            ))
+        }
+        Expr::And(lhs, _) | Expr::Or(lhs, _) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(
+                    "Array access expects integer index, not a boolean".into(),
+                ),
+                lhs.position(),
+            ))
+        }
+        Expr::True(pos) | Expr::False(pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(
+                    "Array access expects integer index, not a boolean".into(),
+                ),
+                *pos,
+            ))
+        }
+        _ => (),
+    }
+
+    // Check if there is a closing bracket
+    match input.peek() {
         Some(&(Token::RightBracket, _)) => {
             input.next();
             return Ok(Expr::Index(lhs, Box::new(idx_expr), pos));
@@ -1163,7 +1222,7 @@ fn parse_index_expr<'a>(
                 Position::eof(),
             ))
         }
-    })
+    }
 }
 
 fn parse_ident_expr<'a>(
@@ -1728,8 +1787,22 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static
                 Some((Token::Identifier(s), _)) => {
                     params.push(s.into());
                 }
-                Some((_, pos)) => return Err(ParseError::new(PERR::MalformedCallExpr, pos)),
-                None => return Err(ParseError::new(PERR::MalformedCallExpr, Position::eof())),
+                Some((_, pos)) => {
+                    return Err(ParseError::new(
+                        PERR::MalformedCallExpr(
+                            "Function call arguments missing either a ',' or a ')'".into(),
+                        ),
+                        pos,
+                    ))
+                }
+                None => {
+                    return Err(ParseError::new(
+                        PERR::MalformedCallExpr(
+                            "Function call arguments missing a closing ')'".into(),
+                        ),
+                        Position::eof(),
+                    ))
+                }
             }
         },
     }
