@@ -68,7 +68,7 @@ mod call;
 mod engine;
 mod error;
 mod fn_register;
-mod optimize;
+//mod optimize;
 mod parser;
 mod result;
 mod scope;
