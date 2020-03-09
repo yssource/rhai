@@ -6,6 +6,7 @@ use crate::engine::{Array, Engine};
 use crate::fn_register::RegisterFn;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
+use std::{i32, i64, u32};
 
 #[cfg(feature = "unchecked")]
 use std::ops::{Shl, Shr};
@@ -293,12 +294,41 @@ impl Engine<'_> {
         fn modulo_u<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
             x % y
         }
+        #[cfg(not(feature = "unchecked"))]
+        fn pow_i64_i64_u(x: i64, y: i64) -> Result<i64, EvalAltResult> {
+            if y > (u32::MAX as i64) {
+                return Err(EvalAltResult::ErrorArithmetic(
+                    format!("Power overflow: {} ~ {}", x, y),
+                    Position::none(),
+                ));
+            }
+
+            x.checked_pow(y as u32).ok_or_else(|| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Power overflow: {} ~ {}", x, y),
+                    Position::none(),
+                )
+            })
+        }
+        #[cfg(feature = "unchecked")]
         fn pow_i64_i64(x: i64, y: i64) -> i64 {
-            x.pow(y as u32)
+            x.powi(y as u32)
         }
         fn pow_f64_f64(x: f64, y: f64) -> f64 {
             x.powf(y)
         }
+        #[cfg(not(feature = "unchecked"))]
+        fn pow_f64_i64_u(x: f64, y: i64) -> Result<f64, EvalAltResult> {
+            if y > (i32::MAX as i64) {
+                return Err(EvalAltResult::ErrorArithmetic(
+                    format!("Power overflow: {} ~ {}", x, y),
+                    Position::none(),
+                ));
+            }
+
+            Ok(x.powi(y as i32))
+        }
+        #[cfg(feature = "unchecked")]
         fn pow_f64_i64(x: f64, y: i64) -> f64 {
             x.powi(y as i32)
         }
@@ -361,9 +391,19 @@ impl Engine<'_> {
 
         reg_op!(self, "%", modulo_u, f32, f64);
 
-        self.register_fn("~", pow_i64_i64);
         self.register_fn("~", pow_f64_f64);
-        self.register_fn("~", pow_f64_i64);
+
+        #[cfg(not(feature = "unchecked"))]
+        {
+            self.register_result_fn("~", pow_i64_i64_u);
+            self.register_result_fn("~", pow_f64_i64_u);
+        }
+
+        #[cfg(feature = "unchecked")]
+        {
+            self.register_fn("~", pow_i64_i64);
+            self.register_fn("~", pow_f64_i64);
+        }
 
         #[cfg(not(feature = "unchecked"))]
         {
@@ -427,6 +467,33 @@ impl Engine<'_> {
     pub(crate) fn register_stdlib(&mut self) {
         use crate::fn_register::RegisterDynamicFn;
 
+        // Advanced math functions
+        self.register_fn("sin", |x: f64| x.to_radians().sin());
+        self.register_fn("cos", |x: f64| x.to_radians().cos());
+        self.register_fn("tan", |x: f64| x.to_radians().tan());
+        self.register_fn("sinh", |x: f64| x.to_radians().sinh());
+        self.register_fn("cosh", |x: f64| x.to_radians().cosh());
+        self.register_fn("tanh", |x: f64| x.to_radians().tanh());
+        self.register_fn("asin", |x: f64| x.asin().to_degrees());
+        self.register_fn("acos", |x: f64| x.acos().to_degrees());
+        self.register_fn("atan", |x: f64| x.atan().to_degrees());
+        self.register_fn("asinh", |x: f64| x.asinh().to_degrees());
+        self.register_fn("acosh", |x: f64| x.acosh().to_degrees());
+        self.register_fn("atanh", |x: f64| x.atanh().to_degrees());
+        self.register_fn("sqrt", |x: f64| x.sqrt());
+        self.register_fn("exp", |x: f64| x.exp());
+        self.register_fn("ln", |x: f64| x.ln());
+        self.register_fn("log", |x: f64, base: f64| x.log(base));
+        self.register_fn("log10", |x: f64| x.log10());
+        self.register_fn("floor", |x: f64| x.floor());
+        self.register_fn("ceiling", |x: f64| x.ceil());
+        self.register_fn("round", |x: f64| x.ceil());
+        self.register_fn("int", |x: f64| x.trunc());
+        self.register_fn("fraction", |x: f64| x.fract());
+        self.register_fn("is_nan", |x: f64| x.is_nan());
+        self.register_fn("is_finite", |x: f64| x.is_finite());
+        self.register_fn("is_infinite", |x: f64| x.is_infinite());
+
         // Register conversion functions
         self.register_fn("to_float", |x: i8| x as f64);
         self.register_fn("to_float", |x: u8| x as f64);
@@ -445,10 +512,37 @@ impl Engine<'_> {
         self.register_fn("to_int", |x: i32| x as i64);
         self.register_fn("to_int", |x: u32| x as i64);
         self.register_fn("to_int", |x: u64| x as i64);
-        self.register_fn("to_int", |x: f32| x as i64);
-        self.register_fn("to_int", |x: f64| x as i64);
-
         self.register_fn("to_int", |ch: char| ch as i64);
+
+        #[cfg(not(feature = "unchecked"))]
+        {
+            self.register_result_fn("to_int", |x: f32| {
+                if x > (i64::MAX as f32) {
+                    return Err(EvalAltResult::ErrorArithmetic(
+                        format!("Integer overflow: to_int({})", x),
+                        Position::none(),
+                    ));
+                }
+
+                Ok(x.trunc() as i64)
+            });
+            self.register_result_fn("to_int", |x: f64| {
+                if x > (i64::MAX as f64) {
+                    return Err(EvalAltResult::ErrorArithmetic(
+                        format!("Integer overflow: to_int({})", x),
+                        Position::none(),
+                    ));
+                }
+
+                Ok(x.trunc() as i64)
+            });
+        }
+
+        #[cfg(feature = "unchecked")]
+        {
+            self.register_fn("to_int", |x: f32| x as i64);
+            self.register_fn("to_int", |x: f64| x as i64);
+        }
 
         // Register array utility functions
         fn push<T: Any>(list: &mut Array, item: T) {

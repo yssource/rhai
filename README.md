@@ -157,12 +157,14 @@ let result: i64 = engine.call_fn("hello", &ast, (&mut String::from("abc"), &mut 
 
 The following primitive types are supported natively:
 
-* Integer: `i32`, `u32`, `i64` (default), `u64`
-* Floating-point: `f32`, `f64` (default)
-* Character: `char`
-* Boolean: `bool`
-* Array: `rhai::Array`
-* Dynamic (i.e. can be anything): `rhai::Dynamic`
+| Category                       | Types                                  |
+| ------------------------------ | -------------------------------------- |
+| Integer                        | `i32`, `u32`, `i64` _(default)_, `u64` |
+| Floating-point                 | `f32`, `f64` _(default)_               |
+| Character                      | `char`                                 |
+| Boolean                        | `bool`                                 |
+| Array                          | `rhai::Array`                          |
+| Dynamic (i.e. can be anything) | `rhai::Dynamic`                        |
 
 # Value conversions
 
@@ -508,15 +510,59 @@ fn main() {
 
 ## Variables
 
+Variables in `Rhai` follow normal naming rules:
+
+* Must start with an ASCII letter
+* Must contain only ASCII letters, digits and `_` underscores
+
+Example:
+
 ```rust
 let x = 3;
 ```
 
+## Numbers
+
+| Format           | Type                                                   |
+| ---------------- | ------------------------------------------------------ |
+| `123_345`, `-42` | `i64` in decimal, '`_`' separator can be used anywhere |
+| `0o07_76`        | `i64` in octal, '`_`' separator can be used anywhere   |
+| `0xabcd_ef`      | `i64` in hex, '`_`' separator can be used anywhere     |
+| `0b0101_1001`    | `i64` in binary, '`_`' separator can be used anywhere  |
+| `123_456.789`    | `f64`, '`_`' separator can be used anywhere            |
+
 ## Numeric operators
 
 ```rust
-let x = (1 + 2) * (6 - 4) / 2;
+let x = (1 + 2) * (6 - 4) / 2;  // arithmetic
+let reminder = 42 % 10;         // modulo
+let power = 42 ~ 2;             // power (i64 and f64 only)
+let left_shifted = 42 << 3;     // left shift
+let right_shifted = 42 >> 3;    // right shift
+let bit_op = 42 | 99;           // bit masking
 ```
+
+## Numeric functions
+
+The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
+
+| Category | Functions      |
+| -------- | -------------- |
+| `abs`    | absolute value |
+
+## Floating-point functions
+
+The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on `f64` only:
+
+| Category         | Functions                                                    |
+| ---------------- | ------------------------------------------------------------ |
+| Trigonometry     | `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` in degrees       |
+| Arc-trigonometry | `asin`, `acos`, `atan`, `asinh`, `acosh`, `atanh` in degrees |
+| Square root      | `sqrt`                                                       |
+| Exponential      | `exp` (base _e_)                                             |
+| Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)         |
+| Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction`               |
+| Tests            | `is_nan`, `is_finite`, `is_infinite`                         |
 
 ## Comparison operators
 
@@ -664,13 +710,17 @@ You can create arrays of values, and then access them with numeric indices.
 
 The following functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on arrays:
 
-* `push` - inserts an element at the end
-* `pop` - removes the last element and returns it (() if empty)
-* `shift` - removes the first element and returns it (() if empty)
-* `len` - returns the number of elements
-* `pad` - pads the array with an element until a specified length
-* `clear` - empties the array
-* `truncate` - cuts off the array at exactly a specified length (discarding all subsequent elements)
+| Function   | Description                                                                           |
+| ---------- | ------------------------------------------------------------------------------------- |
+| `push`     | inserts an element at the end                                                         |
+| `pop`      | removes the last element and returns it (`()` if empty)                               |
+| `shift`    | removes the first element and returns it (`()` if empty)                              |
+| `len`      | returns the number of elements                                                        |
+| `pad`      | pads the array with an element until a specified length                               |
+| `clear`    | empties the array                                                                     |
+| `truncate` | cuts off the array at exactly a specified length (discarding all subsequent elements) |
+
+Examples:
 
 ```rust
 let y = [1, 2, 3];      // 3 elements
@@ -813,14 +863,18 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on strings:
 
-* `len` - returns the number of characters (not number of bytes) in the string
-* `pad` - pads the string with an character until a specified number of characters
-* `append` - Adds a character or a string to the end of another string
-* `clear` - empties the string
-* `truncate` - cuts off the string at exactly a specified number of characters
-* `contains` - checks if a certain character or sub-string occurs in the string
-* `replace` - replaces a substring with another
-* `trim` - trims the string
+| Function   | Description                                                              |
+| ---------- | ------------------------------------------------------------------------ |
+| `len`      | returns the number of characters (not number of bytes) in the string     |
+| `pad`      | pads the string with an character until a specified number of characters |
+| `append`   | Adds a character or a string to the end of another string                |
+| `clear`    | empties the string                                                       |
+| `truncate` | cuts off the string at exactly a specified number of characters          |
+| `contains` | checks if a certain character or sub-string occurs in the string         |
+| `replace`  | replaces a substring with another                                        |
+| `trim`     | trims the string                                                         |
+
+Examples:
 
 ```rust
 let full_name == " Bob C. Davis ";
