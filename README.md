@@ -1,4 +1,5 @@
-# Rhai - Embedded Scripting for Rust
+Rhai - Embedded Scripting for Rust
+=================================
 
 Rhai is an embedded scripting language for Rust that gives you a safe and easy way to add scripting to your applications.
 
@@ -13,7 +14,8 @@ Rhai's current feature set:
 
 **Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
 
-## Installation
+Installation
+------------
 
 You can install Rhai using crates by adding this line to your dependencies:
 
@@ -33,7 +35,8 @@ to use the latest version.
 
 Beware that in order to use pre-releases (alpha and beta) you need to specify the exact version in your `Cargo.toml`.
 
-## Optional Features
+Optional features
+-----------------
 
 ### `debug_msgs`
 
@@ -47,24 +50,28 @@ Exclude the standard library of utility functions in the build, and only include
 
 Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!
 
-## Related
+Related
+-------
 
 Other cool projects to check out:
 
 * [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
 * You can also check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
 
-## Examples
+Examples
+--------
 
 The repository contains several examples in the `examples` folder:
 
-* `arrays_and_structs` demonstrates registering a new type to Rhai and the usage of arrays on it
-* `custom_types_and_methods` shows how to register a type and methods for it
-* `hello` simple example that evaluates an expression and prints the result
-* `reuse_scope` evaluates two pieces of code in separate runs, but using a common scope
-* `rhai_runner` runs each filename passed to it as a Rhai script
-* `simple_fn` shows how to register a Rust function to a Rhai engine
-* `repl` a simple REPL, see source code for what it can do at the moment
+| Example                    | Description                                                               |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `arrays_and_structs`       | demonstrates registering a new type to Rhai and the usage of arrays on it |
+| `custom_types_and_methods` | shows how to register a type and methods for it                           |
+| `hello`                    | simple example that evaluates an expression and prints the result         |
+| `reuse_scope`              | evaluates two pieces of code in separate runs, but using a common scope   |
+| `rhai_runner`              | runs each filename passed to it as a Rhai script                          |
+| `simple_fn`                | shows how to register a Rust function to a Rhai engine                    |
+| `repl`                     | a simple REPL, see source code for what it can do at the moment           |
 
 Examples can be run with the following command:
 
@@ -72,25 +79,28 @@ Examples can be run with the following command:
 cargo run --example name
 ```
 
-## Example Scripts
+Example Scripts
+---------------
 
 We also have a few examples scripts that showcase Rhai's features, all stored in the `scripts` folder:
 
-* `array.rhai` - arrays in Rhai
-* `assignment.rhai` - variable declarations
-* `comments.rhai` - just comments
-* `for1.rhai` - for loops
-* `function_decl1.rhai` - a function without parameters
-* `function_decl2.rhai` - a function with two parameters
-* `function_decl3.rhai` - a function with many parameters
-* `if1.rhai` - if example
-* `loop.rhai` - endless loop in Rhai, this example emulates a do..while cycle
-* `op1.rhai` - just a simple addition
-* `op2.rhai` - simple addition and multiplication
-* `op3.rhai` - change evaluation order with parenthesis
-* `speed_test.rhai` - a simple program to measure the speed of Rhai's interpreter
-* `string.rhai`- string operations
-* `while.rhai` - while loop
+| Script                | Description                                                   |
+| --------------------- | ------------------------------------------------------------- |
+| `array.rhai`          | arrays in Rhai                                                |
+| `assignment.rhai`     | variable declarations                                         |
+| `comments.rhai`       | just comments                                                 |
+| `for1.rhai`           | for loops                                                     |
+| `function_decl1.rhai` | a function without parameters                                 |
+| `function_decl2.rhai` | a function with two parameters                                |
+| `function_decl3.rhai` | a function with many parameters                               |
+| `if1.rhai`            | if example                                                    |
+| `loop.rhai`           | endless loop in Rhai, this example emulates a do..while cycle |
+| `op1.rhai`            | just a simple addition                                        |
+| `op2.rhai`            | simple addition and multiplication                            |
+| `op3.rhai`            | change evaluation order with parenthesis                      |
+| `speed_test.rhai`     | a simple program to measure the speed of Rhai's interpreter   |
+| `string.rhai`         | string operations                                             |
+| `while.rhai`          | while loop                                                    |
 
 To run the scripts, you can either make your own tiny program, or make use of the `rhai_runner`
 example program:
@@ -99,7 +109,8 @@ example program:
 cargo run --example rhai_runner scripts/any_script.rhai
 ```
 
-# Hello world
+Hello world
+-----------
 
 To get going with Rhai, you create an instance of the scripting engine and then run eval.
 
@@ -153,7 +164,8 @@ let ast = Engine::compile("fn hello(x, y) { x.len() + y }")?;
 let result: i64 = engine.call_fn("hello", &ast, (&mut String::from("abc"), &mut 123_i64))?;
 ```
 
-# Values and types
+Values and types
+----------------
 
 The following primitive types are supported natively:
 
@@ -166,7 +178,8 @@ The following primitive types are supported natively:
 | Array                          | `rhai::Array`                          |
 | Dynamic (i.e. can be anything) | `rhai::Dynamic`                        |
 
-# Value conversions
+Value conversions
+-----------------
 
 All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
 
@@ -193,7 +206,8 @@ if z.type_of() == "string" {
 }
 ```
 
-# Working with functions
+Working with functions
+----------------------
 
 Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.
 
@@ -242,7 +256,8 @@ fn decide(yes_no: bool) -> Dynamic {
 }
 ```
 
-# Generic functions
+Generic functions
+-----------------
 
 Generic functions can be used in Rhai, but you'll need to register separate instances for each concrete type:
 
@@ -266,7 +281,8 @@ fn main() {
 
 You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions and call the correct one, based on the types of the arguments, from your script.
 
-# Fallible functions
+Fallible functions
+------------------
 
 If your function is _fallible_ (i.e. it returns a `Result<_, Error>`),  you can register it with `register_result_fn` (using the `RegisterResultFn` trait).
 
@@ -298,7 +314,8 @@ fn main() {
 }
 ```
 
-# Overriding built-in functions
+Overriding built-in functions
+----------------------------
 
 Any similarly-named function defined in a script overrides any built-in function.
 
@@ -311,7 +328,8 @@ fn to_int(num) {
 print(to_int(123));     // what will happen?
 ```
 
-# Custom types and methods
+Custom types and methods
+-----------------------
 
 Here's an more complete example of working with Rust.  First the example, then we'll break it into parts:
 
@@ -414,7 +432,8 @@ print(x.type_of());     // prints "foo::bar::TestStruct"
 
 If you use `register_type_with_name` to register the custom type with a special pretty-print name, `type_of` will return that instead.
 
-# Getters and setters
+Getters and setters
+-------------------
 
 Similarly, you can work with members of your custom types.  This works by registering a 'get' or a 'set' function for working with your struct.
 
@@ -452,24 +471,8 @@ if let Ok(result) = engine.eval::<i64>("let a = new_ts(); a.x = 500; a.x") {
 }
 ```
 
-### WARNING: Gotcha's with Getters
-
-When you _get_ a property, the value is cloned.  Any update to it downstream will **NOT** be reflected back to the custom type.
-
-This can introduce subtle bugs.  For example:
-
-```rust
-fn change(s) {
-    s = 42;
-}
-
-let a = new_ts();
-a.x = 500;
-a.x.change();   // Only a COPY of 'a.x' is changed. 'a.x' is NOT changed.
-a.x == 500;
-```
-
-# Initializing and maintaining state
+Initializing and maintaining state
+---------------------------------
 
 By default, Rhai treats each engine invocation as a fresh one, persisting only the functions that have been defined but no top-level state.  This gives each one a fairly clean starting place.  Sometimes, though, you want to continue using the same top-level state from one invocation to the next.
 
@@ -506,32 +509,48 @@ fn main() {
 }
 ```
 
-# Rhai Language guide
+Rhai Language guide
+===================
 
-## Variables
+Comments
+--------
 
-Variables in `Rhai` follow normal naming rules:
+```rust
+let /* intruder comment */ name = "Bob";
+// This is a very important comment
+/* This comment spans
+   multiple lines, so it
+   only makes sense that
+   it is even more important */
 
-* Must start with an ASCII letter
-* Must contain only ASCII letters, digits and `_` underscores
+/* Fear not, Rhai satisfies all your nesting
+   needs with nested comments:
+   /*/*/*/*/**/*/*/*/*/
+*/
+```
 
-Example:
+Variables
+---------
+
+Variables in `Rhai` follow normal naming rules (i.e. must contain only ASCII letters, digits and '`_`' underscores).
 
 ```rust
 let x = 3;
 ```
 
-## Numbers
+Numbers
+-------
 
-| Format           | Type                                                   |
-| ---------------- | ------------------------------------------------------ |
-| `123_345`, `-42` | `i64` in decimal, '`_`' separator can be used anywhere |
-| `0o07_76`        | `i64` in octal, '`_`' separator can be used anywhere   |
-| `0xabcd_ef`      | `i64` in hex, '`_`' separator can be used anywhere     |
-| `0b0101_1001`    | `i64` in binary, '`_`' separator can be used anywhere  |
-| `123_456.789`    | `f64`, '`_`' separator can be used anywhere            |
+| Format           | Type                                           |
+| ---------------- | ---------------------------------------------- |
+| `123_345`, `-42` | `i64` in decimal, '`_`' separators are ignored |
+| `0o07_76`        | `i64` in octal, '`_`' separators are ignored   |
+| `0xabcd_ef`      | `i64` in hex, '`_`' separators are ignored     |
+| `0b0101_1001`    | `i64` in binary, '`_`' separators are ignored  |
+| `123_456.789`    | `f64`, '`_`' separators are ignored            |
 
-## Numeric operators
+Numeric operators
+-----------------
 
 ```rust
 let x = (1 + 2) * (6 - 4) / 2;  // arithmetic
@@ -542,17 +561,30 @@ let right_shifted = 42 >> 3;    // right shift
 let bit_op = 42 | 99;           // bit masking
 ```
 
-## Numeric functions
+Unary operators
+---------------
 
-The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
+```rust
+let number = -5;
+number = -5 - +5;
+let booly = !true;
+```
 
-| Category | Functions      |
-| -------- | -------------- |
-| `abs`    | absolute value |
+Numeric functions
+-----------------
 
-## Floating-point functions
+The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
-The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on `f64` only:
+| Function   | Description                         |
+| ---------- | ----------------------------------- |
+| `abs`      | absolute value                      |
+| `to_int`   | converts an `f32` or `f64` to `i64` |
+| `to_float` | converts an integer type to `f64`   |
+
+Floating-point functions
+------------------------
+
+The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -564,151 +596,94 @@ The following standard functions (defined in the standard library but excluded i
 | Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction`               |
 | Tests            | `is_nan`, `is_finite`, `is_infinite`                         |
 
-## Comparison operators
-
-You can compare most values of the same data type.  If you compare two values of _different_ data types, the result is always `false`.
-
-```rust
-42 == 42;           // true
-42 > 42;            // false
-"hello" > "foo";    // true
-"42" == 42;         // false
-42 == 42.0;         // false - i64 is different from f64
-```
-
-## Boolean operators
-
-Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated if the first one already proves the condition wrong.
-
-Single boolean operators `&` and `|` always evaluate both operands.
+Strings and Chars
+-----------------
 
 ```rust
-this() || that();   // that() is not evaluated if this() is true
-this() && that();   // that() is not evaluated if this() is false
+let name = "Bob";
+let middle_initial = 'C';
+let last = "Davis";
 
-this() | that();    // both this() and that() are evaluated
-this() & that();    // both this() and that() are evaluated
+let full_name = name + " " + middle_initial + ". " + last;
+full_name == "Bob C. Davis";
+
+// String building with different types
+let age = 42;
+let record = full_name + ": age " + age;
+record == "Bob C. Davis: age 42";
+
+// Strings can be indexed to get a character
+let c = record[4];
+c == 'C';
+
+ts.s = record;
+
+let c = ts.s[4];
+c == 'C';
+
+let c = "foo"[0];
+c == 'f';
+
+let c = ("foo" + "bar")[5];
+c == 'r';
+
+// Escape sequences in strings
+record += " \u2764\n";                  // escape sequence of '❤' in Unicode
+record == "Bob C. Davis: age 42 ❤\n";   // '\n' = new-line
+
+// Unlike Rust, Rhai strings can be modified
+record[4] = '\x58'; // 0x58 = 'X'
+record == "Bob X. Davis: age 42 ❤\n";
 ```
 
-## If
+The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on strings:
+
+| Function   | Description                                                              |
+| ---------- | ------------------------------------------------------------------------ |
+| `len`      | returns the number of characters (not number of bytes) in the string     |
+| `pad`      | pads the string with an character until a specified number of characters |
+| `append`   | Adds a character or a string to the end of another string                |
+| `clear`    | empties the string                                                       |
+| `truncate` | cuts off the string at exactly a specified number of characters          |
+| `contains` | checks if a certain character or sub-string occurs in the string         |
+| `replace`  | replaces a substring with another                                        |
+| `trim`     | trims the string                                                         |
+
+Examples:
 
 ```rust
-if true {
-    print("It's true!");
-} else if true {
-    print("It's true again!");
-} else {
-    print("It's false!");
-}
+let full_name == " Bob C. Davis ";
+full_name.len() == 14;
+
+full_name.trim();
+full_name.len() == 12;
+full_name == "Bob C. Davis";
+
+full_name.pad(15, '$');
+full_name.len() == 15;
+full_name == "Bob C. Davis$$$";
+
+full_name.truncate(6);
+full_name.len() == 6;
+full_name == "Bob C.";
+
+full_name.replace("Bob", "John");
+full_name.len() == 7;
+full_name = "John C.";
+
+full_name.contains('C') == true;
+full_name.contains("John") == true;
+
+full_name.clear();
+full_name.len() == 0;
 ```
 
-## While
-
-```rust
-let x = 10;
-
-while x > 0 {
-    print(x);
-    if x == 5 { break; }
-    x = x - 1;
-}
-```
-
-## Loop
-
-```rust
-let x = 10;
-
-loop {
-    print(x);
-    x = x - 1;
-    if x == 0 { break; }
-}
-```
-
-## Functions
-
-Rhai supports defining functions in script:
-
-```rust
-fn add(x, y) {
-    return x + y;
-}
-
-print(add(2, 3));
-```
-
-Just like in Rust, you can also use an implicit return.
-
-```rust
-fn add(x, y) {
-    x + y
-}
-
-print(add(2, 3));
-```
-
-Remember that functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
-
-Arguments are passed by value, so all functions are _pure_ (i.e. they never modify their arguments).
-
-Furthermore, functions can only be defined at the top level, never inside a block or another function.
-
-```rust
-// Top level is OK
-fn add(x, y) {
-    x + y
-}
-
-// The following will not compile
-fn do_addition(x) {
-    fn add_y(n) {   // functions cannot be defined inside another function
-        n + y
-    }
-
-    add_y(x)
-}
-```
-
-## Return
-
-```rust
-return;
-
-return 123 + 456;
-```
-
-## Errors and Exceptions
-
-```rust
-if error != "" {
-    throw error;  // 'throw' takes a string to form the exception text
-}
-
-throw;  // no exception text
-```
-
-All of `Engine`'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
-
-Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(reason, position))` with the exception text captured by the `reason` parameter.
-
-```rust
-let result = engine.eval::<i64>(&mut scope, r#"
-    let x = 42;
-
-    if x > 0 {
-        throw x + " is too large!";
-    }
-"#);
-
-println!(result);   // prints "Runtime error: 42 is too large! (line 5, position 15)"
-```
-
-## Arrays
+Arrays
+------
 
 You can create arrays of values, and then access them with numeric indices.
 
-The following functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on arrays:
+The following functions (defined in the standard library but excluded if `no_stdlib`) operate on arrays:
 
 | Function   | Description                                                                           |
 | ---------- | ------------------------------------------------------------------------------------- |
@@ -780,190 +755,46 @@ engine.register_fn("push",
 
 The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
 
-## For loops
+Comparison operators
+--------------------
+
+You can compare most values of the same data type.  If you compare two values of _different_ data types, the result is always `false`.
 
 ```rust
-let array = [1, 3, 5, 7, 9, 42];
-
-for x in array {
-    print(x);
-    if x == 42 { break; }
-}
-
-// The range function allows iterating from first..last-1
-for x in range(0,50) {
-    print(x);
-    if x == 42 { break; }
-}
+42 == 42;           // true
+42 > 42;            // false
+"hello" > "foo";    // true
+"42" == 42;         // false
+42 == 42.0;         // false - i64 is different from f64
 ```
 
-## Members and methods
+Boolean operators
+-----------------
+
+Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated if the first one already proves the condition wrong.
+
+Single boolean operators `&` and `|` always evaluate both operands.
 
 ```rust
-let a = new_ts();
-a.x = 500;
-a.update();
+this() || that();   // that() is not evaluated if this() is true
+this() && that();   // that() is not evaluated if this() is false
+
+this() | that();    // both this() and that() are evaluated
+this() & that();    // both this() and that() are evaluated
 ```
 
-## Numbers
-
-```rust
-let x = 123;            // i64
-let x = 123.4;          // f64
-let x = 123_456_789;    // separators can be put anywhere inside the number
-
-let x = 0x12abcd;       // i64 in hex
-let x = 0o777;          // i64 in oct
-let x = 0b1010_1111;    // i64 in binary
-```
-
-Conversion functions (defined in the standard library but excluded if you use the `no_stdlib` feature):
-
-* `to_int` - converts an `f32` or `f64` to `i64`
-* `to_float` - converts an integer type to `f64`
-
-## Strings and Chars
-
-```rust
-let name = "Bob";
-let middle_initial = 'C';
-let last = "Davis";
-
-let full_name = name + " " + middle_initial + ". " + last;
-full_name == "Bob C. Davis";
-
-// String building with different types (not available if 'no_stdlib' features is used)
-let age = 42;
-let record = full_name + ": age " + age;
-record == "Bob C. Davis: age 42";
-
-// Strings can be indexed to get a character
-let c = record[4];
-c == 'C';
-
-ts.s = record;
-
-let c = ts.s[4];
-c == 'C';
-
-let c = "foo"[0];
-c == 'f';
-
-let c = ("foo" + "bar")[5];
-c == 'r';
-
-// Escape sequences in strings
-record += " \u2764\n";                  // escape sequence of '❤' in Unicode 
-record == "Bob C. Davis: age 42 ❤\n";   // '\n' = new-line
-
-// Unlike Rust, Rhai strings can be modified
-record[4] = '\x58'; // 0x58 = 'X'
-record == "Bob X. Davis: age 42 ❤\n";
-```
-
-The following standard functions (defined in the standard library but excluded if you use the `no_stdlib` feature) operate on strings:
-
-| Function   | Description                                                              |
-| ---------- | ------------------------------------------------------------------------ |
-| `len`      | returns the number of characters (not number of bytes) in the string     |
-| `pad`      | pads the string with an character until a specified number of characters |
-| `append`   | Adds a character or a string to the end of another string                |
-| `clear`    | empties the string                                                       |
-| `truncate` | cuts off the string at exactly a specified number of characters          |
-| `contains` | checks if a certain character or sub-string occurs in the string         |
-| `replace`  | replaces a substring with another                                        |
-| `trim`     | trims the string                                                         |
-
-Examples:
-
-```rust
-let full_name == " Bob C. Davis ";
-full_name.len() == 14;
-
-full_name.trim();
-full_name.len() == 12;
-full_name == "Bob C. Davis";
-
-full_name.pad(15, '$');
-full_name.len() == 15;
-full_name == "Bob C. Davis$$$";
-
-full_name.truncate(6);
-full_name.len() == 6;
-full_name == "Bob C.";
-
-full_name.replace("Bob", "John");
-full_name.len() == 7;
-full_name = "John C.";
-
-full_name.contains('C') == true;
-full_name.contains("John") == true;
-
-full_name.clear();
-full_name.len() == 0;
-```
-
-## Print and Debug
-
-```rust
-print("hello");         // prints hello to stdout
-print(1 + 2 + 3);       // prints 6 to stdout
-print("hello" + 42);    // prints hello42 to stdout
-debug("world!");        // prints "world!" to stdout using debug formatting
-```
-
-### Overriding Print and Debug with Callback functions
-
-```rust
-// Any function that takes a &str argument can be used to override print and debug
-engine.on_print(|x| println!("hello: {}", x));
-engine.on_debug(|x| println!("DEBUG: {}", x));
-
-// Redirect logging output to somewhere else
-let mut log: Vec<String> = Vec::new();
-engine.on_print(|x| log.push(format!("log: {}", x)));
-engine.on_debug(|x| log.push(format!("DEBUG: {}", x)));
-            :
-        eval script
-            :
-println!("{:?}", log);   // 'log' captures all the 'print' and 'debug' results.
-```
-
-## Comments
-
-```rust
-let /* intruder comment */ name = "Bob";
-// This is a very important comment
-/* This comment spans
-   multiple lines, so it
-   only makes sense that
-   it is even more important */
-
-/* Fear not, Rhai satisfies all your nesting
-   needs with nested comments:
-   /*/*/*/*/**/*/*/*/*/
-*/
-```
-
-## Unary operators
-
-```rust
-let number = -5;
-number = -5 - +5;
-let booly = !true;
-```
-
-## Compound assignment operators
+Compound assignment operators
+----------------------------
 
 ```rust
 let number = 5;
-number += 4;
-number -= 3;
-number *= 2;
-number /= 1;
-number %= 3;
-number <<= 2;
-number >>= 1;
+number += 4;    // number = number + 4
+number -= 3;    // number = number - 3
+number *= 2;    // number = number * 2
+number /= 1;    // number = number / 1
+number %= 3;    // number = number % 3
+number <<= 2;   // number = number << 2
+number >>= 1;   // number = number >> 1
 ```
 
 The `+=` operator can also be used to build strings:
@@ -974,4 +805,196 @@ my_str += "ABC";
 my_str += 12345;
 
 my_str == "abcABC12345"
+```
+
+If
+--
+
+```rust
+if true {
+    print("It's true!");
+} else if true {
+    print("It's true again!");
+} else {
+    print("It's false!");
+}
+```
+
+While
+-----
+
+```rust
+let x = 10;
+
+while x > 0 {
+    print(x);
+    if x == 5 { break; }
+    x = x - 1;
+}
+```
+
+Loop
+----
+
+```rust
+let x = 10;
+
+loop {
+    print(x);
+    x = x - 1;
+    if x == 0 { break; }
+}
+```
+
+For
+---
+
+```rust
+let array = [1, 3, 5, 7, 9, 42];
+
+// Iterate through array
+for x in array {
+    print(x);
+    if x == 42 { break; }
+}
+
+// The 'range' function allows iterating from first..last-1
+for x in range(0, 50) {
+    print(x);
+    if x == 42 { break; }
+}
+```
+
+Return
+------
+
+```rust
+return;     // equivalent to return ();
+
+return 123 + 456;
+```
+
+Errors and Exceptions
+---------------------
+
+```rust
+if some_bad_condition_has_happened {
+    throw error;  // 'throw' takes a string to form the exception text
+}
+
+throw;  // no exception text
+```
+
+All of `Engine`'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
+
+Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(reason, position))` with the exception text captured by the `reason` parameter.
+
+```rust
+let result = engine.eval::<i64>(&mut scope, r#"
+    let x = 42;
+
+    if x > 0 {
+        throw x + " is too large!";
+    }
+"#);
+
+println!(result);   // prints "Runtime error: 42 is too large! (line 5, position 15)"
+```
+
+Functions
+---------
+
+Rhai supports defining functions in script:
+
+```rust
+fn add(x, y) {
+    return x + y;
+}
+
+print(add(2, 3));
+```
+
+Just like in Rust, you can also use an implicit return.
+
+```rust
+fn add(x, y) {
+    x + y
+}
+
+print(add(2, 3));
+```
+
+Remember that functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
+
+However, all arguments are passed by _value_, so all functions are _pure_ (i.e. they never modify their arguments).
+Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if you are not careful.
+
+```rust
+fn change(s) {
+    s = 42;     // only a COPY of 'x' is changed
+}
+
+let x = 500;
+x.change();
+x == 500;       // 'x' is NOT changed!
+```
+
+Furthermore, functions can only be defined at the top level, never inside a block or another function.
+
+```rust
+// Top level is OK
+fn add(x, y) {
+    x + y
+}
+
+// The following will not compile
+fn do_addition(x) {
+    fn add_y(n) {   // functions cannot be defined inside another function
+        n + y
+    }
+
+    add_y(x)
+}
+```
+
+Members and methods
+-------------------
+
+```rust
+let a = new_ts();
+a.x = 500;
+a.update();
+```
+
+`print` and `debug`
+-------------------
+
+```rust
+print("hello");         // prints hello to stdout
+print(1 + 2 + 3);       // prints 6 to stdout
+print("hello" + 42);    // prints hello42 to stdout
+debug("world!");        // prints "world!" to stdout using debug formatting
+```
+
+### Overriding `print` and `debug` with callback functions
+
+```rust
+// Any function or closure that takes an &str argument can be used to override print and debug
+engine.on_print(|x| println!("hello: {}", x));
+engine.on_debug(|x| println!("DEBUG: {}", x));
+
+// Example: quick-'n-dirty logging
+let mut log: Vec<String> = Vec::new();
+
+// Redirect print/debug output to 'log'
+engine.on_print(|s| log.push(format!("entry: {}", s)));
+engine.on_debug(|s| log.push(format!("DEBUG: {}", s)));
+
+// Evalulate script
+engine.eval::<()>(script)?;
+
+// 'log' captures all the 'print' and 'debug' output
+for entry in log {
+    println!("{}", entry);
+}
 ```
