@@ -338,6 +338,7 @@ impl Token {
         use self::Token::*;
 
         match *self {
+            LexError(_)      |
             LeftBrace        | // (+expr) - is unary
             // RightBrace    | {expr} - expr not unary & is closing
             LeftParen        | // {-expr} - is unary
@@ -386,6 +387,7 @@ impl Token {
             PowerOf          |
             In               |
             PowerOfAssign => true,
+
             _ => false,
         }
     }
@@ -398,6 +400,7 @@ impl Token {
             RightBrace | RightParen | RightBracket | Plus | Minus | Multiply | Divide | Comma
             | Equals | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo
             | EqualsTo | NotEqualsTo | Pipe | Or | Ampersand | And | PowerOf => true,
+
             _ => false,
         }
     }
@@ -567,6 +570,8 @@ impl<'a> TokenIterator<'a> {
     }
 
     fn inner_next(&mut self) -> Option<(Token, Position)> {
+        let mut negated = false;
+
         while let Some(c) = self.char_stream.next() {
             self.advance();
 
@@ -651,6 +656,10 @@ impl<'a> TokenIterator<'a> {
                             }
                             _ => break,
                         }
+                    }
+
+                    if negated {
+                        result.insert(0, '-');
                     }
 
                     if let Some(radix) = radix_base {
@@ -761,20 +770,17 @@ impl<'a> TokenIterator<'a> {
                         pos,
                     ))
                 }
-                '-' => {
-                    return Some((
-                        match self.char_stream.peek() {
-                            Some(&'=') => {
-                                self.char_stream.next();
-                                self.advance();
-                                Token::MinusAssign
-                            }
-                            _ if self.last.is_next_unary() => Token::UnaryMinus,
-                            _ => Token::Minus,
-                        },
-                        pos,
-                    ))
-                }
+                '-' => match self.char_stream.peek() {
+                    // Negative number?
+                    Some('0'..='9') => negated = true,
+                    Some('=') => {
+                        self.char_stream.next();
+                        self.advance();
+                        return Some((Token::MinusAssign, pos));
+                    }
+                    _ if self.last.is_next_unary() => return Some((Token::UnaryMinus, pos)),
+                    _ => return Some((Token::Minus, pos)),
+                },
                 '*' => {
                     return Some((
                         match self.char_stream.peek() {
@@ -1034,19 +1040,28 @@ fn get_precedence(token: &Token) -> i8 {
         | Token::XOrAssign
         | Token::ModuloAssign
         | Token::PowerOfAssign => 10,
+
         Token::Or | Token::XOr | Token::Pipe => 11,
+
         Token::And | Token::Ampersand => 12,
+
         Token::LessThan
         | Token::LessThanEqualsTo
         | Token::GreaterThan
         | Token::GreaterThanEqualsTo
         | Token::EqualsTo
         | Token::NotEqualsTo => 15,
+
         Token::Plus | Token::Minus => 20,
+
         Token::Divide | Token::Multiply | Token::PowerOf => 40,
+
         Token::LeftShift | Token::RightShift => 50,
+
         Token::Modulo => 60,
+
         Token::Period => 100,
+
         _ => -1,
     }
 }
@@ -1056,6 +1071,7 @@ fn parse_paren_expr<'a>(
     begin: Position,
 ) -> Result<Expr, ParseError> {
     match input.peek() {
+        // ()
         Some((Token::RightParen, _)) => {
             input.next();
             return Ok(Expr::Unit(begin));
@@ -1272,16 +1288,22 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
         Some(&(Token::UnaryMinus, pos)) => {
             input.next();
 
-            Ok(Expr::FunctionCall(
-                "-".into(),
-                vec![parse_primary(input)?],
-                None,
-                pos,
-            ))
+            match parse_unary(input) {
+                // Negative integer
+                Ok(Expr::IntegerConstant(i, pos)) => Ok(i
+                    .checked_neg()
+                    .map(|x| Expr::IntegerConstant(x, pos))
+                    .unwrap_or_else(|| Expr::FloatConstant(-(i as f64), pos))),
+                // Negative float
+                Ok(Expr::FloatConstant(f, pos)) => Ok(Expr::FloatConstant(-f, pos)),
+                // Call negative function
+                Ok(expr) => Ok(Expr::FunctionCall("-".into(), vec![expr], None, pos)),
+                err @ Err(_) => err,
+            }
         }
         Some(&(Token::UnaryPlus, _)) => {
             input.next();
-            parse_primary(input)
+            parse_unary(input)
         }
         Some(&(Token::Bang, pos)) => {
             input.next();

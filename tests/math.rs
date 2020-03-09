@@ -21,7 +21,7 @@ fn test_math() -> Result<(), EvalAltResult> {
             Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
             r => panic!("should return overflow error: {:?}", r),
         }
-        match engine.eval::<i64>("(-9223372036854775807) - 2") {
+        match engine.eval::<i64>("-9223372036854775808 - 1") {
             Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
             r => panic!("should return underflow error: {:?}", r),
         }
