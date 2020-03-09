@@ -38,17 +38,11 @@ Beware that in order to use pre-releases (alpha and beta) you need to specify th
 Optional features
 -----------------
 
-### `debug_msgs`
-
-Print debug messages to stdout (using `println!`) related to function registrations and function calls.
-
-### `no_stdlib`
-
-Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities.
-
-### `unchecked`
-
-Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!
+| Feature      | Description                                                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `debug_msgs` | Print debug messages to stdout (using `println!`) related to function registrations and function calls.                 |
+| `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. |
+| `unchecked`  | Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!              |
 
 Related
 -------
@@ -115,40 +109,48 @@ Hello world
 To get going with Rhai, you create an instance of the scripting engine and then run eval.
 
 ```rust
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 
-fn main() {
+fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    if let Ok(result) = engine.eval::<i64>("40 + 2") {
-        println!("Answer: {}", result);  // prints 42
-    }
+    let result = engine.eval::<i64>("40 + 2")?;
+
+    println!("Answer: {}", result);  // prints 42
 }
 ```
 
 You can also evaluate a script file:
 
 ```rust
-if let Ok(result) = engine.eval_file::<i64>("hello_world.rhai") { ... }
+let result = engine.eval_file::<i64>("hello_world.rhai")?;
 ```
 
 If you want to repeatedly evaluate a script, you can _compile_ it first into an AST (abstract syntax tree) form:
 
 ```rust
+use rhai::Engine;
+
+let mut engine = Engine::new();
+
 // Compile to an AST and store it for later evaluations
-let ast = Engine::compile("40 + 2").unwrap();
+let ast = engine.compile("40 + 2")?;
 
 for _ in 0..42 {
-    if let Ok(result) = engine.eval_ast::<i64>(&ast) {
-        println!("Answer: {}", result);  // prints 42
-    }
+    let result = engine.eval_ast::<i64>(&ast)?;
+
+    println!("Answer: {}", result);  // prints 42
 }
 ```
 
 Compiling a script file is also supported:
 
 ```rust
-let ast = Engine::compile_file("hello_world.rhai").unwrap();
+use rhai::Engine;
+
+let mut engine = Engine::new();
+
+let ast = engine.compile_file("hello_world.rhai").unwrap();
 ```
 
 Rhai also allows you to work _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust.
@@ -156,8 +158,12 @@ You do this via `call_fn`, which takes a compiled AST (output from `compile`) an
 function call arguments:
 
 ```rust
+use rhai::Engine;
+
+let mut engine = Engine::new();
+
 // Define a function in a script and compile to AST
-let ast = Engine::compile("fn hello(x, y) { x.len() + y }")?;
+let ast = engine.compile("fn hello(x, y) { x.len() + y }")?;
 
 // Evaluate the function in the AST, passing arguments into the script as a tuple
 // (beware, arguments must be of the correct types because Rhai does not have built-in type conversions)
@@ -212,7 +218,7 @@ Working with functions
 Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.
 
 ```rust
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 use rhai::RegisterFn;                       // include the `RegisterFn` trait to use `register_fn`
 use rhai::{Dynamic, RegisterDynamicFn};     // include the `RegisterDynamicFn` trait to use `register_dynamic_fn`
 
@@ -226,21 +232,23 @@ fn get_an_any() -> Dynamic {
     Box::new(42_i64)
 }
 
-fn main() {
+fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     engine.register_fn("add", add);
 
-    if let Ok(result) = engine.eval::<i64>("add(40, 2)") {
-       println!("Answer: {}", result);  // prints 42
-    }
+    let result = engine.eval::<i64>("add(40, 2)")?;
+
+    println!("Answer: {}", result);  // prints 42
 
     // Functions that return Dynamic values must use register_dynamic_fn()
     engine.register_dynamic_fn("get_an_any", get_an_any);
 
-    if let Ok(result) = engine.eval::<i64>("get_an_any()") {
-       println!("Answer: {}", result);  // prints 42
-    }
+    let result = engine.eval::<i64>("get_an_any()")?;
+
+    println!("Answer: {}", result);  // prints 42
+
+    Ok(())
 }
 ```
 
@@ -334,7 +342,8 @@ Custom types and methods
 Here's an more complete example of working with Rust.  First the example, then we'll break it into parts:
 
 ```rust
-use rhai::{Engine, RegisterFn};
+use rhai::{Engine, EvalAltResult};
+use rhai::RegisterFn;
 
 #[derive(Clone)]
 struct TestStruct {
@@ -351,7 +360,7 @@ impl TestStruct {
     }
 }
 
-fn main() {
+fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     engine.register_type::<TestStruct>();
@@ -359,9 +368,11 @@ fn main() {
     engine.register_fn("update", TestStruct::update);
     engine.register_fn("new_ts", TestStruct::new);
 
-    if let Ok(result) = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x") {
-        println!("result: {}", result.x); // prints 1001
-    }
+    let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
+
+    println!("result: {}", result.x); // prints 1001
+
+    Ok(())
 }
 ```
 
@@ -404,9 +415,9 @@ engine.register_fn("new_ts", TestStruct::new);
 Finally, we call our script.  The script can see the function and method we registered earlier.  We need to get the result back out from script land just as before, this time casting to our custom struct type.
 
 ```rust
-if let Ok(result) = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x") {
-    println!("result: {}", result.x); // prints 1001
-}
+let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
+
+println!("result: {}", result.x); // prints 1001
 ```
 
 In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method-call on that type because internally they are the same thing: methods on a type is implemented as a functions taking an first argument.
@@ -418,9 +429,9 @@ fn foo(ts: &mut TestStruct) -> i64 {
 
 engine.register_fn("foo", foo);
 
-if let Ok(result) = engine.eval::<i64>("let x = new_ts(); x.foo()") {
-    println!("result: {}", result); // prints 1
-}
+let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
+
+println!("result: {}", result); // prints 1
 ```
 
 `type_of` works fine with custom types and returns the name of the type:
@@ -466,9 +477,9 @@ engine.register_type::<TestStruct>();
 engine.register_get_set("x", TestStruct::get_x, TestStruct::set_x);
 engine.register_fn("new_ts", TestStruct::new);
 
-if let Ok(result) = engine.eval::<i64>("let a = new_ts(); a.x = 500; a.x") {
-    println!("result: {}", result);
-}
+let result = engine.eval::<i64>("let a = new_ts(); a.x = 500; a.x")?;
+
+println!("result: {}", result);
 ```
 
 Initializing and maintaining state
@@ -479,9 +490,9 @@ By default, Rhai treats each engine invocation as a fresh one, persisting only t
 In this example, we first create a state with a few initialized variables, then thread the same state through multiple invocations:
 
 ```rust
-use rhai::{Engine, Scope};
+use rhai::{Engine, Scope, EvalAltResult};
 
-fn main() {
+fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     // First create the state
@@ -497,15 +508,17 @@ fn main() {
     engine.eval_with_scope::<()>(&mut scope, r"
         let x = 4 + 5 - y + z;
         y = 1;
-    ").expect("y and z not found?");
+    ")?;
 
     // Second invocation using the same state
-    if let Ok(result) = engine.eval_with_scope::<i64>(&mut scope, "x") {
-       println!("result: {}", result);  // should print 966
-    }
+    let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
+
+    println!("result: {}", result);  // should print 966
 
     // Variable y is changed in the script
-    assert_eq!(scope.get_value::<i64>("y").unwrap(), 1);
+    assert_eq!(scope.get_value::<i64>("y")?, 1);
+
+    Ok(())
 }
 ```
 

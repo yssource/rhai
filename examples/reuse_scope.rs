@@ -1,14 +1,14 @@
-use rhai::{Engine, Scope};
+use rhai::{Engine, EvalAltResult, Scope};
 
-fn main() {
+fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
     let mut scope = Scope::new();
 
-    assert!(engine
-        .eval_with_scope::<()>(&mut scope, "let x = 4 + 5")
-        .is_ok());
+    engine.eval_with_scope::<()>(&mut scope, "let x = 4 + 5")?;
 
-    if let Ok(result) = engine.eval_with_scope::<i64>(&mut scope, "x") {
-        println!("result: {}", result);
-    }
+    let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
+
+    println!("result: {}", result);
+
+    Ok(())
 }
