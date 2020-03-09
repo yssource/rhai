@@ -2,7 +2,8 @@
 
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, usize};
+use crate::optimize::optimize;
+use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, usize};
 
 type LERR = LexError;
 type PERR = ParseErrorType;
@@ -128,21 +129,31 @@ pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef<'static>>);
 pub struct FnDef<'a> {
     pub name: Cow<'a, str>,
     pub params: Vec<Cow<'a, str>>,
-    pub body: Box<Stmt>,
+    pub body: Stmt,
     pub pos: Position,
 }
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    Noop(Position),
     IfElse(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
     While(Box<Expr>, Box<Stmt>),
     Loop(Box<Stmt>),
     For(String, Box<Expr>, Box<Stmt>),
     Let(String, Option<Box<Expr>>, Position),
-    Block(Vec<Stmt>),
+    Block(Vec<Stmt>, Position),
     Expr(Box<Expr>),
     Break(Position),
     ReturnWithVal(Option<Box<Expr>>, bool, Position),
+}
+
+impl Stmt {
+    pub fn is_op(&self) -> bool {
+        match self {
+            Stmt::Noop(_) => false,
+            _ => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -152,7 +163,7 @@ pub enum Expr {
     Identifier(String, Position),
     CharConstant(char, Position),
     StringConstant(String, Position),
-    Block(Box<Stmt>, Position),
+    Stmt(Box<Stmt>, Position),
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
     Assignment(Box<Expr>, Box<Expr>, Position),
     Dot(Box<Expr>, Box<Expr>, Position),
@@ -174,7 +185,7 @@ impl Expr {
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
             | Expr::FunctionCall(_, _, _, pos)
-            | Expr::Block(_, pos)
+            | Expr::Stmt(_, pos)
             | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
@@ -666,24 +677,23 @@ impl<'a> TokenIterator<'a> {
                         let out: String = result.iter().skip(2).filter(|&&c| c != '_').collect();
 
                         return Some((
-                            if let Ok(val) = i64::from_str_radix(&out, radix) {
-                                Token::IntegerConstant(val)
-                            } else {
-                                Token::LexError(LERR::MalformedNumber(result.iter().collect()))
-                            },
+                            i64::from_str_radix(&out, radix)
+                                .map(Token::IntegerConstant)
+                                .unwrap_or_else(|_| {
+                                    Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                }),
                             pos,
                         ));
                     } else {
                         let out: String = result.iter().filter(|&&c| c != '_').collect();
 
                         return Some((
-                            if let Ok(val) = out.parse::<i64>() {
-                                Token::IntegerConstant(val)
-                            } else if let Ok(val) = out.parse::<f64>() {
-                                Token::FloatConstant(val)
-                            } else {
-                                Token::LexError(LERR::MalformedNumber(result.iter().collect()))
-                            },
+                            i64::from_str(&out)
+                                .map(Token::IntegerConstant)
+                                .or_else(|_| f64::from_str(&out).map(Token::FloatConstant))
+                                .unwrap_or_else(|_| {
+                                    Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                }),
                             pos,
                         ));
                     }
@@ -1288,7 +1298,7 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
     // Block statement as expression
     match input.peek() {
         Some(&(Token::LeftBrace, pos)) => {
-            return parse_block(input).map(|block| Expr::Block(Box::new(block), pos))
+            return parse_block(input).map(|block| Expr::Stmt(Box::new(block), pos))
         }
         _ => (),
     }
@@ -1667,7 +1677,7 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
         None => return Err(ParseError::new(PERR::MissingLeftBrace, Position::eof())),
     }
 
-    input.next();
+    let pos = input.next().unwrap().1;
 
     let mut statements = Vec::new();
 
@@ -1695,7 +1705,7 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
     match input.peek() {
         Some(&(Token::RightBrace, _)) => {
             input.next();
-            Ok(Stmt::Block(statements))
+            Ok(Stmt::Block(statements, pos))
         }
         Some(&(_, pos)) => Err(ParseError::new(
             PERR::MissingRightBrace("end of block".into()),
@@ -1811,13 +1821,16 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static
 
     Ok(FnDef {
         name: name.into(),
-        params: params,
-        body: Box::new(body),
-        pos: pos,
+        params,
+        body,
+        pos,
     })
 }
 
-fn parse_top_level<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<AST, ParseError> {
+fn parse_top_level<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    optimize_ast: bool,
+) -> Result<AST, ParseError> {
     let mut statements = Vec::new();
     let mut functions = Vec::new();
 
@@ -1833,9 +1846,26 @@ fn parse_top_level<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<AST, P
         }
     }
 
-    Ok(AST(statements, functions))
+    return Ok(if optimize_ast {
+        AST(
+            optimize(statements),
+            functions
+                .into_iter()
+                .map(|mut fn_def| {
+                    let mut body = optimize(vec![fn_def.body]);
+                    fn_def.body = body.pop().unwrap();
+                    fn_def
+                })
+                .collect(),
+        )
+    } else {
+        AST(statements, functions)
+    });
 }
 
-pub fn parse<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<AST, ParseError> {
-    parse_top_level(input)
+pub fn parse<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    optimize_ast: bool,
+) -> Result<AST, ParseError> {
+    parse_top_level(input, optimize_ast)
 }

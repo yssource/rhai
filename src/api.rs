@@ -95,13 +95,13 @@ impl<'e> Engine<'e> {
     }
 
     /// Compile a string into an AST
-    pub fn compile(input: &str) -> Result<AST, ParseError> {
+    pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
         let tokens = lex(input);
-        parse(&mut tokens.peekable())
+        parse(&mut tokens.peekable(), self.optimize)
     }
 
     /// Compile a file into an AST
-    pub fn compile_file(filename: &str) -> Result<AST, EvalAltResult> {
+    pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
         use std::fs::File;
         use std::io::prelude::*;
 
@@ -112,7 +112,7 @@ impl<'e> Engine<'e> {
 
         f.read_to_string(&mut contents)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
-            .and_then(|_| Self::compile(&contents).map_err(EvalAltResult::ErrorParsing))
+            .and_then(|_| self.compile(&contents).map_err(EvalAltResult::ErrorParsing))
     }
 
     /// Evaluate a file
@@ -142,7 +142,7 @@ impl<'e> Engine<'e> {
         scope: &mut Scope,
         input: &str,
     ) -> Result<T, EvalAltResult> {
-        let ast = Self::compile(input).map_err(EvalAltResult::ErrorParsing)?;
+        let ast = self.compile(input).map_err(EvalAltResult::ErrorParsing)?;
         self.eval_ast_with_scope(scope, &ast)
     }
 
@@ -229,7 +229,7 @@ impl<'e> Engine<'e> {
     ) -> Result<(), EvalAltResult> {
         let tokens = lex(input);
 
-        parse(&mut tokens.peekable())
+        parse(&mut tokens.peekable(), self.optimize)
             .map_err(|err| EvalAltResult::ErrorParsing(err))
             .and_then(|AST(ref statements, ref functions)| {
                 for f in functions {
@@ -258,11 +258,12 @@ impl<'e> Engine<'e> {
     /// # Example
     ///
     /// ```rust
-    /// # use rhai::{Engine, EvalAltResult};
-    /// # fn main() -> Result<(), EvalAltResult> {
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
     /// let mut engine = Engine::new();
     ///
-    /// let ast = Engine::compile("fn add(x, y) { x.len() + y }")?;
+    /// let ast = engine.compile("fn add(x, y) { x.len() + y }")?;
     ///
     /// let result: i64 = engine.call_fn("add", &ast, (&mut String::from("abc"), &mut 123_i64))?;
     ///
@@ -309,16 +310,20 @@ impl<'e> Engine<'e> {
     /// # Example
     ///
     /// ```rust
-    /// # use rhai::Engine;
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
     /// let mut result = String::from("");
     /// {
     ///     let mut engine = Engine::new();
     ///
     ///     // Override action of 'print' function
     ///     engine.on_print(|s| result.push_str(s));
-    ///     engine.consume("print(40 + 2);").unwrap();
+    ///     engine.consume("print(40 + 2);")?;
     /// }
     /// assert_eq!(result, "42");
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn on_print(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_print = Box::new(callback);
@@ -329,16 +334,20 @@ impl<'e> Engine<'e> {
     /// # Example
     ///
     /// ```rust
-    /// # use rhai::Engine;
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
     /// let mut result = String::from("");
     /// {
     ///     let mut engine = Engine::new();
     ///
     ///     // Override action of 'debug' function
     ///     engine.on_debug(|s| result.push_str(s));
-    ///     engine.consume(r#"debug("hello");"#).unwrap();
+    ///     engine.consume(r#"debug("hello");"#)?;
     /// }
     /// assert_eq!(result, "\"hello\"");
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_debug = Box::new(callback);

@@ -4,7 +4,7 @@ use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use std::any::TypeId;
+use std::any::{type_name, TypeId};
 use std::borrow::Cow;
 use std::cmp::{PartialEq, PartialOrd};
 use std::collections::HashMap;
@@ -20,11 +20,11 @@ pub type FnAny = dyn Fn(FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
 
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
-const KEYWORD_PRINT: &'static str = "print";
-const KEYWORD_DEBUG: &'static str = "debug";
-const KEYWORD_TYPE_OF: &'static str = "type_of";
-const FUNC_GETTER: &'static str = "get$";
-const FUNC_SETTER: &'static str = "set$";
+pub(crate) const KEYWORD_PRINT: &'static str = "print";
+pub(crate) const KEYWORD_DEBUG: &'static str = "debug";
+pub(crate) const KEYWORD_TYPE_OF: &'static str = "type_of";
+pub(crate) const FUNC_GETTER: &'static str = "get$";
+pub(crate) const FUNC_SETTER: &'static str = "set$";
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 enum IndexSourceType {
@@ -42,17 +42,20 @@ pub struct FnSpec<'a> {
 /// Rhai main scripting engine.
 ///
 /// ```rust
+/// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::Engine;
 ///
-/// fn main() {
-///     let mut engine = Engine::new();
+/// let mut engine = Engine::new();
 ///
-///     if let Ok(result) = engine.eval::<i64>("40 + 2") {
-///         println!("Answer: {}", result);  // prints 42
-///     }
-/// }
+/// let result = engine.eval::<i64>("40 + 2")?;
+///
+/// println!("Answer: {}", result);  // prints 42
+/// # Ok(())
+/// # }
 /// ```
 pub struct Engine<'e> {
+    /// Optimize the AST after compilation
+    pub(crate) optimize: bool,
     /// A hashmap containing all compiled functions known to the engine
     pub(crate) ext_functions: HashMap<FnSpec<'e>, Arc<FnIntExt<'e>>>,
     /// A hashmap containing all script-defined functions
@@ -72,6 +75,42 @@ pub enum FnIntExt<'a> {
 }
 
 impl Engine<'_> {
+    /// Create a new `Engine`
+    pub fn new() -> Self {
+        // User-friendly names for built-in types
+        let type_names = [
+            (type_name::<String>(), "string"),
+            (type_name::<Array>(), "array"),
+            (type_name::<Dynamic>(), "dynamic"),
+        ]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+        // Create the new scripting Engine
+        let mut engine = Engine {
+            optimize: true,
+            ext_functions: HashMap::new(),
+            script_functions: HashMap::new(),
+            type_iterators: HashMap::new(),
+            type_names,
+            on_print: Box::new(default_print), // default print/debug implementations
+            on_debug: Box::new(default_print),
+        };
+
+        engine.register_core_lib();
+
+        #[cfg(not(feature = "no_stdlib"))]
+        engine.register_stdlib(); // Register the standard library when no_stdlib is not set
+
+        engine
+    }
+
+    /// Control whether the `Engine` will optimize an AST after compilation
+    pub fn set_optimization(&mut self, optimize: bool) {
+        self.optimize = optimize
+    }
+
     /// Universal method for calling functions, that are either
     /// registered with the `Engine` or written in Rhai
     pub(crate) fn call_fn_raw(
@@ -151,7 +190,7 @@ impl Engine<'_> {
                     );
 
                     // Evaluate
-                    match self.eval_stmt(&mut scope, &*func.body) {
+                    match self.eval_stmt(&mut scope, &func.body) {
                         // Convert return statement to return value
                         Err(EvalAltResult::Return(x, _)) => Ok(x),
                         other => other,
@@ -726,7 +765,7 @@ impl Engine<'_> {
                 .map(|(_, _, _, x)| x),
 
             // Statement block
-            Expr::Block(block, _) => self.eval_stmt(scope, block),
+            Expr::Stmt(stmt, _) => self.eval_stmt(scope, stmt),
 
             // lhs = rhs
             Expr::Assignment(lhs, rhs, _) => {
@@ -850,11 +889,14 @@ impl Engine<'_> {
         stmt: &Stmt,
     ) -> Result<Dynamic, EvalAltResult> {
         match stmt {
+            // No-op
+            Stmt::Noop(_) => Ok(().into_dynamic()),
+
             // Expression as statement
             Stmt::Expr(expr) => self.eval_expr(scope, expr),
 
             // Block scope
-            Stmt::Block(block) => {
+            Stmt::Block(block, _) => {
                 let prev_len = scope.len();
                 let mut last_result: Result<Dynamic, EvalAltResult> = Ok(().into_dynamic());
 
@@ -987,38 +1029,6 @@ impl Engine<'_> {
             .get(name)
             .map(|s| s.as_str())
             .unwrap_or(name)
-    }
-
-    /// Make a new engine
-    pub fn new<'a>() -> Engine<'a> {
-        use std::any::type_name;
-
-        // User-friendly names for built-in types
-        let type_names = [
-            (type_name::<String>(), "string"),
-            (type_name::<Array>(), "array"),
-            (type_name::<Dynamic>(), "dynamic"),
-        ]
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
-
-        // Create the new scripting Engine
-        let mut engine = Engine {
-            ext_functions: HashMap::new(),
-            script_functions: HashMap::new(),
-            type_iterators: HashMap::new(),
-            type_names,
-            on_print: Box::new(default_print), // default print/debug implementations
-            on_debug: Box::new(default_print),
-        };
-
-        engine.register_core_lib();
-
-        #[cfg(not(feature = "no_stdlib"))]
-        engine.register_stdlib(); // Register the standard library when no_stdlib is not set
-
-        engine
     }
 }
 
