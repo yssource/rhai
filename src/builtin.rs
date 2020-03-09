@@ -312,7 +312,7 @@ impl Engine<'_> {
         }
         #[cfg(feature = "unchecked")]
         fn pow_i64_i64(x: i64, y: i64) -> i64 {
-            x.powi(y as u32)
+            x.pow(y as u32)
         }
         fn pow_f64_f64(x: f64, y: f64) -> f64 {
             x.powf(y)
