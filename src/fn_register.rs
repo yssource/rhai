@@ -11,6 +11,7 @@ use std::any::TypeId;
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::{Engine, RegisterFn};
 ///
 /// // Normal function
@@ -23,9 +24,11 @@ use std::any::TypeId;
 /// // You must use the trait rhai::RegisterFn to get this method.
 /// engine.register_fn("add", add);
 ///
-/// if let Ok(result) = engine.eval::<i64>("add(40, 2)") {
-///    println!("Answer: {}", result);  // prints 42
-/// }
+/// let result = engine.eval::<i64>("add(40, 2)")?;
+///
+/// println!("Answer: {}", result);  // prints 42
+/// # Ok(())
+/// # }
 /// ```
 pub trait RegisterFn<FN, ARGS, RET> {
     /// Register a custom function with the `Engine`.
@@ -37,7 +40,8 @@ pub trait RegisterFn<FN, ARGS, RET> {
 /// # Example
 ///
 /// ```rust
-/// use rhai::{Engine, RegisterDynamicFn, Dynamic};
+/// # fn main() -> Result<(), rhai::EvalAltResult> {
+/// use rhai::{Engine, Dynamic, RegisterDynamicFn};
 ///
 /// // Function that returns a Dynamic value
 /// fn get_an_any(x: i64) -> Dynamic {
@@ -49,9 +53,11 @@ pub trait RegisterFn<FN, ARGS, RET> {
 /// // You must use the trait rhai::RegisterDynamicFn to get this method.
 /// engine.register_dynamic_fn("get_an_any", get_an_any);
 ///
-/// if let Ok(result) = engine.eval::<i64>("get_an_any(42)") {
-///    println!("Answer: {}", result);  // prints 42
-/// }
+/// let result = engine.eval::<i64>("get_an_any(42)")?;
+///
+/// println!("Answer: {}", result);  // prints 42
+/// # Ok(())
+/// # }
 /// ```
 pub trait RegisterDynamicFn<FN, ARGS> {
     /// Register a custom function returning `Dynamic` values with the `Engine`.
@@ -63,6 +69,7 @@ pub trait RegisterDynamicFn<FN, ARGS> {
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::{Engine, RegisterFn};
 ///
 /// // Normal function
@@ -75,9 +82,11 @@ pub trait RegisterDynamicFn<FN, ARGS> {
 /// // You must use the trait rhai::RegisterFn to get this method.
 /// engine.register_fn("add", add);
 ///
-/// if let Ok(result) = engine.eval::<i64>("add(40, 2)") {
-///    println!("Answer: {}", result);  // prints 42
-/// }
+/// let result = engine.eval::<i64>("add(40, 2)")?;
+///
+/// println!("Answer: {}", result);  // prints 42
+/// # Ok(())
+/// # }
 /// ```
 pub trait RegisterResultFn<FN, ARGS, RET> {
     /// Register a custom function with the `Engine`.

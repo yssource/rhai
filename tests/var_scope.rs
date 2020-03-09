@@ -40,9 +40,9 @@ fn test_scope_eval() -> Result<(), EvalAltResult> {
         .expect("y and z not found?");
 
     // Second invocation using the same state
-    if let Ok(result) = engine.eval_with_scope::<i64>(&mut scope, "x") {
-        println!("result: {}", result); // should print 966
-    }
+    let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
+
+    println!("result: {}", result); // should print 966
 
     // Variable y is changed in the script
     assert_eq!(scope.get_value::<i64>("y").unwrap(), 1);

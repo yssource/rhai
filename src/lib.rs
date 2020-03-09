@@ -17,15 +17,22 @@
 //! And the Rust part:
 //!
 //! ```rust,no_run
-//! use rhai::{Engine, RegisterFn};
+//! use rhai::{Engine, EvalAltResult, RegisterFn};
 //!
-//! fn compute_something(x: i64) -> bool {
-//!	    (x % 40) == 0
+//! fn main() -> Result<(), EvalAltResult>
+//! {
+//!     fn compute_something(x: i64) -> bool {
+//!	        (x % 40) == 0
+//!     }
+//!
+//!     let mut engine = Engine::new();
+//!
+//!     engine.register_fn("compute_something", compute_something);
+//!
+//!     assert_eq!(engine.eval_file::<bool>("my_script.rhai")?, true);
+//!
+//!     Ok(())
 //! }
-//!
-//! let mut engine = Engine::new();
-//! engine.register_fn("compute_something", compute_something);
-//! assert_eq!(engine.eval_file::<bool>("my_script.rhai").unwrap(), true);
 //! ```
 //!
 //! [Check out the README on GitHub for more information!](https://github.com/jonathandturner/rhai)
@@ -61,6 +68,7 @@ mod call;
 mod engine;
 mod error;
 mod fn_register;
+mod optimize;
 mod parser;
 mod result;
 mod scope;

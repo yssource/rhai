@@ -9,13 +9,17 @@ use std::borrow::Cow;
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::{Engine, Scope};
 ///
 /// let mut engine = Engine::new();
 /// let mut my_scope = Scope::new();
 ///
-/// assert!(engine.eval_with_scope::<()>(&mut my_scope, "let x = 5;").is_ok());
-/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1").unwrap(), 6);
+/// engine.eval_with_scope::<()>(&mut my_scope, "let x = 5;")?;
+///
+/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1")?, 6);
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// When searching for variables, newly-added variables are found before similarly-named but older variables,

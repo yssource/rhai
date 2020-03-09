@@ -4,7 +4,7 @@ use rhai::{Engine, EvalAltResult};
 fn test_engine_call_fn() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    let ast = Engine::compile("fn hello(x, y) { x.len() + y }")?;
+    let ast = engine.compile("fn hello(x, y) { x.len() + y }")?;
 
     let result: i64 = engine.call_fn("hello", &ast, (&mut String::from("abc"), &mut 123_i64))?;
 
