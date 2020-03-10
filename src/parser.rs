@@ -5,6 +5,17 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::optimize;
 use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, usize};
 
+/// The system integer type
+#[cfg(not(feature = "only_i32"))]
+pub type INT = i64;
+
+/// The system integer type
+#[cfg(feature = "only_i32")]
+pub type INT = i32;
+
+/// The system floating-point type
+pub type FLOAT = f64;
+
 type LERR = LexError;
 type PERR = ParseErrorType;
 
@@ -158,9 +169,9 @@ impl Stmt {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    IntegerConstant(i64, Position),
+    IntegerConstant(INT, Position),
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(f64, Position),
+    FloatConstant(FLOAT, Position),
     Identifier(String, Position),
     CharConstant(char, Position),
     StringConstant(String, Position),
@@ -233,9 +244,9 @@ impl Expr {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    IntegerConstant(i64),
+    IntegerConstant(INT),
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(f64),
+    FloatConstant(FLOAT),
     Identifier(String),
     CharConstant(char),
     StringConst(String),
@@ -711,7 +722,7 @@ impl<'a> TokenIterator<'a> {
                         let out: String = result.iter().skip(2).filter(|&&c| c != '_').collect();
 
                         return Some((
-                            i64::from_str_radix(&out, radix)
+                            INT::from_str_radix(&out, radix)
                                 .map(Token::IntegerConstant)
                                 .unwrap_or_else(|_| {
                                     Token::LexError(LERR::MalformedNumber(result.iter().collect()))
@@ -723,7 +734,7 @@ impl<'a> TokenIterator<'a> {
 
                         #[cfg(feature = "no_float")]
                         return Some((
-                            i64::from_str(&out)
+                            INT::from_str(&out)
                                 .map(Token::IntegerConstant)
                                 .unwrap_or_else(|_| {
                                     Token::LexError(LERR::MalformedNumber(result.iter().collect()))
@@ -733,9 +744,9 @@ impl<'a> TokenIterator<'a> {
 
                         #[cfg(not(feature = "no_float"))]
                         return Some((
-                            i64::from_str(&out)
+                            INT::from_str(&out)
                                 .map(Token::IntegerConstant)
-                                .or_else(|_| f64::from_str(&out).map(Token::FloatConstant))
+                                .or_else(|_| FLOAT::from_str(&out).map(Token::FloatConstant))
                                 .unwrap_or_else(|_| {
                                     Token::LexError(LERR::MalformedNumber(result.iter().collect()))
                                 }),
@@ -1415,7 +1426,7 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
                 Ok(Expr::IntegerConstant(i, _)) => Ok(i
                     .checked_neg()
                     .map(|x| Expr::IntegerConstant(x, pos))
-                    .unwrap_or_else(|| Expr::FloatConstant(-(i as f64), pos))),
+                    .unwrap_or_else(|| Expr::FloatConstant(-(i as FLOAT), pos))),
 
                 // Negative integer
                 #[cfg(feature = "no_float")]

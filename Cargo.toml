@@ -24,6 +24,8 @@ unchecked = []
 no_stdlib = []
 no_index = []
 no_float = []
+only_i32 = []
+only_i64 = []
 
 [profile.release]
 lto = "fat"

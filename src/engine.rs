@@ -4,6 +4,10 @@ use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
+
+#[cfg(not(feature = "no_index"))]
+use crate::INT;
+
 use std::{
     any::{type_name, TypeId},
     borrow::Cow,
@@ -419,15 +423,15 @@ impl Engine<'_> {
             .and_then(move |(idx, _, val)| map(val).map(|v| (idx, v)))
     }
 
-    /// Evaluate the value of an index (must evaluate to i64)
+    /// Evaluate the value of an index (must evaluate to INT)
     #[cfg(not(feature = "no_index"))]
     fn eval_index_value(
         &mut self,
         scope: &mut Scope,
         idx_expr: &Expr,
-    ) -> Result<i64, EvalAltResult> {
+    ) -> Result<INT, EvalAltResult> {
         self.eval_expr(scope, idx_expr)?
-            .downcast::<i64>()
+            .downcast::<INT>()
             .map(|v| *v)
             .map_err(|_| EvalAltResult::ErrorIndexExpr(idx_expr.position()))
     }
@@ -437,7 +441,7 @@ impl Engine<'_> {
     fn get_indexed_value(
         &self,
         val: Dynamic,
-        idx: i64,
+        idx: INT,
         val_pos: Position,
         idx_pos: Position,
     ) -> Result<(Dynamic, IndexSourceType), EvalAltResult> {

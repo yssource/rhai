@@ -38,13 +38,18 @@ Beware that in order to use pre-releases (alpha and beta) you need to specify th
 Optional features
 -----------------
 
-| Feature      | Description                                                                                                             |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `debug_msgs` | Print debug messages to stdout (using `println!`) related to function registrations and function calls.                 |
-| `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. |
-| `unchecked`  | Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!              |
-| `no_index`   | Disable arrays and indexing features if you don't need them.                                                            |
-| `no_float`   | Disable floating-point numbers and math if you don't need them.                                                         |
+| Feature      | Description                                                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug_msgs` | Print debug messages to stdout related to function registrations and calls.                                                                              |
+| `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
+| `unchecked`  | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
+| `no_index`   | Disable arrays and indexing features if you don't need them.                                                                                             |
+| `no_float`   | Disable floating-point numbers and math if you don't need them.                                                                                          |
+| `only_i32`   | Set the system integer type to `i32` and disable all other integer types.                                                                                |
+| `only_i64`   | Set the system integer type to `i64` and disable all other integer types.                                                                                |
+
+By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here for you to opt-**out** of certain functionalities that you do not need.
+Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
 
 Related
 -------
@@ -190,19 +195,27 @@ Values and types
 
 The following primitive types are supported natively:
 
-| Category                                                        | Types                                  |
-| --------------------------------------------------------------- | -------------------------------------- |
-| Integer                                                         | `i32`, `u32`, `i64` _(default)_, `u64` |
-| Floating-point (disabled with [`no_float`](#optional-features)) | `f32`, `f64` _(default)_               |
-| Character                                                       | `char`                                 |
-| Boolean                                                         | `bool`                                 |
-| Array (disabled with [`no_index`](#optional-features))          | `rhai::Array`                          |
-| Dynamic (i.e. can be anything)                                  | `rhai::Dynamic`                        |
+| Category                                                            | Types                                                                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Integer**                                                         | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`](#optional-features)),<br/>`u64`, `i64` _(default)_ |
+| **Floating-point** (disabled with [`no_float`](#optional-features)) | `f32`, `f64` _(default)_                                                                                                 |
+| **Character**                                                       | `char`                                                                                                                   |
+| **Boolean**                                                         | `bool`                                                                                                                   |
+| **Array** (disabled with [`no_index`](#optional-features))          | `rhai::Array`                                                                                                            |
+| **Dynamic** (i.e. can be anything)                                  | `rhai::Dynamic`                                                                                                          |
+| **System** (current configuration)                                  | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                                         |
+
+All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
+
+The default integer type is `i64`. If you do not need any other integer type, you can enable the [`only_i64`](#optional-features) feature.
+
+If you only need 32-bit integers, you can enable the [`only_i32`](#optional-features) feature and remove support for all integer types other than `i32` including `i64`.
+This is useful on 32-bit systems where using 64-bit integers incurs a performance penalty.
+
+If you do not need floating-point, enable the [`no_float`](#optional-features) feature to remove support.
 
 Value conversions
 -----------------
-
-All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
 
 There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it. For other conversions you can register your own conversion functions.
 

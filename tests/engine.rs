@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_stdlib"))]
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_engine_call_fn() -> Result<(), EvalAltResult> {
@@ -13,7 +13,7 @@ fn test_engine_call_fn() -> Result<(), EvalAltResult> {
                 ",
     )?;
 
-    let result: i64 = engine.call_fn("hello", &ast, (String::from("abc"), 123_i64))?;
+    let result: INT = engine.call_fn("hello", &ast, (String::from("abc"), 123 as INT))?;
 
     assert_eq!(result, 126);
 
