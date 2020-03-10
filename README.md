@@ -43,6 +43,7 @@ Optional features
 | `debug_msgs` | Print debug messages to stdout (using `println!`) related to function registrations and function calls.                 |
 | `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. |
 | `unchecked`  | Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!              |
+| `no_index`   | Disable arrays and indexing features                                                                                    |
 
 Related
 -------
@@ -606,7 +607,7 @@ let booly = !true;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function   | Description                         |
 | ---------- | ----------------------------------- |
@@ -617,7 +618,7 @@ The following standard functions (defined in the standard library but excluded i
 Floating-point functions
 ------------------------
 
-The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on `f64` only:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -645,7 +646,7 @@ let age = 42;
 let record = full_name + ": age " + age;
 record == "Bob C. Davis: age 42";
 
-// Strings can be indexed to get a character
+// Strings can be indexed to get a character (disabled with the 'no_index' feature)
 let c = record[4];
 c == 'C';
 
@@ -669,7 +670,7 @@ record[4] = '\x58'; // 0x58 = 'X'
 record == "Bob X. Davis: age 42 ❤\n";
 ```
 
-The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on strings:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on strings:
 
 | Function   | Description                                                              |
 | ---------- | ------------------------------------------------------------------------ |
@@ -716,7 +717,7 @@ Arrays
 
 You can create arrays of values, and then access them with numeric indices.
 
-The following functions (defined in the standard library but excluded if `no_stdlib`) operate on arrays:
+The following functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on arrays:
 
 | Function   | Description                                                                           |
 | ---------- | ------------------------------------------------------------------------------------- |
@@ -787,6 +788,8 @@ engine.register_fn("push",
 ```
 
 The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
+
+Arrays are disabled via the [`no_index`](#optional-features) feature.
 
 Comparison operators
 --------------------

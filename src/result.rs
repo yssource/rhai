@@ -173,6 +173,12 @@ impl From<ParseError> for EvalAltResult {
     }
 }
 
+impl<T: AsRef<str>> From<T> for EvalAltResult {
+    fn from(err: T) -> Self {
+        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
+    }
+}
+
 impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
@@ -223,11 +229,5 @@ impl EvalAltResult {
             | Self::ErrorRuntime(_, ref mut pos)
             | Self::Return(_, ref mut pos) => *pos = new_position,
         }
-    }
-}
-
-impl<T: AsRef<str>> From<T> for EvalAltResult {
-    fn from(err: T) -> Self {
-        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
     }
 }

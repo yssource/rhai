@@ -139,11 +139,24 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
             Box::new(optimize_expr(*rhs, changed)),
             pos,
         ),
-        Expr::Index(lhs, rhs, pos) => Expr::Index(
-            Box::new(optimize_expr(*lhs, changed)),
-            Box::new(optimize_expr(*rhs, changed)),
-            pos,
-        ),
+        #[cfg(not(feature = "no_index"))]
+        Expr::Index(lhs, rhs, pos) => match (*lhs, *rhs) {
+            (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
+                if i >= 0
+                    && (i as usize) < items.len()
+                    && !items.iter().any(|x| x.is_constant()) =>
+            {
+                // Array where everything is a constant - promote the item
+                *changed = true;
+                items.remove(i as usize)
+            }
+            (lhs, rhs) => Expr::Index(
+                Box::new(optimize_expr(lhs, changed)),
+                Box::new(optimize_expr(rhs, changed)),
+                pos,
+            ),
+        },
+        #[cfg(not(feature = "no_index"))]
         Expr::Array(items, pos) => {
             let original_len = items.len();
 

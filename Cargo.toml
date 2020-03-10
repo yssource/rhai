@@ -18,6 +18,12 @@ include = [
 num-traits = "*"
 
 [features]
+default = []
 debug_msgs = []
-no_stdlib = []
 unchecked = []
+no_stdlib = []
+no_index = []
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

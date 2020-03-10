@@ -167,7 +167,9 @@ pub enum Expr {
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
     Assignment(Box<Expr>, Box<Expr>, Position),
     Dot(Box<Expr>, Box<Expr>, Position),
+    #[cfg(not(feature = "no_index"))]
     Index(Box<Expr>, Box<Expr>, Position),
+    #[cfg(not(feature = "no_index"))]
     Array(Vec<Expr>, Position),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
@@ -186,16 +188,19 @@ impl Expr {
             | Expr::StringConstant(_, pos)
             | Expr::FunctionCall(_, _, _, pos)
             | Expr::Stmt(_, pos)
-            | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Index(e, _, _)
-            | Expr::Assignment(e, _, _)
-            | Expr::Dot(e, _, _)
-            | Expr::And(e, _)
-            | Expr::Or(e, _) => e.position(),
+            Expr::Assignment(e, _, _) | Expr::Dot(e, _, _) | Expr::And(e, _) | Expr::Or(e, _) => {
+                e.position()
+            }
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(e, _, _) => e.position(),
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Array(_, pos) => *pos,
         }
     }
 
@@ -1166,6 +1171,7 @@ fn parse_call_expr<'a>(
     }
 }
 
+#[cfg(not(feature = "no_index"))]
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
@@ -1260,6 +1266,7 @@ fn parse_ident_expr<'a>(
             input.next();
             parse_call_expr(id, input, begin)
         }
+        #[cfg(not(feature = "no_index"))]
         Some(&(Token::LeftBracket, pos)) => {
             input.next();
             parse_index_expr(Box::new(Expr::Identifier(id, begin)), input, pos)
@@ -1269,6 +1276,7 @@ fn parse_ident_expr<'a>(
     }
 }
 
+#[cfg(not(feature = "no_index"))]
 fn parse_array_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
@@ -1320,26 +1328,28 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
 
     let token = input.next();
 
-    let mut follow_on = false;
+    let mut can_be_indexed = false;
 
+    #[allow(unused_mut)]
     let mut root_expr = match token {
         Some((Token::IntegerConstant(x), pos)) => Ok(Expr::IntegerConstant(x, pos)),
         Some((Token::FloatConstant(x), pos)) => Ok(Expr::FloatConstant(x, pos)),
         Some((Token::CharConstant(c), pos)) => Ok(Expr::CharConstant(c, pos)),
         Some((Token::StringConst(s), pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             Ok(Expr::StringConstant(s, pos))
         }
         Some((Token::Identifier(s), pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             parse_ident_expr(s, input, pos)
         }
         Some((Token::LeftParen, pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             parse_paren_expr(input, pos)
         }
+        #[cfg(not(feature = "no_index"))]
         Some((Token::LeftBracket, pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             parse_array_expr(input, pos)
         }
         Some((Token::True, pos)) => Ok(Expr::True(pos)),
@@ -1354,14 +1364,13 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
         None => Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
     }?;
 
-    if !follow_on {
-        return Ok(root_expr);
-    }
-
-    // Tail processing all possible indexing
-    while let Some(&(Token::LeftBracket, pos)) = input.peek() {
-        input.next();
-        root_expr = parse_index_expr(Box::new(root_expr), input, pos)?;
+    if can_be_indexed {
+        // Tail processing all possible indexing
+        #[cfg(not(feature = "no_index"))]
+        while let Some(&(Token::LeftBracket, pos)) = input.peek() {
+            input.next();
+            root_expr = parse_index_expr(Box::new(root_expr), input, pos)?;
+        }
     }
 
     Ok(root_expr)
@@ -1408,6 +1417,7 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
         match expr {
             Expr::Identifier(_, pos) => (true, *pos),
 
+            #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
                 Expr::Identifier(_, _) => (true, idx_lhs.position()),
                 _ => (false, idx_lhs.position()),
@@ -1415,10 +1425,13 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
 
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
                 Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
+
+                #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
                     Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
                     _ => (false, idx_lhs.position()),
                 },
+
                 _ => (false, dot_lhs.position()),
             },
 

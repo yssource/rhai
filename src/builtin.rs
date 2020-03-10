@@ -2,8 +2,12 @@
 //! _standard library_ of utility functions.
 
 use crate::any::Any;
-use crate::engine::{Array, Engine};
+use crate::engine::Engine;
 use crate::fn_register::RegisterFn;
+
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
+
 use std::{
     fmt::{Debug, Display},
     i32, i64,
@@ -15,14 +19,13 @@ use std::{
 use std::ops::{Shl, Shr};
 
 #[cfg(not(feature = "unchecked"))]
-use crate::{parser::Position, result::EvalAltResult, RegisterResultFn};
-
-#[cfg(not(feature = "unchecked"))]
-use std::convert::TryFrom;
-
-#[cfg(not(feature = "unchecked"))]
-use num_traits::{
-    CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl, CheckedShr, CheckedSub,
+use {
+    crate::{parser::Position, result::EvalAltResult, RegisterResultFn},
+    num_traits::{
+        CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl, CheckedShr,
+        CheckedSub,
+    },
+    std::convert::TryFrom,
 };
 
 macro_rules! reg_op {
@@ -102,6 +105,7 @@ macro_rules! reg_func2y {
 }
 
 #[cfg(not(feature = "no_stdlib"))]
+#[cfg(not(feature = "no_index"))]
 macro_rules! reg_func3 {
     ($self:expr, $x:expr, $op:expr, $v:ty, $w:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -438,19 +442,23 @@ impl Engine<'_> {
         reg_func1!(self, "print", print, String, i8, u8, i16, u16);
         reg_func1!(self, "print", print, String, i32, i64, u32, u64);
         reg_func1!(self, "print", print, String, f32, f64, bool, char, String);
-        reg_func1!(self, "print", print_debug, String, Array);
         self.register_fn("print", || "".to_string());
         self.register_fn("print", |_: ()| "".to_string());
 
         reg_func1!(self, "debug", print_debug, String, i8, u8, i16, u16);
         reg_func1!(self, "debug", print_debug, String, i32, i64, u32, u64);
         reg_func1!(self, "debug", print_debug, String, f32, f64, bool, char);
-        reg_func1!(self, "debug", print_debug, String, String, Array, ());
 
-        // Register array iterator
-        self.register_iterator::<Array, _>(|a| {
-            Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
-        });
+        #[cfg(not(feature = "no_index"))]
+        {
+            reg_func1!(self, "print", print_debug, String, Array);
+            reg_func1!(self, "debug", print_debug, String, String, Array, ());
+
+            // Register array iterator
+            self.register_iterator::<Array, _>(|a| {
+                Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
+            });
+        }
 
         // Register range function
         self.register_iterator::<Range<i64>, _>(|a| {
@@ -468,6 +476,7 @@ impl Engine<'_> {
     /// Register the built-in library.
     #[cfg(not(feature = "no_stdlib"))]
     pub(crate) fn register_stdlib(&mut self) {
+        #[cfg(not(feature = "no_index"))]
         use crate::fn_register::RegisterDynamicFn;
 
         // Advanced math functions
@@ -547,42 +556,45 @@ impl Engine<'_> {
             self.register_fn("to_int", |x: f64| x as i64);
         }
 
-        // Register array utility functions
-        fn push<T: Any>(list: &mut Array, item: T) {
-            list.push(Box::new(item));
-        }
-        fn pad<T: Any + Clone>(list: &mut Array, len: i64, item: T) {
-            if len >= 0 {
-                while list.len() < len as usize {
-                    push(list, item.clone());
+        #[cfg(not(feature = "no_index"))]
+        {
+            // Register array utility functions
+            fn push<T: Any>(list: &mut Array, item: T) {
+                list.push(Box::new(item));
+            }
+            fn pad<T: Any + Clone>(list: &mut Array, len: i64, item: T) {
+                if len >= 0 {
+                    while list.len() < len as usize {
+                        push(list, item.clone());
+                    }
                 }
             }
+
+            reg_func2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
+            reg_func2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
+            reg_func2x!(self, "push", push, &mut Array, (), f32, f64, bool, char);
+            reg_func2x!(self, "push", push, &mut Array, (), String, Array, ());
+            reg_func3!(self, "pad", pad, &mut Array, i64, (), i8, u8, i16, u16);
+            reg_func3!(self, "pad", pad, &mut Array, i64, (), i32, u32, f32);
+            reg_func3!(self, "pad", pad, &mut Array, i64, (), i64, u64, f64);
+            reg_func3!(self, "pad", pad, &mut Array, i64, (), bool, char);
+            reg_func3!(self, "pad", pad, &mut Array, i64, (), String, Array, ());
+
+            self.register_dynamic_fn("pop", |list: &mut Array| {
+                list.pop().unwrap_or_else(|| ().into_dynamic())
+            });
+            self.register_dynamic_fn("shift", |list: &mut Array| match list.len() {
+                0 => ().into_dynamic(),
+                _ => list.remove(0),
+            });
+            self.register_fn("len", |list: &mut Array| list.len() as i64);
+            self.register_fn("clear", |list: &mut Array| list.clear());
+            self.register_fn("truncate", |list: &mut Array, len: i64| {
+                if len >= 0 {
+                    list.truncate(len as usize);
+                }
+            });
         }
-
-        reg_func2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
-        reg_func2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
-        reg_func2x!(self, "push", push, &mut Array, (), f32, f64, bool, char);
-        reg_func2x!(self, "push", push, &mut Array, (), String, Array, ());
-        reg_func3!(self, "pad", pad, &mut Array, i64, (), i8, u8, i16, u16);
-        reg_func3!(self, "pad", pad, &mut Array, i64, (), i32, u32, f32);
-        reg_func3!(self, "pad", pad, &mut Array, i64, (), i64, u64, f64);
-        reg_func3!(self, "pad", pad, &mut Array, i64, (), bool, char);
-        reg_func3!(self, "pad", pad, &mut Array, i64, (), String, Array, ());
-
-        self.register_dynamic_fn("pop", |list: &mut Array| {
-            list.pop().unwrap_or_else(|| ().into_dynamic())
-        });
-        self.register_dynamic_fn("shift", |list: &mut Array| match list.len() {
-            0 => ().into_dynamic(),
-            _ => list.remove(0),
-        });
-        self.register_fn("len", |list: &mut Array| list.len() as i64);
-        self.register_fn("clear", |list: &mut Array| list.clear());
-        self.register_fn("truncate", |list: &mut Array, len: i64| {
-            if len >= 0 {
-                list.truncate(len as usize);
-            }
-        });
 
         // Register string concatenate functions
         fn prepend<T: Display>(x: T, y: String) -> String {
@@ -596,15 +608,19 @@ impl Engine<'_> {
             self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64,
             bool, char
         );
-        self.register_fn("+", |x: String, y: Array| format!("{}{:?}", x, y));
         self.register_fn("+", |x: String, _: ()| format!("{}", x));
 
         reg_func2y!(
             self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64,
             bool, char
         );
-        self.register_fn("+", |x: Array, y: String| format!("{:?}{}", x, y));
         self.register_fn("+", |_: (), y: String| format!("{}", y));
+
+        #[cfg(not(feature = "no_index"))]
+        {
+            self.register_fn("+", |x: String, y: Array| format!("{}{:?}", x, y));
+            self.register_fn("+", |x: Array, y: String| format!("{:?}{}", x, y));
+        }
 
         // Register string utility functions
         self.register_fn("len", |s: &mut String| s.chars().count() as i64);
