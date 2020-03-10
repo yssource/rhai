@@ -1030,6 +1030,11 @@ impl Engine<'_> {
             .map(|s| s.as_str())
             .unwrap_or(name)
     }
+
+    /// Clean up all script-defined functions within the `Engine`.
+    pub fn clear_functions(&mut self) {
+        self.script_functions.clear();
+    }
 }
 
 /// Print/debug to stdout

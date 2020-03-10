@@ -81,7 +81,7 @@ pub enum ParseErrorType {
 
 /// Error when parsing a script.
 #[derive(Debug, PartialEq, Clone)]
-pub struct ParseError(ParseErrorType, Position);
+pub struct ParseError(pub(crate) ParseErrorType, pub(crate) Position);
 
 impl ParseError {
     /// Create a new `ParseError`.

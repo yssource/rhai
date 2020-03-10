@@ -94,13 +94,13 @@ impl<'e> Engine<'e> {
         self.register_set(name, set_fn);
     }
 
-    /// Compile a string into an AST
+    /// Compile a string into an AST.
     pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
         let tokens = lex(input);
         parse(&mut tokens.peekable(), self.optimize)
     }
 
-    /// Compile a file into an AST
+    /// Compile a file into an AST.
     pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
         use std::fs::File;
         use std::io::prelude::*;
@@ -115,7 +115,7 @@ impl<'e> Engine<'e> {
             .and_then(|_| self.compile(&contents).map_err(EvalAltResult::ErrorParsing))
     }
 
-    /// Evaluate a file
+    /// Evaluate a file.
     pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
         use std::fs::File;
         use std::io::prelude::*;
@@ -130,32 +130,40 @@ impl<'e> Engine<'e> {
             .and_then(|_| self.eval::<T>(&contents))
     }
 
-    /// Evaluate a string
+    /// Evaluate a string.
     pub fn eval<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
-        self.eval_with_scope(&mut scope, input)
+        self.eval_with_scope(&mut scope, false, input)
     }
 
-    /// Evaluate a string with own scope
+    /// Evaluate a string with own scope.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
     pub fn eval_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
+        retain_functions: bool,
         input: &str,
     ) -> Result<T, EvalAltResult> {
         let ast = self.compile(input).map_err(EvalAltResult::ErrorParsing)?;
-        self.eval_ast_with_scope(scope, &ast)
+        self.eval_ast_with_scope(scope, retain_functions, &ast)
     }
 
-    /// Evaluate an AST
+    /// Evaluate an AST.
     pub fn eval_ast<T: Any + Clone>(&mut self, ast: &AST) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
-        self.eval_ast_with_scope(&mut scope, ast)
+        self.eval_ast_with_scope(&mut scope, false, ast)
     }
 
-    /// Evaluate an AST with own scope
+    /// Evaluate an AST with own scope.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
     pub fn eval_ast_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
+        retain_functions: bool,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
         let AST(statements, functions) = ast;
@@ -174,7 +182,9 @@ impl<'e> Engine<'e> {
             .iter()
             .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt));
 
-        self.script_functions.clear(); // Clean up engine
+        if !retain_functions {
+            self.clear_functions();
+        }
 
         match result {
             Err(EvalAltResult::Return(out, pos)) => out.downcast::<T>().map(|v| *v).map_err(|a| {
@@ -196,8 +206,7 @@ impl<'e> Engine<'e> {
     }
 
     /// Evaluate a file, but throw away the result and only return error (if any).
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume_file(&mut self, filename: &str) -> Result<(), EvalAltResult> {
         use std::fs::File;
         use std::io::prelude::*;
@@ -213,18 +222,20 @@ impl<'e> Engine<'e> {
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume(&mut self, input: &str) -> Result<(), EvalAltResult> {
-        self.consume_with_scope(&mut Scope::new(), input)
+        self.consume_with_scope(&mut Scope::new(), false, input)
     }
 
-    /// Evaluate a string with own scope, but throw away the result and only return error (if any).
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
+    /// Evaluate a string, but throw away the result and only return error (if any).
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
     pub fn consume_with_scope(
         &mut self,
         scope: &mut Scope,
+        retain_functions: bool,
         input: &str,
     ) -> Result<(), EvalAltResult> {
         let tokens = lex(input);
@@ -247,7 +258,9 @@ impl<'e> Engine<'e> {
                     .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
                     .map(|_| ());
 
-                self.script_functions.clear(); // Clean up engine
+                if !retain_functions {
+                    self.clear_functions();
+                }
 
                 val
             })
@@ -300,7 +313,7 @@ impl<'e> Engine<'e> {
                 })
             });
 
-        self.script_functions.clear(); // Clean up engine
+        self.clear_functions();
 
         result
     }

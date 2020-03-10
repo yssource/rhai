@@ -174,29 +174,54 @@ impl From<ParseError> for EvalAltResult {
 }
 
 impl EvalAltResult {
+    pub fn position(&self) -> Position {
+        match self {
+            Self::ErrorReadingScriptFile(_, _) | Self::LoopBreak => Position::none(),
+
+            Self::ErrorParsing(err) => err.position(),
+
+            Self::ErrorFunctionNotFound(_, pos)
+            | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
+            | Self::ErrorBooleanArgMismatch(_, pos)
+            | Self::ErrorCharMismatch(pos)
+            | Self::ErrorArrayBounds(_, _, pos)
+            | Self::ErrorStringBounds(_, _, pos)
+            | Self::ErrorIndexingType(_, pos)
+            | Self::ErrorIndexExpr(pos)
+            | Self::ErrorIfGuard(pos)
+            | Self::ErrorFor(pos)
+            | Self::ErrorVariableNotFound(_, pos)
+            | Self::ErrorAssignmentToUnknownLHS(pos)
+            | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorDotExpr(_, pos)
+            | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorRuntime(_, pos)
+            | Self::Return(_, pos) => *pos,
+        }
+    }
+
     pub(crate) fn set_position(&mut self, new_position: Position) {
         match self {
-            EvalAltResult::ErrorReadingScriptFile(_, _)
-            | EvalAltResult::LoopBreak
-            | EvalAltResult::ErrorParsing(_) => (),
+            Self::ErrorReadingScriptFile(_, _) | Self::LoopBreak => (),
 
-            EvalAltResult::ErrorFunctionNotFound(_, ref mut pos)
-            | EvalAltResult::ErrorFunctionArgsMismatch(_, _, _, ref mut pos)
-            | EvalAltResult::ErrorBooleanArgMismatch(_, ref mut pos)
-            | EvalAltResult::ErrorCharMismatch(ref mut pos)
-            | EvalAltResult::ErrorArrayBounds(_, _, ref mut pos)
-            | EvalAltResult::ErrorStringBounds(_, _, ref mut pos)
-            | EvalAltResult::ErrorIndexingType(_, ref mut pos)
-            | EvalAltResult::ErrorIndexExpr(ref mut pos)
-            | EvalAltResult::ErrorIfGuard(ref mut pos)
-            | EvalAltResult::ErrorFor(ref mut pos)
-            | EvalAltResult::ErrorVariableNotFound(_, ref mut pos)
-            | EvalAltResult::ErrorAssignmentToUnknownLHS(ref mut pos)
-            | EvalAltResult::ErrorMismatchOutputType(_, ref mut pos)
-            | EvalAltResult::ErrorDotExpr(_, ref mut pos)
-            | EvalAltResult::ErrorArithmetic(_, ref mut pos)
-            | EvalAltResult::ErrorRuntime(_, ref mut pos)
-            | EvalAltResult::Return(_, ref mut pos) => *pos = new_position,
+            Self::ErrorParsing(ParseError(_, ref mut pos))
+            | Self::ErrorFunctionNotFound(_, ref mut pos)
+            | Self::ErrorFunctionArgsMismatch(_, _, _, ref mut pos)
+            | Self::ErrorBooleanArgMismatch(_, ref mut pos)
+            | Self::ErrorCharMismatch(ref mut pos)
+            | Self::ErrorArrayBounds(_, _, ref mut pos)
+            | Self::ErrorStringBounds(_, _, ref mut pos)
+            | Self::ErrorIndexingType(_, ref mut pos)
+            | Self::ErrorIndexExpr(ref mut pos)
+            | Self::ErrorIfGuard(ref mut pos)
+            | Self::ErrorFor(ref mut pos)
+            | Self::ErrorVariableNotFound(_, ref mut pos)
+            | Self::ErrorAssignmentToUnknownLHS(ref mut pos)
+            | Self::ErrorMismatchOutputType(_, ref mut pos)
+            | Self::ErrorDotExpr(_, ref mut pos)
+            | Self::ErrorArithmetic(_, ref mut pos)
+            | Self::ErrorRuntime(_, ref mut pos)
+            | Self::Return(_, ref mut pos) => *pos = new_position,
         }
     }
 }
