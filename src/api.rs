@@ -2,7 +2,7 @@
 
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
-use crate::engine::{Engine, FnAny, FnIntExt, FnSpec};
+use crate::engine::{Engine, FnAny, FnCallArgs, FnIntExt, FnSpec};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, Position, AST};
@@ -273,17 +273,32 @@ impl<'e> Engine<'e> {
     ///
     /// let ast = engine.compile("fn add(x, y) { x.len() + y }")?;
     ///
-    /// let result: i64 = engine.call_fn("add", &ast, (&mut String::from("abc"), &mut 123_i64))?;
+    /// let result: i64 = engine.call_fn("add", &ast, (String::from("abc"), 123_i64))?;
     ///
     /// assert_eq!(result, 126);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn call_fn<'f, A: FuncArgs<'f>, T: Any + Clone>(
+    pub fn call_fn<A: FuncArgs, T: Any + Clone>(
         &mut self,
         name: &str,
         ast: &AST,
         args: A,
+    ) -> Result<T, EvalAltResult> {
+        let mut arg_values = args.into_vec();
+
+        self.call_fn_internal(
+            name,
+            ast,
+            arg_values.iter_mut().map(|v| v.as_mut()).collect(),
+        )
+    }
+
+    pub(crate) fn call_fn_internal<T: Any + Clone>(
+        &mut self,
+        name: &str,
+        ast: &AST,
+        args: FnCallArgs,
     ) -> Result<T, EvalAltResult> {
         let pos = Default::default();
 
@@ -297,16 +312,14 @@ impl<'e> Engine<'e> {
             );
         });
 
-        let result = self
-            .call_fn_raw(name, args.into_vec(), None, pos)
-            .and_then(|b| {
-                b.downcast().map(|b| *b).map_err(|a| {
-                    EvalAltResult::ErrorMismatchOutputType(
-                        self.map_type_name((*a).type_name()).into(),
-                        pos,
-                    )
-                })
-            });
+        let result = self.call_fn_raw(name, args, None, pos).and_then(|b| {
+            b.downcast().map(|b| *b).map_err(|a| {
+                EvalAltResult::ErrorMismatchOutputType(
+                    self.map_type_name((*a).type_name()).into(),
+                    pos,
+                )
+            })
+        });
 
         self.clear_functions();
 

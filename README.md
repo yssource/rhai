@@ -120,6 +120,8 @@ fn main() -> Result<(), EvalAltResult>
     let result = engine.eval::<i64>("40 + 2")?;
 
     println!("Answer: {}", result);  // prints 42
+
+    Ok(())
 }
 ```
 
@@ -153,7 +155,7 @@ use rhai::Engine;
 
 let mut engine = Engine::new();
 
-let ast = engine.compile_file("hello_world.rhai").unwrap();
+let ast = engine.compile_file("hello_world.rhai")?;
 ```
 
 Rhai also allows you to work _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust.
@@ -166,11 +168,19 @@ use rhai::Engine;
 let mut engine = Engine::new();
 
 // Define a function in a script and compile to AST
-let ast = engine.compile("fn hello(x, y) { x.len() + y }")?;
+let ast = engine.compile(
+    r"
+            fn hello(x, y) {    // a function with two arguments: String and i64
+                x.len() + y     // returning i64
+            }
+    ")?;
 
-// Evaluate the function in the AST, passing arguments into the script as a tuple
-// (beware, arguments must be of the correct types because Rhai does not have built-in type conversions)
-let result: i64 = engine.call_fn("hello", &ast, (&mut String::from("abc"), &mut 123_i64))?;
+// Evaluate the function in the AST, passing arguments into the script as a tuple.
+// Beware, arguments must be of the correct types because Rhai does not have built-in type conversions.
+// If you pass in arguments of the wrong type, the Engine will not find the function.
+
+let result: i64 = engine.call_fn("hello", &ast, ( String::from("abc"), 123_i64 ) )?;
+//                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ put arguments in a tuple
 ```
 
 Values and types
@@ -292,7 +302,7 @@ fn main()
 }
 ```
 
-You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions and call the correct one, based on the types of the arguments, from your script.
+You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions the correct one, based on the types of the arguments, from your script.
 
 Fallible functions
 ------------------
