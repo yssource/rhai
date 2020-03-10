@@ -43,8 +43,8 @@ Optional features
 | `debug_msgs` | Print debug messages to stdout (using `println!`) related to function registrations and function calls.                 |
 | `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. |
 | `unchecked`  | Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!              |
-| `no_index`   | Disable arrays and indexing features                                                                                    |
-| `no_float`   | Disable floating-point numbers and math                                                                                 |
+| `no_index`   | Disable arrays and indexing features if you don't need them.                                                            |
+| `no_float`   | Disable floating-point numbers and math if you don't need them.                                                         |
 
 Related
 -------
@@ -190,14 +190,14 @@ Values and types
 
 The following primitive types are supported natively:
 
-| Category                       | Types                                  |
-| ------------------------------ | -------------------------------------- |
-| Integer                        | `i32`, `u32`, `i64` _(default)_, `u64` |
-| Floating-point                 | `f32`, `f64` _(default)_               |
-| Character                      | `char`                                 |
-| Boolean                        | `bool`                                 |
-| Array                          | `rhai::Array`                          |
-| Dynamic (i.e. can be anything) | `rhai::Dynamic`                        |
+| Category                                                        | Types                                  |
+| --------------------------------------------------------------- | -------------------------------------- |
+| Integer                                                         | `i32`, `u32`, `i64` _(default)_, `u64` |
+| Floating-point (disabled with [`no_float`](#optional-features)) | `f32`, `f64` _(default)_               |
+| Character                                                       | `char`                                 |
+| Boolean                                                         | `bool`                                 |
+| Array (disabled with [`no_index`](#optional-features))          | `rhai::Array`                          |
+| Dynamic (i.e. can be anything)                                  | `rhai::Dynamic`                        |
 
 Value conversions
 -----------------

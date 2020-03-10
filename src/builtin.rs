@@ -479,7 +479,7 @@ impl Engine<'_> {
 
         reg_func1!(self, "debug", print_debug, String, i8, u8, i16, u16);
         reg_func1!(self, "debug", print_debug, String, i32, i64, u32, u64);
-        reg_func1!(self, "debug", print_debug, String, bool, char);
+        reg_func1!(self, "debug", print_debug, String, bool, char, String, ());
 
         #[cfg(not(feature = "no_float"))]
         {
@@ -490,7 +490,7 @@ impl Engine<'_> {
         #[cfg(not(feature = "no_index"))]
         {
             reg_func1!(self, "print", print_debug, String, Array);
-            reg_func1!(self, "debug", print_debug, String, String, Array, ());
+            reg_func1!(self, "debug", print_debug, String, Array);
 
             // Register array iterator
             self.register_iterator::<Array, _>(|a| {

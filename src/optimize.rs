@@ -61,7 +61,7 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
                 // Remove all raw expression statements that evaluate to constants
                 // except for the very last statement
                 result.retain(|stmt| match stmt {
-                    Stmt::Expr(expr) if expr.is_constant() => false,
+                    Stmt::Expr(expr) if expr.is_constant() || expr.is_identifier() => false,
                     _ => true,
                 });
 

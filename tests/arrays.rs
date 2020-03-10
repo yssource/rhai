@@ -1,3 +1,4 @@
+#![cfg(not(feature = "no_index"))]
 use rhai::{Engine, EvalAltResult, RegisterFn};
 
 #[test]

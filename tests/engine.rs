@@ -1,3 +1,4 @@
+#![cfg(not(feature = "no_stdlib"))]
 use rhai::{Engine, EvalAltResult};
 
 #[test]

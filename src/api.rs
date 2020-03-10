@@ -274,6 +274,8 @@ impl<'e> Engine<'e> {
     ///
     /// ```rust
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # #[cfg(not(feature = "no_stdlib"))]
+    /// # {
     /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
@@ -283,6 +285,7 @@ impl<'e> Engine<'e> {
     /// let result: i64 = engine.call_fn("add", &ast, (String::from("abc"), 123_i64))?;
     ///
     /// assert_eq!(result, 126);
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
