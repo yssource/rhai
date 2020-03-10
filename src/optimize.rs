@@ -8,8 +8,8 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
                 Stmt::Noop(pos)
             }
             Expr::True(_) => optimize_stmt(*stmt1, changed),
-            _ => Stmt::IfElse(
-                Box::new(optimize_expr(*expr, changed)),
+            expr => Stmt::IfElse(
+                Box::new(optimize_expr(expr, changed)),
                 Box::new(optimize_stmt(*stmt1, changed)),
                 None,
             ),
@@ -18,8 +18,8 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
         Stmt::IfElse(expr, stmt1, Some(stmt2)) => match *expr {
             Expr::False(_) => optimize_stmt(*stmt2, changed),
             Expr::True(_) => optimize_stmt(*stmt1, changed),
-            _ => Stmt::IfElse(
-                Box::new(optimize_expr(*expr, changed)),
+            expr => Stmt::IfElse(
+                Box::new(optimize_expr(expr, changed)),
                 Box::new(optimize_stmt(*stmt1, changed)),
                 Some(Box::new(optimize_stmt(*stmt2, changed))),
             ),
@@ -31,8 +31,8 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
                 Stmt::Noop(pos)
             }
             Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(*stmt, changed))),
-            _ => Stmt::While(
-                Box::new(optimize_expr(*expr, changed)),
+            expr => Stmt::While(
+                Box::new(optimize_expr(expr, changed)),
                 Box::new(optimize_stmt(*stmt, changed)),
             ),
         },
@@ -57,6 +57,17 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
                 .filter(Stmt::is_op) // Remove no-op's
                 .collect();
 
+            if let Some(last_stmt) = result.pop() {
+                // Remove all raw expression statements that evaluate to constants
+                // except for the very last statement
+                result.retain(|stmt| match stmt {
+                    Stmt::Expr(expr) if expr.is_constant() => false,
+                    _ => true,
+                });
+
+                result.push(last_stmt);
+            }
+
             *changed = *changed || original_len != result.len();
 
             match result[..] {
@@ -65,14 +76,19 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
                     *changed = true;
                     Stmt::Noop(pos)
                 }
-                [Stmt::Let(_, _, _)] => {
+                [Stmt::Let(_, None, _)] => {
+                    // Only one empty variable declaration - change to No-op
+                    *changed = true;
+                    Stmt::Noop(pos)
+                }
+                [Stmt::Let(_, Some(_), _)] => {
                     // Only one let statement, but cannot promote
                     // (otherwise the variable gets declared in the scope above)
                     // and still need to run just in case there are side effects
                     Stmt::Block(result, pos)
                 }
                 [_] => {
-                    // No statements in block - change to No-op
+                    // Only one statement - promote
                     *changed = true;
                     result.remove(0)
                 }
@@ -87,9 +103,9 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
             is_return,
             pos,
         ),
-        Stmt::ReturnWithVal(None, _, _) => stmt,
+        stmt @ Stmt::ReturnWithVal(None, _, _) => stmt,
 
-        Stmt::Noop(_) | Stmt::Break(_) => stmt,
+        stmt @ Stmt::Noop(_) | stmt @ Stmt::Break(_) => stmt,
     }
 }
 

@@ -198,6 +198,21 @@ impl Expr {
             | Expr::Or(e, _) => e.position(),
         }
     }
+
+    pub fn is_constant(&self) -> bool {
+        match self {
+            Expr::IntegerConstant(_, _)
+            | Expr::FloatConstant(_, _)
+            | Expr::Identifier(_, _)
+            | Expr::CharConstant(_, _)
+            | Expr::StringConstant(_, _)
+            | Expr::True(_)
+            | Expr::False(_)
+            | Expr::Unit(_) => true,
+
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
