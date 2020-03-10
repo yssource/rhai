@@ -1,7 +1,7 @@
+//! Module containing error definitions for the parsing process.
+
 use crate::parser::Position;
-use std::char;
-use std::error::Error;
-use std::fmt;
+use std::{char, error::Error, fmt};
 
 /// Error when tokenizing the script text.
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -64,9 +64,9 @@ pub enum ParseErrorType {
     /// An open `[` is missing the corresponding closing `]`.
     MissingRightBracket(String),
     /// An expression in function call arguments `()` has syntax error.
-    MalformedCallExpr,
+    MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
-    MalformedIndexExpr,
+    MalformedIndexExpr(String),
     /// Missing a variable name after the `let` keyword.
     VarExpectsIdentifier,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
@@ -75,11 +75,13 @@ pub enum ParseErrorType {
     FnMissingName,
     /// A function definition is missing the parameters list. Wrapped value is the function name.
     FnMissingParams(String),
+    /// Assignment to an inappropriate LHS (left-hand-side) expression.
+    AssignmentToInvalidLHS,
 }
 
 /// Error when parsing a script.
 #[derive(Debug, PartialEq, Clone)]
-pub struct ParseError(ParseErrorType, Position);
+pub struct ParseError(pub(crate) ParseErrorType, pub(crate) Position);
 
 impl ParseError {
     /// Create a new `ParseError`.
@@ -108,12 +110,13 @@ impl Error for ParseError {
             ParseErrorType::MissingLeftBrace => "Expecting '{'",
             ParseErrorType::MissingRightBrace(_) => "Expecting '}'",
             ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
-            ParseErrorType::MalformedCallExpr => "Invalid expression in function call arguments",
-            ParseErrorType::MalformedIndexExpr => "Invalid index in indexing expression",
+            ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
+            ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
             ParseErrorType::VarExpectsIdentifier => "Expecting name of a variable",
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
+            ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression because it will only be changing a copy of the value"
         }
     }
 
@@ -125,7 +128,11 @@ impl Error for ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            ParseErrorType::BadInput(ref s) => write!(f, "{}", s)?,
+            ParseErrorType::BadInput(ref s)
+            | ParseErrorType::MalformedIndexExpr(ref s)
+            | ParseErrorType::MalformedCallExpr(ref s) => {
+                write!(f, "{}", if s.is_empty() { self.description() } else { s })?
+            }
             ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
             ParseErrorType::FnMissingParams(ref s) => {
                 write!(f, "Expecting parameters for function '{}'", s)?
@@ -140,6 +147,9 @@ impl fmt::Display for ParseError {
 
         if !self.1.is_eof() {
             write!(f, " ({})", self.1)
+        } else if !self.1.is_none() {
+            // Do not write any position if None
+            Ok(())
         } else {
             write!(f, " at the end of the script but there is no more input")
         }

@@ -1,8 +1,9 @@
+//! Main module defining the lexer and parser.
+
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use std::char;
-use std::iter::Peekable;
-use std::str::Chars;
+use crate::optimize::optimize;
+use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, usize};
 
 type LERR = LexError;
 type PERR = ParseErrorType;
@@ -17,25 +18,33 @@ pub struct Position {
 impl Position {
     /// Create a new `Position`.
     pub fn new(line: usize, position: usize) -> Self {
+        if line == 0 || (line == usize::MAX && position == usize::MAX) {
+            panic!("invalid position: ({}, {})", line, position);
+        }
+
         Self {
             line,
             pos: position,
         }
     }
 
-    /// Get the line number (1-based), or `None` if EOF.
+    /// Get the line number (1-based), or `None` if no position or EOF.
     pub fn line(&self) -> Option<usize> {
-        match self.line {
-            0 => None,
-            x => Some(x),
+        if self.is_none() || self.is_eof() {
+            None
+        } else {
+            Some(self.line)
         }
     }
 
     /// Get the character position (1-based), or `None` if at beginning of a line.
     pub fn position(&self) -> Option<usize> {
-        match self.pos {
-            0 => None,
-            x => Some(x),
+        if self.is_none() || self.is_eof() {
+            None
+        } else if self.pos == 0 {
+            None
+        } else {
+            Some(self.pos)
         }
     }
 
@@ -61,14 +70,27 @@ impl Position {
         self.pos = 0;
     }
 
+    /// Create a `Position` representing no position.
+    pub(crate) fn none() -> Self {
+        Self { line: 0, pos: 0 }
+    }
+
     /// Create a `Position` at EOF.
     pub(crate) fn eof() -> Self {
-        Self { line: 0, pos: 0 }
+        Self {
+            line: usize::MAX,
+            pos: usize::MAX,
+        }
+    }
+
+    /// Is there no `Position`?
+    pub fn is_none(&self) -> bool {
+        self.line == 0 && self.pos == 0
     }
 
     /// Is the `Position` at EOF?
     pub fn is_eof(&self) -> bool {
-        self.line == 0
+        self.line == usize::MAX && self.pos == usize::MAX
     }
 }
 
@@ -78,18 +100,20 @@ impl Default for Position {
     }
 }
 
-impl std::fmt::Display for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_eof() {
             write!(f, "EOF")
+        } else if self.is_none() {
+            write!(f, "none")
         } else {
             write!(f, "line {}, position {}", self.line, self.pos)
         }
     }
 }
 
-impl std::fmt::Debug for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_eof() {
             write!(f, "(EOF)")
         } else {
@@ -99,27 +123,37 @@ impl std::fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
-pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef>);
+pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef<'static>>);
 
 #[derive(Debug, Clone)]
-pub struct FnDef {
-    pub name: String,
-    pub params: Vec<String>,
-    pub body: Box<Stmt>,
+pub struct FnDef<'a> {
+    pub name: Cow<'a, str>,
+    pub params: Vec<Cow<'a, str>>,
+    pub body: Stmt,
     pub pos: Position,
 }
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    Noop(Position),
     IfElse(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
     While(Box<Expr>, Box<Stmt>),
     Loop(Box<Stmt>),
     For(String, Box<Expr>, Box<Stmt>),
     Let(String, Option<Box<Expr>>, Position),
-    Block(Vec<Stmt>),
+    Block(Vec<Stmt>, Position),
     Expr(Box<Expr>),
     Break(Position),
     ReturnWithVal(Option<Box<Expr>>, bool, Position),
+}
+
+impl Stmt {
+    pub fn is_op(&self) -> bool {
+        match self {
+            Stmt::Noop(_) => false,
+            _ => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -129,10 +163,11 @@ pub enum Expr {
     Identifier(String, Position),
     CharConstant(char, Position),
     StringConstant(String, Position),
+    Stmt(Box<Stmt>, Position),
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
-    Assignment(Box<Expr>, Box<Expr>),
-    Dot(Box<Expr>, Box<Expr>),
-    Index(Box<Expr>, Box<Expr>),
+    Assignment(Box<Expr>, Box<Expr>, Position),
+    Dot(Box<Expr>, Box<Expr>, Position),
+    Index(Box<Expr>, Box<Expr>, Position),
     Array(Vec<Expr>, Position),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
@@ -150,16 +185,32 @@ impl Expr {
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
             | Expr::FunctionCall(_, _, _, pos)
+            | Expr::Stmt(_, pos)
             | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Index(e, _)
-            | Expr::Assignment(e, _)
-            | Expr::Dot(e, _)
+            Expr::Index(e, _, _)
+            | Expr::Assignment(e, _, _)
+            | Expr::Dot(e, _, _)
             | Expr::And(e, _)
             | Expr::Or(e, _) => e.position(),
+        }
+    }
+
+    pub fn is_constant(&self) -> bool {
+        match self {
+            Expr::IntegerConstant(_, _)
+            | Expr::FloatConstant(_, _)
+            | Expr::Identifier(_, _)
+            | Expr::CharConstant(_, _)
+            | Expr::StringConstant(_, _)
+            | Expr::True(_)
+            | Expr::False(_)
+            | Expr::Unit(_) => true,
+
+            _ => false,
         }
     }
 }
@@ -232,14 +283,14 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn syntax(&self) -> std::borrow::Cow<'static, str> {
+    pub fn syntax<'a>(&'a self) -> Cow<'a, str> {
         use self::Token::*;
 
         match *self {
-            IntegerConstant(ref s) => s.to_string().into(),
-            FloatConstant(ref s) => s.to_string().into(),
-            Identifier(ref s) => s.to_string().into(),
-            CharConstant(ref s) => s.to_string().into(),
+            IntegerConstant(ref i) => i.to_string().into(),
+            FloatConstant(ref f) => f.to_string().into(),
+            Identifier(ref s) => s.into(),
+            CharConstant(ref c) => c.to_string().into(),
             LexError(ref err) => err.to_string().into(),
 
             ref token => (match token {
@@ -301,7 +352,7 @@ impl Token {
                 PowerOfAssign => "~=",
                 For => "for",
                 In => "in",
-                _ => panic!(),
+                _ => panic!("operator should be match in outer scope"),
             })
             .into(),
         }
@@ -313,6 +364,7 @@ impl Token {
         use self::Token::*;
 
         match *self {
+            LexError(_)      |
             LeftBrace        | // (+expr) - is unary
             // RightBrace    | {expr} - expr not unary & is closing
             LeftParen        | // {-expr} - is unary
@@ -361,6 +413,7 @@ impl Token {
             PowerOf          |
             In               |
             PowerOfAssign => true,
+
             _ => false,
         }
     }
@@ -373,6 +426,7 @@ impl Token {
             RightBrace | RightParen | RightBracket | Plus | Minus | Multiply | Divide | Comma
             | Equals | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo
             | EqualsTo | NotEqualsTo | Pipe | Or | Ampersand | And | PowerOf => true,
+
             _ => false,
         }
     }
@@ -538,11 +592,12 @@ impl<'a> TokenIterator<'a> {
             }
         }
 
-        let out: String = result.iter().collect();
-        Ok(out)
+        Ok(result.iter().collect())
     }
 
     fn inner_next(&mut self) -> Option<(Token, Position)> {
+        let mut negated = false;
+
         while let Some(c) = self.char_stream.next() {
             self.advance();
 
@@ -629,31 +684,34 @@ impl<'a> TokenIterator<'a> {
                         }
                     }
 
+                    if negated {
+                        result.insert(0, '-');
+                    }
+
                     if let Some(radix) = radix_base {
                         let out: String = result.iter().skip(2).filter(|&&c| c != '_').collect();
 
                         return Some((
-                            if let Ok(val) = i64::from_str_radix(&out, radix) {
-                                Token::IntegerConstant(val)
-                            } else {
-                                Token::LexError(LERR::MalformedNumber(result.iter().collect()))
-                            },
+                            i64::from_str_radix(&out, radix)
+                                .map(Token::IntegerConstant)
+                                .unwrap_or_else(|_| {
+                                    Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                }),
+                            pos,
+                        ));
+                    } else {
+                        let out: String = result.iter().filter(|&&c| c != '_').collect();
+
+                        return Some((
+                            i64::from_str(&out)
+                                .map(Token::IntegerConstant)
+                                .or_else(|_| f64::from_str(&out).map(Token::FloatConstant))
+                                .unwrap_or_else(|_| {
+                                    Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                }),
                             pos,
                         ));
                     }
-
-                    let out: String = result.iter().filter(|&&c| c != '_').collect();
-
-                    return Some((
-                        if let Ok(val) = out.parse::<i64>() {
-                            Token::IntegerConstant(val)
-                        } else if let Ok(val) = out.parse::<f64>() {
-                            Token::FloatConstant(val)
-                        } else {
-                            Token::LexError(LERR::MalformedNumber(result.iter().collect()))
-                        },
-                        pos,
-                    ));
                 }
                 'A'..='Z' | 'a'..='z' | '_' => {
                     let mut result = Vec::new();
@@ -687,7 +745,7 @@ impl<'a> TokenIterator<'a> {
                             "fn" => Token::Fn,
                             "for" => Token::For,
                             "in" => Token::In,
-                            x => Token::Identifier(x.into()),
+                            _ => Token::Identifier(out),
                         },
                         pos,
                     ));
@@ -737,20 +795,17 @@ impl<'a> TokenIterator<'a> {
                         pos,
                     ))
                 }
-                '-' => {
-                    return Some((
-                        match self.char_stream.peek() {
-                            Some(&'=') => {
-                                self.char_stream.next();
-                                self.advance();
-                                Token::MinusAssign
-                            }
-                            _ if self.last.is_next_unary() => Token::UnaryMinus,
-                            _ => Token::Minus,
-                        },
-                        pos,
-                    ))
-                }
+                '-' => match self.char_stream.peek() {
+                    // Negative number?
+                    Some('0'..='9') => negated = true,
+                    Some('=') => {
+                        self.char_stream.next();
+                        self.advance();
+                        return Some((Token::MinusAssign, pos));
+                    }
+                    _ if self.last.is_next_unary() => return Some((Token::UnaryMinus, pos)),
+                    _ => return Some((Token::Minus, pos)),
+                },
                 '*' => {
                     return Some((
                         match self.char_stream.peek() {
@@ -1010,19 +1065,28 @@ fn get_precedence(token: &Token) -> i8 {
         | Token::XOrAssign
         | Token::ModuloAssign
         | Token::PowerOfAssign => 10,
+
         Token::Or | Token::XOr | Token::Pipe => 11,
+
         Token::And | Token::Ampersand => 12,
+
         Token::LessThan
         | Token::LessThanEqualsTo
         | Token::GreaterThan
         | Token::GreaterThanEqualsTo
         | Token::EqualsTo
         | Token::NotEqualsTo => 15,
+
         Token::Plus | Token::Minus => 20,
+
         Token::Divide | Token::Multiply | Token::PowerOf => 40,
+
         Token::LeftShift | Token::RightShift => 50,
+
         Token::Modulo => 60,
+
         Token::Period => 100,
+
         _ => -1,
     }
 }
@@ -1032,6 +1096,7 @@ fn parse_paren_expr<'a>(
     begin: Position,
 ) -> Result<Expr, ParseError> {
     match input.peek() {
+        // ()
         Some((Token::RightParen, _)) => {
             input.next();
             return Ok(Expr::Unit(begin));
@@ -1104,11 +1169,71 @@ fn parse_call_expr<'a>(
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
+    pos: Position,
 ) -> Result<Expr, ParseError> {
-    parse_expr(input).and_then(|idx_expr| match input.peek() {
+    let idx_expr = parse_expr(input)?;
+
+    // Check type of indexing - must be integer
+    match &idx_expr {
+        Expr::IntegerConstant(i, pos) if *i < 0 => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(format!(
+                    "Array access expects non-negative index: {} < 0",
+                    i
+                )),
+                *pos,
+            ))
+        }
+        Expr::FloatConstant(_, pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr("Array access expects integer index, not a float".into()),
+                *pos,
+            ))
+        }
+        Expr::CharConstant(_, pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(
+                    "Array access expects integer index, not a character".into(),
+                ),
+                *pos,
+            ))
+        }
+        Expr::StringConstant(_, pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr("Array access expects integer index, not a string".into()),
+                *pos,
+            ))
+        }
+        Expr::Assignment(_, _, pos) | Expr::Unit(pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr("Array access expects integer index, not ()".into()),
+                *pos,
+            ))
+        }
+        Expr::And(lhs, _) | Expr::Or(lhs, _) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(
+                    "Array access expects integer index, not a boolean".into(),
+                ),
+                lhs.position(),
+            ))
+        }
+        Expr::True(pos) | Expr::False(pos) => {
+            return Err(ParseError::new(
+                PERR::MalformedIndexExpr(
+                    "Array access expects integer index, not a boolean".into(),
+                ),
+                *pos,
+            ))
+        }
+        _ => (),
+    }
+
+    // Check if there is a closing bracket
+    match input.peek() {
         Some(&(Token::RightBracket, _)) => {
             input.next();
-            return Ok(Expr::Index(lhs, Box::new(idx_expr)));
+            return Ok(Expr::Index(lhs, Box::new(idx_expr), pos));
         }
         Some(&(_, pos)) => {
             return Err(ParseError::new(
@@ -1122,7 +1247,7 @@ fn parse_index_expr<'a>(
                 Position::eof(),
             ))
         }
-    })
+    }
 }
 
 fn parse_ident_expr<'a>(
@@ -1135,9 +1260,9 @@ fn parse_ident_expr<'a>(
             input.next();
             parse_call_expr(id, input, begin)
         }
-        Some(&(Token::LeftBracket, _)) => {
+        Some(&(Token::LeftBracket, pos)) => {
             input.next();
-            parse_index_expr(Box::new(Expr::Identifier(id, begin)), input)
+            parse_index_expr(Box::new(Expr::Identifier(id, begin)), input, pos)
         }
         Some(_) => Ok(Expr::Identifier(id, begin)),
         None => Ok(Expr::Identifier(id, Position::eof())),
@@ -1185,6 +1310,14 @@ fn parse_array_expr<'a>(
 }
 
 fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
+    // Block statement as expression
+    match input.peek() {
+        Some(&(Token::LeftBrace, pos)) => {
+            return parse_block(input).map(|block| Expr::Stmt(Box::new(block), pos))
+        }
+        _ => (),
+    }
+
     let token = input.next();
 
     let mut follow_on = false;
@@ -1226,9 +1359,9 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
     }
 
     // Tail processing all possible indexing
-    while let Some(&(Token::LeftBracket, _)) = input.peek() {
+    while let Some(&(Token::LeftBracket, pos)) = input.peek() {
         input.next();
-        root_expr = parse_index_expr(Box::new(root_expr), input)?;
+        root_expr = parse_index_expr(Box::new(root_expr), input, pos)?;
     }
 
     Ok(root_expr)
@@ -1239,16 +1372,22 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
         Some(&(Token::UnaryMinus, pos)) => {
             input.next();
 
-            Ok(Expr::FunctionCall(
-                "-".into(),
-                vec![parse_primary(input)?],
-                None,
-                pos,
-            ))
+            match parse_unary(input) {
+                // Negative integer
+                Ok(Expr::IntegerConstant(i, pos)) => Ok(i
+                    .checked_neg()
+                    .map(|x| Expr::IntegerConstant(x, pos))
+                    .unwrap_or_else(|| Expr::FloatConstant(-(i as f64), pos))),
+                // Negative float
+                Ok(Expr::FloatConstant(f, pos)) => Ok(Expr::FloatConstant(-f, pos)),
+                // Call negative function
+                Ok(expr) => Ok(Expr::FunctionCall("-".into(), vec![expr], None, pos)),
+                err @ Err(_) => err,
+            }
         }
         Some(&(Token::UnaryPlus, _)) => {
             input.next();
-            parse_primary(input)
+            parse_unary(input)
         }
         Some(&(Token::Bang, pos)) => {
             input.next();
@@ -1262,6 +1401,75 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
         }
         _ => parse_primary(input),
     }
+}
+
+fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
+    fn valid_assignment_chain(expr: &Expr) -> (bool, Position) {
+        match expr {
+            Expr::Identifier(_, pos) => (true, *pos),
+
+            Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
+                Expr::Identifier(_, _) => (true, idx_lhs.position()),
+                _ => (false, idx_lhs.position()),
+            },
+
+            Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
+                Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
+                Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
+                    Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
+                    _ => (false, idx_lhs.position()),
+                },
+                _ => (false, dot_lhs.position()),
+            },
+
+            _ => (false, expr.position()),
+        }
+    }
+
+    //println!("{:?} = {:?}", lhs, rhs);
+
+    match valid_assignment_chain(&lhs) {
+        (true, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+        (false, pos) => Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
+    }
+}
+
+fn parse_op_assignment(
+    function: &str,
+    lhs: Expr,
+    rhs: Expr,
+    pos: Position,
+) -> Result<Expr, ParseError> {
+    let lhs_copy = lhs.clone();
+
+    parse_assignment(
+        lhs,
+        Expr::FunctionCall(function.into(), vec![lhs_copy, rhs], None, pos),
+        pos,
+    )
+
+    /*
+    const LHS_VALUE: &'static str = "@LHS_VALUE@";
+
+    let lhs_pos = lhs.position();
+
+    Ok(Expr::Block(
+        Box::new(Stmt::Block(vec![
+            Stmt::Let(LHS_VALUE.to_string(), Some(Box::new(lhs)), lhs_pos),
+            Stmt::Expr(Box::new(parse_assignment(
+                lhs,
+                Expr::FunctionCall(
+                    function.into(),
+                    vec![Expr::Identifier(LHS_VALUE.to_string(), lhs_pos), rhs],
+                    None,
+                    pos,
+                ),
+                pos,
+            )?)),
+        ])),
+        pos,
+    ))
+    */
 }
 
 fn parse_binary_op<'a>(
@@ -1308,32 +1516,10 @@ fn parse_binary_op<'a>(
                 }
                 Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
 
-                Token::Equals => Expr::Assignment(Box::new(current_lhs), Box::new(rhs)),
-                Token::PlusAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "+".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
-                Token::MinusAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "-".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
-                Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs)),
+                Token::Equals => parse_assignment(current_lhs, rhs, pos)?,
+                Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
+                Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
+                Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs), pos),
 
                 // Comparison operators default to false when passed invalid operands
                 Token::EqualsTo => Expr::FunctionCall(
@@ -1376,66 +1562,11 @@ fn parse_binary_op<'a>(
                 Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs)),
                 Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs)),
                 Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
-                Token::OrAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "|".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
-                Token::AndAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "&".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
-                Token::XOrAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "^".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
-                Token::MultiplyAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "*".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
-                Token::DivideAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "/".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
+                Token::OrAssign => parse_op_assignment("|", current_lhs, rhs, pos)?,
+                Token::AndAssign => parse_op_assignment("&", current_lhs, rhs, pos)?,
+                Token::XOrAssign => parse_op_assignment("^", current_lhs, rhs, pos)?,
+                Token::MultiplyAssign => parse_op_assignment("*", current_lhs, rhs, pos)?,
+                Token::DivideAssign => parse_op_assignment("/", current_lhs, rhs, pos)?,
                 Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
                 Token::LeftShift => {
                     Expr::FunctionCall("<<".into(), vec![current_lhs, rhs], None, pos)
@@ -1443,59 +1574,15 @@ fn parse_binary_op<'a>(
                 Token::RightShift => {
                     Expr::FunctionCall(">>".into(), vec![current_lhs, rhs], None, pos)
                 }
-                Token::LeftShiftAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "<<".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
-                Token::RightShiftAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            ">>".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
+                Token::LeftShiftAssign => parse_op_assignment("<<", current_lhs, rhs, pos)?,
+                Token::RightShiftAssign => parse_op_assignment(">>", current_lhs, rhs, pos)?,
                 Token::Ampersand => {
                     Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos)
                 }
                 Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
-                Token::ModuloAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "%".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
+                Token::ModuloAssign => parse_op_assignment("%", current_lhs, rhs, pos)?,
                 Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
-                Token::PowerOfAssign => {
-                    let lhs_copy = current_lhs.clone();
-                    Expr::Assignment(
-                        Box::new(current_lhs),
-                        Box::new(Expr::FunctionCall(
-                            "~".into(),
-                            vec![lhs_copy, rhs],
-                            None,
-                            pos,
-                        )),
-                    )
-                }
+                Token::PowerOfAssign => parse_op_assignment("~", current_lhs, rhs, pos)?,
                 token => {
                     return Err(ParseError::new(
                         PERR::UnknownOperator(token.syntax().into()),
@@ -1591,8 +1678,8 @@ fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
     match input.peek() {
         Some(&(Token::Equals, _)) => {
             input.next();
-            let initializer = parse_expr(input)?;
-            Ok(Stmt::Let(name, Some(Box::new(initializer)), pos))
+            let init_value = parse_expr(input)?;
+            Ok(Stmt::Let(name, Some(Box::new(init_value)), pos))
         }
         _ => Ok(Stmt::Let(name, None, pos)),
     }
@@ -1605,7 +1692,7 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
         None => return Err(ParseError::new(PERR::MissingLeftBrace, Position::eof())),
     }
 
-    input.next();
+    let pos = input.next().unwrap().1;
 
     let mut statements = Vec::new();
 
@@ -1633,7 +1720,7 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
     match input.peek() {
         Some(&(Token::RightBrace, _)) => {
             input.next();
-            Ok(Stmt::Block(statements))
+            Ok(Stmt::Block(statements, pos))
         }
         Some(&(_, pos)) => Err(ParseError::new(
             PERR::MissingRightBrace("end of block".into()),
@@ -1687,7 +1774,7 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
     }
 }
 
-fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
+fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static>, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
         _ => return Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
@@ -1723,10 +1810,24 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
                 Some((Token::RightParen, _)) => break,
                 Some((Token::Comma, _)) => (),
                 Some((Token::Identifier(s), _)) => {
-                    params.push(s);
+                    params.push(s.into());
                 }
-                Some((_, pos)) => return Err(ParseError::new(PERR::MalformedCallExpr, pos)),
-                None => return Err(ParseError::new(PERR::MalformedCallExpr, Position::eof())),
+                Some((_, pos)) => {
+                    return Err(ParseError::new(
+                        PERR::MalformedCallExpr(
+                            "Function call arguments missing either a ',' or a ')'".into(),
+                        ),
+                        pos,
+                    ))
+                }
+                None => {
+                    return Err(ParseError::new(
+                        PERR::MalformedCallExpr(
+                            "Function call arguments missing a closing ')'".into(),
+                        ),
+                        Position::eof(),
+                    ))
+                }
             }
         },
     }
@@ -1734,14 +1835,17 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     let body = parse_block(input)?;
 
     Ok(FnDef {
-        name: name,
-        params: params,
-        body: Box::new(body),
-        pos: pos,
+        name: name.into(),
+        params,
+        body,
+        pos,
     })
 }
 
-fn parse_top_level<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<AST, ParseError> {
+fn parse_top_level<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    optimize_ast: bool,
+) -> Result<AST, ParseError> {
     let mut statements = Vec::new();
     let mut functions = Vec::new();
 
@@ -1757,9 +1861,26 @@ fn parse_top_level<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<AST, P
         }
     }
 
-    Ok(AST(statements, functions))
+    return Ok(if optimize_ast {
+        AST(
+            optimize(statements),
+            functions
+                .into_iter()
+                .map(|mut fn_def| {
+                    let mut body = optimize(vec![fn_def.body]);
+                    fn_def.body = body.pop().unwrap();
+                    fn_def
+                })
+                .collect(),
+        )
+    } else {
+        AST(statements, functions)
+    });
 }
 
-pub fn parse<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<AST, ParseError> {
-    parse_top_level(input)
+pub fn parse<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    optimize_ast: bool,
+) -> Result<AST, ParseError> {
+    parse_top_level(input, optimize_ast)
 }

@@ -1,3 +1,5 @@
+//! Module that defines the extern API of `Engine`.
+
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
 use crate::engine::{Engine, FnAny, FnIntExt, FnSpec};
@@ -6,10 +8,14 @@ use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use std::any::TypeId;
-use std::sync::Arc;
+use std::{
+    any::{type_name, TypeId},
+    fs::File,
+    io::prelude::*,
+    sync::Arc,
+};
 
-impl<'a> Engine<'a> {
+impl<'e> Engine<'e> {
     pub(crate) fn register_fn_raw(
         &mut self,
         fn_name: &str,
@@ -17,12 +23,16 @@ impl<'a> Engine<'a> {
         f: Box<FnAny>,
     ) {
         debug_println!(
-            "Register function: {} for {} parameter(s)",
+            "Register function: {} with {}",
             fn_name,
             if let Some(a) = &args {
-                format!("{}", a.len())
+                format!(
+                    "{} parameter{}",
+                    a.len(),
+                    if a.len() > 1 { "s" } else { "" }
+                )
             } else {
-                "no".to_string()
+                "no parameter".to_string()
             }
         );
 
@@ -31,24 +41,21 @@ impl<'a> Engine<'a> {
             args,
         };
 
-        self.external_functions
-            .insert(spec, Arc::new(FnIntExt::Ext(f)));
+        self.ext_functions.insert(spec, Arc::new(FnIntExt::Ext(f)));
     }
 
     /// Register a custom type for use with the `Engine`.
     /// The type must be `Clone`.
     pub fn register_type<T: Any + Clone>(&mut self) {
-        self.register_type_with_name::<T>(std::any::type_name::<T>());
+        self.register_type_with_name::<T>(type_name::<T>());
     }
 
     /// Register a custom type for use with the `Engine` with a name for the `type_of` function.
     /// The type must be `Clone`.
-    pub fn register_type_with_name<T: Any + Clone>(&mut self, type_name: &str) {
+    pub fn register_type_with_name<T: Any + Clone>(&mut self, name: &str) {
         // Add the pretty-print type name into the map
-        self.type_names.insert(
-            std::any::type_name::<T>().to_string(),
-            type_name.to_string(),
-        );
+        self.type_names
+            .insert(type_name::<T>().to_string(), name.to_string());
     }
 
     /// Register an iterator adapter for a type with the `Engine`.
@@ -91,17 +98,14 @@ impl<'a> Engine<'a> {
         self.register_set(name, set_fn);
     }
 
-    /// Compile a string into an AST
-    pub fn compile(input: &str) -> Result<AST, ParseError> {
+    /// Compile a string into an AST.
+    pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
         let tokens = lex(input);
-        parse(&mut tokens.peekable())
+        parse(&mut tokens.peekable(), self.optimize)
     }
 
-    /// Compile a file into an AST
-    pub fn compile_file(filename: &str) -> Result<AST, EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
+    /// Compile a file into an AST.
+    pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
@@ -109,14 +113,11 @@ impl<'a> Engine<'a> {
 
         f.read_to_string(&mut contents)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
-            .and_then(|_| Self::compile(&contents).map_err(EvalAltResult::ErrorParsing))
+            .and_then(|_| self.compile(&contents).map_err(EvalAltResult::ErrorParsing))
     }
 
-    /// Evaluate a file
+    /// Evaluate a file.
     pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
@@ -127,32 +128,40 @@ impl<'a> Engine<'a> {
             .and_then(|_| self.eval::<T>(&contents))
     }
 
-    /// Evaluate a string
+    /// Evaluate a string.
     pub fn eval<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
-        self.eval_with_scope(&mut scope, input)
+        self.eval_with_scope(&mut scope, false, input)
     }
 
-    /// Evaluate a string with own scope
+    /// Evaluate a string with own scope.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
     pub fn eval_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
+        retain_functions: bool,
         input: &str,
     ) -> Result<T, EvalAltResult> {
-        let ast = Self::compile(input).map_err(EvalAltResult::ErrorParsing)?;
-        self.eval_ast_with_scope(scope, &ast)
+        let ast = self.compile(input).map_err(EvalAltResult::ErrorParsing)?;
+        self.eval_ast_with_scope(scope, retain_functions, &ast)
     }
 
-    /// Evaluate an AST
+    /// Evaluate an AST.
     pub fn eval_ast<T: Any + Clone>(&mut self, ast: &AST) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
-        self.eval_ast_with_scope(&mut scope, ast)
+        self.eval_ast_with_scope(&mut scope, false, ast)
     }
 
-    /// Evaluate an AST with own scope
+    /// Evaluate an AST with own scope.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
     pub fn eval_ast_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
+        retain_functions: bool,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
         let AST(statements, functions) = ast;
@@ -169,9 +178,11 @@ impl<'a> Engine<'a> {
 
         let result = statements
             .iter()
-            .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o));
+            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt));
 
-        self.script_functions.clear(); // Clean up engine
+        if !retain_functions {
+            self.clear_functions();
+        }
 
         match result {
             Err(EvalAltResult::Return(out, pos)) => out.downcast::<T>().map(|v| *v).map_err(|a| {
@@ -193,12 +204,8 @@ impl<'a> Engine<'a> {
     }
 
     /// Evaluate a file, but throw away the result and only return error (if any).
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume_file(&mut self, filename: &str) -> Result<(), EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
@@ -210,23 +217,25 @@ impl<'a> Engine<'a> {
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume(&mut self, input: &str) -> Result<(), EvalAltResult> {
-        self.consume_with_scope(&mut Scope::new(), input)
+        self.consume_with_scope(&mut Scope::new(), false, input)
     }
 
-    /// Evaluate a string with own scope, but throw away the result and only return error (if any).
-    /// Useful for when you don't need the result, but still need
-    /// to keep track of possible errors
+    /// Evaluate a string, but throw away the result and only return error (if any).
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
     pub fn consume_with_scope(
         &mut self,
         scope: &mut Scope,
+        retain_functions: bool,
         input: &str,
     ) -> Result<(), EvalAltResult> {
         let tokens = lex(input);
 
-        parse(&mut tokens.peekable())
+        parse(&mut tokens.peekable(), self.optimize)
             .map_err(|err| EvalAltResult::ErrorParsing(err))
             .and_then(|AST(ref statements, ref functions)| {
                 for f in functions {
@@ -244,7 +253,9 @@ impl<'a> Engine<'a> {
                     .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
                     .map(|_| ());
 
-                self.script_functions.clear(); // Clean up engine
+                if !retain_functions {
+                    self.clear_functions();
+                }
 
                 val
             })
@@ -255,13 +266,14 @@ impl<'a> Engine<'a> {
     /// # Example
     ///
     /// ```rust
-    /// # use rhai::{Engine, EvalAltResult};
-    /// # fn main() -> Result<(), EvalAltResult> {
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
     /// let mut engine = Engine::new();
     ///
-    /// let ast = Engine::compile("fn add(x, y) { x.len() + y }")?;
+    /// let ast = engine.compile("fn add(x, y) { x.len() + y }")?;
     ///
-    /// let result: i64 = engine.call_fn("add", ast, (&mut String::from("abc"), &mut 123_i64))?;
+    /// let result: i64 = engine.call_fn("add", &ast, (&mut String::from("abc"), &mut 123_i64))?;
     ///
     /// assert_eq!(result, 126);
     /// # Ok(())
@@ -270,7 +282,7 @@ impl<'a> Engine<'a> {
     pub fn call_fn<'f, A: FuncArgs<'f>, T: Any + Clone>(
         &mut self,
         name: &str,
-        ast: AST,
+        ast: &AST,
         args: A,
     ) -> Result<T, EvalAltResult> {
         let pos = Default::default();
@@ -296,7 +308,7 @@ impl<'a> Engine<'a> {
                 })
             });
 
-        self.script_functions.clear(); // Clean up engine
+        self.clear_functions();
 
         result
     }
@@ -306,18 +318,22 @@ impl<'a> Engine<'a> {
     /// # Example
     ///
     /// ```rust
-    /// # use rhai::Engine;
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
     /// let mut result = String::from("");
     /// {
     ///     let mut engine = Engine::new();
     ///
     ///     // Override action of 'print' function
     ///     engine.on_print(|s| result.push_str(s));
-    ///     engine.consume("print(40 + 2);").unwrap();
+    ///     engine.consume("print(40 + 2);")?;
     /// }
     /// assert_eq!(result, "42");
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn on_print(&mut self, callback: impl FnMut(&str) + 'a) {
+    pub fn on_print(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_print = Box::new(callback);
     }
 
@@ -326,18 +342,22 @@ impl<'a> Engine<'a> {
     /// # Example
     ///
     /// ```rust
-    /// # use rhai::Engine;
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
     /// let mut result = String::from("");
     /// {
     ///     let mut engine = Engine::new();
     ///
     ///     // Override action of 'debug' function
     ///     engine.on_debug(|s| result.push_str(s));
-    ///     engine.consume(r#"debug("hello");"#).unwrap();
+    ///     engine.consume(r#"debug("hello");"#)?;
     /// }
     /// assert_eq!(result, "\"hello\"");
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'a) {
+    pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_debug = Box::new(callback);
     }
 }

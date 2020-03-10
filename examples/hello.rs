@@ -1,9 +1,11 @@
-use rhai::Engine;
+use rhai::{Engine, EvalAltResult};
 
-fn main() {
+fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    if let Ok(result) = engine.eval::<i64>("40 + 2") {
-        println!("Answer: {}", result); // prints 42
-    }
+    let result = engine.eval::<i64>("40 + 2")?;
+
+    println!("Answer: {}", result); // prints 42
+
+    Ok(())
 }

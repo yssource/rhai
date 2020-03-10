@@ -1,4 +1,4 @@
-use rhai::{Engine, RegisterFn};
+use rhai::{Engine, EvalAltResult, RegisterFn};
 
 #[derive(Clone)]
 struct TestStruct {
@@ -15,7 +15,7 @@ impl TestStruct {
     }
 }
 
-fn main() {
+fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     engine.register_type::<TestStruct>();
@@ -23,7 +23,9 @@ fn main() {
     engine.register_fn("update", TestStruct::update);
     engine.register_fn("new_ts", TestStruct::new);
 
-    if let Ok(result) = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x") {
-        println!("result: {}", result.x); // prints 1001
-    }
+    let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
+
+    println!("result: {}", result.x); // prints 1001
+
+    Ok(())
 }
