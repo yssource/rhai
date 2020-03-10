@@ -112,13 +112,15 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
 fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
     match expr {
         Expr::IntegerConstant(_, _)
-        | Expr::FloatConstant(_, _)
         | Expr::Identifier(_, _)
         | Expr::CharConstant(_, _)
         | Expr::StringConstant(_, _)
         | Expr::True(_)
         | Expr::False(_)
         | Expr::Unit(_) => expr,
+
+        #[cfg(not(feature = "no_float"))]
+        Expr::FloatConstant(_, _) => expr,
 
         Expr::Stmt(stmt, pos) => match optimize_stmt(*stmt, changed) {
             Stmt::Noop(_) => {
@@ -144,9 +146,9 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
             (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
                 if i >= 0
                     && (i as usize) < items.len()
-                    && !items.iter().any(|x| x.is_constant()) =>
+                    && !items.iter().any(|x| x.is_constant() || x.is_identifier()) =>
             {
-                // Array where everything is a constant - promote the item
+                // Array where everything is a constant or identifier - promote the item
                 *changed = true;
                 items.remove(i as usize)
             }

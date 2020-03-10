@@ -44,6 +44,7 @@ Optional features
 | `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. |
 | `unchecked`  | Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!              |
 | `no_index`   | Disable arrays and indexing features                                                                                    |
+| `no_float`   | Disable floating-point numbers and math                                                                                 |
 
 Related
 -------

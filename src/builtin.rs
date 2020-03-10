@@ -11,12 +11,15 @@ use crate::engine::Array;
 use std::{
     fmt::{Debug, Display},
     i32, i64,
-    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub},
+    ops::{BitAnd, BitOr, BitXor, Range},
     u32,
 };
 
 #[cfg(feature = "unchecked")]
 use std::ops::{Shl, Shr};
+
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
+use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
 #[cfg(not(feature = "unchecked"))]
 use {
@@ -188,21 +191,27 @@ impl Engine<'_> {
                 })
             }
         }
+        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn add_u<T: Add>(x: T, y: T) -> <T as Add>::Output {
             x + y
         }
+        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn sub_u<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
             x - y
         }
+        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn mul_u<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
             x * y
         }
+        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn div_u<T: Div>(x: T, y: T) -> <T as Div>::Output {
             x / y
         }
+        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn neg_u<T: Neg>(x: T) -> <T as Neg>::Output {
             -x
         }
+        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn abs_u<T: Neg + PartialOrd + From<i8>>(x: T) -> T
         where
             <T as Neg>::Output: Into<T>,
@@ -298,6 +307,7 @@ impl Engine<'_> {
                 )
             })
         }
+        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn modulo_u<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
             x % y
         }
@@ -321,10 +331,12 @@ impl Engine<'_> {
         fn pow_i64_i64(x: i64, y: i64) -> i64 {
             x.pow(y as u32)
         }
+        #[cfg(not(feature = "no_float"))]
         fn pow_f64_f64(x: f64, y: f64) -> f64 {
             x.powf(y)
         }
         #[cfg(not(feature = "unchecked"))]
+        #[cfg(not(feature = "no_float"))]
         fn pow_f64_i64_u(x: f64, y: i64) -> Result<f64, EvalAltResult> {
             if y > (i32::MAX as i64) {
                 return Err(EvalAltResult::ErrorArithmetic(
@@ -336,6 +348,7 @@ impl Engine<'_> {
             Ok(x.powi(y as i32))
         }
         #[cfg(feature = "unchecked")]
+        #[cfg(not(feature = "no_float"))]
         fn pow_f64_i64(x: f64, y: i64) -> f64 {
             x.powi(y as i32)
         }
@@ -356,21 +369,30 @@ impl Engine<'_> {
             reg_op!(self, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64);
         }
 
-        reg_op!(self, "+", add_u, f32, f64);
-        reg_op!(self, "-", sub_u, f32, f64);
-        reg_op!(self, "*", mul_u, f32, f64);
-        reg_op!(self, "/", div_u, f32, f64);
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_op!(self, "+", add_u, f32, f64);
+            reg_op!(self, "-", sub_u, f32, f64);
+            reg_op!(self, "*", mul_u, f32, f64);
+            reg_op!(self, "/", div_u, f32, f64);
+        }
 
-        reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
-        reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
-        reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
-        reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64, String, char);
-        reg_cmp!(
-            self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, bool, f32, f64, String, char
-        );
-        reg_cmp!(
-            self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, bool, f32, f64, String, char
-        );
+        reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, String, char);
+        reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, String, char);
+        reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, String, char);
+        reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, String, char);
+        reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, bool, String, char);
+        reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, bool, String, char);
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_cmp!(self, "<", lt, f32, f64);
+            reg_cmp!(self, "<=", lte, f32, f64);
+            reg_cmp!(self, ">", gt, f32, f64);
+            reg_cmp!(self, ">=", gte, f32, f64);
+            reg_cmp!(self, "==", eq, f32, f64);
+            reg_cmp!(self, "!=", ne, f32, f64);
+        }
 
         //reg_op!(self, "||", or, bool);
         //reg_op!(self, "&&", and, bool);
@@ -396,19 +418,25 @@ impl Engine<'_> {
             reg_op!(self, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64);
         }
 
-        reg_op!(self, "%", modulo_u, f32, f64);
-
-        self.register_fn("~", pow_f64_f64);
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_op!(self, "%", modulo_u, f32, f64);
+            self.register_fn("~", pow_f64_f64);
+        }
 
         #[cfg(not(feature = "unchecked"))]
         {
             self.register_result_fn("~", pow_i64_i64_u);
+
+            #[cfg(not(feature = "no_float"))]
             self.register_result_fn("~", pow_f64_i64_u);
         }
 
         #[cfg(feature = "unchecked")]
         {
             self.register_fn("~", pow_i64_i64);
+
+            #[cfg(not(feature = "no_float"))]
             self.register_fn("~", pow_f64_i64);
         }
 
@@ -424,8 +452,12 @@ impl Engine<'_> {
             reg_un!(self, "abs", abs_u, i8, i16, i32, i64);
         }
 
-        reg_un!(self, "-", neg_u, f32, f64);
-        reg_un!(self, "abs", abs_u, f32, f64);
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_un!(self, "-", neg_u, f32, f64);
+            reg_un!(self, "abs", abs_u, f32, f64);
+        }
+
         reg_un!(self, "!", not, bool);
 
         self.register_fn("+", |x: String, y: String| x + &y); // String + String
@@ -441,13 +473,19 @@ impl Engine<'_> {
 
         reg_func1!(self, "print", print, String, i8, u8, i16, u16);
         reg_func1!(self, "print", print, String, i32, i64, u32, u64);
-        reg_func1!(self, "print", print, String, f32, f64, bool, char, String);
+        reg_func1!(self, "print", print, String, bool, char, String);
         self.register_fn("print", || "".to_string());
         self.register_fn("print", |_: ()| "".to_string());
 
         reg_func1!(self, "debug", print_debug, String, i8, u8, i16, u16);
         reg_func1!(self, "debug", print_debug, String, i32, i64, u32, u64);
-        reg_func1!(self, "debug", print_debug, String, f32, f64, bool, char);
+        reg_func1!(self, "debug", print_debug, String, bool, char);
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_func1!(self, "print", print, String, f32, f64);
+            reg_func1!(self, "debug", print_debug, String, f32, f64);
+        }
 
         #[cfg(not(feature = "no_index"))]
         {
@@ -479,43 +517,46 @@ impl Engine<'_> {
         #[cfg(not(feature = "no_index"))]
         use crate::fn_register::RegisterDynamicFn;
 
-        // Advanced math functions
-        self.register_fn("sin", |x: f64| x.to_radians().sin());
-        self.register_fn("cos", |x: f64| x.to_radians().cos());
-        self.register_fn("tan", |x: f64| x.to_radians().tan());
-        self.register_fn("sinh", |x: f64| x.to_radians().sinh());
-        self.register_fn("cosh", |x: f64| x.to_radians().cosh());
-        self.register_fn("tanh", |x: f64| x.to_radians().tanh());
-        self.register_fn("asin", |x: f64| x.asin().to_degrees());
-        self.register_fn("acos", |x: f64| x.acos().to_degrees());
-        self.register_fn("atan", |x: f64| x.atan().to_degrees());
-        self.register_fn("asinh", |x: f64| x.asinh().to_degrees());
-        self.register_fn("acosh", |x: f64| x.acosh().to_degrees());
-        self.register_fn("atanh", |x: f64| x.atanh().to_degrees());
-        self.register_fn("sqrt", |x: f64| x.sqrt());
-        self.register_fn("exp", |x: f64| x.exp());
-        self.register_fn("ln", |x: f64| x.ln());
-        self.register_fn("log", |x: f64, base: f64| x.log(base));
-        self.register_fn("log10", |x: f64| x.log10());
-        self.register_fn("floor", |x: f64| x.floor());
-        self.register_fn("ceiling", |x: f64| x.ceil());
-        self.register_fn("round", |x: f64| x.ceil());
-        self.register_fn("int", |x: f64| x.trunc());
-        self.register_fn("fraction", |x: f64| x.fract());
-        self.register_fn("is_nan", |x: f64| x.is_nan());
-        self.register_fn("is_finite", |x: f64| x.is_finite());
-        self.register_fn("is_infinite", |x: f64| x.is_infinite());
+        #[cfg(not(feature = "no_float"))]
+        {
+            // Advanced math functions
+            self.register_fn("sin", |x: f64| x.to_radians().sin());
+            self.register_fn("cos", |x: f64| x.to_radians().cos());
+            self.register_fn("tan", |x: f64| x.to_radians().tan());
+            self.register_fn("sinh", |x: f64| x.to_radians().sinh());
+            self.register_fn("cosh", |x: f64| x.to_radians().cosh());
+            self.register_fn("tanh", |x: f64| x.to_radians().tanh());
+            self.register_fn("asin", |x: f64| x.asin().to_degrees());
+            self.register_fn("acos", |x: f64| x.acos().to_degrees());
+            self.register_fn("atan", |x: f64| x.atan().to_degrees());
+            self.register_fn("asinh", |x: f64| x.asinh().to_degrees());
+            self.register_fn("acosh", |x: f64| x.acosh().to_degrees());
+            self.register_fn("atanh", |x: f64| x.atanh().to_degrees());
+            self.register_fn("sqrt", |x: f64| x.sqrt());
+            self.register_fn("exp", |x: f64| x.exp());
+            self.register_fn("ln", |x: f64| x.ln());
+            self.register_fn("log", |x: f64, base: f64| x.log(base));
+            self.register_fn("log10", |x: f64| x.log10());
+            self.register_fn("floor", |x: f64| x.floor());
+            self.register_fn("ceiling", |x: f64| x.ceil());
+            self.register_fn("round", |x: f64| x.ceil());
+            self.register_fn("int", |x: f64| x.trunc());
+            self.register_fn("fraction", |x: f64| x.fract());
+            self.register_fn("is_nan", |x: f64| x.is_nan());
+            self.register_fn("is_finite", |x: f64| x.is_finite());
+            self.register_fn("is_infinite", |x: f64| x.is_infinite());
 
-        // Register conversion functions
-        self.register_fn("to_float", |x: i8| x as f64);
-        self.register_fn("to_float", |x: u8| x as f64);
-        self.register_fn("to_float", |x: i16| x as f64);
-        self.register_fn("to_float", |x: u16| x as f64);
-        self.register_fn("to_float", |x: i32| x as f64);
-        self.register_fn("to_float", |x: u32| x as f64);
-        self.register_fn("to_float", |x: i64| x as f64);
-        self.register_fn("to_float", |x: u64| x as f64);
-        self.register_fn("to_float", |x: f32| x as f64);
+            // Register conversion functions
+            self.register_fn("to_float", |x: i8| x as f64);
+            self.register_fn("to_float", |x: u8| x as f64);
+            self.register_fn("to_float", |x: i16| x as f64);
+            self.register_fn("to_float", |x: u16| x as f64);
+            self.register_fn("to_float", |x: i32| x as f64);
+            self.register_fn("to_float", |x: u32| x as f64);
+            self.register_fn("to_float", |x: i64| x as f64);
+            self.register_fn("to_float", |x: u64| x as f64);
+            self.register_fn("to_float", |x: f32| x as f64);
+        }
 
         self.register_fn("to_int", |x: i8| x as i64);
         self.register_fn("to_int", |x: u8| x as i64);
@@ -526,34 +567,37 @@ impl Engine<'_> {
         self.register_fn("to_int", |x: u64| x as i64);
         self.register_fn("to_int", |ch: char| ch as i64);
 
-        #[cfg(not(feature = "unchecked"))]
+        #[cfg(not(feature = "no_float"))]
         {
-            self.register_result_fn("to_int", |x: f32| {
-                if x > (i64::MAX as f32) {
-                    return Err(EvalAltResult::ErrorArithmetic(
-                        format!("Integer overflow: to_int({})", x),
-                        Position::none(),
-                    ));
-                }
+            #[cfg(not(feature = "unchecked"))]
+            {
+                self.register_result_fn("to_int", |x: f32| {
+                    if x > (i64::MAX as f32) {
+                        return Err(EvalAltResult::ErrorArithmetic(
+                            format!("Integer overflow: to_int({})", x),
+                            Position::none(),
+                        ));
+                    }
 
-                Ok(x.trunc() as i64)
-            });
-            self.register_result_fn("to_int", |x: f64| {
-                if x > (i64::MAX as f64) {
-                    return Err(EvalAltResult::ErrorArithmetic(
-                        format!("Integer overflow: to_int({})", x),
-                        Position::none(),
-                    ));
-                }
+                    Ok(x.trunc() as i64)
+                });
+                self.register_result_fn("to_int", |x: f64| {
+                    if x > (i64::MAX as f64) {
+                        return Err(EvalAltResult::ErrorArithmetic(
+                            format!("Integer overflow: to_int({})", x),
+                            Position::none(),
+                        ));
+                    }
 
-                Ok(x.trunc() as i64)
-            });
-        }
+                    Ok(x.trunc() as i64)
+                });
+            }
 
-        #[cfg(feature = "unchecked")]
-        {
-            self.register_fn("to_int", |x: f32| x as i64);
-            self.register_fn("to_int", |x: f64| x as i64);
+            #[cfg(feature = "unchecked")]
+            {
+                self.register_fn("to_int", |x: f32| x as i64);
+                self.register_fn("to_int", |x: f64| x as i64);
+            }
         }
 
         #[cfg(not(feature = "no_index"))]
@@ -572,13 +616,18 @@ impl Engine<'_> {
 
             reg_func2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
             reg_func2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
-            reg_func2x!(self, "push", push, &mut Array, (), f32, f64, bool, char);
+            reg_func2x!(self, "push", push, &mut Array, (), bool, char);
             reg_func2x!(self, "push", push, &mut Array, (), String, Array, ());
             reg_func3!(self, "pad", pad, &mut Array, i64, (), i8, u8, i16, u16);
-            reg_func3!(self, "pad", pad, &mut Array, i64, (), i32, u32, f32);
-            reg_func3!(self, "pad", pad, &mut Array, i64, (), i64, u64, f64);
+            reg_func3!(self, "pad", pad, &mut Array, i64, (), i32, u32, i64, u64);
             reg_func3!(self, "pad", pad, &mut Array, i64, (), bool, char);
             reg_func3!(self, "pad", pad, &mut Array, i64, (), String, Array, ());
+
+            #[cfg(not(feature = "no_float"))]
+            {
+                reg_func2x!(self, "push", push, &mut Array, (), f32, f64);
+                reg_func3!(self, "pad", pad, &mut Array, i64, (), f32, f64);
+            }
 
             self.register_dynamic_fn("pop", |list: &mut Array| {
                 list.pop().unwrap_or_else(|| ().into_dynamic())
@@ -605,16 +654,20 @@ impl Engine<'_> {
         }
 
         reg_func2x!(
-            self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64,
-            bool, char
+            self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64, bool, char
         );
         self.register_fn("+", |x: String, _: ()| format!("{}", x));
 
         reg_func2y!(
-            self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64, f32, f64,
-            bool, char
+            self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64, bool, char
         );
         self.register_fn("+", |_: (), y: String| format!("{}", y));
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_func2x!(self, "+", append, String, String, f32, f64);
+            reg_func2y!(self, "+", prepend, String, String, f32, f64);
+        }
 
         #[cfg(not(feature = "no_index"))]
         {

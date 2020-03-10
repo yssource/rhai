@@ -23,6 +23,7 @@ debug_msgs = []
 unchecked = []
 no_stdlib = []
 no_index = []
+no_float = []
 
 [profile.release]
 lto = "fat"

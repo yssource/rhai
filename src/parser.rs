@@ -159,6 +159,7 @@ impl Stmt {
 #[derive(Debug, Clone)]
 pub enum Expr {
     IntegerConstant(i64, Position),
+    #[cfg(not(feature = "no_float"))]
     FloatConstant(f64, Position),
     Identifier(String, Position),
     CharConstant(char, Position),
@@ -182,7 +183,6 @@ impl Expr {
     pub fn position(&self) -> Position {
         match self {
             Expr::IntegerConstant(_, pos)
-            | Expr::FloatConstant(_, pos)
             | Expr::Identifier(_, pos)
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
@@ -196,6 +196,9 @@ impl Expr {
                 e.position()
             }
 
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, pos) => *pos,
+
             #[cfg(not(feature = "no_index"))]
             Expr::Index(e, _, _) => e.position(),
 
@@ -207,14 +210,22 @@ impl Expr {
     pub fn is_constant(&self) -> bool {
         match self {
             Expr::IntegerConstant(_, _)
-            | Expr::FloatConstant(_, _)
-            | Expr::Identifier(_, _)
             | Expr::CharConstant(_, _)
             | Expr::StringConstant(_, _)
             | Expr::True(_)
             | Expr::False(_)
             | Expr::Unit(_) => true,
 
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, _) => true,
+
+            _ => false,
+        }
+    }
+
+    pub fn is_identifier(&self) -> bool {
+        match self {
+            Expr::Identifier(_, _) => true,
             _ => false,
         }
     }
@@ -223,6 +234,7 @@ impl Expr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     IntegerConstant(i64),
+    #[cfg(not(feature = "no_float"))]
     FloatConstant(f64),
     Identifier(String),
     CharConstant(char),
@@ -293,6 +305,7 @@ impl Token {
 
         match *self {
             IntegerConstant(ref i) => i.to_string().into(),
+            #[cfg(not(feature = "no_float"))]
             FloatConstant(ref f) => f.to_string().into(),
             Identifier(ref s) => s.into(),
             CharConstant(ref c) => c.to_string().into(),
@@ -622,6 +635,7 @@ impl<'a> TokenIterator<'a> {
                                 self.char_stream.next();
                                 self.advance();
                             }
+                            #[cfg(not(feature = "no_float"))]
                             '.' => {
                                 result.push(next_char);
                                 self.char_stream.next();
@@ -707,6 +721,17 @@ impl<'a> TokenIterator<'a> {
                     } else {
                         let out: String = result.iter().filter(|&&c| c != '_').collect();
 
+                        #[cfg(feature = "no_float")]
+                        return Some((
+                            i64::from_str(&out)
+                                .map(Token::IntegerConstant)
+                                .unwrap_or_else(|_| {
+                                    Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                }),
+                            pos,
+                        ));
+
+                        #[cfg(not(feature = "no_float"))]
                         return Some((
                             i64::from_str(&out)
                                 .map(Token::IntegerConstant)
@@ -1190,6 +1215,7 @@ fn parse_index_expr<'a>(
                 *pos,
             ))
         }
+        #[cfg(not(feature = "no_float"))]
         Expr::FloatConstant(_, pos) => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr("Array access expects integer index, not a float".into()),
@@ -1332,8 +1358,10 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
 
     #[allow(unused_mut)]
     let mut root_expr = match token {
-        Some((Token::IntegerConstant(x), pos)) => Ok(Expr::IntegerConstant(x, pos)),
+        #[cfg(not(feature = "no_float"))]
         Some((Token::FloatConstant(x), pos)) => Ok(Expr::FloatConstant(x, pos)),
+
+        Some((Token::IntegerConstant(x), pos)) => Ok(Expr::IntegerConstant(x, pos)),
         Some((Token::CharConstant(c), pos)) => Ok(Expr::CharConstant(c, pos)),
         Some((Token::StringConst(s), pos)) => {
             can_be_indexed = true;
@@ -1383,14 +1411,31 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 
             match parse_unary(input) {
                 // Negative integer
-                Ok(Expr::IntegerConstant(i, pos)) => Ok(i
+                #[cfg(not(feature = "no_float"))]
+                Ok(Expr::IntegerConstant(i, _)) => Ok(i
                     .checked_neg()
                     .map(|x| Expr::IntegerConstant(x, pos))
                     .unwrap_or_else(|| Expr::FloatConstant(-(i as f64), pos))),
+
+                // Negative integer
+                #[cfg(feature = "no_float")]
+                Ok(Expr::IntegerConstant(i, _)) => i
+                    .checked_neg()
+                    .map(|x| Expr::IntegerConstant(x, pos))
+                    .ok_or_else(|| {
+                        ParseError::new(
+                            PERR::BadInput(LERR::MalformedNumber(format!("-{}", i)).to_string()),
+                            pos,
+                        )
+                    }),
+
                 // Negative float
+                #[cfg(not(feature = "no_float"))]
                 Ok(Expr::FloatConstant(f, pos)) => Ok(Expr::FloatConstant(-f, pos)),
+
                 // Call negative function
                 Ok(expr) => Ok(Expr::FunctionCall("-".into(), vec![expr], None, pos)),
+
                 err @ Err(_) => err,
             }
         }
@@ -1418,10 +1463,9 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
             Expr::Identifier(_, pos) => (true, *pos),
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
-                Expr::Identifier(_, _) => (true, idx_lhs.position()),
-                _ => (false, idx_lhs.position()),
-            },
+            Expr::Index(idx_lhs, _, _) if idx_lhs.is_identifier() => (true, idx_lhs.position()),
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(idx_lhs, _, _) => (false, idx_lhs.position()),
 
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
                 Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
@@ -1460,29 +1504,6 @@ fn parse_op_assignment(
         Expr::FunctionCall(function.into(), vec![lhs_copy, rhs], None, pos),
         pos,
     )
-
-    /*
-    const LHS_VALUE: &'static str = "@LHS_VALUE@";
-
-    let lhs_pos = lhs.position();
-
-    Ok(Expr::Block(
-        Box::new(Stmt::Block(vec![
-            Stmt::Let(LHS_VALUE.to_string(), Some(Box::new(lhs)), lhs_pos),
-            Stmt::Expr(Box::new(parse_assignment(
-                lhs,
-                Expr::FunctionCall(
-                    function.into(),
-                    vec![Expr::Identifier(LHS_VALUE.to_string(), lhs_pos), rhs],
-                    None,
-                    pos,
-                ),
-                pos,
-            )?)),
-        ])),
-        pos,
-    ))
-    */
 }
 
 fn parse_binary_op<'a>(
@@ -1532,6 +1553,7 @@ fn parse_binary_op<'a>(
                 Token::Equals => parse_assignment(current_lhs, rhs, pos)?,
                 Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
                 Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
+
                 Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs), pos),
 
                 // Comparison operators default to false when passed invalid operands

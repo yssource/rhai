@@ -768,8 +768,10 @@ impl Engine<'_> {
     /// Evaluate an expression
     fn eval_expr(&mut self, scope: &mut Scope, expr: &Expr) -> Result<Dynamic, EvalAltResult> {
         match expr {
-            Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
+            #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(f, _) => Ok(f.into_dynamic()),
+
+            Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
             Expr::StringConstant(s, _) => Ok(s.into_dynamic()),
             Expr::CharConstant(c, _) => Ok(c.into_dynamic()),
             Expr::Identifier(id, pos) => {
