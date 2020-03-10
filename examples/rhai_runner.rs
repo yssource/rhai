@@ -1,27 +1,79 @@
-use rhai::{Engine, RegisterFn};
-use std::env;
-use std::fmt::Display;
+use rhai::{Engine, EvalAltResult};
+use std::{env, fs::File, io::Read, iter, process::exit};
 
-fn showit<T: Display>(x: &mut T) -> () {
-    println!("{}", x)
+fn padding(pad: &str, len: usize) -> String {
+    iter::repeat(pad).take(len).collect::<String>()
+}
+
+fn eprint_error(input: &str, err: EvalAltResult) {
+    fn eprint_line(lines: &Vec<&str>, line: usize, pos: usize, err: &str) {
+        let line_no = format!("{}: ", line);
+        let pos_text = format!(" (line {}, position {})", line, pos);
+
+        eprintln!("{}{}", line_no, lines[line - 1]);
+        eprintln!(
+            "{}^ {}",
+            padding(" ", line_no.len() + pos - 1),
+            err.replace(&pos_text, "")
+        );
+        eprintln!("");
+    }
+
+    let lines: Vec<_> = input.split("\n").collect();
+
+    // Print error
+    match err.position() {
+        p if p.is_eof() => {
+            // EOF
+            let line = lines.len() - 1;
+            let pos = lines[line - 1].len();
+            eprint_line(&lines, line, pos, &err.to_string());
+        }
+        p if p.is_none() => {
+            // No position
+            eprintln!("{}", err);
+        }
+        p => {
+            // Specific position
+            eprint_line(
+                &lines,
+                p.line().unwrap(),
+                p.position().unwrap(),
+                &err.to_string(),
+            )
+        }
+    }
 }
 
 fn main() {
-    for fname in env::args().skip(1) {
+    for filename in env::args().skip(1) {
         let mut engine = Engine::new();
 
-        engine.register_fn("print", showit as fn(x: &mut i32) -> ());
-        engine.register_fn("print", showit as fn(x: &mut i64) -> ());
-        engine.register_fn("print", showit as fn(x: &mut u32) -> ());
-        engine.register_fn("print", showit as fn(x: &mut u64) -> ());
-        engine.register_fn("print", showit as fn(x: &mut f32) -> ());
-        engine.register_fn("print", showit as fn(x: &mut f64) -> ());
-        engine.register_fn("print", showit as fn(x: &mut bool) -> ());
-        engine.register_fn("print", showit as fn(x: &mut String) -> ());
+        let mut f = match File::open(&filename) {
+            Err(err) => {
+                eprintln!("Error reading script file: {}\n{}", filename, err);
+                exit(1);
+            }
+            Ok(f) => f,
+        };
 
-        match engine.eval_file::<()>(&fname) {
-            Ok(_) => (),
-            Err(e) => println!("Error: {}", e),
+        let mut contents = String::new();
+
+        match f.read_to_string(&mut contents) {
+            Err(err) => {
+                eprintln!("Error reading script file: {}\n{}", filename, err);
+                exit(1);
+            }
+            _ => (),
+        }
+
+        if let Err(err) = engine.consume(&contents) {
+            eprintln!("{}", padding("=", filename.len()));
+            eprintln!("{}", filename);
+            eprintln!("{}", padding("=", filename.len()));
+            eprintln!("");
+
+            eprint_error(&contents, err);
         }
     }
 }

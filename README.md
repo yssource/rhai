@@ -55,7 +55,7 @@ Other cool projects to check out:
 Examples
 --------
 
-The repository contains several examples in the `examples` folder:
+A number of examples can be found in the `examples` folder:
 
 | Example                    | Description                                                               |
 | -------------------------- | ------------------------------------------------------------------------- |
@@ -65,7 +65,7 @@ The repository contains several examples in the `examples` folder:
 | `reuse_scope`              | evaluates two pieces of code in separate runs, but using a common scope   |
 | `rhai_runner`              | runs each filename passed to it as a Rhai script                          |
 | `simple_fn`                | shows how to register a Rust function to a Rhai engine                    |
-| `repl`                     | a simple REPL, see source code for what it can do at the moment           |
+| `repl`                     | a simple REPL, interactively evaluate statements from stdin               |
 
 Examples can be run with the following command:
 
@@ -73,10 +73,13 @@ Examples can be run with the following command:
 cargo run --example name
 ```
 
+The `repl` example is a particularly good one as it allows you to interactively try out Rhai's
+language features in a standard REPL (**R**ead-**E**val-**P**rint **L**oop).
+
 Example Scripts
 ---------------
 
-We also have a few examples scripts that showcase Rhai's features, all stored in the `scripts` folder:
+There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
 
 | Script                | Description                                                   |
 | --------------------- | ------------------------------------------------------------- |
@@ -96,8 +99,7 @@ We also have a few examples scripts that showcase Rhai's features, all stored in
 | `string.rhai`         | string operations                                             |
 | `while.rhai`          | while loop                                                    |
 
-To run the scripts, you can either make your own tiny program, or make use of the `rhai_runner`
-example program:
+To run the scripts, either make a tiny program or use of the `rhai_runner` example:
 
 ```bash
 cargo run --example rhai_runner scripts/any_script.rhai
@@ -106,12 +108,13 @@ cargo run --example rhai_runner scripts/any_script.rhai
 Hello world
 -----------
 
-To get going with Rhai, you create an instance of the scripting engine and then run eval.
+To get going with Rhai, create an instance of the scripting engine and then call `eval`:
 
 ```rust
 use rhai::{Engine, EvalAltResult};
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), EvalAltResult>
+{
     let mut engine = Engine::new();
 
     let result = engine.eval::<i64>("40 + 2")?;
@@ -232,7 +235,8 @@ fn get_an_any() -> Dynamic {
     Box::new(42_i64)
 }
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), EvalAltResult>
+{
     let mut engine = Engine::new();
 
     engine.register_fn("add", add);
@@ -278,7 +282,8 @@ fn showit<T: Display>(x: &mut T) -> () {
     println!("{}", x)
 }
 
-fn main() {
+fn main()
+{
     let mut engine = Engine::new();
 
     engine.register_fn("print", showit as fn(x: &mut i64)->());
@@ -310,7 +315,8 @@ fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
     }
 }
 
-fn main() {
+fn main()
+{
     let mut engine = Engine::new();
 
     // Fallible functions that return Result values must use register_result_fn()
@@ -360,7 +366,8 @@ impl TestStruct {
     }
 }
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), EvalAltResult>
+{
     let mut engine = Engine::new();
 
     engine.register_type::<TestStruct>();
@@ -492,7 +499,8 @@ In this example, we first create a state with a few initialized variables, then 
 ```rust
 use rhai::{Engine, Scope, EvalAltResult};
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), EvalAltResult>
+{
     let mut engine = Engine::new();
 
     // First create the state
@@ -505,13 +513,15 @@ fn main() -> Result<(), EvalAltResult> {
     scope.push("z".into(), 999_i64);
 
     // First invocation
-    engine.eval_with_scope::<()>(&mut scope, r"
+    // (the second boolean argument indicates that we don't need to retain function definitions
+    // because we didn't declare any!)
+    engine.eval_with_scope::<()>(&mut scope, false, r"
         let x = 4 + 5 - y + z;
         y = 1;
     ")?;
 
     // Second invocation using the same state
-    let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
+    let result = engine.eval_with_scope::<i64>(&mut scope, false, "x")?;
 
     println!("result: {}", result);  // should print 966
 
@@ -545,7 +555,7 @@ let /* intruder comment */ name = "Bob";
 Variables
 ---------
 
-Variables in `Rhai` follow normal naming rules (i.e. must contain only ASCII letters, digits and '`_`' underscores).
+Variables in Rhai follow normal naming rules (i.e. must contain only ASCII letters, digits and '`_`' underscores).
 
 ```rust
 let x = 3;
