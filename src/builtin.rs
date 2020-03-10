@@ -4,9 +4,12 @@
 use crate::any::Any;
 use crate::engine::{Array, Engine};
 use crate::fn_register::RegisterFn;
-use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
-use std::{i32, i64, u32};
+use std::{
+    fmt::{Debug, Display},
+    i32, i64,
+    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub},
+    u32,
+};
 
 #[cfg(feature = "unchecked")]
 use std::ops::{Shl, Shr};

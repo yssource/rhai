@@ -4,12 +4,14 @@ use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use std::any::{type_name, TypeId};
-use std::borrow::Cow;
-use std::cmp::{PartialEq, PartialOrd};
-use std::collections::HashMap;
-use std::iter::once;
-use std::sync::Arc;
+use std::{
+    any::{type_name, TypeId},
+    borrow::Cow,
+    cmp::{PartialEq, PartialOrd},
+    collections::HashMap,
+    iter::once,
+    sync::Arc,
+};
 
 /// An dynamic array of `Dynamic` values.
 pub type Array = Vec<Dynamic>;

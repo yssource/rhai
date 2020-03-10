@@ -1,7 +1,9 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use std::any::{type_name, TypeId};
-use std::fmt;
+use std::{
+    any::{type_name, TypeId},
+    fmt,
+};
 
 /// An raw value of any type.
 pub type Variant = dyn Any;

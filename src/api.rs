@@ -8,8 +8,12 @@ use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use std::any::{type_name, TypeId};
-use std::sync::Arc;
+use std::{
+    any::{type_name, TypeId},
+    fs::File,
+    io::prelude::*,
+    sync::Arc,
+};
 
 impl<'e> Engine<'e> {
     pub(crate) fn register_fn_raw(
@@ -102,9 +106,6 @@ impl<'e> Engine<'e> {
 
     /// Compile a file into an AST.
     pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
@@ -117,9 +118,6 @@ impl<'e> Engine<'e> {
 
     /// Evaluate a file.
     pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
@@ -208,9 +206,6 @@ impl<'e> Engine<'e> {
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume_file(&mut self, filename: &str) -> Result<(), EvalAltResult> {
-        use std::fs::File;
-        use std::io::prelude::*;
-
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
