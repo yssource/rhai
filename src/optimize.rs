@@ -141,6 +141,7 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
             Box::new(optimize_expr(*rhs, changed)),
             pos,
         ),
+
         #[cfg(not(feature = "no_index"))]
         Expr::Index(lhs, rhs, pos) => match (*lhs, *rhs) {
             (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
@@ -158,6 +159,9 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
                 pos,
             ),
         },
+        #[cfg(feature = "no_index")]
+        Expr::Index(_, _, _) => panic!("encountered an index expression during no_index!"),
+
         #[cfg(not(feature = "no_index"))]
         Expr::Array(items, pos) => {
             let original_len = items.len();
@@ -171,6 +175,9 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
 
             Expr::Array(items, pos)
         }
+
+        #[cfg(feature = "no_index")]
+        Expr::Array(_, _) => panic!("encountered an array during no_index!"),
 
         Expr::And(lhs, rhs) => match (*lhs, *rhs) {
             (Expr::True(_), rhs) => {
@@ -208,7 +215,6 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
                 Box::new(optimize_expr(rhs, changed)),
             ),
         },
-
         Expr::FunctionCall(id, args, def_value, pos) => {
             let original_len = args.len();
 

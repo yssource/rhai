@@ -1,6 +1,7 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::any::{Any, Dynamic};
+
 use std::borrow::Cow;
 
 /// A type containing information about current scope.

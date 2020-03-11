@@ -1,4 +1,5 @@
 #![cfg(not(feature = "no_stdlib"))]
+#![cfg(not(feature = "no_function"))]
 use rhai::{Engine, EvalAltResult, INT};
 
 #[test]

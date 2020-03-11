@@ -3,13 +3,18 @@
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::optimize;
+
 use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, usize};
 
-/// The system integer type
+/// The system integer type.
+///
+/// If the `only_i32` feature is enabled, this will be `i32` instead.
 #[cfg(not(feature = "only_i32"))]
 pub type INT = i64;
 
 /// The system integer type
+///
+/// If the `only_i32` feature is not enabled, this will be `i64` instead.
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
 
@@ -134,7 +139,10 @@ impl fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
-pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef<'static>>);
+pub struct AST(
+    pub(crate) Vec<Stmt>,
+    #[cfg(not(feature = "no_function"))] pub(crate) Vec<FnDef<'static>>,
+);
 
 #[derive(Debug, Clone)]
 pub struct FnDef<'a> {
@@ -179,9 +187,7 @@ pub enum Expr {
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
     Assignment(Box<Expr>, Box<Expr>, Position),
     Dot(Box<Expr>, Box<Expr>, Position),
-    #[cfg(not(feature = "no_index"))]
     Index(Box<Expr>, Box<Expr>, Position),
-    #[cfg(not(feature = "no_index"))]
     Array(Vec<Expr>, Position),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
@@ -197,24 +203,21 @@ impl Expr {
             | Expr::Identifier(_, pos)
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
-            | Expr::FunctionCall(_, _, _, pos)
             | Expr::Stmt(_, pos)
+            | Expr::FunctionCall(_, _, _, pos)
+            | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Assignment(e, _, _) | Expr::Dot(e, _, _) | Expr::And(e, _) | Expr::Or(e, _) => {
-                e.position()
-            }
+            Expr::Assignment(e, _, _)
+            | Expr::Dot(e, _, _)
+            | Expr::Index(e, _, _)
+            | Expr::And(e, _)
+            | Expr::Or(e, _) => e.position(),
 
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, pos) => *pos,
-
-            #[cfg(not(feature = "no_index"))]
-            Expr::Index(e, _, _) => e.position(),
-
-            #[cfg(not(feature = "no_index"))]
-            Expr::Array(_, pos) => *pos,
         }
     }
 
@@ -1820,6 +1823,7 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
     }
 }
 
+#[cfg(not(feature = "no_function"))]
 fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static>, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
@@ -1892,11 +1896,14 @@ fn parse_top_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     optimize_ast: bool,
 ) -> Result<AST, ParseError> {
-    let mut statements = Vec::new();
-    let mut functions = Vec::new();
+    let mut statements = Vec::<Stmt>::new();
+
+    #[cfg(not(feature = "no_function"))]
+    let mut functions = Vec::<FnDef>::new();
 
     while input.peek().is_some() {
         match input.peek() {
+            #[cfg(not(feature = "no_function"))]
             Some(&(Token::Fn, _)) => functions.push(parse_fn(input)?),
             _ => statements.push(parse_stmt(input)?),
         }
@@ -1910,6 +1917,7 @@ fn parse_top_level<'a>(
     return Ok(if optimize_ast {
         AST(
             optimize(statements),
+            #[cfg(not(feature = "no_function"))]
             functions
                 .into_iter()
                 .map(|mut fn_def| {
@@ -1920,7 +1928,11 @@ fn parse_top_level<'a>(
                 .collect(),
         )
     } else {
-        AST(statements, functions)
+        AST(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            functions,
+        )
     });
 }
 
