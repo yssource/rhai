@@ -3,6 +3,7 @@
 use crate::any::Dynamic;
 use crate::error::ParseError;
 use crate::parser::{Position, INT};
+
 use std::{error::Error, fmt};
 
 /// Evaluation result.
@@ -75,12 +76,12 @@ impl Error for EvalAltResult {
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
-            Self::ErrorArrayBounds(max, _, _) if *max == 0 => "Access of empty array",
+            Self::ErrorArrayBounds(0, _, _) => "Access of empty array",
             Self::ErrorArrayBounds(_, _, _) => "Array index out of bounds",
             Self::ErrorStringBounds(_, index, _) if *index < 0 => {
                 "Indexing a string expects a non-negative index"
             }
-            Self::ErrorStringBounds(max, _, _) if *max == 0 => "Indexing of empty string",
+            Self::ErrorStringBounds(0, _, _) => "Indexing of empty string",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
             Self::ErrorIfGuard(_) => "If guard expects boolean expression",
             Self::ErrorFor(_) => "For loop expects array or range",
@@ -128,6 +129,16 @@ impl fmt::Display for EvalAltResult {
                 write!(f, "{} '{}': {}", desc, filename, err)
             }
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
+            Self::ErrorFunctionArgsMismatch(fun, 0, n, pos) => write!(
+                f,
+                "Function '{}' expects no argument but {} found ({})",
+                fun, n, pos
+            ),
+            Self::ErrorFunctionArgsMismatch(fun, 1, n, pos) => write!(
+                f,
+                "Function '{}' expects one argument but {} found ({})",
+                fun, n, pos
+            ),
             Self::ErrorFunctionArgsMismatch(fun, need, n, pos) => write!(
                 f,
                 "Function '{}' expects {} argument(s) but {} found ({})",
@@ -142,26 +153,30 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorArrayBounds(_, index, pos) if *index < 0 => {
                 write!(f, "{}: {} < 0 ({})", desc, index, pos)
             }
-            Self::ErrorArrayBounds(max, _, pos) if *max == 0 => write!(f, "{} ({})", desc, pos),
+            Self::ErrorArrayBounds(0, _, pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorArrayBounds(1, index, pos) => write!(
+                f,
+                "Array index {} is out of bounds: only one element in the array ({})",
+                index, pos
+            ),
             Self::ErrorArrayBounds(max, index, pos) => write!(
                 f,
-                "Array index {} is out of bounds: only {} element{} in the array ({})",
-                index,
-                max,
-                if *max > 1 { "s" } else { "" },
-                pos
+                "Array index {} is out of bounds: only {} elements in the array ({})",
+                index, max, pos
             ),
             Self::ErrorStringBounds(_, index, pos) if *index < 0 => {
                 write!(f, "{}: {} < 0 ({})", desc, index, pos)
             }
-            Self::ErrorStringBounds(max, _, pos) if *max == 0 => write!(f, "{} ({})", desc, pos),
+            Self::ErrorStringBounds(0, _, pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorStringBounds(1, index, pos) => write!(
+                f,
+                "String index {} is out of bounds: only one character in the string ({})",
+                index, pos
+            ),
             Self::ErrorStringBounds(max, index, pos) => write!(
                 f,
-                "String index {} is out of bounds: only {} character{} in the string ({})",
-                index,
-                max,
-                if *max > 1 { "s" } else { "" },
-                pos
+                "String index {} is out of bounds: only {} characters in the string ({})",
+                index, max, pos
             ),
         }
     }

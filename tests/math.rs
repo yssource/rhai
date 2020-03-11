@@ -24,6 +24,10 @@ fn test_math() -> Result<(), EvalAltResult> {
     {
         #[cfg(not(feature = "only_i32"))]
         {
+            match engine.eval::<INT>("(-9223372036854775808).abs()") {
+                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
+                r => panic!("should return overflow error: {:?}", r),
+            }
             match engine.eval::<INT>("9223372036854775807 + 1") {
                 Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
                 r => panic!("should return overflow error: {:?}", r),

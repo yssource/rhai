@@ -3,13 +3,18 @@
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::optimize;
+
 use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, usize};
 
-/// The system integer type
+/// The system integer type.
+///
+/// If the `only_i32` feature is enabled, this will be `i32` instead.
 #[cfg(not(feature = "only_i32"))]
 pub type INT = i64;
 
 /// The system integer type
+///
+/// If the `only_i32` feature is not enabled, this will be `i64` instead.
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
 
@@ -179,9 +184,7 @@ pub enum Expr {
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
     Assignment(Box<Expr>, Box<Expr>, Position),
     Dot(Box<Expr>, Box<Expr>, Position),
-    #[cfg(not(feature = "no_index"))]
     Index(Box<Expr>, Box<Expr>, Position),
-    #[cfg(not(feature = "no_index"))]
     Array(Vec<Expr>, Position),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
@@ -197,24 +200,21 @@ impl Expr {
             | Expr::Identifier(_, pos)
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
-            | Expr::FunctionCall(_, _, _, pos)
             | Expr::Stmt(_, pos)
+            | Expr::FunctionCall(_, _, _, pos)
+            | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Assignment(e, _, _) | Expr::Dot(e, _, _) | Expr::And(e, _) | Expr::Or(e, _) => {
-                e.position()
-            }
+            Expr::Assignment(e, _, _)
+            | Expr::Dot(e, _, _)
+            | Expr::Index(e, _, _)
+            | Expr::And(e, _)
+            | Expr::Or(e, _) => e.position(),
 
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, pos) => *pos,
-
-            #[cfg(not(feature = "no_index"))]
-            Expr::Index(e, _, _) => e.position(),
-
-            #[cfg(not(feature = "no_index"))]
-            Expr::Array(_, pos) => *pos,
         }
     }
 

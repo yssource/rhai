@@ -120,20 +120,20 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos))
-                    } else {
-                        #[allow(unused_variables, unused_mut)]
-                        let mut drain = args.drain(..);
-                        $(
-                        // Downcast every element, return in case of a type mismatch
-                        let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
-                        )*
-
-                        // Call the user-supplied function using ($clone) to
-                        // potentially clone the value, otherwise pass the reference.
-                        let r = f($(($clone)($par)),*);
-                        Ok(Box::new(r) as Dynamic)
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos));
                     }
+
+                    #[allow(unused_variables, unused_mut)]
+                    let mut drain = args.drain(..);
+                    $(
+                    // Downcast every element, return in case of a type mismatch
+                    let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
+                    )*
+
+                    // Call the user-supplied function using ($clone) to
+                    // potentially clone the value, otherwise pass the reference.
+                    let r = f($(($clone)($par)),*);
+                    Ok(Box::new(r) as Dynamic)
                 };
                 self.register_fn_raw(name, Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }
@@ -152,19 +152,19 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos))
-                    } else {
-                        #[allow(unused_variables, unused_mut)]
-                        let mut drain = args.drain(..);
-                        $(
-                        // Downcast every element, return in case of a type mismatch
-                        let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
-                        )*
-
-                        // Call the user-supplied function using ($clone) to
-                        // potentially clone the value, otherwise pass the reference.
-                        Ok(f($(($clone)($par)),*))
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos));
                     }
+
+                    #[allow(unused_variables, unused_mut)]
+                    let mut drain = args.drain(..);
+                    $(
+                    // Downcast every element, return in case of a type mismatch
+                    let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
+                    )*
+
+                    // Call the user-supplied function using ($clone) to
+                    // potentially clone the value, otherwise pass the reference.
+                    Ok(f($(($clone)($par)),*))
                 };
                 self.register_fn_raw(name, Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }
@@ -184,23 +184,23 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos))
-                    } else {
-                        #[allow(unused_variables, unused_mut)]
-                        let mut drain = args.drain(..);
-                        $(
-                        // Downcast every element, return in case of a type mismatch
-                        let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
-                        )*
+                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos));
+                    }
 
-                        // Call the user-supplied function using ($clone) to
-                        // potentially clone the value, otherwise pass the reference.
-                        match f($(($clone)($par)),*) {
-                            Ok(r) => Ok(Box::new(r) as Dynamic),
-                            Err(mut err) => {
-                                err.set_position(pos);
-                                Err(err)
-                            }
+                    #[allow(unused_variables, unused_mut)]
+                    let mut drain = args.drain(..);
+                    $(
+                    // Downcast every element, return in case of a type mismatch
+                    let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
+                    )*
+
+                    // Call the user-supplied function using ($clone) to
+                    // potentially clone the value, otherwise pass the reference.
+                    match f($(($clone)($par)),*) {
+                        Ok(r) => Ok(Box::new(r) as Dynamic),
+                        Err(mut err) => {
+                            err.set_position(pos);
+                            Err(err)
                         }
                     }
                 };

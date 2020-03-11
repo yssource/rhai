@@ -18,6 +18,7 @@ include = [
 num-traits = "*"
 
 [features]
+#default = ["no_index", "no_float", "only_i32", "no_stdlib", "unchecked"]
 default = []
 debug_msgs = []
 unchecked = []

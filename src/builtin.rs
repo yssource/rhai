@@ -2,45 +2,23 @@
 //! _standard library_ of utility functions.
 
 use crate::any::Any;
-use crate::engine::Engine;
-use crate::fn_register::RegisterFn;
-use crate::parser::INT;
-
-#[cfg(not(feature = "unchecked"))]
-use crate::{parser::Position, result::EvalAltResult, RegisterResultFn};
-
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
-
-#[cfg(not(feature = "no_float"))]
+use crate::engine::Engine;
+use crate::fn_register::{RegisterFn, RegisterResultFn};
+use crate::parser::{Position, INT};
+use crate::result::EvalAltResult;
 use crate::FLOAT;
+
+use num_traits::{
+    identities::Zero, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl,
+    CheckedShr, CheckedSub,
+};
 
 use std::{
     fmt::{Debug, Display},
-    ops::{BitAnd, BitOr, BitXor, Range},
-};
-
-#[cfg(feature = "unchecked")]
-use std::ops::{Shl, Shr};
-
-#[cfg(not(feature = "unchecked"))]
-#[cfg(not(feature = "no_float"))]
-use std::{i32, i64};
-
-#[cfg(not(feature = "unchecked"))]
-#[cfg(not(feature = "only_i32"))]
-use std::u32;
-
-#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
-use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
-
-#[cfg(not(feature = "unchecked"))]
-use {
-    num_traits::{
-        CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl, CheckedShr,
-        CheckedSub,
-    },
-    std::convert::TryFrom,
+    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub},
+    {i32, i64, u32},
 };
 
 macro_rules! reg_op {
@@ -162,12 +140,9 @@ impl Engine<'_> {
         #[cfg(not(feature = "unchecked"))]
         fn div<T>(x: T, y: T) -> Result<T, EvalAltResult>
         where
-            T: Display + CheckedDiv + PartialEq + TryFrom<i8>,
+            T: Display + CheckedDiv + PartialEq + Zero,
         {
-            if y == <T as TryFrom<i8>>::try_from(0)
-                .map_err(|_| ())
-                .expect("zero should always succeed")
-            {
+            if y == T::zero() {
                 return Err(EvalAltResult::ErrorArithmetic(
                     format!("Division by zero: {} / {}", x, y),
                     Position::none(),
@@ -191,8 +166,10 @@ impl Engine<'_> {
             })
         }
         #[cfg(not(feature = "unchecked"))]
-        fn abs<T: Display + CheckedNeg + PartialOrd + From<i8>>(x: T) -> Result<T, EvalAltResult> {
-            if x >= 0.into() {
+        fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> Result<T, EvalAltResult> {
+            // FIX - We don't use Signed::abs() here because, contrary to documentation, it panics
+            //       when the number is ::MIN instead of returning ::MIN itself.
+            if x >= <T as Zero>::zero() {
                 Ok(x)
             } else {
                 x.checked_neg().ok_or_else(|| {
@@ -224,14 +201,15 @@ impl Engine<'_> {
             -x
         }
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
-        fn abs_u<T: Neg + PartialOrd + From<i8>>(x: T) -> T
+        fn abs_u<T>(x: T) -> <T as Neg>::Output
         where
-            <T as Neg>::Output: Into<T>,
+            T: Neg + PartialOrd + Default + Into<<T as Neg>::Output>,
         {
-            if x < 0.into() {
-                (-x).into()
+            // Numbers should default to zero
+            if x < Default::default() {
+                -x
             } else {
-                x
+                x.into()
             }
         }
         fn lt<T: PartialOrd>(x: T, y: T) -> bool {

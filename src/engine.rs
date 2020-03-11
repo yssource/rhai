@@ -4,8 +4,6 @@ use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-
-#[cfg(not(feature = "no_index"))]
 use crate::INT;
 
 use std::{
@@ -788,6 +786,9 @@ impl Engine<'_> {
                 .eval_index_expr(scope, lhs, idx_expr, *idx_pos)
                 .map(|(_, _, _, x)| x),
 
+            #[cfg(feature = "no_index")]
+            Expr::Index(_, _, _) => panic!("encountered an index expression during no_index!"),
+
             // Statement block
             Expr::Stmt(stmt, _) => self.eval_stmt(scope, stmt),
 
@@ -855,6 +856,8 @@ impl Engine<'_> {
 
                 Ok(Box::new(arr))
             }
+            #[cfg(feature = "no_index")]
+            Expr::Array(_, _) => panic!("encountered an array during no_index!"),
 
             Expr::FunctionCall(fn_name, args, def_val, pos) => {
                 let mut args = args
