@@ -1,27 +1,28 @@
+use crate::engine::KEYWORD_DUMP_AST;
 use crate::parser::{Expr, Stmt};
 
-fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
+fn optimize_stmt(stmt: Stmt, changed: &mut bool, preserve_result: bool) -> Stmt {
     match stmt {
         Stmt::IfElse(expr, stmt1, None) => match *expr {
             Expr::False(pos) => {
                 *changed = true;
                 Stmt::Noop(pos)
             }
-            Expr::True(_) => optimize_stmt(*stmt1, changed),
+            Expr::True(_) => optimize_stmt(*stmt1, changed, true),
             expr => Stmt::IfElse(
                 Box::new(optimize_expr(expr, changed)),
-                Box::new(optimize_stmt(*stmt1, changed)),
+                Box::new(optimize_stmt(*stmt1, changed, true)),
                 None,
             ),
         },
 
         Stmt::IfElse(expr, stmt1, Some(stmt2)) => match *expr {
-            Expr::False(_) => optimize_stmt(*stmt2, changed),
-            Expr::True(_) => optimize_stmt(*stmt1, changed),
+            Expr::False(_) => optimize_stmt(*stmt2, changed, true),
+            Expr::True(_) => optimize_stmt(*stmt1, changed, true),
             expr => Stmt::IfElse(
                 Box::new(optimize_expr(expr, changed)),
-                Box::new(optimize_stmt(*stmt1, changed)),
-                Some(Box::new(optimize_stmt(*stmt2, changed))),
+                Box::new(optimize_stmt(*stmt1, changed, true)),
+                Some(Box::new(optimize_stmt(*stmt2, changed, true))),
             ),
         },
 
@@ -30,18 +31,18 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
                 *changed = true;
                 Stmt::Noop(pos)
             }
-            Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(*stmt, changed))),
+            Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(*stmt, changed, false))),
             expr => Stmt::While(
                 Box::new(optimize_expr(expr, changed)),
-                Box::new(optimize_stmt(*stmt, changed)),
+                Box::new(optimize_stmt(*stmt, changed, false)),
             ),
         },
 
-        Stmt::Loop(stmt) => Stmt::Loop(Box::new(optimize_stmt(*stmt, changed))),
+        Stmt::Loop(stmt) => Stmt::Loop(Box::new(optimize_stmt(*stmt, changed, false))),
         Stmt::For(id, expr, stmt) => Stmt::For(
             id,
             Box::new(optimize_expr(*expr, changed)),
-            Box::new(optimize_stmt(*stmt, changed)),
+            Box::new(optimize_stmt(*stmt, changed, false)),
         ),
         Stmt::Let(id, Some(expr), pos) => {
             Stmt::Let(id, Some(Box::new(optimize_expr(*expr, changed))), pos)
@@ -53,42 +54,67 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
 
             let mut result: Vec<_> = statements
                 .into_iter() // For each statement
-                .map(|s| optimize_stmt(s, changed)) // Optimize the statement
-                .filter(Stmt::is_op) // Remove no-op's
+                .rev() // Scan in reverse
+                .map(|s| optimize_stmt(s, changed, preserve_result)) // Optimize the statement
+                .enumerate()
+                .filter(|(i, s)| s.is_op() || (preserve_result && *i == 0)) // Remove no-op's but leave the last one if we need the result
+                .map(|(_, s)| s)
+                .rev()
                 .collect();
 
-            if let Some(last_stmt) = result.pop() {
-                // Remove all raw expression statements that evaluate to constants
-                // except for the very last statement
-                result.retain(|stmt| match stmt {
-                    Stmt::Expr(expr) if expr.is_constant() || expr.is_identifier() => false,
-                    _ => true,
-                });
+            // Remove all raw expression statements that are pure except for the very last statement
+            let last_stmt = if preserve_result { result.pop() } else { None };
 
-                result.push(last_stmt);
+            result.retain(|stmt| match stmt {
+                Stmt::Expr(expr) if expr.is_pure() => false,
+                _ => true,
+            });
+
+            if let Some(stmt) = last_stmt {
+                result.push(stmt);
+            }
+
+            // Remove all let statements at the end of a block - the new variables will go away anyway.
+            // But be careful only remove ones that have no initial values or have values that are pure expressions,
+            // otherwise there may be side effects.
+            let mut removed = false;
+
+            while let Some(expr) = result.pop() {
+                match expr {
+                    Stmt::Let(_, None, _) => removed = true,
+                    Stmt::Let(_, Some(val_expr), _) if val_expr.is_pure() => removed = true,
+
+                    _ => {
+                        result.push(expr);
+                        break;
+                    }
+                }
+            }
+
+            if preserve_result {
+                if removed {
+                    result.push(Stmt::Noop(pos))
+                }
+
+                result = result
+                    .into_iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(i, s)| optimize_stmt(s, changed, i == 0)) // Optimize all other statements again
+                    .rev()
+                    .collect();
             }
 
             *changed = *changed || original_len != result.len();
 
             match result[..] {
+                // No statements in block - change to No-op
                 [] => {
-                    // No statements in block - change to No-op
                     *changed = true;
                     Stmt::Noop(pos)
                 }
-                [Stmt::Let(_, None, _)] => {
-                    // Only one empty variable declaration - change to No-op
-                    *changed = true;
-                    Stmt::Noop(pos)
-                }
-                [Stmt::Let(_, Some(_), _)] => {
-                    // Only one let statement, but cannot promote
-                    // (otherwise the variable gets declared in the scope above)
-                    // and still need to run just in case there are side effects
-                    Stmt::Block(result, pos)
-                }
+                // Only one statement - promote
                 [_] => {
-                    // Only one statement - promote
                     *changed = true;
                     result.remove(0)
                 }
@@ -103,26 +129,14 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
             is_return,
             pos,
         ),
-        stmt @ Stmt::ReturnWithVal(None, _, _) => stmt,
 
-        stmt @ Stmt::Noop(_) | stmt @ Stmt::Break(_) => stmt,
+        stmt => stmt,
     }
 }
 
 fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
     match expr {
-        Expr::IntegerConstant(_, _)
-        | Expr::Identifier(_, _)
-        | Expr::CharConstant(_, _)
-        | Expr::StringConstant(_, _)
-        | Expr::True(_)
-        | Expr::False(_)
-        | Expr::Unit(_) => expr,
-
-        #[cfg(not(feature = "no_float"))]
-        Expr::FloatConstant(_, _) => expr,
-
-        Expr::Stmt(stmt, pos) => match optimize_stmt(*stmt, changed) {
+        Expr::Stmt(stmt, pos) => match optimize_stmt(*stmt, changed, true) {
             Stmt::Noop(_) => {
                 *changed = true;
                 Expr::Unit(pos)
@@ -145,11 +159,10 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
         #[cfg(not(feature = "no_index"))]
         Expr::Index(lhs, rhs, pos) => match (*lhs, *rhs) {
             (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
-                if i >= 0
-                    && (i as usize) < items.len()
-                    && !items.iter().any(|x| x.is_constant() || x.is_identifier()) =>
+                if i >= 0 && (i as usize) < items.len() && items.iter().all(|x| x.is_pure()) =>
             {
-                // Array where everything is a constant or identifier - promote the item
+                // Array where everything is a pure - promote the indexed item.
+                // All other items can be thrown away.
                 *changed = true;
                 items.remove(i as usize)
             }
@@ -215,6 +228,10 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
                 Box::new(optimize_expr(rhs, changed)),
             ),
         },
+
+        // Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST => {
+        //     Expr::FunctionCall(id, args, def_value, pos)
+        // }
         Expr::FunctionCall(id, args, def_value, pos) => {
             let original_len = args.len();
 
@@ -227,17 +244,29 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
 
             Expr::FunctionCall(id, args, def_value, pos)
         }
+
+        expr => expr,
     }
 }
 
-pub(crate) fn optimize(mut statements: Vec<Stmt>) -> Vec<Stmt> {
+pub(crate) fn optimize(statements: Vec<Stmt>) -> Vec<Stmt> {
+    let mut result = statements;
+
     loop {
         let mut changed = false;
 
-        statements = statements
+        result = result
             .into_iter()
-            .map(|stmt| optimize_stmt(stmt, &mut changed))
-            .filter(Stmt::is_op)
+            .rev() // Scan in reverse
+            .enumerate()
+            .map(|(i, stmt)| {
+                // Keep all variable declarations at this level
+                let keep = stmt.is_var();
+
+                // Always keep the last return value
+                optimize_stmt(stmt, &mut changed, keep || i == 0)
+            })
+            .rev()
             .collect();
 
         if !changed {
@@ -245,5 +274,14 @@ pub(crate) fn optimize(mut statements: Vec<Stmt>) -> Vec<Stmt> {
         }
     }
 
-    statements
+    // Eliminate No-op's but always keep the last statement
+    let last_stmt = result.pop();
+
+    result.retain(Stmt::is_op); // Remove all No-op's
+
+    if let Some(stmt) = last_stmt {
+        result.push(stmt); // Add back the last statement
+    }
+
+    result
 }
