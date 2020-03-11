@@ -139,7 +139,10 @@ impl fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
-pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef<'static>>);
+pub struct AST(
+    pub(crate) Vec<Stmt>,
+    #[cfg(not(feature = "no_function"))] pub(crate) Vec<FnDef<'static>>,
+);
 
 #[derive(Debug, Clone)]
 pub struct FnDef<'a> {
@@ -1820,6 +1823,7 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
     }
 }
 
+#[cfg(not(feature = "no_function"))]
 fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static>, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
@@ -1892,11 +1896,14 @@ fn parse_top_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     optimize_ast: bool,
 ) -> Result<AST, ParseError> {
-    let mut statements = Vec::new();
-    let mut functions = Vec::new();
+    let mut statements = Vec::<Stmt>::new();
+
+    #[cfg(not(feature = "no_function"))]
+    let mut functions = Vec::<FnDef>::new();
 
     while input.peek().is_some() {
         match input.peek() {
+            #[cfg(not(feature = "no_function"))]
             Some(&(Token::Fn, _)) => functions.push(parse_fn(input)?),
             _ => statements.push(parse_stmt(input)?),
         }
@@ -1910,6 +1917,7 @@ fn parse_top_level<'a>(
     return Ok(if optimize_ast {
         AST(
             optimize(statements),
+            #[cfg(not(feature = "no_function"))]
             functions
                 .into_iter()
                 .map(|mut fn_def| {
@@ -1920,7 +1928,11 @@ fn parse_top_level<'a>(
                 .collect(),
         )
     } else {
-        AST(statements, functions)
+        AST(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            functions,
+        )
     });
 }
 

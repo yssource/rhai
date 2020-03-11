@@ -4,6 +4,8 @@ use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
+
+#[cfg(not(feature = "no_index"))]
 use crate::INT;
 
 use std::{

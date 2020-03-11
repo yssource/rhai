@@ -168,17 +168,25 @@ impl<'e> Engine<'e> {
             retain_functions: bool,
             ast: &AST,
         ) -> Result<Dynamic, EvalAltResult> {
-            let AST(statements, functions) = ast;
+            #[cfg(feature = "no_function")]
+            let AST(statements) = ast;
 
-            functions.iter().for_each(|f| {
-                engine.script_functions.insert(
-                    FnSpec {
-                        name: f.name.clone().into(),
-                        args: None,
-                    },
-                    Arc::new(FnIntExt::Int(f.clone())),
-                );
-            });
+            #[cfg(not(feature = "no_function"))]
+            let statements = {
+                let AST(statements, functions) = ast;
+
+                functions.iter().for_each(|f| {
+                    engine.script_functions.insert(
+                        FnSpec {
+                            name: f.name.clone().into(),
+                            args: None,
+                        },
+                        Arc::new(FnIntExt::Int(f.clone())),
+                    );
+                });
+
+                statements
+            };
 
             let result = statements
                 .iter()
@@ -244,16 +252,26 @@ impl<'e> Engine<'e> {
 
         parse(&mut tokens.peekable(), self.optimize)
             .map_err(|err| EvalAltResult::ErrorParsing(err))
-            .and_then(|AST(ref statements, ref functions)| {
-                for f in functions {
-                    self.script_functions.insert(
-                        FnSpec {
-                            name: f.name.clone().into(),
-                            args: None,
-                        },
-                        Arc::new(FnIntExt::Int(f.clone())),
-                    );
-                }
+            .and_then(|ast| {
+                #[cfg(feature = "no_function")]
+                let AST(statements) = ast;
+
+                #[cfg(not(feature = "no_function"))]
+                let statements = {
+                    let AST(ref statements, ref functions) = ast;
+
+                    functions.iter().for_each(|f| {
+                        self.script_functions.insert(
+                            FnSpec {
+                                name: f.name.clone().into(),
+                                args: None,
+                            },
+                            Arc::new(FnIntExt::Int(f.clone())),
+                        );
+                    });
+
+                    statements
+                };
 
                 let val = statements
                     .iter()
@@ -275,6 +293,7 @@ impl<'e> Engine<'e> {
     /// ```rust
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// # #[cfg(not(feature = "no_stdlib"))]
+    /// # #[cfg(not(feature = "no_function"))]
     /// # {
     /// use rhai::Engine;
     ///
@@ -289,6 +308,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "no_function"))]
     pub fn call_fn<A: FuncArgs, T: Any + Clone>(
         &mut self,
         name: &str,

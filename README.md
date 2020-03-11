@@ -10,7 +10,7 @@ Rhai's current feature set:
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * Easy-to-use language similar to JS+Rust
 * Support for overloaded functions
-* Very few additional dependencies (right now only `num-traits` to do checked arithmetic operations)
+* Very few additional dependencies (right now only [`num-traits`] to do checked arithmetic operations)
 
 **Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
 
@@ -38,15 +38,16 @@ Beware that in order to use pre-releases (alpha and beta) you need to specify th
 Optional features
 -----------------
 
-| Feature      | Description                                                                                                                                              |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug_msgs` | Print debug messages to stdout related to function registrations and calls.                                                                              |
-| `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
-| `unchecked`  | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
-| `no_index`   | Disable arrays and indexing features if you don't need them.                                                                                             |
-| `no_float`   | Disable floating-point numbers and math if you don't need them.                                                                                          |
-| `only_i32`   | Set the system integer type to `i32` and disable all other integer types.                                                                                |
-| `only_i64`   | Set the system integer type to `i64` and disable all other integer types.                                                                                |
+| Feature       | Description                                                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug_msgs`  | Print debug messages to stdout related to function registrations and calls.                                                                              |
+| `no_stdlib`   | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
+| `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
+| `no_function` | Disable script-defined functions if you don't need them.                                                                                                 |
+| `no_index`    | Disable arrays and indexing features if you don't need them.                                                                                             |
+| `no_float`    | Disable floating-point numbers and math if you don't need them.                                                                                          |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types.                                                                                |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types.                                                                                |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here for you to opt-**out** of certain functionalities that you do not need.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
@@ -56,8 +57,8 @@ Related
 
 Other cool projects to check out:
 
-* [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
-* You can also check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
+* [ChaiScript] - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
+* You can also check out the list of [scripting languages for Rust] on [awesome-rust].
 
 Examples
 --------
@@ -195,24 +196,24 @@ Values and types
 
 The following primitive types are supported natively:
 
-| Category                                                            | Types                                                                                                                    |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Integer**                                                         | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`](#optional-features)),<br/>`u64`, `i64` _(default)_ |
-| **Floating-point** (disabled with [`no_float`](#optional-features)) | `f32`, `f64` _(default)_                                                                                                 |
-| **Character**                                                       | `char`                                                                                                                   |
-| **Boolean**                                                         | `bool`                                                                                                                   |
-| **Array** (disabled with [`no_index`](#optional-features))          | `rhai::Array`                                                                                                            |
-| **Dynamic** (i.e. can be anything)                                  | `rhai::Dynamic`                                                                                                          |
-| **System** (current configuration)                                  | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                                         |
+| Category                                        | Types                                                                                                |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Integer**                                     | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`]),<br/>`u64`, `i64` _(default)_ |
+| **Floating-point** (disabled with [`no_float`]) | `f32`, `f64` _(default)_                                                                             |
+| **Character**                                   | `char`                                                                                               |
+| **Boolean**                                     | `bool`                                                                                               |
+| **Array** (disabled with [`no_index`])          | `rhai::Array`                                                                                        |
+| **Dynamic** (i.e. can be anything)              | `rhai::Dynamic`                                                                                      |
+| **System** (current configuration)              | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                     |
 
 All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
 
-The default integer type is `i64`. If you do not need any other integer type, you can enable the [`only_i64`](#optional-features) feature.
+The default integer type is `i64`. If you do not need any other integer type, you can enable the [`only_i64`] feature.
 
-If you only need 32-bit integers, you can enable the [`only_i32`](#optional-features) feature and remove support for all integer types other than `i32` including `i64`.
+If you only need 32-bit integers, you can enable the [`only_i32`] feature and remove support for all integer types other than `i32` including `i64`.
 This is useful on 32-bit systems where using 64-bit integers incurs a performance penalty.
 
-If you do not need floating-point, enable the [`no_float`](#optional-features) feature to remove support.
+If you do not need floating-point, enable the [`no_float`] feature to remove support.
 
 Value conversions
 -----------------
@@ -303,17 +304,17 @@ use std::fmt::Display;
 
 use rhai::{Engine, RegisterFn};
 
-fn showit<T: Display>(x: &mut T) -> () {
-    println!("{}", x)
+fn show_it<T: Display>(x: &mut T) -> () {
+    println!("put up a good show: {}!", x)
 }
 
 fn main()
 {
     let mut engine = Engine::new();
 
-    engine.register_fn("print", showit as fn(x: &mut i64)->());
-    engine.register_fn("print", showit as fn(x: &mut bool)->());
-    engine.register_fn("print", showit as fn(x: &mut String)->());
+    engine.register_fn("print", show_it as fn(x: &mut i64)->());
+    engine.register_fn("print", show_it as fn(x: &mut bool)->());
+    engine.register_fn("print", show_it as fn(x: &mut String)->());
 }
 ```
 
@@ -615,24 +616,23 @@ Unary operators
 ```rust
 let number = -5;
 number = -5 - +5;
-let booly = !true;
+let boolean = !true;
 ```
 
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
-| Function   | Description                         |
-| ---------- | ----------------------------------- |
-| `abs`      | absolute value                      |
-| `to_int`   | converts an `f32` or `f64` to `i64` |
-| `to_float` | converts an integer type to `f64`   |
+| Function   | Description                       |
+| ---------- | --------------------------------- |
+| `abs`      | absolute value                    |
+| `to_float` | converts an integer type to `f64` |
 
 Floating-point functions
 ------------------------
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on `f64` only:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -642,7 +642,8 @@ The following standard functions (defined in the standard library but excluded i
 | Exponential      | `exp` (base _e_)                                             |
 | Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)         |
 | Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction`               |
-| Tests            | `is_nan`, `is_finite`, `is_infinite`                         |
+| Conversion       | `to_int`                                                     |
+| Testing          | `is_nan`, `is_finite`, `is_infinite`                         |
 
 Strings and Chars
 -----------------
@@ -684,7 +685,7 @@ record[4] = '\x58'; // 0x58 = 'X'
 record == "Bob X. Davis: age 42 ❤\n";
 ```
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on strings:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on strings:
 
 | Function   | Description                                                              |
 | ---------- | ------------------------------------------------------------------------ |
@@ -731,7 +732,7 @@ Arrays
 
 You can create arrays of values, and then access them with numeric indices.
 
-The following functions (defined in the standard library but excluded if [`no_stdlib`](#optional-features)) operate on arrays:
+The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on arrays:
 
 | Function   | Description                                                                           |
 | ---------- | ------------------------------------------------------------------------------------- |
@@ -803,7 +804,7 @@ engine.register_fn("push",
 
 The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
 
-Arrays are disabled via the [`no_index`](#optional-features) feature.
+Arrays are disabled via the [`no_index`] feature.
 
 Comparison operators
 --------------------
@@ -954,7 +955,7 @@ println!(result);   // prints "Runtime error: 42 is too large! (line 5, position
 Functions
 ---------
 
-Rhai supports defining functions in script:
+Rhai supports defining functions in script (unless disabled with [`no_function`]):
 
 ```rust
 fn add(x, y) {
@@ -1048,3 +1049,17 @@ for entry in log {
     println!("{}", entry);
 }
 ```
+
+[ChaiScript]: http://chaiscript.com/
+[scripting languages for Rust]: https://github.com/rust-unofficial/awesome-rust#scripting
+[awesome-rust]: https://github.com/rust-unofficial/awesome-rust
+
+[`num-traits`]: https://crates.io/crates/num-traits/
+[`debug_msgs`]: #optional-features
+[`unchecked`]: #optional-features
+[`no_stdlib`]: #optional-features
+[`no_index`]: #optional-features
+[`no_float`]: #optional-features
+[`no_function`]: #optional-features
+[`only_i32`]: #optional-features
+[`only_i64`]: #optional-features
