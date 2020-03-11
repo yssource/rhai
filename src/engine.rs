@@ -27,6 +27,7 @@ type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 pub(crate) const KEYWORD_PRINT: &'static str = "print";
 pub(crate) const KEYWORD_DEBUG: &'static str = "debug";
+pub(crate) const KEYWORD_DUMP_AST: &'static str = "dump_ast";
 pub(crate) const KEYWORD_TYPE_OF: &'static str = "type_of";
 pub(crate) const FUNC_GETTER: &'static str = "get$";
 pub(crate) const FUNC_SETTER: &'static str = "set$";
@@ -859,6 +860,31 @@ impl Engine<'_> {
             #[cfg(feature = "no_index")]
             Expr::Array(_, _) => panic!("encountered an array during no_index!"),
 
+            // Dump AST
+            Expr::FunctionCall(fn_name, args, _, pos) if fn_name == KEYWORD_DUMP_AST => {
+                let pos = if args.len() == 0 {
+                    *pos
+                } else {
+                    args[0].position()
+                };
+
+                // Change the argument to a debug dump of the expressions
+                let result = args
+                    .into_iter()
+                    .map(|expr| format!("{:#?}", expr))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                // Redirect call to `print`
+                self.call_fn_raw(
+                    KEYWORD_PRINT,
+                    vec![result.into_dynamic().as_mut()],
+                    None,
+                    pos,
+                )
+            }
+
+            // Normal function call
             Expr::FunctionCall(fn_name, args, def_val, pos) => {
                 let mut args = args
                     .iter()
