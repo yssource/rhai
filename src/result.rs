@@ -2,7 +2,7 @@
 
 use crate::any::Dynamic;
 use crate::error::ParseError;
-use crate::parser::Position;
+use crate::parser::{Position, INT};
 use std::{error::Error, fmt};
 
 /// Evaluation result.
@@ -24,10 +24,10 @@ pub enum EvalAltResult {
     ErrorCharMismatch(Position),
     /// Array access out-of-bounds.
     /// Wrapped values are the current number of elements in the array and the index number.
-    ErrorArrayBounds(usize, i64, Position),
+    ErrorArrayBounds(usize, INT, Position),
     /// String indexing out-of-bounds.
     /// Wrapped values are the current number of characters in the string and the index number.
-    ErrorStringBounds(usize, i64, Position),
+    ErrorStringBounds(usize, INT, Position),
     /// Trying to index into a type that is not an array and not a string.
     ErrorIndexingType(String, Position),
     /// Trying to index into an array or string with an index that is not `i64`.
@@ -173,6 +173,12 @@ impl From<ParseError> for EvalAltResult {
     }
 }
 
+impl<T: AsRef<str>> From<T> for EvalAltResult {
+    fn from(err: T) -> Self {
+        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
+    }
+}
+
 impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
@@ -223,11 +229,5 @@ impl EvalAltResult {
             | Self::ErrorRuntime(_, ref mut pos)
             | Self::Return(_, ref mut pos) => *pos = new_position,
         }
-    }
-}
-
-impl<T: AsRef<str>> From<T> for EvalAltResult {
-    fn from(err: T) -> Self {
-        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
     }
 }

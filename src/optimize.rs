@@ -61,7 +61,7 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
                 // Remove all raw expression statements that evaluate to constants
                 // except for the very last statement
                 result.retain(|stmt| match stmt {
-                    Stmt::Expr(expr) if expr.is_constant() => false,
+                    Stmt::Expr(expr) if expr.is_constant() || expr.is_identifier() => false,
                     _ => true,
                 });
 
@@ -112,13 +112,15 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool) -> Stmt {
 fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
     match expr {
         Expr::IntegerConstant(_, _)
-        | Expr::FloatConstant(_, _)
         | Expr::Identifier(_, _)
         | Expr::CharConstant(_, _)
         | Expr::StringConstant(_, _)
         | Expr::True(_)
         | Expr::False(_)
         | Expr::Unit(_) => expr,
+
+        #[cfg(not(feature = "no_float"))]
+        Expr::FloatConstant(_, _) => expr,
 
         Expr::Stmt(stmt, pos) => match optimize_stmt(*stmt, changed) {
             Stmt::Noop(_) => {
@@ -139,11 +141,24 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
             Box::new(optimize_expr(*rhs, changed)),
             pos,
         ),
-        Expr::Index(lhs, rhs, pos) => Expr::Index(
-            Box::new(optimize_expr(*lhs, changed)),
-            Box::new(optimize_expr(*rhs, changed)),
-            pos,
-        ),
+        #[cfg(not(feature = "no_index"))]
+        Expr::Index(lhs, rhs, pos) => match (*lhs, *rhs) {
+            (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
+                if i >= 0
+                    && (i as usize) < items.len()
+                    && !items.iter().any(|x| x.is_constant() || x.is_identifier()) =>
+            {
+                // Array where everything is a constant or identifier - promote the item
+                *changed = true;
+                items.remove(i as usize)
+            }
+            (lhs, rhs) => Expr::Index(
+                Box::new(optimize_expr(lhs, changed)),
+                Box::new(optimize_expr(rhs, changed)),
+                pos,
+            ),
+        },
+        #[cfg(not(feature = "no_index"))]
         Expr::Array(items, pos) => {
             let original_len = items.len();
 

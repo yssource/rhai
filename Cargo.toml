@@ -18,6 +18,15 @@ include = [
 num-traits = "*"
 
 [features]
+default = []
 debug_msgs = []
-no_stdlib = []
 unchecked = []
+no_stdlib = []
+no_index = []
+no_float = []
+only_i32 = []
+only_i64 = []
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

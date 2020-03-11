@@ -104,8 +104,7 @@ impl<'e> Engine<'e> {
         parse(&mut tokens.peekable(), self.optimize)
     }
 
-    /// Compile a file into an AST.
-    pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
+    fn read_file(filename: &str) -> Result<String, EvalAltResult> {
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
@@ -113,19 +112,18 @@ impl<'e> Engine<'e> {
 
         f.read_to_string(&mut contents)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
-            .and_then(|_| self.compile(&contents).map_err(EvalAltResult::ErrorParsing))
+            .map(|_| contents)
+    }
+
+    /// Compile a file into an AST.
+    pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
+        Self::read_file(filename)
+            .and_then(|contents| self.compile(&contents).map_err(|err| err.into()))
     }
 
     /// Evaluate a file.
     pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
-        let mut f = File::open(filename)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
-
-        let mut contents = String::new();
-
-        f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
-            .and_then(|_| self.eval::<T>(&contents))
+        Self::read_file(filename).and_then(|contents| self.eval::<T>(&contents))
     }
 
     /// Evaluate a string.
@@ -164,27 +162,36 @@ impl<'e> Engine<'e> {
         retain_functions: bool,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
-        let AST(statements, functions) = ast;
+        fn eval_ast_internal(
+            engine: &mut Engine,
+            scope: &mut Scope,
+            retain_functions: bool,
+            ast: &AST,
+        ) -> Result<Dynamic, EvalAltResult> {
+            let AST(statements, functions) = ast;
 
-        functions.iter().for_each(|f| {
-            self.script_functions.insert(
-                FnSpec {
-                    name: f.name.clone().into(),
-                    args: None,
-                },
-                Arc::new(FnIntExt::Int(f.clone())),
-            );
-        });
+            functions.iter().for_each(|f| {
+                engine.script_functions.insert(
+                    FnSpec {
+                        name: f.name.clone().into(),
+                        args: None,
+                    },
+                    Arc::new(FnIntExt::Int(f.clone())),
+                );
+            });
 
-        let result = statements
-            .iter()
-            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt));
+            let result = statements
+                .iter()
+                .try_fold(().into_dynamic(), |_, stmt| engine.eval_stmt(scope, stmt));
 
-        if !retain_functions {
-            self.clear_functions();
+            if !retain_functions {
+                engine.clear_functions();
+            }
+
+            result
         }
 
-        match result {
+        match eval_ast_internal(self, scope, retain_functions, ast) {
             Err(EvalAltResult::Return(out, pos)) => out.downcast::<T>().map(|v| *v).map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name((*a).type_name()).to_string(),
@@ -267,6 +274,8 @@ impl<'e> Engine<'e> {
     ///
     /// ```rust
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # #[cfg(not(feature = "no_stdlib"))]
+    /// # {
     /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
@@ -276,6 +285,7 @@ impl<'e> Engine<'e> {
     /// let result: i64 = engine.call_fn("add", &ast, (String::from("abc"), 123_i64))?;
     ///
     /// assert_eq!(result, 126);
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
@@ -285,45 +295,45 @@ impl<'e> Engine<'e> {
         ast: &AST,
         args: A,
     ) -> Result<T, EvalAltResult> {
+        fn call_fn_internal(
+            engine: &mut Engine,
+            name: &str,
+            ast: &AST,
+            args: FnCallArgs,
+        ) -> Result<Dynamic, EvalAltResult> {
+            ast.1.iter().for_each(|f| {
+                engine.script_functions.insert(
+                    FnSpec {
+                        name: f.name.clone().into(),
+                        args: None,
+                    },
+                    Arc::new(FnIntExt::Int(f.clone())),
+                );
+            });
+
+            let result = engine.call_fn_raw(name, args, None, Position::none());
+
+            engine.clear_functions();
+
+            result
+        }
+
         let mut arg_values = args.into_vec();
 
-        self.call_fn_internal(
+        call_fn_internal(
+            self,
             name,
             ast,
             arg_values.iter_mut().map(|v| v.as_mut()).collect(),
         )
-    }
-
-    pub(crate) fn call_fn_internal<T: Any + Clone>(
-        &mut self,
-        name: &str,
-        ast: &AST,
-        args: FnCallArgs,
-    ) -> Result<T, EvalAltResult> {
-        let pos = Default::default();
-
-        ast.1.iter().for_each(|f| {
-            self.script_functions.insert(
-                FnSpec {
-                    name: f.name.clone().into(),
-                    args: None,
-                },
-                Arc::new(FnIntExt::Int(f.clone())),
-            );
-        });
-
-        let result = self.call_fn_raw(name, args, None, pos).and_then(|b| {
+        .and_then(|b| {
             b.downcast().map(|b| *b).map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name((*a).type_name()).into(),
-                    pos,
+                    Position::none(),
                 )
             })
-        });
-
-        self.clear_functions();
-
-        result
+        })
     }
 
     /// Override default action of `print` (print to stdout using `println!`)

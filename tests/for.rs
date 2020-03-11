@@ -1,4 +1,5 @@
-use rhai::{Engine, EvalAltResult};
+#![cfg(not(feature = "no_index"))]
+use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_for() -> Result<(), EvalAltResult> {
@@ -20,7 +21,7 @@ fn test_for() -> Result<(), EvalAltResult> {
         sum1 + sum2
     ";
 
-    assert_eq!(engine.eval::<i64>(script)?, 30);
+    assert_eq!(engine.eval::<INT>(script)?, 30);
 
     Ok(())
 }

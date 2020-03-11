@@ -1,12 +1,12 @@
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_unary_minus() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    assert_eq!(engine.eval::<i64>("let x = -5; x")?, -5);
-    assert_eq!(engine.eval::<i64>("fn neg(x) { -x } neg(5)")?, -5);
-    assert_eq!(engine.eval::<i64>("5 - -+++--+-5")?, 0);
+    assert_eq!(engine.eval::<INT>("let x = -5; x")?, -5);
+    assert_eq!(engine.eval::<INT>("fn neg(x) { -x } neg(5)")?, -5);
+    assert_eq!(engine.eval::<INT>("5 - -+++--+-5")?, 0);
 
     Ok(())
 }

@@ -4,6 +4,10 @@ use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
+
+#[cfg(not(feature = "no_index"))]
+use crate::INT;
+
 use std::{
     any::{type_name, TypeId},
     borrow::Cow,
@@ -14,6 +18,7 @@ use std::{
 };
 
 /// An dynamic array of `Dynamic` values.
+#[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
 pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
@@ -29,6 +34,7 @@ pub(crate) const FUNC_GETTER: &'static str = "get$";
 pub(crate) const FUNC_SETTER: &'static str = "set$";
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg(not(feature = "no_index"))]
 enum IndexSourceType {
     Array,
     String,
@@ -82,8 +88,9 @@ impl Engine<'_> {
         // User-friendly names for built-in types
         let type_names = [
             (type_name::<String>(), "string"),
-            (type_name::<Array>(), "array"),
             (type_name::<Dynamic>(), "dynamic"),
+            #[cfg(not(feature = "no_index"))]
+            (type_name::<Array>(), "array"),
         ]
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -251,7 +258,7 @@ impl Engine<'_> {
         match dot_rhs {
             // xxx.fn_name(args)
             Expr::FunctionCall(fn_name, args, def_val, pos) => {
-                let mut args: Array = args
+                let mut args = args
                     .iter()
                     .map(|arg| self.eval_expr(scope, arg))
                     .collect::<Result<Vec<_>, _>>()?;
@@ -271,6 +278,7 @@ impl Engine<'_> {
             }
 
             // xxx.idx_lhs[idx_expr]
+            #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, idx_expr, idx_pos) => {
                 let (expr, _) = match idx_lhs.as_ref() {
                     // xxx.id[idx_expr]
@@ -309,6 +317,7 @@ impl Engine<'_> {
                         .and_then(|mut v| self.get_dot_val_helper(scope, v.as_mut(), rhs))
                 }
                 // xxx.idx_lhs[idx_expr].rhs
+                #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, idx_expr, idx_pos) => {
                     let (expr, _) = match idx_lhs.as_ref() {
                         // xxx.id[idx_expr].rhs
@@ -371,6 +380,7 @@ impl Engine<'_> {
             }
 
             // idx_lhs[idx_expr].???
+            #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, idx_expr, idx_pos) => {
                 let (src_type, src, idx, mut target) =
                     self.eval_index_expr(scope, idx_lhs, idx_expr, *idx_pos)?;
@@ -413,23 +423,25 @@ impl Engine<'_> {
             .and_then(move |(idx, _, val)| map(val).map(|v| (idx, v)))
     }
 
-    /// Evaluate the value of an index (must evaluate to i64)
+    /// Evaluate the value of an index (must evaluate to INT)
+    #[cfg(not(feature = "no_index"))]
     fn eval_index_value(
         &mut self,
         scope: &mut Scope,
         idx_expr: &Expr,
-    ) -> Result<i64, EvalAltResult> {
+    ) -> Result<INT, EvalAltResult> {
         self.eval_expr(scope, idx_expr)?
-            .downcast::<i64>()
+            .downcast::<INT>()
             .map(|v| *v)
             .map_err(|_| EvalAltResult::ErrorIndexExpr(idx_expr.position()))
     }
 
     /// Get the value at the indexed position of a base type
+    #[cfg(not(feature = "no_index"))]
     fn get_indexed_value(
         &self,
         val: Dynamic,
-        idx: i64,
+        idx: INT,
         val_pos: Position,
         idx_pos: Position,
     ) -> Result<(Dynamic, IndexSourceType), EvalAltResult> {
@@ -473,6 +485,7 @@ impl Engine<'_> {
     }
 
     /// Evaluate an index expression
+    #[cfg(not(feature = "no_index"))]
     fn eval_index_expr<'a>(
         &mut self,
         scope: &mut Scope,
@@ -505,6 +518,7 @@ impl Engine<'_> {
     }
 
     /// Replace a character at an index position in a mutable string
+    #[cfg(not(feature = "no_index"))]
     fn str_replace_char(s: &mut String, idx: usize, new_ch: char) {
         let mut chars: Vec<char> = s.chars().collect();
         let ch = *chars.get(idx).expect("string index out of bounds");
@@ -518,6 +532,7 @@ impl Engine<'_> {
     }
 
     /// Update the value at an index position in a variable inside the scope
+    #[cfg(not(feature = "no_index"))]
     fn update_indexed_var_in_scope(
         src_type: IndexSourceType,
         scope: &mut Scope,
@@ -550,6 +565,7 @@ impl Engine<'_> {
     }
 
     /// Update the value at an index position
+    #[cfg(not(feature = "no_index"))]
     fn update_indexed_value(
         mut target: Dynamic,
         idx: usize,
@@ -593,6 +609,7 @@ impl Engine<'_> {
 
             // xxx.lhs[idx_expr]
             // TODO - Allow chaining of indexing!
+            #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, idx_pos) => match lhs.as_ref() {
                 // xxx.id[idx_expr]
                 Expr::Identifier(id, pos) => {
@@ -636,6 +653,7 @@ impl Engine<'_> {
 
                 // xxx.lhs[idx_expr].rhs
                 // TODO - Allow chaining of indexing!
+                #[cfg(not(feature = "no_index"))]
                 Expr::Index(lhs, idx_expr, idx_pos) => match lhs.as_ref() {
                     // xxx.id[idx_expr].rhs
                     Expr::Identifier(id, pos) => {
@@ -720,6 +738,7 @@ impl Engine<'_> {
 
             // lhs[idx_expr].???
             // TODO - Allow chaining of indexing!
+            #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, idx_pos) => {
                 let (src_type, src, idx, mut target) =
                     self.eval_index_expr(scope, lhs, idx_expr, *idx_pos)?;
@@ -753,8 +772,10 @@ impl Engine<'_> {
     /// Evaluate an expression
     fn eval_expr(&mut self, scope: &mut Scope, expr: &Expr) -> Result<Dynamic, EvalAltResult> {
         match expr {
-            Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
+            #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(f, _) => Ok(f.into_dynamic()),
+
+            Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
             Expr::StringConstant(s, _) => Ok(s.into_dynamic()),
             Expr::CharConstant(c, _) => Ok(c.into_dynamic()),
             Expr::Identifier(id, pos) => {
@@ -762,6 +783,7 @@ impl Engine<'_> {
             }
 
             // lhs[idx_expr]
+            #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, idx_pos) => self
                 .eval_index_expr(scope, lhs, idx_expr, *idx_pos)
                 .map(|(_, _, _, x)| x),
@@ -785,6 +807,7 @@ impl Engine<'_> {
                     }
 
                     // idx_lhs[idx_expr] = rhs
+                    #[cfg(not(feature = "no_index"))]
                     Expr::Index(idx_lhs, idx_expr, idx_pos) => {
                         let (src_type, src, idx, _) =
                             self.eval_index_expr(scope, idx_lhs, idx_expr, *idx_pos)?;
@@ -818,6 +841,7 @@ impl Engine<'_> {
 
             Expr::Dot(lhs, rhs, _) => self.get_dot_val(scope, lhs, rhs),
 
+            #[cfg(not(feature = "no_index"))]
             Expr::Array(contents, _) => {
                 let mut arr = Vec::new();
 
@@ -836,7 +860,7 @@ impl Engine<'_> {
                 let mut args = args
                     .iter()
                     .map(|expr| self.eval_expr(scope, expr))
-                    .collect::<Result<Array, _>>()?;
+                    .collect::<Result<Vec<Dynamic>, _>>()?;
 
                 self.call_fn_raw(
                     fn_name,

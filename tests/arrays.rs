@@ -1,11 +1,12 @@
-use rhai::{Engine, EvalAltResult, RegisterFn};
+#![cfg(not(feature = "no_index"))]
+use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
 fn test_arrays() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    assert_eq!(engine.eval::<i64>("let x = [1, 2, 3]; x[1]")?, 2);
-    assert_eq!(engine.eval::<i64>("let y = [1, 2, 3]; y[1] = 5; y[1]")?, 5);
+    assert_eq!(engine.eval::<INT>("let x = [1, 2, 3]; x[1]")?, 2);
+    assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[1] = 5; y[1]")?, 5);
 
     Ok(())
 }
@@ -14,7 +15,7 @@ fn test_arrays() -> Result<(), EvalAltResult> {
 fn test_array_with_structs() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {
-        x: i64,
+        x: INT,
     }
 
     impl TestStruct {
@@ -22,11 +23,11 @@ fn test_array_with_structs() -> Result<(), EvalAltResult> {
             self.x += 1000;
         }
 
-        fn get_x(&mut self) -> i64 {
+        fn get_x(&mut self) -> INT {
             self.x
         }
 
-        fn set_x(&mut self, new_x: i64) {
+        fn set_x(&mut self, new_x: INT) {
             self.x = new_x;
         }
 
@@ -43,10 +44,10 @@ fn test_array_with_structs() -> Result<(), EvalAltResult> {
     engine.register_fn("update", TestStruct::update);
     engine.register_fn("new_ts", TestStruct::new);
 
-    assert_eq!(engine.eval::<i64>("let a = [new_ts()]; a[0].x")?, 1);
+    assert_eq!(engine.eval::<INT>("let a = [new_ts()]; a[0].x")?, 1);
 
     assert_eq!(
-        engine.eval::<i64>(
+        engine.eval::<INT>(
             "let a = [new_ts()];     \
              a[0].x = 100;           \
              a[0].update();          \

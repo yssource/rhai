@@ -93,6 +93,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Get a mutable reference to a variable in the Scope and downcast it to a specific type
+    #[cfg(not(feature = "no_index"))]
     pub(crate) fn get_mut_by_type<T: Any + Clone>(&mut self, key: &str, index: usize) -> &mut T {
         self.get_mut(key, index)
             .downcast_mut::<T>()
