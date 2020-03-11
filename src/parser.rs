@@ -4,7 +4,7 @@ use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::optimize;
 
-use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, usize};
+use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc, usize};
 
 /// The system integer type.
 ///
@@ -139,17 +139,24 @@ impl fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
+#[derive(Debug, Clone)]
 pub struct AST(
     pub(crate) Vec<Stmt>,
-    #[cfg(not(feature = "no_function"))] pub(crate) Vec<FnDef<'static>>,
+    #[cfg(not(feature = "no_function"))] pub(crate) Vec<Arc<FnDef>>,
 );
 
-#[derive(Debug, Clone)]
-pub struct FnDef<'a> {
-    pub name: Cow<'a, str>,
-    pub params: Vec<Cow<'a, str>>,
+#[derive(Debug)] // Do not derive Clone because it is expensive
+pub struct FnDef {
+    pub name: String,
+    pub params: Vec<String>,
     pub body: Stmt,
     pub pos: Position,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum ReturnType {
+    Return,
+    Exception,
 }
 
 #[derive(Debug, Clone)]
@@ -163,7 +170,7 @@ pub enum Stmt {
     Block(Vec<Stmt>, Position),
     Expr(Box<Expr>),
     Break(Position),
-    ReturnWithVal(Option<Box<Expr>>, bool, Position),
+    ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
 }
 
 impl Stmt {
@@ -171,6 +178,25 @@ impl Stmt {
         match self {
             Stmt::Noop(_) => false,
             _ => true,
+        }
+    }
+
+    pub fn is_var(&self) -> bool {
+        match self {
+            Stmt::Let(_, _, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn position(&self) -> Position {
+        match self {
+            Stmt::Noop(pos)
+            | Stmt::Let(_, _, pos)
+            | Stmt::Block(_, pos)
+            | Stmt::Break(pos)
+            | Stmt::ReturnWithVal(_, _, pos) => *pos,
+            Stmt::IfElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
+            Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
         }
     }
 }
@@ -221,9 +247,13 @@ impl Expr {
         }
     }
 
-    pub fn is_constant(&self) -> bool {
+    /// Is this expression pure?
+    ///
+    /// A pure expression has no side effects.
+    pub fn is_pure(&self) -> bool {
         match self {
-            Expr::IntegerConstant(_, _)
+            Expr::Identifier(_, _)
+            | Expr::IntegerConstant(_, _)
             | Expr::CharConstant(_, _)
             | Expr::StringConstant(_, _)
             | Expr::True(_)
@@ -232,6 +262,8 @@ impl Expr {
 
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, _) => true,
+
+            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
 
             _ => false,
         }
@@ -1425,17 +1457,16 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 
             match parse_unary(input) {
                 // Negative integer
-                #[cfg(not(feature = "no_float"))]
-                Ok(Expr::IntegerConstant(i, _)) => Ok(i
-                    .checked_neg()
-                    .map(|x| Expr::IntegerConstant(x, pos))
-                    .unwrap_or_else(|| Expr::FloatConstant(-(i as FLOAT), pos))),
-
-                // Negative integer
-                #[cfg(feature = "no_float")]
                 Ok(Expr::IntegerConstant(i, _)) => i
                     .checked_neg()
                     .map(|x| Expr::IntegerConstant(x, pos))
+                    .or_else(|| {
+                        #[cfg(not(feature = "no_float"))]
+                        return Some(Expr::FloatConstant(-(i as FLOAT), pos));
+
+                        #[cfg(feature = "no_float")]
+                        return None;
+                    })
                     .ok_or_else(|| {
                         ParseError::new(
                             PERR::BadInput(LERR::MalformedNumber(format!("-{}", i)).to_string()),
@@ -1485,10 +1516,11 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
                 Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
 
                 #[cfg(not(feature = "no_index"))]
-                Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
-                    Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
-                    _ => (false, idx_lhs.position()),
-                },
+                Expr::Index(idx_lhs, _, _) if idx_lhs.is_identifier() => {
+                    valid_assignment_chain(dot_rhs)
+                }
+                #[cfg(not(feature = "no_index"))]
+                Expr::Index(idx_lhs, _, _) => (false, idx_lhs.position()),
 
                 _ => (false, dot_lhs.position()),
             },
@@ -1497,7 +1529,7 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
         }
     }
 
-    //println!("{:?} = {:?}", lhs, rhs);
+    //println!("{:#?} = {:#?}", lhs, rhs);
 
     match valid_assignment_chain(&lhs) {
         (true, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
@@ -1797,23 +1829,23 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
             Ok(Stmt::Break(pos))
         }
         Some(&(ref token @ Token::Return, _)) | Some(&(ref token @ Token::Throw, _)) => {
-            let is_return = match token {
-                Token::Return => true,
-                Token::Throw => false,
-                _ => panic!(),
+            let return_type = match token {
+                Token::Return => ReturnType::Return,
+                Token::Throw => ReturnType::Exception,
+                _ => panic!("unexpected token!"),
             };
 
             input.next();
 
             match input.peek() {
                 // return; or throw;
-                Some(&(Token::SemiColon, pos)) => Ok(Stmt::ReturnWithVal(None, is_return, pos)),
+                Some(&(Token::SemiColon, pos)) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
                 // Just a return/throw without anything at the end of script
-                None => Ok(Stmt::ReturnWithVal(None, is_return, Position::eof())),
+                None => Ok(Stmt::ReturnWithVal(None, return_type, Position::eof())),
                 // return or throw with expression
                 Some(&(_, pos)) => {
                     let ret = parse_expr(input)?;
-                    Ok(Stmt::ReturnWithVal(Some(Box::new(ret)), is_return, pos))
+                    Ok(Stmt::ReturnWithVal(Some(Box::new(ret)), return_type, pos))
                 }
             }
         }
@@ -1824,7 +1856,7 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
 }
 
 #[cfg(not(feature = "no_function"))]
-fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static>, ParseError> {
+fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
         _ => return Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
@@ -1885,7 +1917,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static
     let body = parse_block(input)?;
 
     Ok(FnDef {
-        name: name.into(),
+        name,
         params,
         body,
         pos,
@@ -1914,26 +1946,25 @@ fn parse_top_level<'a>(
         }
     }
 
-    return Ok(if optimize_ast {
-        AST(
-            optimize(statements),
-            #[cfg(not(feature = "no_function"))]
-            functions
-                .into_iter()
-                .map(|mut fn_def| {
+    return Ok(AST(
+        if optimize_ast {
+            optimize(statements)
+        } else {
+            statements
+        },
+        #[cfg(not(feature = "no_function"))]
+        functions
+            .into_iter()
+            .map(|mut fn_def| {
+                if optimize_ast {
+                    let pos = fn_def.body.position();
                     let mut body = optimize(vec![fn_def.body]);
-                    fn_def.body = body.pop().unwrap();
-                    fn_def
-                })
-                .collect(),
-        )
-    } else {
-        AST(
-            statements,
-            #[cfg(not(feature = "no_function"))]
-            functions,
-        )
-    });
+                    fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
+                }
+                Arc::new(fn_def)
+            })
+            .collect(),
+    ));
 }
 
 pub fn parse<'a>(

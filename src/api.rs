@@ -2,7 +2,7 @@
 
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
-use crate::engine::{Engine, FnAny, FnCallArgs, FnIntExt, FnSpec};
+use crate::engine::{Engine, FnAny, FnCallArgs, FnSpec};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, Position, AST};
@@ -12,7 +12,6 @@ use std::{
     any::{type_name, TypeId},
     fs::File,
     io::prelude::*,
-    sync::Arc,
 };
 
 impl<'e> Engine<'e> {
@@ -41,7 +40,7 @@ impl<'e> Engine<'e> {
             args,
         };
 
-        self.ext_functions.insert(spec, Arc::new(FnIntExt::Ext(f)));
+        self.ext_functions.insert(spec, f);
     }
 
     /// Register a custom type for use with the `Engine`.
@@ -63,7 +62,7 @@ impl<'e> Engine<'e> {
     where
         F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static,
     {
-        self.type_iterators.insert(TypeId::of::<T>(), Arc::new(f));
+        self.type_iterators.insert(TypeId::of::<T>(), Box::new(f));
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
@@ -176,13 +175,7 @@ impl<'e> Engine<'e> {
                 let AST(statements, functions) = ast;
 
                 functions.iter().for_each(|f| {
-                    engine.script_functions.insert(
-                        FnSpec {
-                            name: f.name.clone().into(),
-                            args: None,
-                        },
-                        Arc::new(FnIntExt::Int(f.clone())),
-                    );
+                    engine.script_functions.push(f.clone());
                 });
 
                 statements
@@ -261,13 +254,7 @@ impl<'e> Engine<'e> {
                     let AST(ref statements, ref functions) = ast;
 
                     functions.iter().for_each(|f| {
-                        self.script_functions.insert(
-                            FnSpec {
-                                name: f.name.clone().into(),
-                                args: None,
-                            },
-                            Arc::new(FnIntExt::Int(f.clone())),
-                        );
+                        self.script_functions.push(f.clone());
                     });
 
                     statements
@@ -322,13 +309,7 @@ impl<'e> Engine<'e> {
             args: FnCallArgs,
         ) -> Result<Dynamic, EvalAltResult> {
             ast.1.iter().for_each(|f| {
-                engine.script_functions.insert(
-                    FnSpec {
-                        name: f.name.clone().into(),
-                        args: None,
-                    },
-                    Arc::new(FnIntExt::Int(f.clone())),
-                );
+                engine.script_functions.push(f.clone());
             });
 
             let result = engine.call_fn_raw(name, args, None, Position::none());

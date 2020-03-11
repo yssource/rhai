@@ -1,7 +1,7 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::any::{Any, AnyExt, Dynamic, Variant};
-use crate::parser::{Expr, FnDef, Position, Stmt};
+use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 
@@ -11,7 +11,6 @@ use crate::INT;
 use std::{
     any::{type_name, TypeId},
     borrow::Cow,
-    cmp::{PartialEq, PartialOrd},
     collections::HashMap,
     iter::once,
     sync::Arc,
@@ -34,7 +33,7 @@ pub(crate) const KEYWORD_TYPE_OF: &'static str = "type_of";
 pub(crate) const FUNC_GETTER: &'static str = "get$";
 pub(crate) const FUNC_SETTER: &'static str = "set$";
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 #[cfg(not(feature = "no_index"))]
 enum IndexSourceType {
     Array,
@@ -42,7 +41,7 @@ enum IndexSourceType {
     Expression,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct FnSpec<'a> {
     pub name: Cow<'a, str>,
     pub args: Option<Vec<TypeId>>,
@@ -66,21 +65,16 @@ pub struct Engine<'e> {
     /// Optimize the AST after compilation
     pub(crate) optimize: bool,
     /// A hashmap containing all compiled functions known to the engine
-    pub(crate) ext_functions: HashMap<FnSpec<'e>, Arc<FnIntExt<'e>>>,
+    pub(crate) ext_functions: HashMap<FnSpec<'e>, Box<FnAny>>,
     /// A hashmap containing all script-defined functions
-    pub(crate) script_functions: HashMap<FnSpec<'e>, Arc<FnIntExt<'e>>>,
+    pub(crate) script_functions: Vec<Arc<FnDef>>,
     /// A hashmap containing all iterators known to the engine
-    pub(crate) type_iterators: HashMap<TypeId, Arc<IteratorFn>>,
+    pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
     pub(crate) type_names: HashMap<String, String>,
 
     // Closures for implementing the print/debug commands
     pub(crate) on_print: Box<dyn FnMut(&str) + 'e>,
     pub(crate) on_debug: Box<dyn FnMut(&str) + 'e>,
-}
-
-pub enum FnIntExt<'a> {
-    Ext(Box<FnAny>),
-    Int(FnDef<'a>),
 }
 
 impl Engine<'_> {
@@ -101,7 +95,7 @@ impl Engine<'_> {
         let mut engine = Engine {
             optimize: true,
             ext_functions: HashMap::new(),
-            script_functions: HashMap::new(),
+            script_functions: Vec::new(),
             type_iterators: HashMap::new(),
             type_names,
             on_print: Box::new(default_print), // default print/debug implementations
@@ -140,113 +134,112 @@ impl Engine<'_> {
                 .join(", ")
         );
 
-        let mut spec = FnSpec {
+        // First search in script-defined functions (can override built-in)
+        if let Some(func) = self
+            .script_functions
+            .iter()
+            .rev()
+            .find(|fn_def| fn_def.name == fn_name)
+            .map(|fn_def| fn_def.clone())
+        {
+            // First check number of parameters
+            if func.params.len() != args.len() {
+                return Err(EvalAltResult::ErrorFunctionArgsMismatch(
+                    fn_name.into(),
+                    func.params.len(),
+                    args.len(),
+                    pos,
+                ));
+            }
+
+            let mut scope = Scope::new();
+
+            scope.extend(
+                // Put arguments into scope as variables
+                func.params
+                    .iter()
+                    .zip(args.iter().map(|x| (*x).into_dynamic())),
+            );
+
+            // Evaluate
+            return match self.eval_stmt(&mut scope, &func.body) {
+                // Convert return statement to return value
+                Err(EvalAltResult::Return(x, _)) => Ok(x),
+                other => other,
+            };
+        }
+
+        let spec = FnSpec {
             name: fn_name.into(),
-            args: None,
+            args: Some(args.iter().map(|a| Any::type_id(&**a)).collect()),
         };
 
-        // First search in script-defined functions (can override built-in),
-        // then built-in's and external functions
-        let fn_def = self
-            .script_functions
-            .get(&spec)
-            .or_else(|| {
-                spec.args = Some(args.iter().map(|a| Any::type_id(&**a)).collect());
-                self.ext_functions.get(&spec)
-            })
-            .map(|f| f.clone());
+        // Then search built-in's and external functions
+        if let Some(func) = self.ext_functions.get(&spec) {
+            // Run external function
+            let result = func(args, pos)?;
 
-        if let Some(f) = fn_def {
-            match *f {
-                // Run external function
-                FnIntExt::Ext(ref func) => {
-                    let result = func(args, pos)?;
+            // See if the function match print/debug (which requires special processing)
+            let callback = match spec.name.as_ref() {
+                KEYWORD_PRINT => self.on_print.as_mut(),
+                KEYWORD_DEBUG => self.on_debug.as_mut(),
+                _ => return Ok(result),
+            };
 
-                    // See if the function match print/debug (which requires special processing)
-                    let callback = match spec.name.as_ref() {
-                        KEYWORD_PRINT => self.on_print.as_mut(),
-                        KEYWORD_DEBUG => self.on_debug.as_mut(),
-                        _ => return Ok(result),
-                    };
+            let val = &result
+                .downcast::<String>()
+                .map(|s| *s)
+                .unwrap_or("error: not a string".into());
 
-                    let val = &result
-                        .downcast::<String>()
-                        .map(|s| *s)
-                        .unwrap_or("error: not a string".into());
+            return Ok(callback(val).into_dynamic());
+        }
 
-                    Ok(callback(val).into_dynamic())
-                }
-
-                // Run script-defined function
-                FnIntExt::Int(ref func) => {
-                    // First check number of parameters
-                    if func.params.len() != args.len() {
-                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(
-                            spec.name.into(),
-                            func.params.len(),
-                            args.len(),
-                            pos,
-                        ));
-                    }
-
-                    let mut scope = Scope::new();
-
-                    scope.extend(
-                        // Put arguments into scope as variables
-                        func.params
-                            .iter()
-                            .cloned()
-                            .zip(args.iter().map(|x| (*x).into_dynamic())),
-                    );
-
-                    // Evaluate
-                    match self.eval_stmt(&mut scope, &func.body) {
-                        // Convert return statement to return value
-                        Err(EvalAltResult::Return(x, _)) => Ok(x),
-                        other => other,
-                    }
-                }
-            }
-        } else if spec.name == KEYWORD_TYPE_OF && args.len() == 1 {
+        if spec.name == KEYWORD_TYPE_OF && args.len() == 1 {
             // Handle `type_of` function
-            Ok(self
+            return Ok(self
                 .map_type_name(args[0].type_name())
                 .to_string()
-                .into_dynamic())
-        } else if spec.name.starts_with(FUNC_GETTER) {
+                .into_dynamic());
+        }
+
+        if spec.name.starts_with(FUNC_GETTER) {
             // Getter function not found
-            Err(EvalAltResult::ErrorDotExpr(
+            return Err(EvalAltResult::ErrorDotExpr(
                 format!(
                     "- property '{}' unknown or write-only",
                     &spec.name[FUNC_GETTER.len()..]
                 ),
                 pos,
-            ))
-        } else if spec.name.starts_with(FUNC_SETTER) {
+            ));
+        }
+
+        if spec.name.starts_with(FUNC_SETTER) {
             // Setter function not found
-            Err(EvalAltResult::ErrorDotExpr(
+            return Err(EvalAltResult::ErrorDotExpr(
                 format!(
                     "- property '{}' unknown or read-only",
                     &spec.name[FUNC_SETTER.len()..]
                 ),
                 pos,
-            ))
-        } else if let Some(val) = def_val {
-            // Return default value
-            Ok(val.clone())
-        } else {
-            // Raise error
-            let types_list = args
-                .iter()
-                .map(|x| (*x).type_name())
-                .map(|name| self.map_type_name(name))
-                .collect::<Vec<_>>();
-
-            Err(EvalAltResult::ErrorFunctionNotFound(
-                format!("{} ({})", spec.name, types_list.join(", ")),
-                pos,
-            ))
+            ));
         }
+
+        if let Some(val) = def_val {
+            // Return default value
+            return Ok(val.clone());
+        }
+
+        // Raise error
+        let types_list = args
+            .iter()
+            .map(|x| (*x).type_name())
+            .map(|name| self.map_type_name(name))
+            .collect::<Vec<_>>();
+
+        Err(EvalAltResult::ErrorFunctionNotFound(
+            format!("{} ({})", spec.name, types_list.join(", ")),
+            pos,
+        ))
     }
 
     /// Chain-evaluate a dot setter
@@ -281,7 +274,7 @@ impl Engine<'_> {
             // xxx.idx_lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, idx_expr, idx_pos) => {
-                let (expr, _) = match idx_lhs.as_ref() {
+                let (val, _) = match idx_lhs.as_ref() {
                     // xxx.id[idx_expr]
                     Expr::Identifier(id, pos) => {
                         let get_fn_name = format!("{}{}", FUNC_GETTER, id);
@@ -304,7 +297,7 @@ impl Engine<'_> {
                 };
 
                 let idx = self.eval_index_value(scope, idx_expr)?;
-                self.get_indexed_value(expr, idx, idx_expr.position(), *idx_pos)
+                self.get_indexed_value(&val, idx, idx_expr.position(), *idx_pos)
                     .map(|(v, _)| v)
             }
 
@@ -320,7 +313,7 @@ impl Engine<'_> {
                 // xxx.idx_lhs[idx_expr].rhs
                 #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, idx_expr, idx_pos) => {
-                    let (expr, _) = match idx_lhs.as_ref() {
+                    let (val, _) = match idx_lhs.as_ref() {
                         // xxx.id[idx_expr].rhs
                         Expr::Identifier(id, pos) => {
                             let get_fn_name = format!("{}{}", FUNC_GETTER, id);
@@ -343,7 +336,7 @@ impl Engine<'_> {
                     };
 
                     let idx = self.eval_index_value(scope, idx_expr)?;
-                    self.get_indexed_value(expr, idx, idx_expr.position(), *idx_pos)
+                    self.get_indexed_value(&val, idx, idx_expr.position(), *idx_pos)
                         .and_then(|(mut v, _)| self.get_dot_val_helper(scope, v.as_mut(), rhs))
                 }
                 // Syntax error
@@ -441,14 +434,14 @@ impl Engine<'_> {
     #[cfg(not(feature = "no_index"))]
     fn get_indexed_value(
         &self,
-        val: Dynamic,
+        val: &Dynamic,
         idx: INT,
         val_pos: Position,
         idx_pos: Position,
     ) -> Result<(Dynamic, IndexSourceType), EvalAltResult> {
         if val.is::<Array>() {
             // val_array[idx]
-            let arr = val.downcast::<Array>().expect("array expected");
+            let arr = val.downcast_ref::<Array>().expect("array expected");
 
             if idx >= 0 {
                 arr.get(idx as usize)
@@ -460,7 +453,7 @@ impl Engine<'_> {
             }
         } else if val.is::<String>() {
             // val_string[idx]
-            let s = val.downcast::<String>().expect("string expected");
+            let s = val.downcast_ref::<String>().expect("string expected");
 
             if idx >= 0 {
                 s.chars()
@@ -501,7 +494,7 @@ impl Engine<'_> {
             Expr::Identifier(id, _) => Self::search_scope(
                 scope,
                 &id,
-                |val| self.get_indexed_value(val, idx, idx_expr.position(), idx_pos),
+                |val| self.get_indexed_value(&val, idx, idx_expr.position(), idx_pos),
                 lhs.position(),
             )
             .map(|(src_idx, (val, src_type))| {
@@ -512,7 +505,7 @@ impl Engine<'_> {
             expr => {
                 let val = self.eval_expr(scope, expr)?;
 
-                self.get_indexed_value(val, idx, idx_expr.position(), idx_pos)
+                self.get_indexed_value(&val, idx, idx_expr.position(), idx_pos)
                     .map(|(v, _)| (IndexSourceType::Expression, None, idx as usize, v))
             }
         }
@@ -663,12 +656,8 @@ impl Engine<'_> {
                         self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
                             .and_then(|v| {
                                 let idx = self.eval_index_value(scope, idx_expr)?;
-                                let (mut target, _) = self.get_indexed_value(
-                                    v.clone(), // TODO - Avoid cloning this
-                                    idx,
-                                    idx_expr.position(),
-                                    *idx_pos,
-                                )?;
+                                let (mut target, _) =
+                                    self.get_indexed_value(&v, idx, idx_expr.position(), *idx_pos)?;
 
                                 self.set_dot_val_helper(
                                     scope,
@@ -1042,22 +1031,22 @@ impl Engine<'_> {
             Stmt::Break(_) => Err(EvalAltResult::LoopBreak),
 
             // Empty return
-            Stmt::ReturnWithVal(None, true, pos) => {
+            Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
                 Err(EvalAltResult::Return(().into_dynamic(), *pos))
             }
 
             // Return value
-            Stmt::ReturnWithVal(Some(a), true, pos) => {
+            Stmt::ReturnWithVal(Some(a), ReturnType::Return, pos) => {
                 Err(EvalAltResult::Return(self.eval_expr(scope, a)?, *pos))
             }
 
             // Empty throw
-            Stmt::ReturnWithVal(None, false, pos) => {
+            Stmt::ReturnWithVal(None, ReturnType::Exception, pos) => {
                 Err(EvalAltResult::ErrorRuntime("".into(), *pos))
             }
 
             // Throw value
-            Stmt::ReturnWithVal(Some(a), false, pos) => {
+            Stmt::ReturnWithVal(Some(a), ReturnType::Exception, pos) => {
                 let val = self.eval_expr(scope, a)?;
                 Err(EvalAltResult::ErrorRuntime(
                     val.downcast::<String>()
@@ -1068,13 +1057,14 @@ impl Engine<'_> {
             }
 
             // Let statement
-            Stmt::Let(name, init, _) => {
-                if let Some(v) = init {
-                    let val = self.eval_expr(scope, v)?;
-                    scope.push_dynamic(name.clone(), val);
-                } else {
-                    scope.push(name.clone(), ());
-                }
+            Stmt::Let(name, Some(expr), _) => {
+                let val = self.eval_expr(scope, expr)?;
+                scope.push_dynamic(name.clone(), val);
+                Ok(().into_dynamic())
+            }
+
+            Stmt::Let(name, None, _) => {
+                scope.push(name.clone(), ());
                 Ok(().into_dynamic())
             }
         }
