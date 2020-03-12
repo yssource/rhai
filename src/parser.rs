@@ -186,6 +186,13 @@ pub enum Stmt {
 }
 
 impl Stmt {
+    pub fn is_noop(&self) -> bool {
+        match self {
+            Stmt::Noop(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_op(&self) -> bool {
         match self {
             Stmt::Noop(_) => false,
@@ -265,6 +272,7 @@ impl Expr {
     pub fn is_pure(&self) -> bool {
         match self {
             Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
+            Expr::And(x, y) | Expr::Or(x, y) | Expr::Index(x, y, _) => x.is_pure() && y.is_pure(),
             expr => expr.is_constant() || expr.is_identifier(),
         }
     }

@@ -3,6 +3,26 @@ use crate::parser::{Expr, Stmt};
 
 fn optimize_stmt(stmt: Stmt, changed: &mut bool, preserve_result: bool) -> Stmt {
     match stmt {
+        Stmt::IfElse(expr, stmt1, None) if stmt1.is_noop() => {
+            *changed = true;
+
+            let pos = expr.position();
+            let expr = optimize_expr(*expr, changed);
+
+            match expr {
+                Expr::False(_) | Expr::True(_) => Stmt::Noop(stmt1.position()),
+                expr => {
+                    let stmt = Stmt::Expr(Box::new(expr));
+
+                    if preserve_result {
+                        Stmt::Block(vec![stmt, *stmt1], pos)
+                    } else {
+                        stmt
+                    }
+                }
+            }
+        }
+
         Stmt::IfElse(expr, stmt1, None) => match *expr {
             Expr::False(pos) => {
                 *changed = true;
@@ -22,7 +42,10 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool, preserve_result: bool) -> Stmt 
             expr => Stmt::IfElse(
                 Box::new(optimize_expr(expr, changed)),
                 Box::new(optimize_stmt(*stmt1, changed, true)),
-                Some(Box::new(optimize_stmt(*stmt2, changed, true))),
+                match optimize_stmt(*stmt2, changed, true) {
+                    stmt if stmt.is_noop() => None,
+                    stmt => Some(Box::new(stmt)),
+                },
             ),
         },
 
@@ -274,10 +297,14 @@ pub(crate) fn optimize(statements: Vec<Stmt>) -> Vec<Stmt> {
         }
     }
 
-    // Eliminate No-op's but always keep the last statement
+    // Eliminate code that is pure but always keep the last statement
     let last_stmt = result.pop();
 
-    result.retain(Stmt::is_op); // Remove all No-op's
+    // Remove all pure statements at top level
+    result.retain(|stmt| match stmt {
+        Stmt::Expr(expr) if expr.is_pure() => false,
+        _ => true,
+    });
 
     if let Some(stmt) = last_stmt {
         result.push(stmt); // Add back the last statement
