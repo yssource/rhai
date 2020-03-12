@@ -16,9 +16,9 @@ use std::borrow::Cow;
 /// let mut engine = Engine::new();
 /// let mut my_scope = Scope::new();
 ///
-/// engine.eval_with_scope::<()>(&mut my_scope, false, "let x = 5;")?;
+/// engine.eval_with_scope::<()>(&mut my_scope, "let x = 5;")?;
 ///
-/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, false, "x + 1")?, 6);
+/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1")?, 6);
 /// # Ok(())
 /// # }
 /// ```

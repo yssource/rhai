@@ -67,7 +67,7 @@ fn main() {
             _ => (),
         }
 
-        if let Err(err) = engine.consume(&contents) {
+        if let Err(err) = engine.consume(&contents, false) {
             eprintln!("{}", padding("=", filename.len()));
             eprintln!("{}", filename);
             eprintln!("{}", padding("=", filename.len()));

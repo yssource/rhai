@@ -1212,26 +1212,26 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
 ) -> Result<Expr, ParseError> {
-    let mut args = Vec::new();
+    let mut args_expr_list = Vec::new();
 
     if let Some(&(Token::RightParen, _)) = input.peek() {
         input.next();
-        return Ok(Expr::FunctionCall(id, args, None, begin));
+        return Ok(Expr::FunctionCall(id, args_expr_list, None, begin));
     }
 
     loop {
-        args.push(parse_expr(input)?);
+        args_expr_list.push(parse_expr(input)?);
 
         match input.peek() {
             Some(&(Token::RightParen, _)) => {
                 input.next();
-                return Ok(Expr::FunctionCall(id, args, None, begin));
+                return Ok(Expr::FunctionCall(id, args_expr_list, None, begin));
             }
             Some(&(Token::Comma, _)) => (),
             Some(&(_, pos)) => {
                 return Err(ParseError::new(
                     PERR::MissingRightParen(format!(
-                        "closing the arguments list to function call of '{}'",
+                        "closing the parameters list to function call of '{}'",
                         id
                     )),
                     pos,
@@ -1240,7 +1240,7 @@ fn parse_call_expr<'a>(
             None => {
                 return Err(ParseError::new(
                     PERR::MissingRightParen(format!(
-                        "closing the arguments list to function call of '{}'",
+                        "closing the parameters list to function call of '{}'",
                         id
                     )),
                     Position::eof(),

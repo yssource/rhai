@@ -1,6 +1,7 @@
 //! Helper module which defines `FnArgs` to make function calling easier.
 
 use crate::any::{Any, Dynamic};
+use crate::engine::Array;
 
 /// Trait that represent arguments to a function call.
 pub trait FuncArgs {
@@ -8,11 +9,35 @@ pub trait FuncArgs {
     fn into_vec(self) -> Vec<Dynamic>;
 }
 
-impl<T: Any> FuncArgs for &mut Vec<T> {
-    fn into_vec(self) -> Vec<Dynamic> {
-        self.iter_mut().map(|x| x.into_dynamic()).collect()
-    }
+macro_rules! impl_std_args {
+    ($($p:ty),*) => {
+        $(
+            impl FuncArgs for $p {
+                fn into_vec(self) -> Vec<Dynamic> {
+                    vec![self.into_dynamic()]
+                }
+            }
+        )*
+    };
 }
+
+impl_std_args!(String, char, bool);
+
+#[cfg(not(feature = "no_index"))]
+impl_std_args!(Array);
+
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+impl_std_args!(u8, i8, u16, i16, u32, i32, u64, i64);
+
+#[cfg(feature = "only_i32")]
+impl_std_args!(i32);
+
+#[cfg(feature = "only_i64")]
+impl_std_args!(i64);
+
+#[cfg(not(feature = "no_float"))]
+impl_std_args!(f32, f64);
 
 macro_rules! impl_args {
     ($($p:ident),*) => {
@@ -33,7 +58,9 @@ macro_rules! impl_args {
     };
     (@pop) => {
     };
-    (@pop $head:ident $(, $tail:ident)*) => {
+    (@pop $head:ident) => {
+    };
+    (@pop $head:ident $(, $tail:ident)+) => {
         impl_args!($($tail),*);
     };
 }

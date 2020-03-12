@@ -6,17 +6,23 @@ use rhai::{Engine, EvalAltResult, INT};
 fn test_engine_call_fn() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    let ast = engine.compile(
+    engine.consume(
         r"
             fn hello(x, y) {
                 x.len() + y
             }
+            fn hello(x) {
+                x * 2
+            }
                 ",
+        true,
     )?;
 
-    let result: INT = engine.call_fn("hello", &ast, (String::from("abc"), 123 as INT))?;
+    let r: i64 = engine.call_fn("hello", (String::from("abc"), 123 as INT))?;
+    assert_eq!(r, 126);
 
-    assert_eq!(result, 126);
+    let r: i64 = engine.call_fn("hello", 123 as INT)?;
+    assert_eq!(r, 246);
 
     Ok(())
 }

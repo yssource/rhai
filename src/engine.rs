@@ -139,19 +139,20 @@ impl Engine<'_> {
             .script_functions
             .binary_search_by(|f| f.compare(fn_name, args.len()))
         {
-            let func = self.script_functions[n].clone();
-
             let mut scope = Scope::new();
+
+            let fn_def = self.script_functions[n].clone();
 
             scope.extend(
                 // Put arguments into scope as variables
-                func.params
+                fn_def
+                    .params
                     .iter()
                     .zip(args.iter().map(|x| (*x).into_dynamic())),
             );
 
             // Evaluate
-            return match self.eval_stmt(&mut scope, &func.body) {
+            return match self.eval_stmt(&mut scope, &fn_def.body) {
                 // Convert return statement to return value
                 Err(EvalAltResult::Return(x, _)) => Ok(x),
                 other => other,
@@ -240,14 +241,14 @@ impl Engine<'_> {
     ) -> Result<Dynamic, EvalAltResult> {
         match dot_rhs {
             // xxx.fn_name(args)
-            Expr::FunctionCall(fn_name, args, def_val, pos) => {
-                let mut args = args
+            Expr::FunctionCall(fn_name, arg_expr_list, def_val, pos) => {
+                let mut values = arg_expr_list
                     .iter()
-                    .map(|arg| self.eval_expr(scope, arg))
+                    .map(|arg_expr| self.eval_expr(scope, arg_expr))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let args = once(this_ptr)
-                    .chain(args.iter_mut().map(|b| b.as_mut()))
+                    .chain(values.iter_mut().map(|b| b.as_mut()))
                     .collect();
 
                 self.call_fn_raw(fn_name, args, def_val.as_ref(), *pos)
@@ -837,15 +838,15 @@ impl Engine<'_> {
             Expr::Array(_, _) => panic!("encountered an array during no_index!"),
 
             // Dump AST
-            Expr::FunctionCall(fn_name, args, _, pos) if fn_name == KEYWORD_DUMP_AST => {
-                let pos = if args.len() == 0 {
+            Expr::FunctionCall(fn_name, args_expr_list, _, pos) if fn_name == KEYWORD_DUMP_AST => {
+                let pos = if args_expr_list.len() == 0 {
                     *pos
                 } else {
-                    args[0].position()
+                    args_expr_list[0].position()
                 };
 
                 // Change the argument to a debug dump of the expressions
-                let result = args
+                let result = args_expr_list
                     .into_iter()
                     .map(|expr| format!("{:#?}", expr))
                     .collect::<Vec<_>>()
@@ -861,15 +862,15 @@ impl Engine<'_> {
             }
 
             // Normal function call
-            Expr::FunctionCall(fn_name, args, def_val, pos) => {
-                let mut args = args
+            Expr::FunctionCall(fn_name, args_expr_list, def_val, pos) => {
+                let mut values = args_expr_list
                     .iter()
                     .map(|expr| self.eval_expr(scope, expr))
                     .collect::<Result<Vec<Dynamic>, _>>()?;
 
                 self.call_fn_raw(
                     fn_name,
-                    args.iter_mut().map(|b| b.as_mut()).collect(),
+                    values.iter_mut().map(|b| b.as_mut()).collect(),
                     def_val.as_ref(),
                     *pos,
                 )

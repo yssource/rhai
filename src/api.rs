@@ -2,16 +2,17 @@
 
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
-use crate::engine::{Engine, FnAny, FnCallArgs, FnSpec};
+use crate::engine::{Engine, FnAny, FnSpec};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
-use crate::parser::{lex, parse, Position, AST};
+use crate::parser::{lex, parse, FnDef, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use std::{
     any::{type_name, TypeId},
     fs::File,
     io::prelude::*,
+    sync::Arc,
 };
 
 impl<'e> Engine<'e> {
@@ -99,8 +100,8 @@ impl<'e> Engine<'e> {
 
     /// Compile a string into an AST.
     pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
-        let tokens = lex(input);
-        parse(&mut tokens.peekable(), self.optimize)
+        let tokens_stream = lex(input);
+        parse(&mut tokens_stream.peekable(), self.optimize)
     }
 
     fn read_file(filename: &str) -> Result<String, EvalAltResult> {
@@ -128,62 +129,45 @@ impl<'e> Engine<'e> {
     /// Evaluate a string.
     pub fn eval<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
-        self.eval_with_scope(&mut scope, false, input)
+        self.eval_with_scope(&mut scope, input)
     }
 
     /// Evaluate a string with own scope.
-    ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
     pub fn eval_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
-        retain_functions: bool,
         input: &str,
     ) -> Result<T, EvalAltResult> {
         let ast = self.compile(input).map_err(EvalAltResult::ErrorParsing)?;
-        self.eval_ast_with_scope(scope, retain_functions, &ast)
+        self.eval_ast_with_scope(scope, &ast)
     }
 
     /// Evaluate an AST.
     pub fn eval_ast<T: Any + Clone>(&mut self, ast: &AST) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
-        self.eval_ast_with_scope(&mut scope, false, ast)
+        self.eval_ast_with_scope(&mut scope, ast)
     }
 
     /// Evaluate an AST with own scope.
-    ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
     pub fn eval_ast_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
-        retain_functions: bool,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
         fn eval_ast_internal(
             engine: &mut Engine,
             scope: &mut Scope,
-            retain_functions: bool,
             ast: &AST,
         ) -> Result<Dynamic, EvalAltResult> {
+            engine.clear_functions();
+
             #[cfg(feature = "no_function")]
             let AST(statements) = ast;
 
             #[cfg(not(feature = "no_function"))]
             let statements = {
                 let AST(statements, functions) = ast;
-
-                for f in functions {
-                    match engine
-                        .script_functions
-                        .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
-                    {
-                        Ok(n) => engine.script_functions[n] = f.clone(),
-                        Err(n) => engine.script_functions.insert(n, f.clone()),
-                    }
-                }
-
+                engine.load_script_functions(functions);
                 statements
             };
 
@@ -191,14 +175,12 @@ impl<'e> Engine<'e> {
                 .iter()
                 .try_fold(().into_dynamic(), |_, stmt| engine.eval_stmt(scope, stmt));
 
-            if !retain_functions {
-                engine.clear_functions();
-            }
+            engine.clear_functions();
 
             result
         }
 
-        match eval_ast_internal(self, scope, retain_functions, ast) {
+        match eval_ast_internal(self, scope, ast) {
             Err(EvalAltResult::Return(out, pos)) => out.downcast::<T>().map(|v| *v).map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name((*a).type_name()).to_string(),
@@ -219,7 +201,14 @@ impl<'e> Engine<'e> {
 
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume_file(&mut self, filename: &str) -> Result<(), EvalAltResult> {
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
+    pub fn consume_file(
+        &mut self,
+        filename: &str,
+        retain_functions: bool,
+    ) -> Result<(), EvalAltResult> {
         let mut f = File::open(filename)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
 
@@ -227,13 +216,16 @@ impl<'e> Engine<'e> {
 
         f.read_to_string(&mut contents)
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
-            .and_then(|_| self.consume(&contents))
+            .and_then(|_| self.consume(&contents, retain_functions))
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume(&mut self, input: &str) -> Result<(), EvalAltResult> {
-        self.consume_with_scope(&mut Scope::new(), false, input)
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
+    pub fn consume(&mut self, input: &str, retain_functions: bool) -> Result<(), EvalAltResult> {
+        self.consume_with_scope(&mut Scope::new(), retain_functions, input)
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
@@ -247,45 +239,54 @@ impl<'e> Engine<'e> {
         retain_functions: bool,
         input: &str,
     ) -> Result<(), EvalAltResult> {
-        let tokens = lex(input);
+        let tokens_stream = lex(input);
 
-        parse(&mut tokens.peekable(), self.optimize)
-            .map_err(|err| EvalAltResult::ErrorParsing(err))
-            .and_then(|ast| {
-                #[cfg(feature = "no_function")]
-                let AST(statements) = ast;
+        let ast = parse(&mut tokens_stream.peekable(), self.optimize)
+            .map_err(EvalAltResult::ErrorParsing)?;
 
-                #[cfg(not(feature = "no_function"))]
-                let statements = {
-                    let AST(ref statements, ref functions) = ast;
+        if !retain_functions {
+            self.clear_functions();
+        }
 
-                    for f in functions {
-                        match self
-                            .script_functions
-                            .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
-                        {
-                            Ok(n) => self.script_functions[n] = f.clone(),
-                            Err(n) => self.script_functions.insert(n, f.clone()),
-                        }
-                    }
+        #[cfg(feature = "no_function")]
+        let AST(statements) = ast;
 
-                    statements
-                };
+        #[cfg(not(feature = "no_function"))]
+        let statements = {
+            let AST(ref statements, ref functions) = ast;
+            self.load_script_functions(functions);
+            statements
+        };
 
-                let val = statements
-                    .iter()
-                    .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
-                    .map(|_| ());
+        let result = statements
+            .iter()
+            .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
+            .map(|_| ());
 
-                if !retain_functions {
-                    self.clear_functions();
-                }
+        if !retain_functions {
+            self.clear_functions();
+        }
 
-                val
-            })
+        result
     }
 
-    /// Call a script function defined in a compiled AST.
+    /// Load a list of functions into the Engine.
+    pub(crate) fn load_script_functions<'a>(
+        &mut self,
+        functions: impl IntoIterator<Item = &'a Arc<FnDef>>,
+    ) {
+        for f in functions.into_iter() {
+            match self
+                .script_functions
+                .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
+            {
+                Ok(n) => self.script_functions[n] = f.clone(),
+                Err(n) => self.script_functions.insert(n, f.clone()),
+            }
+        }
+    }
+
+    /// Call a script function retained inside the Engine.
     ///
     /// # Example
     ///
@@ -298,9 +299,9 @@ impl<'e> Engine<'e> {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// let ast = engine.compile("fn add(x, y) { x.len() + y }")?;
+    /// engine.consume("fn add(x, y) { x.len() + y }", true)?;
     ///
-    /// let result: i64 = engine.call_fn("add", &ast, (String::from("abc"), 123_i64))?;
+    /// let result: i64 = engine.call_fn("add", (String::from("abc"), 123_i64))?;
     ///
     /// assert_eq!(result, 126);
     /// # }
@@ -311,41 +312,22 @@ impl<'e> Engine<'e> {
     pub fn call_fn<A: FuncArgs, T: Any + Clone>(
         &mut self,
         name: &str,
-        ast: &AST,
         args: A,
     ) -> Result<T, EvalAltResult> {
+        // Split out non-generic portion to avoid exploding code size
         fn call_fn_internal(
             engine: &mut Engine,
             name: &str,
-            ast: &AST,
-            args: FnCallArgs,
+            mut values: Vec<Dynamic>,
         ) -> Result<Dynamic, EvalAltResult> {
-            for f in &ast.1 {
-                match engine
-                    .script_functions
-                    .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
-                {
-                    Ok(n) => engine.script_functions[n] = f.clone(),
-                    Err(n) => engine.script_functions.insert(n, f.clone()),
-                }
-            }
+            let values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
-            let result = engine.call_fn_raw(name, args, None, Position::none());
-
-            engine.clear_functions();
+            let result = engine.call_fn_raw(name, values, None, Position::none());
 
             result
         }
 
-        let mut arg_values = args.into_vec();
-
-        call_fn_internal(
-            self,
-            name,
-            ast,
-            arg_values.iter_mut().map(|v| v.as_mut()).collect(),
-        )
-        .and_then(|b| {
+        call_fn_internal(self, name, args.into_vec()).and_then(|b| {
             b.downcast().map(|b| *b).map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name((*a).type_name()).into(),
@@ -369,7 +351,7 @@ impl<'e> Engine<'e> {
     ///
     ///     // Override action of 'print' function
     ///     engine.on_print(|s| result.push_str(s));
-    ///     engine.consume("print(40 + 2);")?;
+    ///     engine.consume("print(40 + 2);", false)?;
     /// }
     /// assert_eq!(result, "42");
     /// # Ok(())
@@ -393,7 +375,7 @@ impl<'e> Engine<'e> {
     ///
     ///     // Override action of 'debug' function
     ///     engine.on_debug(|s| result.push_str(s));
-    ///     engine.consume(r#"debug("hello");"#)?;
+    ///     engine.consume(r#"debug("hello");"#, false)?;
     /// }
     /// assert_eq!(result, "\"hello\"");
     /// # Ok(())

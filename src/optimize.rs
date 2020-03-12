@@ -50,7 +50,7 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool, preserve_result: bool) -> Stmt 
         Stmt::Let(_, None, _) => stmt,
 
         Stmt::Block(statements, pos) => {
-            let original_len = statements.len();
+            let orig_len = statements.len();
 
             let mut result: Vec<_> = statements
                 .into_iter() // For each statement
@@ -105,7 +105,7 @@ fn optimize_stmt(stmt: Stmt, changed: &mut bool, preserve_result: bool) -> Stmt 
                     .collect();
             }
 
-            *changed = *changed || original_len != result.len();
+            *changed = *changed || orig_len != result.len();
 
             match result[..] {
                 // No statements in block - change to No-op
@@ -177,14 +177,14 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
 
         #[cfg(not(feature = "no_index"))]
         Expr::Array(items, pos) => {
-            let original_len = items.len();
+            let orig_len = items.len();
 
             let items: Vec<_> = items
                 .into_iter()
                 .map(|expr| optimize_expr(expr, changed))
                 .collect();
 
-            *changed = *changed || original_len != items.len();
+            *changed = *changed || orig_len != items.len();
 
             Expr::Array(items, pos)
         }
@@ -233,14 +233,14 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
             Expr::FunctionCall(id, args, def_value, pos)
         }
         Expr::FunctionCall(id, args, def_value, pos) => {
-            let original_len = args.len();
+            let orig_len = args.len();
 
             let args: Vec<_> = args
                 .into_iter()
                 .map(|a| optimize_expr(a, changed))
                 .collect();
 
-            *changed = *changed || original_len != args.len();
+            *changed = *changed || orig_len != args.len();
 
             Expr::FunctionCall(id, args, def_value, pos)
         }
