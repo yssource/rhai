@@ -41,7 +41,7 @@ enum IndexSourceType {
     Expression,
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FnSpec<'a> {
     pub name: Cow<'a, str>,
     pub args: Option<Vec<TypeId>>,
@@ -82,10 +82,10 @@ impl Engine<'_> {
     pub fn new() -> Self {
         // User-friendly names for built-in types
         let type_names = [
-            (type_name::<String>(), "string"),
-            (type_name::<Dynamic>(), "dynamic"),
             #[cfg(not(feature = "no_index"))]
             (type_name::<Array>(), "array"),
+            (type_name::<String>(), "string"),
+            (type_name::<Dynamic>(), "dynamic"),
         ]
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -135,22 +135,11 @@ impl Engine<'_> {
         );
 
         // First search in script-defined functions (can override built-in)
-        if let Some(func) = self
+        if let Ok(n) = self
             .script_functions
-            .iter()
-            .rev()
-            .find(|fn_def| fn_def.name == fn_name)
-            .map(|fn_def| fn_def.clone())
+            .binary_search_by(|f| f.compare(fn_name, args.len()))
         {
-            // First check number of parameters
-            if func.params.len() != args.len() {
-                return Err(EvalAltResult::ErrorFunctionArgsMismatch(
-                    fn_name.into(),
-                    func.params.len(),
-                    args.len(),
-                    pos,
-                ));
-            }
+            let func = self.script_functions[n].clone();
 
             let mut scope = Scope::new();
 
@@ -838,13 +827,9 @@ impl Engine<'_> {
             Expr::Array(contents, _) => {
                 let mut arr = Vec::new();
 
-                contents
-                    .iter()
-                    .try_for_each::<_, Result<_, EvalAltResult>>(|item| {
-                        let arg = self.eval_expr(scope, item)?;
-                        arr.push(arg);
-                        Ok(())
-                    })?;
+                for item in contents {
+                    arr.push(self.eval_expr(scope, item)?);
+                }
 
                 Ok(Box::new(arr))
             }

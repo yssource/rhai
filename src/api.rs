@@ -174,9 +174,15 @@ impl<'e> Engine<'e> {
             let statements = {
                 let AST(statements, functions) = ast;
 
-                functions.iter().for_each(|f| {
-                    engine.script_functions.push(f.clone());
-                });
+                for f in functions {
+                    match engine
+                        .script_functions
+                        .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
+                    {
+                        Ok(n) => engine.script_functions[n] = f.clone(),
+                        Err(n) => engine.script_functions.insert(n, f.clone()),
+                    }
+                }
 
                 statements
             };
@@ -253,9 +259,15 @@ impl<'e> Engine<'e> {
                 let statements = {
                     let AST(ref statements, ref functions) = ast;
 
-                    functions.iter().for_each(|f| {
-                        self.script_functions.push(f.clone());
-                    });
+                    for f in functions {
+                        match self
+                            .script_functions
+                            .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
+                        {
+                            Ok(n) => self.script_functions[n] = f.clone(),
+                            Err(n) => self.script_functions.insert(n, f.clone()),
+                        }
+                    }
 
                     statements
                 };
@@ -308,9 +320,15 @@ impl<'e> Engine<'e> {
             ast: &AST,
             args: FnCallArgs,
         ) -> Result<Dynamic, EvalAltResult> {
-            ast.1.iter().for_each(|f| {
-                engine.script_functions.push(f.clone());
-            });
+            for f in &ast.1 {
+                match engine
+                    .script_functions
+                    .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
+                {
+                    Ok(n) => engine.script_functions[n] = f.clone(),
+                    Err(n) => engine.script_functions.insert(n, f.clone()),
+                }
+            }
 
             let result = engine.call_fn_raw(name, args, None, Position::none());
 

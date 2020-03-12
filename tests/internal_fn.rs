@@ -30,3 +30,25 @@ fn test_big_internal_fn() -> Result<(), EvalAltResult> {
 
     Ok(())
 }
+
+#[test]
+fn test_internal_fn_overloading() -> Result<(), EvalAltResult> {
+    let mut engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn abc(x,y,z) { 2*x + 3*y + 4*z + 888 }
+                fn abc(x) { x + 42 }
+                fn abc(x,y) { x + 2*y + 88 }
+                fn abc() { 42 }
+                fn abc(x) { x - 42 }    // should override previous definition
+
+                abc() + abc(1) + abc(1,2) + abc(1,2,3)
+    "#
+        )?,
+        1002
+    );
+
+    Ok(())
+}

@@ -362,10 +362,10 @@ Any similarly-named function defined in a script overrides any built-in function
 ```rust
 // Override the built-in function 'to_int'
 fn to_int(num) {
-    print("Ha! Gotcha!" + num);
+    print("Ha! Gotcha! " + num);
 }
 
-print(to_int(123));     // what will happen?
+print(to_int(123));     // what happens?
 ```
 
 Custom types and methods
@@ -794,7 +794,7 @@ print(y.len());         // prints 0
 ```
 
 `push` and `pad` are only defined for standard built-in types.  If you want to use them with
-your own custom type, you need to define a specific override:
+your own custom type, you need to register a type-specific version:
 
 ```rust
 engine.register_fn("push",
@@ -975,9 +975,8 @@ fn add(x, y) {
 print(add(2, 3));
 ```
 
-Remember that functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
-
-However, all arguments are passed by _value_, so all functions are _pure_ (i.e. they never modify their arguments).
+Functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
+It is important to remember that all arguments are passed by _value_, so all functions are _pure_ (i.e. they never modify their arguments).
 Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if you are not careful.
 
 ```rust
@@ -990,7 +989,7 @@ x.change();
 x == 500;       // 'x' is NOT changed!
 ```
 
-Furthermore, functions can only be defined at the top level, never inside a block or another function.
+Functions can only be defined at the top level, never inside a block or another function.
 
 ```rust
 // Top level is OK
@@ -1006,6 +1005,22 @@ fn do_addition(x) {
 
     add_y(x)
 }
+```
+
+Functions can be _overloaded_ based on the number of parameters (but not parameter types, since all parameters are `Dynamic`).
+New definitions of the same name and number of parameters overwrite previous definitions.
+
+```rust
+fn abc(x,y,z) { print("Three!!! " + x + "," + y + "," + z) }
+fn abc(x) { print("One! " + x) }
+fn abc(x,y) { print("Two! " + x + "," + y) }
+fn abc() { print("None.") }
+fn abc(x) { print("HA! NEW ONE! " + x) }    // overwrites previous definition
+
+abc(1,2,3);     // prints "Three!!! 1,2,3"
+abc(42);        // prints "HA! NEW ONE! 42"
+abc(1,2);       // prints "Two!! 1,2"
+abc();          // prints "None."
 ```
 
 Members and methods

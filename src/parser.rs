@@ -1944,7 +1944,15 @@ fn parse_top_level<'a>(
     while input.peek().is_some() {
         match input.peek() {
             #[cfg(not(feature = "no_function"))]
-            Some(&(Token::Fn, _)) => functions.push(parse_fn(input)?),
+            Some(&(Token::Fn, _)) => {
+                let f = parse_fn(input)?;
+
+                // Ensure list is sorted
+                match functions.binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len())) {
+                    Ok(n) => functions[n] = f,        // Override previous definition
+                    Err(n) => functions.insert(n, f), // New function definition
+                }
+            }
             _ => statements.push(parse_stmt(input)?),
         }
 
