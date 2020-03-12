@@ -229,9 +229,9 @@ fn optimize_expr(expr: Expr, changed: &mut bool) -> Expr {
             ),
         },
 
-        // Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST => {
-        //     Expr::FunctionCall(id, args, def_value, pos)
-        // }
+        Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST => {
+            Expr::FunctionCall(id, args, def_value, pos)
+        }
         Expr::FunctionCall(id, args, def_value, pos) => {
             let original_len = args.len();
 
