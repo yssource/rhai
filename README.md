@@ -89,23 +89,27 @@ Example Scripts
 
 There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
 
-| Script                | Description                                                   |
-| --------------------- | ------------------------------------------------------------- |
-| `array.rhai`          | arrays in Rhai                                                |
-| `assignment.rhai`     | variable declarations                                         |
-| `comments.rhai`       | just comments                                                 |
-| `for1.rhai`           | for loops                                                     |
-| `function_decl1.rhai` | a function without parameters                                 |
-| `function_decl2.rhai` | a function with two parameters                                |
-| `function_decl3.rhai` | a function with many parameters                               |
-| `if1.rhai`            | if example                                                    |
-| `loop.rhai`           | endless loop in Rhai, this example emulates a do..while cycle |
-| `op1.rhai`            | just a simple addition                                        |
-| `op2.rhai`            | simple addition and multiplication                            |
-| `op3.rhai`            | change evaluation order with parenthesis                      |
-| `speed_test.rhai`     | a simple program to measure the speed of Rhai's interpreter   |
-| `string.rhai`         | string operations                                             |
-| `while.rhai`          | while loop                                                    |
+| Language feature scripts | Description                                                   |
+| ------------------------ | ------------------------------------------------------------- |
+| `array.rhai`             | arrays in Rhai                                                |
+| `assignment.rhai`        | variable declarations                                         |
+| `comments.rhai`          | just comments                                                 |
+| `for1.rhai`              | for loops                                                     |
+| `function_decl1.rhai`    | a function without parameters                                 |
+| `function_decl2.rhai`    | a function with two parameters                                |
+| `function_decl3.rhai`    | a function with many parameters                               |
+| `if1.rhai`               | if example                                                    |
+| `loop.rhai`              | endless loop in Rhai, this example emulates a do..while cycle |
+| `op1.rhai`               | just a simple addition                                        |
+| `op2.rhai`               | simple addition and multiplication                            |
+| `op3.rhai`               | change evaluation order with parenthesis                      |
+| `string.rhai`            | string operations                                             |
+| `while.rhai`             | while loop                                                    |
+
+| Example scripts   | Description                                                       |
+| ----------------- | ----------------------------------------------------------------- |
+| `speed_test.rhai` | a simple program to measure the speed of Rhai's interpreter       |
+| `primes.rhai`     | use Sieve of Eratosthenes to find all primes smaller than a limit |
 
 To run the scripts, either make a tiny program or use of the `rhai_runner` example:
 
@@ -916,7 +920,7 @@ for x in array {
     if x == 42 { break; }
 }
 
-// The 'range' function allows iterating from first..last-1
+// The 'range' function allows iterating from first..last
 for x in range(0, 50) {
     print(x);
     if x == 42 { break; }
