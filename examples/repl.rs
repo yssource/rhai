@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Scope};
+use rhai::{Engine, EvalAltResult, Scope, AST};
 use std::{
     io::{stdin, stdout, Write},
     iter,
@@ -46,6 +46,7 @@ fn main() {
     let mut scope = Scope::new();
 
     let mut input = String::new();
+    let mut ast: Option<AST> = None;
 
     loop {
         print!("rhai> ");
@@ -57,7 +58,28 @@ fn main() {
             println!("input error: {}", err);
         }
 
-        if let Err(err) = engine.consume_with_scope(&mut scope, true, &input) {
+        // Implement standard commands
+        match input.as_str().trim() {
+            "exit" | "quit" => break, // quit
+            "ast" => {
+                // print the last AST
+                match &ast {
+                    Some(ast) => println!("{:#?}", ast),
+                    None => println!("()"),
+                }
+                continue;
+            }
+            _ => (),
+        }
+
+        if let Err(err) = engine
+            .compile(&input)
+            .map_err(EvalAltResult::ErrorParsing)
+            .and_then(|r| {
+                ast = Some(r);
+                engine.consume_ast_with_scope(&mut scope, true, ast.as_ref().unwrap())
+            })
+        {
             println!("");
             print_error(&input, err);
             println!("");
