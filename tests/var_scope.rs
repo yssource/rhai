@@ -42,7 +42,15 @@ fn test_scope_eval() -> Result<(), EvalAltResult> {
     println!("result: {}", result); // should print 966
 
     // Variable y is changed in the script
-    assert_eq!(scope.get_value::<INT>("y").unwrap(), 1);
+    assert_eq!(
+        scope
+            .get_value::<INT>("y")
+            .ok_or(EvalAltResult::ErrorRuntime(
+                "variable y not found".into(),
+                Default::default()
+            ))?,
+        1
+    );
 
     Ok(())
 }
