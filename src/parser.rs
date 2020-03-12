@@ -4,7 +4,10 @@ use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::optimize;
 
-use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc, usize};
+use std::{
+    borrow::Cow, char, cmp::Ordering, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc,
+    usize,
+};
 
 /// The system integer type.
 ///
@@ -153,6 +156,15 @@ pub struct FnDef {
     pub pos: Position,
 }
 
+impl FnDef {
+    pub fn compare(&self, name: &str, params_len: usize) -> Ordering {
+        match self.name.as_str().cmp(name) {
+            Ordering::Equal => self.params.len().cmp(&params_len),
+            order => order,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ReturnType {
     Return,
@@ -252,8 +264,14 @@ impl Expr {
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
-            Expr::Identifier(_, _)
-            | Expr::IntegerConstant(_, _)
+            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
+            expr => expr.is_constant() || expr.is_identifier(),
+        }
+    }
+
+    pub fn is_constant(&self) -> bool {
+        match self {
+            Expr::IntegerConstant(_, _)
             | Expr::CharConstant(_, _)
             | Expr::StringConstant(_, _)
             | Expr::True(_)
@@ -263,12 +281,9 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, _) => true,
 
-            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
-
             _ => false,
         }
     }
-
     pub fn is_identifier(&self) -> bool {
         match self {
             Expr::Identifier(_, _) => true,
@@ -532,14 +547,9 @@ impl<'a> TokenIterator<'a> {
 
         loop {
             let next_char = self.char_stream.next();
-
-            if next_char.is_none() {
-                return Err((LERR::UnterminatedString, Position::eof()));
-            }
-
             self.advance();
 
-            match next_char.unwrap() {
+            match next_char.ok_or((LERR::UnterminatedString, Position::eof()))? {
                 '\\' if escape.is_empty() => {
                     escape.push('\\');
                 }
@@ -1767,13 +1777,11 @@ fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 }
 
 fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
-    match input.peek() {
-        Some(&(Token::LeftBrace, _)) => (),
-        Some(&(_, pos)) => return Err(ParseError::new(PERR::MissingLeftBrace, pos)),
+    let pos = match input.next() {
+        Some((Token::LeftBrace, pos)) => pos,
+        Some((_, pos)) => return Err(ParseError::new(PERR::MissingLeftBrace, pos)),
         None => return Err(ParseError::new(PERR::MissingLeftBrace, Position::eof())),
-    }
-
-    let pos = input.next().unwrap().1;
+    };
 
     let mut statements = Vec::new();
 
