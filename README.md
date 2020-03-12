@@ -181,21 +181,22 @@ engine.consume(
             x.len() + y     // returning i64
         }
 
-        fn hello(x) {       // script-functions can be overloaded: this one takes only one parameter
+        fn hello(x) {       // functions can be overloaded: this one takes only one parameter
             x * 2           // returning i64
         }
-    ", true)?;              // pass true to 'retain_functions' otherwise these functions will be cleared
-                            // at the end of consume()
+    ", true)?;              // pass true to 'retain_functions' otherwise these functions
+                            // will be cleared at the end of consume()
 
-// Evaluate the function in the AST, passing arguments into the script as a tuple if there are more than one.
-// Beware, arguments must be of the correct types because Rhai does not have built-in type conversions.
-// If you pass in arguments of the wrong type, the Engine will not find the function.
+// Evaluate the function in the AST, passing arguments into the script as a tuple
+// if there are more than one. Beware, arguments must be of the correct types because
+// Rhai does not have built-in type conversions. If you pass in arguments of the wrong type,
+// the Engine will not find the function.
 
 let result: i64 = engine.call_fn("hello", &ast, ( String::from("abc"), 123_i64 ) )?;
 //                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ put arguments in a tuple
 
 let result: i64 = engine.call_fn("hello", 123_i64)?
-//                                        ^^^^^^^ this one calls the 'hello' function with one parameter (so need for tuple)
+//                                        ^^^^^^^ calls 'hello' with one parameter (no need for tuple)
 ```
 
 Values and types
@@ -255,8 +256,8 @@ Rhai's scripting engine is very lightweight.  It gets its ability from the funct
 
 ```rust
 use rhai::{Engine, EvalAltResult};
-use rhai::RegisterFn;                       // include the `RegisterFn` trait to use `register_fn`
-use rhai::{Dynamic, RegisterDynamicFn};     // include the `RegisterDynamicFn` trait to use `register_dynamic_fn`
+use rhai::RegisterFn;                       // use `RegisterFn` trait for `register_fn`
+use rhai::{Dynamic, RegisterDynamicFn};     // use `RegisterDynamicFn` trait for `register_dynamic_fn`
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -336,13 +337,13 @@ Your function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
-use rhai::RegisterResultFn;     // include the `RegisterResultFn` trait to use `register_result_fn`
+use rhai::RegisterResultFn;     // use `RegisterResultFn` trait for `register_result_fn`
 
 // Function that may fail
 fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero detected!".into())    // short-cut to create EvalAltResult
+        Err("Division by zero detected!".into())  // short-cut to create EvalAltResult
     } else {
         Ok(x / y)
     }
@@ -540,21 +541,19 @@ fn main() -> Result<(), EvalAltResult>
     let mut scope = Scope::new();
 
     // Then push some initialized variables into the state
-    // NOTE: Remember the default numbers used by Rhai are i64 and f64.
-    //       Better stick to them or it gets hard to work with other variables in the script.
+    // NOTE: Remember the system number types in Rhai are i64 (i32 if 'only_i32') ond f64.
+    //       Better stick to them or it gets hard working with the script.
     scope.push("y".into(), 42_i64);
     scope.push("z".into(), 999_i64);
 
     // First invocation
-    // (the second boolean argument indicates that we don't need to retain function definitions
-    // because we didn't declare any!)
-    engine.eval_with_scope::<()>(&mut scope, false, r"
+    engine.eval_with_scope::<()>(&mut scope, r"
         let x = 4 + 5 - y + z;
         y = 1;
     ")?;
 
     // Second invocation using the same state
-    let result = engine.eval_with_scope::<i64>(&mut scope, false, "x")?;
+    let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
 
     println!("result: {}", result);  // should print 966
 
@@ -668,7 +667,8 @@ let age = 42;
 let record = full_name + ": age " + age;
 record == "Bob C. Davis: age 42";
 
-// Strings can be indexed to get a character (disabled with the 'no_index' feature)
+// Strings can be indexed to get a character
+// (disabled with the 'no_index' feature)
 let c = record[4];
 c == 'C';
 
@@ -1052,7 +1052,8 @@ debug("world!");        // prints "world!" to stdout using debug formatting
 ### Overriding `print` and `debug` with callback functions
 
 ```rust
-// Any function or closure that takes an &str argument can be used to override print and debug
+// Any function or closure that takes an &str argument can be used to override
+// print and debug
 engine.on_print(|x| println!("hello: {}", x));
 engine.on_debug(|x| println!("DEBUG: {}", x));
 
@@ -1063,7 +1064,7 @@ let mut log: Vec<String> = Vec::new();
 engine.on_print(|s| log.push(format!("entry: {}", s)));
 engine.on_debug(|s| log.push(format!("DEBUG: {}", s)));
 
-// Evalulate script
+// Evaluate script
 engine.eval::<()>(script)?;
 
 // 'log' captures all the 'print' and 'debug' output
@@ -1071,6 +1072,98 @@ for entry in log {
     println!("{}", entry);
 }
 ```
+
+Optimizations
+=============
+
+Rhai includes an _optimizer_ that tries to optimize a script after parsing.  This can reduce resource utilization and increase execution speed.
+
+For example, in the following:
+
+```rust
+{
+    let x = 999;        // NOT eliminated - Rhai doesn't check yet whether a variable is used later on
+    123;                // eliminated - no effect
+    "hello";            // eliminated - no effect
+    [1, 2, x, x*2, 5];  // eliminated - no effect
+    foo(42);            // NOT eliminated - the function 'foo' may have side effects
+    666                 // NOT eliminated - this is the return value of the block,
+                        //                  and the block is the last one
+                        //                  so this is the return value of the whole script
+}
+```
+
+Rhai attempts to eliminate _dead code_ (i.e. code that does nothing, for example an expression by itself as a statement, which is allowed in Rhai).
+The above script optimizes to:
+
+```rust
+{
+    let x = 999;
+    foo(42);
+    666
+}
+```
+
+Constant propagation is used to remove dead code:
+
+```rust
+if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called
+if true { print("done!"); }                 // <-- the line above is equivalent to this
+print("done!");                             // <-- the line above is further simplified to this
+                                            //     because the condition is always true
+```
+
+These are quite effective for template-based machine-generated scripts where certain constant values are spliced into the script text in order to turn on/off certain sections.
+
+Beware, however, that most operators are actually function calls, and those functions can be overridden, so they are not optimized away:
+
+```rust
+if 1 == 1 { ... }       // '1==1' is NOT optimized away because you can define
+                        // your own '==' function to override the built-in default!
+```
+
+### Here be dragons!
+
+Some optimizations can be quite aggressive and can alter subtle semantics of the script.  For example:
+
+```rust
+if true {       // <-- condition always true
+    123.456;    // <-- eliminated
+    hello;      // <-- eliminated, EVEN THOUGH the variable doesn't exist!
+    foo(42)     // <-- promoted up-level
+}
+
+// The above optimizes to:
+
+foo(42)
+```
+
+Nevertheless, if you would be evaluating the original script, it would have been an error - the variable `hello` doesn't exist, so the script would have been terminated at that point with an error return.
+
+In fact, any errors inside a statement that has been eliminated will silently _go away_:
+
+```rust
+print("start!");
+if my_decision { /* do nothing... */ }  // <-- eliminated due to no effect
+print("end!");
+
+// The above optimizes to:
+
+print("start!");
+print("end!");
+```
+
+In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to a type error.
+However, after optimization, the entire `if` statement is removed, thus the script silently runs to completion without errors.
+
+It is usually a bad idea to depend on a script failing or such kind of subtleties, but if it turns out to be necessary (why? I would never guess),
+there is a setting in `Engine` to turn off optimizations.
+
+```rust
+let engine = rhai::Engine::new();
+engine.set_optimization(false);     // turn off the optimizer
+```
+
 
 [ChaiScript]: http://chaiscript.com/
 [scripting languages for Rust]: https://github.com/rust-unofficial/awesome-rust#scripting
