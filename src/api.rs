@@ -244,6 +244,20 @@ impl<'e> Engine<'e> {
         let ast = parse(&mut tokens_stream.peekable(), self.optimize)
             .map_err(EvalAltResult::ErrorParsing)?;
 
+        self.consume_ast_with_scope(scope, retain_functions, &ast)
+    }
+
+    /// Evaluate an AST, but throw away the result and only return error (if any).
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
+    pub fn consume_ast_with_scope(
+        &mut self,
+        scope: &mut Scope,
+        retain_functions: bool,
+        ast: &AST,
+    ) -> Result<(), EvalAltResult> {
         if !retain_functions {
             self.clear_functions();
         }
