@@ -47,66 +47,6 @@ macro_rules! reg_op_result1 {
     )
 }
 
-macro_rules! reg_un {
-    ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-        $(
-            $self.register_fn($x, $op as fn(x: $y)->$y);
-        )*
-    )
-}
-
-#[cfg(not(feature = "unchecked"))]
-macro_rules! reg_un_result {
-    ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-        $(
-            $self.register_result_fn($x, $op as fn(x: $y)->Result<$y,EvalAltResult>);
-        )*
-    )
-}
-macro_rules! reg_cmp {
-    ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-        $(
-            $self.register_fn($x, $op as fn(x: $y, y: $y)->bool);
-        )*
-    )
-}
-
-macro_rules! reg_func1 {
-    ($self:expr, $x:expr, $op:expr, $r:ty, $( $y:ty ),*) => (
-        $(
-            $self.register_fn($x, $op as fn(x: $y)->$r);
-        )*
-    )
-}
-
-#[cfg(not(feature = "no_stdlib"))]
-macro_rules! reg_func2x {
-    ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
-        $(
-            $self.register_fn($x, $op as fn(x: $v, y: $y)->$r);
-        )*
-    )
-}
-
-#[cfg(not(feature = "no_stdlib"))]
-macro_rules! reg_func2y {
-    ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
-        $(
-            $self.register_fn($x, $op as fn(y: $y, x: $v)->$r);
-        )*
-    )
-}
-
-#[cfg(not(feature = "no_stdlib"))]
-#[cfg(not(feature = "no_index"))]
-macro_rules! reg_func3 {
-    ($self:expr, $x:expr, $op:expr, $v:ty, $w:ty, $r:ty, $( $y:ty ),*) => (
-        $(
-            $self.register_fn($x, $op as fn(x: $v, y: $w, z: $y)->$r);
-        )*
-    )
-}
-
 impl Engine<'_> {
     /// Register the core built-in library.
     pub(crate) fn register_core_lib(&mut self) {
@@ -410,32 +350,42 @@ impl Engine<'_> {
             reg_op!(self, "/", div_u, f32, f64);
         }
 
-        reg_cmp!(self, "<", lt, INT, String, char);
-        reg_cmp!(self, "<=", lte, INT, String, char);
-        reg_cmp!(self, ">", gt, INT, String, char);
-        reg_cmp!(self, ">=", gte, INT, String, char);
-        reg_cmp!(self, "==", eq, INT, String, char, bool);
-        reg_cmp!(self, "!=", ne, INT, String, char, bool);
-
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
         {
-            reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64);
-        }
+            macro_rules! reg_cmp {
+                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+                    $(
+                        $self.register_fn($x, $op as fn(x: $y, y: $y)->bool);
+                    )*
+                )
+            }
 
-        #[cfg(not(feature = "no_float"))]
-        {
-            reg_cmp!(self, "<", lt, f32, f64);
-            reg_cmp!(self, "<=", lte, f32, f64);
-            reg_cmp!(self, ">", gt, f32, f64);
-            reg_cmp!(self, ">=", gte, f32, f64);
-            reg_cmp!(self, "==", eq, f32, f64);
-            reg_cmp!(self, "!=", ne, f32, f64);
+            reg_cmp!(self, "<", lt, INT, String, char);
+            reg_cmp!(self, "<=", lte, INT, String, char);
+            reg_cmp!(self, ">", gt, INT, String, char);
+            reg_cmp!(self, ">=", gte, INT, String, char);
+            reg_cmp!(self, "==", eq, INT, String, char, bool);
+            reg_cmp!(self, "!=", ne, INT, String, char, bool);
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            {
+                reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64);
+            }
+
+            #[cfg(not(feature = "no_float"))]
+            {
+                reg_cmp!(self, "<", lt, f32, f64);
+                reg_cmp!(self, "<=", lte, f32, f64);
+                reg_cmp!(self, ">", gt, f32, f64);
+                reg_cmp!(self, ">=", gte, f32, f64);
+                reg_cmp!(self, "==", eq, f32, f64);
+                reg_cmp!(self, "!=", ne, f32, f64);
+            }
         }
 
         //reg_op!(self, "||", or, bool);
@@ -507,39 +457,58 @@ impl Engine<'_> {
             self.register_fn("~", pow_f_i);
         }
 
-        #[cfg(not(feature = "unchecked"))]
         {
-            reg_un_result!(self, "-", neg, INT);
-            reg_un_result!(self, "abs", abs, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_un_result!(self, "-", neg, i8, i16, i32, i64);
-                reg_un_result!(self, "abs", abs, i8, i16, i32, i64);
+            macro_rules! reg_un {
+                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+                    $(
+                        $self.register_fn($x, $op as fn(x: $y)->$y);
+                    )*
+                )
             }
-        }
 
-        #[cfg(feature = "unchecked")]
-        {
-            reg_un!(self, "-", neg_u, INT);
-            reg_un!(self, "abs", abs_u, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_un!(self, "-", neg_u, i8, i16, i32, i64);
-                reg_un!(self, "abs", abs_u, i8, i16, i32, i64);
+            #[cfg(not(feature = "unchecked"))]
+            macro_rules! reg_un_result {
+                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+                    $(
+                        $self.register_result_fn($x, $op as fn(x: $y)->Result<$y,EvalAltResult>);
+                    )*
+                )
             }
-        }
 
-        #[cfg(not(feature = "no_float"))]
-        {
-            reg_un!(self, "-", neg_u, f32, f64);
-            reg_un!(self, "abs", abs_u, f32, f64);
-        }
+            #[cfg(not(feature = "unchecked"))]
+            {
+                reg_un_result!(self, "-", neg, INT);
+                reg_un_result!(self, "abs", abs, INT);
 
-        reg_un!(self, "!", not, bool);
+                #[cfg(not(feature = "only_i32"))]
+                #[cfg(not(feature = "only_i64"))]
+                {
+                    reg_un_result!(self, "-", neg, i8, i16, i32, i64);
+                    reg_un_result!(self, "abs", abs, i8, i16, i32, i64);
+                }
+            }
+
+            #[cfg(feature = "unchecked")]
+            {
+                reg_un!(self, "-", neg_u, INT);
+                reg_un!(self, "abs", abs_u, INT);
+
+                #[cfg(not(feature = "only_i32"))]
+                #[cfg(not(feature = "only_i64"))]
+                {
+                    reg_un!(self, "-", neg_u, i8, i16, i32, i64);
+                    reg_un!(self, "abs", abs_u, i8, i16, i32, i64);
+                }
+            }
+
+            #[cfg(not(feature = "no_float"))]
+            {
+                reg_un!(self, "-", neg_u, f32, f64);
+                reg_un!(self, "abs", abs_u, f32, f64);
+            }
+
+            reg_un!(self, "!", not, bool);
+        }
 
         self.register_fn("+", |x: String, y: String| x + &y); // String + String
         self.register_fn("==", |_: (), _: ()| true); // () == ()
@@ -552,51 +521,106 @@ impl Engine<'_> {
             format!("{}", x)
         }
 
-        reg_func1!(self, "print", print, String, INT, bool, char, String);
-        self.register_fn("print", || "".to_string());
-        self.register_fn("print", |_: ()| "".to_string());
-        reg_func1!(self, "debug", debug, String, INT, bool, char, String, ());
+        {
+            macro_rules! reg_fn1 {
+                ($self:expr, $x:expr, $op:expr, $r:ty, $( $y:ty ),*) => (
+                    $(
+                        $self.register_fn($x, $op as fn(x: $y)->$r);
+                    )*
+                )
+            }
+
+            reg_fn1!(self, "print", print, String, INT, bool, char, String);
+            self.register_fn("print", || "".to_string());
+            self.register_fn("print", |_: ()| "".to_string());
+            reg_fn1!(self, "debug", debug, String, INT, bool, char, String, ());
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            {
+                reg_fn1!(self, "print", print, String, i8, u8, i16, u16);
+                reg_fn1!(self, "print", print, String, i32, i64, u32, u64);
+                reg_fn1!(self, "debug", debug, String, i8, u8, i16, u16);
+                reg_fn1!(self, "debug", debug, String, i32, i64, u32, u64);
+            }
+
+            #[cfg(not(feature = "no_float"))]
+            {
+                reg_fn1!(self, "print", print, String, f32, f64);
+                reg_fn1!(self, "debug", debug, String, f32, f64);
+            }
+
+            #[cfg(not(feature = "no_index"))]
+            {
+                reg_fn1!(self, "print", debug, String, Array);
+                reg_fn1!(self, "debug", debug, String, Array);
+
+                // Register array iterator
+                self.register_iterator::<Array, _>(|a| {
+                    Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
+                });
+            }
+        }
+
+        // Register range function
+        fn reg_iterator<T: Any + Clone>(engine: &mut Engine)
+        where
+            Range<T>: Iterator<Item = T>,
+        {
+            engine.register_iterator::<Range<T>, _>(|a| {
+                Box::new(
+                    a.downcast_ref::<Range<T>>()
+                        .unwrap()
+                        .clone()
+                        .map(|n| n.into_dynamic()),
+                )
+            });
+        }
+
+        fn range<T>(from: T, to: T) -> Range<T> {
+            (from..to)
+        }
+
+        reg_iterator::<INT>(self);
+        self.register_fn("range", |i1: INT, i2: INT| (i1..i2));
 
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_func1!(self, "print", print, String, i8, u8, i16, u16);
-            reg_func1!(self, "print", print, String, i32, i64, u32, u64);
-            reg_func1!(self, "debug", debug, String, i8, u8, i16, u16);
-            reg_func1!(self, "debug", debug, String, i32, i64, u32, u64);
+            macro_rules! reg_range {
+                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+                    $(
+                        reg_iterator::<$y>(self);
+                        $self.register_fn($x, $op as fn(x: $y, y: $y)->Range<$y>);
+                    )*
+                )
+            }
+
+            reg_range!(self, "range", range, i8, u8, i16, u16, i32, i64, u32, u64);
         }
-
-        #[cfg(not(feature = "no_float"))]
-        {
-            reg_func1!(self, "print", print, String, f32, f64);
-            reg_func1!(self, "debug", debug, String, f32, f64);
-        }
-
-        #[cfg(not(feature = "no_index"))]
-        {
-            reg_func1!(self, "print", debug, String, Array);
-            reg_func1!(self, "debug", debug, String, Array);
-
-            // Register array iterator
-            self.register_iterator::<Array, _>(|a| {
-                Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
-            });
-        }
-
-        // Register range function
-        self.register_iterator::<Range<INT>, _>(|a| {
-            Box::new(
-                a.downcast_ref::<Range<INT>>()
-                    .unwrap()
-                    .clone()
-                    .map(|n| n.into_dynamic()),
-            )
-        });
-
-        self.register_fn("range", |i1: INT, i2: INT| (i1..i2));
     }
+}
 
-    /// Register the built-in library.
+#[cfg(not(feature = "no_stdlib"))]
+macro_rules! reg_fn2x {
+    ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
+        $(
+            $self.register_fn($x, $op as fn(x: $v, y: $y)->$r);
+        )*
+    )
+}
+
+#[cfg(not(feature = "no_stdlib"))]
+macro_rules! reg_fn2y {
+    ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
+        $(
+            $self.register_fn($x, $op as fn(y: $y, x: $v)->$r);
+        )*
+    )
+}
+
+/// Register the built-in library.
+impl Engine<'_> {
     #[cfg(not(feature = "no_stdlib"))]
     pub(crate) fn register_stdlib(&mut self) {
         #[cfg(not(feature = "no_index"))]
@@ -704,6 +728,14 @@ impl Engine<'_> {
 
         #[cfg(not(feature = "no_index"))]
         {
+            macro_rules! reg_fn3 {
+                ($self:expr, $x:expr, $op:expr, $v:ty, $w:ty, $r:ty, $( $y:ty ),*) => (
+                    $(
+                        $self.register_fn($x, $op as fn(x: $v, y: $w, z: $y)->$r);
+                    )*
+                )
+            }
+
             // Register array utility functions
             fn push<T: Any>(list: &mut Array, item: T) {
                 list.push(Box::new(item));
@@ -716,24 +748,24 @@ impl Engine<'_> {
                 }
             }
 
-            reg_func2x!(self, "push", push, &mut Array, (), INT, bool, char);
-            reg_func2x!(self, "push", push, &mut Array, (), String, Array, ());
-            reg_func3!(self, "pad", pad, &mut Array, INT, (), INT, bool, char);
-            reg_func3!(self, "pad", pad, &mut Array, INT, (), String, Array, ());
+            reg_fn2x!(self, "push", push, &mut Array, (), INT, bool, char);
+            reg_fn2x!(self, "push", push, &mut Array, (), String, Array, ());
+            reg_fn3!(self, "pad", pad, &mut Array, INT, (), INT, bool, char);
+            reg_fn3!(self, "pad", pad, &mut Array, INT, (), String, Array, ());
 
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_func2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
-                reg_func2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
-                reg_func3!(self, "pad", pad, &mut Array, INT, (), i8, u8, i16, u16);
-                reg_func3!(self, "pad", pad, &mut Array, INT, (), i32, u32, i64, u64);
+                reg_fn2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
+                reg_fn2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
+                reg_fn3!(self, "pad", pad, &mut Array, INT, (), i8, u8, i16, u16);
+                reg_fn3!(self, "pad", pad, &mut Array, INT, (), i32, u32, i64, u64);
             }
 
             #[cfg(not(feature = "no_float"))]
             {
-                reg_func2x!(self, "push", push, &mut Array, (), f32, f64);
-                reg_func3!(self, "pad", pad, &mut Array, INT, (), f32, f64);
+                reg_fn2x!(self, "push", push, &mut Array, (), f32, f64);
+                reg_fn3!(self, "pad", pad, &mut Array, INT, (), f32, f64);
             }
 
             self.register_dynamic_fn("pop", |list: &mut Array| {
@@ -760,23 +792,23 @@ impl Engine<'_> {
             format!("{}{}", x, y)
         }
 
-        reg_func2x!(self, "+", append, String, String, INT, bool, char);
+        reg_fn2x!(self, "+", append, String, String, INT, bool, char);
         self.register_fn("+", |x: String, _: ()| format!("{}", x));
 
-        reg_func2y!(self, "+", prepend, String, String, INT, bool, char);
+        reg_fn2y!(self, "+", prepend, String, String, INT, bool, char);
         self.register_fn("+", |_: (), y: String| format!("{}", y));
 
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_func2x!(self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_func2y!(self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_fn2x!(self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_fn2y!(self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
         }
 
         #[cfg(not(feature = "no_float"))]
         {
-            reg_func2x!(self, "+", append, String, String, f32, f64);
-            reg_func2y!(self, "+", prepend, String, String, f32, f64);
+            reg_fn2x!(self, "+", append, String, String, f32, f64);
+            reg_fn2y!(self, "+", prepend, String, String, f32, f64);
         }
 
         #[cfg(not(feature = "no_index"))]
