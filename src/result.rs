@@ -41,6 +41,8 @@ pub enum EvalAltResult {
     ErrorVariableNotFound(String, Position),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     ErrorAssignmentToUnknownLHS(Position),
+    /// Assignment to a constant variable.
+    ErrorAssignmentToConstant(String, Position),
     /// Returned type is not the same as the required output type.
     /// Wrapped value is the type of the actual result.
     ErrorMismatchOutputType(String, Position),
@@ -89,6 +91,7 @@ impl Error for EvalAltResult {
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"
             }
+            Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
             Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
@@ -116,6 +119,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorIfGuard(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorFor(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorAssignmentToUnknownLHS(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorAssignmentToConstant(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
             Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
             Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
             Self::ErrorDotExpr(_, pos) => write!(f, "{} ({})", desc, pos),
@@ -213,6 +217,7 @@ impl EvalAltResult {
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
+            | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
@@ -238,6 +243,7 @@ impl EvalAltResult {
             | Self::ErrorFor(ref mut pos)
             | Self::ErrorVariableNotFound(_, ref mut pos)
             | Self::ErrorAssignmentToUnknownLHS(ref mut pos)
+            | Self::ErrorAssignmentToConstant(_, ref mut pos)
             | Self::ErrorMismatchOutputType(_, ref mut pos)
             | Self::ErrorDotExpr(_, ref mut pos)
             | Self::ErrorArithmetic(_, ref mut pos)

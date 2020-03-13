@@ -57,8 +57,8 @@ Related
 
 Other cool projects to check out:
 
-* [ChaiScript] - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
-* You can also check out the list of [scripting languages for Rust] on [awesome-rust].
+* [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
+* You can also check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
 
 Examples
 --------
@@ -597,6 +597,17 @@ Variables in Rhai follow normal naming rules (i.e. must contain only ASCII lette
 let x = 3;
 ```
 
+Constants
+---------
+
+Constants can be defined and are immutable.  Constants follow the same naming rules as [variables](#variables).
+
+```rust
+const x = 42;
+print(x * 2);   // prints 84
+x = 123;        // <- syntax error - cannot assign to constant
+```
+
 Numbers
 -------
 
@@ -1108,10 +1119,12 @@ The above script optimizes to:
 }
 ```
 
-Constant propagation is used to remove dead code:
+Constants propagation is used to remove dead code:
 
 ```rust
-if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called
+const abc = true;
+if abc || some_work() { print("done!"); }   // 'abc' is constant so it is replaced by 'true'...
+if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called because the LHS is 'true'
 if true { print("done!"); }                 // <-- the line above is equivalent to this
 print("done!");                             // <-- the line above is further simplified to this
                                             //     because the condition is always true
@@ -1168,10 +1181,6 @@ let engine = rhai::Engine::new();
 engine.set_optimization(false);     // turn off the optimizer
 ```
 
-
-[ChaiScript]: http://chaiscript.com/
-[scripting languages for Rust]: https://github.com/rust-unofficial/awesome-rust#scripting
-[awesome-rust]: https://github.com/rust-unofficial/awesome-rust
 
 [`num-traits`]: https://crates.io/crates/num-traits/
 [`debug_msgs`]: #optional-features

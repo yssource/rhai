@@ -2,7 +2,7 @@
 
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::optimize::optimize;
+use crate::{optimize::optimize, scope::VariableType};
 
 use std::{
     borrow::Cow, char, cmp::Ordering, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc,
@@ -179,6 +179,7 @@ pub enum Stmt {
     Loop(Box<Stmt>),
     For(String, Box<Expr>, Box<Stmt>),
     Let(String, Option<Box<Expr>>, Position),
+    Const(String, Box<Expr>, Position),
     Block(Vec<Stmt>, Position),
     Expr(Box<Expr>),
     Break(Position),
@@ -211,6 +212,7 @@ impl Stmt {
         match self {
             Stmt::Noop(pos)
             | Stmt::Let(_, _, pos)
+            | Stmt::Const(_, _, pos)
             | Stmt::Block(_, pos)
             | Stmt::Break(pos)
             | Stmt::ReturnWithVal(_, _, pos) => *pos,
@@ -225,7 +227,8 @@ pub enum Expr {
     IntegerConstant(INT, Position),
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT, Position),
-    Identifier(String, Position),
+    Variable(String, Position),
+    Property(String, Position),
     CharConstant(char, Position),
     StringConstant(String, Position),
     Stmt(Box<Stmt>, Position),
@@ -242,12 +245,29 @@ pub enum Expr {
 }
 
 impl Expr {
+    pub fn get_value_str(&self) -> String {
+        match self {
+            Expr::IntegerConstant(i, _) => i.to_string(),
+            Expr::CharConstant(c, _) => c.to_string(),
+            Expr::StringConstant(_, _) => "string".to_string(),
+            Expr::True(_) => "true".to_string(),
+            Expr::False(_) => "false".to_string(),
+            Expr::Unit(_) => "()".to_string(),
+
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(f, _) => f.to_string(),
+
+            _ => "".to_string(),
+        }
+    }
+
     pub fn position(&self) -> Position {
         match self {
             Expr::IntegerConstant(_, pos)
-            | Expr::Identifier(_, pos)
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
+            | Expr::Variable(_, pos)
+            | Expr::Property(_, pos)
             | Expr::Stmt(_, pos)
             | Expr::FunctionCall(_, _, _, pos)
             | Expr::Array(_, pos)
@@ -273,7 +293,7 @@ impl Expr {
         match self {
             Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
             Expr::And(x, y) | Expr::Or(x, y) | Expr::Index(x, y, _) => x.is_pure() && y.is_pure(),
-            expr => expr.is_constant() || expr.is_identifier(),
+            expr => expr.is_constant() || expr.is_variable(),
         }
     }
 
@@ -292,9 +312,17 @@ impl Expr {
             _ => false,
         }
     }
-    pub fn is_identifier(&self) -> bool {
+
+    pub fn is_variable(&self) -> bool {
         match self {
-            Expr::Identifier(_, _) => true,
+            Expr::Variable(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_property(&self) -> bool {
+        match self {
+            Expr::Property(_, _) => true,
             _ => false,
         }
     }
@@ -328,6 +356,7 @@ pub enum Token {
     True,
     False,
     Let,
+    Const,
     If,
     Else,
     While,
@@ -402,6 +431,7 @@ impl Token {
                 True => "true",
                 False => "false",
                 Let => "let",
+                Const => "const",
                 If => "if",
                 Else => "else",
                 While => "while",
@@ -829,6 +859,7 @@ impl<'a> TokenIterator<'a> {
                             "true" => Token::True,
                             "false" => Token::False,
                             "let" => Token::Let,
+                            "const" => Token::Const,
                             "if" => Token::If,
                             "else" => Token::Else,
                             "while" => Token::While,
@@ -891,7 +922,8 @@ impl<'a> TokenIterator<'a> {
                 }
                 '-' => match self.char_stream.peek() {
                     // Negative number?
-                    Some('0'..='9') => negated = true,
+                    Some('0'..='9') if self.last.is_next_unary() => negated = true,
+                    Some('0'..='9') => return Some((Token::Minus, pos)),
                     Some('=') => {
                         self.char_stream.next();
                         self.advance();
@@ -1359,10 +1391,10 @@ fn parse_ident_expr<'a>(
         #[cfg(not(feature = "no_index"))]
         Some(&(Token::LeftBracket, pos)) => {
             input.next();
-            parse_index_expr(Box::new(Expr::Identifier(id, begin)), input, pos)
+            parse_index_expr(Box::new(Expr::Variable(id, begin)), input, pos)
         }
-        Some(_) => Ok(Expr::Identifier(id, begin)),
-        None => Ok(Expr::Identifier(id, Position::eof())),
+        Some(_) => Ok(Expr::Variable(id, begin)),
+        None => Ok(Expr::Variable(id, Position::eof())),
     }
 }
 
@@ -1521,37 +1553,69 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 }
 
 fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
-    fn valid_assignment_chain(expr: &Expr) -> (bool, Position) {
+    fn valid_assignment_chain(expr: &Expr, is_top: bool) -> Option<ParseError> {
         match expr {
-            Expr::Identifier(_, pos) => (true, *pos),
+            Expr::Variable(_, _) => {
+                assert!(is_top, "property expected but gets variable");
+                None
+            }
+            Expr::Property(_, _) => {
+                assert!(!is_top, "variable expected but gets property");
+                None
+            }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(idx_lhs, _, _) if idx_lhs.is_identifier() => (true, idx_lhs.position()),
+            Expr::Index(idx_lhs, _, _) if idx_lhs.is_variable() => {
+                assert!(is_top, "property expected but gets variable");
+                None
+            }
+
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(idx_lhs, _, _) => (false, idx_lhs.position()),
+            Expr::Index(idx_lhs, _, _) if idx_lhs.is_property() => {
+                assert!(!is_top, "variable expected but gets property");
+                None
+            }
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(idx_lhs, _, _) if is_top => valid_assignment_chain(idx_lhs, true),
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(idx_lhs, _, _) if !is_top => Some(ParseError::new(
+                ParseErrorType::AssignmentToInvalidLHS,
+                idx_lhs.position(),
+            )),
 
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
-                Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
+                Expr::Variable(_, _) if is_top => valid_assignment_chain(dot_rhs, false),
+                Expr::Property(_, _) if !is_top => valid_assignment_chain(dot_rhs, false),
 
                 #[cfg(not(feature = "no_index"))]
-                Expr::Index(idx_lhs, _, _) if idx_lhs.is_identifier() => {
-                    valid_assignment_chain(dot_rhs)
+                Expr::Index(idx_lhs, _, _)
+                    if (idx_lhs.is_variable() && is_top) || (idx_lhs.is_property() && !is_top) =>
+                {
+                    valid_assignment_chain(dot_rhs, false)
                 }
                 #[cfg(not(feature = "no_index"))]
-                Expr::Index(idx_lhs, _, _) => (false, idx_lhs.position()),
+                Expr::Index(idx_lhs, _, _) => Some(ParseError::new(
+                    ParseErrorType::AssignmentToCopy,
+                    idx_lhs.position(),
+                )),
 
-                _ => (false, dot_lhs.position()),
+                expr => panic!("unexpected dot expression {:#?}", expr),
             },
 
-            _ => (false, expr.position()),
+            _ => Some(ParseError::new(
+                ParseErrorType::AssignmentToInvalidLHS,
+                expr.position(),
+            )),
         }
     }
 
     //println!("{:#?} = {:#?}", lhs, rhs);
 
-    match valid_assignment_chain(&lhs) {
-        (true, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-        (false, pos) => Err(ParseError::new(PERR::AssignmentToInvalidLHS, pos)),
+    match valid_assignment_chain(&lhs, true) {
+        None => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+        Some(err) => Err(err),
     }
 }
 
@@ -1618,7 +1682,28 @@ fn parse_binary_op<'a>(
                 Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
                 Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
 
-                Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs), pos),
+                Token::Period => {
+                    fn change_var_to_property(expr: Expr) -> Expr {
+                        match expr {
+                            Expr::Dot(lhs, rhs, pos) => Expr::Dot(
+                                Box::new(change_var_to_property(*lhs)),
+                                Box::new(change_var_to_property(*rhs)),
+                                pos,
+                            ),
+                            Expr::Index(lhs, idx, pos) => {
+                                Expr::Index(Box::new(change_var_to_property(*lhs)), idx, pos)
+                            }
+                            Expr::Variable(s, pos) => Expr::Property(s, pos),
+                            expr => expr,
+                        }
+                    }
+
+                    Expr::Dot(
+                        Box::new(current_lhs),
+                        Box::new(change_var_to_property(rhs)),
+                        pos,
+                    )
+                }
 
                 // Comparison operators default to false when passed invalid operands
                 Token::EqualsTo => Expr::FunctionCall(
@@ -1762,7 +1847,10 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
     Ok(Stmt::For(name, Box::new(expr), Box::new(body)))
 }
 
-fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
+fn parse_var<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    var_type: VariableType,
+) -> Result<Stmt, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
         _ => return Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
@@ -1778,7 +1866,19 @@ fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
         Some(&(Token::Equals, _)) => {
             input.next();
             let init_value = parse_expr(input)?;
-            Ok(Stmt::Let(name, Some(Box::new(init_value)), pos))
+
+            match var_type {
+                VariableType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
+
+                VariableType::Constant if init_value.is_constant() => {
+                    Ok(Stmt::Const(name, Box::new(init_value), pos))
+                }
+                // Constants require a constant expression
+                VariableType::Constant => Err(ParseError(
+                    PERR::ForbiddenConstantExpr(name.to_string()),
+                    init_value.position(),
+                )),
+            }
         }
         _ => Ok(Stmt::Let(name, None, pos)),
     }
@@ -1866,7 +1966,8 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
             }
         }
         Some(&(Token::LeftBrace, _)) => parse_block(input),
-        Some(&(Token::Let, _)) => parse_var(input),
+        Some(&(Token::Let, _)) => parse_var(input, VariableType::Normal),
+        Some(&(Token::Const, _)) => parse_var(input, VariableType::Constant),
         _ => parse_expr_stmt(input),
     }
 }

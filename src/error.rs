@@ -67,6 +67,8 @@ pub enum ParseErrorType {
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
     MalformedIndexExpr(String),
+    /// Invalid expression assigned to constant.
+    ForbiddenConstantExpr(String),
     /// Missing a variable name after the `let` keyword.
     VarExpectsIdentifier,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
@@ -77,6 +79,10 @@ pub enum ParseErrorType {
     FnMissingParams(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     AssignmentToInvalidLHS,
+    /// Assignment to a copy of a value.
+    AssignmentToCopy,
+    /// Assignment to an a constant variable.
+    AssignmentToConstant(String),
 }
 
 /// Error when parsing a script.
@@ -112,11 +118,14 @@ impl Error for ParseError {
             ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
+            ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
             ParseErrorType::VarExpectsIdentifier => "Expecting name of a variable",
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
-            ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression because it will only be changing a copy of the value"
+            ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
+            ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
+            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable."
         }
     }
 
@@ -133,6 +142,9 @@ impl fmt::Display for ParseError {
             | ParseErrorType::MalformedCallExpr(ref s) => {
                 write!(f, "{}", if s.is_empty() { self.description() } else { s })?
             }
+            ParseErrorType::ForbiddenConstantExpr(ref s) => {
+                write!(f, "Expecting a constant to assign to '{}'", s)?
+            }
             ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
             ParseErrorType::FnMissingParams(ref s) => {
                 write!(f, "Expecting parameters for function '{}'", s)?
@@ -141,6 +153,12 @@ impl fmt::Display for ParseError {
             | ParseErrorType::MissingRightBrace(ref s)
             | ParseErrorType::MissingRightBracket(ref s) => {
                 write!(f, "{} for {}", self.description(), s)?
+            }
+            ParseErrorType::AssignmentToConstant(ref s) if s.is_empty() => {
+                write!(f, "{}", self.description())?
+            }
+            ParseErrorType::AssignmentToConstant(ref s) => {
+                write!(f, "Cannot assign to constant '{}'", s)?
             }
             _ => write!(f, "{}", self.description())?,
         }
