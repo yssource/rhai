@@ -891,7 +891,8 @@ impl<'a> TokenIterator<'a> {
                 }
                 '-' => match self.char_stream.peek() {
                     // Negative number?
-                    Some('0'..='9') => negated = true,
+                    Some('0'..='9') if self.last.is_next_unary() => negated = true,
+                    Some('0'..='9') => return Some((Token::Minus, pos)),
                     Some('=') => {
                         self.char_stream.next();
                         self.advance();
