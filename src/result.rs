@@ -124,8 +124,8 @@ impl fmt::Display for EvalAltResult {
             }
             Self::LoopBreak => write!(f, "{}", desc),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorReadingScriptFile(filename, err) => {
-                write!(f, "{} '{}': {}", desc, filename.display(), err)
+            Self::ErrorReadingScriptFile(path, err) => {
+                write!(f, "{} '{}': {}", desc, path.display(), err)
             }
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
             Self::ErrorFunctionArgsMismatch(fun, need, n, pos) => write!(
