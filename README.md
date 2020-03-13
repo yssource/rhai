@@ -153,7 +153,7 @@ use rhai::Engine;
 
 let mut engine = Engine::new();
 
-let ast = engine.compile_file("hello_world.rhai").unwrap();
+let ast = engine.compile_file("hello_world.rhai".into()).unwrap();
 ```
 
 Rhai also allows you to work _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust.

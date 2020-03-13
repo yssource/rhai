@@ -3,7 +3,7 @@
 use crate::any::Dynamic;
 use crate::error::ParseError;
 use crate::parser::Position;
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, path::PathBuf};
 
 /// Evaluation result.
 ///
@@ -44,7 +44,7 @@ pub enum EvalAltResult {
     /// Wrapped value is the type of the actual result.
     ErrorMismatchOutputType(String, Position),
     /// Error reading from a script file. Wrapped value is the path of the script file.
-    ErrorReadingScriptFile(String, std::io::Error),
+    ErrorReadingScriptFile(PathBuf, std::io::Error),
     /// Inappropriate member access.
     ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
@@ -124,8 +124,8 @@ impl fmt::Display for EvalAltResult {
             }
             Self::LoopBreak => write!(f, "{}", desc),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorReadingScriptFile(filename, err) => {
-                write!(f, "{} '{}': {}", desc, filename, err)
+            Self::ErrorReadingScriptFile(path, err) => {
+                write!(f, "{} '{}': {}", desc, path.display(), err)
             }
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
             Self::ErrorFunctionArgsMismatch(fun, need, n, pos) => write!(
