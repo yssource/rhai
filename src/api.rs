@@ -12,6 +12,7 @@ use std::{
     any::{type_name, TypeId},
     fs::File,
     io::prelude::*,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -104,9 +105,9 @@ impl<'e> Engine<'e> {
         parse(&mut tokens_stream.peekable(), self.optimize)
     }
 
-    fn read_file(filename: &str) -> Result<String, EvalAltResult> {
-        let mut f = File::open(filename)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
+    fn read_file(path: PathBuf) -> Result<String, EvalAltResult> {
+        let mut f = File::open(path.clone())
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(path.clone(), err))?;
 
         let mut contents = String::new();
 
@@ -116,14 +117,14 @@ impl<'e> Engine<'e> {
     }
 
     /// Compile a file into an AST.
-    pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
-        Self::read_file(filename)
+    pub fn compile_file(&self, path: PathBuf) -> Result<AST, EvalAltResult> {
+        Self::read_file(path)
             .and_then(|contents| self.compile(&contents).map_err(|err| err.into()))
     }
 
     /// Evaluate a file.
-    pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
-        Self::read_file(filename).and_then(|contents| self.eval::<T>(&contents))
+    pub fn eval_file<T: Any + Clone>(&mut self, path: PathBuf) -> Result<T, EvalAltResult> {
+        Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
 
     /// Evaluate a string.
@@ -206,17 +207,10 @@ impl<'e> Engine<'e> {
     ///        and not cleared from run to run.
     pub fn consume_file(
         &mut self,
-        filename: &str,
+        path: PathBuf,
         retain_functions: bool,
     ) -> Result<(), EvalAltResult> {
-        let mut f = File::open(filename)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
-
-        let mut contents = String::new();
-
-        f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
-            .and_then(|_| self.consume(&contents, retain_functions))
+        Self::read_file(path).and_then(|_| self.consume(&contents, retain_functions))
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
