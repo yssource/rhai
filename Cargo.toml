@@ -18,6 +18,18 @@ include = [
 num-traits = "*"
 
 [features]
-debug_msgs = []
-no_stdlib = []
-unchecked = []
+#default = ["no_function", "no_index", "no_float", "only_i32", "no_stdlib", "unchecked"]
+default = []
+debug_msgs = []     # print debug messages on function registrations and calls
+unchecked = []      # unchecked arithmetic
+no_stdlib = []      # no standard library of utility functions
+no_index = []       # no arrays and indexing
+no_float = []       # no floating-point
+no_function = []    # no script-defined functions
+only_i32 = []       # set INT=i32 (useful for 32-bit systems)
+only_i64 = []       # set INT=i64 (default) and disable support for all other integer types
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+#opt-level = "z"     # optimize for size

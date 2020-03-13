@@ -1,10 +1,10 @@
-use rhai::{Engine, EvalAltResult, RegisterFn};
+use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
 fn test_method_call() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {
-        x: i64,
+        x: INT,
     }
 
     impl TestStruct {

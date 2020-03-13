@@ -3,7 +3,26 @@
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::optimize;
-use std::{borrow::Cow, char, fmt, iter::Peekable, str::Chars, str::FromStr, usize};
+
+use std::{
+    borrow::Cow, char, cmp::Ordering, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc,
+    usize,
+};
+
+/// The system integer type.
+///
+/// If the `only_i32` feature is enabled, this will be `i32` instead.
+#[cfg(not(feature = "only_i32"))]
+pub type INT = i64;
+
+/// The system integer type
+///
+/// If the `only_i32` feature is not enabled, this will be `i64` instead.
+#[cfg(feature = "only_i32")]
+pub type INT = i32;
+
+/// The system floating-point type
+pub type FLOAT = f64;
 
 type LERR = LexError;
 type PERR = ParseErrorType;
@@ -123,14 +142,33 @@ impl fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
-pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<FnDef<'static>>);
-
 #[derive(Debug, Clone)]
-pub struct FnDef<'a> {
-    pub name: Cow<'a, str>,
-    pub params: Vec<Cow<'a, str>>,
+pub struct AST(
+    pub(crate) Vec<Stmt>,
+    #[cfg(not(feature = "no_function"))] pub(crate) Vec<Arc<FnDef>>,
+);
+
+#[derive(Debug)] // Do not derive Clone because it is expensive
+pub struct FnDef {
+    pub name: String,
+    pub params: Vec<String>,
     pub body: Stmt,
     pub pos: Position,
+}
+
+impl FnDef {
+    pub fn compare(&self, name: &str, params_len: usize) -> Ordering {
+        match self.name.as_str().cmp(name) {
+            Ordering::Equal => self.params.len().cmp(&params_len),
+            order => order,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum ReturnType {
+    Return,
+    Exception,
 }
 
 #[derive(Debug, Clone)]
@@ -144,22 +182,49 @@ pub enum Stmt {
     Block(Vec<Stmt>, Position),
     Expr(Box<Expr>),
     Break(Position),
-    ReturnWithVal(Option<Box<Expr>>, bool, Position),
+    ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
 }
 
 impl Stmt {
+    pub fn is_noop(&self) -> bool {
+        match self {
+            Stmt::Noop(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_op(&self) -> bool {
         match self {
             Stmt::Noop(_) => false,
             _ => true,
         }
     }
+
+    pub fn is_var(&self) -> bool {
+        match self {
+            Stmt::Let(_, _, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn position(&self) -> Position {
+        match self {
+            Stmt::Noop(pos)
+            | Stmt::Let(_, _, pos)
+            | Stmt::Block(_, pos)
+            | Stmt::Break(pos)
+            | Stmt::ReturnWithVal(_, _, pos) => *pos,
+            Stmt::IfElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
+            Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    IntegerConstant(i64, Position),
-    FloatConstant(f64, Position),
+    IntegerConstant(INT, Position),
+    #[cfg(not(feature = "no_float"))]
+    FloatConstant(FLOAT, Position),
     Identifier(String, Position),
     CharConstant(char, Position),
     StringConstant(String, Position),
@@ -180,36 +245,56 @@ impl Expr {
     pub fn position(&self) -> Position {
         match self {
             Expr::IntegerConstant(_, pos)
-            | Expr::FloatConstant(_, pos)
             | Expr::Identifier(_, pos)
             | Expr::CharConstant(_, pos)
             | Expr::StringConstant(_, pos)
-            | Expr::FunctionCall(_, _, _, pos)
             | Expr::Stmt(_, pos)
+            | Expr::FunctionCall(_, _, _, pos)
             | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Index(e, _, _)
-            | Expr::Assignment(e, _, _)
+            Expr::Assignment(e, _, _)
             | Expr::Dot(e, _, _)
+            | Expr::Index(e, _, _)
             | Expr::And(e, _)
             | Expr::Or(e, _) => e.position(),
+
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, pos) => *pos,
+        }
+    }
+
+    /// Is this expression pure?
+    ///
+    /// A pure expression has no side effects.
+    pub fn is_pure(&self) -> bool {
+        match self {
+            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
+            Expr::And(x, y) | Expr::Or(x, y) | Expr::Index(x, y, _) => x.is_pure() && y.is_pure(),
+            expr => expr.is_constant() || expr.is_identifier(),
         }
     }
 
     pub fn is_constant(&self) -> bool {
         match self {
             Expr::IntegerConstant(_, _)
-            | Expr::FloatConstant(_, _)
-            | Expr::Identifier(_, _)
             | Expr::CharConstant(_, _)
             | Expr::StringConstant(_, _)
             | Expr::True(_)
             | Expr::False(_)
             | Expr::Unit(_) => true,
 
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, _) => true,
+
+            _ => false,
+        }
+    }
+    pub fn is_identifier(&self) -> bool {
+        match self {
+            Expr::Identifier(_, _) => true,
             _ => false,
         }
     }
@@ -217,8 +302,9 @@ impl Expr {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    IntegerConstant(i64),
-    FloatConstant(f64),
+    IntegerConstant(INT),
+    #[cfg(not(feature = "no_float"))]
+    FloatConstant(FLOAT),
     Identifier(String),
     CharConstant(char),
     StringConst(String),
@@ -288,6 +374,7 @@ impl Token {
 
         match *self {
             IntegerConstant(ref i) => i.to_string().into(),
+            #[cfg(not(feature = "no_float"))]
             FloatConstant(ref f) => f.to_string().into(),
             Identifier(ref s) => s.into(),
             CharConstant(ref c) => c.to_string().into(),
@@ -468,14 +555,9 @@ impl<'a> TokenIterator<'a> {
 
         loop {
             let next_char = self.char_stream.next();
-
-            if next_char.is_none() {
-                return Err((LERR::UnterminatedString, Position::eof()));
-            }
-
             self.advance();
 
-            match next_char.unwrap() {
+            match next_char.ok_or((LERR::UnterminatedString, Position::eof()))? {
                 '\\' if escape.is_empty() => {
                     escape.push('\\');
                 }
@@ -617,6 +699,7 @@ impl<'a> TokenIterator<'a> {
                                 self.char_stream.next();
                                 self.advance();
                             }
+                            #[cfg(not(feature = "no_float"))]
                             '.' => {
                                 result.push(next_char);
                                 self.char_stream.next();
@@ -692,7 +775,7 @@ impl<'a> TokenIterator<'a> {
                         let out: String = result.iter().skip(2).filter(|&&c| c != '_').collect();
 
                         return Some((
-                            i64::from_str_radix(&out, radix)
+                            INT::from_str_radix(&out, radix)
                                 .map(Token::IntegerConstant)
                                 .unwrap_or_else(|_| {
                                     Token::LexError(LERR::MalformedNumber(result.iter().collect()))
@@ -702,10 +785,21 @@ impl<'a> TokenIterator<'a> {
                     } else {
                         let out: String = result.iter().filter(|&&c| c != '_').collect();
 
+                        #[cfg(feature = "no_float")]
                         return Some((
-                            i64::from_str(&out)
+                            INT::from_str(&out)
                                 .map(Token::IntegerConstant)
-                                .or_else(|_| f64::from_str(&out).map(Token::FloatConstant))
+                                .unwrap_or_else(|_| {
+                                    Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                }),
+                            pos,
+                        ));
+
+                        #[cfg(not(feature = "no_float"))]
+                        return Some((
+                            INT::from_str(&out)
+                                .map(Token::IntegerConstant)
+                                .or_else(|_| FLOAT::from_str(&out).map(Token::FloatConstant))
                                 .unwrap_or_else(|_| {
                                     Token::LexError(LERR::MalformedNumber(result.iter().collect()))
                                 }),
@@ -797,7 +891,8 @@ impl<'a> TokenIterator<'a> {
                 }
                 '-' => match self.char_stream.peek() {
                     // Negative number?
-                    Some('0'..='9') => negated = true,
+                    Some('0'..='9') if self.last.is_next_unary() => negated = true,
+                    Some('0'..='9') => return Some((Token::Minus, pos)),
                     Some('=') => {
                         self.char_stream.next();
                         self.advance();
@@ -1126,26 +1221,26 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
 ) -> Result<Expr, ParseError> {
-    let mut args = Vec::new();
+    let mut args_expr_list = Vec::new();
 
     if let Some(&(Token::RightParen, _)) = input.peek() {
         input.next();
-        return Ok(Expr::FunctionCall(id, args, None, begin));
+        return Ok(Expr::FunctionCall(id, args_expr_list, None, begin));
     }
 
     loop {
-        args.push(parse_expr(input)?);
+        args_expr_list.push(parse_expr(input)?);
 
         match input.peek() {
             Some(&(Token::RightParen, _)) => {
                 input.next();
-                return Ok(Expr::FunctionCall(id, args, None, begin));
+                return Ok(Expr::FunctionCall(id, args_expr_list, None, begin));
             }
             Some(&(Token::Comma, _)) => (),
             Some(&(_, pos)) => {
                 return Err(ParseError::new(
                     PERR::MissingRightParen(format!(
-                        "closing the arguments list to function call of '{}'",
+                        "closing the parameters list to function call of '{}'",
                         id
                     )),
                     pos,
@@ -1154,7 +1249,7 @@ fn parse_call_expr<'a>(
             None => {
                 return Err(ParseError::new(
                     PERR::MissingRightParen(format!(
-                        "closing the arguments list to function call of '{}'",
+                        "closing the parameters list to function call of '{}'",
                         id
                     )),
                     Position::eof(),
@@ -1166,6 +1261,7 @@ fn parse_call_expr<'a>(
     }
 }
 
+#[cfg(not(feature = "no_index"))]
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
@@ -1184,6 +1280,7 @@ fn parse_index_expr<'a>(
                 *pos,
             ))
         }
+        #[cfg(not(feature = "no_float"))]
         Expr::FloatConstant(_, pos) => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr("Array access expects integer index, not a float".into()),
@@ -1260,6 +1357,7 @@ fn parse_ident_expr<'a>(
             input.next();
             parse_call_expr(id, input, begin)
         }
+        #[cfg(not(feature = "no_index"))]
         Some(&(Token::LeftBracket, pos)) => {
             input.next();
             parse_index_expr(Box::new(Expr::Identifier(id, begin)), input, pos)
@@ -1269,6 +1367,7 @@ fn parse_ident_expr<'a>(
     }
 }
 
+#[cfg(not(feature = "no_index"))]
 fn parse_array_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
@@ -1320,26 +1419,30 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
 
     let token = input.next();
 
-    let mut follow_on = false;
+    let mut can_be_indexed = false;
 
+    #[allow(unused_mut)]
     let mut root_expr = match token {
-        Some((Token::IntegerConstant(x), pos)) => Ok(Expr::IntegerConstant(x, pos)),
+        #[cfg(not(feature = "no_float"))]
         Some((Token::FloatConstant(x), pos)) => Ok(Expr::FloatConstant(x, pos)),
+
+        Some((Token::IntegerConstant(x), pos)) => Ok(Expr::IntegerConstant(x, pos)),
         Some((Token::CharConstant(c), pos)) => Ok(Expr::CharConstant(c, pos)),
         Some((Token::StringConst(s), pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             Ok(Expr::StringConstant(s, pos))
         }
         Some((Token::Identifier(s), pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             parse_ident_expr(s, input, pos)
         }
         Some((Token::LeftParen, pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             parse_paren_expr(input, pos)
         }
+        #[cfg(not(feature = "no_index"))]
         Some((Token::LeftBracket, pos)) => {
-            follow_on = true;
+            can_be_indexed = true;
             parse_array_expr(input, pos)
         }
         Some((Token::True, pos)) => Ok(Expr::True(pos)),
@@ -1354,14 +1457,13 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
         None => Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
     }?;
 
-    if !follow_on {
-        return Ok(root_expr);
-    }
-
-    // Tail processing all possible indexing
-    while let Some(&(Token::LeftBracket, pos)) = input.peek() {
-        input.next();
-        root_expr = parse_index_expr(Box::new(root_expr), input, pos)?;
+    if can_be_indexed {
+        // Tail processing all possible indexing
+        #[cfg(not(feature = "no_index"))]
+        while let Some(&(Token::LeftBracket, pos)) = input.peek() {
+            input.next();
+            root_expr = parse_index_expr(Box::new(root_expr), input, pos)?;
+        }
     }
 
     Ok(root_expr)
@@ -1374,14 +1476,30 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 
             match parse_unary(input) {
                 // Negative integer
-                Ok(Expr::IntegerConstant(i, pos)) => Ok(i
+                Ok(Expr::IntegerConstant(i, _)) => i
                     .checked_neg()
                     .map(|x| Expr::IntegerConstant(x, pos))
-                    .unwrap_or_else(|| Expr::FloatConstant(-(i as f64), pos))),
+                    .or_else(|| {
+                        #[cfg(not(feature = "no_float"))]
+                        return Some(Expr::FloatConstant(-(i as FLOAT), pos));
+
+                        #[cfg(feature = "no_float")]
+                        return None;
+                    })
+                    .ok_or_else(|| {
+                        ParseError::new(
+                            PERR::BadInput(LERR::MalformedNumber(format!("-{}", i)).to_string()),
+                            pos,
+                        )
+                    }),
+
                 // Negative float
+                #[cfg(not(feature = "no_float"))]
                 Ok(Expr::FloatConstant(f, pos)) => Ok(Expr::FloatConstant(-f, pos)),
+
                 // Call negative function
                 Ok(expr) => Ok(Expr::FunctionCall("-".into(), vec![expr], None, pos)),
+
                 err @ Err(_) => err,
             }
         }
@@ -1408,17 +1526,21 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
         match expr {
             Expr::Identifier(_, pos) => (true, *pos),
 
-            Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
-                Expr::Identifier(_, _) => (true, idx_lhs.position()),
-                _ => (false, idx_lhs.position()),
-            },
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(idx_lhs, _, _) if idx_lhs.is_identifier() => (true, idx_lhs.position()),
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(idx_lhs, _, _) => (false, idx_lhs.position()),
 
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
                 Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
-                Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
-                    Expr::Identifier(_, _) => valid_assignment_chain(dot_rhs),
-                    _ => (false, idx_lhs.position()),
-                },
+
+                #[cfg(not(feature = "no_index"))]
+                Expr::Index(idx_lhs, _, _) if idx_lhs.is_identifier() => {
+                    valid_assignment_chain(dot_rhs)
+                }
+                #[cfg(not(feature = "no_index"))]
+                Expr::Index(idx_lhs, _, _) => (false, idx_lhs.position()),
+
                 _ => (false, dot_lhs.position()),
             },
 
@@ -1426,7 +1548,7 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
         }
     }
 
-    //println!("{:?} = {:?}", lhs, rhs);
+    //println!("{:#?} = {:#?}", lhs, rhs);
 
     match valid_assignment_chain(&lhs) {
         (true, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
@@ -1447,29 +1569,6 @@ fn parse_op_assignment(
         Expr::FunctionCall(function.into(), vec![lhs_copy, rhs], None, pos),
         pos,
     )
-
-    /*
-    const LHS_VALUE: &'static str = "@LHS_VALUE@";
-
-    let lhs_pos = lhs.position();
-
-    Ok(Expr::Block(
-        Box::new(Stmt::Block(vec![
-            Stmt::Let(LHS_VALUE.to_string(), Some(Box::new(lhs)), lhs_pos),
-            Stmt::Expr(Box::new(parse_assignment(
-                lhs,
-                Expr::FunctionCall(
-                    function.into(),
-                    vec![Expr::Identifier(LHS_VALUE.to_string(), lhs_pos), rhs],
-                    None,
-                    pos,
-                ),
-                pos,
-            )?)),
-        ])),
-        pos,
-    ))
-    */
 }
 
 fn parse_binary_op<'a>(
@@ -1519,6 +1618,7 @@ fn parse_binary_op<'a>(
                 Token::Equals => parse_assignment(current_lhs, rhs, pos)?,
                 Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
                 Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
+
                 Token::Period => Expr::Dot(Box::new(current_lhs), Box::new(rhs), pos),
 
                 // Comparison operators default to false when passed invalid operands
@@ -1686,13 +1786,11 @@ fn parse_var<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 }
 
 fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
-    match input.peek() {
-        Some(&(Token::LeftBrace, _)) => (),
-        Some(&(_, pos)) => return Err(ParseError::new(PERR::MissingLeftBrace, pos)),
+    let pos = match input.next() {
+        Some((Token::LeftBrace, pos)) => pos,
+        Some((_, pos)) => return Err(ParseError::new(PERR::MissingLeftBrace, pos)),
         None => return Err(ParseError::new(PERR::MissingLeftBrace, Position::eof())),
-    }
-
-    let pos = input.next().unwrap().1;
+    };
 
     let mut statements = Vec::new();
 
@@ -1748,23 +1846,23 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
             Ok(Stmt::Break(pos))
         }
         Some(&(ref token @ Token::Return, _)) | Some(&(ref token @ Token::Throw, _)) => {
-            let is_return = match token {
-                Token::Return => true,
-                Token::Throw => false,
-                _ => panic!(),
+            let return_type = match token {
+                Token::Return => ReturnType::Return,
+                Token::Throw => ReturnType::Exception,
+                _ => panic!("unexpected token!"),
             };
 
             input.next();
 
             match input.peek() {
                 // return; or throw;
-                Some(&(Token::SemiColon, pos)) => Ok(Stmt::ReturnWithVal(None, is_return, pos)),
+                Some(&(Token::SemiColon, pos)) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
                 // Just a return/throw without anything at the end of script
-                None => Ok(Stmt::ReturnWithVal(None, is_return, Position::eof())),
+                None => Ok(Stmt::ReturnWithVal(None, return_type, Position::eof())),
                 // return or throw with expression
                 Some(&(_, pos)) => {
                     let ret = parse_expr(input)?;
-                    Ok(Stmt::ReturnWithVal(Some(Box::new(ret)), is_return, pos))
+                    Ok(Stmt::ReturnWithVal(Some(Box::new(ret)), return_type, pos))
                 }
             }
         }
@@ -1774,7 +1872,8 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
     }
 }
 
-fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static>, ParseError> {
+#[cfg(not(feature = "no_function"))]
+fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
     let pos = match input.next() {
         Some((_, tok_pos)) => tok_pos,
         _ => return Err(ParseError::new(PERR::InputPastEndOfFile, Position::eof())),
@@ -1835,7 +1934,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef<'static
     let body = parse_block(input)?;
 
     Ok(FnDef {
-        name: name.into(),
+        name,
         params,
         body,
         pos,
@@ -1846,12 +1945,23 @@ fn parse_top_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     optimize_ast: bool,
 ) -> Result<AST, ParseError> {
-    let mut statements = Vec::new();
-    let mut functions = Vec::new();
+    let mut statements = Vec::<Stmt>::new();
+
+    #[cfg(not(feature = "no_function"))]
+    let mut functions = Vec::<FnDef>::new();
 
     while input.peek().is_some() {
         match input.peek() {
-            Some(&(Token::Fn, _)) => functions.push(parse_fn(input)?),
+            #[cfg(not(feature = "no_function"))]
+            Some(&(Token::Fn, _)) => {
+                let f = parse_fn(input)?;
+
+                // Ensure list is sorted
+                match functions.binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len())) {
+                    Ok(n) => functions[n] = f,        // Override previous definition
+                    Err(n) => functions.insert(n, f), // New function definition
+                }
+            }
             _ => statements.push(parse_stmt(input)?),
         }
 
@@ -1861,21 +1971,25 @@ fn parse_top_level<'a>(
         }
     }
 
-    return Ok(if optimize_ast {
-        AST(
-            optimize(statements),
-            functions
-                .into_iter()
-                .map(|mut fn_def| {
+    return Ok(AST(
+        if optimize_ast {
+            optimize(statements)
+        } else {
+            statements
+        },
+        #[cfg(not(feature = "no_function"))]
+        functions
+            .into_iter()
+            .map(|mut fn_def| {
+                if optimize_ast {
+                    let pos = fn_def.body.position();
                     let mut body = optimize(vec![fn_def.body]);
-                    fn_def.body = body.pop().unwrap();
-                    fn_def
-                })
-                .collect(),
-        )
-    } else {
-        AST(statements, functions)
-    });
+                    fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
+                }
+                Arc::new(fn_def)
+            })
+            .collect(),
+    ));
 }
 
 pub fn parse<'a>(

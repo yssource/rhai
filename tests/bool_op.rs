@@ -39,10 +39,9 @@ fn test_bool_op_short_circuit() -> Result<(), EvalAltResult> {
     assert_eq!(
         engine.eval::<bool>(
             r"
-            fn this() { true }
-            fn that() { 9/0 }
+                let this = true;
 
-            this() || that();
+                this || { throw; };
         "
         )?,
         true
@@ -51,10 +50,9 @@ fn test_bool_op_short_circuit() -> Result<(), EvalAltResult> {
     assert_eq!(
         engine.eval::<bool>(
             r"
-            fn this() { false }
-            fn that() { 9/0 }
+                let this = false;
 
-            this() && that();
+                this && { throw; };
         "
         )?,
         false
@@ -64,41 +62,31 @@ fn test_bool_op_short_circuit() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-#[should_panic]
 fn test_bool_op_no_short_circuit1() {
     let mut engine = Engine::new();
 
-    assert_eq!(
-        engine
-            .eval::<bool>(
-                r"
-                    fn this() { false }
-                    fn that() { 9/0 }
+    assert!(engine
+        .eval::<bool>(
+            r"
+                    let this = true;
 
-                    this() | that();
+                    this | { throw; }
                 "
-            )
-            .unwrap(),
-        false
-    );
+        )
+        .is_err());
 }
 
 #[test]
-#[should_panic]
 fn test_bool_op_no_short_circuit2() {
     let mut engine = Engine::new();
 
-    assert_eq!(
-        engine
-            .eval::<bool>(
-                r"
-                    fn this() { false }
-                    fn that() { 9/0 }
+    assert!(engine
+        .eval::<bool>(
+            r"
+                    let this = false;
 
-                    this() & that();
+                    this & { throw; }
                 "
-            )
-            .unwrap(),
-        false
-    );
+        )
+        .is_err());
 }

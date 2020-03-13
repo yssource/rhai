@@ -1,6 +1,7 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::any::{Any, Dynamic};
+
 use std::borrow::Cow;
 
 /// A type containing information about current scope.
@@ -15,9 +16,9 @@ use std::borrow::Cow;
 /// let mut engine = Engine::new();
 /// let mut my_scope = Scope::new();
 ///
-/// engine.eval_with_scope::<()>(&mut my_scope, false, "let x = 5;")?;
+/// engine.eval_with_scope::<()>(&mut my_scope, "let x = 5;")?;
 ///
-/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, false, "x + 1")?, 6);
+/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1")?, 6);
 /// # Ok(())
 /// # }
 /// ```
@@ -93,6 +94,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Get a mutable reference to a variable in the Scope and downcast it to a specific type
+    #[cfg(not(feature = "no_index"))]
     pub(crate) fn get_mut_by_type<T: Any + Clone>(&mut self, key: &str, index: usize) -> &mut T {
         self.get_mut(key, index)
             .downcast_mut::<T>()

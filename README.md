@@ -10,7 +10,7 @@ Rhai's current feature set:
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * Easy-to-use language similar to JS+Rust
 * Support for overloaded functions
-* Very few additional dependencies (right now only `num-traits` to do checked arithmetic operations)
+* Very few additional dependencies (right now only [`num-traits`] to do checked arithmetic operations)
 
 **Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
 
@@ -38,19 +38,27 @@ Beware that in order to use pre-releases (alpha and beta) you need to specify th
 Optional features
 -----------------
 
-| Feature      | Description                                                                                                             |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `debug_msgs` | Print debug messages to stdout (using `println!`) related to function registrations and function calls.                 |
-| `no_stdlib`  | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. |
-| `unchecked`  | Exclude arithmetic checking in the standard library. Beware that a bad script may panic the entire system!              |
+| Feature       | Description                                                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug_msgs`  | Print debug messages to stdout related to function registrations and calls.                                                                              |
+| `no_stdlib`   | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
+| `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
+| `no_function` | Disable script-defined functions if you don't need them.                                                                                                 |
+| `no_index`    | Disable arrays and indexing features if you don't need them.                                                                                             |
+| `no_float`    | Disable floating-point numbers and math if you don't need them.                                                                                          |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types.                                                                                |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types.                                                                                |
+
+By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here for you to opt-**out** of certain functionalities that you do not need.
+Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
 
 Related
 -------
 
 Other cool projects to check out:
 
-* [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
-* You can also check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
+* [ChaiScript] - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
+* You can also check out the list of [scripting languages for Rust] on [awesome-rust].
 
 Examples
 --------
@@ -81,23 +89,27 @@ Example Scripts
 
 There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
 
-| Script                | Description                                                   |
-| --------------------- | ------------------------------------------------------------- |
-| `array.rhai`          | arrays in Rhai                                                |
-| `assignment.rhai`     | variable declarations                                         |
-| `comments.rhai`       | just comments                                                 |
-| `for1.rhai`           | for loops                                                     |
-| `function_decl1.rhai` | a function without parameters                                 |
-| `function_decl2.rhai` | a function with two parameters                                |
-| `function_decl3.rhai` | a function with many parameters                               |
-| `if1.rhai`            | if example                                                    |
-| `loop.rhai`           | endless loop in Rhai, this example emulates a do..while cycle |
-| `op1.rhai`            | just a simple addition                                        |
-| `op2.rhai`            | simple addition and multiplication                            |
-| `op3.rhai`            | change evaluation order with parenthesis                      |
-| `speed_test.rhai`     | a simple program to measure the speed of Rhai's interpreter   |
-| `string.rhai`         | string operations                                             |
-| `while.rhai`          | while loop                                                    |
+| Language feature scripts | Description                                                   |
+| ------------------------ | ------------------------------------------------------------- |
+| `array.rhai`             | arrays in Rhai                                                |
+| `assignment.rhai`        | variable declarations                                         |
+| `comments.rhai`          | just comments                                                 |
+| `for1.rhai`              | for loops                                                     |
+| `function_decl1.rhai`    | a function without parameters                                 |
+| `function_decl2.rhai`    | a function with two parameters                                |
+| `function_decl3.rhai`    | a function with many parameters                               |
+| `if1.rhai`               | if example                                                    |
+| `loop.rhai`              | endless loop in Rhai, this example emulates a do..while cycle |
+| `op1.rhai`               | just a simple addition                                        |
+| `op2.rhai`               | simple addition and multiplication                            |
+| `op3.rhai`               | change evaluation order with parenthesis                      |
+| `string.rhai`            | string operations                                             |
+| `while.rhai`             | while loop                                                    |
+
+| Example scripts   | Description                                                       |
+| ----------------- | ----------------------------------------------------------------- |
+| `speed_test.rhai` | a simple program to measure the speed of Rhai's interpreter       |
+| `primes.rhai`     | use Sieve of Eratosthenes to find all primes smaller than a limit |
 
 To run the scripts, either make a tiny program or use of the `rhai_runner` example:
 
@@ -120,6 +132,8 @@ fn main() -> Result<(), EvalAltResult>
     let result = engine.eval::<i64>("40 + 2")?;
 
     println!("Answer: {}", result);  // prints 42
+
+    Ok(())
 }
 ```
 
@@ -157,20 +171,36 @@ let ast = engine.compile_file("hello_world.rhai".into()).unwrap();
 ```
 
 Rhai also allows you to work _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust.
-You do this via `call_fn`, which takes a compiled AST (output from `compile`) and the
-function call arguments:
+You do this via `call_fn`:
 
 ```rust
 use rhai::Engine;
 
 let mut engine = Engine::new();
 
-// Define a function in a script and compile to AST
-let ast = engine.compile("fn hello(x, y) { x.len() + y }")?;
+// Define a function in a script and load it into the Engine.
+engine.consume(
+    r"
+        fn hello(x, y) {    // a function with two parameters: String and i64
+            x.len() + y     // returning i64
+        }
+
+        fn hello(x) {       // functions can be overloaded: this one takes only one parameter
+            x * 2           // returning i64
+        }
+    ", true)?;              // pass true to 'retain_functions' otherwise these functions
+                            // will be cleared at the end of consume()
 
 // Evaluate the function in the AST, passing arguments into the script as a tuple
-// (beware, arguments must be of the correct types because Rhai does not have built-in type conversions)
-let result: i64 = engine.call_fn("hello", &ast, (&mut String::from("abc"), &mut 123_i64))?;
+// if there are more than one. Beware, arguments must be of the correct types because
+// Rhai does not have built-in type conversions. If you pass in arguments of the wrong type,
+// the Engine will not find the function.
+
+let result: i64 = engine.call_fn("hello", &ast, ( String::from("abc"), 123_i64 ) )?;
+//                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ put arguments in a tuple
+
+let result: i64 = engine.call_fn("hello", 123_i64)?
+//                                        ^^^^^^^ calls 'hello' with one parameter (no need for tuple)
 ```
 
 Values and types
@@ -178,19 +208,27 @@ Values and types
 
 The following primitive types are supported natively:
 
-| Category                       | Types                                  |
-| ------------------------------ | -------------------------------------- |
-| Integer                        | `i32`, `u32`, `i64` _(default)_, `u64` |
-| Floating-point                 | `f32`, `f64` _(default)_               |
-| Character                      | `char`                                 |
-| Boolean                        | `bool`                                 |
-| Array                          | `rhai::Array`                          |
-| Dynamic (i.e. can be anything) | `rhai::Dynamic`                        |
+| Category                                        | Types                                                                                                |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Integer**                                     | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`]),<br/>`u64`, `i64` _(default)_ |
+| **Floating-point** (disabled with [`no_float`]) | `f32`, `f64` _(default)_                                                                             |
+| **Character**                                   | `char`                                                                                               |
+| **Boolean**                                     | `bool`                                                                                               |
+| **Array** (disabled with [`no_index`])          | `rhai::Array`                                                                                        |
+| **Dynamic** (i.e. can be anything)              | `rhai::Dynamic`                                                                                      |
+| **System** (current configuration)              | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                     |
+
+All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
+
+The default integer type is `i64`. If you do not need any other integer type, you can enable the [`only_i64`] feature.
+
+If you only need 32-bit integers, you can enable the [`only_i32`] feature and remove support for all integer types other than `i32` including `i64`.
+This is useful on 32-bit systems where using 64-bit integers incurs a performance penalty.
+
+If you do not need floating-point, enable the [`no_float`] feature to remove support.
 
 Value conversions
 -----------------
-
-All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
 
 There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it. For other conversions you can register your own conversion functions.
 
@@ -222,8 +260,8 @@ Rhai's scripting engine is very lightweight.  It gets its ability from the funct
 
 ```rust
 use rhai::{Engine, EvalAltResult};
-use rhai::RegisterFn;                       // include the `RegisterFn` trait to use `register_fn`
-use rhai::{Dynamic, RegisterDynamicFn};     // include the `RegisterDynamicFn` trait to use `register_dynamic_fn`
+use rhai::RegisterFn;                       // use `RegisterFn` trait for `register_fn`
+use rhai::{Dynamic, RegisterDynamicFn};     // use `RegisterDynamicFn` trait for `register_dynamic_fn`
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -278,21 +316,21 @@ use std::fmt::Display;
 
 use rhai::{Engine, RegisterFn};
 
-fn showit<T: Display>(x: &mut T) -> () {
-    println!("{}", x)
+fn show_it<T: Display>(x: &mut T) -> () {
+    println!("put up a good show: {}!", x)
 }
 
 fn main()
 {
     let mut engine = Engine::new();
 
-    engine.register_fn("print", showit as fn(x: &mut i64)->());
-    engine.register_fn("print", showit as fn(x: &mut bool)->());
-    engine.register_fn("print", showit as fn(x: &mut String)->());
+    engine.register_fn("print", show_it as fn(x: &mut i64)->());
+    engine.register_fn("print", show_it as fn(x: &mut bool)->());
+    engine.register_fn("print", show_it as fn(x: &mut String)->());
 }
 ```
 
-You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions and call the correct one, based on the types of the arguments, from your script.
+You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions the correct one, based on the types of the parameters, from your script.
 
 Fallible functions
 ------------------
@@ -303,13 +341,13 @@ Your function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
-use rhai::RegisterResultFn;     // include the `RegisterResultFn` trait to use `register_result_fn`
+use rhai::RegisterResultFn;     // use `RegisterResultFn` trait for `register_result_fn`
 
 // Function that may fail
 fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero detected!".into())    // short-cut to create EvalAltResult
+        Err("Division by zero detected!".into())  // short-cut to create EvalAltResult
     } else {
         Ok(x / y)
     }
@@ -336,10 +374,10 @@ Any similarly-named function defined in a script overrides any built-in function
 ```rust
 // Override the built-in function 'to_int'
 fn to_int(num) {
-    print("Ha! Gotcha!" + num);
+    print("Ha! Gotcha! " + num);
 }
 
-print(to_int(123));     // what will happen?
+print(to_int(123));     // what happens?
 ```
 
 Custom types and methods
@@ -507,21 +545,19 @@ fn main() -> Result<(), EvalAltResult>
     let mut scope = Scope::new();
 
     // Then push some initialized variables into the state
-    // NOTE: Remember the default numbers used by Rhai are i64 and f64.
-    //       Better stick to them or it gets hard to work with other variables in the script.
+    // NOTE: Remember the system number types in Rhai are i64 (i32 if 'only_i32') ond f64.
+    //       Better stick to them or it gets hard working with the script.
     scope.push("y".into(), 42_i64);
     scope.push("z".into(), 999_i64);
 
     // First invocation
-    // (the second boolean argument indicates that we don't need to retain function definitions
-    // because we didn't declare any!)
-    engine.eval_with_scope::<()>(&mut scope, false, r"
+    engine.eval_with_scope::<()>(&mut scope, r"
         let x = 4 + 5 - y + z;
         y = 1;
     ")?;
 
     // Second invocation using the same state
-    let result = engine.eval_with_scope::<i64>(&mut scope, false, "x")?;
+    let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
 
     println!("result: {}", result);  // should print 966
 
@@ -590,24 +626,23 @@ Unary operators
 ```rust
 let number = -5;
 number = -5 - +5;
-let booly = !true;
+let boolean = !true;
 ```
 
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
-| Function   | Description                         |
-| ---------- | ----------------------------------- |
-| `abs`      | absolute value                      |
-| `to_int`   | converts an `f32` or `f64` to `i64` |
-| `to_float` | converts an integer type to `f64`   |
+| Function   | Description                       |
+| ---------- | --------------------------------- |
+| `abs`      | absolute value                    |
+| `to_float` | converts an integer type to `f64` |
 
 Floating-point functions
 ------------------------
 
-The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on `f64` only:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -617,7 +652,8 @@ The following standard functions (defined in the standard library but excluded i
 | Exponential      | `exp` (base _e_)                                             |
 | Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)         |
 | Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction`               |
-| Tests            | `is_nan`, `is_finite`, `is_infinite`                         |
+| Conversion       | `to_int`                                                     |
+| Testing          | `is_nan`, `is_finite`, `is_infinite`                         |
 
 Strings and Chars
 -----------------
@@ -636,6 +672,7 @@ let record = full_name + ": age " + age;
 record == "Bob C. Davis: age 42";
 
 // Strings can be indexed to get a character
+// (disabled with the 'no_index' feature)
 let c = record[4];
 c == 'C';
 
@@ -659,7 +696,7 @@ record[4] = '\x58'; // 0x58 = 'X'
 record == "Bob X. Davis: age 42 ❤\n";
 ```
 
-The following standard functions (defined in the standard library but excluded if `no_stdlib`) operate on strings:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on strings:
 
 | Function   | Description                                                              |
 | ---------- | ------------------------------------------------------------------------ |
@@ -706,7 +743,7 @@ Arrays
 
 You can create arrays of values, and then access them with numeric indices.
 
-The following functions (defined in the standard library but excluded if `no_stdlib`) operate on arrays:
+The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on arrays:
 
 | Function   | Description                                                                           |
 | ---------- | ------------------------------------------------------------------------------------- |
@@ -768,7 +805,7 @@ print(y.len());         // prints 0
 ```
 
 `push` and `pad` are only defined for standard built-in types.  If you want to use them with
-your own custom type, you need to define a specific override:
+your own custom type, you need to register a type-specific version:
 
 ```rust
 engine.register_fn("push",
@@ -777,6 +814,8 @@ engine.register_fn("push",
 ```
 
 The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
+
+Arrays are disabled via the [`no_index`] feature.
 
 Comparison operators
 --------------------
@@ -881,7 +920,7 @@ for x in array {
     if x == 42 { break; }
 }
 
-// The 'range' function allows iterating from first..last-1
+// The 'range' function allows iterating from first..last
 for x in range(0, 50) {
     print(x);
     if x == 42 { break; }
@@ -927,7 +966,7 @@ println!(result);   // prints "Runtime error: 42 is too large! (line 5, position
 Functions
 ---------
 
-Rhai supports defining functions in script:
+Rhai supports defining functions in script (unless disabled with [`no_function`]):
 
 ```rust
 fn add(x, y) {
@@ -947,9 +986,8 @@ fn add(x, y) {
 print(add(2, 3));
 ```
 
-Remember that functions defined in script always take `Dynamic` arguments (i.e. the arguments can be of any type).
-
-However, all arguments are passed by _value_, so all functions are _pure_ (i.e. they never modify their arguments).
+Functions defined in script always take `Dynamic` parameters (i.e. the parameter can be of any type).
+It is important to remember that all parameters are passed by _value_, so all functions are _pure_ (i.e. they never modify their parameters).
 Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if you are not careful.
 
 ```rust
@@ -962,7 +1000,7 @@ x.change();
 x == 500;       // 'x' is NOT changed!
 ```
 
-Furthermore, functions can only be defined at the top level, never inside a block or another function.
+Functions can only be defined at the top level, never inside a block or another function.
 
 ```rust
 // Top level is OK
@@ -978,6 +1016,22 @@ fn do_addition(x) {
 
     add_y(x)
 }
+```
+
+Functions can be _overloaded_ based on the number of parameters (but not parameter types, since all parameters are `Dynamic`).
+New definitions of the same name and number of parameters overwrite previous definitions.
+
+```rust
+fn abc(x,y,z) { print("Three!!! " + x + "," + y + "," + z) }
+fn abc(x) { print("One! " + x) }
+fn abc(x,y) { print("Two! " + x + "," + y) }
+fn abc() { print("None.") }
+fn abc(x) { print("HA! NEW ONE! " + x) }    // overwrites previous definition
+
+abc(1,2,3);     // prints "Three!!! 1,2,3"
+abc(42);        // prints "HA! NEW ONE! 42"
+abc(1,2);       // prints "Two!! 1,2"
+abc();          // prints "None."
 ```
 
 Members and methods
@@ -1002,7 +1056,8 @@ debug("world!");        // prints "world!" to stdout using debug formatting
 ### Overriding `print` and `debug` with callback functions
 
 ```rust
-// Any function or closure that takes an &str argument can be used to override print and debug
+// Any function or closure that takes an &str argument can be used to override
+// print and debug
 engine.on_print(|x| println!("hello: {}", x));
 engine.on_debug(|x| println!("DEBUG: {}", x));
 
@@ -1013,7 +1068,7 @@ let mut log: Vec<String> = Vec::new();
 engine.on_print(|s| log.push(format!("entry: {}", s)));
 engine.on_debug(|s| log.push(format!("DEBUG: {}", s)));
 
-// Evalulate script
+// Evaluate script
 engine.eval::<()>(script)?;
 
 // 'log' captures all the 'print' and 'debug' output
@@ -1021,3 +1076,109 @@ for entry in log {
     println!("{}", entry);
 }
 ```
+
+Optimizations
+=============
+
+Rhai includes an _optimizer_ that tries to optimize a script after parsing.  This can reduce resource utilization and increase execution speed.
+
+For example, in the following:
+
+```rust
+{
+    let x = 999;        // NOT eliminated - Rhai doesn't check yet whether a variable is used later on
+    123;                // eliminated - no effect
+    "hello";            // eliminated - no effect
+    [1, 2, x, x*2, 5];  // eliminated - no effect
+    foo(42);            // NOT eliminated - the function 'foo' may have side effects
+    666                 // NOT eliminated - this is the return value of the block,
+                        //                  and the block is the last one
+                        //                  so this is the return value of the whole script
+}
+```
+
+Rhai attempts to eliminate _dead code_ (i.e. code that does nothing, for example an expression by itself as a statement, which is allowed in Rhai).
+The above script optimizes to:
+
+```rust
+{
+    let x = 999;
+    foo(42);
+    666
+}
+```
+
+Constant propagation is used to remove dead code:
+
+```rust
+if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called
+if true { print("done!"); }                 // <-- the line above is equivalent to this
+print("done!");                             // <-- the line above is further simplified to this
+                                            //     because the condition is always true
+```
+
+These are quite effective for template-based machine-generated scripts where certain constant values are spliced into the script text in order to turn on/off certain sections.
+
+Beware, however, that most operators are actually function calls, and those functions can be overridden, so they are not optimized away:
+
+```rust
+if 1 == 1 { ... }       // '1==1' is NOT optimized away because you can define
+                        // your own '==' function to override the built-in default!
+```
+
+### Here be dragons!
+
+Some optimizations can be quite aggressive and can alter subtle semantics of the script.  For example:
+
+```rust
+if true {       // <-- condition always true
+    123.456;    // <-- eliminated
+    hello;      // <-- eliminated, EVEN THOUGH the variable doesn't exist!
+    foo(42)     // <-- promoted up-level
+}
+
+// The above optimizes to:
+
+foo(42)
+```
+
+Nevertheless, if you would be evaluating the original script, it would have been an error - the variable `hello` doesn't exist, so the script would have been terminated at that point with an error return.
+
+In fact, any errors inside a statement that has been eliminated will silently _go away_:
+
+```rust
+print("start!");
+if my_decision { /* do nothing... */ }  // <-- eliminated due to no effect
+print("end!");
+
+// The above optimizes to:
+
+print("start!");
+print("end!");
+```
+
+In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to a type error.
+However, after optimization, the entire `if` statement is removed, thus the script silently runs to completion without errors.
+
+It is usually a bad idea to depend on a script failing or such kind of subtleties, but if it turns out to be necessary (why? I would never guess),
+there is a setting in `Engine` to turn off optimizations.
+
+```rust
+let engine = rhai::Engine::new();
+engine.set_optimization(false);     // turn off the optimizer
+```
+
+
+[ChaiScript]: http://chaiscript.com/
+[scripting languages for Rust]: https://github.com/rust-unofficial/awesome-rust#scripting
+[awesome-rust]: https://github.com/rust-unofficial/awesome-rust
+
+[`num-traits`]: https://crates.io/crates/num-traits/
+[`debug_msgs`]: #optional-features
+[`unchecked`]: #optional-features
+[`no_stdlib`]: #optional-features
+[`no_index`]: #optional-features
+[`no_float`]: #optional-features
+[`no_function`]: #optional-features
+[`only_i32`]: #optional-features
+[`only_i64`]: #optional-features

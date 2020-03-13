@@ -1,35 +1,54 @@
 //! Helper module which defines `FnArgs` to make function calling easier.
 
-use crate::any::{Any, Variant};
+use crate::any::{Any, Dynamic};
+use crate::engine::Array;
 
 /// Trait that represent arguments to a function call.
-pub trait FuncArgs<'a> {
-    /// Convert to a `Vec` of `Variant` arguments.
-    fn into_vec(self) -> Vec<&'a mut Variant>;
+pub trait FuncArgs {
+    /// Convert to a `Vec` of `Dynamic` arguments.
+    fn into_vec(self) -> Vec<Dynamic>;
 }
 
-impl<'a> FuncArgs<'a> for Vec<&'a mut Variant> {
-    fn into_vec(self) -> Self {
-        self
-    }
+macro_rules! impl_std_args {
+    ($($p:ty),*) => {
+        $(
+            impl FuncArgs for $p {
+                fn into_vec(self) -> Vec<Dynamic> {
+                    vec![self.into_dynamic()]
+                }
+            }
+        )*
+    };
 }
 
-impl<'a, T: Any> FuncArgs<'a> for &'a mut Vec<T> {
-    fn into_vec(self) -> Vec<&'a mut Variant> {
-        self.iter_mut().map(|x| x as &mut Variant).collect()
-    }
-}
+impl_std_args!(String, char, bool);
+
+#[cfg(not(feature = "no_index"))]
+impl_std_args!(Array);
+
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+impl_std_args!(u8, i8, u16, i16, u32, i32, u64, i64);
+
+#[cfg(feature = "only_i32")]
+impl_std_args!(i32);
+
+#[cfg(feature = "only_i64")]
+impl_std_args!(i64);
+
+#[cfg(not(feature = "no_float"))]
+impl_std_args!(f32, f64);
 
 macro_rules! impl_args {
     ($($p:ident),*) => {
-        impl<'a, $($p: Any + Clone),*> FuncArgs<'a> for ($(&'a mut $p,)*)
+        impl<$($p: Any + Clone),*> FuncArgs for ($($p,)*)
         {
-            fn into_vec(self) -> Vec<&'a mut Variant> {
+            fn into_vec(self) -> Vec<Dynamic> {
                 let ($($p,)*) = self;
 
                 #[allow(unused_variables, unused_mut)]
                 let mut v = Vec::new();
-                $(v.push($p as &mut Variant);)*
+                $(v.push($p.into_dynamic());)*
 
                 v
             }
@@ -39,10 +58,12 @@ macro_rules! impl_args {
     };
     (@pop) => {
     };
-    (@pop $head:ident $(, $tail:ident)*) => {
+    (@pop $head:ident) => {
+    };
+    (@pop $head:ident $(, $tail:ident)+) => {
         impl_args!($($tail),*);
     };
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-impl_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
+impl_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);

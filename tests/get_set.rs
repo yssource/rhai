@@ -1,18 +1,18 @@
-use rhai::{Engine, EvalAltResult, RegisterFn};
+use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
 fn test_get_set() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {
-        x: i64,
+        x: INT,
     }
 
     impl TestStruct {
-        fn get_x(&mut self) -> i64 {
+        fn get_x(&mut self) -> INT {
             self.x
         }
 
-        fn set_x(&mut self, new_x: i64) {
+        fn set_x(&mut self, new_x: INT) {
             self.x = new_x;
         }
 
@@ -28,7 +28,7 @@ fn test_get_set() -> Result<(), EvalAltResult> {
     engine.register_get_set("x", TestStruct::get_x, TestStruct::set_x);
     engine.register_fn("new_ts", TestStruct::new);
 
-    assert_eq!(engine.eval::<i64>("let a = new_ts(); a.x = 500; a.x")?, 500);
+    assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x = 500; a.x")?, 500);
 
     Ok(())
 }
@@ -37,15 +37,15 @@ fn test_get_set() -> Result<(), EvalAltResult> {
 fn test_big_get_set() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestChild {
-        x: i64,
+        x: INT,
     }
 
     impl TestChild {
-        fn get_x(&mut self) -> i64 {
+        fn get_x(&mut self) -> INT {
             self.x
         }
 
-        fn set_x(&mut self, new_x: i64) {
+        fn set_x(&mut self, new_x: INT) {
             self.x = new_x;
         }
 
@@ -86,7 +86,7 @@ fn test_big_get_set() -> Result<(), EvalAltResult> {
     engine.register_fn("new_tp", TestParent::new);
 
     assert_eq!(
-        engine.eval::<i64>("let a = new_tp(); a.child.x = 500; a.child.x")?,
+        engine.eval::<INT>("let a = new_tp(); a.child.x = 500; a.child.x")?,
         500
     );
 
