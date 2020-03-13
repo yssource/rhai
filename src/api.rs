@@ -12,6 +12,7 @@ use std::{
     any::{type_name, TypeId},
     fs::File,
     io::prelude::*,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -105,26 +106,26 @@ impl<'e> Engine<'e> {
     }
 
     /// Compile a file into an AST.
-    pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
-        let mut f = File::open(filename)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
+    pub fn compile_file(&self, filename: PathBuf) -> Result<AST, EvalAltResult> {
+        let mut f = File::open(filename.clone())
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.clone(), err))?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.clone(), err))
             .and_then(|_| self.compile(&contents).map_err(EvalAltResult::ErrorParsing))
     }
 
     /// Evaluate a file.
-    pub fn eval_file<T: Any + Clone>(&mut self, filename: &str) -> Result<T, EvalAltResult> {
-        let mut f = File::open(filename)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
+    pub fn eval_file<T: Any + Clone>(&mut self, filename: PathBuf) -> Result<T, EvalAltResult> {
+        let mut f = File::open(filename.clone())
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.clone(), err))?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.clone(), err))
             .and_then(|_| self.eval::<T>(&contents))
     }
 
@@ -205,14 +206,14 @@ impl<'e> Engine<'e> {
 
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume_file(&mut self, filename: &str) -> Result<(), EvalAltResult> {
-        let mut f = File::open(filename)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))?;
+    pub fn consume_file(&mut self, filename: PathBuf) -> Result<(), EvalAltResult> {
+        let mut f = File::open(filename.clone())
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.clone(), err))?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.clone(), err))
             .and_then(|_| self.consume(&contents))
     }
 
