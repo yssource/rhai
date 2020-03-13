@@ -112,7 +112,7 @@ impl<'e> Engine<'e> {
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(filename.into(), err))
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(path.clone(), err))
             .map(|_| contents)
     }
 
@@ -210,7 +210,7 @@ impl<'e> Engine<'e> {
         path: PathBuf,
         retain_functions: bool,
     ) -> Result<(), EvalAltResult> {
-        Self::read_file(path).and_then(|_| self.consume(&contents, retain_functions))
+        Self::read_file(path).and_then(|contents| self.consume(&contents, retain_functions))
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
