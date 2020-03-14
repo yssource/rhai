@@ -171,13 +171,15 @@ impl<'e> Engine<'e> {
                 statements
             };
 
-            let result = statements
-                .iter()
-                .try_fold(().into_dynamic(), |_, stmt| engine.eval_stmt(scope, stmt));
+            let mut result = ().into_dynamic();
+
+            for stmt in statements {
+                result = engine.eval_stmt(scope, stmt)?;
+            }
 
             engine.clear_functions();
 
-            result
+            Ok(result)
         }
 
         match eval_ast_internal(self, scope, ast) {

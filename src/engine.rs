@@ -796,8 +796,8 @@ impl Engine<'_> {
                     // name = rhs
                     Expr::Variable(name, pos) => match scope.get(name) {
                         Some((idx, _, VariableType::Normal, _)) => {
-                            *scope.get_mut(name, idx) = rhs_val;
-                            Ok(().into_dynamic())
+                            *scope.get_mut(name, idx) = rhs_val.clone();
+                            Ok(rhs_val)
                         }
                         Some((_, _, VariableType::Constant, _)) => Err(
                             EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
@@ -947,7 +947,15 @@ impl Engine<'_> {
             Stmt::Noop(_) => Ok(().into_dynamic()),
 
             // Expression as statement
-            Stmt::Expr(expr) => self.eval_expr(scope, expr),
+            Stmt::Expr(expr) => {
+                let result = self.eval_expr(scope, expr)?;
+
+                Ok(match expr.as_ref() {
+                    // If it is an assignment, erase the result at the root
+                    Expr::Assignment(_, _, _) => ().into_dynamic(),
+                    _ => result,
+                })
+            }
 
             // Block scope
             Stmt::Block(block, _) => {
