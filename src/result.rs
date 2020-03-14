@@ -61,10 +61,10 @@ pub enum EvalAltResult {
     Return(Dynamic, Position),
 }
 
-impl Error for EvalAltResult {
-    fn description(&self) -> &str {
+impl EvalAltResult {
+    pub(crate) fn desc(&self) -> &str {
         match self {
-            Self::ErrorParsing(p) => p.description(),
+            Self::ErrorParsing(p) => p.desc(),
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorFunctionArgsMismatch(_, _, _, _) => {
                 "Function call with wrong number of arguments"
@@ -101,15 +101,13 @@ impl Error for EvalAltResult {
             Self::Return(_, _) => "[Not Error] Function returns value",
         }
     }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
 }
+
+impl Error for EvalAltResult {}
 
 impl fmt::Display for EvalAltResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let desc = self.description();
+        let desc = self.desc();
 
         match self {
             Self::ErrorFunctionNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
