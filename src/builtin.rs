@@ -580,7 +580,7 @@ impl Engine<'_> {
         }
 
         fn range<T>(from: T, to: T) -> Range<T> {
-            (from..to)
+            from..to
         }
 
         reg_iterator::<INT>(self);
@@ -773,9 +773,12 @@ impl Engine<'_> {
             self.register_dynamic_fn("pop", |list: &mut Array| {
                 list.pop().unwrap_or_else(|| ().into_dynamic())
             });
-            self.register_dynamic_fn("shift", |list: &mut Array| match list.len() {
-                0 => ().into_dynamic(),
-                _ => list.remove(0),
+            self.register_dynamic_fn("shift", |list: &mut Array| {
+                if !list.is_empty() {
+                    ().into_dynamic()
+                } else {
+                    list.remove(0)
+                }
             });
             self.register_fn("len", |list: &mut Array| list.len() as INT);
             self.register_fn("clear", |list: &mut Array| list.clear());
