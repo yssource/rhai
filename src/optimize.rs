@@ -1,3 +1,5 @@
+#![cfg(not(feature = "no_optimize"))]
+
 use crate::engine::KEYWORD_DUMP_AST;
 use crate::parser::{Expr, Stmt};
 use crate::scope::{Scope, ScopeEntry, VariableType};

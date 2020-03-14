@@ -12,6 +12,7 @@ fn test_constant() -> Result<(), EvalAltResult> {
         Ok(_) => panic!("expecting compilation error"),
     }
 
+    #[cfg(not(feature = "no_index"))]
     match engine.eval::<i64>("const x = [1, 2, 3, 4, 5]; x[2] = 42;") {
         Err(EvalAltResult::ErrorAssignmentToConstant(var, _)) if var == "x" => (),
         Err(err) => return Err(err),

@@ -8,7 +8,9 @@ use crate::engine::Engine;
 use crate::fn_register::{RegisterFn, RegisterResultFn};
 use crate::parser::{Position, INT};
 use crate::result::EvalAltResult;
-use crate::FLOAT;
+
+#[cfg(not(feature = "no_float"))]
+use crate::parser::FLOAT;
 
 use num_traits::{
     identities::Zero, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl,

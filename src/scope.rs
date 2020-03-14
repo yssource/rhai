@@ -221,15 +221,6 @@ fn map_dynamic_to_expr(value: Dynamic) -> (Option<Expr>, Dynamic) {
             )),
             value2,
         )
-    } else if value.is::<FLOAT>() {
-        let value2 = value.clone();
-        (
-            Some(Expr::FloatConstant(
-                *value.downcast::<FLOAT>().expect("value should be FLOAT"),
-                Position::none(),
-            )),
-            value2,
-        )
     } else if value.is::<char>() {
         let value2 = value.clone();
         (
@@ -261,6 +252,20 @@ fn map_dynamic_to_expr(value: Dynamic) -> (Option<Expr>, Dynamic) {
             value2,
         )
     } else {
+        #[cfg(not(feature = "no_float"))]
+        {
+            if value.is::<FLOAT>() {
+                let value2 = value.clone();
+                return (
+                    Some(Expr::FloatConstant(
+                        *value.downcast::<FLOAT>().expect("value should be FLOAT"),
+                        Position::none(),
+                    )),
+                    value2,
+                );
+            }
+        }
+
         (None, value)
     }
 }

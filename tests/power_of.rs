@@ -1,4 +1,7 @@
-use rhai::{Engine, EvalAltResult, FLOAT, INT};
+use rhai::{Engine, EvalAltResult, INT};
+
+#[cfg(not(feature = "no_float"))]
+use rhai::FLOAT;
 
 #[test]
 fn test_power_of() -> Result<(), EvalAltResult> {
