@@ -100,8 +100,14 @@ impl<'e> Engine<'e> {
 
     /// Compile a string into an AST.
     pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
+        self.compile_with_scope(&Scope::new(), input)
+    }
+
+    /// Compile a string into an AST using own scope.
+    /// The scope is useful for passing constants into the script for optimization.
+    pub fn compile_with_scope(&self, scope: &Scope, input: &str) -> Result<AST, ParseError> {
         let tokens_stream = lex(input);
-        parse(&mut tokens_stream.peekable(), self.optimize)
+        parse(&mut tokens_stream.peekable(), scope, self.optimize)
     }
 
     fn read_file(filename: &str) -> Result<String, EvalAltResult> {
@@ -117,8 +123,20 @@ impl<'e> Engine<'e> {
 
     /// Compile a file into an AST.
     pub fn compile_file(&self, filename: &str) -> Result<AST, EvalAltResult> {
-        Self::read_file(filename)
-            .and_then(|contents| self.compile(&contents).map_err(|err| err.into()))
+        self.compile_file_with_scope(&Scope::new(), filename)
+    }
+
+    /// Compile a file into an AST using own scope.
+    /// The scope is useful for passing constants into the script for optimization.
+    pub fn compile_file_with_scope(
+        &self,
+        scope: &Scope,
+        filename: &str,
+    ) -> Result<AST, EvalAltResult> {
+        Self::read_file(filename).and_then(|contents| {
+            self.compile_with_scope(scope, &contents)
+                .map_err(|err| err.into())
+        })
     }
 
     /// Evaluate a file.
@@ -241,7 +259,7 @@ impl<'e> Engine<'e> {
     ) -> Result<(), EvalAltResult> {
         let tokens_stream = lex(input);
 
-        let ast = parse(&mut tokens_stream.peekable(), self.optimize)
+        let ast = parse(&mut tokens_stream.peekable(), scope, self.optimize)
             .map_err(EvalAltResult::ErrorParsing)?;
 
         self.consume_ast_with_scope(scope, retain_functions, &ast)

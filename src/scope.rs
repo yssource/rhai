@@ -1,6 +1,10 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
-use crate::any::{Any, Dynamic};
+use crate::any::{Any, AnyExt, Dynamic};
+use crate::parser::{Expr, Position, INT};
+
+#[cfg(not(feature = "no_float"))]
+use crate::parser::FLOAT;
 
 use std::borrow::Cow;
 
@@ -8,6 +12,13 @@ use std::borrow::Cow;
 pub enum VariableType {
     Normal,
     Constant,
+}
+
+pub struct ScopeEntry<'a> {
+    pub name: Cow<'a, str>,
+    pub var_type: VariableType,
+    pub value: Dynamic,
+    pub expr: Option<Expr>,
 }
 
 /// A type containing information about current scope.
@@ -31,7 +42,7 @@ pub enum VariableType {
 ///
 /// When searching for variables, newly-added variables are found before similarly-named but older variables,
 /// allowing for automatic _shadowing_ of variables.
-pub struct Scope<'a>(Vec<(Cow<'a, str>, VariableType, Dynamic)>);
+pub struct Scope<'a>(Vec<ScopeEntry<'a>>);
 
 impl<'a> Scope<'a> {
     /// Create a new Scope.
@@ -50,32 +61,62 @@ impl<'a> Scope<'a> {
     }
 
     /// Add (push) a new variable to the Scope.
-    pub fn push<K: Into<Cow<'a, str>>, T: Any>(&mut self, key: K, value: T) {
-        self.0
-            .push((key.into(), VariableType::Normal, Box::new(value)));
+    pub fn push<K: Into<Cow<'a, str>>, T: Any>(&mut self, name: K, value: T) {
+        let value = value.into_dynamic();
+
+        // Map into constant expressions
+        let (expr, value) = map_dynamic_to_expr(value);
+
+        self.0.push(ScopeEntry {
+            name: name.into(),
+            var_type: VariableType::Normal,
+            value,
+            expr,
+        });
     }
 
     /// Add (push) a new constant to the Scope.
-    pub fn push_constant<K: Into<Cow<'a, str>>, T: Any>(&mut self, key: K, value: T) {
-        self.0
-            .push((key.into(), VariableType::Constant, Box::new(value)));
+    pub fn push_constant<K: Into<Cow<'a, str>>, T: Any>(&mut self, name: K, value: T) {
+        let value = value.into_dynamic();
+
+        // Map into constant expressions
+        let (expr, value) = map_dynamic_to_expr(value);
+
+        self.0.push(ScopeEntry {
+            name: name.into(),
+            var_type: VariableType::Constant,
+            value,
+            expr,
+        });
     }
 
     /// Add (push) a new variable with a `Dynamic` value to the Scope.
     pub(crate) fn push_dynamic<K: Into<Cow<'a, str>>>(
         &mut self,
-        key: K,
-        val_type: VariableType,
+        name: K,
+        var_type: VariableType,
         value: Dynamic,
     ) {
-        self.0.push((key.into(), val_type, value));
+        let (expr, value) = map_dynamic_to_expr(value);
+
+        self.0.push(ScopeEntry {
+            name: name.into(),
+            var_type,
+            value,
+            expr,
+        });
     }
 
     /// Remove (pop) the last variable from the Scope.
     pub fn pop(&mut self) -> Option<(String, VariableType, Dynamic)> {
-        self.0
-            .pop()
-            .map(|(key, var_type, value)| (key.to_string(), var_type, value))
+        self.0.pop().map(
+            |ScopeEntry {
+                 name,
+                 var_type,
+                 value,
+                 ..
+             }| (name.to_string(), var_type, value),
+        )
     }
 
     /// Truncate (rewind) the Scope to a previous size.
@@ -89,8 +130,18 @@ impl<'a> Scope<'a> {
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find(|(_, (name, _, _))| name == key)
-            .map(|(i, (name, var_type, value))| (i, name.as_ref(), *var_type, value.clone()))
+            .find(|(_, ScopeEntry { name, .. })| name == key)
+            .map(
+                |(
+                    i,
+                    ScopeEntry {
+                        name,
+                        var_type,
+                        value,
+                        ..
+                    },
+                )| (i, name.as_ref(), *var_type, value.clone()),
+            )
     }
 
     /// Get the value of a variable in the Scope, starting from the last.
@@ -99,50 +150,37 @@ impl<'a> Scope<'a> {
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find(|(_, (name, _, _))| name == key)
-            .and_then(|(_, (_, _, value))| value.downcast_ref::<T>())
-            .map(|value| value.clone())
+            .find(|(_, ScopeEntry { name, .. })| name == key)
+            .and_then(|(_, ScopeEntry { value, .. })| value.downcast_ref::<T>())
+            .map(T::clone)
     }
 
     /// Get a mutable reference to a variable in the Scope.
-    pub(crate) fn get_mut(&mut self, key: &str, index: usize) -> &mut Dynamic {
+    pub(crate) fn get_mut(&mut self, name: &str, index: usize) -> &mut Dynamic {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
 
         assert_ne!(
-            entry.1,
+            entry.var_type,
             VariableType::Constant,
             "get mut of constant variable"
         );
-        assert_eq!(entry.0, key, "incorrect key at Scope entry");
+        assert_eq!(entry.name, name, "incorrect key at Scope entry");
 
-        &mut entry.2
+        &mut entry.value
     }
 
     /// Get a mutable reference to a variable in the Scope and downcast it to a specific type
     #[cfg(not(feature = "no_index"))]
-    pub(crate) fn get_mut_by_type<T: Any + Clone>(&mut self, key: &str, index: usize) -> &mut T {
-        self.get_mut(key, index)
+    pub(crate) fn get_mut_by_type<T: Any + Clone>(&mut self, name: &str, index: usize) -> &mut T {
+        self.get_mut(name, index)
             .downcast_mut::<T>()
             .expect("wrong type cast")
     }
 
     /// Get an iterator to variables in the Scope.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, VariableType, &Dynamic)> {
-        self.0
-            .iter()
-            .rev() // Always search a Scope in reverse order
-            .map(|(key, var_type, value)| (key.as_ref(), *var_type, value))
+    pub fn iter(&self) -> impl Iterator<Item = &ScopeEntry> {
+        self.0.iter().rev() // Always search a Scope in reverse order
     }
-
-    /*
-    /// Get a mutable iterator to variables in the Scope.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Dynamic)> {
-        self.0
-            .iter_mut()
-            .rev() // Always search a Scope in reverse order
-            .map(|(key, value)| (key.as_ref(), value))
-    }
-    */
 }
 
 impl<'a, K> std::iter::Extend<(K, VariableType, Dynamic)> for Scope<'a>
@@ -150,9 +188,66 @@ where
     K: Into<Cow<'a, str>>,
 {
     fn extend<T: IntoIterator<Item = (K, VariableType, Dynamic)>>(&mut self, iter: T) {
-        self.0.extend(
-            iter.into_iter()
-                .map(|(key, var_type, value)| (key.into(), var_type, value)),
-        );
+        self.0
+            .extend(iter.into_iter().map(|(name, var_type, value)| ScopeEntry {
+                name: name.into(),
+                var_type,
+                value,
+                expr: None,
+            }));
+    }
+}
+
+fn map_dynamic_to_expr(value: Dynamic) -> (Option<Expr>, Dynamic) {
+    if value.is::<INT>() {
+        let value2 = value.clone();
+        (
+            Some(Expr::IntegerConstant(
+                *value.downcast::<INT>().expect("value should be INT"),
+                Position::none(),
+            )),
+            value2,
+        )
+    } else if value.is::<FLOAT>() {
+        let value2 = value.clone();
+        (
+            Some(Expr::FloatConstant(
+                *value.downcast::<FLOAT>().expect("value should be FLOAT"),
+                Position::none(),
+            )),
+            value2,
+        )
+    } else if value.is::<char>() {
+        let value2 = value.clone();
+        (
+            Some(Expr::CharConstant(
+                *value.downcast::<char>().expect("value should be char"),
+                Position::none(),
+            )),
+            value2,
+        )
+    } else if value.is::<String>() {
+        let value2 = value.clone();
+        (
+            Some(Expr::StringConstant(
+                *value.downcast::<String>().expect("value should be String"),
+                Position::none(),
+            )),
+            value2,
+        )
+    } else if value.is::<bool>() {
+        let value2 = value.clone();
+        (
+            Some(
+                if *value.downcast::<bool>().expect("value should be bool") {
+                    Expr::True(Position::none())
+                } else {
+                    Expr::False(Position::none())
+                },
+            ),
+            value2,
+        )
+    } else {
+        (None, value)
     }
 }

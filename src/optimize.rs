@@ -1,5 +1,6 @@
 use crate::engine::KEYWORD_DUMP_AST;
 use crate::parser::{Expr, Stmt};
+use crate::scope::{Scope, ScopeEntry, VariableType};
 
 struct State {
     changed: bool,
@@ -330,12 +331,26 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     }
 }
 
-pub(crate) fn optimize(statements: Vec<Stmt>) -> Vec<Stmt> {
+pub(crate) fn optimize(statements: Vec<Stmt>, scope: &Scope) -> Vec<Stmt> {
     let mut result = statements;
 
     loop {
         let mut state = State::new();
         let num_statements = result.len();
+
+        scope
+            .iter()
+            .filter(|ScopeEntry { var_type, expr, .. }| {
+                // Get all the constants with definite constant expressions
+                *var_type == VariableType::Constant
+                    && expr.as_ref().map(|e| e.is_constant()).unwrap_or(false)
+            })
+            .for_each(|ScopeEntry { name, expr, .. }| {
+                state.push_constant(
+                    name.as_ref(),
+                    expr.as_ref().expect("should be Some(expr)").clone(),
+                )
+            });
 
         result = result
             .into_iter()

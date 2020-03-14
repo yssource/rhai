@@ -1,6 +1,6 @@
 // This is a script to calculate prime numbers.
 
-let MAX_NUMBER_TO_CHECK = 10000;    // 1229 primes
+const MAX_NUMBER_TO_CHECK = 10000;    // 1229 primes
 
 let prime_mask = [];
 prime_mask.pad(MAX_NUMBER_TO_CHECK, true);

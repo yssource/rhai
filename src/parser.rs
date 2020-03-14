@@ -2,7 +2,8 @@
 
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::{optimize::optimize, scope::VariableType};
+use crate::optimize::optimize;
+use crate::scope::{Scope, VariableType};
 
 use std::{
     borrow::Cow, char, cmp::Ordering, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc,
@@ -147,6 +148,42 @@ pub struct AST(
     pub(crate) Vec<Stmt>,
     #[cfg(not(feature = "no_function"))] pub(crate) Vec<Arc<FnDef>>,
 );
+
+impl AST {
+    /// Optimize the AST with constants defined in an external Scope.
+    ///
+    /// Although optimization is performed by default during compilation, sometimes it is necessary to
+    /// "re"-optimize an AST. For example, when working with constants that are passed in via an
+    /// external scope, it will be more efficient to optimize the AST once again to take advantage
+    /// of the new constants.
+    ///
+    /// With this method, it is no longer necessary to regenerate a large script with hard-coded
+    /// constant values. The script AST can be compiled once and stored. During actually evaluation,
+    /// constants are passed into the Engine via an external scope (i.e. with `scope.push_constant(...)`).
+    /// Then, the AST is cloned and the copy re-optimized before running.
+    pub fn optimize(self, scope: &Scope) -> Self {
+        AST(
+            crate::optimize::optimize(self.0, scope),
+            #[cfg(not(feature = "no_function"))]
+            self.1
+                .into_iter()
+                .map(|fn_def| {
+                    let pos = fn_def.body.position();
+                    let body = optimize(vec![fn_def.body.clone()], scope)
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| Stmt::Noop(pos));
+                    Arc::new(FnDef {
+                        name: fn_def.name.clone(),
+                        params: fn_def.params.clone(),
+                        body,
+                        pos: fn_def.pos,
+                    })
+                })
+                .collect(),
+        )
+    }
+}
 
 #[derive(Debug)] // Do not derive Clone because it is expensive
 pub struct FnDef {
@@ -2043,6 +2080,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
 
 fn parse_top_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    scope: &Scope,
     optimize_ast: bool,
 ) -> Result<AST, ParseError> {
     let mut statements = Vec::<Stmt>::new();
@@ -2073,7 +2111,7 @@ fn parse_top_level<'a>(
 
     return Ok(AST(
         if optimize_ast {
-            optimize(statements)
+            optimize(statements, &scope)
         } else {
             statements
         },
@@ -2083,7 +2121,7 @@ fn parse_top_level<'a>(
             .map(|mut fn_def| {
                 if optimize_ast {
                     let pos = fn_def.body.position();
-                    let mut body = optimize(vec![fn_def.body]);
+                    let mut body = optimize(vec![fn_def.body], &scope);
                     fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
                 }
                 Arc::new(fn_def)
@@ -2094,7 +2132,8 @@ fn parse_top_level<'a>(
 
 pub fn parse<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    scope: &Scope,
     optimize_ast: bool,
 ) -> Result<AST, ParseError> {
-    parse_top_level(input, optimize_ast)
+    parse_top_level(input, scope, optimize_ast)
 }

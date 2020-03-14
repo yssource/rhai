@@ -73,7 +73,7 @@ fn main() {
         }
 
         if let Err(err) = engine
-            .compile(&input)
+            .compile_with_scope(&scope, &input)
             .map_err(EvalAltResult::ErrorParsing)
             .and_then(|r| {
                 ast = Some(r);
