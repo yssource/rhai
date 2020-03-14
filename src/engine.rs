@@ -372,16 +372,26 @@ impl Engine<'_> {
                 let val = self.get_dot_val_helper(scope, target.as_mut(), dot_rhs);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                if let Some((id, src_idx)) = src {
-                    Self::update_indexed_var_in_scope(
-                        src_type,
-                        scope,
-                        id,
-                        src_idx,
-                        idx,
-                        target,
-                        idx_lhs.position(),
-                    )?;
+                if let Some((id, var_type, src_idx)) = src {
+                    match var_type {
+                        VariableType::Constant => {
+                            return Err(EvalAltResult::ErrorAssignmentToConstant(
+                                id.to_string(),
+                                idx_lhs.position(),
+                            ));
+                        }
+                        VariableType::Normal => {
+                            Self::update_indexed_var_in_scope(
+                                src_type,
+                                scope,
+                                id,
+                                src_idx,
+                                idx,
+                                target,
+                                dot_rhs.position(),
+                            )?;
+                        }
+                    }
                 }
 
                 val
@@ -477,7 +487,15 @@ impl Engine<'_> {
         lhs: &'a Expr,
         idx_expr: &Expr,
         idx_pos: Position,
-    ) -> Result<(IndexSourceType, Option<(&'a str, usize)>, usize, Dynamic), EvalAltResult> {
+    ) -> Result<
+        (
+            IndexSourceType,
+            Option<(&'a str, VariableType, usize)>,
+            usize,
+            Dynamic,
+        ),
+        EvalAltResult,
+    > {
         let idx = self.eval_index_value(scope, idx_expr)?;
 
         match lhs {
@@ -488,8 +506,13 @@ impl Engine<'_> {
                 |val| self.get_indexed_value(&val, idx, idx_expr.position(), idx_pos),
                 lhs.position(),
             )
-            .map(|(src_idx, _, (val, src_type))| {
-                (src_type, Some((id.as_str(), src_idx)), idx as usize, val)
+            .map(|(src_idx, var_type, (val, src_type))| {
+                (
+                    src_type,
+                    Some((id.as_str(), var_type, src_idx)),
+                    idx as usize,
+                    val,
+                )
             }),
 
             // (expr)[idx_expr]
@@ -739,16 +762,20 @@ impl Engine<'_> {
                     self.set_dot_val_helper(scope, target.as_mut(), dot_rhs, new_val, val_pos);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                if let Some((id, src_idx)) = src {
-                    Self::update_indexed_var_in_scope(
-                        src_type,
-                        scope,
-                        id,
-                        src_idx,
-                        idx,
-                        target,
-                        lhs.position(),
-                    )?;
+                if let Some((id, var_type, src_idx)) = src {
+                    match var_type {
+                        VariableType::Constant => {
+                            return Err(EvalAltResult::ErrorAssignmentToConstant(
+                                id.to_string(),
+                                lhs.position(),
+                            ));
+                        }
+                        VariableType::Normal => {
+                            Self::update_indexed_var_in_scope(
+                                src_type, scope, id, src_idx, idx, target, val_pos,
+                            )?;
+                        }
+                    }
                 }
 
                 val
@@ -811,16 +838,24 @@ impl Engine<'_> {
                         let (src_type, src, idx, _) =
                             self.eval_index_expr(scope, idx_lhs, idx_expr, *idx_pos)?;
 
-                        if let Some((id, src_idx)) = src {
-                            Ok(Self::update_indexed_var_in_scope(
-                                src_type,
-                                scope,
-                                &id,
-                                src_idx,
-                                idx,
-                                rhs_val,
-                                rhs.position(),
-                            )?)
+                        if let Some((id, var_type, src_idx)) = src {
+                            match var_type {
+                                VariableType::Constant => {
+                                    return Err(EvalAltResult::ErrorAssignmentToConstant(
+                                        id.to_string(),
+                                        idx_lhs.position(),
+                                    ));
+                                }
+                                VariableType::Normal => Ok(Self::update_indexed_var_in_scope(
+                                    src_type,
+                                    scope,
+                                    &id,
+                                    src_idx,
+                                    idx,
+                                    rhs_val,
+                                    rhs.position(),
+                                )?),
+                            }
                         } else {
                             Err(EvalAltResult::ErrorAssignmentToUnknownLHS(
                                 idx_lhs.position(),

@@ -7,6 +7,10 @@ fn test_arrays() -> Result<(), EvalAltResult> {
 
     assert_eq!(engine.eval::<INT>("let x = [1, 2, 3]; x[1]")?, 2);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[1] = 5; y[1]")?, 5);
+    assert_eq!(
+        engine.eval::<char>(r#"let y = [1, [ 42, 88, "93" ], 3]; y[1][2][1]"#)?,
+        '3'
+    );
 
     Ok(())
 }
@@ -48,10 +52,12 @@ fn test_array_with_structs() -> Result<(), EvalAltResult> {
 
     assert_eq!(
         engine.eval::<INT>(
-            "let a = [new_ts()];     \
-             a[0].x = 100;           \
-             a[0].update();          \
-             a[0].x",
+            r"
+                let a = [new_ts()];
+                a[0].x = 100;
+                a[0].update();
+                a[0].x
+            "
         )?,
         1100
     );

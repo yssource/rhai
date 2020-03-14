@@ -343,6 +343,8 @@ impl Expr {
             | Expr::False(_)
             | Expr::Unit(_) => true,
 
+            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_constant),
+
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, _) => true,
 
@@ -1635,12 +1637,12 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(idx_lhs, _, _) if is_top => valid_assignment_chain(idx_lhs, true),
-
-            #[cfg(not(feature = "no_index"))]
-            Expr::Index(idx_lhs, _, _) if !is_top => Some(ParseError::new(
-                ParseErrorType::AssignmentToInvalidLHS,
-                idx_lhs.position(),
+            Expr::Index(idx_lhs, _, pos) => Some(ParseError::new(
+                match idx_lhs.as_ref() {
+                    Expr::Index(_, _, _) => ParseErrorType::AssignmentToCopy,
+                    _ => ParseErrorType::AssignmentToInvalidLHS,
+                },
+                *pos,
             )),
 
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {

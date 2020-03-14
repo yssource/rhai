@@ -65,15 +65,15 @@ Examples
 
 A number of examples can be found in the `examples` folder:
 
-| Example                    | Description                                                               |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `arrays_and_structs`       | demonstrates registering a new type to Rhai and the usage of arrays on it |
-| `custom_types_and_methods` | shows how to register a type and methods for it                           |
-| `hello`                    | simple example that evaluates an expression and prints the result         |
-| `reuse_scope`              | evaluates two pieces of code in separate runs, but using a common scope   |
-| `rhai_runner`              | runs each filename passed to it as a Rhai script                          |
-| `simple_fn`                | shows how to register a Rust function to a Rhai engine                    |
-| `repl`                     | a simple REPL, interactively evaluate statements from stdin               |
+| Example                    | Description                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `arrays_and_structs`       | demonstrates registering a new type to Rhai and the usage of arrays on it   |
+| `custom_types_and_methods` | shows how to register a type and methods for it                             |
+| `hello`                    | simple example that evaluates an expression and prints the result           |
+| `reuse_scope`              | evaluates two pieces of code in separate runs, but using a common [`Scope`] |
+| `rhai_runner`              | runs each filename passed to it as a Rhai script                            |
+| `simple_fn`                | shows how to register a Rust function to a Rhai [`Engine`]                  |
+| `repl`                     | a simple REPL, interactively evaluate statements from stdin                 |
 
 Examples can be run with the following command:
 
@@ -294,7 +294,7 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
-To return a `Dynamic` value, simply `Box` it and return it.
+To return a [`Dynamic`] value, simply `Box` it and return it.
 
 ```rust
 fn decide(yes_no: bool) -> Dynamic {
@@ -421,7 +421,7 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
-First, for each type we use with the engine, we need to be able to Clone.  This allows the engine to pass by value and still keep its own state.
+All custom types must implement `Clone`.  This allows the [`Engine`] to pass by value.
 
 ```rust
 #[derive(Clone)]
@@ -430,7 +430,7 @@ struct TestStruct {
 }
 ```
 
-Next, we create a few methods that we'll later use in our scripts.  Notice that we register our custom type with the engine.
+Next, we create a few methods that we'll later use in our scripts.  Notice that we register our custom type with the [`Engine`].
 
 ```rust
 impl TestStruct {
@@ -448,9 +448,9 @@ let mut engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-To use methods and functions with the engine, we need to register them.  There are some convenience functions to help with this.  Below I register update and new with the engine.
+To use methods and functions with the [`Engine`], we need to register them.  There are some convenience functions to help with this.  Below I register update and new with the [`Engine`].
 
-*Note: the engine follows the convention that methods use a &mut first parameter so that invoking methods can update the value in memory.*
+*Note: [`Engine`] follows the convention that methods use a `&mut` first parameter so that invoking methods can update the value in memory.*
 
 ```rust
 engine.register_fn("update", TestStruct::update);
@@ -530,7 +530,7 @@ println!("result: {}", result);
 Initializing and maintaining state
 ---------------------------------
 
-By default, Rhai treats each engine invocation as a fresh one, persisting only the functions that have been defined but no top-level state.  This gives each one a fairly clean starting place.  Sometimes, though, you want to continue using the same top-level state from one invocation to the next.
+By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting only the functions that have been defined but no top-level state.  This gives each one a fairly clean starting place.  Sometimes, though, you want to continue using the same top-level state from one invocation to the next.
 
 In this example, we first create a state with a few initialized variables, then thread the same state through multiple invocations:
 
@@ -604,9 +604,16 @@ Constants can be defined and are immutable.  Constants follow the same naming ru
 
 ```rust
 const x = 42;
-print(x * 2);   // prints 84
-x = 123;        // <- syntax error - cannot assign to constant
+print(x * 2);       // prints 84
+x = 123;            // <- syntax error - cannot assign to constant
 ```
+
+Constants must be assigned a _value_ not an expression.
+
+```rust
+const x = 40 + 2;   // <- syntax error - cannot assign expression to constant
+```
+
 
 Numbers
 -------
@@ -997,7 +1004,7 @@ fn add(x, y) {
 print(add(2, 3));
 ```
 
-Functions defined in script always take `Dynamic` parameters (i.e. the parameter can be of any type).
+Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
 It is important to remember that all parameters are passed by _value_, so all functions are _pure_ (i.e. they never modify their parameters).
 Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if you are not careful.
 
@@ -1029,7 +1036,7 @@ fn do_addition(x) {
 }
 ```
 
-Functions can be _overloaded_ based on the number of parameters (but not parameter types, since all parameters are `Dynamic`).
+Functions can be _overloaded_ based on the number of parameters (but not parameter types, since all parameters are [`Dynamic`]).
 New definitions of the same name and number of parameters overwrite previous definitions.
 
 ```rust
@@ -1122,24 +1129,56 @@ The above script optimizes to:
 Constants propagation is used to remove dead code:
 
 ```rust
-const abc = true;
-if abc || some_work() { print("done!"); }   // 'abc' is constant so it is replaced by 'true'...
-if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called because the LHS is 'true'
+const ABC = true;
+if ABC || some_work() { print("done!"); }   // 'ABC' is constant so it is replaced by 'true'...
+if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called
 if true { print("done!"); }                 // <-- the line above is equivalent to this
 print("done!");                             // <-- the line above is further simplified to this
                                             //     because the condition is always true
 ```
 
 These are quite effective for template-based machine-generated scripts where certain constant values are spliced into the script text in order to turn on/off certain sections.
+For fixed script texts, the constant values can be provided in a user-defined `Scope` object to the `Engine` for use in compilation and evaluation.
 
 Beware, however, that most operators are actually function calls, and those functions can be overridden, so they are not optimized away:
 
 ```rust
-if 1 == 1 { ... }       // '1==1' is NOT optimized away because you can define
-                        // your own '==' function to override the built-in default!
+const DECISION = 1;
+
+if DECISION == 1 {          // NOT optimized away because you can define
+    :                       // your own '==' function to override the built-in default!
+    :
+} else if DECISION == 2 {   // same here, NOT optimized away
+    :
+} else if DECISION == 3 {   // same here, NOT optimized away
+    :
+} else {
+    :
+}
 ```
 
-### Here be dragons!
+So, instead, do this:
+
+```rust
+const DECISION_1 = true;
+const DECISION_2 = false;
+const DECISION_3 = false;
+
+if DECISION_1 {
+    :                   // this branch is kept
+} else if DECISION_2 {
+    :                   // this branch is eliminated
+} else if DECISION_3 {
+    :                   // this branch is eliminated
+} else {
+    :                   // this branch is eliminated
+}
+```
+
+In general, boolean constants are most effective if you want the optimizer to automatically prune large `if`-`else` branches because they do not depend on operators.
+
+Here be dragons!
+----------------
 
 Some optimizations can be quite aggressive and can alter subtle semantics of the script.  For example:
 
@@ -1191,3 +1230,7 @@ engine.set_optimization(false);     // turn off the optimizer
 [`no_function`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
+
+[`Engine`]: #hello-world
+[`Scope`]: #initializing-and-maintaining-state
+[`Dynamic`]: #values-and-types
