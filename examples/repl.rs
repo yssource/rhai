@@ -62,10 +62,11 @@ fn main() {
         match input.as_str().trim() {
             "exit" | "quit" => break, // quit
             "ast" => {
-                // print the last AST
-                match &ast {
-                    Some(ast) => println!("{:#?}", ast),
-                    None => println!("()"),
+                if matches!(&ast, Some(_)) {
+                    // print the last AST
+                    println!("{:#?}", ast.as_ref().unwrap());
+                } else {
+                    println!("()");
                 }
                 continue;
             }
