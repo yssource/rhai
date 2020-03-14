@@ -153,8 +153,8 @@ impl Engine<'_> {
             );
 
             // Evaluate
+            // Convert return statement to return value
             return match self.eval_stmt(&mut scope, &fn_def.body) {
-                // Convert return statement to return value
                 Err(EvalAltResult::Return(x, _)) => Ok(x),
                 other => other,
             };
@@ -985,10 +985,11 @@ impl Engine<'_> {
             Stmt::Expr(expr) => {
                 let result = self.eval_expr(scope, expr)?;
 
-                Ok(match expr.as_ref() {
+                Ok(if !matches!(expr.as_ref(), Expr::Assignment(_, _, _)) {
+                    result
+                } else {
                     // If it is an assignment, erase the result at the root
-                    Expr::Assignment(_, _, _) => ().into_dynamic(),
-                    _ => result,
+                    ().into_dynamic()
                 })
             }
 
@@ -1032,9 +1033,9 @@ impl Engine<'_> {
                     Ok(guard_val) => {
                         if *guard_val {
                             match self.eval_stmt(scope, body) {
+                                Ok(_) => (),
                                 Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
                                 Err(x) => return Err(x),
-                                _ => (),
                             }
                         } else {
                             return Ok(().into_dynamic());
@@ -1047,9 +1048,9 @@ impl Engine<'_> {
             // Loop statement
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, body) {
+                    Ok(_) => (),
                     Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
                     Err(x) => return Err(x),
-                    _ => (),
                 }
             },
 
@@ -1066,9 +1067,9 @@ impl Engine<'_> {
                         *scope.get_mut(name, idx) = a;
 
                         match self.eval_stmt(scope, body) {
+                            Ok(_) => (),
                             Err(EvalAltResult::LoopBreak) => break,
                             Err(x) => return Err(x),
-                            _ => (),
                         }
                     }
                     scope.pop();

@@ -50,16 +50,15 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             let pos = expr.position();
             let expr = optimize_expr(*expr, state);
 
-            match expr {
-                Expr::False(_) | Expr::True(_) => Stmt::Noop(stmt1.position()),
-                expr => {
-                    let stmt = Stmt::Expr(Box::new(expr));
+            if matches!(expr, Expr::False(_) | Expr::True(_)) {
+                Stmt::Noop(stmt1.position())
+            } else {
+                let stmt = Stmt::Expr(Box::new(expr));
 
-                    if preserve_result {
-                        Stmt::Block(vec![stmt, *stmt1], pos)
-                    } else {
-                        stmt
-                    }
+                if preserve_result {
+                    Stmt::Block(vec![stmt, *stmt1], pos)
+                } else {
+                    stmt
                 }
             }
         }
@@ -136,10 +135,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             // Remove all raw expression statements that are pure except for the very last statement
             let last_stmt = if preserve_result { result.pop() } else { None };
 
-            result.retain(|stmt| match stmt {
-                Stmt::Expr(expr) if expr.is_pure() => false,
-                _ => true,
-            });
+            result.retain(|stmt| !matches!(stmt, Stmt::Expr(expr) if expr.is_pure()));
 
             if let Some(stmt) = last_stmt {
                 result.push(stmt);
@@ -154,7 +150,6 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 match expr {
                     Stmt::Let(_, None, _) => removed = true,
                     Stmt::Let(_, Some(val_expr), _) if val_expr.is_pure() => removed = true,
-
                     _ => {
                         result.push(expr);
                         break;
@@ -402,10 +397,7 @@ pub(crate) fn optimize(statements: Vec<Stmt>, scope: &Scope) -> Vec<Stmt> {
     let last_stmt = result.pop();
 
     // Remove all pure statements at top level
-    result.retain(|stmt| match stmt {
-        Stmt::Expr(expr) if expr.is_pure() => false,
-        _ => true,
-    });
+    result.retain(|stmt| !matches!(stmt, Stmt::Expr(expr) if expr.is_pure()));
 
     if let Some(stmt) = last_stmt {
         result.push(stmt); // Add back the last statement

@@ -229,24 +229,15 @@ pub enum Stmt {
 
 impl Stmt {
     pub fn is_noop(&self) -> bool {
-        match self {
-            Stmt::Noop(_) => true,
-            _ => false,
-        }
+        matches!(self, Stmt::Noop(_))
     }
 
     pub fn is_op(&self) -> bool {
-        match self {
-            Stmt::Noop(_) => false,
-            _ => true,
-        }
+        !matches!(self, Stmt::Noop(_))
     }
 
     pub fn is_var(&self) -> bool {
-        match self {
-            Stmt::Let(_, _, _) => true,
-            _ => false,
-        }
+        matches!(self, Stmt::Let(_, _, _))
     }
 
     pub fn position(&self) -> Position {
@@ -334,7 +325,7 @@ impl Expr {
         match self {
             Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
             Expr::And(x, y) | Expr::Or(x, y) | Expr::Index(x, y, _) => x.is_pure() && y.is_pure(),
-            expr => expr.is_constant() || expr.is_variable(),
+            expr => expr.is_constant() || matches!(expr, Expr::Variable(_, _)),
         }
     }
 
@@ -352,20 +343,6 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, _) => true,
 
-            _ => false,
-        }
-    }
-
-    pub fn is_variable(&self) -> bool {
-        match self {
-            Expr::Variable(_, _) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_property(&self) -> bool {
-        match self {
-            Expr::Property(_, _) => true,
             _ => false,
         }
     }
@@ -1629,13 +1606,13 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(idx_lhs, _, _) if idx_lhs.is_variable() => {
+            Expr::Index(idx_lhs, _, _) if matches!(idx_lhs.as_ref(), &Expr::Variable(_, _)) => {
                 assert!(is_top, "property expected but gets variable");
                 None
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(idx_lhs, _, _) if idx_lhs.is_property() => {
+            Expr::Index(idx_lhs, _, _) if matches!(idx_lhs.as_ref(), &Expr::Property(_, _)) => {
                 assert!(!is_top, "variable expected but gets property");
                 None
             }
@@ -1655,7 +1632,13 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
 
                 #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _)
-                    if (idx_lhs.is_variable() && is_top) || (idx_lhs.is_property() && !is_top) =>
+                    if matches!(idx_lhs.as_ref(), &Expr::Variable(_, _)) && is_top =>
+                {
+                    valid_assignment_chain(dot_rhs, false)
+                }
+                #[cfg(not(feature = "no_index"))]
+                Expr::Index(idx_lhs, _, _)
+                    if matches!(idx_lhs.as_ref(), &Expr::Property(_, _)) && !is_top =>
                 {
                     valid_assignment_chain(dot_rhs, false)
                 }
@@ -1865,9 +1848,10 @@ fn parse_if<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseEr
         Some(&(Token::Else, _)) => {
             input.next();
 
-            let else_body = match input.peek() {
-                Some(&(Token::If, _)) => parse_if(input)?,
-                _ => parse_block(input)?,
+            let else_body = if matches!(input.peek(), Some(&(Token::If, _))) {
+                parse_if(input)?
+            } else {
+                parse_block(input)?
             };
 
             Ok(Stmt::IfElse(
@@ -1934,25 +1918,24 @@ fn parse_var<'a>(
         None => return Err(ParseError::new(PERR::VarExpectsIdentifier, Position::eof())),
     };
 
-    match input.peek() {
-        Some(&(Token::Equals, _)) => {
-            input.next();
-            let init_value = parse_expr(input)?;
+    if matches!(input.peek(), Some(&(Token::Equals, _))) {
+        input.next();
+        let init_value = parse_expr(input)?;
 
-            match var_type {
-                VariableType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
+        match var_type {
+            VariableType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
 
-                VariableType::Constant if init_value.is_constant() => {
-                    Ok(Stmt::Const(name, Box::new(init_value), pos))
-                }
-                // Constants require a constant expression
-                VariableType::Constant => Err(ParseError(
-                    PERR::ForbiddenConstantExpr(name.to_string()),
-                    init_value.position(),
-                )),
+            VariableType::Constant if init_value.is_constant() => {
+                Ok(Stmt::Const(name, Box::new(init_value), pos))
             }
+            // Constants require a constant expression
+            VariableType::Constant => Err(ParseError(
+                PERR::ForbiddenConstantExpr(name.to_string()),
+                init_value.position(),
+            )),
         }
-        _ => Ok(Stmt::Let(name, None, pos)),
+    } else {
+        Ok(Stmt::Let(name, None, pos))
     }
 }
 
@@ -2072,11 +2055,10 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
 
     let mut params = Vec::new();
 
-    match input.peek() {
-        Some(&(Token::RightParen, _)) => {
-            input.next();
-        }
-        _ => loop {
+    if matches!(input.peek(), Some(&(Token::RightParen, _))) {
+        input.next();
+    } else {
+        loop {
             match input.next() {
                 Some((Token::RightParen, _)) => break,
                 Some((Token::Comma, _)) => (),
@@ -2100,7 +2082,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
                     ))
                 }
             }
-        },
+        }
     }
 
     let body = parse_block(input)?;
