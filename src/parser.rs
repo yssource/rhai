@@ -2,8 +2,10 @@
 
 use crate::any::Dynamic;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::optimize::optimize;
 use crate::scope::{Scope, VariableType};
+
+#[cfg(not(feature = "no_optimize"))]
+use crate::optimize::optimize;
 
 use std::{
     borrow::Cow, char, cmp::Ordering, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc,
@@ -23,6 +25,7 @@ pub type INT = i64;
 pub type INT = i32;
 
 /// The system floating-point type
+#[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
 
 type LERR = LexError;
@@ -161,6 +164,7 @@ impl AST {
     /// constant values. The script AST can be compiled just once. During actual evaluation,
     /// constants are passed into the Engine via an external scope (i.e. with `scope.push_constant(...)`).
     /// Then, the AST is cloned and the copy re-optimized before running.
+    #[cfg(not(feature = "no_optimize"))]
     pub fn optimize(self, scope: &Scope) -> Self {
         AST(
             crate::optimize::optimize(self.0, scope),
@@ -2140,25 +2144,34 @@ fn parse_top_level<'a>(
         }
     }
 
-    return Ok(AST(
-        if optimize_ast {
-            optimize(statements, &scope)
-        } else {
-            statements
-        },
-        #[cfg(not(feature = "no_function"))]
-        functions
-            .into_iter()
-            .map(|mut fn_def| {
-                if optimize_ast {
-                    let pos = fn_def.body.position();
-                    let mut body = optimize(vec![fn_def.body], &scope);
-                    fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
-                }
-                Arc::new(fn_def)
-            })
-            .collect(),
-    ));
+    Ok(
+        #[cfg(not(feature = "no_optimize"))]
+        AST(
+            if optimize_ast {
+                optimize(statements, &scope)
+            } else {
+                statements
+            },
+            #[cfg(not(feature = "no_function"))]
+            functions
+                .into_iter()
+                .map(|mut fn_def| {
+                    if optimize_ast {
+                        let pos = fn_def.body.position();
+                        let mut body = optimize(vec![fn_def.body], &scope);
+                        fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
+                    }
+                    Arc::new(fn_def)
+                })
+                .collect(),
+        ),
+        #[cfg(feature = "no_optimize")]
+        AST(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            functions.into_iter().map(Arc::new).collect(),
+        ),
+    )
 }
 
 pub fn parse<'a>(

@@ -46,6 +46,7 @@ Optional features
 | `no_function` | Disable script-defined functions if you don't need them.                                                                                                 |
 | `no_index`    | Disable arrays and indexing features if you don't need them.                                                                                             |
 | `no_float`    | Disable floating-point numbers and math if you don't need them.                                                                                          |
+| `no_optimize` | Disable the script optimizer.                                                                                                                            |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types.                                                                                |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types.                                                                                |
 
@@ -1099,6 +1100,7 @@ Optimizations
 =============
 
 Rhai includes an _optimizer_ that tries to optimize a script after parsing.  This can reduce resource utilization and increase execution speed.
+Script optimization can be turned off via the [`no_optimize`] feature.
 
 For example, in the following:
 
@@ -1228,6 +1230,7 @@ engine.set_optimization(false);     // turn off the optimizer
 [`no_index`]: #optional-features
 [`no_float`]: #optional-features
 [`no_function`]: #optional-features
+[`no_optimize`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
 
