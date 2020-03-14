@@ -3,7 +3,7 @@
 use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt};
 use crate::result::EvalAltResult;
-use crate::scope::Scope;
+use crate::scope::{Scope, VariableType};
 
 #[cfg(not(feature = "no_index"))]
 use crate::INT;
@@ -148,7 +148,8 @@ impl Engine<'_> {
                 fn_def
                     .params
                     .iter()
-                    .zip(args.iter().map(|x| (*x).into_dynamic())),
+                    .zip(args.iter().map(|x| (*x).into_dynamic()))
+                    .map(|(name, value)| (name, VariableType::Normal, value)),
             );
 
             // Evaluate
@@ -255,7 +256,7 @@ impl Engine<'_> {
             }
 
             // xxx.id
-            Expr::Identifier(id, pos) => {
+            Expr::Property(id, pos) => {
                 let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                 self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
@@ -266,7 +267,7 @@ impl Engine<'_> {
             Expr::Index(idx_lhs, idx_expr, idx_pos) => {
                 let (val, _) = match idx_lhs.as_ref() {
                     // xxx.id[idx_expr]
-                    Expr::Identifier(id, pos) => {
+                    Expr::Property(id, pos) => {
                         let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                         (
                             self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
@@ -294,7 +295,7 @@ impl Engine<'_> {
             // xxx.dot_lhs.rhs
             Expr::Dot(dot_lhs, rhs, _) => match dot_lhs.as_ref() {
                 // xxx.id.rhs
-                Expr::Identifier(id, pos) => {
+                Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                     self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
@@ -305,7 +306,7 @@ impl Engine<'_> {
                 Expr::Index(idx_lhs, idx_expr, idx_pos) => {
                     let (val, _) = match idx_lhs.as_ref() {
                         // xxx.id[idx_expr].rhs
-                        Expr::Identifier(id, pos) => {
+                        Expr::Property(id, pos) => {
                             let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                             (
                                 self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
@@ -353,8 +354,8 @@ impl Engine<'_> {
     ) -> Result<Dynamic, EvalAltResult> {
         match dot_lhs {
             // id.???
-            Expr::Identifier(id, pos) => {
-                let (src_idx, mut target) = Self::search_scope(scope, id, Ok, *pos)?;
+            Expr::Variable(id, pos) => {
+                let (src_idx, _, mut target) = Self::search_scope(scope, id, Ok, *pos)?;
                 let val = self.get_dot_val_helper(scope, target.as_mut(), dot_rhs);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
@@ -400,11 +401,11 @@ impl Engine<'_> {
         id: &str,
         map: impl FnOnce(Dynamic) -> Result<T, EvalAltResult>,
         begin: Position,
-    ) -> Result<(usize, T), EvalAltResult> {
+    ) -> Result<(usize, VariableType, T), EvalAltResult> {
         scope
             .get(id)
             .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(id.into(), begin))
-            .and_then(move |(idx, _, val)| map(val).map(|v| (idx, v)))
+            .and_then(move |(idx, _, var_type, val)| map(val).map(|v| (idx, var_type, v)))
     }
 
     /// Evaluate the value of an index (must evaluate to INT)
@@ -481,13 +482,13 @@ impl Engine<'_> {
 
         match lhs {
             // id[idx_expr]
-            Expr::Identifier(id, _) => Self::search_scope(
+            Expr::Variable(id, _) => Self::search_scope(
                 scope,
                 &id,
                 |val| self.get_indexed_value(&val, idx, idx_expr.position(), idx_pos),
                 lhs.position(),
             )
-            .map(|(src_idx, (val, src_type))| {
+            .map(|(src_idx, _, (val, src_type))| {
                 (src_type, Some((id.as_str(), src_idx)), idx as usize, val)
             }),
 
@@ -585,7 +586,7 @@ impl Engine<'_> {
     ) -> Result<Dynamic, EvalAltResult> {
         match dot_rhs {
             // xxx.id
-            Expr::Identifier(id, pos) => {
+            Expr::Property(id, pos) => {
                 let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
                 self.call_fn_raw(&set_fn_name, vec![this_ptr, new_val.as_mut()], None, *pos)
@@ -596,7 +597,7 @@ impl Engine<'_> {
             #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, idx_pos) => match lhs.as_ref() {
                 // xxx.id[idx_expr]
-                Expr::Identifier(id, pos) => {
+                Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                     self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
@@ -620,7 +621,7 @@ impl Engine<'_> {
             // xxx.lhs.{...}
             Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 // xxx.id.rhs
-                Expr::Identifier(id, pos) => {
+                Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                     self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
@@ -640,7 +641,7 @@ impl Engine<'_> {
                 #[cfg(not(feature = "no_index"))]
                 Expr::Index(lhs, idx_expr, idx_pos) => match lhs.as_ref() {
                     // xxx.id[idx_expr].rhs
-                    Expr::Identifier(id, pos) => {
+                    Expr::Property(id, pos) => {
                         let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
                         self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
@@ -702,11 +703,23 @@ impl Engine<'_> {
         dot_rhs: &Expr,
         new_val: Dynamic,
         val_pos: Position,
+        op_pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
         match dot_lhs {
             // id.???
-            Expr::Identifier(id, pos) => {
-                let (src_idx, mut target) = Self::search_scope(scope, id, Ok, *pos)?;
+            Expr::Variable(id, pos) => {
+                let (src_idx, var_type, mut target) = Self::search_scope(scope, id, Ok, *pos)?;
+
+                match var_type {
+                    VariableType::Constant => {
+                        return Err(EvalAltResult::ErrorAssignmentToConstant(
+                            id.to_string(),
+                            op_pos,
+                        ))
+                    }
+                    _ => (),
+                }
+
                 let val =
                     self.set_dot_val_helper(scope, target.as_mut(), dot_rhs, new_val, val_pos);
 
@@ -758,9 +771,10 @@ impl Engine<'_> {
             Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
             Expr::StringConstant(s, _) => Ok(s.into_dynamic()),
             Expr::CharConstant(c, _) => Ok(c.into_dynamic()),
-            Expr::Identifier(id, pos) => {
-                Self::search_scope(scope, id, Ok, *pos).map(|(_, val)| val)
+            Expr::Variable(id, pos) => {
+                Self::search_scope(scope, id, Ok, *pos).map(|(_, _, val)| val)
             }
+            Expr::Property(_, _) => panic!("unexpected property."),
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
@@ -775,19 +789,21 @@ impl Engine<'_> {
             Expr::Stmt(stmt, _) => self.eval_stmt(scope, stmt),
 
             // lhs = rhs
-            Expr::Assignment(lhs, rhs, _) => {
+            Expr::Assignment(lhs, rhs, op_pos) => {
                 let rhs_val = self.eval_expr(scope, rhs)?;
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Identifier(name, pos) => {
-                        if let Some((idx, _, _)) = scope.get(name) {
+                    Expr::Variable(name, pos) => match scope.get(name) {
+                        Some((idx, _, VariableType::Normal, _)) => {
                             *scope.get_mut(name, idx) = rhs_val;
                             Ok(().into_dynamic())
-                        } else {
-                            Err(EvalAltResult::ErrorVariableNotFound(name.clone(), *pos))
                         }
-                    }
+                        Some((_, _, VariableType::Constant, _)) => Err(
+                            EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
+                        ),
+                        _ => Err(EvalAltResult::ErrorVariableNotFound(name.clone(), *pos)),
+                    },
 
                     // idx_lhs[idx_expr] = rhs
                     #[cfg(not(feature = "no_index"))]
@@ -814,8 +830,14 @@ impl Engine<'_> {
 
                     // dot_lhs.dot_rhs = rhs
                     Expr::Dot(dot_lhs, dot_rhs, _) => {
-                        self.set_dot_val(scope, dot_lhs, dot_rhs, rhs_val, rhs.position())
+                        self.set_dot_val(scope, dot_lhs, dot_rhs, rhs_val, rhs.position(), *op_pos)
                     }
+
+                    // Error assignment to constant
+                    expr if expr.is_constant() => Err(EvalAltResult::ErrorAssignmentToConstant(
+                        expr.get_value_str(),
+                        lhs.position(),
+                    )),
 
                     // Syntax error
                     _ => Err(EvalAltResult::ErrorAssignmentToUnknownLHS(lhs.position())),
@@ -1045,7 +1067,7 @@ impl Engine<'_> {
             // Let statement
             Stmt::Let(name, Some(expr), _) => {
                 let val = self.eval_expr(scope, expr)?;
-                scope.push_dynamic(name.clone(), val);
+                scope.push_dynamic(name.clone(), VariableType::Normal, val);
                 Ok(().into_dynamic())
             }
 
@@ -1053,6 +1075,15 @@ impl Engine<'_> {
                 scope.push(name.clone(), ());
                 Ok(().into_dynamic())
             }
+
+            // Const statement
+            Stmt::Const(name, expr, _) if expr.is_constant() => {
+                let val = self.eval_expr(scope, expr)?;
+                scope.push_dynamic(name.clone(), VariableType::Constant, val);
+                Ok(().into_dynamic())
+            }
+
+            Stmt::Const(_, _, _) => panic!("constant expression not constant!"),
         }
     }
 
