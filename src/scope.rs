@@ -73,13 +73,13 @@ impl<'a> Scope<'a> {
         let value = value.into_dynamic();
 
         // Map into constant expressions
-        let (expr, value) = map_dynamic_to_expr(value);
+        //let (expr, value) = map_dynamic_to_expr(value);
 
         self.0.push(ScopeEntry {
             name: name.into(),
             var_type: VariableType::Normal,
             value,
-            expr,
+            expr: None,
         });
     }
 
@@ -110,13 +110,13 @@ impl<'a> Scope<'a> {
         var_type: VariableType,
         value: Dynamic,
     ) {
-        let (expr, value) = map_dynamic_to_expr(value);
+        //let (expr, value) = map_dynamic_to_expr(value);
 
         self.0.push(ScopeEntry {
             name: name.into(),
             var_type,
             value,
-            expr,
+            expr: None,
         });
     }
 
