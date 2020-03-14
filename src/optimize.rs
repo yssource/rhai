@@ -218,9 +218,30 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             }
             stmt => Expr::Stmt(Box::new(stmt), pos),
         },
-        Expr::Assignment(id, expr, pos) => {
-            Expr::Assignment(id, Box::new(optimize_expr(*expr, state)), pos)
-        }
+        Expr::Assignment(id1, expr1, pos1) => match *expr1 {
+            Expr::Assignment(id2, expr2, pos2) => match (*id1, *id2) {
+                (Expr::Variable(var1, _), Expr::Variable(var2, _)) if var1 == var2 => {
+                    // Assignment to the same variable - fold
+                    state.set_dirty();
+
+                    Expr::Assignment(
+                        Box::new(Expr::Variable(var1, pos1)),
+                        Box::new(optimize_expr(*expr2, state)),
+                        pos1,
+                    )
+                }
+                (id1, id2) => Expr::Assignment(
+                    Box::new(id1),
+                    Box::new(Expr::Assignment(
+                        Box::new(id2),
+                        Box::new(optimize_expr(*expr2, state)),
+                        pos2,
+                    )),
+                    pos1,
+                ),
+            },
+            expr => Expr::Assignment(id1, Box::new(optimize_expr(expr, state)), pos1),
+        },
         Expr::Dot(lhs, rhs, pos) => Expr::Dot(
             Box::new(optimize_expr(*lhs, state)),
             Box::new(optimize_expr(*rhs, state)),

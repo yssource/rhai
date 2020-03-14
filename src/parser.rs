@@ -1214,7 +1214,7 @@ pub fn lex(input: &str) -> TokenIterator<'_> {
     }
 }
 
-fn get_precedence(token: &Token) -> i8 {
+fn get_precedence(token: &Token) -> u8 {
     match *token {
         Token::Equals
         | Token::PlusAssign
@@ -1229,28 +1229,49 @@ fn get_precedence(token: &Token) -> i8 {
         | Token::ModuloAssign
         | Token::PowerOfAssign => 10,
 
-        Token::Or | Token::XOr | Token::Pipe => 11,
+        Token::Or | Token::XOr | Token::Pipe => 50,
 
-        Token::And | Token::Ampersand => 12,
+        Token::And | Token::Ampersand => 60,
 
         Token::LessThan
         | Token::LessThanEqualsTo
         | Token::GreaterThan
         | Token::GreaterThanEqualsTo
         | Token::EqualsTo
-        | Token::NotEqualsTo => 15,
+        | Token::NotEqualsTo => 70,
 
-        Token::Plus | Token::Minus => 20,
+        Token::Plus | Token::Minus => 80,
 
-        Token::Divide | Token::Multiply | Token::PowerOf => 40,
+        Token::Divide | Token::Multiply | Token::PowerOf => 90,
 
-        Token::LeftShift | Token::RightShift => 50,
+        Token::LeftShift | Token::RightShift => 100,
 
-        Token::Modulo => 60,
+        Token::Modulo => 110,
 
-        Token::Period => 100,
+        Token::Period => 120,
 
-        _ => -1,
+        _ => 0,
+    }
+}
+
+fn is_bind_right(token: &Token) -> bool {
+    match *token {
+        Token::Equals
+        | Token::PlusAssign
+        | Token::MinusAssign
+        | Token::MultiplyAssign
+        | Token::DivideAssign
+        | Token::LeftShiftAssign
+        | Token::RightShiftAssign
+        | Token::AndAssign
+        | Token::OrAssign
+        | Token::XOrAssign
+        | Token::ModuloAssign
+        | Token::PowerOfAssign => true,
+
+        Token::Period => true,
+
+        _ => false,
     }
 }
 
@@ -1673,39 +1694,47 @@ fn parse_op_assignment(
 
 fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    precedence: i8,
+    parent_precedence: u8,
     lhs: Expr,
 ) -> Result<Expr, ParseError> {
     let mut current_lhs = lhs;
 
     loop {
-        let mut current_precedence = -1;
+        let (current_precedence, bind_right) = if let Some(&(ref current_op, _)) = input.peek() {
+            (get_precedence(current_op), is_bind_right(current_op))
+        } else {
+            (0, false)
+        };
 
-        if let Some(&(ref current_op, _)) = input.peek() {
-            current_precedence = get_precedence(current_op);
-        }
-
-        if current_precedence < precedence {
+        // Bind left to the parent lhs expression if precedence is higher
+        // If same precedence, then check if the operator binds right
+        if current_precedence < parent_precedence
+            || (current_precedence == parent_precedence && !bind_right)
+        {
             return Ok(current_lhs);
         }
 
         if let Some((op_token, pos)) = input.next() {
             input.peek();
 
-            let mut rhs = parse_unary(input)?;
+            let rhs = parse_unary(input)?;
 
-            let mut next_precedence = -1;
+            let next_precedence = if let Some(&(ref next_op, _)) = input.peek() {
+                get_precedence(next_op)
+            } else {
+                0
+            };
 
-            if let Some(&(ref next_op, _)) = input.peek() {
-                next_precedence = get_precedence(next_op);
-            }
-
-            if current_precedence < next_precedence {
-                rhs = parse_binary_op(input, current_precedence + 1, rhs)?;
-            } else if current_precedence >= 100 {
-                // Always bind right to left for precedence over 100
-                rhs = parse_binary_op(input, current_precedence, rhs)?;
-            }
+            // Bind to right if the next operator has higher precedence
+            // If same precedence, then check if the operator binds right
+            let rhs = if (current_precedence == next_precedence && bind_right)
+                || current_precedence < next_precedence
+            {
+                parse_binary_op(input, current_precedence, rhs)?
+            } else {
+                // Otherwise bind to left (even if next operator has the same precedence)
+                rhs
+            };
 
             current_lhs = match op_token {
                 Token::Plus => Expr::FunctionCall("+".into(), vec![current_lhs, rhs], None, pos),
@@ -1817,7 +1846,7 @@ fn parse_binary_op<'a>(
 
 fn parse_expr<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
     let lhs = parse_unary(input)?;
-    parse_binary_op(input, 0, lhs)
+    parse_binary_op(input, 1, lhs)
 }
 
 fn parse_if<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
