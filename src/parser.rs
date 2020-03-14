@@ -153,12 +153,12 @@ impl AST {
     /// Optimize the AST with constants defined in an external Scope.
     ///
     /// Although optimization is performed by default during compilation, sometimes it is necessary to
-    /// "re"-optimize an AST. For example, when working with constants that are passed in via an
+    /// _re_-optimize an AST. For example, when working with constants that are passed in via an
     /// external scope, it will be more efficient to optimize the AST once again to take advantage
     /// of the new constants.
     ///
     /// With this method, it is no longer necessary to regenerate a large script with hard-coded
-    /// constant values. The script AST can be compiled once and stored. During actually evaluation,
+    /// constant values. The script AST can be compiled just once. During actual evaluation,
     /// constants are passed into the Engine via an external scope (i.e. with `scope.push_constant(...)`).
     /// Then, the AST is cloned and the copy re-optimized before running.
     pub fn optimize(self, scope: &Scope) -> Self {

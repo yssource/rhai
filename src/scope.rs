@@ -8,21 +8,29 @@ use crate::parser::FLOAT;
 
 use std::borrow::Cow;
 
+/// Type of a variable in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum VariableType {
+    /// Normal variable.
     Normal,
+    /// Immutable constant value.
     Constant,
 }
 
+/// An entry in the Scope.
 pub struct ScopeEntry<'a> {
+    /// Name of the variable.
     pub name: Cow<'a, str>,
+    /// Type of the variable.
     pub var_type: VariableType,
+    /// Current value of the variable.
     pub value: Dynamic,
+    /// A constant expression if the initial value matches one of the recognized types.
     pub expr: Option<Expr>,
 }
 
-/// A type containing information about current scope.
-/// Useful for keeping state between `Engine` runs.
+/// A type containing information about the current scope.
+/// Useful for keeping state between `Engine` evaluation runs.
 ///
 /// # Example
 ///
@@ -76,6 +84,11 @@ impl<'a> Scope<'a> {
     }
 
     /// Add (push) a new constant to the Scope.
+    ///
+    /// Constants are immutable and cannot be assigned to.  Their values never change.
+    /// Constants propagation is a technique used to optimize an AST.
+    /// However, in order to be used for optimization, constants must be in one of the recognized types:
+    /// `INT` (default to `i64`, `i32` if `only_i32`), `f64`, `String`, `char` and `bool`.
     pub fn push_constant<K: Into<Cow<'a, str>>, T: Any>(&mut self, name: K, value: T) {
         let value = value.into_dynamic();
 
