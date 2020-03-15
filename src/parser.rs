@@ -1,11 +1,12 @@
 //! Main module defining the lexer and parser.
 
-use crate::any::Dynamic;
+use crate::any::{Any, AnyExt, Dynamic};
+use crate::engine::Engine;
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{Scope, VariableType};
 
 #[cfg(not(feature = "no_optimize"))]
-use crate::optimize::optimize;
+use crate::optimize::optimize_ast;
 
 use std::{
     borrow::Cow, char, cmp::Ordering, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc,
@@ -147,49 +148,9 @@ impl fmt::Debug for Position {
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 #[derive(Debug, Clone)]
-pub struct AST(
-    pub(crate) Vec<Stmt>,
-    #[cfg(not(feature = "no_function"))] pub(crate) Vec<Arc<FnDef>>,
-);
+pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<Arc<FnDef>>);
 
-impl AST {
-    /// Optimize the AST with constants defined in an external Scope.
-    ///
-    /// Although optimization is performed by default during compilation, sometimes it is necessary to
-    /// _re_-optimize an AST. For example, when working with constants that are passed in via an
-    /// external scope, it will be more efficient to optimize the AST once again to take advantage
-    /// of the new constants.
-    ///
-    /// With this method, it is no longer necessary to regenerate a large script with hard-coded
-    /// constant values. The script AST can be compiled just once. During actual evaluation,
-    /// constants are passed into the Engine via an external scope (i.e. with `scope.push_constant(...)`).
-    /// Then, the AST is cloned and the copy re-optimized before running.
-    #[cfg(not(feature = "no_optimize"))]
-    pub fn optimize(self, scope: &Scope) -> Self {
-        AST(
-            crate::optimize::optimize(self.0, scope),
-            #[cfg(not(feature = "no_function"))]
-            self.1
-                .into_iter()
-                .map(|fn_def| {
-                    let pos = fn_def.body.position();
-                    let body = optimize(vec![fn_def.body.clone()], scope)
-                        .into_iter()
-                        .next()
-                        .unwrap_or_else(|| Stmt::Noop(pos));
-                    Arc::new(FnDef {
-                        name: fn_def.name.clone(),
-                        params: fn_def.params.clone(),
-                        body,
-                        pos: fn_def.pos,
-                    })
-                })
-                .collect(),
-        )
-    }
-}
-
-#[derive(Debug)] // Do not derive Clone because it is expensive
+#[derive(Debug, Clone)]
 pub struct FnDef {
     pub name: String,
     pub params: Vec<String>,
@@ -267,7 +228,9 @@ pub enum Expr {
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
     Assignment(Box<Expr>, Box<Expr>, Position),
     Dot(Box<Expr>, Box<Expr>, Position),
+    #[cfg(not(feature = "no_index"))]
     Index(Box<Expr>, Box<Expr>, Position),
+    #[cfg(not(feature = "no_index"))]
     Array(Vec<Expr>, Position),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
@@ -277,7 +240,30 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn get_value_str(&self) -> String {
+    pub fn get_constant_value(&self) -> Dynamic {
+        match self {
+            Expr::IntegerConstant(i, _) => i.into_dynamic(),
+            Expr::CharConstant(c, _) => c.into_dynamic(),
+            Expr::StringConstant(s, _) => s.into_dynamic(),
+            Expr::True(_) => true.into_dynamic(),
+            Expr::False(_) => false.into_dynamic(),
+            Expr::Unit(_) => ().into_dynamic(),
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Array(items, _) if items.iter().all(Expr::is_constant) => items
+                .iter()
+                .map(Expr::get_constant_value)
+                .collect::<Vec<_>>()
+                .into_dynamic(),
+
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(f, _) => f.into_dynamic(),
+
+            _ => panic!("cannot get value of non-constant expression"),
+        }
+    }
+
+    pub fn get_constant_str(&self) -> String {
         match self {
             Expr::IntegerConstant(i, _) => i.to_string(),
             Expr::CharConstant(c, _) => c.to_string(),
@@ -286,10 +272,13 @@ impl Expr {
             Expr::False(_) => "false".to_string(),
             Expr::Unit(_) => "()".to_string(),
 
+            #[cfg(not(feature = "no_index"))]
+            Expr::Array(items, _) if items.iter().all(Expr::is_constant) => "array".to_string(),
+
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(f, _) => f.to_string(),
 
-            _ => "".to_string(),
+            _ => panic!("cannot get value of non-constant expression"),
         }
     }
 
@@ -302,19 +291,22 @@ impl Expr {
             | Expr::Property(_, pos)
             | Expr::Stmt(_, pos)
             | Expr::FunctionCall(_, _, _, pos)
-            | Expr::Array(_, pos)
             | Expr::True(pos)
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Assignment(e, _, _)
-            | Expr::Dot(e, _, _)
-            | Expr::Index(e, _, _)
-            | Expr::And(e, _)
-            | Expr::Or(e, _) => e.position(),
+            Expr::Assignment(e, _, _) | Expr::Dot(e, _, _) | Expr::And(e, _) | Expr::Or(e, _) => {
+                e.position()
+            }
 
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, pos) => *pos,
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Array(_, pos) => *pos,
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(e, _, _) => e.position(),
         }
     }
 
@@ -323,8 +315,14 @@ impl Expr {
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
+            #[cfg(not(feature = "no_index"))]
             Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
-            Expr::And(x, y) | Expr::Or(x, y) | Expr::Index(x, y, _) => x.is_pure() && y.is_pure(),
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(x, y, _) => x.is_pure() && y.is_pure(),
+
+            Expr::And(x, y) | Expr::Or(x, y) => x.is_pure() && y.is_pure(),
+
             expr => expr.is_constant() || matches!(expr, Expr::Variable(_, _)),
         }
     }
@@ -338,10 +336,11 @@ impl Expr {
             | Expr::False(_)
             | Expr::Unit(_) => true,
 
-            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_constant),
-
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, _) => true,
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_constant),
 
             _ => false,
         }
@@ -360,7 +359,9 @@ pub enum Token {
     RightBrace,
     LeftParen,
     RightParen,
+    #[cfg(not(feature = "no_index"))]
     LeftBracket,
+    #[cfg(not(feature = "no_index"))]
     RightBracket,
     Plus,
     UnaryPlus,
@@ -392,6 +393,7 @@ pub enum Token {
     Or,
     Ampersand,
     And,
+    #[cfg(not(feature = "no_function"))]
     Fn,
     Break,
     Return,
@@ -435,7 +437,9 @@ impl Token {
                 RightBrace => "}",
                 LeftParen => "(",
                 RightParen => ")",
+                #[cfg(not(feature = "no_index"))]
                 LeftBracket => "[",
+                #[cfg(not(feature = "no_index"))]
                 RightBracket => "]",
                 Plus => "+",
                 UnaryPlus => "+",
@@ -467,6 +471,7 @@ impl Token {
                 Or => "||",
                 Ampersand => "&",
                 And => "&&",
+                #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
                 Break => "break",
                 Return => "return",
@@ -506,8 +511,6 @@ impl Token {
             // RightBrace    | {expr} - expr not unary & is closing
             LeftParen        | // {-expr} - is unary
             // RightParen    | (expr) - expr not unary & is closing
-            LeftBracket      | // [-expr] - is unary
-            // RightBracket  | [expr] - expr not unary & is closing
             Plus             |
             UnaryPlus        |
             Minus            |
@@ -551,6 +554,10 @@ impl Token {
             In               |
             PowerOfAssign => true,
 
+            #[cfg(not(feature = "no_index"))]
+            LeftBracket => true, // [-expr] - is unary
+            // RightBracket  | [expr] - expr not unary & is closing
+
             _ => false,
         }
     }
@@ -560,9 +567,12 @@ impl Token {
         use self::Token::*;
 
         match *self {
-            RightBrace | RightParen | RightBracket | Plus | Minus | Multiply | Divide | Comma
-            | Equals | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo
-            | EqualsTo | NotEqualsTo | Pipe | Or | Ampersand | And | PowerOf => true,
+            RightParen | Plus | Minus | Multiply | Divide | Comma | Equals | LessThan
+            | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo | NotEqualsTo
+            | Pipe | Or | Ampersand | And | PowerOf => true,
+
+            #[cfg(not(feature = "no_index"))]
+            RightBrace | RightBracket => true,
 
             _ => false,
         }
@@ -887,9 +897,12 @@ impl<'a> TokenIterator<'a> {
                             "break" => Token::Break,
                             "return" => Token::Return,
                             "throw" => Token::Throw,
-                            "fn" => Token::Fn,
                             "for" => Token::For,
                             "in" => Token::In,
+
+                            #[cfg(not(feature = "no_function"))]
+                            "fn" => Token::Fn,
+
                             _ => Token::Identifier(out),
                         },
                         pos,
@@ -924,8 +937,12 @@ impl<'a> TokenIterator<'a> {
                 '}' => return Some((Token::RightBrace, pos)),
                 '(' => return Some((Token::LeftParen, pos)),
                 ')' => return Some((Token::RightParen, pos)),
+
+                #[cfg(not(feature = "no_index"))]
                 '[' => return Some((Token::LeftBracket, pos)),
+                #[cfg(not(feature = "no_index"))]
                 ']' => return Some((Token::RightBracket, pos)),
+
                 '+' => {
                     return Some((
                         match self.char_stream.peek() {
@@ -1745,6 +1762,7 @@ fn parse_binary_op<'a>(
                                 Box::new(change_var_to_property(*rhs)),
                                 pos,
                             ),
+                            #[cfg(not(feature = "no_index"))]
                             Expr::Index(lhs, idx, pos) => {
                                 Expr::Index(Box::new(change_var_to_property(*lhs)), idx, pos)
                             }
@@ -1950,6 +1968,8 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
 
     match input.peek() {
         Some(&(Token::RightBrace, _)) => (), // empty block
+
+        #[cfg(not(feature = "no_function"))]
         Some(&(Token::Fn, pos)) => return Err(ParseError::new(PERR::WrongFnDefinition, pos)),
 
         _ => {
@@ -2003,7 +2023,7 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
             let return_type = match token {
                 Token::Return => ReturnType::Return,
                 Token::Throw => ReturnType::Exception,
-                _ => panic!("unexpected token!"),
+                _ => panic!("token should be return or throw"),
             };
 
             input.next();
@@ -2095,14 +2115,10 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     })
 }
 
-fn parse_top_level<'a>(
+fn parse_top_level<'a, 'e>(
     input: &mut Peekable<TokenIterator<'a>>,
-    scope: &Scope,
-    optimize_ast: bool,
-) -> Result<AST, ParseError> {
+) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
-
-    #[cfg(not(feature = "no_function"))]
     let mut functions = Vec::<FnDef>::new();
 
     while input.peek().is_some() {
@@ -2126,40 +2142,79 @@ fn parse_top_level<'a>(
         }
     }
 
+    Ok((statements, functions))
+}
+
+pub fn parse<'a, 'e>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    engine: &Engine<'e>,
+    scope: &Scope,
+) -> Result<AST, ParseError> {
+    let (statements, functions) = parse_top_level(input)?;
+
     Ok(
         #[cfg(not(feature = "no_optimize"))]
-        AST(
-            if optimize_ast {
-                optimize(statements, &scope)
-            } else {
-                statements
-            },
-            #[cfg(not(feature = "no_function"))]
-            functions
-                .into_iter()
-                .map(|mut fn_def| {
-                    if optimize_ast {
-                        let pos = fn_def.body.position();
-                        let mut body = optimize(vec![fn_def.body], &scope);
-                        fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
-                    }
-                    Arc::new(fn_def)
-                })
-                .collect(),
-        ),
+        optimize_ast(engine, scope, statements, functions),
         #[cfg(feature = "no_optimize")]
-        AST(
-            statements,
-            #[cfg(not(feature = "no_function"))]
-            functions.into_iter().map(Arc::new).collect(),
-        ),
+        AST(statements, functions.into_iter().map(Arc::new).collect()),
     )
 }
 
-pub fn parse<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
-    scope: &Scope,
-    optimize_ast: bool,
-) -> Result<AST, ParseError> {
-    parse_top_level(input, scope, optimize_ast)
+pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> (Option<Expr>, Dynamic) {
+    if value.is::<INT>() {
+        let value2 = value.clone();
+        (
+            Some(Expr::IntegerConstant(
+                *value.downcast::<INT>().expect("value should be INT"),
+                pos,
+            )),
+            value2,
+        )
+    } else if value.is::<char>() {
+        let value2 = value.clone();
+        (
+            Some(Expr::CharConstant(
+                *value.downcast::<char>().expect("value should be char"),
+                pos,
+            )),
+            value2,
+        )
+    } else if value.is::<String>() {
+        let value2 = value.clone();
+        (
+            Some(Expr::StringConstant(
+                *value.downcast::<String>().expect("value should be String"),
+                pos,
+            )),
+            value2,
+        )
+    } else if value.is::<bool>() {
+        let value2 = value.clone();
+        (
+            Some(
+                if *value.downcast::<bool>().expect("value should be bool") {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                },
+            ),
+            value2,
+        )
+    } else {
+        #[cfg(not(feature = "no_float"))]
+        {
+            if value.is::<FLOAT>() {
+                let value2 = value.clone();
+                return (
+                    Some(Expr::FloatConstant(
+                        *value.downcast::<FLOAT>().expect("value should be FLOAT"),
+                        pos,
+                    )),
+                    value2,
+                );
+            }
+        }
+
+        (None, value)
+    }
 }

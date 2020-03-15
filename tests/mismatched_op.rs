@@ -32,13 +32,13 @@ fn test_mismatched_op_custom_type() {
         .eval::<INT>("60 + new_ts()")
         .expect_err("expects error");
 
-    match r {
-        #[cfg(feature = "only_i32")]
-        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i32, TestStruct)" => (),
+    #[cfg(feature = "only_i32")]
+    assert!(
+        matches!(r, EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i32, TestStruct)")
+    );
 
-        #[cfg(not(feature = "only_i32"))]
-        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i64, TestStruct)" => (),
-
-        _ => panic!(),
-    }
+    #[cfg(not(feature = "only_i32"))]
+    assert!(
+        matches!(r, EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i64, TestStruct)")
+    );
 }

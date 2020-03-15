@@ -869,13 +869,13 @@ Compound assignment operators
 
 ```rust
 let number = 5;
-number += 4;    // number = number + 4
-number -= 3;    // number = number - 3
-number *= 2;    // number = number * 2
-number /= 1;    // number = number / 1
-number %= 3;    // number = number % 3
-number <<= 2;   // number = number << 2
-number >>= 1;   // number = number >> 1
+number += 4;        // number = number + 4
+number -= 3;        // number = number - 3
+number *= 2;        // number = number * 2
+number /= 1;        // number = number / 1
+number %= 3;        // number = number % 3
+number <<= 2;       // number = number << 2
+number >>= 1;       // number = number >> 1
 ```
 
 The `+=` operator can also be used to build strings:
@@ -1096,8 +1096,8 @@ for entry in log {
 }
 ```
 
-Optimizations
-=============
+Script optimization
+===================
 
 Rhai includes an _optimizer_ that tries to optimize a script after parsing.  This can reduce resource utilization and increase execution speed.
 Script optimization can be turned off via the [`no_optimize`] feature.
@@ -1167,20 +1167,54 @@ const DECISION_2 = false;
 const DECISION_3 = false;
 
 if DECISION_1 {
-    :                   // this branch is kept
+    :                       // this branch is kept and promoted to the parent level
 } else if DECISION_2 {
-    :                   // this branch is eliminated
+    :                       // this branch is eliminated
 } else if DECISION_3 {
-    :                   // this branch is eliminated
+    :                       // this branch is eliminated
 } else {
-    :                   // this branch is eliminated
+    :                       // this branch is eliminated
 }
 ```
 
 In general, boolean constants are most effective if you want the optimizer to automatically prune large `if`-`else` branches because they do not depend on operators.
 
+Alternatively, turn the optimizer to [`OptimizationLevel::Full`]
+
 Here be dragons!
 ----------------
+
+### Optimization levels
+
+There are actually three levels of optimizations: `None`, `Simple` and `Full`.
+
+`None` is obvious - no optimization on the AST is performed.
+
+`Simple` performs relatively _safe_ optimizations without causing side effects (i.e. it only relies on static analysis and will not actually perform any function calls).  `Simple` is the default.
+
+`Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.  One benefit to this is that many more optimization opportunities arise, especially with regards to comparison operators.
+
+```rust
+// The following run with OptimizationLevel::Full
+
+const DECISION = 1;
+
+if DECISION == 1 {      // this condition is now eliminated because 'DECISION == 1' is a function call to the '==' function, and it returns 'true'
+    print("hello!");    // the 'true' block is promoted to the parent level
+} else {
+    print("boo!");      // the 'else' block is eliminated
+}
+
+print("hello!");        // <- the above is equivalent to this
+```
+
+### Side effect considerations
+
+All built-in operators have _pure_ functions (i.e. they do not cause side effects) so using [`OptimizationLevel::Full`] is usually quite safe.
+Beware, however, that if custom functions are registered, they'll also be called.  If custom functions are registered to replace built-in operator functions,
+the custom functions will be called and _may_ cause side-effects.
+
+### Subtle semantic changes
 
 Some optimizations can be quite aggressive and can alter subtle semantics of the script.  For example:
 
@@ -1214,12 +1248,14 @@ print("end!");
 In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to a type error.
 However, after optimization, the entire `if` statement is removed, thus the script silently runs to completion without errors.
 
+### Turning off optimizations
+
 It is usually a bad idea to depend on a script failing or such kind of subtleties, but if it turns out to be necessary (why? I would never guess),
 there is a setting in `Engine` to turn off optimizations.
 
 ```rust
 let engine = rhai::Engine::new();
-engine.set_optimization(false);     // turn off the optimizer
+engine.set_optimization_level(rhai::OptimizationLevel::None);     // turn off the optimizer
 ```
 
 
@@ -1237,3 +1273,5 @@ engine.set_optimization(false);     // turn off the optimizer
 [`Engine`]: #hello-world
 [`Scope`]: #initializing-and-maintaining-state
 [`Dynamic`]: #values-and-types
+
+[`OptimizationLevel::Full`]: #optimization-levels

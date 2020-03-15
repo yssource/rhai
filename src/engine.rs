@@ -5,6 +5,9 @@ use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::{Scope, VariableType};
 
+#[cfg(not(feature = "no_optimize"))]
+use crate::optimize::OptimizationLevel;
+
 #[cfg(not(feature = "no_index"))]
 use crate::INT;
 
@@ -63,17 +66,20 @@ pub struct FnSpec<'a> {
 /// ```
 pub struct Engine<'e> {
     /// Optimize the AST after compilation
-    pub(crate) optimize: bool,
+    #[cfg(not(feature = "no_optimize"))]
+    pub(crate) optimization_level: OptimizationLevel,
     /// A hashmap containing all compiled functions known to the engine
     pub(crate) ext_functions: HashMap<FnSpec<'e>, Box<FnAny>>,
     /// A hashmap containing all script-defined functions
     pub(crate) script_functions: Vec<Arc<FnDef>>,
     /// A hashmap containing all iterators known to the engine
     pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
+    /// A hashmap mapping type names to pretty-print names
     pub(crate) type_names: HashMap<String, String>,
 
-    // Closures for implementing the print/debug commands
+    /// Closure for implementing the print commands
     pub(crate) on_print: Box<dyn FnMut(&str) + 'e>,
+    /// Closure for implementing the debug commands
     pub(crate) on_debug: Box<dyn FnMut(&str) + 'e>,
 }
 
@@ -93,7 +99,8 @@ impl Engine<'_> {
 
         // Create the new scripting Engine
         let mut engine = Engine {
-            optimize: true,
+            #[cfg(not(feature = "no_optimize"))]
+            optimization_level: OptimizationLevel::Full,
             ext_functions: HashMap::new(),
             script_functions: Vec::new(),
             type_iterators: HashMap::new(),
@@ -110,9 +117,32 @@ impl Engine<'_> {
         engine
     }
 
-    /// Control whether the `Engine` will optimize an AST after compilation
-    pub fn set_optimization(&mut self, optimize: bool) {
-        self.optimize = optimize
+    /// Control whether and how the `Engine` will optimize an AST after compilation
+    #[cfg(not(feature = "no_optimize"))]
+    pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) {
+        self.optimization_level = optimization_level
+    }
+
+    /// Call a registered function
+    #[cfg(not(feature = "no_optimize"))]
+    pub(crate) fn call_ext_fn_raw(
+        &self,
+        fn_name: &str,
+        args: FnCallArgs,
+        pos: Position,
+    ) -> Result<Option<Dynamic>, EvalAltResult> {
+        let spec = FnSpec {
+            name: fn_name.into(),
+            args: Some(args.iter().map(|a| Any::type_id(&**a)).collect()),
+        };
+
+        // Search built-in's and external functions
+        if let Some(func) = self.ext_functions.get(&spec) {
+            // Run external function
+            Ok(Some(func(args, pos)?))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Universal method for calling functions, that are either
@@ -165,13 +195,13 @@ impl Engine<'_> {
             args: Some(args.iter().map(|a| Any::type_id(&**a)).collect()),
         };
 
-        // Then search built-in's and external functions
+        // Search built-in's and external functions
         if let Some(func) = self.ext_functions.get(&spec) {
             // Run external function
             let result = func(args, pos)?;
 
             // See if the function match print/debug (which requires special processing)
-            let callback = match spec.name.as_ref() {
+            let callback = match fn_name {
                 KEYWORD_PRINT => self.on_print.as_mut(),
                 KEYWORD_DEBUG => self.on_debug.as_mut(),
                 _ => return Ok(result),
@@ -185,7 +215,7 @@ impl Engine<'_> {
             return Ok(callback(val).into_dynamic());
         }
 
-        if spec.name == KEYWORD_TYPE_OF && args.len() == 1 {
+        if fn_name == KEYWORD_TYPE_OF && args.len() == 1 {
             // Handle `type_of` function
             return Ok(self
                 .map_type_name(args[0].type_name())
@@ -193,23 +223,23 @@ impl Engine<'_> {
                 .into_dynamic());
         }
 
-        if spec.name.starts_with(FUNC_GETTER) {
+        if fn_name.starts_with(FUNC_GETTER) {
             // Getter function not found
             return Err(EvalAltResult::ErrorDotExpr(
                 format!(
                     "- property '{}' unknown or write-only",
-                    &spec.name[FUNC_GETTER.len()..]
+                    &fn_name[FUNC_GETTER.len()..]
                 ),
                 pos,
             ));
         }
 
-        if spec.name.starts_with(FUNC_SETTER) {
+        if fn_name.starts_with(FUNC_SETTER) {
             // Setter function not found
             return Err(EvalAltResult::ErrorDotExpr(
                 format!(
                     "- property '{}' unknown or read-only",
-                    &spec.name[FUNC_SETTER.len()..]
+                    &fn_name[FUNC_SETTER.len()..]
                 ),
                 pos,
             ));
@@ -228,7 +258,7 @@ impl Engine<'_> {
             .collect::<Vec<_>>();
 
         Err(EvalAltResult::ErrorFunctionNotFound(
-            format!("{} ({})", spec.name, types_list.join(", ")),
+            format!("{} ({})", fn_name, types_list.join(", ")),
             pos,
         ))
     }
@@ -249,7 +279,7 @@ impl Engine<'_> {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let args = once(this_ptr)
-                    .chain(values.iter_mut().map(|b| b.as_mut()))
+                    .chain(values.iter_mut().map(Dynamic::as_mut))
                     .collect();
 
                 self.call_fn_raw(fn_name, args, def_val.as_ref(), *pos)
@@ -567,8 +597,7 @@ impl Engine<'_> {
                 Ok(Self::str_replace_char(s, idx as usize, ch).into_dynamic())
             }
 
-            // All other variable types should be an error
-            _ => panic!("array or string source type expected for indexing"),
+            IndexSourceType::Expression => panic!("expression cannot be indexed for update"),
         }
     }
 
@@ -809,9 +838,6 @@ impl Engine<'_> {
                 .eval_index_expr(scope, lhs, idx_expr, *idx_pos)
                 .map(|(_, _, _, x)| x),
 
-            #[cfg(feature = "no_index")]
-            Expr::Index(_, _, _) => panic!("encountered an index expression during no_index!"),
-
             // Statement block
             Expr::Stmt(stmt, _) => self.eval_stmt(scope, stmt),
 
@@ -870,7 +896,7 @@ impl Engine<'_> {
 
                     // Error assignment to constant
                     expr if expr.is_constant() => Err(EvalAltResult::ErrorAssignmentToConstant(
-                        expr.get_value_str(),
+                        expr.get_constant_str(),
                         lhs.position(),
                     )),
 
@@ -891,8 +917,6 @@ impl Engine<'_> {
 
                 Ok(Box::new(arr))
             }
-            #[cfg(feature = "no_index")]
-            Expr::Array(_, _) => panic!("encountered an array during no_index!"),
 
             // Dump AST
             Expr::FunctionCall(fn_name, args_expr_list, _, pos) if fn_name == KEYWORD_DUMP_AST => {

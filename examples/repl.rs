@@ -1,4 +1,7 @@
+#[cfg(not(feature = "no_optimize"))]
+use rhai::OptimizationLevel;
 use rhai::{Engine, EvalAltResult, Scope, AST};
+
 use std::{
     io::{stdin, stdout, Write},
     iter,
@@ -43,6 +46,10 @@ fn print_error(input: &str, err: EvalAltResult) {
 
 fn main() {
     let mut engine = Engine::new();
+
+    #[cfg(not(feature = "no_optimize"))]
+    engine.set_optimization_level(OptimizationLevel::Full);
+
     let mut scope = Scope::new();
 
     let mut input = String::new();

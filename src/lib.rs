@@ -87,3 +87,6 @@ pub use engine::Array;
 
 #[cfg(not(feature = "no_float"))]
 pub use parser::FLOAT;
+
+#[cfg(not(feature = "no_optimize"))]
+pub use optimize::OptimizationLevel;

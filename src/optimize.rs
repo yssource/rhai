@@ -1,20 +1,40 @@
 #![cfg(not(feature = "no_optimize"))]
 
-use crate::engine::KEYWORD_DUMP_AST;
-use crate::parser::{Expr, Stmt};
+use crate::any::Dynamic;
+use crate::engine::{Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_PRINT};
+use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Stmt, AST};
 use crate::scope::{Scope, ScopeEntry, VariableType};
 
-struct State {
-    changed: bool,
-    constants: Vec<(String, Expr)>,
+use std::sync::Arc;
+
+/// Level of optimization performed
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+pub enum OptimizationLevel {
+    /// No optimization performed
+    None,
+    /// Only perform simple optimizations without evaluating functions
+    Simple,
+    /// Full optimizations performed, including evaluating functions.
+    /// Take care that this may cause side effects.
+    Full,
 }
 
-impl State {
+struct State<'a> {
+    changed: bool,
+    constants: Vec<(String, Expr)>,
+    engine: Option<&'a Engine<'a>>,
+}
+
+impl State<'_> {
     pub fn new() -> Self {
         State {
             changed: false,
             constants: vec![],
+            engine: None,
         }
+    }
+    pub fn reset(&mut self) {
+        self.changed = false;
     }
     pub fn set_dirty(&mut self) {
         self.changed = true;
@@ -42,7 +62,7 @@ impl State {
     }
 }
 
-fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
+fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -> Stmt {
     match stmt {
         Stmt::IfElse(expr, stmt1, None) if stmt1.is_noop() => {
             state.set_dirty();
@@ -114,7 +134,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 
         Stmt::Block(statements, pos) => {
             let orig_len = statements.len();
-            let orig_constants = state.constants.len();
+            let orig_constants_len = state.constants.len();
 
             let mut result: Vec<_> = statements
                 .into_iter() // For each statement
@@ -175,7 +195,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 state.set_dirty();
             }
 
-            state.restore_constants(orig_constants);
+            state.restore_constants(orig_constants_len);
 
             match result[..] {
                 // No statements in block - change to No-op
@@ -202,7 +222,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
     }
 }
 
-fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
+fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
     match expr {
         Expr::Stmt(stmt, pos) => match optimize_stmt(*stmt, state, true) {
             Stmt::Noop(_) => {
@@ -261,8 +281,6 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 pos,
             ),
         },
-        #[cfg(feature = "no_index")]
-        Expr::Index(_, _, _) => panic!("encountered an index expression during no_index!"),
 
         #[cfg(not(feature = "no_index"))]
         Expr::Array(items, pos) => {
@@ -279,9 +297,6 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
             Expr::Array(items, pos)
         }
-
-        #[cfg(feature = "no_index")]
-        Expr::Array(_, _) => panic!("encountered an array during no_index!"),
 
         Expr::And(lhs, rhs) => match (*lhs, *rhs) {
             (Expr::True(_), rhs) => {
@@ -320,9 +335,33 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             ),
         },
 
+        // Do not optimize anything within `dump_ast`
         Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST => {
             Expr::FunctionCall(id, args, def_value, pos)
         }
+        // Actually call function to optimize it
+        Expr::FunctionCall(id, args, def_value, pos)
+            if id != KEYWORD_DEBUG // not debug
+                && id != KEYWORD_PRINT // not print
+                && state.engine.map(|eng| eng.optimization_level == OptimizationLevel::Full).unwrap_or(false) // full optimizations
+                && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
+            =>
+        {
+            let engine = state.engine.expect("engine should be Some");
+            let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
+            let call_args: FnCallArgs = arg_values.iter_mut().map(Dynamic::as_mut).collect();
+            if let Ok(r) = engine.call_ext_fn_raw(&id, call_args, pos) {
+                r.and_then(|result| map_dynamic_to_expr(result, pos).0)
+                    .map(|expr| {
+                        state.set_dirty();
+                        expr
+                    })
+                    .unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
+            } else {
+                Expr::FunctionCall(id, args, def_value, pos)
+            }
+        }
+        // Optimize the function call arguments
         Expr::FunctionCall(id, args, def_value, pos) => {
             let orig_len = args.len();
 
@@ -341,7 +380,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // Replace constant with value
             state
                 .find_constant(name)
-                .expect("can't find constant in scope!")
+                .expect("should find constant in scope!")
                 .clone()
         }
 
@@ -349,26 +388,47 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     }
 }
 
-pub(crate) fn optimize(statements: Vec<Stmt>, scope: &Scope) -> Vec<Stmt> {
+pub(crate) fn optimize<'a>(
+    statements: Vec<Stmt>,
+    engine: Option<&Engine<'a>>,
+    scope: &Scope,
+) -> Vec<Stmt> {
+    // If optimization level is None then skip optimizing
+    if engine
+        .map(|eng| eng.optimization_level == OptimizationLevel::None)
+        .unwrap_or(false)
+    {
+        return statements;
+    }
+
+    // Set up the state
+    let mut state = State::new();
+    state.engine = engine;
+
+    scope
+        .iter()
+        .filter(|ScopeEntry { var_type, expr, .. }| {
+            // Get all the constants with definite constant expressions
+            *var_type == VariableType::Constant
+                && expr.as_ref().map(Expr::is_constant).unwrap_or(false)
+        })
+        .for_each(|ScopeEntry { name, expr, .. }| {
+            state.push_constant(
+                name.as_ref(),
+                expr.as_ref().expect("should be Some(expr)").clone(),
+            )
+        });
+
+    let orig_constants_len = state.constants.len();
+
+    // Optimization loop
     let mut result = statements;
 
     loop {
-        let mut state = State::new();
-        let num_statements = result.len();
+        state.reset();
+        state.restore_constants(orig_constants_len);
 
-        scope
-            .iter()
-            .filter(|ScopeEntry { var_type, expr, .. }| {
-                // Get all the constants with definite constant expressions
-                *var_type == VariableType::Constant
-                    && expr.as_ref().map(|e| e.is_constant()).unwrap_or(false)
-            })
-            .for_each(|ScopeEntry { name, expr, .. }| {
-                state.push_constant(
-                    name.as_ref(),
-                    expr.as_ref().expect("should be Some(expr)").clone(),
-                )
-            });
+        let num_statements = result.len();
 
         result = result
             .into_iter()
@@ -404,4 +464,33 @@ pub(crate) fn optimize(statements: Vec<Stmt>, scope: &Scope) -> Vec<Stmt> {
     }
 
     result
+}
+
+pub fn optimize_ast(
+    engine: &Engine,
+    scope: &Scope,
+    statements: Vec<Stmt>,
+    functions: Vec<FnDef>,
+) -> AST {
+    AST(
+        match engine.optimization_level {
+            OptimizationLevel::None => statements,
+            OptimizationLevel::Simple => optimize(statements, None, &scope),
+            OptimizationLevel::Full => optimize(statements, Some(engine), &scope),
+        },
+        functions
+            .into_iter()
+            .map(|mut fn_def| {
+                match engine.optimization_level {
+                    OptimizationLevel::None => (),
+                    OptimizationLevel::Simple | OptimizationLevel::Full => {
+                        let pos = fn_def.body.position();
+                        let mut body = optimize(vec![fn_def.body], None, &Scope::new());
+                        fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
+                    }
+                }
+                Arc::new(fn_def)
+            })
+            .collect(),
+    )
 }

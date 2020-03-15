@@ -1,3 +1,5 @@
+#[cfg(not(feature = "no_optimize"))]
+use rhai::OptimizationLevel;
 use rhai::{Engine, EvalAltResult};
 use std::{env, fs::File, io::Read, iter, process::exit};
 
@@ -49,6 +51,9 @@ fn main() {
     for filename in env::args().skip(1) {
         let mut engine = Engine::new();
 
+        #[cfg(not(feature = "no_optimize"))]
+        engine.set_optimization_level(OptimizationLevel::Full);
+
         let mut f = match File::open(&filename) {
             Err(err) => {
                 eprintln!("Error reading script file: {}\n{}", filename, err);
@@ -67,7 +72,7 @@ fn main() {
             _ => (),
         }
 
-        if let Err(err) = engine.consume(&contents, false) {
+        if let Err(err) = engine.consume(false, &contents) {
             eprintln!("{}", padding("=", filename.len()));
             eprintln!("{}", filename);
             eprintln!("{}", padding("=", filename.len()));

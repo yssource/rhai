@@ -1,10 +1,7 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
-use crate::any::{Any, AnyExt, Dynamic};
-use crate::parser::{Expr, Position, INT};
-
-#[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::any::{Any, Dynamic};
+use crate::parser::{map_dynamic_to_expr, Expr, Position};
 
 use std::borrow::Cow;
 
@@ -73,7 +70,7 @@ impl<'a> Scope<'a> {
         let value = value.into_dynamic();
 
         // Map into constant expressions
-        //let (expr, value) = map_dynamic_to_expr(value);
+        //let (expr, value) = map_dynamic_to_expr(value, Position::none());
 
         self.0.push(ScopeEntry {
             name: name.into(),
@@ -93,7 +90,7 @@ impl<'a> Scope<'a> {
         let value = value.into_dynamic();
 
         // Map into constant expressions
-        let (expr, value) = map_dynamic_to_expr(value);
+        let (expr, value) = map_dynamic_to_expr(value, Position::none());
 
         self.0.push(ScopeEntry {
             name: name.into(),
@@ -110,13 +107,13 @@ impl<'a> Scope<'a> {
         var_type: VariableType,
         value: Dynamic,
     ) {
-        //let (expr, value) = map_dynamic_to_expr(value);
+        let (expr, value) = map_dynamic_to_expr(value, Position::none());
 
         self.0.push(ScopeEntry {
             name: name.into(),
             var_type,
             value,
-            expr: None,
+            expr,
         });
     }
 
@@ -208,64 +205,5 @@ where
                 value,
                 expr: None,
             }));
-    }
-}
-
-fn map_dynamic_to_expr(value: Dynamic) -> (Option<Expr>, Dynamic) {
-    if value.is::<INT>() {
-        let value2 = value.clone();
-        (
-            Some(Expr::IntegerConstant(
-                *value.downcast::<INT>().expect("value should be INT"),
-                Position::none(),
-            )),
-            value2,
-        )
-    } else if value.is::<char>() {
-        let value2 = value.clone();
-        (
-            Some(Expr::CharConstant(
-                *value.downcast::<char>().expect("value should be char"),
-                Position::none(),
-            )),
-            value2,
-        )
-    } else if value.is::<String>() {
-        let value2 = value.clone();
-        (
-            Some(Expr::StringConstant(
-                *value.downcast::<String>().expect("value should be String"),
-                Position::none(),
-            )),
-            value2,
-        )
-    } else if value.is::<bool>() {
-        let value2 = value.clone();
-        (
-            Some(
-                if *value.downcast::<bool>().expect("value should be bool") {
-                    Expr::True(Position::none())
-                } else {
-                    Expr::False(Position::none())
-                },
-            ),
-            value2,
-        )
-    } else {
-        #[cfg(not(feature = "no_float"))]
-        {
-            if value.is::<FLOAT>() {
-                let value2 = value.clone();
-                return (
-                    Some(Expr::FloatConstant(
-                        *value.downcast::<FLOAT>().expect("value should be FLOAT"),
-                        Position::none(),
-                    )),
-                    value2,
-                );
-            }
-        }
-
-        (None, value)
     }
 }
