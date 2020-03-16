@@ -58,6 +58,8 @@ pub enum ParseErrorType {
     /// An open `[` is missing the corresponding closing `]`.
     #[cfg(not(feature = "no_index"))]
     MissingRightBracket(String),
+    /// A list of expressions is missing the separating ','.
+    MissingComma(String),
     /// An expression in function call arguments `()` has syntax error.
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
@@ -116,6 +118,7 @@ impl ParseError {
             ParseErrorType::MissingRightBrace(_) => "Expecting '}'",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
+            ParseErrorType::MissingComma(_) => "Expecting ','",
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
@@ -164,6 +167,8 @@ impl fmt::Display for ParseError {
 
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MissingRightBracket(ref s) => write!(f, "{} for {}", self.desc(), s)?,
+
+            ParseErrorType::MissingComma(ref s) => write!(f, "{} for {}", self.desc(), s)?,
 
             ParseErrorType::AssignmentToConstant(ref s) if s.is_empty() => {
                 write!(f, "{}", self.desc())?

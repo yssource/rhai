@@ -1026,30 +1026,29 @@ impl Engine<'_> {
             // Block scope
             Stmt::Block(block, _) => {
                 let prev_len = scope.len();
-                let mut last_result: Result<Dynamic, EvalAltResult> = Ok(().into_dynamic());
+                let mut result: Result<Dynamic, EvalAltResult> = Ok(().into_dynamic());
 
-                for block_stmt in block.iter() {
-                    last_result = self.eval_stmt(scope, block_stmt);
+                for stmt in block.iter() {
+                    result = self.eval_stmt(scope, stmt);
 
-                    if let Err(x) = last_result {
-                        last_result = Err(x);
+                    if result.is_err() {
                         break;
                     }
                 }
 
                 scope.rewind(prev_len);
 
-                last_result
+                result
             }
 
             // If-else statement
-            Stmt::IfElse(guard, body, else_body) => self
+            Stmt::IfElse(guard, if_body, else_body) => self
                 .eval_expr(scope, guard)?
                 .downcast::<bool>()
                 .map_err(|_| EvalAltResult::ErrorIfGuard(guard.position()))
                 .and_then(|guard_val| {
                     if *guard_val {
-                        self.eval_stmt(scope, body)
+                        self.eval_stmt(scope, if_body)
                     } else if let Some(stmt) = else_body {
                         self.eval_stmt(scope, stmt.as_ref())
                     } else {

@@ -171,7 +171,7 @@ let ast = engine.compile("40 + 2")?;
 for _ in 0..42 {
     let result: i64 = engine.eval_ast(&ast)?;
 
-    println!("Answer: {}", result);  // prints 42
+    println!("Answer #{}: {}", i, result);  // prints 42
 }
 ```
 
@@ -193,14 +193,17 @@ use rhai::Engine;
 let mut engine = Engine::new();
 
 // Define a function in a script and load it into the Engine.
-engine.consume(true,        // pass true to 'retain_functions' otherwise these functions
-    r"                      //   will be cleared at the end of consume()
-        fn hello(x, y) {    // a function with two parameters: String and i64
-            x.len() + y     //   returning i64
+// Pass true to 'retain_functions' otherwise these functions will be cleared at the end of consume()
+engine.consume(true,
+    r"
+        // a function with two parameters: String and i64
+        fn hello(x, y) {
+            x.len() + y
         }
 
-        fn hello(x) {       // functions can be overloaded: this one takes only one parameter
-            x * 2           //   returning i64
+        // functions can be overloaded: this one takes only one parameter
+        fn hello(x) {
+            x * 2
         }
     ")?;
 
@@ -495,21 +498,20 @@ let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
 println!("result: {}", result); // prints 1
 ```
 
-`type_of` works fine with custom types and returns the name of the type:
+`type_of` works fine with custom types and returns the name of the type. If `register_type_with_name` is used to register the custom type
+with a special "pretty-print" name, `type_of` will return that name instead.
 
 ```rust
 let x = new_ts();
 print(x.type_of());     // prints "foo::bar::TestStruct"
+                        // prints "Hello" if TestStruct is registered with
+                        //   engine.register_type_with_name::<TestStruct>("Hello")?;
 ```
-
-If `register_type_with_name` is used to register the custom type with a special "pretty-print" name, `type_of` will return that name instead.
 
 Getters and setters
 -------------------
 
 Similarly, custom types can expose members by registering a `get` and/or `set` function.
-
-For example:
 
 ```rust
 #[derive(Clone)]
@@ -565,8 +567,8 @@ fn main() -> Result<(), EvalAltResult>
     // Then push some initialized variables into the state
     // NOTE: Remember the system number types in Rhai are i64 (i32 if 'only_i32') ond f64.
     //       Better stick to them or it gets hard working with the script.
-    scope.push("y".into(), 42_i64);
-    scope.push("z".into(), 999_i64);
+    scope.push("y", 42_i64);
+    scope.push("z", 999_i64);
 
     // First invocation
     engine.eval_with_scope::<()>(&mut scope, r"
@@ -684,7 +686,7 @@ Numeric operators generally follow C styles.
 | `%`      | Modulo (remainder)                                          |               |
 | `~`      | Power                                                       |               |
 | `&`      | Binary _And_ bit-mask                                       |      Yes      |
-| `|`      | Binary _Or_ bit-mask                                        |      Yes      |
+| `\|`     | Binary _Or_ bit-mask                                        |      Yes      |
 | `^`      | Binary _Xor_ bit-mask                                       |      Yes      |
 | `<<`     | Left bit-shift                                              |      Yes      |
 | `>>`     | Right bit-shift                                             |      Yes      |
@@ -948,9 +950,9 @@ Boolean operators
 | -------- | ------------------------------- |
 | `!`      | Boolean _Not_                   |
 | `&&`     | Boolean _And_ (short-circuits)  |
-| `||`     | Boolean _Or_ (short-circuits)   |
+| `\|\|`   | Boolean _Or_ (short-circuits)   |
 | `&`      | Boolean _And_ (full evaluation) |
-| `|`      | Boolean _Or_ (full evaluation)  |
+| `\|`     | Boolean _Or_ (full evaluation)  |
 
 Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated
 if the first one already proves the condition wrong.
