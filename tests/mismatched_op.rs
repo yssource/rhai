@@ -5,12 +5,10 @@ use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 fn test_mismatched_op() {
     let mut engine = Engine::new();
 
-    let r = engine.eval::<INT>("60 + \"hello\"");
-
-    match r {
-        Err(EvalAltResult::ErrorMismatchOutputType(err, _)) if err == "string" => (),
-        _ => panic!(),
-    }
+    assert!(
+        matches!(engine.eval::<INT>(r#"60 + "hello""#).expect_err("expects error"),
+        EvalAltResult::ErrorMismatchOutputType(err, _) if err == "string")
+    );
 }
 
 #[test]
@@ -30,15 +28,17 @@ fn test_mismatched_op_custom_type() {
     engine.register_type_with_name::<TestStruct>("TestStruct");
     engine.register_fn("new_ts", TestStruct::new);
 
-    let r = engine.eval::<INT>("60 + new_ts()");
+    let r = engine
+        .eval::<INT>("60 + new_ts()")
+        .expect_err("expects error");
 
-    match r {
-        #[cfg(feature = "only_i32")]
-        Err(EvalAltResult::ErrorFunctionNotFound(err, _)) if err == "+ (i32, TestStruct)" => (),
+    #[cfg(feature = "only_i32")]
+    assert!(
+        matches!(r, EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i32, TestStruct)")
+    );
 
-        #[cfg(not(feature = "only_i32"))]
-        Err(EvalAltResult::ErrorFunctionNotFound(err, _)) if err == "+ (i64, TestStruct)" => (),
-
-        _ => panic!(),
-    }
+    #[cfg(not(feature = "only_i32"))]
+    assert!(
+        matches!(r, EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i64, TestStruct)")
+    );
 }

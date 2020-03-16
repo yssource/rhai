@@ -1,6 +1,8 @@
 //! Helper module which defines `FnArgs` to make function calling easier.
 
 use crate::any::{Any, Dynamic};
+
+#[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
 
 /// Trait that represent arguments to a function call.

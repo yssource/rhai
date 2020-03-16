@@ -196,13 +196,10 @@ macro_rules! def_register {
 
                     // Call the user-supplied function using ($clone) to
                     // potentially clone the value, otherwise pass the reference.
-                    match f($(($clone)($par)),*) {
-                        Ok(r) => Ok(Box::new(r) as Dynamic),
-                        Err(mut err) => {
-                            err.set_position(pos);
-                            Err(err)
-                        }
-                    }
+                    f($(($clone)($par)),*).map(|r| Box::new(r) as Dynamic).map_err(|mut err| {
+                        err.set_position(pos);
+                        err
+                    })
                 };
                 self.register_fn_raw(name, Some(vec![$(TypeId::of::<$par>()),*]), Box::new(fun));
             }

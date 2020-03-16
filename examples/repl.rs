@@ -1,4 +1,8 @@
 use rhai::{Engine, EvalAltResult, Scope, AST};
+
+#[cfg(not(feature = "no_optimize"))]
+use rhai::OptimizationLevel;
+
 use std::{
     io::{stdin, stdout, Write},
     iter,
@@ -43,6 +47,10 @@ fn print_error(input: &str, err: EvalAltResult) {
 
 fn main() {
     let mut engine = Engine::new();
+
+    #[cfg(not(feature = "no_optimize"))]
+    engine.set_optimization_level(OptimizationLevel::Full);
+
     let mut scope = Scope::new();
 
     let mut input = String::new();
@@ -62,10 +70,11 @@ fn main() {
         match input.as_str().trim() {
             "exit" | "quit" => break, // quit
             "ast" => {
-                // print the last AST
-                match &ast {
-                    Some(ast) => println!("{:#?}", ast),
-                    None => println!("()"),
+                if matches!(&ast, Some(_)) {
+                    // print the last AST
+                    println!("{:#?}", ast.as_ref().unwrap());
+                } else {
+                    println!("()");
                 }
                 continue;
             }
@@ -73,7 +82,7 @@ fn main() {
         }
 
         if let Err(err) = engine
-            .compile(&input)
+            .compile_with_scope(&scope, &input)
             .map_err(EvalAltResult::ErrorParsing)
             .and_then(|r| {
                 ast = Some(r);

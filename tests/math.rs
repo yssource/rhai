@@ -24,54 +24,76 @@ fn test_math() -> Result<(), EvalAltResult> {
     {
         #[cfg(not(feature = "only_i32"))]
         {
-            match engine.eval::<INT>("(-9223372036854775808).abs()") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return overflow error: {:?}", r),
-            }
-            match engine.eval::<INT>("9223372036854775807 + 1") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return overflow error: {:?}", r),
-            }
-            match engine.eval::<INT>("-9223372036854775808 - 1") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return underflow error: {:?}", r),
-            }
-            match engine.eval::<INT>("9223372036854775807 * 9223372036854775807") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return overflow error: {:?}", r),
-            }
-            match engine.eval::<INT>("9223372036854775807 / 0") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return division by zero error: {:?}", r),
-            }
-            match engine.eval::<INT>("9223372036854775807 % 0") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return division by zero error: {:?}", r),
-            }
+            assert!(matches!(
+                engine
+                    .eval::<INT>("(-9223372036854775808).abs()")
+                    .expect_err("expects negation overflow"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("9223372036854775807 + 1")
+                    .expect_err("expects overflow"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("-9223372036854775808 - 1")
+                    .expect_err("expects underflow"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("9223372036854775807 * 9223372036854775807")
+                    .expect_err("expects overflow"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("9223372036854775807 / 0")
+                    .expect_err("expects division by zero"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("9223372036854775807 % 0")
+                    .expect_err("expects division by zero"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
         }
 
         #[cfg(feature = "only_i32")]
         {
-            match engine.eval::<INT>("2147483647 + 1") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return overflow error: {:?}", r),
-            }
-            match engine.eval::<INT>("-2147483648 - 1") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return underflow error: {:?}", r),
-            }
-            match engine.eval::<INT>("2147483647 * 2147483647") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return overflow error: {:?}", r),
-            }
-            match engine.eval::<INT>("2147483647 / 0") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return division by zero error: {:?}", r),
-            }
-            match engine.eval::<INT>("2147483647 % 0") {
-                Err(EvalAltResult::ErrorArithmetic(_, _)) => (),
-                r => panic!("should return division by zero error: {:?}", r),
-            }
+            assert!(matches!(
+                engine
+                    .eval::<INT>("2147483647 + 1")
+                    .expect_err("expects overflow"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("-2147483648 - 1")
+                    .expect_err("expects underflow"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("2147483647 * 2147483647")
+                    .expect_err("expects overflow"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("2147483647 / 0")
+                    .expect_err("expects division by zero"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
+            assert!(matches!(
+                engine
+                    .eval::<INT>("2147483647 % 0")
+                    .expect_err("expects division by zero"),
+                EvalAltResult::ErrorArithmetic(_, _)
+            ));
         }
     }
 

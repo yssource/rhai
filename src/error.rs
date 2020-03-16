@@ -18,20 +18,11 @@ pub enum LexError {
     MalformedChar(String),
     /// Error in the script text.
     InputError(String),
+    /// An identifier is in an invalid format.
+    MalformedIdentifier(String),
 }
 
-impl Error for LexError {
-    fn description(&self) -> &str {
-        match *self {
-            Self::UnexpectedChar(_) => "Unexpected character",
-            Self::UnterminatedString => "Open string is not terminated",
-            Self::MalformedEscapeSequence(_) => "Unexpected values in escape sequence",
-            Self::MalformedNumber(_) => "Unexpected characters in number",
-            Self::MalformedChar(_) => "Char constant not a single character",
-            Self::InputError(_) => "Input error",
-        }
-    }
-}
+impl Error for LexError {}
 
 impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -40,8 +31,11 @@ impl fmt::Display for LexError {
             Self::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
             Self::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
             Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
+            Self::MalformedIdentifier(s) => {
+                write!(f, "Variable name is not in a legal format: '{}'", s)
+            }
             Self::InputError(s) => write!(f, "{}", s),
-            _ => write!(f, "{}", self.description()),
+            Self::UnterminatedString => write!(f, "Open string is not terminated"),
         }
     }
 }
@@ -62,21 +56,34 @@ pub enum ParseErrorType {
     /// An open `{` is missing the corresponding closing `}`.
     MissingRightBrace(String),
     /// An open `[` is missing the corresponding closing `]`.
+    #[cfg(not(feature = "no_index"))]
     MissingRightBracket(String),
     /// An expression in function call arguments `()` has syntax error.
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
+    #[cfg(not(feature = "no_index"))]
     MalformedIndexExpr(String),
-    /// Missing a variable name after the `let` keyword.
-    VarExpectsIdentifier,
+    /// Invalid expression assigned to constant.
+    ForbiddenConstantExpr(String),
+    /// Missing a variable name after the `let`, `const` or `for` keywords.
+    VariableExpected,
+    /// A `for` statement is missing the `in` keyword.
+    MissingIn,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
+    #[cfg(not(feature = "no_function"))]
     WrongFnDefinition,
     /// Missing a function name after the `fn` keyword.
+    #[cfg(not(feature = "no_function"))]
     FnMissingName,
     /// A function definition is missing the parameters list. Wrapped value is the function name.
+    #[cfg(not(feature = "no_function"))]
     FnMissingParams(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     AssignmentToInvalidLHS,
+    /// Assignment to a copy of a value.
+    AssignmentToCopy,
+    /// Assignment to an a constant variable.
+    AssignmentToConstant(String),
 }
 
 /// Error when parsing a script.
@@ -98,10 +105,8 @@ impl ParseError {
     pub fn position(&self) -> Position {
         self.1
     }
-}
 
-impl Error for ParseError {
-    fn description(&self) -> &str {
+    pub(crate) fn desc(&self) -> &str {
         match self.0 {
             ParseErrorType::BadInput(ref p) => p,
             ParseErrorType::InputPastEndOfFile => "Script is incomplete",
@@ -109,40 +114,64 @@ impl Error for ParseError {
             ParseErrorType::MissingRightParen(_) => "Expecting ')'",
             ParseErrorType::MissingLeftBrace => "Expecting '{'",
             ParseErrorType::MissingRightBrace(_) => "Expecting '}'",
+            #[cfg(not(feature = "no_index"))]
             ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
+            #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
-            ParseErrorType::VarExpectsIdentifier => "Expecting name of a variable",
+            ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
+            ParseErrorType::MissingIn => "Expecting 'in'",
+            ParseErrorType::VariableExpected => "Expecting name of a variable",
+            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
+            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
+            #[cfg(not(feature = "no_function"))]
             ParseErrorType::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
-            ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression because it will only be changing a copy of the value"
+            ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
+            ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
+            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable."
         }
     }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
 }
+
+impl Error for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            ParseErrorType::BadInput(ref s)
-            | ParseErrorType::MalformedIndexExpr(ref s)
-            | ParseErrorType::MalformedCallExpr(ref s) => {
-                write!(f, "{}", if s.is_empty() { self.description() } else { s })?
+            ParseErrorType::BadInput(ref s) | ParseErrorType::MalformedCallExpr(ref s) => {
+                write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
             }
-            ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.description(), s)?,
+            ParseErrorType::ForbiddenConstantExpr(ref s) => {
+                write!(f, "Expecting a constant to assign to '{}'", s)?
+            }
+            ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.desc(), s)?,
+
+            #[cfg(not(feature = "no_index"))]
+            ParseErrorType::MalformedIndexExpr(ref s) => {
+                write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
+            }
+
+            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(ref s) => {
                 write!(f, "Expecting parameters for function '{}'", s)?
             }
-            ParseErrorType::MissingRightParen(ref s)
-            | ParseErrorType::MissingRightBrace(ref s)
-            | ParseErrorType::MissingRightBracket(ref s) => {
-                write!(f, "{} for {}", self.description(), s)?
+
+            ParseErrorType::MissingRightParen(ref s) | ParseErrorType::MissingRightBrace(ref s) => {
+                write!(f, "{} for {}", self.desc(), s)?
             }
-            _ => write!(f, "{}", self.description())?,
+
+            #[cfg(not(feature = "no_index"))]
+            ParseErrorType::MissingRightBracket(ref s) => write!(f, "{} for {}", self.desc(), s)?,
+
+            ParseErrorType::AssignmentToConstant(ref s) if s.is_empty() => {
+                write!(f, "{}", self.desc())?
+            }
+            ParseErrorType::AssignmentToConstant(ref s) => {
+                write!(f, "Cannot assign to constant '{}'", s)?
+            }
+            _ => write!(f, "{}", self.desc())?,
         }
 
         if !self.1.is_eof() {

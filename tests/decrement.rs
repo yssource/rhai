@@ -6,12 +6,9 @@ fn test_decrement() -> Result<(), EvalAltResult> {
 
     assert_eq!(engine.eval::<INT>("let x = 10; x -= 7; x")?, 3);
 
-    let r = engine.eval::<String>("let s = \"test\"; s -= \"ing\"; s");
-
-    match r {
-        Err(EvalAltResult::ErrorFunctionNotFound(err, _)) if err == "- (string, string)" => (),
-        _ => panic!(),
-    }
+    assert!(matches!(engine
+            .eval::<String>(r#"let s = "test"; s -= "ing"; s"#)
+            .expect_err("expects error"), EvalAltResult::ErrorFunctionNotFound(err, _) if err == "- (string, string)"));
 
     Ok(())
 }

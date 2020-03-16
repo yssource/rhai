@@ -8,6 +8,10 @@ use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, FnDef, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
+
+#[cfg(not(feature = "no_optimize"))]
+use crate::optimize::optimize_ast;
+
 use std::{
     any::{type_name, TypeId},
     fs::File,
@@ -101,8 +105,14 @@ impl<'e> Engine<'e> {
 
     /// Compile a string into an AST.
     pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
+        self.compile_with_scope(&Scope::new(), input)
+    }
+
+    /// Compile a string into an AST using own scope.
+    /// The scope is useful for passing constants into the script for optimization.
+    pub fn compile_with_scope(&self, scope: &Scope, input: &str) -> Result<AST, ParseError> {
         let tokens_stream = lex(input);
-        parse(&mut tokens_stream.peekable(), self.optimize)
+        parse(&mut tokens_stream.peekable(), self, scope)
     }
 
     fn read_file(path: PathBuf) -> Result<String, EvalAltResult> {
@@ -118,13 +128,34 @@ impl<'e> Engine<'e> {
 
     /// Compile a file into an AST.
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, EvalAltResult> {
-        Self::read_file(path)
-            .and_then(|contents| self.compile(&contents).map_err(|err| err.into()))
+        self.compile_file_with_scope(&Scope::new(), path)
+    }
+
+    /// Compile a file into an AST using own scope.
+    /// The scope is useful for passing constants into the script for optimization.
+    pub fn compile_file_with_scope(
+        &self,
+        scope: &Scope,
+        path: PathBuf,
+    ) -> Result<AST, EvalAltResult> {
+        Self::read_file(path).and_then(|contents| {
+            self.compile_with_scope(scope, &contents)
+                .map_err(|err| err.into())
+        })
     }
 
     /// Evaluate a file.
     pub fn eval_file<T: Any + Clone>(&mut self, path: PathBuf) -> Result<T, EvalAltResult> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
+    }
+
+    /// Evaluate a file with own scope.
+    pub fn eval_file_with_scope<T: Any + Clone>(
+        &mut self,
+        scope: &mut Scope,
+        path: PathBuf,
+    ) -> Result<T, EvalAltResult> {
+        Self::read_file(path).and_then(|contents| self.eval_with_scope::<T>(scope, &contents))
     }
 
     /// Evaluate a string.
@@ -162,23 +193,21 @@ impl<'e> Engine<'e> {
         ) -> Result<Dynamic, EvalAltResult> {
             engine.clear_functions();
 
-            #[cfg(feature = "no_function")]
-            let AST(statements) = ast;
-
-            #[cfg(not(feature = "no_function"))]
             let statements = {
                 let AST(statements, functions) = ast;
                 engine.load_script_functions(functions);
                 statements
             };
 
-            let result = statements
-                .iter()
-                .try_fold(().into_dynamic(), |_, stmt| engine.eval_stmt(scope, stmt));
+            let mut result = ().into_dynamic();
+
+            for stmt in statements {
+                result = engine.eval_stmt(scope, stmt)?;
+            }
 
             engine.clear_functions();
 
-            result
+            Ok(result)
         }
 
         match eval_ast_internal(self, scope, ast) {
@@ -207,10 +236,25 @@ impl<'e> Engine<'e> {
     ///        and not cleared from run to run.
     pub fn consume_file(
         &mut self,
-        path: PathBuf,
         retain_functions: bool,
+        path: PathBuf,
     ) -> Result<(), EvalAltResult> {
-        Self::read_file(path).and_then(|contents| self.consume(&contents, retain_functions))
+        Self::read_file(path).and_then(|contents| self.consume(retain_functions, &contents))
+    }
+
+    /// Evaluate a file with own scope, but throw away the result and only return error (if any).
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
+    pub fn consume_file_with_scope(
+        &mut self,
+        scope: &mut Scope,
+        retain_functions: bool,
+        path: PathBuf,
+    ) -> Result<(), EvalAltResult> {
+        Self::read_file(path)
+            .and_then(|contents| self.consume_with_scope(scope, retain_functions, &contents))
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
@@ -218,11 +262,11 @@ impl<'e> Engine<'e> {
     ///
     /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
     ///        and not cleared from run to run.
-    pub fn consume(&mut self, input: &str, retain_functions: bool) -> Result<(), EvalAltResult> {
+    pub fn consume(&mut self, retain_functions: bool, input: &str) -> Result<(), EvalAltResult> {
         self.consume_with_scope(&mut Scope::new(), retain_functions, input)
     }
 
-    /// Evaluate a string, but throw away the result and only return error (if any).
+    /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
     /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
@@ -235,13 +279,22 @@ impl<'e> Engine<'e> {
     ) -> Result<(), EvalAltResult> {
         let tokens_stream = lex(input);
 
-        let ast = parse(&mut tokens_stream.peekable(), self.optimize)
+        let ast = parse(&mut tokens_stream.peekable(), self, scope)
             .map_err(EvalAltResult::ErrorParsing)?;
 
         self.consume_ast_with_scope(scope, retain_functions, &ast)
     }
 
     /// Evaluate an AST, but throw away the result and only return error (if any).
+    /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    ///        and not cleared from run to run.
+    pub fn consume_ast(&mut self, retain_functions: bool, ast: &AST) -> Result<(), EvalAltResult> {
+        self.consume_ast_with_scope(&mut Scope::new(), retain_functions, ast)
+    }
+
+    /// Evaluate an AST with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
     /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
@@ -256,10 +309,6 @@ impl<'e> Engine<'e> {
             self.clear_functions();
         }
 
-        #[cfg(feature = "no_function")]
-        let AST(statements) = ast;
-
-        #[cfg(not(feature = "no_function"))]
         let statements = {
             let AST(ref statements, ref functions) = ast;
             self.load_script_functions(functions);
@@ -307,7 +356,7 @@ impl<'e> Engine<'e> {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// engine.consume("fn add(x, y) { x.len() + y }", true)?;
+    /// engine.consume(true, "fn add(x, y) { x.len() + y }")?;
     ///
     /// let result: i64 = engine.call_fn("add", (String::from("abc"), 123_i64))?;
     ///
@@ -345,6 +394,27 @@ impl<'e> Engine<'e> {
         })
     }
 
+    /// Optimize the AST with constants defined in an external Scope.
+    /// An optimized copy of the AST is returned while the original AST is untouched.
+    ///
+    /// Although optimization is performed by default during compilation, sometimes it is necessary to
+    /// _re_-optimize an AST. For example, when working with constants that are passed in via an
+    /// external scope, it will be more efficient to optimize the AST once again to take advantage
+    /// of the new constants.
+    ///
+    /// With this method, it is no longer necessary to recompile a large script. The script AST can be
+    /// compiled just once. Before evaluation, constants are passed into the `Engine` via an external scope
+    /// (i.e. with `scope.push_constant(...)`). Then, the AST is cloned and the copy re-optimized before running.
+    #[cfg(not(feature = "no_optimize"))]
+    pub fn optimize_ast(&self, scope: &Scope, ast: &AST) -> AST {
+        optimize_ast(
+            self,
+            scope,
+            ast.0.clone(),
+            ast.1.iter().map(|f| (**f).clone()).collect(),
+        )
+    }
+
     /// Override default action of `print` (print to stdout using `println!`)
     ///
     /// # Example
@@ -359,7 +429,7 @@ impl<'e> Engine<'e> {
     ///
     ///     // Override action of 'print' function
     ///     engine.on_print(|s| result.push_str(s));
-    ///     engine.consume("print(40 + 2);", false)?;
+    ///     engine.consume(false, "print(40 + 2);")?;
     /// }
     /// assert_eq!(result, "42");
     /// # Ok(())
@@ -383,7 +453,7 @@ impl<'e> Engine<'e> {
     ///
     ///     // Override action of 'debug' function
     ///     engine.on_debug(|s| result.push_str(s));
-    ///     engine.consume(r#"debug("hello");"#, false)?;
+    ///     engine.consume(false, r#"debug("hello");"#)?;
     /// }
     /// assert_eq!(result, "\"hello\"");
     /// # Ok(())
