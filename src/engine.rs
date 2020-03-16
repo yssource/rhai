@@ -99,14 +99,20 @@ impl Engine<'_> {
 
         // Create the new scripting Engine
         let mut engine = Engine {
-            #[cfg(not(feature = "no_optimize"))]
-            optimization_level: OptimizationLevel::Full,
             ext_functions: HashMap::new(),
             script_functions: Vec::new(),
             type_iterators: HashMap::new(),
             type_names,
             on_print: Box::new(default_print), // default print/debug implementations
             on_debug: Box::new(default_print),
+
+            #[cfg(not(feature = "no_optimize"))]
+            #[cfg(not(feature = "optimize_full"))]
+            optimization_level: OptimizationLevel::Simple,
+
+            #[cfg(not(feature = "no_optimize"))]
+            #[cfg(feature = "optimize_full")]
+            optimization_level: OptimizationLevel::Full,
         };
 
         engine.register_core_lib();
