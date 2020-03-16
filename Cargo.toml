@@ -13,6 +13,7 @@ include = [
     "scripts/*.rhai",
     "Cargo.toml"
 ]
+keywords = [ "scripting" ]
 
 [dependencies]
 num-traits = "0.2.11"
