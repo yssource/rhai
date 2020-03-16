@@ -882,10 +882,11 @@ impl<'a> TokenIterator<'a> {
                         }
                     }
 
-                    let out: String = result.iter().collect();
+                    let has_letter = result.iter().any(char::is_ascii_alphabetic);
+                    let identifier: String = result.iter().collect();
 
                     return Some((
-                        match out.as_str() {
+                        match identifier.as_str() {
                             "true" => Token::True,
                             "false" => Token::False,
                             "let" => Token::Let,
@@ -903,7 +904,9 @@ impl<'a> TokenIterator<'a> {
                             #[cfg(not(feature = "no_function"))]
                             "fn" => Token::Fn,
 
-                            _ => Token::Identifier(out),
+                            _ if has_letter => Token::Identifier(identifier),
+
+                            _ => Token::LexError(LERR::MalformedIdentifier(identifier)),
                         },
                         pos,
                     ));
@@ -1904,14 +1907,17 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 
     let name = match input.next() {
         Some((Token::Identifier(s), _)) => s,
-        Some((_, pos)) => return Err(ParseError::new(PERR::VarExpectsIdentifier, pos)),
-        None => return Err(ParseError::new(PERR::VarExpectsIdentifier, Position::eof())),
+        Some((Token::LexError(s), pos)) => {
+            return Err(ParseError::new(PERR::BadInput(s.to_string()), pos))
+        }
+        Some((_, pos)) => return Err(ParseError::new(PERR::VariableExpected, pos)),
+        None => return Err(ParseError::new(PERR::VariableExpected, Position::eof())),
     };
 
     match input.next() {
-        Some((Token::In, _)) => {}
-        Some((_, pos)) => return Err(ParseError::new(PERR::VarExpectsIdentifier, pos)),
-        None => return Err(ParseError::new(PERR::VarExpectsIdentifier, Position::eof())),
+        Some((Token::In, _)) => (),
+        Some((_, pos)) => return Err(ParseError::new(PERR::MissingIn, pos)),
+        None => return Err(ParseError::new(PERR::MissingIn, Position::eof())),
     }
 
     let expr = parse_expr(input)?;
@@ -1932,8 +1938,11 @@ fn parse_var<'a>(
 
     let name = match input.next() {
         Some((Token::Identifier(s), _)) => s,
-        Some((_, pos)) => return Err(ParseError::new(PERR::VarExpectsIdentifier, pos)),
-        None => return Err(ParseError::new(PERR::VarExpectsIdentifier, Position::eof())),
+        Some((Token::LexError(s), pos)) => {
+            return Err(ParseError::new(PERR::BadInput(s.to_string()), pos))
+        }
+        Some((_, pos)) => return Err(ParseError::new(PERR::VariableExpected, pos)),
+        None => return Err(ParseError::new(PERR::VariableExpected, Position::eof())),
     };
 
     if matches!(input.peek(), Some(&(Token::Equals, _))) {
