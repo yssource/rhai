@@ -50,8 +50,8 @@ Optional features
 | `no_index`    | Disable arrays and indexing features if not needed.                                                                                                      |
 | `no_float`    | Disable floating-point numbers and math if not needed.                                                                                                   |
 | `no_optimize` | Disable the script optimizer.                                                                                                                            |
-| `only_i32`    | Set the system integer type to `i32` and disable all other integer types.                                                                                |
-| `only_i64`    | Set the system integer type to `i64` and disable all other integer types.                                                                                |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                         |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
@@ -93,27 +93,27 @@ Example Scripts
 
 There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
 
-| Language feature scripts | Description                                                   |
-| ------------------------ | ------------------------------------------------------------- |
-| `array.rhai`             | arrays in Rhai                                                |
-| `assignment.rhai`        | variable declarations                                         |
-| `comments.rhai`          | just comments                                                 |
-| `for1.rhai`              | for loops                                                     |
-| `function_decl1.rhai`    | a function without parameters                                 |
-| `function_decl2.rhai`    | a function with two parameters                                |
-| `function_decl3.rhai`    | a function with many parameters                               |
-| `if1.rhai`               | if example                                                    |
-| `loop.rhai`              | endless loop in Rhai, this example emulates a do..while cycle |
-| `op1.rhai`               | just a simple addition                                        |
-| `op2.rhai`               | simple addition and multiplication                            |
-| `op3.rhai`               | change evaluation order with parenthesis                      |
-| `string.rhai`            | string operations                                             |
-| `while.rhai`             | while loop                                                    |
+| Language feature scripts                             | Description                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------- |
+| [`array.rhai`](scripts/array.rhai)                   | arrays in Rhai                                                |
+| [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                         |
+| [`comments.rhai`](scripts/comments.rhai)             | just comments                                                 |
+| [`for1.rhai`](scripts/for1.rhai)                     | for loops                                                     |
+| [`function_decl1.rhai`](scripts/function_decl1.rhai) | a function without parameters                                 |
+| [`function_decl2.rhai`](scripts/function_decl2.rhai) | a function with two parameters                                |
+| [`function_decl3.rhai`](scripts/function_decl3.rhai) | a function with many parameters                               |
+| [`if1.rhai`](scripts/if1.rhai)                       | if example                                                    |
+| [`loop.rhai`](scripts/loop.rhai)                     | endless loop in Rhai, this example emulates a do..while cycle |
+| [`op1.rhai`](scripts/op1.rhai)                       | just a simple addition                                        |
+| [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                            |
+| [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                      |
+| [`string.rhai`](scripts/string.rhai)                 | string operations                                             |
+| [`while.rhai`](scripts/while.rhai)                   | while loop                                                    |
 
-| Example scripts   | Description                                                                        |
-| ----------------- | ---------------------------------------------------------------------------------- |
-| `speed_test.rhai` | a simple program to measure the speed of Rhai's interpreter (1 million iterations) |
-| `primes.rhai`     | use Sieve of Eratosthenes to find all primes smaller than a limit                  |
+| Example scripts                              | Description                                                                        |
+| -------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`speed_test.rhai`](scripts/speed_test.rhai) | a simple program to measure the speed of Rhai's interpreter (1 million iterations) |
+| [`primes.rhai`](scripts/primes.rhai)         | use Sieve of Eratosthenes to find all primes smaller than a limit                  |
 
 To run the scripts, either make a tiny program or use of the `rhai_runner` example:
 
@@ -740,7 +740,9 @@ The following standard functions (defined in the standard library but excluded i
 Strings and Chars
 -----------------
 
-String and char literals follow C-style formatting, with support for Unicode ('`\u`') and hex ('`\x`') escape sequences.
+String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and hex ('`\x`_xx_') escape sequences.
+
+Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full, 32-bit extended Unicode code points.
 
 Although internally Rhai strings are stored as UTF-8 just like in Rust (they _are_ Rust `String`s),
 in the Rhai language they can be considered a stream of Unicode characters, and can be directly indexed (unlike Rust).
@@ -1051,7 +1053,7 @@ for x in array {
     if x == 42 { break; }
 }
 
-// The 'range' function allows iterating from first..last
+// The 'range' function allows iterating from first to last-1
 for x in range(0, 50) {
     print(x);
     if x == 42 { break; }

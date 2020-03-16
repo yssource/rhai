@@ -1,5 +1,7 @@
+// This script defines a function and calls it
+
 fn bob() {
-    3
+    return 3;
 }
 
-print(bob())
+print(bob());       // should print 3
