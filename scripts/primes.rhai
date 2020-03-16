@@ -1,6 +1,6 @@
-// This is a script to calculate prime numbers.
+// This script uses the Sieve of Eratosthenes to calculate prime numbers.
 
-const MAX_NUMBER_TO_CHECK = 10000;    // 1229 primes
+const MAX_NUMBER_TO_CHECK = 10_000;     // 1229 primes <= 10000
 
 let prime_mask = [];
 prime_mask.pad(MAX_NUMBER_TO_CHECK, true);
@@ -24,4 +24,3 @@ for p in range(2, MAX_NUMBER_TO_CHECK) {
 }
 
 print("Total " + total_primes_found + " primes.");
-
