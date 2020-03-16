@@ -1,23 +1,26 @@
 Rhai - Embedded Scripting for Rust
 =================================
 
-Rhai is an embedded scripting language for Rust that gives you a safe and easy way to add scripting to your applications.
+Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way to add scripting to any application.
 
 Rhai's current feature set:
 
-* Easy integration with Rust functions and data types
-* Fairly efficient (1 mil iterations in 0.75 sec on my 5 year old laptop)
+* Easy integration with Rust functions and data types, supporting getter/setter methods
+* Easily call a script-defined function from Rust
+* Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * Easy-to-use language similar to JS+Rust
 * Support for overloaded functions
-* Very few additional dependencies (right now only [`num-traits`] to do checked arithmetic operations)
+* Compiled script is optimized for repeat evaluations
+* Very few additional dependencies (right now only [`num-traits`] to do checked arithmetic operations);
+  For [`no_std`] builds, a number of additional dependencies are pulled in to provide for basic library functionalities.
 
 **Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
 
 Installation
 ------------
 
-You can install Rhai using crates by adding this line to your dependencies:
+Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
@@ -33,7 +36,7 @@ rhai = "*"
 
 to use the latest version.
 
-Beware that in order to use pre-releases (alpha and beta) you need to specify the exact version in your `Cargo.toml`.
+Beware that in order to use pre-releases (e.g. alpha and beta), the exact version must be specified in the `Cargo.toml`.
 
 Optional features
 -----------------
@@ -43,14 +46,14 @@ Optional features
 | `debug_msgs`  | Print debug messages to stdout related to function registrations and calls.                                                                              |
 | `no_stdlib`   | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
 | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
-| `no_function` | Disable script-defined functions if you don't need them.                                                                                                 |
-| `no_index`    | Disable arrays and indexing features if you don't need them.                                                                                             |
-| `no_float`    | Disable floating-point numbers and math if you don't need them.                                                                                          |
+| `no_function` | Disable script-defined functions if not needed.                                                                                                          |
+| `no_index`    | Disable arrays and indexing features if not needed.                                                                                                      |
+| `no_float`    | Disable floating-point numbers and math if not needed.                                                                                                   |
 | `no_optimize` | Disable the script optimizer.                                                                                                                            |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types.                                                                                |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types.                                                                                |
 
-By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here for you to opt-**out** of certain functionalities that you do not need.
+By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
 
 Related
@@ -59,7 +62,7 @@ Related
 Other cool projects to check out:
 
 * [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
-* You can also check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
+* Check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
 
 Examples
 --------
@@ -107,10 +110,10 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 | `string.rhai`            | string operations                                             |
 | `while.rhai`             | while loop                                                    |
 
-| Example scripts   | Description                                                       |
-| ----------------- | ----------------------------------------------------------------- |
-| `speed_test.rhai` | a simple program to measure the speed of Rhai's interpreter       |
-| `primes.rhai`     | use Sieve of Eratosthenes to find all primes smaller than a limit |
+| Example scripts   | Description                                                                        |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| `speed_test.rhai` | a simple program to measure the speed of Rhai's interpreter (1 million iterations) |
+| `primes.rhai`     | use Sieve of Eratosthenes to find all primes smaller than a limit                  |
 
 To run the scripts, either make a tiny program or use of the `rhai_runner` example:
 
@@ -138,13 +141,24 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
-You can also evaluate a script file:
+The type parameter is used to specify the type of the return value, which _must_ match the actual type or an error is returned.
+Rhai is very strict here. There are two ways to specify the return type - _turbofish_ notation, or type inference.
 
 ```rust
-let result = engine.eval_file::<i64>("hello_world.rhai")?;
+let result = engine.eval::<i64>("40 + 2")?;     // return type is i64, specified using 'turbofish' notation
+
+let result: i64 = engine.eval("40 + 2")?;       // return type is inferred to be i64
+
+let result = engine.eval<String>("40 + 2")?;    // returns an error because the actual return type is i64, not String
 ```
 
-If you want to repeatedly evaluate a script, you can _compile_ it first into an AST (abstract syntax tree) form:
+Evaluate a script file directly:
+
+```rust
+let result = engine.eval_file::<i64>("hello_world.rhai".into())?;       // 'eval_file' takes a 'PathBuf'
+```
+
+To repeatedly evaluate a script, _compile_ it first into an AST (abstract syntax tree) form:
 
 ```rust
 use rhai::Engine;
@@ -155,7 +169,7 @@ let mut engine = Engine::new();
 let ast = engine.compile("40 + 2")?;
 
 for _ in 0..42 {
-    let result = engine.eval_ast::<i64>(&ast)?;
+    let result: i64 = engine.eval_ast(&ast)?;
 
     println!("Answer: {}", result);  // prints 42
 }
@@ -168,11 +182,10 @@ use rhai::Engine;
 
 let mut engine = Engine::new();
 
-let ast = engine.compile_file("hello_world.rhai".into()).unwrap();
+let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
 
-Rhai also allows you to work _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust.
-You do this via `call_fn`:
+Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust - via `call_fn`:
 
 ```rust
 use rhai::Engine;
@@ -180,21 +193,20 @@ use rhai::Engine;
 let mut engine = Engine::new();
 
 // Define a function in a script and load it into the Engine.
-engine.consume(
-    r"
+engine.consume(true,        // pass true to 'retain_functions' otherwise these functions
+    r"                      //   will be cleared at the end of consume()
         fn hello(x, y) {    // a function with two parameters: String and i64
-            x.len() + y     // returning i64
+            x.len() + y     //   returning i64
         }
 
         fn hello(x) {       // functions can be overloaded: this one takes only one parameter
-            x * 2           // returning i64
+            x * 2           //   returning i64
         }
-    ", true)?;              // pass true to 'retain_functions' otherwise these functions
-                            // will be cleared at the end of consume()
+    ")?;
 
 // Evaluate the function in the AST, passing arguments into the script as a tuple
 // if there are more than one. Beware, arguments must be of the correct types because
-// Rhai does not have built-in type conversions. If you pass in arguments of the wrong type,
+// Rhai does not have built-in type conversions. If arguments of the wrong types are passed,
 // the Engine will not find the function.
 
 let result: i64 = engine.call_fn("hello", &ast, ( String::from("abc"), 123_i64 ) )?;
@@ -219,19 +231,20 @@ The following primitive types are supported natively:
 | **Dynamic** (i.e. can be anything)              | `rhai::Dynamic`                                                                                      |
 | **System** (current configuration)              | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                     |
 
-All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different; you cannot even add them together.
+All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different - they even cannot be added together. This is very similar to Rust.
 
-The default integer type is `i64`. If you do not need any other integer type, you can enable the [`only_i64`] feature.
+The default integer type is `i64`. If other integer types are not needed, it is possible to exclude them and make a smaller build with the [`only_i64`] feature.
 
-If you only need 32-bit integers, you can enable the [`only_i32`] feature and remove support for all integer types other than `i32` including `i64`.
-This is useful on 32-bit systems where using 64-bit integers incurs a performance penalty.
+If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`, including `i64`.
+This is useful on 32-bit systems where using 64-bit integers incur a performance penalty.
 
-If you do not need floating-point, enable the [`no_float`] feature to remove support.
+If no floating-point is needed, use the [`no_float`] feature to remove support.
 
 Value conversions
 -----------------
 
-There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it. For other conversions you can register your own conversion functions.
+There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it.
+For other conversions, register custom conversion functions.
 
 There is also a `type_of` function to detect the type of a value.
 
@@ -257,7 +270,8 @@ if z.type_of() == "string" {
 Working with functions
 ----------------------
 
-Rhai's scripting engine is very lightweight.  It gets its ability from the functions in your program.  To call these functions, you need to register them with the scripting engine.
+Rhai's scripting engine is very lightweight.  It gets most of its abilities from functions.
+To call these functions, they need to be registered with the engine.
 
 ```rust
 use rhai::{Engine, EvalAltResult};
@@ -310,7 +324,7 @@ fn decide(yes_no: bool) -> Dynamic {
 Generic functions
 -----------------
 
-Generic functions can be used in Rhai, but you'll need to register separate instances for each concrete type:
+Generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately:
 
 ```rust
 use std::fmt::Display;
@@ -331,14 +345,15 @@ fn main()
 }
 ```
 
-You can also see in this example how you can register multiple functions (or in this case multiple instances of the same function) to the same name in script.  This gives you a way to overload functions the correct one, based on the types of the parameters, from your script.
+This example shows how to register multiple functions (or, in this case, multiple instances of the same function) to the same name in script.
+This enables function overloading based on the number and types of parameters.
 
 Fallible functions
 ------------------
 
-If your function is _fallible_ (i.e. it returns a `Result<_, Error>`),  you can register it with `register_result_fn` (using the `RegisterResultFn` trait).
+If a function is _fallible_ (i.e. it returns a `Result<_, Error>`), it can be registered with `register_result_fn` (using the `RegisterResultFn` trait).
 
-Your function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements `From<&str>` and `From<String>` etc. and the error text gets converted into `EvalAltResult::ErrorRuntime`.
+The function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements `From<&str>` and `From<String>` etc. and the error text gets converted into `EvalAltResult::ErrorRuntime`.
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
@@ -487,12 +502,12 @@ let x = new_ts();
 print(x.type_of());     // prints "foo::bar::TestStruct"
 ```
 
-If you use `register_type_with_name` to register the custom type with a special pretty-print name, `type_of` will return that instead.
+If `register_type_with_name` is used to register the custom type with a special "pretty-print" name, `type_of` will return that name instead.
 
 Getters and setters
 -------------------
 
-Similarly, you can work with members of your custom types.  This works by registering a 'get' or a 'set' function for working with your struct.
+Similarly, custom types can expose members by registering a `get` and/or `set` function.
 
 For example:
 
@@ -531,9 +546,11 @@ println!("result: {}", result);
 Initializing and maintaining state
 ---------------------------------
 
-By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting only the functions that have been defined but no top-level state.  This gives each one a fairly clean starting place.  Sometimes, though, you want to continue using the same top-level state from one invocation to the next.
+By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting only the functions that have been defined but no global state.
+This gives each evaluation a clean starting slate. In order to continue using the same global state from one invocation to the next,
+such a state must be manually created and passed in.
 
-In this example, we first create a state with a few initialized variables, then thread the same state through multiple invocations:
+In this example, a global state object (a `Scope`) is created with a few initialized variables, then the same state is threaded through multiple invocations:
 
 ```rust
 use rhai::{Engine, Scope, EvalAltResult};
@@ -569,22 +586,25 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
-Rhai Language guide
+Rhai Language Guide
 ===================
 
 Comments
 --------
 
+Comments are C-style, including '`/*` ... `*/`' pairs and '`//`' for comments to the end of the line.
+
 ```rust
 let /* intruder comment */ name = "Bob";
+
 // This is a very important comment
+
 /* This comment spans
    multiple lines, so it
    only makes sense that
    it is even more important */
 
-/* Fear not, Rhai satisfies all your nesting
-   needs with nested comments:
+/* Fear not, Rhai satisfies all nesting needs with nested comments:
    /*/*/*/*/**/*/*/*/*/
 */
 ```
@@ -592,46 +612,85 @@ let /* intruder comment */ name = "Bob";
 Variables
 ---------
 
-Variables in Rhai follow normal naming rules (i.e. must contain only ASCII letters, digits and '`_`' underscores).
+Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
+
+Variable names must start with an ASCII letter or an underscore '`_`', and must contain at least one ASCII letter within.
+Therefore, names like '`_`', '`_42`' etc. are not legal variable names. Variable names are also case _sensitive_.
+
+Variables are defined using the `let` keyword.
 
 ```rust
-let x = 3;
+let x = 3;      // ok
+let _x = 42;    // ok
+let x_ = 42;    // also ok
+let _x_ = 42;   // still ok
+
+let _ = 123;    // syntax error - illegal variable name
+let _9 = 9;     // syntax error - illegal variable name
+
+let x = 42;     // variable is 'x', lower case
+let X = 123;    // variable is 'X', upper case
+x == 42;
+X == 123;
 ```
 
 Constants
 ---------
 
-Constants can be defined and are immutable.  Constants follow the same naming rules as [variables](#variables).
+Constants can be defined using the `const` keyword and are immutable.  Constants follow the same naming rules as [variables](#variables).
 
 ```rust
 const x = 42;
 print(x * 2);       // prints 84
-x = 123;            // <- syntax error - cannot assign to constant
+x = 123;            // syntax error - cannot assign to constant
 ```
 
 Constants must be assigned a _value_ not an expression.
 
 ```rust
-const x = 40 + 2;   // <- syntax error - cannot assign expression to constant
+const x = 40 + 2;   // syntax error - cannot assign expression to constant
 ```
-
 
 Numbers
 -------
 
-| Format           | Type                                           |
-| ---------------- | ---------------------------------------------- |
-| `123_345`, `-42` | `i64` in decimal, '`_`' separators are ignored |
-| `0o07_76`        | `i64` in octal, '`_`' separators are ignored   |
-| `0xabcd_ef`      | `i64` in hex, '`_`' separators are ignored     |
-| `0b0101_1001`    | `i64` in binary, '`_`' separators are ignored  |
-| `123_456.789`    | `f64`, '`_`' separators are ignored            |
+Integer numbers follow C-style format with support for decimal, binary ('`0b`'), octal ('`0o`') and hex ('`0x`') notations.
+
+The default system integer type (also aliased to `INT`) is `i64`. It can be turned into `i32` via the [`only_i32`] feature.
+
+Floating-point numbers are also supported if not disabled with [`no_float`]. The default system floating-point type is `i64` (also aliased to `FLOAT`).
+
+'`_`' separators can be added freely and are ignored within a number.
+
+| Format           | Type             |
+| ---------------- | ---------------- |
+| `123_345`, `-42` | `i64` in decimal |
+| `0o07_76`        | `i64` in octal   |
+| `0xabcd_ef`      | `i64` in hex     |
+| `0b0101_1001`    | `i64` in binary  |
+| `123_456.789`    | `f64`            |
 
 Numeric operators
 -----------------
 
+Numeric operators generally follow C styles.
+
+| Operator | Description                                                 | Integers only |
+| -------- | ----------------------------------------------------------- | :-----------: |
+| `+`      | Plus                                                        |               |
+| `-`      | Minus                                                       |               |
+| `*`      | Multiply                                                    |               |
+| `/`      | Divide (C-style integer division if acted on integer types) |               |
+| `%`      | Modulo (remainder)                                          |               |
+| `~`      | Power                                                       |               |
+| `&`      | Binary _And_ bit-mask                                       |      Yes      |
+| `|`      | Binary _Or_ bit-mask                                        |      Yes      |
+| `^`      | Binary _Xor_ bit-mask                                       |      Yes      |
+| `<<`     | Left bit-shift                                              |      Yes      |
+| `>>`     | Right bit-shift                                             |      Yes      |
+
 ```rust
-let x = (1 + 2) * (6 - 4) / 2;  // arithmetic
+let x = (1 + 2) * (6 - 4) / 2;  // arithmetic, with parentheses
 let reminder = 42 % 10;         // modulo
 let power = 42 ~ 2;             // power (i64 and f64 only)
 let left_shifted = 42 << 3;     // left shift
@@ -642,10 +701,14 @@ let bit_op = 42 | 99;           // bit masking
 Unary operators
 ---------------
 
+| Operator | Description |
+| -------- | ----------- |
+| `+`      | Plus        |
+| `-`      | Negative    |
+
 ```rust
 let number = -5;
 number = -5 - +5;
-let boolean = !true;
 ```
 
 Numeric functions
@@ -677,6 +740,17 @@ The following standard functions (defined in the standard library but excluded i
 Strings and Chars
 -----------------
 
+String and char literals follow C-style formatting, with support for Unicode ('`\u`') and hex ('`\x`') escape sequences.
+
+Although internally Rhai strings are stored as UTF-8 just like in Rust (they _are_ Rust `String`s),
+in the Rhai language they can be considered a stream of Unicode characters, and can be directly indexed (unlike Rust).
+Individual characters within a Rhai string can be replaced. In Rhai, there is no separate concepts of `String` and `&str` as in Rust.
+
+Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded if [`no_stdlib`]).
+This is particularly useful when printing output.
+
+`type_of()` a string returns `"string"`.
+
 ```rust
 let name = "Bob";
 let middle_initial = 'C';
@@ -690,27 +764,28 @@ let age = 42;
 let record = full_name + ": age " + age;
 record == "Bob C. Davis: age 42";
 
-// Strings can be indexed to get a character
-// (disabled with the 'no_index' feature)
+// Unlike Rust, Rhai strings can be indexed to get a character
+// (disabled with 'no_index')
 let c = record[4];
 c == 'C';
 
-ts.s = record;
+ts.s = record;                          // custom type properties can take strings
 
 let c = ts.s[4];
 c == 'C';
 
-let c = "foo"[0];
+let c = "foo"[0];                       // indexing also works on string literals...
 c == 'f';
 
-let c = ("foo" + "bar")[5];
+let c = ("foo" + "bar")[5];             // ... and expressions returning strings
 c == 'r';
 
 // Escape sequences in strings
 record += " \u2764\n";                  // escape sequence of '❤' in Unicode
 record == "Bob C. Davis: age 42 ❤\n";   // '\n' = new-line
 
-// Unlike Rust, Rhai strings can be modified
+// Unlike Rust, Rhai strings can be directly modified character-by-character
+// (disabled with 'no_index')
 record[4] = '\x58'; // 0x58 = 'X'
 record == "Bob X. Davis: age 42 ❤\n";
 ```
@@ -760,7 +835,12 @@ full_name.len() == 0;
 Arrays
 ------
 
-You can create arrays of values, and then access them with numeric indices.
+Arrays are first-class citizens in Rhai. Like C, arrays are accessed with zero-based, non-negative integer indices.
+Array literals are built within square brackets '`[`' ,, '`]`' and separated by commas '`,`'.
+
+The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
+
+Arrays are disabled via the [`no_index`] feature.
 
 The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on arrays:
 
@@ -777,7 +857,7 @@ The following functions (defined in the standard library but excluded if [`no_st
 Examples:
 
 ```rust
-let y = [1, 2, 3];      // 3 elements
+let y = [1, 2, 3];      // array literal with 3 elements
 y[1] = 42;
 
 print(y[1]);            // prints 42
@@ -789,7 +869,9 @@ foo == 42;
 let foo = [1, 2, 3][0];
 foo == 1;
 
-fn abc() { [42, 43, 44] }
+fn abc() {
+    [42, 43, 44]        // a function returning an array literal
+}
 
 let foo = abc()[0];
 foo == 42;
@@ -823,8 +905,7 @@ y.clear();              // empty the array
 print(y.len());         // prints 0
 ```
 
-`push` and `pad` are only defined for standard built-in types.  If you want to use them with
-your own custom type, you need to register a type-specific version:
+`push` and `pad` are only defined for standard built-in types. For custom types, type-specific versions must be registered:
 
 ```rust
 engine.register_fn("push",
@@ -832,27 +913,45 @@ engine.register_fn("push",
 );
 ```
 
-The type of a Rhai array is `rhai::Array`. `type_of()` returns `"array"`.
-
-Arrays are disabled via the [`no_index`] feature.
-
 Comparison operators
 --------------------
 
-You can compare most values of the same data type.  If you compare two values of _different_ data types, the result is always `false`.
+Comparing most values of the same data type work out-of-the-box for standard types supported by the system.
+
+However, if the [`no_stdlib`] feature is turned on, comparisons can only be made between restricted system
+types - `INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), string, array, `bool`, `char`.
 
 ```rust
 42 == 42;           // true
 42 > 42;            // false
 "hello" > "foo";    // true
 "42" == 42;         // false
+```
+
+Comparing two values of _different_ data types, or of unknown data types, always results in `false`.
+
+```rust
 42 == 42.0;         // false - i64 is different from f64
+42 > "42";          // false - i64 is different from string
+42 <= "42";         // false again
+
+let ts = new_ts();  // custom type
+ts == 42;           // false - types are not the same
 ```
 
 Boolean operators
 -----------------
 
-Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated if the first one already proves the condition wrong.
+| Operator | Description                     |
+| -------- | ------------------------------- |
+| `!`      | Boolean _Not_                   |
+| `&&`     | Boolean _And_ (short-circuits)  |
+| `||`     | Boolean _Or_ (short-circuits)   |
+| `&`      | Boolean _And_ (full evaluation) |
+| `|`      | Boolean _Or_ (full evaluation)  |
+
+Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated
+if the first one already proves the condition wrong.
 
 Single boolean operators `&` and `|` always evaluate both operands.
 
@@ -888,34 +987,45 @@ my_str += 12345;
 my_str == "abcABC12345"
 ```
 
-If
---
+If statements
+-------------
+
+All branches of an `if` statement must be enclosed within braces '`{`' .. '`}`', even when there is only one statement.
+
+Like Rust, there is no ambiguity regarding which `if` clause a statement belongs to.
 
 ```rust
 if true {
     print("It's true!");
 } else if true {
     print("It's true again!");
+} else if ... {
+        :
+} else if ... {
+        :
 } else {
-    print("It's false!");
+    print("It's finally false!");
 }
+
+if (decision) print("I've decided!");
+//            ^ syntax error, expecting '{' in statement block
 ```
 
-While
------
+While loops
+-----------
 
 ```rust
 let x = 10;
 
 while x > 0 {
     print(x);
-    if x == 5 { break; }
+    if x == 5 { break; }    // break out of while loop
     x = x - 1;
 }
 ```
 
-Loop
-----
+Infinite loops
+--------------
 
 ```rust
 let x = 10;
@@ -923,12 +1033,14 @@ let x = 10;
 loop {
     print(x);
     x = x - 1;
-    if x == 0 { break; }
+    if x == 0 { break; }    // break out of loop
 }
 ```
 
-For
----
+For loops
+---------
+
+Iterating through a range or an array is provided by the `for` ... `in` loop.
 
 ```rust
 let array = [1, 3, 5, 7, 9, 42];
@@ -946,32 +1058,34 @@ for x in range(0, 50) {
 }
 ```
 
-Return
-------
+Returning values
+----------------
 
 ```rust
-return;     // equivalent to return ();
+return;             // equivalent to return ();
 
-return 123 + 456;
+return 123 + 456;   // returns 579
 ```
 
-Errors and Exceptions
+Errors and exceptions
 ---------------------
+
+All of `Engine`'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
+To deliberately return an error during an evaluation, use the `throw` keyword.
 
 ```rust
 if some_bad_condition_has_happened {
     throw error;  // 'throw' takes a string to form the exception text
 }
 
-throw;  // no exception text
+throw;            // empty exception text: ""
 ```
 
-All of `Engine`'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
-
-Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(reason, position))` with the exception text captured by the `reason` parameter.
+Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(`_reason_`, `_position_`))`
+with the exception text captured by the first parameter.
 
 ```rust
-let result = engine.eval::<i64>(&mut scope, r#"
+let result = engine.eval::<i64>(r#"
     let x = 42;
 
     if x > 0 {
@@ -995,34 +1109,44 @@ fn add(x, y) {
 print(add(2, 3));
 ```
 
-Just like in Rust, you can also use an implicit return.
+Just like in Rust, an implicit return can be used. In fact, the last statement of a block is _always_ the block's return value
+regardless of whether it is terminated with a semicolon `;`. This is different from Rust.
 
 ```rust
 fn add(x, y) {
-    x + y
+    x + y;          // value of the last statement is used as the function's return value
 }
 
-print(add(2, 3));
+fn add2(x) {
+    return x + 2;   // explicit return
+}
+
+print(add(2, 3));   // prints 5
+print(add2(42));    // prints 44
 ```
 
+### Passing arguments by value
+
 Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
-It is important to remember that all parameters are passed by _value_, so all functions are _pure_ (i.e. they never modify their parameters).
-Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if you are not careful.
+It is important to remember that all arguments are passed by _value_, so all functions are _pure_ (i.e. they never modify their arguments).
+Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if not careful.
 
 ```rust
-fn change(s) {
-    s = 42;     // only a COPY of 'x' is changed
+fn change(s) {  // 's' is passed by value
+    s = 42;     // only a COPY of 's' is changed
 }
 
 let x = 500;
-x.change();
+x.change();     // desugars to change(x)
 x == 500;       // 'x' is NOT changed!
 ```
 
-Functions can only be defined at the top level, never inside a block or another function.
+### Global definitions only
+
+Functions can only be defined at the global level, never inside a block or another function.
 
 ```rust
-// Top level is OK
+// Global level is OK
 fn add(x, y) {
     x + y
 }
@@ -1037,7 +1161,9 @@ fn do_addition(x) {
 }
 ```
 
-Functions can be _overloaded_ based on the number of parameters (but not parameter types, since all parameters are [`Dynamic`]).
+### Functions overloading
+
+Functions can be _overloaded_ based on the _number_ of parameters (but not parameter _types_, since all parameters are the same type - [`Dynamic`]).
 New definitions of the same name and number of parameters overwrite previous definitions.
 
 ```rust
@@ -1056,14 +1182,18 @@ abc();          // prints "None."
 Members and methods
 -------------------
 
+Properties and methods in a Rust custom type registered with the engine can be called just like in Rust:
+
 ```rust
-let a = new_ts();
-a.x = 500;
-a.update();
+let a = new_ts();       // constructor function
+a.x = 500;              // property access
+a.update();             // method call
 ```
 
 `print` and `debug`
 -------------------
+
+The `print` and `debug` functions default to printing to `stdout`, with `debug` using standard debug formatting.
 
 ```rust
 print("hello");         // prints hello to stdout
@@ -1073,6 +1203,9 @@ debug("world!");        // prints "world!" to stdout using debug formatting
 ```
 
 ### Overriding `print` and `debug` with callback functions
+
+When embedding Rhai into an application, it is usually necessary to trap `print` and `debug` output
+(for logging into a tracking log, for example).
 
 ```rust
 // Any function or closure that takes an &str argument can be used to override
@@ -1134,15 +1267,18 @@ Constants propagation is used to remove dead code:
 const ABC = true;
 if ABC || some_work() { print("done!"); }   // 'ABC' is constant so it is replaced by 'true'...
 if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called
-if true { print("done!"); }                 // <-- the line above is equivalent to this
-print("done!");                             // <-- the line above is further simplified to this
+if true { print("done!"); }                 // <- the line above is equivalent to this
+print("done!");                             // <- the line above is further simplified to this
                                             //     because the condition is always true
 ```
 
-These are quite effective for template-based machine-generated scripts where certain constant values are spliced into the script text in order to turn on/off certain sections.
-For fixed script texts, the constant values can be provided in a user-defined `Scope` object to the `Engine` for use in compilation and evaluation.
+These are quite effective for template-based machine-generated scripts where certain constant values
+are spliced into the script text in order to turn on/off certain sections.
+For fixed script texts, the constant values can be provided in a user-defined `Scope` object
+to the `Engine` for use in compilation and evaluation.
 
-Beware, however, that most operators are actually function calls, and those functions can be overridden, so they are not optimized away:
+Beware, however, that most operators are actually function calls, and those functions can be overridden,
+so they are not optimized away:
 
 ```rust
 const DECISION = 1;
@@ -1159,7 +1295,8 @@ if DECISION == 1 {          // NOT optimized away because you can define
 }
 ```
 
-So, instead, do this:
+because no operator functions will be run (in order not to trigger side effects) during the optimization process
+(unless the optimization level is set to [`OptimizationLevel::Full`]). So, instead, do this:
 
 ```rust
 const DECISION_1 = true;
@@ -1177,7 +1314,8 @@ if DECISION_1 {
 }
 ```
 
-In general, boolean constants are most effective if you want the optimizer to automatically prune large `if`-`else` branches because they do not depend on operators.
+In general, boolean constants are most effective for the optimizer to automatically prune
+large `if`-`else` branches because they do not depend on operators.
 
 Alternatively, turn the optimizer to [`OptimizationLevel::Full`]
 
@@ -1188,21 +1326,30 @@ Here be dragons!
 
 There are actually three levels of optimizations: `None`, `Simple` and `Full`.
 
-`None` is obvious - no optimization on the AST is performed.
+* `None` is obvious - no optimization on the AST is performed.
 
-`Simple` performs relatively _safe_ optimizations without causing side effects (i.e. it only relies on static analysis and will not actually perform any function calls).  `Simple` is the default.
+* `Simple` (default) performs relatively _safe_ optimizations without causing side effects
+  (i.e. it only relies on static analysis and will not actually perform any function calls).
 
-`Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.  One benefit to this is that many more optimization opportunities arise, especially with regards to comparison operators.
+* `Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.
+  One benefit to this is that many more optimization opportunities arise, especially with regards to comparison operators.
+
+An engine's optimization level is set via a call to `set_optimization_level`:
 
 ```rust
-// The following run with OptimizationLevel::Full
+// Turn on aggressive optimizations
+engine.set_optimization_level(rhai::OptimizationLevel::Full);
+```
+
+```rust
+// When compiling the following with OptimizationLevel::Full...
 
 const DECISION = 1;
-
-if DECISION == 1 {      // this condition is now eliminated because 'DECISION == 1' is a function call to the '==' function, and it returns 'true'
-    print("hello!");    // the 'true' block is promoted to the parent level
+                        // this condition is now eliminated because 'DECISION == 1'
+if DECISION == 1 {      // is a function call to the '==' function, and it returns 'true'
+    print("hello!");    // this block is promoted to the parent level
 } else {
-    print("boo!");      // the 'else' block is eliminated
+    print("boo!");      // this block is eliminated because it is never reached
 }
 
 print("hello!");        // <- the above is equivalent to this
@@ -1211,32 +1358,35 @@ print("hello!");        // <- the above is equivalent to this
 ### Side effect considerations
 
 All built-in operators have _pure_ functions (i.e. they do not cause side effects) so using [`OptimizationLevel::Full`] is usually quite safe.
-Beware, however, that if custom functions are registered, they'll also be called.  If custom functions are registered to replace built-in operator functions,
-the custom functions will be called and _may_ cause side-effects.
+Beware, however, that if custom functions are registered, they'll also be called.
+If custom functions are registered to replace built-in operator functions, the custom functions will be called
+and _may_ cause side-effects.
+
+Therefore, when using [`OptimizationLevel::Full`], it is recommended that registrations of custom functions be held off
+until _after_ the compilation process.
 
 ### Subtle semantic changes
 
-Some optimizations can be quite aggressive and can alter subtle semantics of the script.  For example:
+Some optimizations can alter subtle semantics of the script.  For example:
 
 ```rust
-if true {       // <-- condition always true
-    123.456;    // <-- eliminated
-    hello;      // <-- eliminated, EVEN THOUGH the variable doesn't exist!
-    foo(42)     // <-- promoted up-level
+if true {       // condition always true
+    123.456;    // eliminated
+    hello;      // eliminated, EVEN THOUGH the variable doesn't exist!
+    foo(42)     // promoted up-level
 }
 
-// The above optimizes to:
-
-foo(42)
+foo(42)         // <- the above optimizes to this
 ```
 
-Nevertheless, if you would be evaluating the original script, it would have been an error - the variable `hello` doesn't exist, so the script would have been terminated at that point with an error return.
+Nevertheless, if the original script were evaluated instead, it would have been an error - the variable `hello` doesn't exist,
+so the script would have been terminated at that point with an error return.
 
-In fact, any errors inside a statement that has been eliminated will silently _go away_:
+In fact, any errors inside a statement that has been eliminated will silently _disappear_:
 
 ```rust
 print("start!");
-if my_decision { /* do nothing... */ }  // <-- eliminated due to no effect
+if my_decision { /* do nothing... */ }  // eliminated due to no effect
 print("end!");
 
 // The above optimizes to:
@@ -1246,16 +1396,19 @@ print("end!");
 ```
 
 In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to a type error.
-However, after optimization, the entire `if` statement is removed, thus the script silently runs to completion without errors.
+However, after optimization, the entire `if` statement is removed (because an access to `my_decision` produces no side effects),
+thus the script silently runs to completion without errors.
 
 ### Turning off optimizations
 
 It is usually a bad idea to depend on a script failing or such kind of subtleties, but if it turns out to be necessary (why? I would never guess),
-there is a setting in `Engine` to turn off optimizations.
+turn it off by setting the optimization level to `OptimizationLevel::None`.
 
 ```rust
 let engine = rhai::Engine::new();
-engine.set_optimization_level(rhai::OptimizationLevel::None);     // turn off the optimizer
+
+// Turn off the optimizer
+engine.set_optimization_level(rhai::OptimizationLevel::None);
 ```
 
 
