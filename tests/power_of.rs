@@ -14,7 +14,7 @@ fn test_power_of() -> Result<(), EvalAltResult> {
     {
         assert_eq!(
             engine.eval::<FLOAT>("2.2 ~ 3.3")?,
-            13.489468760533386 as FLOAT
+            13.489468760533388 as FLOAT
         );
         assert_eq!(engine.eval::<FLOAT>("2.0~-2.0")?, 0.25 as FLOAT);
         assert_eq!(engine.eval::<FLOAT>("(-2.0~-2.0)")?, 0.25 as FLOAT);
@@ -36,7 +36,7 @@ fn test_power_of_equals() -> Result<(), EvalAltResult> {
     {
         assert_eq!(
             engine.eval::<FLOAT>("let x = 2.2; x ~= 3.3; x")?,
-            13.489468760533386 as FLOAT
+            13.489468760533388 as FLOAT
         );
         assert_eq!(
             engine.eval::<FLOAT>("let x = 2.0; x ~= -2.0; x")?,
