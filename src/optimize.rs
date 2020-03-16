@@ -270,11 +270,19 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
                 if i >= 0 && (i as usize) < items.len() && items.iter().all(|x| x.is_pure()) =>
             {
-                // Array where everything is a pure - promote the indexed item.
+                // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
                 items.remove(i as usize)
             }
+            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) 
+                if i >= 0 && (i as usize) < s.chars().count() =>
+            {
+                // String literal indexing - get the character
+                state.set_dirty();
+                Expr::CharConstant(s.chars().nth(i as usize).expect("should get char"), pos)
+            }
+
             (lhs, rhs) => Expr::Index(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
@@ -350,16 +358,13 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             let engine = state.engine.expect("engine should be Some");
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
             let call_args: FnCallArgs = arg_values.iter_mut().map(Dynamic::as_mut).collect();
-            if let Ok(r) = engine.call_ext_fn_raw(&id, call_args, pos) {
-                r.and_then(|result| map_dynamic_to_expr(result, pos).0)
+            engine.call_ext_fn_raw(&id, call_args, pos).ok().map(|r| 
+                r.or(def_value.clone()).and_then(|result| map_dynamic_to_expr(result, pos).0)
                     .map(|expr| {
                         state.set_dirty();
                         expr
-                    })
+                    })).flatten()
                     .unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
-            } else {
-                Expr::FunctionCall(id, args, def_value, pos)
-            }
         }
         // Optimize the function call arguments
         Expr::FunctionCall(id, args, def_value, pos) => {
