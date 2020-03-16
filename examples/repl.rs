@@ -1,6 +1,7 @@
+use rhai::{Engine, EvalAltResult, Scope, AST};
+
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
-use rhai::{Engine, EvalAltResult, Scope, AST};
 
 use std::{
     io::{stdin, stdout, Write},

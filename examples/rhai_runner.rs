@@ -1,6 +1,8 @@
+use rhai::{Engine, EvalAltResult};
+
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
-use rhai::{Engine, EvalAltResult};
+
 use std::{env, fs::File, io::Read, iter, process::exit};
 
 fn padding(pad: &str, len: usize) -> String {
