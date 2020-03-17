@@ -4,7 +4,14 @@ use crate::any::Dynamic;
 use crate::error::ParseError;
 use crate::parser::{Position, INT};
 
-use std::{error::Error, fmt, path::PathBuf};
+use crate::stdlib::{
+    error::Error,
+    fmt,
+    string::{String, ToString},
+};
+
+#[cfg(not(feature = "no_stdlib"))]
+use crate::stdlib::path::PathBuf;
 
 /// Evaluation result.
 ///
@@ -47,6 +54,7 @@ pub enum EvalAltResult {
     /// Wrapped value is the type of the actual result.
     ErrorMismatchOutputType(String, Position),
     /// Error reading from a script file. Wrapped value is the path of the script file.
+    #[cfg(not(feature = "no_stdlib"))]
     ErrorReadingScriptFile(PathBuf, std::io::Error),
     /// Inappropriate member access.
     ErrorDotExpr(String, Position),
@@ -93,6 +101,7 @@ impl EvalAltResult {
             }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
+            #[cfg(not(feature = "no_stdlib"))]
             Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
@@ -127,6 +136,7 @@ impl fmt::Display for EvalAltResult {
             }
             Self::LoopBreak => write!(f, "{}", desc),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
+            #[cfg(not(feature = "no_stdlib"))]
             Self::ErrorReadingScriptFile(path, err) => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)
             }
@@ -199,7 +209,9 @@ impl<T: AsRef<str>> From<T> for EvalAltResult {
 impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
-            Self::ErrorReadingScriptFile(_, _) | Self::LoopBreak => Position::none(),
+            #[cfg(not(feature = "no_stdlib"))]
+            Self::ErrorReadingScriptFile(_, _) => Position::none(),
+            Self::LoopBreak => Position::none(),
 
             Self::ErrorParsing(err) => err.position(),
 
@@ -226,7 +238,9 @@ impl EvalAltResult {
 
     pub(crate) fn set_position(&mut self, new_position: Position) {
         match self {
-            Self::ErrorReadingScriptFile(_, _) | Self::LoopBreak => (),
+            #[cfg(not(feature = "no_stdlib"))]
+            Self::ErrorReadingScriptFile(_, _) => (),
+            Self::LoopBreak => (),
 
             Self::ErrorParsing(ParseError(_, ref mut pos))
             | Self::ErrorFunctionNotFound(_, ref mut pos)

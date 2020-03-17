@@ -1,7 +1,8 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use std::{
-    any::{type_name, TypeId},
+use crate::stdlib::{
+    any::{self, type_name, TypeId},
+    boxed::Box,
     fmt,
 };
 
@@ -12,7 +13,7 @@ pub type Variant = dyn Any;
 pub type Dynamic = Box<Variant>;
 
 /// A trait covering any type.
-pub trait Any: std::any::Any {
+pub trait Any: any::Any {
     /// Get the `TypeId` of this type.
     fn type_id(&self) -> TypeId;
 
@@ -27,7 +28,7 @@ pub trait Any: std::any::Any {
     fn _closed(&self) -> _Private;
 }
 
-impl<T: Clone + std::any::Any + ?Sized> Any for T {
+impl<T: Clone + any::Any + ?Sized> Any for T {
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
     }

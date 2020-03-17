@@ -1,7 +1,7 @@
 //! Module containing error definitions for the parsing process.
 
 use crate::parser::Position;
-use std::{char, error::Error, fmt};
+use crate::stdlib::{char, error::Error, fmt, string::String};
 
 /// Error when tokenizing the script text.
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]

@@ -5,7 +5,11 @@ use crate::engine::{Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Stmt, AST};
 use crate::scope::{Scope, ScopeEntry, VariableType};
 
-use std::sync::Arc;
+use crate::stdlib::{
+    sync::Arc,
+    vec::Vec, string::{String, ToString},
+    boxed::Box, vec,
+};
 
 /// Level of optimization performed
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]

@@ -11,12 +11,17 @@ use crate::optimize::OptimizationLevel;
 #[cfg(not(feature = "no_index"))]
 use crate::INT;
 
-use std::{
+use crate::stdlib::{
     any::{type_name, TypeId},
     borrow::Cow,
+    boxed::Box,
     collections::HashMap,
+    format,
     iter::once,
+    string::{String, ToString},
     sync::Arc,
+    vec,
+    vec::Vec,
 };
 
 /// An dynamic array of `Dynamic` values.

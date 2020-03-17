@@ -1,6 +1,7 @@
 //! Helper module which defines `FnArgs` to make function calling easier.
 
 use crate::any::{Any, Dynamic};
+use crate::stdlib::{string::String, vec, vec::Vec};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;

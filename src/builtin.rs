@@ -17,9 +17,12 @@ use num_traits::{
     CheckedShr, CheckedSub,
 };
 
-use std::{
+use crate::stdlib::{
+    boxed::Box,
     fmt::{Debug, Display},
+    format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub},
+    string::{String, ToString},
     {i32, i64, u32},
 };
 
