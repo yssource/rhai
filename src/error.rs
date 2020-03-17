@@ -82,12 +82,17 @@ pub enum ParseErrorType {
     /// A function definition is missing the parameters list. Wrapped value is the function name.
     #[cfg(not(feature = "no_function"))]
     FnMissingParams(String),
+    /// A function definition is missing the body. Wrapped value is the function name.
+    #[cfg(not(feature = "no_function"))]
+    FnMissingBody(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     AssignmentToInvalidLHS,
     /// Assignment to a copy of a value.
     AssignmentToCopy,
     /// Assignment to an a constant variable.
     AssignmentToConstant(String),
+    /// Break statement not inside a loop.
+    LoopBreak,
 }
 
 /// Error when parsing a script.
@@ -133,10 +138,13 @@ impl ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             #[cfg(not(feature = "no_function"))]
+            ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
+            #[cfg(not(feature = "no_function"))]
             ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
             ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
-            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable."
+            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable.",
+            ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
         }
     }
 }
@@ -162,6 +170,11 @@ impl fmt::Display for ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(ref s) => {
                 write!(f, "Expecting parameters for function '{}'", s)?
+            }
+
+            #[cfg(not(feature = "no_function"))]
+            ParseErrorType::FnMissingBody(ref s) => {
+                write!(f, "Expecting body statement block for function '{}'", s)?
             }
 
             ParseErrorType::MissingRightParen(ref s) | ParseErrorType::MissingRightBrace(ref s) => {
