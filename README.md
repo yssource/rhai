@@ -611,6 +611,27 @@ let /* intruder comment */ name = "Bob";
 */
 ```
 
+Statements
+----------
+
+Statements are terminated by semicolons '`;`' - they are mandatory, except for the _last_ statement where it can be omitted.
+
+A statement can be used anywhere where an expression is expected. The _last_ statement of a statement block
+(enclosed by '`{`' .. '`}`' pairs) is always the return value of the statement. If a statement has no return value
+(e.g. variable definitions, assignments) then the value will be `()`.
+
+```rust
+let a = 42;             // normal assignment statement
+let a = foo(42);        // normal function call statement
+foo < 42;               // normal expression as statement
+
+let a = { 40 + 2 };     // the value of 'a' is the value of the statement block, which is the value of the last statement
+//              ^ notice that the last statement does not require an ending semicolon
+
+4 * 10 + 2              // this is also a statement, which is an expression, with no ending semicolon because
+                        // it is the last statement of the whole block
+```
+
 Variables
 ---------
 
@@ -619,21 +640,27 @@ Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII let
 Variable names must start with an ASCII letter or an underscore '`_`', and must contain at least one ASCII letter within.
 Therefore, names like '`_`', '`_42`' etc. are not legal variable names. Variable names are also case _sensitive_.
 
-Variables are defined using the `let` keyword.
+Variables are defined using the `let` keyword. A variable defined within a statement block is _local_ to that block.
 
 ```rust
-let x = 3;      // ok
-let _x = 42;    // ok
-let x_ = 42;    // also ok
-let _x_ = 42;   // still ok
+let x = 3;          // ok
+let _x = 42;        // ok
+let x_ = 42;        // also ok
+let _x_ = 42;       // still ok
 
-let _ = 123;    // syntax error - illegal variable name
-let _9 = 9;     // syntax error - illegal variable name
+let _ = 123;        // syntax error - illegal variable name
+let _9 = 9;         // syntax error - illegal variable name
 
-let x = 42;     // variable is 'x', lower case
-let X = 123;    // variable is 'X', upper case
+let x = 42;         // variable is 'x', lower case
+let X = 123;        // variable is 'X', upper case
 x == 42;
 X == 123;
+
+{
+    let x = 999;    // local variable 'x' shadows the 'x' in parent block
+    x == 999;       // access to local 'x'
+}
+x == 42;            // the parent block's 'x' is not changed
 ```
 
 Constants
@@ -1118,7 +1145,7 @@ regardless of whether it is terminated with a semicolon `;`. This is different f
 
 ```rust
 fn add(x, y) {
-    x + y;          // value of the last statement is used as the function's return value
+    x + y;          // value of the last statement (no need for ending semicolon) is used as the return value
 }
 
 fn add2(x) {
@@ -1345,6 +1372,10 @@ An engine's optimization level is set via a call to `set_optimization_level`:
 engine.set_optimization_level(rhai::OptimizationLevel::Full);
 ```
 
+When the optimization level is [`OptimizationLevel::Full`], the engine assumes all functions to be _pure_ and will _eagerly_
+evaluated all function calls with constant arguments, using the result to replace the call. This also applies to all operators
+(which are implemented as functions). For instance, the same example above:
+
 ```rust
 // When compiling the following with OptimizationLevel::Full...
 
@@ -1356,18 +1387,38 @@ if DECISION == 1 {      // is a function call to the '==' function, and it retur
     print("boo!");      // this block is eliminated because it is never reached
 }
 
-print("hello!");        // <- the above is equivalent to this
+print("hello!");        // <- the above is equivalent to this ('print' and 'debug' are handled specially)
 ```
 
-### Side effect considerations
+Because of the eager evaluation of functions, many constant expressions will be evaluated and replaced by the result.
+This does not happen with `OptimizationLevel::Simple` which doesn't assume all functions to be _pure_.
 
-All built-in operators have _pure_ functions (i.e. they do not cause side effects) so using [`OptimizationLevel::Full`] is usually quite safe.
-Beware, however, that if custom functions are registered, they'll also be called.
-If custom functions are registered to replace built-in operator functions, the custom functions will be called
-and _may_ cause side-effects.
+```rust
+// When compiling the following with OptimizationLevel::Full...
 
-Therefore, when using [`OptimizationLevel::Full`], it is recommended that registrations of custom functions be held off
-until _after_ the compilation process.
+let x = (1 + 2) * 3 - 4 / 5 % 6;    // <- will be replaced by 'let x = 9'
+let y = (1 > 2) || (3 <= 4);        // <- will be replaced by 'let y = true'
+```
+
+### Function side effect considerations
+
+All of Rhai's built-in functions (and operators which are implemented as functions) are _pure_ (i.e. they do not mutate state
+nor cause side any effects, with the exception of `print` and `debug` which are handled specially) so using [`OptimizationLevel::Full`]
+is usually quite safe _unless_ you register your own types and functions.
+
+If custom functions are registered, they _may_ be called (or maybe not, if the calls happen to lie within a pruned code block).
+If custom functions are registered to replace built-in operators, they will also be called when the operators are used (in an `if`
+statement, for example) and cause side-effects.
+
+### Function volatility considerations
+
+Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_ on the external
+environment and not _pure_. A perfect example is a function that gets the current time - obviously each run will return a different value!
+The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments.
+This may cause the script to behave differently from the intended semantics because essentially the result of each function call will
+always be the same value.
+
+Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.
 
 ### Subtle semantic changes
 
