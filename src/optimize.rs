@@ -455,7 +455,7 @@ pub(crate) fn optimize<'a>(
                 if let Stmt::Const(name, value, _) = &stmt {
                     // Load constants
                     state.push_constant(name, value.as_ref().clone());
-                    stmt // Keep it in the top scope
+                    stmt // Keep it in the global scope
                 } else {
                     // Keep all variable declarations at this level
                     // and always keep the last return value
@@ -474,7 +474,7 @@ pub(crate) fn optimize<'a>(
     // Eliminate code that is pure but always keep the last statement
     let last_stmt = result.pop();
 
-    // Remove all pure statements at top level
+    // Remove all pure statements at global level
     result.retain(|stmt| !matches!(stmt, Stmt::Expr(expr) if expr.is_pure()));
 
     if let Some(stmt) = last_stmt {
