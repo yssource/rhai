@@ -217,23 +217,19 @@ impl<'e> Engine<'e> {
             Ok(result)
         }
 
-        match eval_ast_internal(self, scope, ast) {
-            Err(EvalAltResult::Return(out, pos)) => out.downcast::<T>().map(|v| *v).map_err(|a| {
-                EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name((*a).type_name()).to_string(),
-                    pos,
-                )
-            }),
-
-            Ok(out) => out.downcast::<T>().map(|v| *v).map_err(|a| {
-                EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name((*a).type_name()).to_string(),
-                    Position::eof(),
-                )
-            }),
-
-            Err(err) => Err(err),
-        }
+        eval_ast_internal(self, scope, ast)
+            .or_else(|err| match err {
+                EvalAltResult::Return(out, _) => Ok(out),
+                _ => Err(err),
+            })
+            .and_then(|out| {
+                out.downcast::<T>().map(|v| *v).map_err(|a| {
+                    EvalAltResult::ErrorMismatchOutputType(
+                        self.map_type_name((*a).type_name()).to_string(),
+                        Position::eof(),
+                    )
+                })
+            })
     }
 
     /// Evaluate a file, but throw away the result and only return error (if any).
@@ -333,7 +329,10 @@ impl<'e> Engine<'e> {
             self.clear_functions();
         }
 
-        result
+        result.or_else(|err| match err {
+            EvalAltResult::Return(_, _) => Ok(()),
+            _ => Err(err),
+        })
     }
 
     /// Load a list of functions into the Engine.
