@@ -60,6 +60,8 @@ pub enum ParseErrorType {
     MissingRightBracket(String),
     /// A list of expressions is missing the separating ','.
     MissingComma(String),
+    /// A statement is missing the ending ';'.
+    MissingSemicolon(String),
     /// An expression in function call arguments `()` has syntax error.
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
@@ -119,6 +121,7 @@ impl ParseError {
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
             ParseErrorType::MissingComma(_) => "Expecting ','",
+            ParseErrorType::MissingSemicolon(_) => "Expecting ';'",
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
@@ -130,7 +133,7 @@ impl ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             #[cfg(not(feature = "no_function"))]
-            ParseErrorType::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
+            ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
             ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
             ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable."
@@ -168,7 +171,9 @@ impl fmt::Display for ParseError {
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MissingRightBracket(ref s) => write!(f, "{} for {}", self.desc(), s)?,
 
-            ParseErrorType::MissingComma(ref s) => write!(f, "{} for {}", self.desc(), s)?,
+            ParseErrorType::MissingSemicolon(ref s) | ParseErrorType::MissingComma(ref s) => {
+                write!(f, "{} for {}", self.desc(), s)?
+            }
 
             ParseErrorType::AssignmentToConstant(ref s) if s.is_empty() => {
                 write!(f, "{}", self.desc())?

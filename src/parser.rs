@@ -203,6 +203,23 @@ impl Stmt {
         matches!(self, Stmt::Let(_, _, _))
     }
 
+    pub fn is_self_terminated(&self) -> bool {
+        match self {
+            Stmt::Noop(_)
+            | Stmt::IfElse(_, _, _)
+            | Stmt::While(_, _)
+            | Stmt::Loop(_)
+            | Stmt::For(_, _, _)
+            | Stmt::Block(_, _) => true,
+
+            Stmt::Let(_, _, _)
+            | Stmt::Const(_, _, _)
+            | Stmt::Expr(_)
+            | Stmt::Break(_)
+            | Stmt::ReturnWithVal(_, _, _) => false,
+        }
+    }
+
     pub fn position(&self) -> Position {
         match self {
             Stmt::Noop(pos)
@@ -1913,21 +1930,41 @@ fn parse_block<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
     })? {
         (Token::RightBrace, _) => (), // empty block
 
-        #[cfg(not(feature = "no_function"))]
-        (Token::Fn, pos) => return Err(ParseError::new(PERR::WrongFnDefinition, *pos)),
-
         _ => {
             while input.peek().is_some() {
                 // Parse statements inside the block
-                statements.push(parse_stmt(input)?);
+                let stmt = parse_stmt(input)?;
 
-                // Notice semicolons are optional
-                if let Some((Token::SemiColon, _)) = input.peek() {
-                    input.next();
-                }
+                // See if it needs a terminating semicolon
+                let need_semicolon = !stmt.is_self_terminated();
 
+                statements.push(stmt);
+
+                // End block with right brace
                 if let Some((Token::RightBrace, _)) = input.peek() {
                     break;
+                }
+
+                match input.peek() {
+                    Some((Token::SemiColon, _)) => {
+                        input.next();
+                    }
+                    Some((_, _)) if !need_semicolon => (),
+
+                    Some((_, pos)) => {
+                        // Semicolons are not optional between statements
+                        return Err(ParseError::new(
+                            PERR::MissingSemicolon("terminating a statement".into()),
+                            *pos,
+                        ));
+                    }
+
+                    None => {
+                        return Err(ParseError::new(
+                            PERR::MissingRightBrace("end of block".into()),
+                            Position::eof(),
+                        ))
+                    }
                 }
             }
         }
@@ -1959,6 +1996,9 @@ fn parse_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
         .peek()
         .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
     {
+        #[cfg(not(feature = "no_function"))]
+        (Token::Fn, pos) => return Err(ParseError::new(PERR::WrongFnDefinition, *pos)),
+
         (Token::If, _) => parse_if(input),
         (Token::While, _) => parse_while(input),
         (Token::Loop, _) => parse_loop(input),
@@ -2097,16 +2137,16 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     })
 }
 
-fn parse_top_level<'a, 'e>(
+fn parse_global_level<'a, 'e>(
     input: &mut Peekable<TokenIterator<'a>>,
 ) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
     let mut functions = Vec::<FnDef>::new();
 
     while input.peek().is_some() {
-        match input.peek().expect("should not be None") {
-            #[cfg(not(feature = "no_function"))]
-            (Token::Fn, _) => {
+        #[cfg(not(feature = "no_function"))]
+        {
+            if matches!(input.peek().expect("should not be None"), (Token::Fn, _)) {
                 let f = parse_fn(input)?;
 
                 // Ensure list is sorted
@@ -2114,13 +2154,31 @@ fn parse_top_level<'a, 'e>(
                     Ok(n) => functions[n] = f,        // Override previous definition
                     Err(n) => functions.insert(n, f), // New function definition
                 }
+
+                continue;
             }
-            _ => statements.push(parse_stmt(input)?),
         }
 
-        // Notice semicolons are optional
-        if let Some((Token::SemiColon, _)) = input.peek() {
-            input.next();
+        let stmt = parse_stmt(input)?;
+
+        let need_semicolon = !stmt.is_self_terminated();
+
+        statements.push(stmt);
+
+        match input.peek() {
+            None => break,
+            Some((Token::SemiColon, _)) => {
+                input.next();
+            }
+            Some((_, _)) if !need_semicolon => (),
+
+            Some((_, pos)) => {
+                // Semicolons are not optional between statements
+                return Err(ParseError::new(
+                    PERR::MissingSemicolon("terminating a statement".into()),
+                    *pos,
+                ));
+            }
         }
     }
 
@@ -2132,7 +2190,7 @@ pub fn parse<'a, 'e>(
     engine: &Engine<'e>,
     scope: &Scope,
 ) -> Result<AST, ParseError> {
-    let (statements, functions) = parse_top_level(input)?;
+    let (statements, functions) = parse_global_level(input)?;
 
     Ok(
         #[cfg(not(feature = "no_optimize"))]
