@@ -54,8 +54,8 @@ pub enum EvalAltResult {
     ErrorArithmetic(String, Position),
     /// Run-time error encountered. Wrapped value is the error message.
     ErrorRuntime(String, Position),
-    /// Internal use: Breaking out of loops.
-    LoopBreak,
+    /// Breaking out of loops - not an error if within a loop.
+    ErrorLoopBreak(Position),
     /// Not an error: Value returned from a script via the `return` keyword.
     /// Wrapped value is the result value.
     Return(Dynamic, Position),
@@ -97,7 +97,7 @@ impl EvalAltResult {
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorRuntime(_, _) => "Runtime error",
-            Self::LoopBreak => "[Not Error] Breaks out of loop",
+            Self::ErrorLoopBreak(_) => "Break statement not inside a loop",
             Self::Return(_, _) => "[Not Error] Function returns value",
         }
     }
@@ -125,7 +125,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorRuntime(s, pos) => {
                 write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
             }
-            Self::LoopBreak => write!(f, "{}", desc),
+            Self::ErrorLoopBreak(pos) => write!(f, "{} ({})", desc, pos),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorReadingScriptFile(path, err) => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)
@@ -199,7 +199,7 @@ impl<T: AsRef<str>> From<T> for EvalAltResult {
 impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
-            Self::ErrorReadingScriptFile(_, _) | Self::LoopBreak => Position::none(),
+            Self::ErrorReadingScriptFile(_, _) => Position::none(),
 
             Self::ErrorParsing(err) => err.position(),
 
@@ -220,13 +220,14 @@ impl EvalAltResult {
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorRuntime(_, pos)
+            | Self::ErrorLoopBreak(pos)
             | Self::Return(_, pos) => *pos,
         }
     }
 
     pub(crate) fn set_position(&mut self, new_position: Position) {
         match self {
-            Self::ErrorReadingScriptFile(_, _) | Self::LoopBreak => (),
+            Self::ErrorReadingScriptFile(_, _) => (),
 
             Self::ErrorParsing(ParseError(_, ref mut pos))
             | Self::ErrorFunctionNotFound(_, ref mut pos)
@@ -246,6 +247,7 @@ impl EvalAltResult {
             | Self::ErrorDotExpr(_, ref mut pos)
             | Self::ErrorArithmetic(_, ref mut pos)
             | Self::ErrorRuntime(_, ref mut pos)
+            | Self::ErrorLoopBreak(ref mut pos)
             | Self::Return(_, ref mut pos) => *pos = new_position,
         }
     }

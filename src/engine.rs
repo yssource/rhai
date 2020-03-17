@@ -1063,7 +1063,9 @@ impl Engine<'_> {
                         if *guard_val {
                             match self.eval_stmt(scope, body) {
                                 Ok(_) => (),
-                                Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
+                                Err(EvalAltResult::ErrorLoopBreak(_)) => {
+                                    return Ok(().into_dynamic())
+                                }
                                 Err(x) => return Err(x),
                             }
                         } else {
@@ -1078,7 +1080,7 @@ impl Engine<'_> {
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, body) {
                     Ok(_) => (),
-                    Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
+                    Err(EvalAltResult::ErrorLoopBreak(_)) => return Ok(().into_dynamic()),
                     Err(x) => return Err(x),
                 }
             },
@@ -1097,7 +1099,7 @@ impl Engine<'_> {
 
                         match self.eval_stmt(scope, body) {
                             Ok(_) => (),
-                            Err(EvalAltResult::LoopBreak) => break,
+                            Err(EvalAltResult::ErrorLoopBreak(_)) => break,
                             Err(x) => return Err(x),
                         }
                     }
@@ -1109,7 +1111,7 @@ impl Engine<'_> {
             }
 
             // Break statement
-            Stmt::Break(_) => Err(EvalAltResult::LoopBreak),
+            Stmt::Break(pos) => Err(EvalAltResult::ErrorLoopBreak(*pos)),
 
             // Empty return
             Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {

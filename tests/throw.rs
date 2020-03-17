@@ -9,6 +9,6 @@ fn test_throw() {
         EvalAltResult::ErrorRuntime(s, _) if s == "hello"));
 
     assert!(matches!(
-        engine.eval::<()>(r#"throw;"#).expect_err("expects error"),
+        engine.eval::<()>(r#"throw"#).expect_err("expects error"),
         EvalAltResult::ErrorRuntime(s, _) if s == ""));
 }

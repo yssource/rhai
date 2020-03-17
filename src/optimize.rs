@@ -4,7 +4,7 @@ use crate::any::{Any, Dynamic};
 use crate::engine::{
     Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::scope::{Scope, ScopeEntry, VariableType};
 
 use std::sync::Arc;
@@ -117,18 +117,40 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                 Stmt::Noop(pos)
             }
             Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(*stmt, state, false))),
-            expr => Stmt::While(
-                Box::new(optimize_expr(expr, state)),
-                Box::new(optimize_stmt(*stmt, state, false)),
-            ),
+            expr => match optimize_stmt(*stmt, state, false) {
+                Stmt::Break(pos) => {
+                    // Only a single break statement - turn into running the guard expression once
+                    state.set_dirty();
+                    let mut statements = vec![Stmt::Expr(Box::new(optimize_expr(expr, state)))];
+                    if preserve_result {
+                        statements.push(Stmt::Noop(pos))
+                    }
+                    Stmt::Block(statements, pos)
+                }
+                stmt => Stmt::While(Box::new(optimize_expr(expr, state)), Box::new(stmt)),
+            },
         },
-
-        Stmt::Loop(stmt) => Stmt::Loop(Box::new(optimize_stmt(*stmt, state, false))),
+        Stmt::Loop(stmt) => match optimize_stmt(*stmt, state, false) {
+            Stmt::Break(pos) => {
+                // Only a single break statement
+                state.set_dirty();
+                Stmt::Noop(pos)
+            }
+            stmt => Stmt::Loop(Box::new(stmt)),
+        },
         Stmt::For(id, expr, stmt) => Stmt::For(
             id,
             Box::new(optimize_expr(*expr, state)),
-            Box::new(optimize_stmt(*stmt, state, false)),
+            Box::new(match optimize_stmt(*stmt, state, false) {
+                Stmt::Break(pos) => {
+                    // Only a single break statement
+                    state.set_dirty();
+                    Stmt::Noop(pos)
+                }
+                stmt => stmt,
+            }),
         ),
+
         Stmt::Let(id, Some(expr), pos) => {
             Stmt::Let(id, Some(Box::new(optimize_expr(*expr, state))), pos)
         }
@@ -149,15 +171,12 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                         optimize_stmt(stmt, state, preserve_result) // Optimize the statement
                     }
                 })
-                .enumerate()
-                .filter(|(i, stmt)| stmt.is_op() || (preserve_result && *i == orig_len - 1)) // Remove no-op's but leave the last one if we need the result
-                .map(|(_, stmt)| stmt)
                 .collect();
 
             // Remove all raw expression statements that are pure except for the very last statement
             let last_stmt = if preserve_result { result.pop() } else { None };
 
-            result.retain(|stmt| !matches!(stmt, Stmt::Expr(expr) if expr.is_pure()));
+            result.retain(|stmt| !stmt.is_pure());
 
             if let Some(stmt) = last_stmt {
                 result.push(stmt);
@@ -192,6 +211,24 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                     .rev()
                     .collect();
             }
+
+            // Remove everything following the the first return/throw
+            let mut dead_code = false;
+
+            result.retain(|stmt| {
+                if dead_code {
+                    return false;
+                }
+
+                match stmt {
+                    Stmt::ReturnWithVal(_, _, _) | Stmt::Break(_) => {
+                        dead_code = true;
+                    }
+                    _ => (),
+                }
+
+                true
+            });
 
             if orig_len != result.len() {
                 state.set_dirty();
@@ -500,7 +537,15 @@ pub fn optimize_ast(
                     OptimizationLevel::Simple | OptimizationLevel::Full => {
                         let pos = fn_def.body.position();
                         let mut body = optimize(vec![fn_def.body], None, &Scope::new());
-                        fn_def.body = body.pop().unwrap_or_else(|| Stmt::Noop(pos));
+                        fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                            Stmt::ReturnWithVal(Some(val), ReturnType::Return, _) => {
+                                Stmt::Expr(val)
+                            }
+                            Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
+                                Stmt::Expr(Box::new(Expr::Unit(pos)))
+                            }
+                            stmt => stmt,
+                        };
                     }
                 }
                 Arc::new(fn_def)
