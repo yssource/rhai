@@ -1,7 +1,9 @@
 #![cfg(not(feature = "no_optimize"))]
 
-use crate::any::Dynamic;
-use crate::engine::{Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_PRINT};
+use crate::any::{Any, Dynamic};
+use crate::engine::{
+    Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+};
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Stmt, AST};
 use crate::scope::{Scope, ScopeEntry, VariableType};
 
@@ -227,6 +229,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
 }
 
 fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
+    const SKIP_FUNC_KEYWORDS: [&str; 3] = [KEYWORD_PRINT, KEYWORD_DEBUG, KEYWORD_DUMP_AST];
+
     match expr {
         Expr::Stmt(stmt, pos) => match optimize_stmt(*stmt, state, true) {
             Stmt::Noop(_) => {
@@ -279,7 +283,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 state.set_dirty();
                 items.remove(i as usize)
             }
-            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) 
+            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _))
                 if i >= 0 && (i as usize) < s.chars().count() =>
             {
                 // String literal indexing - get the character
@@ -347,41 +351,46 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             ),
         },
 
-        // Do not optimize anything within `dump_ast`
-        Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST => {
-            Expr::FunctionCall(id, args, def_value, pos)
-        }
+        // Do not optimize anything within built-in function keywords
+        Expr::FunctionCall(id, args, def_value, pos) if SKIP_FUNC_KEYWORDS.contains(&id.as_str())=>
+            Expr::FunctionCall(id, args, def_value, pos),
+
         // Actually call function to optimize it
         Expr::FunctionCall(id, args, def_value, pos)
-            if id != KEYWORD_DEBUG // not debug
-                && id != KEYWORD_PRINT // not print
-                && state.engine.map(|eng| eng.optimization_level == OptimizationLevel::Full).unwrap_or(false) // full optimizations
+                if state.engine.map(|eng| eng.optimization_level == OptimizationLevel::Full).unwrap_or(false) // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
-            =>
-        {
+        => {
             let engine = state.engine.expect("engine should be Some");
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
             let call_args: FnCallArgs = arg_values.iter_mut().map(Dynamic::as_mut).collect();
-            engine.call_ext_fn_raw(&id, call_args, pos).ok().map(|r| 
-                r.or(def_value.clone()).and_then(|result| map_dynamic_to_expr(result, pos).0)
+
+            // Save the typename of the first argument if it is `type_of()`
+            // This is to avoid `call_args` being passed into the closure
+            let arg_for_type_of = if id == KEYWORD_TYPE_OF  && call_args.len() == 1 {
+                engine.map_type_name(call_args[0].type_name())
+            } else {
+                ""
+            };
+
+            engine.call_ext_fn_raw(&id, call_args, pos).ok().map(|r|
+                r.or_else(|| {
+                    if !arg_for_type_of.is_empty() {
+                        // Handle `type_of()`
+                        Some(arg_for_type_of.to_string().into_dynamic())
+                    } else {
+                        // Otherwise use the default value, if any
+                        def_value.clone()
+                    }
+                }).and_then(|result| map_dynamic_to_expr(result, pos).0)
                     .map(|expr| {
                         state.set_dirty();
                         expr
-                    })).flatten()
-                    .unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
+                    })
+            ).flatten().unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
         }
         // Optimize the function call arguments
-        Expr::FunctionCall(id, args, def_value, pos) => {
-            let orig_len = args.len();
-
-            let args: Vec<_> = args.into_iter().map(|a| optimize_expr(a, state)).collect();
-
-            if orig_len != args.len() {
-                state.set_dirty();
-            }
-
-            Expr::FunctionCall(id, args, def_value, pos)
-        }
+        Expr::FunctionCall(id, args, def_value, pos) =>
+            Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         Expr::Variable(ref name, _) if state.contains_constant(name) => {
             state.set_dirty();
