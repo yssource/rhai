@@ -29,13 +29,13 @@ use crate::stdlib::{
 #[cfg(not(feature = "only_i32"))]
 pub type INT = i64;
 
-/// The system integer type
+/// The system integer type.
 ///
 /// If the `only_i32` feature is not enabled, this will be `i64` instead.
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
 
-/// The system floating-point type
+/// The system floating-point type.
 #[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
 
@@ -45,7 +45,9 @@ type PERR = ParseErrorType;
 /// A location (line number + character position) in the input script.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
+    /// Line number - 0 = none, MAX = EOF
     line: usize,
+    /// Character position - 0 = BOL, MAX = EOF
     pos: usize,
 }
 
@@ -162,45 +164,69 @@ impl fmt::Debug for Position {
 #[derive(Debug, Clone)]
 pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<Arc<FnDef>>);
 
+/// A script-function definition.
 #[derive(Debug, Clone)]
 pub struct FnDef {
+    /// Function name.
     pub name: String,
+    /// Names of function parameters.
     pub params: Vec<String>,
+    /// Function body.
     pub body: Stmt,
+    /// Position of the function definition.
     pub pos: Position,
 }
 
 impl FnDef {
+    /// Function to order two FnDef records, for binary search.
     pub fn compare(&self, name: &str, params_len: usize) -> Ordering {
+        // First order by name
         match self.name.as_str().cmp(name) {
+            // Then by number of parameters
             Ordering::Equal => self.params.len().cmp(&params_len),
             order => order,
         }
     }
 }
 
+/// `return`/`throw` statement.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ReturnType {
+    /// `return` statement.
     Return,
+    /// `throw` statement.
     Exception,
 }
 
+/// A statement.
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    /// No-op.
     Noop(Position),
+    /// if expr { stmt } else { stmt }
     IfElse(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
+    /// while expr { stmt }
     While(Box<Expr>, Box<Stmt>),
+    /// loop { stmt }
     Loop(Box<Stmt>),
+    /// for id in expr { stmt }
     For(String, Box<Expr>, Box<Stmt>),
+    /// let id = expr
     Let(String, Option<Box<Expr>>, Position),
+    /// const id = expr
     Const(String, Box<Expr>, Position),
+    /// { stmt; ... }
     Block(Vec<Stmt>, Position),
+    /// { stmt }
     Expr(Box<Expr>),
+    /// break
     Break(Position),
+    /// `return`/`throw`
     ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
 }
 
 impl Stmt {
+    /// Get the `Position` of this statement.
     pub fn position(&self) -> Position {
         match self {
             Stmt::Noop(pos)
@@ -214,18 +240,7 @@ impl Stmt {
         }
     }
 
-    pub fn is_noop(&self) -> bool {
-        matches!(self, Stmt::Noop(_))
-    }
-
-    pub fn is_op(&self) -> bool {
-        !matches!(self, Stmt::Noop(_))
-    }
-
-    pub fn is_var(&self) -> bool {
-        matches!(self, Stmt::Let(_, _, _))
-    }
-
+    /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
             Stmt::Noop(_)
@@ -243,6 +258,7 @@ impl Stmt {
         }
     }
 
+    /// Is this statement _pure_?
     pub fn is_pure(&self) -> bool {
         match self {
             Stmt::Noop(_) => true,
@@ -262,31 +278,54 @@ impl Stmt {
     }
 }
 
+/// An expression.
 #[derive(Debug, Clone)]
 pub enum Expr {
+    /// Integer constant.
     IntegerConstant(INT, Position),
+    /// Floating-point constant.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT, Position),
-    Variable(String, Position),
-    Property(String, Position),
+    /// Character constant.
     CharConstant(char, Position),
+    /// String constant.
     StringConstant(String, Position),
+    /// Variable access.
+    Variable(String, Position),
+    /// Property access.
+    Property(String, Position),
+    /// { stmt }
     Stmt(Box<Stmt>, Position),
+    /// func(expr, ... )
     FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
+    /// expr = expr
     Assignment(Box<Expr>, Box<Expr>, Position),
+    /// lhs.rhs
     Dot(Box<Expr>, Box<Expr>, Position),
+    /// expr[expr]
     #[cfg(not(feature = "no_index"))]
     Index(Box<Expr>, Box<Expr>, Position),
     #[cfg(not(feature = "no_index"))]
+    /// [ expr, ... ]
     Array(Vec<Expr>, Position),
+    /// lhs && rhs
     And(Box<Expr>, Box<Expr>),
+    /// lhs || rhs
     Or(Box<Expr>, Box<Expr>),
+    /// true
     True(Position),
+    /// false
     False(Position),
+    /// ()
     Unit(Position),
 }
 
 impl Expr {
+    /// Get the `Dynamic` value of a constant expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the expression is not constant.
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
             Expr::IntegerConstant(i, _) => i.into_dynamic(),
@@ -310,6 +349,11 @@ impl Expr {
         }
     }
 
+    /// Get the display value of a constant expression.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the expression is not constant.
     pub fn get_constant_str(&self) -> String {
         match self {
             Expr::IntegerConstant(i, _) => i.to_string(),
@@ -329,6 +373,7 @@ impl Expr {
         }
     }
 
+    /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {
             Expr::IntegerConstant(_, pos)
@@ -358,7 +403,7 @@ impl Expr {
         }
     }
 
-    /// Is this expression pure?
+    /// Is the expression pure?
     ///
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
@@ -377,6 +422,7 @@ impl Expr {
         }
     }
 
+    /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
             Expr::IntegerConstant(_, _)
@@ -389,6 +435,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, _) => true,
 
+            // An array literal is constant if all items are constant
             #[cfg(not(feature = "no_index"))]
             Expr::Array(expressions, _) => expressions.iter().all(Expr::is_constant),
 
@@ -397,6 +444,7 @@ impl Expr {
     }
 }
 
+/// Tokens.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     IntegerConstant(INT),
@@ -470,6 +518,7 @@ pub enum Token {
 }
 
 impl Token {
+    /// Get the syntax of the token.
     pub fn syntax<'a>(&'a self) -> Cow<'a, str> {
         use self::Token::*;
 
@@ -550,8 +599,8 @@ impl Token {
         }
     }
 
-    // if another operator is after these, it's probably an unary operator
-    // not sure about fn's name
+    // If another operator is after these, it's probably an unary operator
+    // (not sure about fn name).
     pub fn is_next_unary(&self) -> bool {
         use self::Token::*;
 
@@ -612,6 +661,7 @@ impl Token {
         }
     }
 
+    /// Get the precedence number of the token.
     pub fn precedence(&self) -> u8 {
         match self {
             Self::Equals
@@ -652,8 +702,10 @@ impl Token {
         }
     }
 
+    /// Does an expression bind to the right (instead of left)?
     pub fn is_bind_right(&self) -> bool {
         match self {
+            // Assignments bind to the right
             Self::Equals
             | Self::PlusAssign
             | Self::MinusAssign
@@ -667,6 +719,7 @@ impl Token {
             | Self::ModuloAssign
             | Self::PowerOfAssign => true,
 
+            // Property access binds to the right
             Self::Period => true,
 
             _ => false,
@@ -674,24 +727,36 @@ impl Token {
     }
 }
 
+/// An iterator on a `Token` stream.
 pub struct TokenIterator<'a> {
+    /// The last token seen.
     last: Token,
+    /// Current position.
     pos: Position,
+    /// The input characters stream.
     char_stream: Peekable<Chars<'a>>,
 }
 
 impl<'a> TokenIterator<'a> {
+    /// Move the current position one character ahead.
     fn advance(&mut self) {
         self.pos.advance();
     }
+    /// Move the current position back one character.
+    ///
+    /// # Panics
+    ///
+    /// Panics if already at the beginning of a line - cannot rewind to the previous line.
     fn rewind(&mut self) {
         self.pos.rewind();
     }
+    /// Move the current position to the next line.
     fn new_line(&mut self) {
         self.pos.new_line()
     }
 
-    pub fn parse_string_const(
+    /// Parse a string literal wrapped by `enclosing_char`.
+    pub fn parse_string_literal(
         &mut self,
         enclosing_char: char,
     ) -> Result<String, (LexError, Position)> {
@@ -703,25 +768,31 @@ impl<'a> TokenIterator<'a> {
             self.advance();
 
             match next_char.ok_or((LERR::UnterminatedString, Position::eof()))? {
+                // \...
                 '\\' if escape.is_empty() => {
                     escape.push('\\');
                 }
+                // \\
                 '\\' if !escape.is_empty() => {
                     escape.clear();
                     result.push('\\');
                 }
+                // \t
                 't' if !escape.is_empty() => {
                     escape.clear();
                     result.push('\t');
                 }
+                // \n
                 'n' if !escape.is_empty() => {
                     escape.clear();
                     result.push('\n');
                 }
+                // \r
                 'r' if !escape.is_empty() => {
                     escape.clear();
                     result.push('\r');
                 }
+                // \x??, \u????, \U????????
                 ch @ 'x' | ch @ 'u' | ch @ 'U' if !escape.is_empty() => {
                     let mut seq = escape.clone();
                     seq.push(ch);
@@ -754,15 +825,25 @@ impl<'a> TokenIterator<'a> {
                             .ok_or_else(|| (LERR::MalformedEscapeSequence(seq), self.pos))?,
                     );
                 }
+
+                // \{enclosing_char} - escaped
                 ch if enclosing_char == ch && !escape.is_empty() => result.push(ch),
+
+                // Close wrapper
                 ch if enclosing_char == ch && escape.is_empty() => break,
+
+                // Unknown escape sequence
                 _ if !escape.is_empty() => {
                     return Err((LERR::MalformedEscapeSequence(escape), self.pos))
                 }
+
+                // Cannot have new-lines inside string literals
                 '\n' => {
                     self.rewind();
                     return Err((LERR::UnterminatedString, self.pos));
                 }
+
+                // All other characters
                 ch => {
                     escape.clear();
                     result.push(ch);
@@ -773,6 +854,7 @@ impl<'a> TokenIterator<'a> {
         Ok(result.iter().collect())
     }
 
+    /// Get the next token.
     fn inner_next(&mut self) -> Option<(Token, Position)> {
         let mut negated = false;
 
@@ -782,7 +864,9 @@ impl<'a> TokenIterator<'a> {
             let pos = self.pos;
 
             match c {
+                // \n
                 '\n' => self.new_line(),
+                // digit ...
                 '0'..='9' => {
                     let mut result = Vec::new();
                     let mut radix_base: Option<u32> = None;
@@ -811,6 +895,7 @@ impl<'a> TokenIterator<'a> {
                                     }
                                 }
                             }
+                            // 0x????, 0o????, 0b????
                             ch @ 'x' | ch @ 'X' | ch @ 'o' | ch @ 'O' | ch @ 'b' | ch @ 'B'
                                 if c == '0' =>
                             {
@@ -860,6 +945,7 @@ impl<'a> TokenIterator<'a> {
                         result.insert(0, '-');
                     }
 
+                    // Parse number
                     if let Some(radix) = radix_base {
                         let out: String = result.iter().skip(2).filter(|&&c| c != '_').collect();
 
@@ -875,6 +961,7 @@ impl<'a> TokenIterator<'a> {
                         let out: String = result.iter().filter(|&&c| c != '_').collect();
                         let num = INT::from_str(&out).map(Token::IntegerConstant);
 
+                        // If integer parsing is unnecessary, try float instead
                         #[cfg(not(feature = "no_float"))]
                         let num = num.or_else(|_| FLOAT::from_str(&out).map(Token::FloatConstant));
 
@@ -886,6 +973,7 @@ impl<'a> TokenIterator<'a> {
                         ));
                     }
                 }
+                // letter ...
                 'A'..='Z' | 'a'..='z' | '_' => {
                     let mut result = Vec::new();
                     result.push(c);
@@ -930,13 +1018,15 @@ impl<'a> TokenIterator<'a> {
                         pos,
                     ));
                 }
+                // " - string literal
                 '"' => {
-                    return match self.parse_string_const('"') {
+                    return match self.parse_string_literal('"') {
                         Ok(out) => Some((Token::StringConst(out), pos)),
                         Err(e) => Some((Token::LexError(e.0), e.1)),
                     }
                 }
-                '\'' => match self.parse_string_const('\'') {
+                // ' - character literal
+                '\'' => match self.parse_string_literal('\'') {
                     Ok(result) => {
                         let mut chars = result.chars();
 
@@ -955,16 +1045,22 @@ impl<'a> TokenIterator<'a> {
                     }
                     Err(e) => return Some((Token::LexError(e.0), e.1)),
                 },
+
+                // Braces
                 '{' => return Some((Token::LeftBrace, pos)),
                 '}' => return Some((Token::RightBrace, pos)),
+
+                // Parentheses
                 '(' => return Some((Token::LeftParen, pos)),
                 ')' => return Some((Token::RightParen, pos)),
 
+                // Indexing
                 #[cfg(not(feature = "no_index"))]
                 '[' => return Some((Token::LeftBracket, pos)),
                 #[cfg(not(feature = "no_index"))]
                 ']' => return Some((Token::RightBracket, pos)),
 
+                // Operators
                 '+' => {
                     return Some((
                         match self.char_stream.peek() {
@@ -1228,6 +1324,7 @@ impl<'a> Iterator for TokenIterator<'a> {
     }
 }
 
+/// Tokenize an input text stream.
 pub fn lex(input: &str) -> TokenIterator<'_> {
     TokenIterator {
         last: Token::LexError(LERR::InputError("".into())),
@@ -1236,6 +1333,7 @@ pub fn lex(input: &str) -> TokenIterator<'_> {
     }
 }
 
+/// Parse ( expr )
 fn parse_paren_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
@@ -1252,13 +1350,16 @@ fn parse_paren_expr<'a>(
     let expr = parse_expr(input)?;
 
     match input.next() {
+        // ( xxx )
         Some((Token::RightParen, _)) => Ok(expr),
+        // ( xxx ???
         Some((_, pos)) => {
             return Err(ParseError::new(
                 PERR::MissingRightParen("a matching ( in the expression".into()),
                 pos,
             ))
         }
+        // ( xxx
         None => Err(ParseError::new(
             PERR::MissingRightParen("a matching ( in the expression".into()),
             Position::eof(),
@@ -1266,6 +1367,7 @@ fn parse_paren_expr<'a>(
     }
 }
 
+/// Parse a function call.
 fn parse_call_expr<'a>(
     id: String,
     input: &mut Peekable<TokenIterator<'a>>,
@@ -1273,6 +1375,7 @@ fn parse_call_expr<'a>(
 ) -> Result<Expr, ParseError> {
     let mut args_expr_list = Vec::new();
 
+    // id()
     if let (Token::RightParen, _) = input.peek().ok_or_else(|| {
         ParseError::new(
             PERR::MissingRightParen(format!(
@@ -1318,6 +1421,7 @@ fn parse_call_expr<'a>(
     }
 }
 
+/// Parse an indexing expression.s
 #[cfg(not(feature = "no_index"))]
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
@@ -1328,6 +1432,7 @@ fn parse_index_expr<'a>(
 
     // Check type of indexing - must be integer
     match &idx_expr {
+        // lhs[int]
         Expr::IntegerConstant(i, pos) if *i < 0 => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr(format!(
@@ -1337,6 +1442,7 @@ fn parse_index_expr<'a>(
                 *pos,
             ))
         }
+        // lhs[float]
         #[cfg(not(feature = "no_float"))]
         Expr::FloatConstant(_, pos) => {
             return Err(ParseError::new(
@@ -1344,6 +1450,7 @@ fn parse_index_expr<'a>(
                 *pos,
             ))
         }
+        // lhs[char]
         Expr::CharConstant(_, pos) => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr(
@@ -1352,18 +1459,21 @@ fn parse_index_expr<'a>(
                 *pos,
             ))
         }
+        // lhs[string]
         Expr::StringConstant(_, pos) => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr("Array access expects integer index, not a string".into()),
                 *pos,
             ))
         }
+        // lhs[??? = ??? ], lhs[()]
         Expr::Assignment(_, _, pos) | Expr::Unit(pos) => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr("Array access expects integer index, not ()".into()),
                 *pos,
             ))
         }
+        // lhs[??? && ???], lhs[??? || ???]
         Expr::And(lhs, _) | Expr::Or(lhs, _) => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr(
@@ -1372,6 +1482,7 @@ fn parse_index_expr<'a>(
                 lhs.position(),
             ))
         }
+        // lhs[true], lhs[false]
         Expr::True(pos) | Expr::False(pos) => {
             return Err(ParseError::new(
                 PERR::MalformedIndexExpr(
@@ -1380,6 +1491,7 @@ fn parse_index_expr<'a>(
                 *pos,
             ))
         }
+        // All other expressions
         _ => (),
     }
 
@@ -1403,29 +1515,35 @@ fn parse_index_expr<'a>(
     }
 }
 
+/// Parse an expression that begins with an identifier.
 fn parse_ident_expr<'a>(
     id: String,
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
 ) -> Result<Expr, ParseError> {
     match input.peek() {
+        // id(...) - function call
         Some((Token::LeftParen, _)) => {
             input.next();
             parse_call_expr(id, input, begin)
         }
+        // id[...] - indexing
         #[cfg(not(feature = "no_index"))]
         Some((Token::LeftBracket, pos)) => {
             let pos = *pos;
             input.next();
             parse_index_expr(Box::new(Expr::Variable(id, begin)), input, pos)
         }
+        // id - variable
         Some(_) => Ok(Expr::Variable(id, begin)),
+        // EOF
         None => Ok(Expr::Variable(id, Position::eof())),
     }
 }
 
+/// Parse an array literal.
 #[cfg(not(feature = "no_index"))]
-fn parse_array_expr<'a>(
+fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
 ) -> Result<Expr, ParseError> {
@@ -1472,8 +1590,9 @@ fn parse_array_expr<'a>(
     }
 }
 
+/// Parse a primary expression.
 fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
-    // Block statement as expression
+    // { - block statement as expression
     match input.peek() {
         Some((Token::LeftBrace, pos)) => {
             let pos = *pos;
@@ -1510,7 +1629,7 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
         #[cfg(not(feature = "no_index"))]
         (Token::LeftBracket, pos) => {
             can_be_indexed = true;
-            parse_array_expr(input, pos)
+            parse_array_literal(input, pos)
         }
         (Token::True, pos) => Ok(Expr::True(pos)),
         (Token::False, pos) => Ok(Expr::False(pos)),
@@ -1534,11 +1653,13 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
     Ok(root_expr)
 }
 
+/// Parse a potential unary operator.
 fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
     match input
         .peek()
         .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
     {
+        // -expr
         (Token::UnaryMinus, pos) => {
             let pos = *pos;
 
@@ -1571,10 +1692,12 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
                 expr => Ok(Expr::FunctionCall("-".into(), vec![expr], None, pos)),
             }
         }
+        // +expr
         (Token::UnaryPlus, _) => {
             input.next();
             parse_unary(input)
         }
+        // !expr
         (Token::Bang, pos) => {
             let pos = *pos;
 
@@ -1587,34 +1710,41 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
                 pos,
             ))
         }
+        // All other tokens
         _ => parse_primary(input),
     }
 }
 
+/// Parse an assignment.
 fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
+    // Is the LHS in a valid format?
     fn valid_assignment_chain(expr: &Expr, is_top: bool) -> Option<ParseError> {
         match expr {
+            // var
             Expr::Variable(_, _) => {
                 assert!(is_top, "property expected but gets variable");
                 None
             }
+            // property
             Expr::Property(_, _) => {
                 assert!(!is_top, "variable expected but gets property");
                 None
             }
 
+            // var[...]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, _, _) if matches!(idx_lhs.as_ref(), &Expr::Variable(_, _)) => {
                 assert!(is_top, "property expected but gets variable");
                 None
             }
-
+            // property[...]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, _, _) if matches!(idx_lhs.as_ref(), &Expr::Property(_, _)) => {
                 assert!(!is_top, "variable expected but gets property");
                 None
             }
 
+            // idx_lhs[...]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, _, pos) => Some(ParseError::new(
                 match idx_lhs.as_ref() {
@@ -1624,22 +1754,27 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
                 *pos,
             )),
 
+            // dot_lhs.dot_rhs
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
+                // var.dot_rhs
                 Expr::Variable(_, _) if is_top => valid_assignment_chain(dot_rhs, false),
+                // property.dot_rhs
                 Expr::Property(_, _) if !is_top => valid_assignment_chain(dot_rhs, false),
-
+                // var[...]
                 #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _)
                     if matches!(idx_lhs.as_ref(), &Expr::Variable(_, _)) && is_top =>
                 {
                     valid_assignment_chain(dot_rhs, false)
                 }
+                // property[...]
                 #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _)
                     if matches!(idx_lhs.as_ref(), &Expr::Property(_, _)) && !is_top =>
                 {
                     valid_assignment_chain(dot_rhs, false)
                 }
+                // idx_lhs[...]
                 #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _) => Some(ParseError::new(
                     ParseErrorType::AssignmentToCopy,
@@ -1662,6 +1797,7 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
     }
 }
 
+/// Parse an operator-assignment expression.
 fn parse_op_assignment(
     function: &str,
     lhs: Expr,
@@ -1677,6 +1813,7 @@ fn parse_op_assignment(
     )
 }
 
+/// Parse a binary expression.
 fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     parent_precedence: u8,
@@ -1830,11 +1967,13 @@ fn parse_binary_op<'a>(
     }
 }
 
+/// Parse an expression.
 fn parse_expr<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
     let lhs = parse_unary(input)?;
     parse_binary_op(input, 1, lhs)
 }
 
+/// Parse an if statement.
 fn parse_if<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
@@ -1859,6 +1998,7 @@ fn parse_if<'a>(
     Ok(Stmt::IfElse(Box::new(guard), Box::new(if_body), else_body))
 }
 
+/// Parse a while loop.
 fn parse_while<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
     input.next();
 
@@ -1868,6 +2008,7 @@ fn parse_while<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
     Ok(Stmt::While(Box::new(guard), Box::new(body)))
 }
 
+/// Parse a loop statement.
 fn parse_loop<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
     input.next();
 
@@ -1876,6 +2017,7 @@ fn parse_loop<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
     Ok(Stmt::Loop(Box::new(body)))
 }
 
+/// Parse a for loop.
 fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
     input.next();
 
@@ -1904,7 +2046,8 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
     Ok(Stmt::For(name, Box::new(expr), Box::new(body)))
 }
 
-fn parse_var<'a>(
+/// Parse a variable definition statement.
+fn parse_let<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     var_type: VariableType,
 ) -> Result<Stmt, ParseError> {
@@ -1945,6 +2088,7 @@ fn parse_var<'a>(
     }
 }
 
+/// Parse a statement block.
 fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
@@ -2005,10 +2149,12 @@ fn parse_block<'a>(
     }
 }
 
+/// Parse an expression as a statement.
 fn parse_expr_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
     Ok(Stmt::Expr(Box::new(parse_expr(input)?)))
 }
 
+/// Parse a single statement.
 fn parse_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
@@ -2040,14 +2186,14 @@ fn parse_stmt<'a>(
             input.next();
 
             match input.peek() {
-                // return/throw at EOF
+                // `return`/`throw` at EOF
                 None => Ok(Stmt::ReturnWithVal(None, return_type, Position::eof())),
-                // return; or throw;
+                // `return;` or `throw;`
                 Some((Token::SemiColon, pos)) => {
                     let pos = *pos;
                     Ok(Stmt::ReturnWithVal(None, return_type, pos))
                 }
-                // return or throw with expression
+                // `return` or `throw` with expression
                 Some((_, pos)) => {
                     let pos = *pos;
                     Ok(Stmt::ReturnWithVal(
@@ -2059,12 +2205,13 @@ fn parse_stmt<'a>(
             }
         }
         (Token::LeftBrace, _) => parse_block(input, breakable),
-        (Token::Let, _) => parse_var(input, VariableType::Normal),
-        (Token::Const, _) => parse_var(input, VariableType::Constant),
+        (Token::Let, _) => parse_let(input, VariableType::Normal),
+        (Token::Const, _) => parse_let(input, VariableType::Constant),
         _ => parse_expr_stmt(input),
     }
 }
 
+/// Parse a function definition.
 #[cfg(not(feature = "no_function"))]
 fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
     let pos = input
@@ -2166,6 +2313,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     })
 }
 
+/// Parse the global level statements.
 fn parse_global_level<'a, 'e>(
     input: &mut Peekable<TokenIterator<'a>>,
 ) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
@@ -2214,6 +2362,7 @@ fn parse_global_level<'a, 'e>(
     Ok((statements, functions))
 }
 
+/// Run the parser on an input stream, returning an AST.
 pub fn parse<'a, 'e>(
     input: &mut Peekable<TokenIterator<'a>>,
     engine: &Engine<'e>,
@@ -2229,6 +2378,9 @@ pub fn parse<'a, 'e>(
     )
 }
 
+/// Map a `Dynamic` value to an expression.
+///
+/// Returns Some(expression) if conversion is successful.  Otherwise None.
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> (Option<Expr>, Dynamic) {
     if value.is::<INT>() {
         let value2 = value.clone();
