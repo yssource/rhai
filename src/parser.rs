@@ -991,8 +991,17 @@ impl<'a> TokenIterator<'a> {
                         }
                     }
 
-                    let has_letter = result.iter().any(char::is_ascii_alphabetic);
+                    let is_valid_identifier = result
+                        .iter()
+                        .find(|&ch| char::is_ascii_alphanumeric(ch)) // first alpha-numeric character
+                        .map(char::is_ascii_alphabetic) // is a letter
+                        .unwrap_or(false); // if no alpha-numeric at all - syntax error
+
                     let identifier: String = result.iter().collect();
+
+                    if !is_valid_identifier {
+                        return Some((Token::LexError(LERR::MalformedIdentifier(identifier)), pos));
+                    }
 
                     return Some((
                         match identifier.as_str() {
@@ -1013,9 +1022,7 @@ impl<'a> TokenIterator<'a> {
                             #[cfg(not(feature = "no_function"))]
                             "fn" => Token::Fn,
 
-                            _ if has_letter => Token::Identifier(identifier),
-
-                            _ => Token::LexError(LERR::MalformedIdentifier(identifier)),
+                            _ => Token::Identifier(identifier),
                         },
                         pos,
                     ));
