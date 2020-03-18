@@ -5,7 +5,7 @@ use crate::any::Any;
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
 use crate::engine::Engine;
-use crate::fn_register::{RegisterFn, RegisterResultFn};
+use crate::fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 use crate::parser::{Position, INT};
 use crate::result::EvalAltResult;
 
@@ -52,6 +52,7 @@ macro_rules! reg_op_result1 {
 impl Engine<'_> {
     /// Register the core built-in library.
     pub(crate) fn register_core_lib(&mut self) {
+        /// Checked add
         #[cfg(not(feature = "unchecked"))]
         fn add<T: Display + CheckedAdd>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_add(&y).ok_or_else(|| {
@@ -61,6 +62,7 @@ impl Engine<'_> {
                 )
             })
         }
+        /// Checked subtract
         #[cfg(not(feature = "unchecked"))]
         fn sub<T: Display + CheckedSub>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_sub(&y).ok_or_else(|| {
@@ -70,6 +72,7 @@ impl Engine<'_> {
                 )
             })
         }
+        /// Checked multiply
         #[cfg(not(feature = "unchecked"))]
         fn mul<T: Display + CheckedMul>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_mul(&y).ok_or_else(|| {
@@ -79,11 +82,13 @@ impl Engine<'_> {
                 )
             })
         }
+        /// Checked divide
         #[cfg(not(feature = "unchecked"))]
         fn div<T>(x: T, y: T) -> Result<T, EvalAltResult>
         where
             T: Display + CheckedDiv + PartialEq + Zero,
         {
+            // Detect division by zero
             if y == T::zero() {
                 return Err(EvalAltResult::ErrorArithmetic(
                     format!("Division by zero: {} / {}", x, y),
@@ -98,6 +103,7 @@ impl Engine<'_> {
                 )
             })
         }
+        /// Checked negative - e.g. -(i32::MIN) will overflow i32::MAX
         #[cfg(not(feature = "unchecked"))]
         fn neg<T: Display + CheckedNeg>(x: T) -> Result<T, EvalAltResult> {
             x.checked_neg().ok_or_else(|| {
@@ -107,6 +113,7 @@ impl Engine<'_> {
                 )
             })
         }
+        /// Checked absolute
         #[cfg(not(feature = "unchecked"))]
         fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> Result<T, EvalAltResult> {
             // FIX - We don't use Signed::abs() here because, contrary to documentation, it panics
@@ -122,26 +129,32 @@ impl Engine<'_> {
                 })
             }
         }
+        /// Unchecked add - may panic on overflow
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn add_u<T: Add>(x: T, y: T) -> <T as Add>::Output {
             x + y
         }
+        /// Unchecked subtract - may panic on underflow
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn sub_u<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
             x - y
         }
+        /// Unchecked multiply - may panic on overflow
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn mul_u<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
             x * y
         }
+        /// Unchecked divide - may panic when dividing by zero
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn div_u<T: Div>(x: T, y: T) -> <T as Div>::Output {
             x / y
         }
+        /// Unchecked negative - may panic on overflow
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn neg_u<T: Neg>(x: T) -> <T as Neg>::Output {
             -x
         }
+        /// Unchecked absolute - may panic on overflow
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn abs_u<T>(x: T) -> <T as Neg>::Output
         where
@@ -154,6 +167,9 @@ impl Engine<'_> {
                 x.into()
             }
         }
+
+        // Comparison operators
+
         fn lt<T: PartialOrd>(x: T, y: T) -> bool {
             x < y
         }
@@ -172,6 +188,9 @@ impl Engine<'_> {
         fn ne<T: PartialEq>(x: T, y: T) -> bool {
             x != y
         }
+
+        // Logic operators
+
         fn and(x: bool, y: bool) -> bool {
             x && y
         }
@@ -181,6 +200,9 @@ impl Engine<'_> {
         fn not(x: bool) -> bool {
             !x
         }
+
+        // Bit operators
+
         fn binary_and<T: BitAnd>(x: T, y: T) -> <T as BitAnd>::Output {
             x & y
         }
@@ -190,8 +212,11 @@ impl Engine<'_> {
         fn binary_xor<T: BitXor>(x: T, y: T) -> <T as BitXor>::Output {
             x ^ y
         }
+
+        /// Checked left-shift
         #[cfg(not(feature = "unchecked"))]
         fn shl<T: Display + CheckedShl>(x: T, y: INT) -> Result<T, EvalAltResult> {
+            // Cannot shift by a negative number of bits
             if y < 0 {
                 return Err(EvalAltResult::ErrorArithmetic(
                     format!("Left-shift by a negative number: {} << {}", x, y),
@@ -201,13 +226,15 @@ impl Engine<'_> {
 
             CheckedShl::checked_shl(&x, y as u32).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
-                    format!("Left-shift overflow: {} << {}", x, y),
+                    format!("Left-shift by too many bits: {} << {}", x, y),
                     Position::none(),
                 )
             })
         }
+        /// Checked right-shift
         #[cfg(not(feature = "unchecked"))]
         fn shr<T: Display + CheckedShr>(x: T, y: INT) -> Result<T, EvalAltResult> {
+            // Cannot shift by a negative number of bits
             if y < 0 {
                 return Err(EvalAltResult::ErrorArithmetic(
                     format!("Right-shift by a negative number: {} >> {}", x, y),
@@ -217,44 +244,49 @@ impl Engine<'_> {
 
             CheckedShr::checked_shr(&x, y as u32).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
-                    format!("Right-shift overflow: {} % {}", x, y),
+                    format!("Right-shift by too many bits: {} % {}", x, y),
                     Position::none(),
                 )
             })
         }
+        /// Unchecked left-shift - may panic if shifting by a negative number of bits
         #[cfg(feature = "unchecked")]
         fn shl_u<T: Shl<T>>(x: T, y: T) -> <T as Shl<T>>::Output {
             x.shl(y)
         }
+        /// Unchecked right-shift - may panic if shifting by a negative number of bits
         #[cfg(feature = "unchecked")]
         fn shr_u<T: Shr<T>>(x: T, y: T) -> <T as Shr<T>>::Output {
             x.shr(y)
         }
+        /// Checked modulo
         #[cfg(not(feature = "unchecked"))]
         fn modulo<T: Display + CheckedRem>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_rem(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
-                    format!("Modulo division overflow: {} % {}", x, y),
+                    format!("Modulo division by zero or overflow: {} % {}", x, y),
                     Position::none(),
                 )
             })
         }
+        /// Unchecked modulo - may panic if dividing by zero
         #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn modulo_u<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
             x % y
         }
+        /// Checked power
         #[cfg(not(feature = "unchecked"))]
-        fn pow_i_i_u(x: INT, y: INT) -> Result<INT, EvalAltResult> {
+        fn pow_i_i(x: INT, y: INT) -> Result<INT, EvalAltResult> {
             #[cfg(not(feature = "only_i32"))]
             {
                 if y > (u32::MAX as INT) {
                     Err(EvalAltResult::ErrorArithmetic(
-                        format!("Power overflow: {} ~ {}", x, y),
+                        format!("Integer raised to too large an index: {} ~ {}", x, y),
                         Position::none(),
                     ))
                 } else if y < 0 {
                     Err(EvalAltResult::ErrorArithmetic(
-                        format!("Power underflow: {} ~ {}", x, y),
+                        format!("Integer raised to a negative index: {} ~ {}", x, y),
                         Position::none(),
                     ))
                 } else {
@@ -271,7 +303,7 @@ impl Engine<'_> {
             {
                 if y < 0 {
                     Err(EvalAltResult::ErrorArithmetic(
-                        format!("Power underflow: {} ~ {}", x, y),
+                        format!("Integer raised to a negative index: {} ~ {}", x, y),
                         Position::none(),
                     ))
                 } else {
@@ -284,29 +316,34 @@ impl Engine<'_> {
                 }
             }
         }
+        /// Unchecked integer power - may panic on overflow or if the power index is too high (> u32::MAX)
         #[cfg(feature = "unchecked")]
-        fn pow_i_i(x: INT, y: INT) -> INT {
+        fn pow_i_i_u(x: INT, y: INT) -> INT {
             x.pow(y as u32)
         }
+        /// Floating-point power - always well-defined
         #[cfg(not(feature = "no_float"))]
         fn pow_f_f(x: FLOAT, y: FLOAT) -> FLOAT {
             x.powf(y)
         }
+        /// Checked power
         #[cfg(not(feature = "unchecked"))]
         #[cfg(not(feature = "no_float"))]
-        fn pow_f_i_u(x: FLOAT, y: INT) -> Result<FLOAT, EvalAltResult> {
+        fn pow_f_i(x: FLOAT, y: INT) -> Result<FLOAT, EvalAltResult> {
+            // Raise to power that is larger than an i32
             if y > (i32::MAX as INT) {
                 return Err(EvalAltResult::ErrorArithmetic(
-                    format!("Power overflow: {} ~ {}", x, y),
+                    format!("Number raised to too large an index: {} ~ {}", x, y),
                     Position::none(),
                 ));
             }
 
             Ok(x.powi(y as i32))
         }
+        /// Unchecked power - may be incorrect if the power index is too high (> i32::MAX)
         #[cfg(feature = "unchecked")]
         #[cfg(not(feature = "no_float"))]
-        fn pow_f_i(x: FLOAT, y: INT) -> FLOAT {
+        fn pow_f_i_u(x: FLOAT, y: INT) -> FLOAT {
             x.powi(y as i32)
         }
 
@@ -390,8 +427,10 @@ impl Engine<'_> {
             }
         }
 
+        // `&&` and `||` are treated specially as they short-circuit
         //reg_op!(self, "||", or, bool);
         //reg_op!(self, "&&", and, bool);
+
         reg_op!(self, "|", or, bool);
         reg_op!(self, "&", and, bool);
 
@@ -445,18 +484,18 @@ impl Engine<'_> {
 
         #[cfg(not(feature = "unchecked"))]
         {
-            self.register_result_fn("~", pow_i_i_u);
+            self.register_result_fn("~", pow_i_i);
 
             #[cfg(not(feature = "no_float"))]
-            self.register_result_fn("~", pow_f_i_u);
+            self.register_result_fn("~", pow_f_i);
         }
 
         #[cfg(feature = "unchecked")]
         {
-            self.register_fn("~", pow_i_i);
+            self.register_fn("~", pow_i_i_u);
 
             #[cfg(not(feature = "no_float"))]
-            self.register_fn("~", pow_f_i);
+            self.register_fn("~", pow_f_i_u);
         }
 
         {
@@ -625,9 +664,6 @@ macro_rules! reg_fn2y {
 impl Engine<'_> {
     #[cfg(not(feature = "no_stdlib"))]
     pub(crate) fn register_stdlib(&mut self) {
-        #[cfg(not(feature = "no_index"))]
-        use crate::fn_register::RegisterDynamicFn;
-
         #[cfg(not(feature = "no_float"))]
         {
             // Advanced math functions

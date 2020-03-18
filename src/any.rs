@@ -1,7 +1,7 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
 use std::{
-    any::{type_name, TypeId},
+    any::{type_name, Any as StdAny, TypeId},
     fmt,
 };
 
@@ -12,7 +12,7 @@ pub type Variant = dyn Any;
 pub type Dynamic = Box<Variant>;
 
 /// A trait covering any type.
-pub trait Any: std::any::Any {
+pub trait Any: StdAny {
     /// Get the `TypeId` of this type.
     fn type_id(&self) -> TypeId;
 
@@ -22,12 +22,12 @@ pub trait Any: std::any::Any {
     /// Convert into `Dynamic`.
     fn into_dynamic(&self) -> Dynamic;
 
-    /// This type may only be implemented by `rhai`.
+    /// This trait may only be implemented by `rhai`.
     #[doc(hidden)]
     fn _closed(&self) -> _Private;
 }
 
-impl<T: Clone + std::any::Any + ?Sized> Any for T {
+impl<T: Clone + StdAny + ?Sized> Any for T {
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
     }
@@ -90,7 +90,7 @@ pub trait AnyExt: Sized {
     /// Get a copy of a `Dynamic` value as a specific type.
     fn downcast<T: Any + Clone>(self) -> Result<Box<T>, Self>;
 
-    /// This type may only be implemented by `rhai`.
+    /// This trait may only be implemented by `rhai`.
     #[doc(hidden)]
     fn _closed(&self) -> _Private;
 }

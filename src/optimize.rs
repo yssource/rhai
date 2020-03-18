@@ -9,50 +9,54 @@ use crate::scope::{Scope, ScopeEntry, VariableType};
 
 use std::sync::Arc;
 
-/// Level of optimization performed
+/// Level of optimization performed.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum OptimizationLevel {
-    /// No optimization performed
+    /// No optimization performed.
     None,
-    /// Only perform simple optimizations without evaluating functions
+    /// Only perform simple optimizations without evaluating functions.
     Simple,
     /// Full optimizations performed, including evaluating functions.
-    /// Take care that this may cause side effects.
+    /// Take care that this may cause side effects as it essentially assumes that all functions are pure.
     Full,
 }
 
+/// Mutable state throughout an optimization pass.
 struct State<'a> {
+    /// Has the AST been changed during this pass?
     changed: bool,
+    /// Collection of constants to use for eager function evaluations.
     constants: Vec<(String, Expr)>,
-    engine: Option<&'a Engine<'a>>,
+    /// An `Engine` instance for eager function evaluation.
+    engine: &'a Engine<'a>,
 }
 
 impl State<'_> {
-    pub fn new() -> Self {
-        State {
-            changed: false,
-            constants: vec![],
-            engine: None,
-        }
-    }
+    /// Reset the state from dirty to clean.
     pub fn reset(&mut self) {
         self.changed = false;
     }
+    /// Set the AST state to be dirty (i.e. changed).
     pub fn set_dirty(&mut self) {
         self.changed = true;
     }
+    /// Is the AST dirty (i.e. changed)?
     pub fn is_dirty(&self) -> bool {
         self.changed
     }
+    /// Does a constant exist?
     pub fn contains_constant(&self, name: &str) -> bool {
         self.constants.iter().any(|(n, _)| n == name)
     }
+    /// Prune the list of constants back to a specified size.
     pub fn restore_constants(&mut self, len: usize) {
         self.constants.truncate(len)
     }
+    /// Add a new constant to the list.
     pub fn push_constant(&mut self, name: &str, value: Expr) {
         self.constants.push((name.to_string(), value))
     }
+    /// Look up a constant from the list.
     pub fn find_constant(&self, name: &str) -> Option<&Expr> {
         for (n, expr) in self.constants.iter().rev() {
             if n == name {
@@ -64,60 +68,68 @@ impl State<'_> {
     }
 }
 
+/// Optimize a statement.
 fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -> Stmt {
     match stmt {
-        Stmt::IfElse(expr, stmt1, None) if stmt1.is_noop() => {
+        // if expr { Noop }
+        Stmt::IfElse(expr, if_block, None) if matches!(*if_block, Stmt::Noop(_)) => {
             state.set_dirty();
 
             let pos = expr.position();
             let expr = optimize_expr(*expr, state);
 
-            if matches!(expr, Expr::False(_) | Expr::True(_)) {
-                Stmt::Noop(stmt1.position())
+            if preserve_result {
+                // -> { expr, Noop }
+                Stmt::Block(vec![Stmt::Expr(Box::new(expr)), *if_block], pos)
             } else {
-                let stmt = Stmt::Expr(Box::new(expr));
-
-                if preserve_result {
-                    Stmt::Block(vec![stmt, *stmt1], pos)
-                } else {
-                    stmt
-                }
+                // -> expr
+                Stmt::Expr(Box::new(expr))
             }
         }
-
-        Stmt::IfElse(expr, stmt1, None) => match *expr {
+        // if expr { if_block }
+        Stmt::IfElse(expr, if_block, None) => match *expr {
+            // if false { if_block } -> Noop
             Expr::False(pos) => {
                 state.set_dirty();
                 Stmt::Noop(pos)
             }
-            Expr::True(_) => optimize_stmt(*stmt1, state, true),
+            // if true { if_block } -> if_block
+            Expr::True(_) => optimize_stmt(*if_block, state, true),
+            // if expr { if_block }
             expr => Stmt::IfElse(
                 Box::new(optimize_expr(expr, state)),
-                Box::new(optimize_stmt(*stmt1, state, true)),
+                Box::new(optimize_stmt(*if_block, state, true)),
                 None,
             ),
         },
-
-        Stmt::IfElse(expr, stmt1, Some(stmt2)) => match *expr {
-            Expr::False(_) => optimize_stmt(*stmt2, state, true),
-            Expr::True(_) => optimize_stmt(*stmt1, state, true),
+        // if expr { if_block } else { else_block }
+        Stmt::IfElse(expr, if_block, Some(else_block)) => match *expr {
+            // if false { if_block } else { else_block } -> else_block
+            Expr::False(_) => optimize_stmt(*else_block, state, true),
+            // if true { if_block } else { else_block } -> if_block
+            Expr::True(_) => optimize_stmt(*if_block, state, true),
+            // if expr { if_block } else { else_block }
             expr => Stmt::IfElse(
                 Box::new(optimize_expr(expr, state)),
-                Box::new(optimize_stmt(*stmt1, state, true)),
-                match optimize_stmt(*stmt2, state, true) {
-                    stmt if stmt.is_noop() => None,
+                Box::new(optimize_stmt(*if_block, state, true)),
+                match optimize_stmt(*else_block, state, true) {
+                    stmt if matches!(stmt, Stmt::Noop(_)) => None, // Noop -> no else block
                     stmt => Some(Box::new(stmt)),
                 },
             ),
         },
-
-        Stmt::While(expr, stmt) => match *expr {
+        // while expr { block }
+        Stmt::While(expr, block) => match *expr {
+            // while false { block } -> Noop
             Expr::False(pos) => {
                 state.set_dirty();
                 Stmt::Noop(pos)
             }
-            Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(*stmt, state, false))),
-            expr => match optimize_stmt(*stmt, state, false) {
+            // while true { block } -> loop { block }
+            Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(*block, state, false))),
+            // while expr { block }
+            expr => match optimize_stmt(*block, state, false) {
+                // while expr { break; } -> { expr; }
                 Stmt::Break(pos) => {
                     // Only a single break statement - turn into running the guard expression once
                     state.set_dirty();
@@ -127,48 +139,50 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                     }
                     Stmt::Block(statements, pos)
                 }
+                // while expr { block }
                 stmt => Stmt::While(Box::new(optimize_expr(expr, state)), Box::new(stmt)),
             },
         },
-        Stmt::Loop(stmt) => match optimize_stmt(*stmt, state, false) {
+        // loop { block }
+        Stmt::Loop(block) => match optimize_stmt(*block, state, false) {
+            // loop { break; } -> Noop
             Stmt::Break(pos) => {
                 // Only a single break statement
                 state.set_dirty();
                 Stmt::Noop(pos)
             }
+            // loop { block }
             stmt => Stmt::Loop(Box::new(stmt)),
         },
-        Stmt::For(id, expr, stmt) => Stmt::For(
+        // for id in expr { block }
+        Stmt::For(id, expr, block) => Stmt::For(
             id,
             Box::new(optimize_expr(*expr, state)),
-            Box::new(match optimize_stmt(*stmt, state, false) {
-                Stmt::Break(pos) => {
-                    // Only a single break statement
-                    state.set_dirty();
-                    Stmt::Noop(pos)
-                }
-                stmt => stmt,
-            }),
+            Box::new(optimize_stmt(*block, state, false)),
         ),
-
+        // let id = expr;
         Stmt::Let(id, Some(expr), pos) => {
             Stmt::Let(id, Some(Box::new(optimize_expr(*expr, state))), pos)
         }
+        // let id;
         Stmt::Let(_, None, _) => stmt,
+        // { block }
+        Stmt::Block(block, pos) => {
+            let orig_len = block.len(); // Original number of statements in the block, for change detection
+            let orig_constants_len = state.constants.len(); // Original number of constants in the state, for restore later
 
-        Stmt::Block(statements, pos) => {
-            let orig_len = statements.len();
-            let orig_constants_len = state.constants.len();
-
-            let mut result: Vec<_> = statements
-                .into_iter() // For each statement
+            // Optimize each statement in the block
+            let mut result: Vec<_> = block
+                .into_iter()
                 .map(|stmt| {
                     if let Stmt::Const(name, value, pos) = stmt {
+                        // Add constant into the state
                         state.push_constant(&name, *value);
                         state.set_dirty();
                         Stmt::Noop(pos) // No need to keep constants
                     } else {
-                        optimize_stmt(stmt, state, preserve_result) // Optimize the statement
+                        // Optimize the statement
+                        optimize_stmt(stmt, state, preserve_result)
                     }
                 })
                 .collect();
@@ -203,11 +217,12 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                     result.push(Stmt::Noop(pos))
                 }
 
+                // Optimize all the statements again
                 result = result
                     .into_iter()
                     .rev()
                     .enumerate()
-                    .map(|(i, s)| optimize_stmt(s, state, i == 0)) // Optimize all other statements again
+                    .map(|(i, s)| optimize_stmt(s, state, i == 0))
                     .rev()
                     .collect();
             }
@@ -230,10 +245,12 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                 true
             });
 
+            // Change detection
             if orig_len != result.len() {
                 state.set_dirty();
             }
 
+            // Pop the stack and remove all the local constants
             state.restore_constants(orig_constants_len);
 
             match result[..] {
@@ -250,44 +267,54 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                 _ => Stmt::Block(result, pos),
             }
         }
-
+        // expr;
         Stmt::Expr(expr) => Stmt::Expr(Box::new(optimize_expr(*expr, state))),
-
+        // return expr;
         Stmt::ReturnWithVal(Some(expr), is_return, pos) => {
             Stmt::ReturnWithVal(Some(Box::new(optimize_expr(*expr, state))), is_return, pos)
         }
-
+        // All other statements - skip
         stmt => stmt,
     }
 }
 
+/// Optimize an expression.
 fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
+    // These keywords are handled specially
     const SKIP_FUNC_KEYWORDS: [&str; 3] = [KEYWORD_PRINT, KEYWORD_DEBUG, KEYWORD_DUMP_AST];
 
     match expr {
+        // ( stmt )
         Expr::Stmt(stmt, pos) => match optimize_stmt(*stmt, state, true) {
+            // ( Noop ) -> ()
             Stmt::Noop(_) => {
                 state.set_dirty();
                 Expr::Unit(pos)
             }
+            // ( expr ) -> expr
             Stmt::Expr(expr) => {
                 state.set_dirty();
                 *expr
             }
+            // ( stmt )
             stmt => Expr::Stmt(Box::new(stmt), pos),
         },
-        Expr::Assignment(id1, expr1, pos1) => match *expr1 {
-            Expr::Assignment(id2, expr2, pos2) => match (*id1, *id2) {
-                (Expr::Variable(var1, _), Expr::Variable(var2, _)) if var1 == var2 => {
+        // id = expr
+        Expr::Assignment(id, expr, pos) => match *expr {
+            //id = id2 = expr2
+            Expr::Assignment(id2, expr2, pos2) => match (*id, *id2) {
+                // var = var = expr2 -> var = expr2
+                (Expr::Variable(var, _), Expr::Variable(var2, _)) if var == var2 => {
                     // Assignment to the same variable - fold
                     state.set_dirty();
 
                     Expr::Assignment(
-                        Box::new(Expr::Variable(var1, pos1)),
+                        Box::new(Expr::Variable(var, pos)),
                         Box::new(optimize_expr(*expr2, state)),
-                        pos1,
+                        pos,
                     )
                 }
+                // id1 = id2 = expr2
                 (id1, id2) => Expr::Assignment(
                     Box::new(id1),
                     Box::new(Expr::Assignment(
@@ -295,19 +322,23 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                         Box::new(optimize_expr(*expr2, state)),
                         pos2,
                     )),
-                    pos1,
+                    pos,
                 ),
             },
-            expr => Expr::Assignment(id1, Box::new(optimize_expr(expr, state)), pos1),
+            // id = expr
+            expr => Expr::Assignment(id, Box::new(optimize_expr(expr, state)), pos),
         },
+        // lhs.rhs
         Expr::Dot(lhs, rhs, pos) => Expr::Dot(
             Box::new(optimize_expr(*lhs, state)),
             Box::new(optimize_expr(*rhs, state)),
             pos,
         ),
 
+        // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
         Expr::Index(lhs, rhs, pos) => match (*lhs, *rhs) {
+            // array[int]
             (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
                 if i >= 0 && (i as usize) < items.len() && items.iter().all(|x| x.is_pure()) =>
             {
@@ -316,6 +347,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 state.set_dirty();
                 items.remove(i as usize)
             }
+            // string[int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _))
                 if i >= 0 && (i as usize) < s.chars().count() =>
             {
@@ -323,14 +355,14 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 state.set_dirty();
                 Expr::CharConstant(s.chars().nth(i as usize).expect("should get char"), pos)
             }
-
+            // lhs[rhs]
             (lhs, rhs) => Expr::Index(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
                 pos,
             ),
         },
-
+        // [ items .. ]
         #[cfg(not(feature = "no_index"))]
         Expr::Array(items, pos) => {
             let orig_len = items.len();
@@ -346,38 +378,47 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
 
             Expr::Array(items, pos)
         }
-
+        // lhs && rhs
         Expr::And(lhs, rhs) => match (*lhs, *rhs) {
+            // true && rhs -> rhs
             (Expr::True(_), rhs) => {
                 state.set_dirty();
                 rhs
             }
+            // false && rhs -> false
             (Expr::False(pos), _) => {
                 state.set_dirty();
                 Expr::False(pos)
             }
+            // lhs && true -> lhs
             (lhs, Expr::True(_)) => {
                 state.set_dirty();
-                lhs
+                optimize_expr(lhs, state)
             }
+            // lhs && rhs
             (lhs, rhs) => Expr::And(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
             ),
         },
+        // lhs || rhs
         Expr::Or(lhs, rhs) => match (*lhs, *rhs) {
+            // false || rhs -> rhs
             (Expr::False(_), rhs) => {
                 state.set_dirty();
                 rhs
             }
+            // true || rhs -> true
             (Expr::True(pos), _) => {
                 state.set_dirty();
                 Expr::True(pos)
             }
+            // lhs || false
             (lhs, Expr::False(_)) => {
                 state.set_dirty();
-                lhs
+                optimize_expr(lhs, state)
             }
+            // lhs || rhs
             (lhs, rhs) => Expr::Or(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
@@ -388,24 +429,23 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         Expr::FunctionCall(id, args, def_value, pos) if SKIP_FUNC_KEYWORDS.contains(&id.as_str())=>
             Expr::FunctionCall(id, args, def_value, pos),
 
-        // Actually call function to optimize it
+        // Eagerly call functions
         Expr::FunctionCall(id, args, def_value, pos)
-                if state.engine.map(|eng| eng.optimization_level == OptimizationLevel::Full).unwrap_or(false) // full optimizations
+                if state.engine.optimization_level == OptimizationLevel::Full // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
-            let engine = state.engine.expect("engine should be Some");
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
             let call_args: FnCallArgs = arg_values.iter_mut().map(Dynamic::as_mut).collect();
 
             // Save the typename of the first argument if it is `type_of()`
             // This is to avoid `call_args` being passed into the closure
             let arg_for_type_of = if id == KEYWORD_TYPE_OF  && call_args.len() == 1 {
-                engine.map_type_name(call_args[0].type_name())
+                state.engine.map_type_name(call_args[0].type_name())
             } else {
                 ""
             };
 
-            engine.call_ext_fn_raw(&id, call_args, pos).ok().map(|r|
+            state.engine.call_ext_fn_raw(&id, call_args, pos).ok().map(|r|
                 r.or_else(|| {
                     if !arg_for_type_of.is_empty() {
                         // Handle `type_of()`
@@ -421,10 +461,10 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     })
             ).flatten().unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
         }
-        // Optimize the function call arguments
+        // id(args ..) -> optimize function call arguments
         Expr::FunctionCall(id, args, def_value, pos) =>
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
-
+        // constant-name
         Expr::Variable(ref name, _) if state.contains_constant(name) => {
             state.set_dirty();
 
@@ -434,28 +474,25 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 .expect("should find constant in scope!")
                 .clone()
         }
-
+        // All other expressions - skip
         expr => expr,
     }
 }
 
-pub(crate) fn optimize<'a>(
-    statements: Vec<Stmt>,
-    engine: Option<&Engine<'a>>,
-    scope: &Scope,
-) -> Vec<Stmt> {
+pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &Scope) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
-    if engine
-        .map(|eng| eng.optimization_level == OptimizationLevel::None)
-        .unwrap_or(false)
-    {
+    if engine.optimization_level == OptimizationLevel::None {
         return statements;
     }
 
     // Set up the state
-    let mut state = State::new();
-    state.engine = engine;
+    let mut state = State {
+        changed: false,
+        constants: vec![],
+        engine,
+    };
 
+    // Add constants from the scope into the state
     scope
         .iter()
         .filter(|ScopeEntry { var_type, expr, .. }| {
@@ -472,9 +509,9 @@ pub(crate) fn optimize<'a>(
 
     let orig_constants_len = state.constants.len();
 
-    // Optimization loop
     let mut result = statements;
 
+    // Optimization loop
     loop {
         state.reset();
         state.restore_constants(orig_constants_len);
@@ -492,7 +529,7 @@ pub(crate) fn optimize<'a>(
                 } else {
                     // Keep all variable declarations at this level
                     // and always keep the last return value
-                    let keep = stmt.is_var() || i == num_statements - 1;
+                    let keep = matches!(stmt, Stmt::Let(_, _, _)) || i == num_statements - 1;
 
                     optimize_stmt(stmt, &mut state, keep)
                 }
@@ -517,6 +554,7 @@ pub(crate) fn optimize<'a>(
     result
 }
 
+/// Optimize an AST.
 pub fn optimize_ast(
     engine: &Engine,
     scope: &Scope,
@@ -526,8 +564,8 @@ pub fn optimize_ast(
     AST(
         match engine.optimization_level {
             OptimizationLevel::None => statements,
-            OptimizationLevel::Simple => optimize(statements, None, &scope),
-            OptimizationLevel::Full => optimize(statements, Some(engine), &scope),
+            OptimizationLevel::Simple => optimize(statements, engine, &scope),
+            OptimizationLevel::Full => optimize(statements, engine, &scope),
         },
         functions
             .into_iter()
@@ -536,14 +574,21 @@ pub fn optimize_ast(
                     OptimizationLevel::None => (),
                     OptimizationLevel::Simple | OptimizationLevel::Full => {
                         let pos = fn_def.body.position();
-                        let mut body = optimize(vec![fn_def.body], None, &Scope::new());
+
+                        // Optimize the function body
+                        let mut body = optimize(vec![fn_def.body], engine, &Scope::new());
+
+                        // {} -> Noop
                         fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                            // { return val; } -> val
                             Stmt::ReturnWithVal(Some(val), ReturnType::Return, _) => {
                                 Stmt::Expr(val)
                             }
+                            // { return; } -> ()
                             Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
                                 Stmt::Expr(Box::new(Expr::Unit(pos)))
                             }
+                            // All others
                             stmt => stmt,
                         };
                     }
