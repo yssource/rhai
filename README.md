@@ -71,15 +71,16 @@ Examples
 
 A number of examples can be found in the `examples` folder:
 
-| Example                    | Description                                                                 |
-| -------------------------- | --------------------------------------------------------------------------- |
-| `arrays_and_structs`       | demonstrates registering a new type to Rhai and the usage of arrays on it   |
-| `custom_types_and_methods` | shows how to register a type and methods for it                             |
-| `hello`                    | simple example that evaluates an expression and prints the result           |
-| `reuse_scope`              | evaluates two pieces of code in separate runs, but using a common [`Scope`] |
-| `rhai_runner`              | runs each filename passed to it as a Rhai script                            |
-| `simple_fn`                | shows how to register a Rust function to a Rhai [`Engine`]                  |
-| `repl`                     | a simple REPL, interactively evaluate statements from stdin                 |
+| Example                                                            | Description                                                                 |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| [`arrays_and_structs`](examples/arrays_and_structs.rs)             | demonstrates registering a new type to Rhai and the usage of arrays on it   |
+| [`custom_types_and_methods`](examples/custom_types_and_methods.rs) | shows how to register a type and methods for it                             |
+| [`hello`](examples/hello.rs)                                       | simple example that evaluates an expression and prints the result           |
+| [`no_std`](examples/no_std.rs)                                     | example to test out `no-std` builds                                         |
+| [`reuse_scope`](examples/reuse_scope.rs)                           | evaluates two pieces of code in separate runs, but using a common [`Scope`] |
+| [`rhai_runner`](examples/rhai_runner.rs)                           | runs each filename passed to it as a Rhai script                            |
+| [`simple_fn`](examples/simple_fn.rs)                               | shows how to register a Rust function to a Rhai [`Engine`]                  |
+| [`repl`](examples/repl.rs)                                         | a simple REPL, interactively evaluate statements from stdin                 |
 
 Examples can be run with the following command:
 
