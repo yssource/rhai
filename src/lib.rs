@@ -43,30 +43,6 @@
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
-// needs to be here, because order matters for macros
-macro_rules! debug_println {
-    () => (
-        #[cfg(feature = "debug_msgs")]
-        {
-            print!("\n");
-        }
-    );
-    ($fmt:expr) => (
-        #[cfg(feature = "debug_msgs")]
-        {
-            print!(concat!($fmt, "\n"));
-        }
-    );
-    ($fmt:expr, $($arg:tt)*) => (
-        #[cfg(feature = "debug_msgs")]
-        {
-            print!(concat!($fmt, "\n"), $($arg)*);
-        }
-    );
-}
-
-#[macro_use]
-mod stdlib;
 mod any;
 mod api;
 mod builtin;
@@ -78,6 +54,7 @@ mod optimize;
 mod parser;
 mod result;
 mod scope;
+mod stdlib;
 
 pub use any::{Any, AnyExt, Dynamic, Variant};
 pub use call::FuncArgs;

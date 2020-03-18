@@ -165,16 +165,6 @@ impl Engine<'_> {
         def_val: Option<&Dynamic>,
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
-        debug_println!(
-            "Calling function: {} ({})",
-            fn_name,
-            args.iter()
-                .map(|x| (*x).type_name())
-                .map(|name| self.map_type_name(name))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
         // First search in script-defined functions (can override built-in)
         if let Ok(n) = self
             .script_functions

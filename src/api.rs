@@ -29,20 +29,6 @@ impl<'e> Engine<'e> {
         args: Option<Vec<TypeId>>,
         f: Box<FnAny>,
     ) {
-        debug_println!(
-            "Register function: {} with {}",
-            fn_name,
-            if let Some(a) = &args {
-                format!(
-                    "{} parameter{}",
-                    a.len(),
-                    if a.len() > 1 { "s" } else { "" }
-                )
-            } else {
-                "no parameter".to_string()
-            }
-        );
-
         let spec = FnSpec {
             name: fn_name.to_string().into(),
             args,

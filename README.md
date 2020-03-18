@@ -44,7 +44,6 @@ Optional features
 
 | Feature       | Description                                                                                                                                              |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug_msgs`  | Print debug messages to stdout related to function registrations and calls.                                                                              |
 | `no_stdlib`   | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
 | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
 | `no_function` | Disable script-defined functions if not needed.                                                                                                          |

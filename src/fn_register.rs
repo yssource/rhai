@@ -6,6 +6,7 @@ use crate::any::{Any, Dynamic};
 use crate::engine::{Engine, FnCallArgs};
 use crate::parser::Position;
 use crate::result::EvalAltResult;
+
 use crate::stdlib::{any::TypeId, boxed::Box, string::ToString, vec};
 
 /// A trait to register custom functions with the `Engine`.
