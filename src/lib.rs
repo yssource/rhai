@@ -16,7 +16,7 @@
 //!
 //! And the Rust part:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use rhai::{Engine, EvalAltResult, RegisterFn};
 //!
 //! fn main() -> Result<(), EvalAltResult>
@@ -37,7 +37,11 @@
 //!
 //! [Check out the README on GitHub for more information!](https://github.com/jonathandturner/rhai)
 
+#![cfg_attr(feature = "no_stdlib", no_std)]
 #![allow(non_snake_case)]
+
+#[cfg(feature = "no_stdlib")]
+extern crate alloc;
 
 // needs to be here, because order matters for macros
 macro_rules! debug_println {
@@ -61,6 +65,8 @@ macro_rules! debug_println {
     );
 }
 
+#[macro_use]
+mod stdlib;
 mod any;
 mod api;
 mod builtin;

@@ -3,7 +3,12 @@
 use crate::any::{Any, Dynamic};
 use crate::parser::{map_dynamic_to_expr, Expr, Position};
 
-use std::borrow::Cow;
+use crate::stdlib::{
+    borrow::Cow,
+    iter,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// Type of a variable in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -193,7 +198,7 @@ impl<'a> Scope<'a> {
     }
 }
 
-impl<'a, K> std::iter::Extend<(K, VariableType, Dynamic)> for Scope<'a>
+impl<'a, K> iter::Extend<(K, VariableType, Dynamic)> for Scope<'a>
 where
     K: Into<Cow<'a, str>>,
 {

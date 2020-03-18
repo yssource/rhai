@@ -8,9 +8,19 @@ use crate::scope::{Scope, VariableType};
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_ast;
 
-use std::{
-    borrow::Cow, char, cmp::Ordering, fmt, iter::Peekable, str::Chars, str::FromStr, sync::Arc,
-    usize,
+use crate::stdlib::{
+    borrow::Cow,
+    boxed::Box,
+    char,
+    cmp::Ordering,
+    fmt, format,
+    iter::Peekable,
+    str::Chars,
+    str::FromStr,
+    string::{String, ToString},
+    sync::Arc,
+    usize, vec,
+    vec::Vec,
 };
 
 /// The system integer type.
