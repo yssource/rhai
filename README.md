@@ -16,7 +16,7 @@ Rhai's current features set:
 * Very few additional dependencies (right now only [`num-traits`] to do checked arithmetic operations);
   For [`no_std`] builds, a number of additional dependencies are pulled in to provide for basic library functionalities.
 
-**Note:** Currently, the version is 0.10.2, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.11.0, so the language and API's may change before they stabilize.
 
 Installation
 ------------
@@ -25,7 +25,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.10.2"
+rhai = "0.11.0"
 ```
 
 or simply:
