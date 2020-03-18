@@ -1,6 +1,6 @@
 //! Helper module which defines most of the needed features from `std` for `no-std` builds.
 
-#[cfg(feature = "no_stdlib")]
+#[cfg(feature = "no_std")]
 mod inner {
     pub use core::{
         any, arch, array, ascii, cell, char, clone, cmp, convert, default, f32, f64, ffi, fmt,
@@ -17,7 +17,7 @@ mod inner {
     }
 }
 
-#[cfg(not(feature = "no_stdlib"))]
+#[cfg(not(feature = "no_std"))]
 mod inner {
     pub use std::*;
 }

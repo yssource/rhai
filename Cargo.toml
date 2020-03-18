@@ -23,6 +23,7 @@ num-traits = "0.2.11"
 default = [ "optimize_full" ]
 debug_msgs = []     # print debug messages on function registrations and calls
 unchecked = []      # unchecked arithmetic
+no_stdlib = []      # no standard library of utility functions
 no_index = []       # no arrays and indexing
 no_float = []       # no floating-point
 no_function = []    # no script-defined functions
@@ -31,13 +32,13 @@ optimize_full = []  # set optimization level to Full (default is Simple)
 only_i32 = []       # set INT=i32 (useful for 32-bit systems)
 only_i64 = []       # set INT=i64 (default) and disable support for all other integer types
 
-# no standard library of utility functions
-no_stdlib = [ "num-traits/libm", "hashbrown", "core-error", "libm" ]
+# compiling for no-std
+no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm" ]
 
 [profile.release]
 lto = "fat"
 codegen-units = 1
-#opt-level = "z"     # optimize for size
+opt-level = "z"     # optimize for size
 
 [dependencies.libm]
 version = "0.2.1"

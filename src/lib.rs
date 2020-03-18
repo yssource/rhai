@@ -16,7 +16,7 @@
 //!
 //! And the Rust part:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use rhai::{Engine, EvalAltResult, RegisterFn};
 //!
 //! fn main() -> Result<(), EvalAltResult>
@@ -29,6 +29,7 @@
 //!
 //!     engine.register_fn("compute_something", compute_something);
 //!
+//! # #[cfg(not(feature = "no_std"))]
 //!     assert_eq!(engine.eval_file::<bool>("my_script.rhai".into())?, true);
 //!
 //!     Ok(())
@@ -37,10 +38,9 @@
 //!
 //! [Check out the README on GitHub for more information!](https://github.com/jonathandturner/rhai)
 
-#![cfg_attr(feature = "no_stdlib", no_std)]
-#![allow(non_snake_case)]
+#![cfg_attr(feature = "no_std", no_std)]
 
-#[cfg(feature = "no_stdlib")]
+#[cfg(feature = "no_std")]
 extern crate alloc;
 
 // needs to be here, because order matters for macros

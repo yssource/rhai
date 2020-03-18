@@ -19,7 +19,7 @@ use crate::stdlib::{
     sync::Arc,
     vec::Vec,
 };
-#[cfg(not(feature = "no_stdlib"))]
+#[cfg(not(feature = "no_std"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 impl<'e> Engine<'e> {
@@ -117,7 +117,7 @@ impl<'e> Engine<'e> {
         parse(&mut tokens_stream.peekable(), self, scope)
     }
 
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     fn read_file(path: PathBuf) -> Result<String, EvalAltResult> {
         let mut f = File::open(path.clone())
             .map_err(|err| EvalAltResult::ErrorReadingScriptFile(path.clone(), err))?;
@@ -130,14 +130,14 @@ impl<'e> Engine<'e> {
     }
 
     /// Compile a file into an AST.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, EvalAltResult> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
 
     /// Compile a file into an AST using own scope.
     /// The scope is useful for passing constants into the script for optimization.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
@@ -150,13 +150,13 @@ impl<'e> Engine<'e> {
     }
 
     /// Evaluate a file.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     pub fn eval_file<T: Any + Clone>(&mut self, path: PathBuf) -> Result<T, EvalAltResult> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
 
     /// Evaluate a file with own scope.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     pub fn eval_file_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
@@ -237,7 +237,7 @@ impl<'e> Engine<'e> {
     ///
     /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
     ///        and not cleared from run to run.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     pub fn consume_file(
         &mut self,
         retain_functions: bool,
@@ -251,7 +251,7 @@ impl<'e> Engine<'e> {
     ///
     /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
     ///        and not cleared from run to run.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     pub fn consume_file_with_scope(
         &mut self,
         scope: &mut Scope,

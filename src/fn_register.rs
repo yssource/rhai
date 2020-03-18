@@ -1,5 +1,7 @@
 //! Module which defines the function registration mechanism.
 
+#![allow(non_snake_case)]
+
 use crate::any::{Any, Dynamic};
 use crate::engine::{Engine, FnCallArgs};
 use crate::parser::Position;

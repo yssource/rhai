@@ -1182,11 +1182,12 @@ impl Engine<'_> {
 }
 
 /// Print/debug to stdout
+#[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_stdlib"))]
 fn default_print(s: &str) {
     println!("{}", s);
 }
 
 /// No-op
-#[cfg(feature = "no_stdlib")]
+#[cfg(any(feature = "no_std", feature = "no_stdlib"))]
 fn default_print(_: &str) {}

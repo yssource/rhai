@@ -1,5 +1,7 @@
 //! Helper module which defines `FnArgs` to make function calling easier.
 
+#![allow(non_snake_case)]
+
 use crate::any::{Any, Dynamic};
 use crate::stdlib::{string::String, vec, vec::Vec};
 

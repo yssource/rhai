@@ -10,7 +10,7 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-#[cfg(not(feature = "no_stdlib"))]
+#[cfg(not(feature = "no_std"))]
 use crate::stdlib::path::PathBuf;
 
 /// Evaluation result.
@@ -54,7 +54,7 @@ pub enum EvalAltResult {
     /// Wrapped value is the type of the actual result.
     ErrorMismatchOutputType(String, Position),
     /// Error reading from a script file. Wrapped value is the path of the script file.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     ErrorReadingScriptFile(PathBuf, std::io::Error),
     /// Inappropriate member access.
     ErrorDotExpr(String, Position),
@@ -101,7 +101,7 @@ impl EvalAltResult {
             }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
@@ -136,7 +136,7 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorLoopBreak(pos) => write!(f, "{} ({})", desc, pos),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(path, err) => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)
             }
@@ -209,7 +209,7 @@ impl<T: AsRef<str>> From<T> for EvalAltResult {
 impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => Position::none(),
 
             Self::ErrorParsing(err) => err.position(),
@@ -238,7 +238,7 @@ impl EvalAltResult {
 
     pub(crate) fn set_position(&mut self, new_position: Position) {
         match self {
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => (),
 
             Self::ErrorParsing(ParseError(_, ref mut pos))

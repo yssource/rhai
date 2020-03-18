@@ -2,12 +2,13 @@
 //! _standard library_ of utility functions.
 
 use crate::any::Any;
-#[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
 use crate::engine::Engine;
 use crate::fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 use crate::parser::{Position, INT};
 use crate::result::EvalAltResult;
+
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -23,6 +24,7 @@ use crate::stdlib::{
     format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub},
     string::{String, ToString},
+    vec::Vec,
     {i32, i64, u32},
 };
 
@@ -645,7 +647,6 @@ impl Engine<'_> {
     }
 }
 
-#[cfg(not(feature = "no_stdlib"))]
 macro_rules! reg_fn2x {
     ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
         $(
@@ -654,7 +655,6 @@ macro_rules! reg_fn2x {
     )
 }
 
-#[cfg(not(feature = "no_stdlib"))]
 macro_rules! reg_fn2y {
     ($self:expr, $x:expr, $op:expr, $v:ty, $r:ty, $( $y:ty ),*) => (
         $(
