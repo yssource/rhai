@@ -3,8 +3,9 @@ Rhai - Embedded Scripting for Rust
 
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way to add scripting to any application.
 
-Rhai's current feature set:
+Rhai's current features set:
 
+* `no-std` support
 * Easy integration with Rust functions and data types, supporting getter/setter methods
 * Easily call a script-defined function from Rust
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
@@ -52,6 +53,7 @@ Optional features
 | `no_optimize` | Disable the script optimizer.                                                                                                                            |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                         |
+| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                     |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
@@ -1477,6 +1479,7 @@ engine.set_optimization_level(rhai::OptimizationLevel::None);
 [`no_optimize`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
+[`no_std`]: #optional-features
 
 [`Engine`]: #hello-world
 [`Scope`]: #initializing-and-maintaining-state

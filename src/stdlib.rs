@@ -1,3 +1,5 @@
+//! Helper module which defines most of the needed features from `std` for `no-std` builds.
+
 #[cfg(feature = "no_stdlib")]
 mod inner {
     pub use core::{
