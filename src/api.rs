@@ -10,7 +10,7 @@ use crate::result::EvalAltResult;
 use crate::scope::Scope;
 
 #[cfg(not(feature = "no_optimize"))]
-use crate::optimize::optimize_ast;
+use crate::optimize::optimize_into_ast;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -415,12 +415,10 @@ impl<'e> Engine<'e> {
     /// (i.e. with `scope.push_constant(...)`). Then, the AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
     pub fn optimize_ast(&self, scope: &Scope, ast: &AST) -> AST {
-        optimize_ast(
-            self,
-            scope,
-            ast.0.clone(),
-            ast.1.iter().map(|f| (**f).clone()).collect(),
-        )
+        let statements = ast.0.clone();
+        let functions = ast.1.iter().map(|f| (**f).clone()).collect();
+
+        optimize_into_ast(self, scope, statements, functions)
     }
 
     /// Override default action of `print` (print to stdout using `println!`)

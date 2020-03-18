@@ -8,9 +8,11 @@ use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::scope::{Scope, ScopeEntry, VariableType};
 
 use crate::stdlib::{
+    boxed::Box,
+    string::{String, ToString},
     sync::Arc,
-    vec::Vec, string::{String, ToString},
-    boxed::Box, vec,
+    vec,
+    vec::Vec,
 };
 
 /// Level of optimization performed.
@@ -549,17 +551,20 @@ pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &S
     let last_stmt = result.pop();
 
     // Remove all pure statements at global level
-    result.retain(|stmt| !matches!(stmt, Stmt::Expr(expr) if expr.is_pure()));
+    result.retain(|stmt| !stmt.is_pure());
 
+    // Add back the last statement unless it is a lone No-op
     if let Some(stmt) = last_stmt {
-        result.push(stmt); // Add back the last statement
+        if result.len() > 0 || !matches!(stmt, Stmt::Noop(_)) {
+            result.push(stmt);
+        }
     }
 
     result
 }
 
 /// Optimize an AST.
-pub fn optimize_ast(
+pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     statements: Vec<Stmt>,

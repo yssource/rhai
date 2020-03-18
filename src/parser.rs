@@ -6,7 +6,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{Scope, VariableType};
 
 #[cfg(not(feature = "no_optimize"))]
-use crate::optimize::optimize_ast;
+use crate::optimize::optimize_into_ast;
 
 use crate::stdlib::{
     borrow::Cow,
@@ -243,12 +243,14 @@ impl Stmt {
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Stmt::Noop(_)
-            | Stmt::IfElse(_, _, _)
+            Stmt::IfElse(_, _, _)
             | Stmt::While(_, _)
             | Stmt::Loop(_)
             | Stmt::For(_, _, _)
             | Stmt::Block(_, _) => true,
+
+            // A No-op requires a semicolon in order to know it is an empty statement!
+            Stmt::Noop(_) => false,
 
             Stmt::Let(_, _, _)
             | Stmt::Const(_, _, _)
@@ -1717,7 +1719,7 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 
 /// Parse an assignment.
 fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
-    // Is the LHS in a valid format?
+    // Is the LHS in a valid format for an assignment target?
     fn valid_assignment_chain(expr: &Expr, is_top: bool) -> Option<ParseError> {
         match expr {
             // var
@@ -1798,17 +1800,13 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
 }
 
 /// Parse an operator-assignment expression.
-fn parse_op_assignment(
-    function: &str,
-    lhs: Expr,
-    rhs: Expr,
-    pos: Position,
-) -> Result<Expr, ParseError> {
+fn parse_op_assignment(op: &str, lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
     let lhs_copy = lhs.clone();
 
+    // lhs op= rhs -> lhs = op(lhs, rhs)
     parse_assignment(
         lhs,
-        Expr::FunctionCall(function.into(), vec![lhs_copy, rhs], None, pos),
+        Expr::FunctionCall(op.into(), vec![lhs_copy, rhs], None, pos),
         pos,
     )
 }
@@ -1978,17 +1976,22 @@ fn parse_if<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
 ) -> Result<Stmt, ParseError> {
+    // if ...
     input.next();
 
+    // if guard { body }
     let guard = parse_expr(input)?;
     let if_body = parse_block(input, breakable)?;
 
+    // if guard { body } else ...
     let else_body = if matches!(input.peek(), Some((Token::Else, _))) {
         input.next();
 
         Some(Box::new(if matches!(input.peek(), Some((Token::If, _))) {
+            // if guard { body } else if ...
             parse_if(input, breakable)?
         } else {
+            // if guard { body } else { else-body }
             parse_block(input, breakable)?
         }))
     } else {
@@ -2000,8 +2003,10 @@ fn parse_if<'a>(
 
 /// Parse a while loop.
 fn parse_while<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
+    // while ...
     input.next();
 
+    // while guard { body }
     let guard = parse_expr(input)?;
     let body = parse_block(input, true)?;
 
@@ -2010,8 +2015,10 @@ fn parse_while<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
 
 /// Parse a loop statement.
 fn parse_loop<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
+    // loop ...
     input.next();
 
+    // loop { body }
     let body = parse_block(input, true)?;
 
     Ok(Stmt::Loop(Box::new(body)))
@@ -2019,19 +2026,25 @@ fn parse_loop<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Parse
 
 /// Parse a for loop.
 fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
+    // for ...
     input.next();
 
+    // for name ...
     let name = match input
         .next()
         .ok_or_else(|| ParseError::new(PERR::VariableExpected, Position::eof()))?
     {
+        // Variable name
         (Token::Identifier(s), _) => s,
+        // Bad identifier
         (Token::LexError(err), pos) => {
             return Err(ParseError::new(PERR::BadInput(err.to_string()), pos))
         }
+        // Not a variable name
         (_, pos) => return Err(ParseError::new(PERR::VariableExpected, pos)),
     };
 
+    // for name in ...
     match input
         .next()
         .ok_or_else(|| ParseError::new(PERR::MissingIn, Position::eof()))?
@@ -2040,6 +2053,7 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
         (_, pos) => return Err(ParseError::new(PERR::MissingIn, pos)),
     }
 
+    // for name in expr { body }
     let expr = parse_expr(input)?;
     let body = parse_block(input, true)?;
 
@@ -2051,39 +2065,43 @@ fn parse_let<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     var_type: VariableType,
 ) -> Result<Stmt, ParseError> {
-    let pos = input
-        .next()
-        .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
-        .1;
+    // let/const... (specified in `var_type`)
+    input.next();
 
-    let name = match input
+    // let name ...
+    let (name, pos) = match input
         .next()
         .ok_or_else(|| ParseError::new(PERR::VariableExpected, Position::eof()))?
     {
-        (Token::Identifier(s), _) => s,
+        (Token::Identifier(s), pos) => (s, pos),
         (Token::LexError(err), pos) => {
             return Err(ParseError::new(PERR::BadInput(err.to_string()), pos))
         }
         (_, pos) => return Err(ParseError::new(PERR::VariableExpected, pos)),
     };
 
+    // let name = ...
     if matches!(input.peek(), Some((Token::Equals, _))) {
         input.next();
+
+        // let name = expr
         let init_value = parse_expr(input)?;
 
         match var_type {
+            // let name = expr
             VariableType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
-
+            // const name = { expr:constant }
             VariableType::Constant if init_value.is_constant() => {
                 Ok(Stmt::Const(name, Box::new(init_value), pos))
             }
-            // Constants require a constant expression
+            // const name = expr - error
             VariableType::Constant => Err(ParseError(
                 PERR::ForbiddenConstantExpr(name.to_string()),
                 init_value.position(),
             )),
         }
     } else {
+        // let name
         Ok(Stmt::Let(name, None, pos))
     }
 }
@@ -2093,6 +2111,7 @@ fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
 ) -> Result<Stmt, ParseError> {
+    // Must start with {
     let pos = match input
         .next()
         .ok_or_else(|| ParseError::new(PERR::MissingLeftBrace, Position::eof()))?
@@ -2113,15 +2132,19 @@ fn parse_block<'a>(
         statements.push(stmt);
 
         match input.peek() {
+            // EOF
             None => break,
-
+            // { ... stmt }
             Some((Token::RightBrace, _)) => break,
-
-            Some((Token::SemiColon, _)) => {
+            // { ... stmt;
+            Some((Token::SemiColon, _)) if need_semicolon => {
                 input.next();
             }
+            // { ... { stmt } ;
+            Some((Token::SemiColon, _)) if !need_semicolon => (),
+            // { ... { stmt } ???
             Some((_, _)) if !need_semicolon => (),
-
+            // { ... stmt ??? - error
             Some((_, pos)) => {
                 // Semicolons are not optional between statements
                 return Err(ParseError::new(
@@ -2163,6 +2186,10 @@ fn parse_stmt<'a>(
         .peek()
         .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
     {
+        // Semicolon - empty statement
+        (Token::SemiColon, pos) => Ok(Stmt::Noop(*pos)),
+
+        // fn ...
         #[cfg(not(feature = "no_function"))]
         (Token::Fn, pos) => return Err(ParseError::new(PERR::WrongFnDefinition, *pos)),
 
@@ -2323,6 +2350,7 @@ fn parse_global_level<'a, 'e>(
     while input.peek().is_some() {
         #[cfg(not(feature = "no_function"))]
         {
+            // Collect all the function definitions
             if matches!(input.peek().expect("should not be None"), (Token::Fn, _)) {
                 let f = parse_fn(input)?;
 
@@ -2336,6 +2364,7 @@ fn parse_global_level<'a, 'e>(
             }
         }
 
+        // Actual statement
         let stmt = parse_stmt(input, false)?;
 
         let need_semicolon = !stmt.is_self_terminated();
@@ -2343,12 +2372,17 @@ fn parse_global_level<'a, 'e>(
         statements.push(stmt);
 
         match input.peek() {
+            // EOF
             None => break,
-            Some((Token::SemiColon, _)) => {
+            // stmt ;
+            Some((Token::SemiColon, _)) if need_semicolon => {
                 input.next();
             }
+            // stmt ;
+            Some((Token::SemiColon, _)) if !need_semicolon => (),
+            // { stmt } ???
             Some((_, _)) if !need_semicolon => (),
-
+            // stmt ??? - error
             Some((_, pos)) => {
                 // Semicolons are not optional between statements
                 return Err(ParseError::new(
@@ -2371,8 +2405,11 @@ pub fn parse<'a, 'e>(
     let (statements, functions) = parse_global_level(input)?;
 
     Ok(
+        // Optimize AST
         #[cfg(not(feature = "no_optimize"))]
-        optimize_ast(engine, scope, statements, functions),
+        optimize_into_ast(engine, scope, statements, functions),
+        //
+        // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]
         AST(statements, functions.into_iter().map(Arc::new).collect()),
     )
