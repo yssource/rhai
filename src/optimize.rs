@@ -438,15 +438,19 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
 
         // Do not optimize anything within built-in function keywords
         Expr::FunctionCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_str())=>
-            Expr::FunctionCall(id,
-                args.into_iter().map(|a| optimize_expr(a, state)).collect(),
-                def_value, pos),
+            Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // Eagerly call functions
         Expr::FunctionCall(id, args, def_value, pos)
                 if state.engine.optimization_level == OptimizationLevel::Full // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
+            // First search in script-defined functions (can override built-in)
+            if state.engine.script_functions.binary_search_by(|f| f.compare(&id, args.len())).is_ok() {
+                // A script-defined function overrides the built-in function - do not make the call
+                return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
+            }
+
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
             let call_args: FnCallArgs = arg_values.iter_mut().map(Dynamic::as_mut).collect();
 
@@ -477,19 +481,14 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
 
         // id(args ..) -> optimize function call arguments
         Expr::FunctionCall(id, args, def_value, pos) =>
-            Expr::FunctionCall(id,
-                args.into_iter().map(|a| optimize_expr(a, state)).collect(),
-                def_value, pos),
+            Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // constant-name
         Expr::Variable(ref name, _) if state.contains_constant(name) => {
             state.set_dirty();
 
             // Replace constant with value
-            state
-                .find_constant(name)
-                .expect("should find constant in scope!")
-                .clone()
+            state.find_constant(name).expect("should find constant in scope!").clone()
         }
 
         // All other expressions - skip
