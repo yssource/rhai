@@ -5,7 +5,7 @@
 //! It provides a familiar syntax based on JS and Rust and a simple Rust interface.
 //! Here is a quick example. First, the contents of `my_script.rhai`:
 //!
-//! ```rust,ignore
+//! ```,ignore
 //! fn factorial(x) {
 //!     if x == 1 { return 1; }
 //!	    x * factorial(x - 1)
@@ -16,7 +16,7 @@
 //!
 //! And the Rust part:
 //!
-//! ```rust,no_run
+//! ```,no_run
 //! use rhai::{Engine, EvalAltResult, RegisterFn};
 //!
 //! fn main() -> Result<(), EvalAltResult>

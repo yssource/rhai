@@ -38,7 +38,7 @@ fn struct_with_float() -> Result<(), EvalAltResult> {
             self.x = new_x;
         }
 
-        fn new() -> TestStruct {
+        fn new() -> Self {
             TestStruct { x: 1.0 }
         }
     }

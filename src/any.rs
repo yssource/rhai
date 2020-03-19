@@ -101,7 +101,7 @@ impl AnyExt for Dynamic {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// use rhai::{Dynamic, Any, AnyExt};
     ///
     /// let x: Dynamic = 42_u32.into_dynamic();

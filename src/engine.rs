@@ -57,7 +57,7 @@ pub struct FnSpec<'a> {
 
 /// Rhai main scripting engine.
 ///
-/// ```rust
+/// ```
 /// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::Engine;
 ///

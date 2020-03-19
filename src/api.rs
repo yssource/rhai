@@ -23,6 +23,7 @@ use crate::stdlib::{
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 impl<'e> Engine<'e> {
+    /// Register a custom function.
     pub(crate) fn register_fn_raw(
         &mut self,
         fn_name: &str,
@@ -38,13 +39,88 @@ impl<'e> Engine<'e> {
     }
 
     /// Register a custom type for use with the `Engine`.
-    /// The type must be `Clone`.
+    /// The type must implement `Clone`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     field: i64
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self        { TestStruct { field: 1 } }
+    ///     fn update(&mut self)    { self.field += 41; }
+    /// }
+    ///
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register method on the type.
+    /// engine.register_fn("update", TestStruct::update);
+    ///
+    /// assert_eq!(
+    ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?.field,
+    ///     42
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn register_type<T: Any + Clone>(&mut self) {
         self.register_type_with_name::<T>(type_name::<T>());
     }
 
-    /// Register a custom type for use with the `Engine` with a name for the `type_of` function.
-    /// The type must be `Clone`.
+    /// Register a custom type for use with the `Engine`, with a pretty-print name
+    /// for the `type_of` function. The type must implement `Clone`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    ///     struct TestStruct {
+    ///     field: i64
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self { TestStruct { field: 1 } }
+    /// }
+    ///
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// assert_eq!(
+    ///     engine.eval::<String>("let x = new_ts(); type_of(x)")?,
+    ///     "rust_out::TestStruct"
+    /// );
+    ///
+    /// // Register the custom type with a name.
+    /// engine.register_type_with_name::<TestStruct>("Hello");
+    ///
+    /// // Register methods on the type.
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// assert_eq!(
+    ///     engine.eval::<String>("let x = new_ts(); type_of(x)")?,
+    ///     "Hello"
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn register_type_with_name<T: Any + Clone>(&mut self, name: &str) {
         // Add the pretty-print type name into the map
         self.type_names
@@ -52,6 +128,7 @@ impl<'e> Engine<'e> {
     }
 
     /// Register an iterator adapter for a type with the `Engine`.
+    /// This is an advanced feature.
     pub fn register_iterator<T: Any, F>(&mut self, f: F)
     where
         F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static,
@@ -60,6 +137,37 @@ impl<'e> Engine<'e> {
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    ///     struct TestStruct {
+    ///     field: i64
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                { TestStruct { field: 1 } }
+    ///     fn get_field(&mut self) -> i64  { self.field }
+    /// }
+    ///
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register a getter on a property (notice it doesn't have to be the same name).
+    /// engine.register_get("xyz", TestStruct::get_field);
+    ///
+    /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a.xyz")?, 1);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn register_get<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
@@ -70,6 +178,38 @@ impl<'e> Engine<'e> {
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     field: i64
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                        { TestStruct { field: 1 } }
+    ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
+    /// }
+    ///
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register a setter on a property (notice it doesn't have to be the same name)
+    /// engine.register_set("xyz", TestStruct::set_field);
+    ///
+    /// // Notice that, with a getter, there is no way to get the property value
+    /// engine.eval("let a = new_ts(); a.xyz = 42;")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn register_set<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
@@ -81,6 +221,39 @@ impl<'e> Engine<'e> {
 
     /// Shorthand for registering both getter and setter functions
     /// of a registered type with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     field: i64
+    /// }
+    ///
+    /// impl TestStruct {
+    /// fn new() -> Self                            { TestStruct { field: 1 } }
+    ///     fn get_field(&mut self) -> i64          { self.field }
+    ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
+    /// }
+    ///
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register a getter and a setter on a property
+    /// // (notice it doesn't have to be the same name)
+    /// engine.register_get_set("xyz", TestStruct::get_field, TestStruct::set_field);
+    ///
+    /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn register_get_set<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
@@ -91,18 +264,59 @@ impl<'e> Engine<'e> {
         self.register_set(name, set_fn);
     }
 
-    /// Compile a string into an AST.
+    /// Compile a string into an `AST`, which can be used later for evaluations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Compile a script to an AST and store it for later evaluations
+    /// let ast = engine.compile("40 + 2")?;
+    ///
+    /// for _ in 0..42 {
+    ///     assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
         self.compile_with_scope(&Scope::new(), input)
     }
 
-    /// Compile a string into an AST using own scope.
+    /// Compile a string into an `AST` using own scope, which can be used later for evaluations.
     /// The scope is useful for passing constants into the script for optimization.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push_constant("x", 42_i64);   // 'x' is a constant
+    ///
+    /// // Compile a script to an AST and store it for later evaluations
+    /// let ast = engine.compile_with_scope(&mut scope,
+    ///             "if x > 40 { x } else { 0 }"
+    /// )?;
+    ///
+    /// assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn compile_with_scope(&self, scope: &Scope, input: &str) -> Result<AST, ParseError> {
         let tokens_stream = lex(input);
         parse(&mut tokens_stream.peekable(), self, scope)
     }
 
+    /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     fn read_file(path: PathBuf) -> Result<String, EvalAltResult> {
         let mut f = File::open(path.clone())
@@ -115,14 +329,54 @@ impl<'e> Engine<'e> {
             .map(|_| contents)
     }
 
-    /// Compile a file into an AST.
+    /// Compile a script file into an `AST`, which can be used later for evaluations.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Compile a script file to an AST and store it for later evaluations
+    /// // Notice that a PathBuf is required which can easily be constructed from a string.
+    /// let ast = engine.compile_file("script.rhai".into())?;
+    ///
+    /// for _ in 0..42 {
+    ///     engine.eval_ast::<i64>(&ast)?;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(not(feature = "no_std"))]
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, EvalAltResult> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
 
-    /// Compile a file into an AST using own scope.
+    /// Compile a script file into an `AST` using own scope, which can be used later for evaluations.
     /// The scope is useful for passing constants into the script for optimization.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push_constant("x", 42_i64);   // 'x' is a constant
+    ///
+    /// // Compile a script to an AST and store it for later evaluations
+    /// // Notice that a PathBuf is required which can easily be constructed from a string.
+    /// let ast = engine.compile_file_with_scope(&mut scope, "script.rhai".into())?;
+    ///
+    /// let result = engine.eval_ast::<i64>(&ast)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(not(feature = "no_std"))]
     pub fn compile_file_with_scope(
         &self,
@@ -135,13 +389,45 @@ impl<'e> Engine<'e> {
         })
     }
 
-    /// Evaluate a file.
+    /// Evaluate a script file.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Notice that a PathBuf is required which can easily be constructed from a string.
+    /// let result = engine.eval_file::<i64>("script.rhai".into())?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(not(feature = "no_std"))]
     pub fn eval_file<T: Any + Clone>(&mut self, path: PathBuf) -> Result<T, EvalAltResult> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
 
-    /// Evaluate a file with own scope.
+    /// Evaluate a script file with own scope.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push("x", 42_i64);
+    ///
+    /// // Notice that a PathBuf is required which can easily be constructed from a string.
+    /// let result = engine.eval_file_with_scope::<i64>(&mut scope, "script.rhai".into())?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(not(feature = "no_std"))]
     pub fn eval_file_with_scope<T: Any + Clone>(
         &mut self,
@@ -152,12 +438,46 @@ impl<'e> Engine<'e> {
     }
 
     /// Evaluate a string.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// assert_eq!(engine.eval::<i64>("40 + 2")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn eval<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
         self.eval_with_scope(&mut scope, input)
     }
 
     /// Evaluate a string with own scope.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push("x", 40_i64);
+    ///
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 42);
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 44);
+    ///
+    /// // The variable in the scope is modified
+    /// assert_eq!(scope.get_value::<i64>("x").expect("variable x should exist"), 44);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn eval_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
@@ -167,13 +487,55 @@ impl<'e> Engine<'e> {
         self.eval_ast_with_scope(scope, &ast)
     }
 
-    /// Evaluate an AST.
+    /// Evaluate an `AST`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Compile a script to an AST and store it for later evaluations
+    /// let ast = engine.compile("40 + 2")?;
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn eval_ast<T: Any + Clone>(&mut self, ast: &AST) -> Result<T, EvalAltResult> {
         let mut scope = Scope::new();
         self.eval_ast_with_scope(&mut scope, ast)
     }
 
-    /// Evaluate an AST with own scope.
+    /// Evaluate an `AST` with own scope.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Compile a script to an AST and store it for later evaluations
+    /// let ast = engine.compile("x + 2")?;
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push("x", 40_i64);
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 42);
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 44);
+    ///
+    /// // The variable in the scope is modified
+    /// assert_eq!(scope.get_value::<i64>("x").expect("variable x should exist"), 44);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn eval_ast_with_scope<T: Any + Clone>(
         &mut self,
         scope: &mut Scope,
@@ -221,8 +583,7 @@ impl<'e> Engine<'e> {
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
     pub fn consume_file(
         &mut self,
@@ -235,8 +596,7 @@ impl<'e> Engine<'e> {
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
     pub fn consume_file_with_scope(
         &mut self,
@@ -251,8 +611,7 @@ impl<'e> Engine<'e> {
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume(&mut self, retain_functions: bool, input: &str) -> Result<(), EvalAltResult> {
         self.consume_with_scope(&mut Scope::new(), retain_functions, input)
     }
@@ -260,8 +619,7 @@ impl<'e> Engine<'e> {
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume_with_scope(
         &mut self,
         scope: &mut Scope,
@@ -279,17 +637,15 @@ impl<'e> Engine<'e> {
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume_ast(&mut self, retain_functions: bool, ast: &AST) -> Result<(), EvalAltResult> {
         self.consume_ast_with_scope(&mut Scope::new(), retain_functions, ast)
     }
 
-    /// Evaluate an AST with own scope, but throw away the result and only return error (if any).
+    /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    ///        and not cleared from run to run.
+    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume_ast_with_scope(
         &mut self,
         scope: &mut Scope,
@@ -341,7 +697,7 @@ impl<'e> Engine<'e> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// # #[cfg(not(feature = "no_stdlib"))]
     /// # #[cfg(not(feature = "no_function"))]
@@ -350,8 +706,10 @@ impl<'e> Engine<'e> {
     ///
     /// let mut engine = Engine::new();
     ///
+    /// // Set 'retain_functions' in 'consume' to keep the function definitions
     /// engine.consume(true, "fn add(x, y) { x.len() + y }")?;
     ///
+    /// // Call the script-defined function
     /// let result: i64 = engine.call_fn("add", (String::from("abc"), 123_i64))?;
     ///
     /// assert_eq!(result, 126);
@@ -388,17 +746,17 @@ impl<'e> Engine<'e> {
         })
     }
 
-    /// Optimize the AST with constants defined in an external Scope.
-    /// An optimized copy of the AST is returned while the original AST is untouched.
+    /// Optimize the `AST` with constants defined in an external Scope.
+    /// An optimized copy of the `AST` is returned while the original `AST` is untouched.
     ///
     /// Although optimization is performed by default during compilation, sometimes it is necessary to
     /// _re_-optimize an AST. For example, when working with constants that are passed in via an
-    /// external scope, it will be more efficient to optimize the AST once again to take advantage
+    /// external scope, it will be more efficient to optimize the `AST` once again to take advantage
     /// of the new constants.
     ///
-    /// With this method, it is no longer necessary to recompile a large script. The script AST can be
+    /// With this method, it is no longer necessary to recompile a large script. The script `AST` can be
     /// compiled just once. Before evaluation, constants are passed into the `Engine` via an external scope
-    /// (i.e. with `scope.push_constant(...)`). Then, the AST is cloned and the copy re-optimized before running.
+    /// (i.e. with `scope.push_constant(...)`). Then, the `AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
     pub fn optimize_ast(&self, scope: &Scope, ast: &AST) -> AST {
         let statements = ast.0.clone();
@@ -411,17 +769,17 @@ impl<'e> Engine<'e> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// use rhai::Engine;
     ///
     /// let mut result = String::from("");
     /// {
-    ///     let mut engine = Engine::new();
+    /// let mut engine = Engine::new();
     ///
-    ///     // Override action of 'print' function
-    ///     engine.on_print(|s| result.push_str(s));
-    ///     engine.consume(false, "print(40 + 2);")?;
+    /// // Override action of 'print' function
+    /// engine.on_print(|s| result.push_str(s));
+    /// engine.consume(false, "print(40 + 2);")?;
     /// }
     /// assert_eq!(result, "42");
     /// # Ok(())
@@ -435,17 +793,17 @@ impl<'e> Engine<'e> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// use rhai::Engine;
     ///
     /// let mut result = String::from("");
     /// {
-    ///     let mut engine = Engine::new();
+    /// let mut engine = Engine::new();
     ///
-    ///     // Override action of 'debug' function
-    ///     engine.on_debug(|s| result.push_str(s));
-    ///     engine.consume(false, r#"debug("hello");"#)?;
+    /// // Override action of 'debug' function
+    /// engine.on_debug(|s| result.push_str(s));
+    /// engine.consume(false, r#"debug("hello");"#)?;
     /// }
     /// assert_eq!(result, "\"hello\"");
     /// # Ok(())
