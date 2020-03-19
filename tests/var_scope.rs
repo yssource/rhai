@@ -42,10 +42,7 @@ fn test_scope_eval() -> Result<(), EvalAltResult> {
     assert_eq!(
         scope
             .get_value::<INT>("y")
-            .ok_or(EvalAltResult::ErrorRuntime(
-                "variable y not found".into(),
-                Default::default()
-            ))?,
+            .expect("variable y should exist"),
         1
     );
 
