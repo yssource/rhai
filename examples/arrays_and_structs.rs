@@ -10,7 +10,7 @@ impl TestStruct {
         self.x += 1000;
     }
 
-    fn new() -> TestStruct {
+    fn new() -> Self {
         TestStruct { x: 1 }
     }
 }

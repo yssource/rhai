@@ -12,7 +12,7 @@ fn test_method_call() -> Result<(), EvalAltResult> {
             self.x += 1000;
         }
 
-        fn new() -> TestStruct {
+        fn new() -> Self {
             TestStruct { x: 1 }
         }
     }

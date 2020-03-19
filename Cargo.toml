@@ -1,6 +1,6 @@
 [package]
 name = "rhai"
-version = "0.10.2"
+version = "0.11.0"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung"]
 description = "Embedded scripting for Rust"
@@ -13,9 +13,32 @@ include = [
     "scripts/*.rhai",
     "Cargo.toml"
 ]
+keywords = [ "scripting" ]
 
 [dependencies]
 num-traits = "0.2.11"
+
+[features]
+#default = ["no_function", "no_index", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize"]
+default = []
+unchecked = []      # unchecked arithmetic
+no_stdlib = []      # no standard library of utility functions
+no_index = []       # no arrays and indexing
+no_float = []       # no floating-point
+no_function = []    # no script-defined functions
+no_optimize = []    # no script optimizer
+optimize_full = []  # set optimization level to Full (default is Simple) - this is a feature used only to simplify testing
+only_i32 = []       # set INT=i32 (useful for 32-bit systems)
+only_i64 = []       # set INT=i64 (default) and disable support for all other integer types
+
+# compiling for no-std
+no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm" ]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+#opt-level = "z"     # optimize for size
+#panic = 'abort'     # remove stack backtrace for no-std
 
 [dependencies.libm]
 version = "0.2.1"
@@ -36,22 +59,3 @@ optional = true
 version = "0.3.2"
 default-features = false
 optional = true
-
-[features]
-#default = ["no_function", "no_index", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize"]
-default = [ "optimize_full" ]
-debug_msgs = []     # print debug messages on function registrations and calls
-unchecked = []      # unchecked arithmetic
-no_stdlib = ["num-traits/libm", "hashbrown", "core-error", "libm"]      # no standard library of utility functions
-no_index = []       # no arrays and indexing
-no_float = []       # no floating-point
-no_function = []    # no script-defined functions
-no_optimize = []    # no script optimizer
-optimize_full = []  # set optimization level to Full (default is Simple)
-only_i32 = []       # set INT=i32 (useful for 32-bit systems)
-only_i64 = []       # set INT=i64 (default) and disable support for all other integer types
-
-[profile.release]
-lto = "fat"
-codegen-units = 1
-#opt-level = "z"     # optimize for size

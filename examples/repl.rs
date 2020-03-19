@@ -36,10 +36,18 @@ fn print_error(input: &str, err: EvalAltResult) {
             );
 
             println!("{}", lines[p.line().unwrap() - 1]);
+
+            let err_text = match err {
+                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
+                    format!("Runtime error: {}", err)
+                }
+                _ => err.to_string(),
+            };
+
             println!(
                 "{}^ {}",
                 padding(" ", p.position().unwrap() - 1),
-                err.to_string().replace(&pos_text, "")
+                err_text.replace(&pos_text, "")
             );
         }
     }
@@ -86,7 +94,12 @@ fn main() {
             .map_err(EvalAltResult::ErrorParsing)
             .and_then(|r| {
                 ast = Some(r);
-                engine.consume_ast_with_scope(&mut scope, true, ast.as_ref().unwrap())
+                engine
+                    .consume_ast_with_scope(&mut scope, true, ast.as_ref().unwrap())
+                    .or_else(|err| match err {
+                        EvalAltResult::Return(_, _) => Ok(()),
+                        err => Err(err),
+                    })
             })
         {
             println!("");

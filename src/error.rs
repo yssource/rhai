@@ -1,6 +1,7 @@
 //! Module containing error definitions for the parsing process.
 
 use crate::parser::Position;
+
 use crate::stdlib::{char, error::Error, fmt, string::String};
 
 /// Error when tokenizing the script text.
@@ -58,6 +59,10 @@ pub enum ParseErrorType {
     /// An open `[` is missing the corresponding closing `]`.
     #[cfg(not(feature = "no_index"))]
     MissingRightBracket(String),
+    /// A list of expressions is missing the separating ','.
+    MissingComma(String),
+    /// A statement is missing the ending ';'.
+    MissingSemicolon(String),
     /// An expression in function call arguments `()` has syntax error.
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
@@ -78,12 +83,17 @@ pub enum ParseErrorType {
     /// A function definition is missing the parameters list. Wrapped value is the function name.
     #[cfg(not(feature = "no_function"))]
     FnMissingParams(String),
+    /// A function definition is missing the body. Wrapped value is the function name.
+    #[cfg(not(feature = "no_function"))]
+    FnMissingBody(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     AssignmentToInvalidLHS,
     /// Assignment to a copy of a value.
     AssignmentToCopy,
     /// Assignment to an a constant variable.
     AssignmentToConstant(String),
+    /// Break statement not inside a loop.
+    LoopBreak,
 }
 
 /// Error when parsing a script.
@@ -116,6 +126,8 @@ impl ParseError {
             ParseErrorType::MissingRightBrace(_) => "Expecting '}'",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
+            ParseErrorType::MissingComma(_) => "Expecting ','",
+            ParseErrorType::MissingSemicolon(_) => "Expecting ';'",
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
@@ -127,10 +139,13 @@ impl ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             #[cfg(not(feature = "no_function"))]
-            ParseErrorType::WrongFnDefinition => "Function definitions must be at top level and cannot be inside a block or another function",
+            ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
+            #[cfg(not(feature = "no_function"))]
+            ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
             ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
-            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable."
+            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable.",
+            ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
         }
     }
 }
@@ -158,12 +173,21 @@ impl fmt::Display for ParseError {
                 write!(f, "Expecting parameters for function '{}'", s)?
             }
 
+            #[cfg(not(feature = "no_function"))]
+            ParseErrorType::FnMissingBody(ref s) => {
+                write!(f, "Expecting body statement block for function '{}'", s)?
+            }
+
             ParseErrorType::MissingRightParen(ref s) | ParseErrorType::MissingRightBrace(ref s) => {
                 write!(f, "{} for {}", self.desc(), s)?
             }
 
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MissingRightBracket(ref s) => write!(f, "{} for {}", self.desc(), s)?,
+
+            ParseErrorType::MissingSemicolon(ref s) | ParseErrorType::MissingComma(ref s) => {
+                write!(f, "{} for {}", self.desc(), s)?
+            }
 
             ParseErrorType::AssignmentToConstant(ref s) if s.is_empty() => {
                 write!(f, "{}", self.desc())?

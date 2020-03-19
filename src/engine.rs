@@ -57,7 +57,7 @@ pub struct FnSpec<'a> {
 
 /// Rhai main scripting engine.
 ///
-/// ```rust
+/// ```
 /// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::Engine;
 ///
@@ -165,16 +165,6 @@ impl Engine<'_> {
         def_val: Option<&Dynamic>,
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
-        debug_println!(
-            "Calling function: {} ({})",
-            fn_name,
-            args.iter()
-                .map(|x| (*x).type_name())
-                .map(|name| self.map_type_name(name))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
         // First search in script-defined functions (can override built-in)
         if let Ok(n) = self
             .script_functions
@@ -1031,30 +1021,29 @@ impl Engine<'_> {
             // Block scope
             Stmt::Block(block, _) => {
                 let prev_len = scope.len();
-                let mut last_result: Result<Dynamic, EvalAltResult> = Ok(().into_dynamic());
+                let mut result: Result<Dynamic, EvalAltResult> = Ok(().into_dynamic());
 
-                for block_stmt in block.iter() {
-                    last_result = self.eval_stmt(scope, block_stmt);
+                for stmt in block.iter() {
+                    result = self.eval_stmt(scope, stmt);
 
-                    if let Err(x) = last_result {
-                        last_result = Err(x);
+                    if result.is_err() {
                         break;
                     }
                 }
 
                 scope.rewind(prev_len);
 
-                last_result
+                result
             }
 
             // If-else statement
-            Stmt::IfElse(guard, body, else_body) => self
+            Stmt::IfElse(guard, if_body, else_body) => self
                 .eval_expr(scope, guard)?
                 .downcast::<bool>()
                 .map_err(|_| EvalAltResult::ErrorIfGuard(guard.position()))
                 .and_then(|guard_val| {
                     if *guard_val {
-                        self.eval_stmt(scope, body)
+                        self.eval_stmt(scope, if_body)
                     } else if let Some(stmt) = else_body {
                         self.eval_stmt(scope, stmt.as_ref())
                     } else {
@@ -1069,7 +1058,9 @@ impl Engine<'_> {
                         if *guard_val {
                             match self.eval_stmt(scope, body) {
                                 Ok(_) => (),
-                                Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
+                                Err(EvalAltResult::ErrorLoopBreak(_)) => {
+                                    return Ok(().into_dynamic())
+                                }
                                 Err(x) => return Err(x),
                             }
                         } else {
@@ -1084,7 +1075,7 @@ impl Engine<'_> {
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, body) {
                     Ok(_) => (),
-                    Err(EvalAltResult::LoopBreak) => return Ok(().into_dynamic()),
+                    Err(EvalAltResult::ErrorLoopBreak(_)) => return Ok(().into_dynamic()),
                     Err(x) => return Err(x),
                 }
             },
@@ -1103,7 +1094,7 @@ impl Engine<'_> {
 
                         match self.eval_stmt(scope, body) {
                             Ok(_) => (),
-                            Err(EvalAltResult::LoopBreak) => break,
+                            Err(EvalAltResult::ErrorLoopBreak(_)) => break,
                             Err(x) => return Err(x),
                         }
                     }
@@ -1115,7 +1106,7 @@ impl Engine<'_> {
             }
 
             // Break statement
-            Stmt::Break(_) => Err(EvalAltResult::LoopBreak),
+            Stmt::Break(pos) => Err(EvalAltResult::ErrorLoopBreak(*pos)),
 
             // Empty return
             Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
@@ -1181,11 +1172,12 @@ impl Engine<'_> {
 }
 
 /// Print/debug to stdout
+#[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_stdlib"))]
 fn default_print(s: &str) {
     println!("{}", s);
 }
 
 /// No-op
-#[cfg(feature = "no_stdlib")]
+#[cfg(any(feature = "no_std", feature = "no_stdlib"))]
 fn default_print(_: &str) {}

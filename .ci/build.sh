@@ -7,7 +7,7 @@ cargo test --verbose
 
 if [ "$TRAVIS_RUST_VERSION" = "nightly" ]
 then
-    cargo build --verbose --features no_stdlib
-    cargo test --verbose --features no_stdlib
+    cargo build --verbose --features no_std
+    cargo test --verbose --features no_std
 fi
 

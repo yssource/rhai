@@ -1,95 +1,99 @@
 //! Module which defines the function registration mechanism.
 
+#![allow(non_snake_case)]
+
 use crate::any::{Any, Dynamic};
 use crate::engine::{Engine, FnCallArgs};
 use crate::parser::Position;
 use crate::result::EvalAltResult;
+
 use crate::stdlib::{any::TypeId, boxed::Box, string::ToString, vec};
 
 /// A trait to register custom functions with the `Engine`.
-///
-/// # Example
-///
-/// ```rust
-/// # fn main() -> Result<(), rhai::EvalAltResult> {
-/// use rhai::{Engine, RegisterFn};
-///
-/// // Normal function
-/// fn add(x: i64, y: i64) -> i64 {
-///     x + y
-/// }
-///
-/// let mut engine = Engine::new();
-///
-/// // You must use the trait rhai::RegisterFn to get this method.
-/// engine.register_fn("add", add);
-///
-/// let result = engine.eval::<i64>("add(40, 2)")?;
-///
-/// println!("Answer: {}", result);  // prints 42
-/// # Ok(())
-/// # }
-/// ```
 pub trait RegisterFn<FN, ARGS, RET> {
     /// Register a custom function with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// // Normal function
+    /// fn add(x: i64, y: i64) -> i64 {
+    ///     x + y
+    /// }
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // You must use the trait rhai::RegisterFn to get this method.
+    /// engine.register_fn("add", add);
+    ///
+    /// assert_eq!(engine.eval::<i64>("add(40, 2)")?, 42);
+    ///
+    /// // You can also register a closure.
+    /// engine.register_fn("sub", |x: i64, y: i64| x - y );
+    ///
+    /// assert_eq!(engine.eval::<i64>("sub(44, 2)")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
     fn register_fn(&mut self, name: &str, f: FN);
 }
 
 /// A trait to register custom functions that return `Dynamic` values with the `Engine`.
-///
-/// # Example
-///
-/// ```rust
-/// # fn main() -> Result<(), rhai::EvalAltResult> {
-/// use rhai::{Engine, Dynamic, RegisterDynamicFn};
-///
-/// // Function that returns a Dynamic value
-/// fn get_an_any(x: i64) -> Dynamic {
-///     Box::new(x)
-/// }
-///
-/// let mut engine = Engine::new();
-///
-/// // You must use the trait rhai::RegisterDynamicFn to get this method.
-/// engine.register_dynamic_fn("get_an_any", get_an_any);
-///
-/// let result = engine.eval::<i64>("get_an_any(42)")?;
-///
-/// println!("Answer: {}", result);  // prints 42
-/// # Ok(())
-/// # }
-/// ```
 pub trait RegisterDynamicFn<FN, ARGS> {
     /// Register a custom function returning `Dynamic` values with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, Dynamic, RegisterDynamicFn};
+    ///
+    /// // Function that returns a Dynamic value
+    /// fn return_the_same_as_dynamic(x: i64) -> Dynamic {
+    ///     Box::new(x)
+    /// }
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // You must use the trait rhai::RegisterDynamicFn to get this method.
+    /// engine.register_dynamic_fn("get_any_number", return_the_same_as_dynamic);
+    ///
+    /// assert_eq!(engine.eval::<i64>("get_any_number(42)")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
     fn register_dynamic_fn(&mut self, name: &str, f: FN);
 }
 
 /// A trait to register fallible custom functions returning Result<_, EvalAltResult> with the `Engine`.
-///
-/// # Example
-///
-/// ```rust
-/// # fn main() -> Result<(), rhai::EvalAltResult> {
-/// use rhai::{Engine, RegisterFn};
-///
-/// // Normal function
-/// fn add(x: i64, y: i64) -> i64 {
-///     x + y
-/// }
-///
-/// let mut engine = Engine::new();
-///
-/// // You must use the trait rhai::RegisterFn to get this method.
-/// engine.register_fn("add", add);
-///
-/// let result = engine.eval::<i64>("add(40, 2)")?;
-///
-/// println!("Answer: {}", result);  // prints 42
-/// # Ok(())
-/// # }
-/// ```
 pub trait RegisterResultFn<FN, ARGS, RET> {
-    /// Register a custom function with the `Engine`.
+    /// Register a custom fallible function with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Engine, RegisterResultFn, EvalAltResult};
+    ///
+    /// // Normal function
+    /// fn div(x: i64, y: i64) -> Result<i64, EvalAltResult> {
+    ///     if y == 0 {
+    ///         Err("division by zero!".into())     // '.into()' automatically converts to 'EvalAltResult::ErrorRuntime'
+    ///     } else {
+    ///         Ok(x / y)
+    ///     }
+    /// }
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // You must use the trait rhai::RegisterResultFn to get this method.
+    /// engine.register_result_fn("div", div);
+    ///
+    /// engine.eval::<i64>("div(42, 0)")
+    ///         .expect_err("expecting division by zero error!");
+    /// ```
     fn register_result_fn(&mut self, name: &str, f: FN);
 }
 

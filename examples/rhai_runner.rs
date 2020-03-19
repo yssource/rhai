@@ -31,7 +31,13 @@ fn eprint_error(input: &str, err: EvalAltResult) {
             // EOF
             let line = lines.len() - 1;
             let pos = lines[line - 1].len();
-            eprint_line(&lines, line, pos, &err.to_string());
+            let err_text = match err {
+                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
+                    format!("Runtime error: {}", err)
+                }
+                _ => err.to_string(),
+            };
+            eprint_line(&lines, line, pos, &err_text);
         }
         p if p.is_none() => {
             // No position

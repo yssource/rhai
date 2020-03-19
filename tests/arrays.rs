@@ -35,7 +35,7 @@ fn test_array_with_structs() -> Result<(), EvalAltResult> {
             self.x = new_x;
         }
 
-        fn new() -> TestStruct {
+        fn new() -> Self {
             TestStruct { x: 1 }
         }
     }

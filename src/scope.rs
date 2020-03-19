@@ -36,7 +36,7 @@ pub struct ScopeEntry<'a> {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```
 /// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::{Engine, Scope};
 ///

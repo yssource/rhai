@@ -5,7 +5,7 @@
 //! It provides a familiar syntax based on JS and Rust and a simple Rust interface.
 //! Here is a quick example. First, the contents of `my_script.rhai`:
 //!
-//! ```rust,ignore
+//! ```,ignore
 //! fn factorial(x) {
 //!     if x == 1 { return 1; }
 //!	    x * factorial(x - 1)
@@ -16,7 +16,7 @@
 //!
 //! And the Rust part:
 //!
-//! ```rust,ignore
+//! ```,no_run
 //! use rhai::{Engine, EvalAltResult, RegisterFn};
 //!
 //! fn main() -> Result<(), EvalAltResult>
@@ -29,6 +29,7 @@
 //!
 //!     engine.register_fn("compute_something", compute_something);
 //!
+//! # #[cfg(not(feature = "no_std"))]
 //!     assert_eq!(engine.eval_file::<bool>("my_script.rhai".into())?, true);
 //!
 //!     Ok(())
@@ -37,36 +38,11 @@
 //!
 //! [Check out the README on GitHub for more information!](https://github.com/jonathandturner/rhai)
 
-#![cfg_attr(feature = "no_stdlib", no_std)]
-#![allow(non_snake_case)]
+#![cfg_attr(feature = "no_std", no_std)]
 
-#[cfg(feature = "no_stdlib")]
+#[cfg(feature = "no_std")]
 extern crate alloc;
 
-// needs to be here, because order matters for macros
-macro_rules! debug_println {
-    () => (
-        #[cfg(feature = "debug_msgs")]
-        {
-            print!("\n");
-        }
-    );
-    ($fmt:expr) => (
-        #[cfg(feature = "debug_msgs")]
-        {
-            print!(concat!($fmt, "\n"));
-        }
-    );
-    ($fmt:expr, $($arg:tt)*) => (
-        #[cfg(feature = "debug_msgs")]
-        {
-            print!(concat!($fmt, "\n"), $($arg)*);
-        }
-    );
-}
-
-#[macro_use]
-mod stdlib;
 mod any;
 mod api;
 mod builtin;
@@ -78,6 +54,7 @@ mod optimize;
 mod parser;
 mod result;
 mod scope;
+mod stdlib;
 
 pub use any::{Any, AnyExt, Dynamic, Variant};
 pub use call::FuncArgs;

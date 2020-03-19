@@ -10,7 +10,7 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-#[cfg(not(feature = "no_stdlib"))]
+#[cfg(not(feature = "no_std"))]
 use crate::stdlib::path::PathBuf;
 
 /// Evaluation result.
@@ -54,7 +54,7 @@ pub enum EvalAltResult {
     /// Wrapped value is the type of the actual result.
     ErrorMismatchOutputType(String, Position),
     /// Error reading from a script file. Wrapped value is the path of the script file.
-    #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_std"))]
     ErrorReadingScriptFile(PathBuf, std::io::Error),
     /// Inappropriate member access.
     ErrorDotExpr(String, Position),
@@ -62,8 +62,8 @@ pub enum EvalAltResult {
     ErrorArithmetic(String, Position),
     /// Run-time error encountered. Wrapped value is the error message.
     ErrorRuntime(String, Position),
-    /// Internal use: Breaking out of loops.
-    LoopBreak,
+    /// Breaking out of loops - not an error if within a loop.
+    ErrorLoopBreak(Position),
     /// Not an error: Value returned from a script via the `return` keyword.
     /// Wrapped value is the result value.
     Return(Dynamic, Position),
@@ -101,12 +101,12 @@ impl EvalAltResult {
             }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorRuntime(_, _) => "Runtime error",
-            Self::LoopBreak => "[Not Error] Breaks out of loop",
+            Self::ErrorLoopBreak(_) => "Break statement not inside a loop",
             Self::Return(_, _) => "[Not Error] Function returns value",
         }
     }
@@ -134,9 +134,9 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorRuntime(s, pos) => {
                 write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
             }
-            Self::LoopBreak => write!(f, "{}", desc),
+            Self::ErrorLoopBreak(pos) => write!(f, "{} ({})", desc, pos),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(path, err) => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)
             }
@@ -209,9 +209,8 @@ impl<T: AsRef<str>> From<T> for EvalAltResult {
 impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => Position::none(),
-            Self::LoopBreak => Position::none(),
 
             Self::ErrorParsing(err) => err.position(),
 
@@ -232,15 +231,15 @@ impl EvalAltResult {
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorRuntime(_, pos)
+            | Self::ErrorLoopBreak(pos)
             | Self::Return(_, pos) => *pos,
         }
     }
 
     pub(crate) fn set_position(&mut self, new_position: Position) {
         match self {
-            #[cfg(not(feature = "no_stdlib"))]
+            #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => (),
-            Self::LoopBreak => (),
 
             Self::ErrorParsing(ParseError(_, ref mut pos))
             | Self::ErrorFunctionNotFound(_, ref mut pos)
@@ -260,6 +259,7 @@ impl EvalAltResult {
             | Self::ErrorDotExpr(_, ref mut pos)
             | Self::ErrorArithmetic(_, ref mut pos)
             | Self::ErrorRuntime(_, ref mut pos)
+            | Self::ErrorLoopBreak(ref mut pos)
             | Self::Return(_, ref mut pos) => *pos = new_position,
         }
     }

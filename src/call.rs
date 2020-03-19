@@ -1,10 +1,13 @@
 //! Helper module which defines `FnArgs` to make function calling easier.
 
+#![allow(non_snake_case)]
+
 use crate::any::{Any, Dynamic};
-use crate::stdlib::{string::String, vec, vec::Vec};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
+
+use crate::stdlib::{string::String, vec, vec::Vec};
 
 /// Trait that represent arguments to a function call.
 pub trait FuncArgs {
