@@ -71,7 +71,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Add (push) a new variable to the Scope.
-    pub fn push<K: Into<Cow<'a, str>>, T: Any>(&mut self, name: K, value: T) {
+    pub fn push<K: Into<Cow<'a, str>>, T: Any + Clone>(&mut self, name: K, value: T) {
         let value = value.into_dynamic();
 
         // Map into constant expressions
@@ -91,7 +91,7 @@ impl<'a> Scope<'a> {
     /// Constants propagation is a technique used to optimize an AST.
     /// However, in order to be used for optimization, constants must be in one of the recognized types:
     /// `INT` (default to `i64`, `i32` if `only_i32`), `f64`, `String`, `char` and `bool`.
-    pub fn push_constant<K: Into<Cow<'a, str>>, T: Any>(&mut self, name: K, value: T) {
+    pub fn push_constant<K: Into<Cow<'a, str>>, T: Any + Clone>(&mut self, name: K, value: T) {
         let value = value.into_dynamic();
 
         // Map into constant expressions

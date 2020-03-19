@@ -2,7 +2,8 @@
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::scope::{Scope, ScopeEntry, VariableType};
@@ -287,7 +288,7 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
 /// Optimize an expression.
 fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
     // These keywords are handled specially
-    const SKIP_FUNC_KEYWORDS: [&str; 3] = [KEYWORD_PRINT, KEYWORD_DEBUG, KEYWORD_DUMP_AST];
+    const DONT_EVAL_KEYWORDS: [&str; 3] = [KEYWORD_PRINT, KEYWORD_DEBUG, KEYWORD_EVAL];
 
     match expr {
         // ( stmt )
@@ -431,9 +432,15 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             ),
         },
 
-        // Do not optimize anything within built-in function keywords
-        Expr::FunctionCall(id, args, def_value, pos) if SKIP_FUNC_KEYWORDS.contains(&id.as_str())=>
+        // Do not optimize anything within dump_ast
+        Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST =>
             Expr::FunctionCall(id, args, def_value, pos),
+
+        // Do not optimize anything within built-in function keywords
+        Expr::FunctionCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_str())=>
+            Expr::FunctionCall(id,
+                args.into_iter().map(|a| optimize_expr(a, state)).collect(),
+                def_value, pos),
 
         // Eagerly call functions
         Expr::FunctionCall(id, args, def_value, pos)
@@ -467,9 +474,13 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     })
             ).flatten().unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
         }
+
         // id(args ..) -> optimize function call arguments
         Expr::FunctionCall(id, args, def_value, pos) =>
-            Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
+            Expr::FunctionCall(id,
+                args.into_iter().map(|a| optimize_expr(a, state)).collect(),
+                def_value, pos),
+
         // constant-name
         Expr::Variable(ref name, _) if state.contains_constant(name) => {
             state.set_dirty();
@@ -480,6 +491,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 .expect("should find constant in scope!")
                 .clone()
         }
+
         // All other expressions - skip
         expr => expr,
     }

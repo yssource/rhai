@@ -469,6 +469,10 @@ pub enum Token {
     UnaryMinus,
     Multiply,
     Divide,
+    Modulo,
+    PowerOf,
+    LeftShift,
+    RightShift,
     SemiColon,
     Colon,
     Comma,
@@ -482,15 +486,18 @@ pub enum Token {
     Else,
     While,
     Loop,
+    For,
+    In,
     LessThan,
     GreaterThan,
-    Bang,
     LessThanEqualsTo,
     GreaterThanEqualsTo,
     EqualsTo,
     NotEqualsTo,
+    Bang,
     Pipe,
     Or,
+    XOr,
     Ampersand,
     And,
     #[cfg(not(feature = "no_function"))]
@@ -507,15 +514,8 @@ pub enum Token {
     AndAssign,
     OrAssign,
     XOrAssign,
-    LeftShift,
-    RightShift,
-    XOr,
-    Modulo,
     ModuloAssign,
-    PowerOf,
     PowerOfAssign,
-    For,
-    In,
     LexError(LexError),
 }
 
@@ -2210,31 +2210,27 @@ fn parse_stmt<'a>(
             Ok(Stmt::Break(pos))
         }
         (Token::Break, pos) => return Err(ParseError::new(PERR::LoopBreak, *pos)),
-        (token @ Token::Return, _) | (token @ Token::Throw, _) => {
+        (token @ Token::Return, pos) | (token @ Token::Throw, pos) => {
             let return_type = match token {
                 Token::Return => ReturnType::Return,
                 Token::Throw => ReturnType::Exception,
                 _ => panic!("token should be return or throw"),
             };
 
+            let pos = *pos;
             input.next();
 
             match input.peek() {
                 // `return`/`throw` at EOF
                 None => Ok(Stmt::ReturnWithVal(None, return_type, Position::eof())),
                 // `return;` or `throw;`
-                Some((Token::SemiColon, pos)) => {
-                    let pos = *pos;
-                    Ok(Stmt::ReturnWithVal(None, return_type, pos))
-                }
+                Some((Token::SemiColon, _)) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
                 // `return` or `throw` with expression
-                Some((_, pos)) => {
-                    let pos = *pos;
-                    Ok(Stmt::ReturnWithVal(
-                        Some(Box::new(parse_expr(input)?)),
-                        return_type,
-                        pos,
-                    ))
+                Some((_, _)) => {
+                    let expr = parse_expr(input)?;
+                    let pos = expr.position();
+
+                    Ok(Stmt::ReturnWithVal(Some(Box::new(expr)), return_type, pos))
                 }
             }
         }

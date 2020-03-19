@@ -2,7 +2,7 @@
 
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
-use crate::engine::{Engine, FnAny, FnSpec};
+use crate::engine::{Engine, FnAny, FnSpec, FUNC_GETTER, FUNC_SETTER};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, FnDef, Position, AST};
@@ -173,8 +173,8 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T) -> U + 'static,
     ) {
-        let get_name = "get$".to_string() + name;
-        self.register_fn(&get_name, callback);
+        let get_fn_name = format!("{}{}", FUNC_GETTER, name);
+        self.register_fn(&get_fn_name, callback);
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
@@ -215,8 +215,8 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T, U) -> () + 'static,
     ) {
-        let set_name = "set$".to_string() + name;
-        self.register_fn(&set_name, callback);
+        let set_fn_name = format!("{}{}", FUNC_SETTER, name);
+        self.register_fn(&set_fn_name, callback);
     }
 
     /// Shorthand for registering both getter and setter functions
@@ -264,7 +264,7 @@ impl<'e> Engine<'e> {
         self.register_set(name, set_fn);
     }
 
-    /// Compile a string into an `AST`, which can be used later for evaluations.
+    /// Compile a string into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
     ///
@@ -274,7 +274,7 @@ impl<'e> Engine<'e> {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Compile a script to an AST and store it for later evaluations
+    /// // Compile a script to an AST and store it for later evaluation
     /// let ast = engine.compile("40 + 2")?;
     ///
     /// for _ in 0..42 {
@@ -287,27 +287,40 @@ impl<'e> Engine<'e> {
         self.compile_with_scope(&Scope::new(), input)
     }
 
-    /// Compile a string into an `AST` using own scope, which can be used later for evaluations.
-    /// The scope is useful for passing constants into the script for optimization.
+    /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
+    /// The scope is useful for passing constants into the script for optimization
+    /// when using `OptimizationLevel::Full`.
     ///
     /// # Example
     ///
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// use rhai::{Engine, Scope};
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// # {
+    /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
+    ///
+    /// // Set optimization level to 'Full' so the Engine can fold constants
+    /// // into function calls and operators.
+    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
     /// scope.push_constant("x", 42_i64);   // 'x' is a constant
     ///
-    /// // Compile a script to an AST and store it for later evaluations
+    /// // Compile a script to an AST and store it for later evaluation.
+    /// // Notice that `Full` optimization is on, so constants are folded
+    /// // into function calls and operators.
     /// let ast = engine.compile_with_scope(&mut scope,
-    ///             "if x > 40 { x } else { 0 }"
+    ///             "if x > 40 { x } else { 0 }"    // all 'x' are replaced with 42
     /// )?;
     ///
+    /// // Normally this would have failed because no scope is passed into the 'eval_ast'
+    /// // call and so the variable 'x' does not exist.  Here, it passes because the script
+    /// // has been optimized and all references to 'x' are already gone.
     /// assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
@@ -329,7 +342,7 @@ impl<'e> Engine<'e> {
             .map(|_| contents)
     }
 
-    /// Compile a script file into an `AST`, which can be used later for evaluations.
+    /// Compile a script file into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
     ///
@@ -339,7 +352,7 @@ impl<'e> Engine<'e> {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Compile a script file to an AST and store it for later evaluations
+    /// // Compile a script file to an AST and store it for later evaluation.
     /// // Notice that a PathBuf is required which can easily be constructed from a string.
     /// let ast = engine.compile_file("script.rhai".into())?;
     ///
@@ -354,26 +367,33 @@ impl<'e> Engine<'e> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
 
-    /// Compile a script file into an `AST` using own scope, which can be used later for evaluations.
-    /// The scope is useful for passing constants into the script for optimization.
+    /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
+    /// The scope is useful for passing constants into the script for optimization
+    /// when using `OptimizationLevel::Full`.
     ///
     /// # Example
     ///
     /// ```no_run
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// use rhai::{Engine, Scope};
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// # {
+    /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
+    ///
+    /// // Set optimization level to 'Full' so the Engine can fold constants.
+    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
     /// scope.push_constant("x", 42_i64);   // 'x' is a constant
     ///
-    /// // Compile a script to an AST and store it for later evaluations
+    /// // Compile a script to an AST and store it for later evaluation.
     /// // Notice that a PathBuf is required which can easily be constructed from a string.
     /// let ast = engine.compile_file_with_scope(&mut scope, "script.rhai".into())?;
     ///
     /// let result = engine.eval_ast::<i64>(&ast)?;
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
@@ -491,13 +511,13 @@ impl<'e> Engine<'e> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Compile a script to an AST and store it for later evaluations
+    /// // Compile a script to an AST and store it for later evaluation
     /// let ast = engine.compile("40 + 2")?;
     ///
     /// // Evaluate it
@@ -514,22 +534,25 @@ impl<'e> Engine<'e> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// use rhai::{Engine, Scope};
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Compile a script to an AST and store it for later evaluations
+    /// // Compile a script to an AST and store it for later evaluation
     /// let ast = engine.compile("x + 2")?;
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
     /// scope.push("x", 40_i64);
     ///
+    /// // Compile a script to an AST and store it for later evaluation
+    /// let ast = engine.compile("x = x + 2; x")?;
+    ///
     /// // Evaluate it
-    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 42);
-    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 44);
+    /// assert_eq!(engine.eval_ast_with_scope::<i64>(&mut scope, &ast)?, 42);
+    /// assert_eq!(engine.eval_ast_with_scope::<i64>(&mut scope, &ast)?, 44);
     ///
     /// // The variable in the scope is modified
     /// assert_eq!(scope.get_value::<i64>("x").expect("variable x should exist"), 44);
@@ -541,12 +564,32 @@ impl<'e> Engine<'e> {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
+        self.eval_ast_with_scope_raw(scope, false, ast)
+            .and_then(|out| {
+                out.downcast::<T>().map(|v| *v).map_err(|a| {
+                    EvalAltResult::ErrorMismatchOutputType(
+                        self.map_type_name((*a).type_name()).to_string(),
+                        Position::none(),
+                    )
+                })
+            })
+    }
+
+    pub(crate) fn eval_ast_with_scope_raw(
+        &mut self,
+        scope: &mut Scope,
+        retain_functions: bool,
+        ast: &AST,
+    ) -> Result<Dynamic, EvalAltResult> {
         fn eval_ast_internal(
             engine: &mut Engine,
             scope: &mut Scope,
+            retain_functions: bool,
             ast: &AST,
         ) -> Result<Dynamic, EvalAltResult> {
-            engine.clear_functions();
+            if !retain_functions {
+                engine.clear_functions();
+            }
 
             let statements = {
                 let AST(statements, functions) = ast;
@@ -560,24 +603,17 @@ impl<'e> Engine<'e> {
                 result = engine.eval_stmt(scope, stmt)?;
             }
 
-            engine.clear_functions();
+            if !retain_functions {
+                engine.clear_functions();
+            }
 
             Ok(result)
         }
 
-        eval_ast_internal(self, scope, ast)
-            .or_else(|err| match err {
-                EvalAltResult::Return(out, _) => Ok(out),
-                _ => Err(err),
-            })
-            .and_then(|out| {
-                out.downcast::<T>().map(|v| *v).map_err(|a| {
-                    EvalAltResult::ErrorMismatchOutputType(
-                        self.map_type_name((*a).type_name()).to_string(),
-                        Position::eof(),
-                    )
-                })
-            })
+        eval_ast_internal(self, scope, retain_functions, ast).or_else(|err| match err {
+            EvalAltResult::Return(out, _) => Ok(out),
+            _ => Err(err),
+        })
     }
 
     /// Evaluate a file, but throw away the result and only return error (if any).
@@ -729,9 +765,10 @@ impl<'e> Engine<'e> {
             name: &str,
             mut values: Vec<Dynamic>,
         ) -> Result<Dynamic, EvalAltResult> {
+            let mut scope = Scope::new();
             let values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
-            let result = engine.call_fn_raw(name, values, None, Position::none());
+            let result = engine.call_fn_raw(&mut scope, name, values, None, Position::none());
 
             result
         }

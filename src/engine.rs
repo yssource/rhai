@@ -38,6 +38,7 @@ pub(crate) const KEYWORD_PRINT: &'static str = "print";
 pub(crate) const KEYWORD_DEBUG: &'static str = "debug";
 pub(crate) const KEYWORD_DUMP_AST: &'static str = "dump_ast";
 pub(crate) const KEYWORD_TYPE_OF: &'static str = "type_of";
+pub(crate) const KEYWORD_EVAL: &'static str = "eval";
 pub(crate) const FUNC_GETTER: &'static str = "get$";
 pub(crate) const FUNC_SETTER: &'static str = "set$";
 
@@ -160,6 +161,7 @@ impl Engine<'_> {
     /// registered with the `Engine` or written in Rhai
     pub(crate) fn call_fn_raw(
         &mut self,
+        scope: &mut Scope,
         fn_name: &str,
         args: FnCallArgs,
         def_val: Option<&Dynamic>,
@@ -185,10 +187,15 @@ impl Engine<'_> {
 
             // Evaluate
             // Convert return statement to return value
-            return match self.eval_stmt(&mut scope, &fn_def.body) {
-                Err(EvalAltResult::Return(x, _)) => Ok(x),
-                other => other,
-            };
+            return self
+                .eval_stmt(&mut scope, &fn_def.body)
+                .or_else(|mut err| match err {
+                    EvalAltResult::Return(x, _) => Ok(x),
+                    _ => {
+                        err.set_position(pos);
+                        Err(err)
+                    }
+                });
         }
 
         let spec = FnSpec {
@@ -196,24 +203,26 @@ impl Engine<'_> {
             args: Some(args.iter().map(|a| Any::type_id(&**a)).collect()),
         };
 
+        // Argument must be a string
+        fn cast_to_string<'a>(r: &'a Variant, pos: Position) -> Result<&'a str, EvalAltResult> {
+            r.downcast_ref::<String>()
+                .map(String::as_str)
+                .ok_or_else(|| EvalAltResult::ErrorMismatchOutputType(r.type_name().into(), pos))
+        }
+
         // Search built-in's and external functions
         if let Some(func) = self.ext_functions.get(&spec) {
             // Run external function
             let result = func(args, pos)?;
 
             // See if the function match print/debug (which requires special processing)
-            let callback = match fn_name {
-                KEYWORD_PRINT => self.on_print.as_mut(),
-                KEYWORD_DEBUG => self.on_debug.as_mut(),
-                _ => return Ok(result),
-            };
+            match fn_name {
+                KEYWORD_PRINT => self.on_print.as_mut()(cast_to_string(result.as_ref(), pos)?),
+                KEYWORD_DEBUG => self.on_debug.as_mut()(cast_to_string(result.as_ref(), pos)?),
+                _ => (),
+            }
 
-            let val = &result
-                .downcast::<String>()
-                .map(|s| *s)
-                .unwrap_or("error: not a string".into());
-
-            return Ok(callback(val).into_dynamic());
+            return Ok(result);
         }
 
         if fn_name == KEYWORD_TYPE_OF && args.len() == 1 {
@@ -222,6 +231,32 @@ impl Engine<'_> {
                 .map_type_name(args[0].type_name())
                 .to_string()
                 .into_dynamic());
+        }
+
+        if fn_name == KEYWORD_EVAL && args.len() == 1 {
+            // Handle `eval` function
+            let script = cast_to_string(args[0], pos)?;
+
+            #[cfg(not(feature = "no_optimize"))]
+            let ast = {
+                let orig_optimization_level = self.optimization_level;
+
+                self.set_optimization_level(OptimizationLevel::None);
+                let ast = self.compile(script);
+                self.set_optimization_level(orig_optimization_level);
+
+                ast.map_err(EvalAltResult::ErrorParsing)?
+            };
+
+            #[cfg(feature = "no_optimize")]
+            let ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
+
+            return Ok(self
+                .eval_ast_with_scope_raw(scope, true, &ast)
+                .map_err(|mut err| {
+                    err.set_position(pos);
+                    err
+                })?);
         }
 
         if fn_name.starts_with(FUNC_GETTER) {
@@ -283,14 +318,14 @@ impl Engine<'_> {
                     .chain(values.iter_mut().map(Dynamic::as_mut))
                     .collect();
 
-                self.call_fn_raw(fn_name, args, def_val.as_ref(), *pos)
+                self.call_fn_raw(scope, fn_name, args, def_val.as_ref(), *pos)
             }
 
             // xxx.id
             Expr::Property(id, pos) => {
                 let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                self.call_fn_raw(scope, &get_fn_name, vec![this_ptr], None, *pos)
             }
 
             // xxx.idx_lhs[idx_expr]
@@ -301,7 +336,7 @@ impl Engine<'_> {
                     Expr::Property(id, pos) => {
                         let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                         (
-                            self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
+                            self.call_fn_raw(scope, &get_fn_name, vec![this_ptr], None, *pos)?,
                             *pos,
                         )
                     }
@@ -329,7 +364,7 @@ impl Engine<'_> {
                 Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                    self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                    self.call_fn_raw(scope, &get_fn_name, vec![this_ptr], None, *pos)
                         .and_then(|mut v| self.get_dot_val_helper(scope, v.as_mut(), rhs))
                 }
                 // xxx.idx_lhs[idx_expr].rhs
@@ -340,7 +375,7 @@ impl Engine<'_> {
                         Expr::Property(id, pos) => {
                             let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                             (
-                                self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
+                                self.call_fn_raw(scope, &get_fn_name, vec![this_ptr], None, *pos)?,
                                 *pos,
                             )
                         }
@@ -642,7 +677,13 @@ impl Engine<'_> {
             Expr::Property(id, pos) => {
                 let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
-                self.call_fn_raw(&set_fn_name, vec![this_ptr, new_val.as_mut()], None, *pos)
+                self.call_fn_raw(
+                    scope,
+                    &set_fn_name,
+                    vec![this_ptr, new_val.as_mut()],
+                    None,
+                    *pos,
+                )
             }
 
             // xxx.lhs[idx_expr]
@@ -653,14 +694,20 @@ impl Engine<'_> {
                 Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                    self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                    self.call_fn_raw(scope, &get_fn_name, vec![this_ptr], None, *pos)
                         .and_then(|v| {
                             let idx = self.eval_index_value(scope, idx_expr)?;
                             Self::update_indexed_value(v, idx as usize, new_val, val_pos)
                         })
                         .and_then(|mut v| {
                             let set_fn_name = format!("{}{}", FUNC_SETTER, id);
-                            self.call_fn_raw(&set_fn_name, vec![this_ptr, v.as_mut()], None, *pos)
+                            self.call_fn_raw(
+                                scope,
+                                &set_fn_name,
+                                vec![this_ptr, v.as_mut()],
+                                None,
+                                *pos,
+                            )
                         })
                 }
 
@@ -677,7 +724,7 @@ impl Engine<'_> {
                 Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                    self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                    self.call_fn_raw(scope, &get_fn_name, vec![this_ptr], None, *pos)
                         .and_then(|mut v| {
                             self.set_dot_val_helper(scope, v.as_mut(), rhs, new_val, val_pos)
                                 .map(|_| v) // Discard Ok return value
@@ -685,7 +732,13 @@ impl Engine<'_> {
                         .and_then(|mut v| {
                             let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
-                            self.call_fn_raw(&set_fn_name, vec![this_ptr, v.as_mut()], None, *pos)
+                            self.call_fn_raw(
+                                scope,
+                                &set_fn_name,
+                                vec![this_ptr, v.as_mut()],
+                                None,
+                                *pos,
+                            )
                         })
                 }
 
@@ -697,7 +750,7 @@ impl Engine<'_> {
                     Expr::Property(id, pos) => {
                         let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                        self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                        self.call_fn_raw(scope, &get_fn_name, vec![this_ptr], None, *pos)
                             .and_then(|v| {
                                 let idx = self.eval_index_value(scope, idx_expr)?;
                                 let (mut target, _) =
@@ -718,6 +771,7 @@ impl Engine<'_> {
                                 let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
                                 self.call_fn_raw(
+                                    scope,
                                     &set_fn_name,
                                     vec![this_ptr, v.as_mut()],
                                     None,
@@ -936,6 +990,7 @@ impl Engine<'_> {
 
                 // Redirect call to `print`
                 self.call_fn_raw(
+                    scope,
                     KEYWORD_PRINT,
                     vec![result.into_dynamic().as_mut()],
                     None,
@@ -951,6 +1006,7 @@ impl Engine<'_> {
                     .collect::<Result<Vec<Dynamic>, _>>()?;
 
                 self.call_fn_raw(
+                    scope,
                     fn_name,
                     values.iter_mut().map(|b| b.as_mut()).collect(),
                     def_val.as_ref(),

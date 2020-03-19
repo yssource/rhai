@@ -1515,3 +1515,38 @@ let engine = rhai::Engine::new();
 // Turn off the optimizer
 engine.set_optimization_level(rhai::OptimizationLevel::None);
 ```
+
+`eval` - or "How to Shoot Yourself in the Foot even Easier"
+---------------------------------------------------------
+
+Saving the best for last: in addition to script optimizations, there is the ever-dreaded... `eval` function!
+
+```rust
+let x = 10;
+
+fn foo(x) { x += 12; x }
+
+let script = "let y = x;";      // build a script
+script +=    "y += foo(y);";
+script +=    "x + y";
+
+let result = eval(script);
+
+print("Answer: " + result);     // prints 42
+
+print("x = " + x);              // prints 10 (functions call arguments are passed by value)
+print("y = " + y);              // prints 32 (variables defined in 'eval' persist)
+
+eval("{ let z = y }");          // to keep a variable local, use a statement block
+
+print("z = " + z);              // error - variable 'z' not found
+```
+
+For those who subscribe to the (very sensible) motto of ["`eval` is **evil**"](http://linterrors.com/js/eval-is-evil),
+disable `eval` by overriding it, probably with something that throws.
+
+```rust
+fn eval(script) { throw "eval is evil! I refuse to run " + script }
+
+let x = eval("40 + 2");         // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
+```
