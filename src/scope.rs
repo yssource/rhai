@@ -139,6 +139,16 @@ impl<'a> Scope<'a> {
         self.0.truncate(size);
     }
 
+    /// Does the scope contain the variable?
+    pub fn contains(&self, key: &str) -> bool {
+        self.0
+            .iter()
+            .enumerate()
+            .rev() // Always search a Scope in reverse order
+            .find(|(_, ScopeEntry { name, .. })| name == key)
+            .is_some()
+    }
+
     /// Find a variable in the Scope, starting from the last.
     pub fn get(&self, key: &str) -> Option<(usize, &str, VariableType, Dynamic)> {
         self.0
