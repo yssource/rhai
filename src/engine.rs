@@ -1159,7 +1159,7 @@ impl Engine<'_> {
             Stmt::IfElse(guard, if_body, else_body) => self
                 .eval_expr(scope, guard)?
                 .downcast::<bool>()
-                .map_err(|_| EvalAltResult::ErrorIfGuard(guard.position()))
+                .map_err(|_| EvalAltResult::ErrorLogicGuard(guard.position()))
                 .and_then(|guard_val| {
                     if *guard_val {
                         self.eval_stmt(scope, if_body)
@@ -1186,7 +1186,7 @@ impl Engine<'_> {
                             return Ok(().into_dynamic());
                         }
                     }
-                    Err(_) => return Err(EvalAltResult::ErrorIfGuard(guard.position())),
+                    Err(_) => return Err(EvalAltResult::ErrorLogicGuard(guard.position())),
                 }
             },
 
