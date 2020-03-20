@@ -765,10 +765,9 @@ impl<'e> Engine<'e> {
             name: &str,
             mut values: Vec<Dynamic>,
         ) -> Result<Dynamic, EvalAltResult> {
-            let mut scope = Scope::new();
             let values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
-            let result = engine.call_fn_raw(&mut scope, name, values, None, Position::none());
+            let result = engine.call_fn_raw(name, values, None, Position::none());
 
             result
         }

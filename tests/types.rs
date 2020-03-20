@@ -23,10 +23,10 @@ fn test_type_of() -> Result<(), EvalAltResult> {
     assert_eq!(engine.eval::<String>(r#"type_of("hello")"#)?, "string");
 
     #[cfg(not(feature = "only_i32"))]
-    assert_eq!(engine.eval::<String>("let x = 123; x.type_of()")?, "i64");
+    assert_eq!(engine.eval::<String>("let x = 123; type_of(x)")?, "i64");
 
     #[cfg(feature = "only_i32")]
-    assert_eq!(engine.eval::<String>("let x = 123; x.type_of()")?, "i32");
+    assert_eq!(engine.eval::<String>("let x = 123; type_of(x)")?, "i32");
 
     Ok(())
 }

@@ -273,10 +273,11 @@ type_of('c') == "char";
 type_of(42) == "i64";
 
 let x = 123;
-x.type_of() == "i64";
+x.type_of();                // error - 'type_of' cannot use postfix notation
+type_of(x) == "i64";
 
 x = 99.999;
-x.type_of() == "f64";
+type_of(x) == "f64";
 
 x = "hello";
 if type_of(x) == "string" {
@@ -538,12 +539,12 @@ with a special "pretty-print" name, [`type_of`] will return that name instead.
 engine.register_type::<TestStruct>();
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(x.type_of());                                 // prints "path::to::module::TestStruct"
+print(type_of(x));                                 // prints "path::to::module::TestStruct"
 
 engine.register_type_with_name::<TestStruct>("Hello");
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(x.type_of());                                 // prints "Hello"
+print(type_of(x));                                 // prints "Hello"
 ```
 
 Getters and setters
@@ -1527,16 +1528,35 @@ let script = "let y = x;";      // build a script
 script +=    "y += foo(y);";
 script +=    "x + y";
 
-let result = eval(script);
+let result = eval(script);      // <- look, JS, we can also do this!
 
 print("Answer: " + result);     // prints 42
 
-print("x = " + x);              // prints 10 (functions call arguments are passed by value)
-print("y = " + y);              // prints 32 (variables defined in 'eval' persist)
+print("x = " + x);              // prints 10 - functions call arguments are passed by value
+print("y = " + y);              // prints 32 - variables defined in 'eval' persist!
 
 eval("{ let z = y }");          // to keep a variable local, use a statement block
 
 print("z = " + z);              // error - variable 'z' not found
+
+"print(42)".eval();             // nope - just like 'type_of' postfix notation doesn't work
+```
+
+Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,
+including all variables that are visible at that position in code! It is almost as if the script segments were
+physically pasted in at the position of the `eval` call.
+
+```rust
+let script = "x += 32";
+let x = 10;
+eval(script);                   // variable 'x' in the current scope is visible!
+print(x);                       // prints 42
+
+// The above is equivalent to:
+let script = "x += 32";
+let x = 10;
+x += 32;
+print(x);
 ```
 
 For those who subscribe to the (very sensible) motto of ["`eval` is **evil**"](http://linterrors.com/js/eval-is-evil),
@@ -1546,4 +1566,14 @@ disable `eval` by overriding it, probably with something that throws.
 fn eval(script) { throw "eval is evil! I refuse to run " + script }
 
 let x = eval("40 + 2");         // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
+```
+
+Or override it from Rust:
+
+```rust
+fn alt_eval(script: String) -> Result<(), EvalAltResult> {
+    Err(format!("eval is evil! I refuse to run {}", script).into())
+}
+
+engine.register_result_fn("eval", alt_eval);
 ```
