@@ -273,10 +273,11 @@ type_of('c') == "char";
 type_of(42) == "i64";
 
 let x = 123;
-x.type_of() == "i64";
+x.type_of();                // error - 'type_of' cannot use postfix notation
+type_of(x) == "i64";
 
 x = 99.999;
-x.type_of() == "f64";
+type_of(x) == "f64";
 
 x = "hello";
 if type_of(x) == "string" {
@@ -538,12 +539,12 @@ with a special "pretty-print" name, [`type_of`] will return that name instead.
 engine.register_type::<TestStruct>();
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(x.type_of());                                 // prints "path::to::module::TestStruct"
+print(type_of(x));                                 // prints "path::to::module::TestStruct"
 
 engine.register_type_with_name::<TestStruct>("Hello");
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(x.type_of());                                 // prints "Hello"
+print(type_of(x));                                 // prints "Hello"
 ```
 
 Getters and setters
@@ -1304,7 +1305,8 @@ for entry in log {
 Script optimization
 ===================
 
-Rhai includes an _optimizer_ that tries to optimize a script after parsing.  This can reduce resource utilization and increase execution speed.
+Rhai includes an _optimizer_ that tries to optimize a script after parsing.
+This can reduce resource utilization and increase execution speed.
 Script optimization can be turned off via the [`no_optimize`] feature.
 
 For example, in the following:
@@ -1315,7 +1317,7 @@ For example, in the following:
     123;                // eliminated - no effect
     "hello";            // eliminated - no effect
     [1, 2, x, x*2, 5];  // eliminated - no effect
-    foo(42);            // NOT eliminated - the function 'foo' may have side effects
+    foo(42);            // NOT eliminated - functions calls are not touched
     666                 // NOT eliminated - this is the return value of the block,
                         //                  and the block is the last one
                         //                  so this is the return value of the whole script
@@ -1349,14 +1351,12 @@ are spliced into the script text in order to turn on/off certain sections.
 For fixed script texts, the constant values can be provided in a user-defined [`Scope`] object
 to the [`Engine`] for use in compilation and evaluation.
 
-Beware, however, that most operators are actually function calls, and those functions can be overridden,
-so they are not optimized away:
+Beware, however, that most operators are actually function calls, and those are not optimized away:
 
 ```rust
 const DECISION = 1;
 
-if DECISION == 1 {          // NOT optimized away because you can define
-    :                       // your own '==' function to override the built-in default!
+if DECISION == 1 {          // NOT optimized away because it requires a call to the '==' function
     :
 } else if DECISION == 2 {   // same here, NOT optimized away
     :
@@ -1367,8 +1367,8 @@ if DECISION == 1 {          // NOT optimized away because you can define
 }
 ```
 
-because no operator functions will be run (in order not to trigger side effects) during the optimization process
-(unless the optimization level is set to [`OptimizationLevel::Full`]). So, instead, do this:
+because no operator functions will be run during the optimization process (unless the optimization level is
+set to [`OptimizationLevel::Full`]). So, instead, do this:
 
 ```rust
 const DECISION_1 = true;
@@ -1405,11 +1405,14 @@ There are actually three levels of optimizations: `None`, `Simple` and `Full`.
 
 * `None` is obvious - no optimization on the AST is performed.
 
-* `Simple` (default) performs relatively _safe_ optimizations without causing side effects
-  (i.e. it only relies on static analysis and will not actually perform any function calls).
+* `Simple` (default) relies exclusively on static analysis, performing relatively _safe_ optimizations only.
+  In particular, no function calls will be made to determine the output value. This also means that most comparison
+  operators and constant arithmetic expressions are untouched.
 
-* `Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.
-  One benefit to this is that many more optimization opportunities arise, especially with regards to comparison operators.
+* `Full` is _much_ more aggressive. Functions _will_ be run, when passed constant arguments, to determine their results.
+  One benefit is that many more optimization opportunities arise, especially with regards to comparison operators.
+  Nevertheless, the majority of scripts do not excessively rely on constants, and that is why this optimization level
+  is opt-in; only scripts that are machine-generated tend to have constants spliced in at generation time.
 
 An [`Engine`]'s optimization level is set via a call to `set_optimization_level`:
 
@@ -1419,15 +1422,15 @@ engine.set_optimization_level(rhai::OptimizationLevel::Full);
 ```
 
 When the optimization level is [`OptimizationLevel::Full`], the [`Engine`] assumes all functions to be _pure_ and will _eagerly_
-evaluated all function calls with constant arguments, using the result to replace the call. This also applies to all operators
-(which are implemented as functions). For instance, the same example above:
+call all functions when passed constant arguments, using the results to replace the actual calls. This also affects all operators
+because most of them are implemented as functions. For instance, the same example above:
 
 ```rust
 // When compiling the following with OptimizationLevel::Full...
 
 const DECISION = 1;
-                        // this condition is now eliminated because 'DECISION == 1'
-if DECISION == 1 {      // is a function call to the '==' function, and it returns 'true'
+                        // this condition is now eliminated because 'DECISION == 1' is a
+if DECISION == 1 {      //   function call to the '==' function with constant arguments, and it returns 'true'
     print("hello!");    // this block is promoted to the parent level
 } else {
     print("boo!");      // this block is eliminated because it is never reached
@@ -1446,25 +1449,20 @@ let x = (1 + 2) * 3 - 4 / 5 % 6;    // <- will be replaced by 'let x = 9'
 let y = (1 > 2) || (3 <= 4);        // <- will be replaced by 'let y = true'
 ```
 
-Function side effect considerations
-----------------------------------
-
-All of Rhai's built-in functions (and operators which are implemented as functions) are _pure_ (i.e. they do not mutate state
-nor cause side any effects, with the exception of `print` and `debug` which are handled specially) so using [`OptimizationLevel::Full`]
-is usually quite safe _unless_ you register your own types and functions.
-
-If custom functions are registered, they _may_ be called (or maybe not, if the calls happen to lie within a pruned code block).
-If custom functions are registered to replace built-in operators, they will also be called when the operators are used (in an `if`
-statement, for example) and cause side-effects.
-
 Function volatility considerations
 ---------------------------------
 
-Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_ on the external
-environment and not _pure_. A perfect example is a function that gets the current time - obviously each run will return a different value!
-The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments.
-This may cause the script to behave differently from the intended semantics because essentially the result of each function call will
-always be the same value.
+Rhai functions never mutate state nor cause side any effects (except `print` and `debug` which are handled specially).
+The only functions allowed to mutate state are custom type getters, setters and methods, and functions calls involving custom types
+are never optimized. So using [`OptimizationLevel::Full`] is usually quite safe.
+
+However, even if a function cannot mutate state nor cause side effects, it may still be _volatile_, i.e. it may
+_depend_ on the external environment and not be _pure_. A perfect example is a function that gets the current time -
+obviously each run will return a different value!
+
+The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_ when it finds constant arguments.
+This may cause the script to behave differently from the intended semantics because essentially the result of each function call
+will always be the same value.
 
 Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.
 
@@ -1514,4 +1512,68 @@ let engine = rhai::Engine::new();
 
 // Turn off the optimizer
 engine.set_optimization_level(rhai::OptimizationLevel::None);
+```
+
+`eval` - or "How to Shoot Yourself in the Foot even Easier"
+---------------------------------------------------------
+
+Saving the best for last: in addition to script optimizations, there is the ever-dreaded... `eval` function!
+
+```rust
+let x = 10;
+
+fn foo(x) { x += 12; x }
+
+let script = "let y = x;";      // build a script
+script +=    "y += foo(y);";
+script +=    "x + y";
+
+let result = eval(script);      // <- look, JS, we can also do this!
+
+print("Answer: " + result);     // prints 42
+
+print("x = " + x);              // prints 10 - functions call arguments are passed by value
+print("y = " + y);              // prints 32 - variables defined in 'eval' persist!
+
+eval("{ let z = y }");          // to keep a variable local, use a statement block
+
+print("z = " + z);              // error - variable 'z' not found
+
+"print(42)".eval();             // nope - just like 'type_of' postfix notation doesn't work
+```
+
+Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,
+including all variables that are visible at that position in code! It is almost as if the script segments were
+physically pasted in at the position of the `eval` call.
+
+```rust
+let script = "x += 32";
+let x = 10;
+eval(script);                   // variable 'x' in the current scope is visible!
+print(x);                       // prints 42
+
+// The above is equivalent to:
+let script = "x += 32";
+let x = 10;
+x += 32;
+print(x);
+```
+
+For those who subscribe to the (very sensible) motto of ["`eval` is **evil**"](http://linterrors.com/js/eval-is-evil),
+disable `eval` by overriding it, probably with something that throws.
+
+```rust
+fn eval(script) { throw "eval is evil! I refuse to run " + script }
+
+let x = eval("40 + 2");         // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
+```
+
+Or override it from Rust:
+
+```rust
+fn alt_eval(script: String) -> Result<(), EvalAltResult> {
+    Err(format!("eval is evil! I refuse to run {}", script).into())
+}
+
+engine.register_result_fn("eval", alt_eval);
 ```

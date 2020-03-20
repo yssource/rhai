@@ -469,6 +469,10 @@ pub enum Token {
     UnaryMinus,
     Multiply,
     Divide,
+    Modulo,
+    PowerOf,
+    LeftShift,
+    RightShift,
     SemiColon,
     Colon,
     Comma,
@@ -482,15 +486,18 @@ pub enum Token {
     Else,
     While,
     Loop,
+    For,
+    In,
     LessThan,
     GreaterThan,
-    Bang,
     LessThanEqualsTo,
     GreaterThanEqualsTo,
     EqualsTo,
     NotEqualsTo,
+    Bang,
     Pipe,
     Or,
+    XOr,
     Ampersand,
     And,
     #[cfg(not(feature = "no_function"))]
@@ -507,15 +514,8 @@ pub enum Token {
     AndAssign,
     OrAssign,
     XOrAssign,
-    LeftShift,
-    RightShift,
-    XOr,
-    Modulo,
     ModuloAssign,
-    PowerOf,
     PowerOfAssign,
-    For,
-    In,
     LexError(LexError),
 }
 
@@ -1601,23 +1601,21 @@ fn parse_array_literal<'a>(
 
 /// Parse a primary expression.
 fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
-    // { - block statement as expression
-    match input.peek() {
-        Some((Token::LeftBrace, pos)) => {
+    let token = match input
+        .peek()
+        .ok_or_else(|| ParseError::new(PERR::UnexpectedEOF, Position::eof()))?
+    {
+        // { - block statement as expression
+        (Token::LeftBrace, pos) => {
             let pos = *pos;
             return parse_block(input, false).map(|block| Expr::Stmt(Box::new(block), pos));
         }
-        _ => (),
-    }
-
-    let token = input.next();
+        _ => input.next().expect("should be a token"),
+    };
 
     let mut can_be_indexed = false;
 
-    #[allow(unused_mut)]
-    let mut root_expr = match token
-        .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
-    {
+    let mut root_expr = match token {
         #[cfg(not(feature = "no_float"))]
         (Token::FloatConstant(x), pos) => Ok(Expr::FloatConstant(x, pos)),
 
@@ -1666,7 +1664,7 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
 fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
     match input
         .peek()
-        .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
+        .ok_or_else(|| ParseError::new(PERR::UnexpectedEOF, Position::eof()))?
     {
         // -expr
         (Token::UnaryMinus, pos) => {
@@ -1978,6 +1976,22 @@ fn parse_expr<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Parse
     parse_binary_op(input, 1, lhs)
 }
 
+/// Make sure that the expression is not a statement expression (i.e. wrapped in {})
+fn ensure_not_statement_expr<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    type_name: &str,
+) -> Result<(), ParseError> {
+    match input
+        .peek()
+        .ok_or_else(|| ParseError(PERR::ExprExpected(type_name.to_string()), Position::eof()))?
+    {
+        // Disallow statement expressions
+        (Token::LeftBrace, pos) => Err(ParseError(PERR::ExprExpected(type_name.to_string()), *pos)),
+        // No need to check for others at this time - leave it for the expr parser
+        _ => Ok(()),
+    }
+}
+
 /// Parse an if statement.
 fn parse_if<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
@@ -1986,19 +2000,20 @@ fn parse_if<'a>(
     // if ...
     input.next();
 
-    // if guard { body }
+    // if guard { if_body }
+    ensure_not_statement_expr(input, "a boolean")?;
     let guard = parse_expr(input)?;
     let if_body = parse_block(input, breakable)?;
 
-    // if guard { body } else ...
+    // if guard { if_body } else ...
     let else_body = if matches!(input.peek(), Some((Token::Else, _))) {
         input.next();
 
         Some(Box::new(if matches!(input.peek(), Some((Token::If, _))) {
-            // if guard { body } else if ...
+            // if guard { if_body } else if ...
             parse_if(input, breakable)?
         } else {
-            // if guard { body } else { else-body }
+            // if guard { if_body } else { else-body }
             parse_block(input, breakable)?
         }))
     } else {
@@ -2014,6 +2029,7 @@ fn parse_while<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Pars
     input.next();
 
     // while guard { body }
+    ensure_not_statement_expr(input, "a boolean")?;
     let guard = parse_expr(input)?;
     let body = parse_block(input, true)?;
 
@@ -2061,6 +2077,7 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
     }
 
     // for name in expr { body }
+    ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input)?;
     let body = parse_block(input, true)?;
 
@@ -2189,10 +2206,12 @@ fn parse_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
 ) -> Result<Stmt, ParseError> {
-    match input
-        .peek()
-        .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
-    {
+    let token = match input.peek() {
+        Some(token) => token,
+        None => return Ok(Stmt::Noop(Position::eof())),
+    };
+
+    match token {
         // Semicolon - empty statement
         (Token::SemiColon, pos) => Ok(Stmt::Noop(*pos)),
 
@@ -2210,31 +2229,27 @@ fn parse_stmt<'a>(
             Ok(Stmt::Break(pos))
         }
         (Token::Break, pos) => return Err(ParseError::new(PERR::LoopBreak, *pos)),
-        (token @ Token::Return, _) | (token @ Token::Throw, _) => {
+        (token @ Token::Return, pos) | (token @ Token::Throw, pos) => {
             let return_type = match token {
                 Token::Return => ReturnType::Return,
                 Token::Throw => ReturnType::Exception,
                 _ => panic!("token should be return or throw"),
             };
 
+            let pos = *pos;
             input.next();
 
             match input.peek() {
                 // `return`/`throw` at EOF
                 None => Ok(Stmt::ReturnWithVal(None, return_type, Position::eof())),
                 // `return;` or `throw;`
-                Some((Token::SemiColon, pos)) => {
-                    let pos = *pos;
-                    Ok(Stmt::ReturnWithVal(None, return_type, pos))
-                }
+                Some((Token::SemiColon, _)) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
                 // `return` or `throw` with expression
-                Some((_, pos)) => {
-                    let pos = *pos;
-                    Ok(Stmt::ReturnWithVal(
-                        Some(Box::new(parse_expr(input)?)),
-                        return_type,
-                        pos,
-                    ))
+                Some((_, _)) => {
+                    let expr = parse_expr(input)?;
+                    let pos = expr.position();
+
+                    Ok(Stmt::ReturnWithVal(Some(Box::new(expr)), return_type, pos))
                 }
             }
         }
@@ -2248,10 +2263,7 @@ fn parse_stmt<'a>(
 /// Parse a function definition.
 #[cfg(not(feature = "no_function"))]
 fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
-    let pos = input
-        .next()
-        .ok_or_else(|| ParseError::new(PERR::InputPastEndOfFile, Position::eof()))?
-        .1;
+    let pos = input.next().expect("should be fn").1;
 
     let name = match input
         .next()

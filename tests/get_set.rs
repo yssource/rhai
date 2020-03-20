@@ -91,7 +91,7 @@ fn test_big_get_set() -> Result<(), EvalAltResult> {
     );
 
     assert_eq!(
-        engine.eval::<String>("let a = new_tp(); a.type_of()")?,
+        engine.eval::<String>("let a = new_tp(); type_of(a)")?,
         "TestParent"
     );
 

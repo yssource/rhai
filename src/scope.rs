@@ -31,6 +31,13 @@ pub struct ScopeEntry<'a> {
     pub expr: Option<Expr>,
 }
 
+/// Information about a particular entry in the Scope.
+pub(crate) struct ScopeSource<'a> {
+    pub name: &'a str,
+    pub idx: usize,
+    pub var_type: VariableType,
+}
+
 /// A type containing information about the current scope.
 /// Useful for keeping state between `Engine` evaluation runs.
 ///
@@ -71,7 +78,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Add (push) a new variable to the Scope.
-    pub fn push<K: Into<Cow<'a, str>>, T: Any>(&mut self, name: K, value: T) {
+    pub fn push<K: Into<Cow<'a, str>>, T: Any + Clone>(&mut self, name: K, value: T) {
         let value = value.into_dynamic();
 
         // Map into constant expressions
@@ -91,7 +98,7 @@ impl<'a> Scope<'a> {
     /// Constants propagation is a technique used to optimize an AST.
     /// However, in order to be used for optimization, constants must be in one of the recognized types:
     /// `INT` (default to `i64`, `i32` if `only_i32`), `f64`, `String`, `char` and `bool`.
-    pub fn push_constant<K: Into<Cow<'a, str>>, T: Any>(&mut self, name: K, value: T) {
+    pub fn push_constant<K: Into<Cow<'a, str>>, T: Any + Clone>(&mut self, name: K, value: T) {
         let value = value.into_dynamic();
 
         // Map into constant expressions
@@ -139,8 +146,18 @@ impl<'a> Scope<'a> {
         self.0.truncate(size);
     }
 
+    /// Does the scope contain the variable?
+    pub fn contains(&self, key: &str) -> bool {
+        self.0
+            .iter()
+            .enumerate()
+            .rev() // Always search a Scope in reverse order
+            .find(|(_, ScopeEntry { name, .. })| name == key)
+            .is_some()
+    }
+
     /// Find a variable in the Scope, starting from the last.
-    pub fn get(&self, key: &str) -> Option<(usize, &str, VariableType, Dynamic)> {
+    pub(crate) fn get(&self, key: &str) -> Option<(ScopeSource, Dynamic)> {
         self.0
             .iter()
             .enumerate()
@@ -155,7 +172,16 @@ impl<'a> Scope<'a> {
                         value,
                         ..
                     },
-                )| (i, name.as_ref(), *var_type, value.clone()),
+                )| {
+                    (
+                        ScopeSource {
+                            name: name.as_ref(),
+                            idx: i,
+                            var_type: *var_type,
+                        },
+                        value.clone(),
+                    )
+                },
             )
     }
 
@@ -174,11 +200,11 @@ impl<'a> Scope<'a> {
     pub(crate) fn get_mut(&mut self, name: &str, index: usize) -> &mut Dynamic {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
 
-        assert_ne!(
-            entry.var_type,
-            VariableType::Constant,
-            "get mut of constant variable"
-        );
+        // assert_ne!(
+        //     entry.var_type,
+        //     VariableType::Constant,
+        //     "get mut of constant variable"
+        // );
         assert_eq!(entry.name, name, "incorrect key at Scope entry");
 
         &mut entry.value

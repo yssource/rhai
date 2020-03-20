@@ -40,8 +40,8 @@ pub enum EvalAltResult {
     ErrorIndexingType(String, Position),
     /// Trying to index into an array or string with an index that is not `i64`.
     ErrorIndexExpr(Position),
-    /// The guard expression in an `if` statement does not return a boolean value.
-    ErrorIfGuard(Position),
+    /// The guard expression in an `if` or `while` statement does not return a boolean value.
+    ErrorLogicGuard(Position),
     /// The `for` statement encounters a type that is not an iterator.
     ErrorFor(Position),
     /// Usage of an unknown variable. Wrapped value is the name of the variable.
@@ -93,7 +93,7 @@ impl EvalAltResult {
             }
             Self::ErrorStringBounds(0, _, _) => "Indexing of empty string",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
-            Self::ErrorIfGuard(_) => "If guard expects boolean expression",
+            Self::ErrorLogicGuard(_) => "Boolean expression expected",
             Self::ErrorFor(_) => "For loop expects array or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorAssignmentToUnknownLHS(_) => {
@@ -123,7 +123,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorVariableNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
             Self::ErrorIndexingType(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorIndexExpr(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorIfGuard(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorLogicGuard(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorFor(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorAssignmentToUnknownLHS(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorAssignmentToConstant(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
@@ -222,7 +222,7 @@ impl EvalAltResult {
             | Self::ErrorStringBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorIndexExpr(pos)
-            | Self::ErrorIfGuard(pos)
+            | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
@@ -250,7 +250,7 @@ impl EvalAltResult {
             | Self::ErrorStringBounds(_, _, ref mut pos)
             | Self::ErrorIndexingType(_, ref mut pos)
             | Self::ErrorIndexExpr(ref mut pos)
-            | Self::ErrorIfGuard(ref mut pos)
+            | Self::ErrorLogicGuard(ref mut pos)
             | Self::ErrorFor(ref mut pos)
             | Self::ErrorVariableNotFound(_, ref mut pos)
             | Self::ErrorAssignmentToUnknownLHS(ref mut pos)

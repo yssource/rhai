@@ -47,7 +47,7 @@ pub enum ParseErrorType {
     /// Error in the script text. Wrapped value is the error message.
     BadInput(String),
     /// The script ends prematurely.
-    InputPastEndOfFile,
+    UnexpectedEOF,
     /// An unknown operator is encountered. Wrapped value is the operator.
     UnknownOperator(String),
     /// An open `(` is missing the corresponding closing `)`.
@@ -72,6 +72,8 @@ pub enum ParseErrorType {
     ForbiddenConstantExpr(String),
     /// Missing a variable name after the `let`, `const` or `for` keywords.
     VariableExpected,
+    /// Missing an expression.
+    ExprExpected(String),
     /// A `for` statement is missing the `in` keyword.
     MissingIn,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
@@ -119,7 +121,7 @@ impl ParseError {
     pub(crate) fn desc(&self) -> &str {
         match self.0 {
             ParseErrorType::BadInput(ref p) => p,
-            ParseErrorType::InputPastEndOfFile => "Script is incomplete",
+            ParseErrorType::UnexpectedEOF => "Script is incomplete",
             ParseErrorType::UnknownOperator(_) => "Unknown operator",
             ParseErrorType::MissingRightParen(_) => "Expecting ')'",
             ParseErrorType::MissingLeftBrace => "Expecting '{'",
@@ -134,6 +136,7 @@ impl ParseError {
             ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
             ParseErrorType::MissingIn => "Expecting 'in'",
             ParseErrorType::VariableExpected => "Expecting name of a variable",
+            ParseErrorType::ExprExpected(_) => "Expecting an expression",
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
             #[cfg(not(feature = "no_function"))]
@@ -167,6 +170,8 @@ impl fmt::Display for ParseError {
             ParseErrorType::MalformedIndexExpr(ref s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
             }
+
+            ParseErrorType::ExprExpected(ref s) => write!(f, "Expecting {} expression", s)?,
 
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(ref s) => {
