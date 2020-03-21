@@ -13,15 +13,25 @@ fn print_error(input: &str, err: EvalAltResult) {
         iter::repeat(pad).take(len).collect::<String>()
     }
 
-    let lines: Vec<_> = input.split("\n").collect();
+    let lines: Vec<_> = input.trim().split("\n").collect();
+
+    let line_no = if lines.len() > 1 {
+        match err.position() {
+            p if p.is_none() => "".to_string(),
+            p if p.is_eof() => format!("{}: ", lines.len()),
+            p => format!("{}: ", p.line().unwrap()),
+        }
+    } else {
+        "".to_string()
+    };
 
     // Print error
     match err.position() {
         p if p.is_eof() => {
             // EOF
-            let last = lines[lines.len() - 2];
-            println!("{}", last);
-            println!("{}^ {}", padding(" ", last.len() - 1), err);
+            let last = lines[lines.len() - 1];
+            println!("{}{}", line_no, last);
+            println!("{}^ {}", padding(" ", line_no.len() + last.len() - 1), err);
         }
         p if p.is_none() => {
             // No position
@@ -35,7 +45,7 @@ fn print_error(input: &str, err: EvalAltResult) {
                 p.position().unwrap()
             );
 
-            println!("{}", lines[p.line().unwrap() - 1]);
+            println!("{}{}", line_no, lines[p.line().unwrap() - 1]);
 
             let err_text = match err {
                 EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
@@ -46,11 +56,19 @@ fn print_error(input: &str, err: EvalAltResult) {
 
             println!(
                 "{}^ {}",
-                padding(" ", p.position().unwrap() - 1),
+                padding(" ", line_no.len() + p.position().unwrap() - 1),
                 err_text.replace(&pos_text, "")
             );
         }
     }
+}
+
+fn print_help() {
+    println!("help       => print this help");
+    println!("quit, exit => quit");
+    println!("ast        => print the last AST");
+    println!(r"end a line with '\' to continue to the next line.");
+    println!();
 }
 
 fn main() {
@@ -64,18 +82,44 @@ fn main() {
     let mut input = String::new();
     let mut ast: Option<AST> = None;
 
+    println!("Rhai REPL tool");
+    println!("==============");
+    print_help();
+
     loop {
         print!("rhai> ");
         stdout().flush().expect("couldn't flush stdout");
 
         input.clear();
 
-        if let Err(err) = stdin().read_line(&mut input) {
-            println!("input error: {}", err);
+        loop {
+            if let Err(err) = stdin().read_line(&mut input) {
+                panic!("input error: {}", err);
+            }
+
+            let line = input.as_str().trim_end();
+
+            // Allow line continuation
+            if line.ends_with('\\') {
+                let len = line.len();
+                input.truncate(len - 1);
+                input.push('\n');
+            } else {
+                break;
+            }
+
+            print!("> ");
+            stdout().flush().expect("couldn't flush stdout");
         }
 
+        let script = input.trim();
+
         // Implement standard commands
-        match input.as_str().trim() {
+        match script {
+            "help" => {
+                print_help();
+                continue;
+            }
             "exit" | "quit" => break, // quit
             "ast" => {
                 if matches!(&ast, Some(_)) {
@@ -90,7 +134,7 @@ fn main() {
         }
 
         if let Err(err) = engine
-            .compile_with_scope(&scope, &input)
+            .compile_with_scope(&scope, &script)
             .map_err(EvalAltResult::ErrorParsing)
             .and_then(|r| {
                 ast = Some(r);
