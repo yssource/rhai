@@ -67,6 +67,7 @@ fn print_help() {
     println!("help       => print this help");
     println!("quit, exit => quit");
     println!("ast        => print the last AST");
+    println!("astu       => print the last raw, un-optimized AST");
     println!(r"end a line with '\' to continue to the next line.");
     println!();
 }
@@ -75,11 +76,12 @@ fn main() {
     let mut engine = Engine::new();
 
     #[cfg(not(feature = "no_optimize"))]
-    engine.set_optimization_level(OptimizationLevel::Full);
+    engine.set_optimization_level(OptimizationLevel::None);
 
     let mut scope = Scope::new();
 
     let mut input = String::new();
+    let mut ast_u: Option<AST> = None;
     let mut ast: Option<AST> = None;
 
     println!("Rhai REPL tool");
@@ -121,6 +123,15 @@ fn main() {
                 continue;
             }
             "exit" | "quit" => break, // quit
+            "astu" => {
+                if matches!(&ast_u, Some(_)) {
+                    // print the last un-optimized AST
+                    println!("{:#?}", ast_u.as_ref().unwrap());
+                } else {
+                    println!("()");
+                }
+                continue;
+            }
             "ast" => {
                 if matches!(&ast, Some(_)) {
                     // print the last AST
@@ -137,7 +148,12 @@ fn main() {
             .compile_with_scope(&scope, &script)
             .map_err(EvalAltResult::ErrorParsing)
             .and_then(|r| {
-                ast = Some(r);
+                ast_u = Some(r);
+
+                engine.set_optimization_level(OptimizationLevel::Full);
+                ast = Some(engine.optimize_ast(&mut scope, ast_u.as_ref().unwrap()));
+                engine.set_optimization_level(OptimizationLevel::None);
+
                 engine
                     .consume_ast_with_scope(&mut scope, true, ast.as_ref().unwrap())
                     .or_else(|err| match err {
