@@ -1346,6 +1346,7 @@ pub fn lex(input: &str) -> TokenIterator<'_> {
 fn parse_paren_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
+    allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
     match input.peek() {
         // ()
@@ -1356,7 +1357,7 @@ fn parse_paren_expr<'a>(
         _ => (),
     }
 
-    let expr = parse_expr(input)?;
+    let expr = parse_expr(input, allow_stmt_expr)?;
 
     match input.next() {
         // ( xxx )
@@ -1381,6 +1382,7 @@ fn parse_call_expr<'a>(
     id: String,
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
+    allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
     let mut args_expr_list = Vec::new();
 
@@ -1399,7 +1401,7 @@ fn parse_call_expr<'a>(
     }
 
     loop {
-        args_expr_list.push(parse_expr(input)?);
+        args_expr_list.push(parse_expr(input, allow_stmt_expr)?);
 
         match input.peek().ok_or_else(|| {
             ParseError::new(
@@ -1436,8 +1438,9 @@ fn parse_index_expr<'a>(
     lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
     pos: Position,
+    allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
-    let idx_expr = parse_expr(input)?;
+    let idx_expr = parse_expr(input, allow_stmt_expr)?;
 
     // Check type of indexing - must be integer
     match &idx_expr {
@@ -1529,24 +1532,30 @@ fn parse_ident_expr<'a>(
     id: String,
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
+    allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
     match input.peek() {
         // id(...) - function call
         Some((Token::LeftParen, _)) => {
             input.next();
-            parse_call_expr(id, input, begin)
+            parse_call_expr(id, input, begin, allow_stmt_expr)
         }
         // id[...] - indexing
         #[cfg(not(feature = "no_index"))]
         Some((Token::LeftBracket, pos)) => {
             let pos = *pos;
             input.next();
-            parse_index_expr(Box::new(Expr::Variable(id, begin)), input, pos)
+            parse_index_expr(
+                Box::new(Expr::Variable(id, begin)),
+                input,
+                pos,
+                allow_stmt_expr,
+            )
         }
         // id - variable
         Some(_) => Ok(Expr::Variable(id, begin)),
         // EOF
-        None => Ok(Expr::Variable(id, Position::eof())),
+        None => Ok(Expr::Variable(id, begin)),
     }
 }
 
@@ -1555,12 +1564,13 @@ fn parse_ident_expr<'a>(
 fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
+    allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
     let mut arr = Vec::new();
 
     if !matches!(input.peek(), Some((Token::RightBracket, _))) {
         while input.peek().is_some() {
-            arr.push(parse_expr(input)?);
+            arr.push(parse_expr(input, allow_stmt_expr)?);
 
             match input.peek().ok_or_else(|| {
                 ParseError(
@@ -1600,15 +1610,19 @@ fn parse_array_literal<'a>(
 }
 
 /// Parse a primary expression.
-fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
+fn parse_primary<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<Expr, ParseError> {
     let token = match input
         .peek()
         .ok_or_else(|| ParseError::new(PERR::UnexpectedEOF, Position::eof()))?
     {
         // { - block statement as expression
-        (Token::LeftBrace, pos) => {
+        (Token::LeftBrace, pos) if allow_stmt_expr => {
             let pos = *pos;
-            return parse_block(input, false).map(|block| Expr::Stmt(Box::new(block), pos));
+            return parse_block(input, false, allow_stmt_expr)
+                .map(|block| Expr::Stmt(Box::new(block), pos));
         }
         _ => input.next().expect("should be a token"),
     };
@@ -1627,16 +1641,16 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
         }
         (Token::Identifier(s), pos) => {
             can_be_indexed = true;
-            parse_ident_expr(s, input, pos)
+            parse_ident_expr(s, input, pos, allow_stmt_expr)
         }
         (Token::LeftParen, pos) => {
             can_be_indexed = true;
-            parse_paren_expr(input, pos)
+            parse_paren_expr(input, pos, allow_stmt_expr)
         }
         #[cfg(not(feature = "no_index"))]
         (Token::LeftBracket, pos) => {
             can_be_indexed = true;
-            parse_array_literal(input, pos)
+            parse_array_literal(input, pos, allow_stmt_expr)
         }
         (Token::True, pos) => Ok(Expr::True(pos)),
         (Token::False, pos) => Ok(Expr::False(pos)),
@@ -1653,7 +1667,7 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
         while let Some((Token::LeftBracket, pos)) = input.peek() {
             let pos = *pos;
             input.next();
-            root_expr = parse_index_expr(Box::new(root_expr), input, pos)?;
+            root_expr = parse_index_expr(Box::new(root_expr), input, pos, allow_stmt_expr)?;
         }
     }
 
@@ -1661,7 +1675,10 @@ fn parse_primary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pa
 }
 
 /// Parse a potential unary operator.
-fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
+fn parse_unary<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<Expr, ParseError> {
     match input
         .peek()
         .ok_or_else(|| ParseError::new(PERR::UnexpectedEOF, Position::eof()))?
@@ -1672,7 +1689,7 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 
             input.next();
 
-            match parse_unary(input)? {
+            match parse_unary(input, allow_stmt_expr)? {
                 // Negative integer
                 Expr::IntegerConstant(i, _) => i
                     .checked_neg()
@@ -1702,7 +1719,7 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
         // +expr
         (Token::UnaryPlus, _) => {
             input.next();
-            parse_unary(input)
+            parse_unary(input, allow_stmt_expr)
         }
         // !expr
         (Token::Bang, pos) => {
@@ -1712,13 +1729,13 @@ fn parse_unary<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, Pars
 
             Ok(Expr::FunctionCall(
                 "!".into(),
-                vec![parse_primary(input)?],
+                vec![parse_primary(input, allow_stmt_expr)?],
                 Some(Box::new(false)), // NOT operator, when operating on invalid operand, defaults to false
                 pos,
             ))
         }
         // All other tokens
-        _ => parse_primary(input),
+        _ => parse_primary(input, allow_stmt_expr),
     }
 }
 
@@ -1821,6 +1838,7 @@ fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     parent_precedence: u8,
     lhs: Expr,
+    allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
     let mut current_lhs = lhs;
 
@@ -1842,7 +1860,7 @@ fn parse_binary_op<'a>(
         if let Some((op_token, pos)) = input.next() {
             input.peek();
 
-            let rhs = parse_unary(input)?;
+            let rhs = parse_unary(input, allow_stmt_expr)?;
 
             let next_precedence = if let Some((next_op, _)) = input.peek() {
                 next_op.precedence()
@@ -1855,7 +1873,7 @@ fn parse_binary_op<'a>(
             let rhs = if (current_precedence == next_precedence && bind_right)
                 || current_precedence < next_precedence
             {
-                parse_binary_op(input, current_precedence, rhs)?
+                parse_binary_op(input, current_precedence, rhs, allow_stmt_expr)?
             } else {
                 // Otherwise bind to left (even if next operator has the same precedence)
                 rhs
@@ -1971,9 +1989,12 @@ fn parse_binary_op<'a>(
 }
 
 /// Parse an expression.
-fn parse_expr<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Expr, ParseError> {
-    let lhs = parse_unary(input)?;
-    parse_binary_op(input, 1, lhs)
+fn parse_expr<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<Expr, ParseError> {
+    let lhs = parse_unary(input, allow_stmt_expr)?;
+    parse_binary_op(input, 1, lhs, allow_stmt_expr)
 }
 
 /// Make sure that the expression is not a statement expression (i.e. wrapped in {})
@@ -1996,14 +2017,15 @@ fn ensure_not_statement_expr<'a>(
 fn parse_if<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
+    allow_stmt_expr: bool,
 ) -> Result<Stmt, ParseError> {
     // if ...
     input.next();
 
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input)?;
-    let if_body = parse_block(input, breakable)?;
+    let guard = parse_expr(input, allow_stmt_expr)?;
+    let if_body = parse_block(input, breakable, allow_stmt_expr)?;
 
     // if guard { if_body } else ...
     let else_body = if matches!(input.peek(), Some((Token::Else, _))) {
@@ -2011,10 +2033,10 @@ fn parse_if<'a>(
 
         Some(Box::new(if matches!(input.peek(), Some((Token::If, _))) {
             // if guard { if_body } else if ...
-            parse_if(input, breakable)?
+            parse_if(input, breakable, allow_stmt_expr)?
         } else {
             // if guard { if_body } else { else-body }
-            parse_block(input, breakable)?
+            parse_block(input, breakable, allow_stmt_expr)?
         }))
     } else {
         None
@@ -2028,31 +2050,40 @@ fn parse_if<'a>(
 }
 
 /// Parse a while loop.
-fn parse_while<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
+fn parse_while<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<Stmt, ParseError> {
     // while ...
     input.next();
 
     // while guard { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input)?;
-    let body = parse_block(input, true)?;
+    let guard = parse_expr(input, allow_stmt_expr)?;
+    let body = parse_block(input, true, allow_stmt_expr)?;
 
     Ok(Stmt::While(Box::new(guard), Box::new(body)))
 }
 
 /// Parse a loop statement.
-fn parse_loop<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
+fn parse_loop<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<Stmt, ParseError> {
     // loop ...
     input.next();
 
     // loop { body }
-    let body = parse_block(input, true)?;
+    let body = parse_block(input, true, allow_stmt_expr)?;
 
     Ok(Stmt::Loop(Box::new(body)))
 }
 
 /// Parse a for loop.
-fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
+fn parse_for<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<Stmt, ParseError> {
     // for ...
     input.next();
 
@@ -2082,8 +2113,8 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 
     // for name in expr { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let expr = parse_expr(input)?;
-    let body = parse_block(input, true)?;
+    let expr = parse_expr(input, allow_stmt_expr)?;
+    let body = parse_block(input, true, allow_stmt_expr)?;
 
     Ok(Stmt::For(name, Box::new(expr), Box::new(body)))
 }
@@ -2092,6 +2123,7 @@ fn parse_for<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseE
 fn parse_let<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     var_type: VariableType,
+    allow_stmt_expr: bool,
 ) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
     input.next();
@@ -2113,7 +2145,7 @@ fn parse_let<'a>(
         input.next();
 
         // let name = expr
-        let init_value = parse_expr(input)?;
+        let init_value = parse_expr(input, allow_stmt_expr)?;
 
         match var_type {
             // let name = expr
@@ -2138,6 +2170,7 @@ fn parse_let<'a>(
 fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
+    allow_stmt_expr: bool,
 ) -> Result<Stmt, ParseError> {
     // Must start with {
     let pos = match input
@@ -2152,7 +2185,7 @@ fn parse_block<'a>(
 
     while !matches!(input.peek(), Some((Token::RightBrace, _))) {
         // Parse statements inside the block
-        let stmt = parse_stmt(input, breakable)?;
+        let stmt = parse_stmt(input, breakable, allow_stmt_expr)?;
 
         // See if it needs a terminating semicolon
         let need_semicolon = !stmt.is_self_terminated();
@@ -2201,14 +2234,18 @@ fn parse_block<'a>(
 }
 
 /// Parse an expression as a statement.
-fn parse_expr_stmt<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, ParseError> {
-    Ok(Stmt::Expr(Box::new(parse_expr(input)?)))
+fn parse_expr_stmt<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<Stmt, ParseError> {
+    Ok(Stmt::Expr(Box::new(parse_expr(input, allow_stmt_expr)?)))
 }
 
 /// Parse a single statement.
 fn parse_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
+    allow_stmt_expr: bool,
 ) -> Result<Stmt, ParseError> {
     let token = match input.peek() {
         Some(token) => token,
@@ -2223,10 +2260,10 @@ fn parse_stmt<'a>(
         #[cfg(not(feature = "no_function"))]
         (Token::Fn, pos) => return Err(ParseError::new(PERR::WrongFnDefinition, *pos)),
 
-        (Token::If, _) => parse_if(input, breakable),
-        (Token::While, _) => parse_while(input),
-        (Token::Loop, _) => parse_loop(input),
-        (Token::For, _) => parse_for(input),
+        (Token::If, _) => parse_if(input, breakable, allow_stmt_expr),
+        (Token::While, _) => parse_while(input, allow_stmt_expr),
+        (Token::Loop, _) => parse_loop(input, allow_stmt_expr),
+        (Token::For, _) => parse_for(input, allow_stmt_expr),
         (Token::Break, pos) if breakable => {
             let pos = *pos;
             input.next();
@@ -2250,23 +2287,26 @@ fn parse_stmt<'a>(
                 Some((Token::SemiColon, _)) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
                 // `return` or `throw` with expression
                 Some((_, _)) => {
-                    let expr = parse_expr(input)?;
+                    let expr = parse_expr(input, allow_stmt_expr)?;
                     let pos = expr.position();
 
                     Ok(Stmt::ReturnWithVal(Some(Box::new(expr)), return_type, pos))
                 }
             }
         }
-        (Token::LeftBrace, _) => parse_block(input, breakable),
-        (Token::Let, _) => parse_let(input, VariableType::Normal),
-        (Token::Const, _) => parse_let(input, VariableType::Constant),
-        _ => parse_expr_stmt(input),
+        (Token::LeftBrace, _) => parse_block(input, breakable, allow_stmt_expr),
+        (Token::Let, _) => parse_let(input, VariableType::Normal, allow_stmt_expr),
+        (Token::Const, _) => parse_let(input, VariableType::Constant, allow_stmt_expr),
+        _ => parse_expr_stmt(input, allow_stmt_expr),
     }
 }
 
 /// Parse a function definition.
 #[cfg(not(feature = "no_function"))]
-fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseError> {
+fn parse_fn<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    allow_stmt_expr: bool,
+) -> Result<FnDef, ParseError> {
     let pos = input.next().expect("should be fn").1;
 
     let name = match input
@@ -2350,7 +2390,7 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     }
 
     let body = match input.peek() {
-        Some((Token::LeftBrace, _)) => parse_block(input, false)?,
+        Some((Token::LeftBrace, _)) => parse_block(input, false, allow_stmt_expr)?,
         Some((_, pos)) => return Err(ParseError::new(PERR::FnMissingBody(name), *pos)),
         None => return Err(ParseError::new(PERR::FnMissingBody(name), Position::eof())),
     };
@@ -2363,8 +2403,34 @@ fn parse_fn<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<FnDef, ParseE
     })
 }
 
+pub fn parse_global_expr<'a, 'e>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    engine: &Engine<'e>,
+    scope: &Scope,
+) -> Result<AST, ParseError> {
+    let expr = parse_expr(input, false)?;
+
+    if let Some((token, pos)) = input.peek() {
+        // Return error if the expression doesn't end
+        return Err(ParseError::new(
+            PERR::BadInput(format!("Unexpected '{}'", token.syntax())),
+            *pos,
+        ));
+    }
+
+    Ok(
+        // Optimize AST
+        #[cfg(not(feature = "no_optimize"))]
+        optimize_into_ast(engine, scope, vec![Stmt::Expr(Box::new(expr))], vec![]),
+        //
+        // Do not optimize AST if `no_optimize`
+        #[cfg(feature = "no_optimize")]
+        AST(vec![Stmt::Expr(Box::new(expr))], vec![]),
+    )
+}
+
 /// Parse the global level statements.
-fn parse_global_level<'a, 'e>(
+fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
 ) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
@@ -2375,7 +2441,7 @@ fn parse_global_level<'a, 'e>(
         {
             // Collect all the function definitions
             if matches!(input.peek().expect("should not be None"), (Token::Fn, _)) {
-                let f = parse_fn(input)?;
+                let f = parse_fn(input, true)?;
 
                 // Ensure list is sorted
                 match functions.binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len())) {
@@ -2388,7 +2454,7 @@ fn parse_global_level<'a, 'e>(
         }
 
         // Actual statement
-        let stmt = parse_stmt(input, false)?;
+        let stmt = parse_stmt(input, false, true)?;
 
         let need_semicolon = !stmt.is_self_terminated();
 

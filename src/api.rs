@@ -5,7 +5,7 @@ use crate::call::FuncArgs;
 use crate::engine::{Engine, FnAny, FnSpec, FUNC_GETTER, FUNC_SETTER};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
-use crate::parser::{lex, parse, FnDef, Position, AST};
+use crate::parser::{lex, parse, parse_global_expr, FnDef, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 
@@ -416,6 +416,78 @@ impl<'e> Engine<'e> {
         })
     }
 
+    /// Compile a string containing an expression into an `AST`,
+    /// which can be used later for evaluation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Compile a script to an AST and store it for later evaluation
+    /// let ast = engine.compile_expression("40 + 2")?;
+    ///
+    /// for _ in 0..42 {
+    ///     assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn compile_expression(&self, input: &str) -> Result<AST, ParseError> {
+        self.compile_expression_with_scope(&Scope::new(), input)
+    }
+
+    /// Compile a string containing an expression into an `AST` using own scope,
+    /// which can be used later for evaluation.
+    ///
+    /// The scope is useful for passing constants into the script for optimization
+    /// when using `OptimizationLevel::Full`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// # {
+    /// use rhai::{Engine, Scope, OptimizationLevel};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Set optimization level to 'Full' so the Engine can fold constants
+    /// // into function calls and operators.
+    /// engine.set_optimization_level(OptimizationLevel::Full);
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push_constant("x", 10_i64);   // 'x' is a constant
+    ///
+    /// // Compile a script to an AST and store it for later evaluation.
+    /// // Notice that `Full` optimization is on, so constants are folded
+    /// // into function calls and operators.
+    /// let ast = engine.compile_expression_with_scope(&mut scope,
+    ///             "2 + (x + x) * 2"    // all 'x' are replaced with 10
+    /// )?;
+    ///
+    /// // Normally this would have failed because no scope is passed into the 'eval_ast'
+    /// // call and so the variable 'x' does not exist.  Here, it passes because the script
+    /// // has been optimized and all references to 'x' are already gone.
+    /// assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn compile_expression_with_scope(
+        &self,
+        scope: &Scope,
+        input: &str,
+    ) -> Result<AST, ParseError> {
+        let tokens_stream = lex(input);
+        parse_global_expr(&mut tokens_stream.peekable(), self, scope)
+    }
+
     /// Evaluate a script file.
     ///
     /// # Example
@@ -511,6 +583,55 @@ impl<'e> Engine<'e> {
         input: &str,
     ) -> Result<T, EvalAltResult> {
         let ast = self.compile(input).map_err(EvalAltResult::ErrorParsing)?;
+        self.eval_ast_with_scope(scope, &ast)
+    }
+
+    /// Evaluate a string containing an expression.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// assert_eq!(engine.eval_expression::<i64>("40 + 2")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn eval_expression<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
+        let mut scope = Scope::new();
+        self.eval_expression_with_scope(&mut scope, input)
+    }
+
+    /// Evaluate a string containing an expression with own scope.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push("x", 40_i64);
+    ///
+    /// assert_eq!(engine.eval_expression_with_scope::<i64>(&mut scope, "x + 2")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn eval_expression_with_scope<T: Any + Clone>(
+        &mut self,
+        scope: &mut Scope,
+        input: &str,
+    ) -> Result<T, EvalAltResult> {
+        let ast = self
+            .compile_expression(input)
+            .map_err(EvalAltResult::ErrorParsing)?;
+
         self.eval_ast_with_scope(scope, &ast)
     }
 

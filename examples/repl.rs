@@ -26,12 +26,26 @@ fn print_error(input: &str, err: EvalAltResult) {
     };
 
     // Print error
+    let pos_text = format!(" ({})", err.position());
+
     match err.position() {
         p if p.is_eof() => {
             // EOF
             let last = lines[lines.len() - 1];
             println!("{}{}", line_no, last);
-            println!("{}^ {}", padding(" ", line_no.len() + last.len() - 1), err);
+
+            let err_text = match err {
+                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
+                    format!("Runtime error: {}", err)
+                }
+                _ => err.to_string(),
+            };
+
+            println!(
+                "{}^ {}",
+                padding(" ", line_no.len() + last.len() - 1),
+                err_text.replace(&pos_text, "")
+            );
         }
         p if p.is_none() => {
             // No position
@@ -39,12 +53,6 @@ fn print_error(input: &str, err: EvalAltResult) {
         }
         p => {
             // Specific position
-            let pos_text = format!(
-                " (line {}, position {})",
-                p.line().unwrap(),
-                p.position().unwrap()
-            );
-
             println!("{}{}", line_no, lines[p.line().unwrap() - 1]);
 
             let err_text = match err {
@@ -150,9 +158,17 @@ fn main() {
             .and_then(|r| {
                 ast_u = Some(r);
 
-                engine.set_optimization_level(OptimizationLevel::Full);
-                ast = Some(engine.optimize_ast(&mut scope, ast_u.as_ref().unwrap()));
-                engine.set_optimization_level(OptimizationLevel::None);
+                #[cfg(not(feature = "no_optimize"))]
+                {
+                    engine.set_optimization_level(OptimizationLevel::Full);
+                    ast = Some(engine.optimize_ast(&mut scope, ast_u.as_ref().unwrap()));
+                    engine.set_optimization_level(OptimizationLevel::None);
+                }
+
+                #[cfg(feature = "no_optimize")]
+                {
+                    ast = ast_u.clone();
+                }
 
                 engine
                     .consume_ast_with_scope(&mut scope, true, ast.as_ref().unwrap())
