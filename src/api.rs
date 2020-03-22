@@ -50,8 +50,8 @@ impl<'e> Engine<'e> {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self        { TestStruct { field: 1 } }
-    ///     fn update(&mut self)    { self.field += 41; }
+    ///     fn new() -> Self                    { TestStruct { field: 1 } }
+    ///     fn update(&mut self, offset: i64)   { self.field += offset; }
     /// }
     ///
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
@@ -64,11 +64,11 @@ impl<'e> Engine<'e> {
     ///
     /// engine.register_fn("new_ts", TestStruct::new);
     ///
-    /// // Register method on the type.
+    /// // Use `register_fn` to register methods on the type.
     /// engine.register_fn("update", TestStruct::update);
     ///
     /// assert_eq!(
-    ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?.field,
+    ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(41); x")?.field,
     ///     42
     /// );
     /// # Ok(())
@@ -138,6 +138,8 @@ impl<'e> Engine<'e> {
 
     /// Register a getter function for a member of a registered type with the `Engine`.
     ///
+    /// The function signature must start with `&mut self` and not `&self`.
+    ///
     /// # Example
     ///
     /// ```
@@ -148,6 +150,8 @@ impl<'e> Engine<'e> {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                { TestStruct { field: 1 } }
+    ///
+    ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
     ///
@@ -222,6 +226,8 @@ impl<'e> Engine<'e> {
     /// Shorthand for registering both getter and setter functions
     /// of a registered type with the `Engine`.
     ///
+    /// All function signatures must start with `&mut self` and not `&self`.
+    ///
     /// # Example
     ///
     /// ```
@@ -231,8 +237,9 @@ impl<'e> Engine<'e> {
     /// }
     ///
     /// impl TestStruct {
-    /// fn new() -> Self                            { TestStruct { field: 1 } }
+    ///     fn new() -> Self                        { TestStruct { field: 1 } }
     ///     fn get_field(&mut self) -> i64          { self.field }
+    ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///

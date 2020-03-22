@@ -204,7 +204,7 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfElse(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
+    IfThenElse(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
     /// while expr { stmt }
     While(Box<Expr>, Box<Stmt>),
     /// loop { stmt }
@@ -235,7 +235,7 @@ impl Stmt {
             | Stmt::Block(_, pos)
             | Stmt::Break(pos)
             | Stmt::ReturnWithVal(_, _, pos) => *pos,
-            Stmt::IfElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
+            Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
             Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
         }
     }
@@ -243,7 +243,7 @@ impl Stmt {
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Stmt::IfElse(_, _, _)
+            Stmt::IfThenElse(_, _, _)
             | Stmt::While(_, _)
             | Stmt::Loop(_)
             | Stmt::For(_, _, _)
@@ -265,10 +265,10 @@ impl Stmt {
         match self {
             Stmt::Noop(_) => true,
             Stmt::Expr(expr) => expr.is_pure(),
-            Stmt::IfElse(guard, if_block, Some(else_block)) => {
+            Stmt::IfThenElse(guard, if_block, Some(else_block)) => {
                 guard.is_pure() && if_block.is_pure() && else_block.is_pure()
             }
-            Stmt::IfElse(guard, block, None) | Stmt::While(guard, block) => {
+            Stmt::IfThenElse(guard, block, None) | Stmt::While(guard, block) => {
                 guard.is_pure() && block.is_pure()
             }
             Stmt::Loop(block) => block.is_pure(),
@@ -2020,7 +2020,11 @@ fn parse_if<'a>(
         None
     };
 
-    Ok(Stmt::IfElse(Box::new(guard), Box::new(if_body), else_body))
+    Ok(Stmt::IfThenElse(
+        Box::new(guard),
+        Box::new(if_body),
+        else_body,
+    ))
 }
 
 /// Parse a while loop.

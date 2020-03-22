@@ -1,6 +1,13 @@
 Rhai - Embedded Scripting for Rust
 =================================
 
+![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai)
+[![Travis (.org)](https://img.shields.io/travis/jonathandturner/rhai)](http://travis-ci.org/jonathandturner/rhai)
+[![license](https://img.shields.io/github/license/jonathandturner/rhai)](https://github.com/license/jonathandturner/rhai)
+[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https::/crates.io/crates/rhai/)
+![crates.io](https://img.shields.io/crates/d/rhai)
+[![API Docs](https://docs.rs/rhai/badge.svg)](https://docs.rs/rhai/)
+
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way to add scripting to any application.
 
 Rhai's current features set:
@@ -1464,9 +1471,9 @@ Function volatility considerations
 
 Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_ on the external
 environment and not _pure_. A perfect example is a function that gets the current time - obviously each run will return a different value!
-The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments.
-This may cause the script to behave differently from the intended semantics because essentially the result of each function call will
-always be the same value.
+The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments
+it will eagerly run execute the function call. This causes the script to behave differently from the intended semantics because
+essentially the result of the function call will always be the same value.
 
 Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.
 

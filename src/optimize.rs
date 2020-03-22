@@ -79,7 +79,7 @@ impl State<'_> {
 fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -> Stmt {
     match stmt {
         // if expr { Noop }
-        Stmt::IfElse(expr, if_block, None) if matches!(*if_block, Stmt::Noop(_)) => {
+        Stmt::IfThenElse(expr, if_block, None) if matches!(*if_block, Stmt::Noop(_)) => {
             state.set_dirty();
 
             let pos = expr.position();
@@ -94,7 +94,7 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
             }
         }
         // if expr { if_block }
-        Stmt::IfElse(expr, if_block, None) => match *expr {
+        Stmt::IfThenElse(expr, if_block, None) => match *expr {
             // if false { if_block } -> Noop
             Expr::False(pos) => {
                 state.set_dirty();
@@ -103,20 +103,20 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
             // if true { if_block } -> if_block
             Expr::True(_) => optimize_stmt(*if_block, state, true),
             // if expr { if_block }
-            expr => Stmt::IfElse(
+            expr => Stmt::IfThenElse(
                 Box::new(optimize_expr(expr, state)),
                 Box::new(optimize_stmt(*if_block, state, true)),
                 None,
             ),
         },
         // if expr { if_block } else { else_block }
-        Stmt::IfElse(expr, if_block, Some(else_block)) => match *expr {
+        Stmt::IfThenElse(expr, if_block, Some(else_block)) => match *expr {
             // if false { if_block } else { else_block } -> else_block
             Expr::False(_) => optimize_stmt(*else_block, state, true),
             // if true { if_block } else { else_block } -> if_block
             Expr::True(_) => optimize_stmt(*if_block, state, true),
             // if expr { if_block } else { else_block }
-            expr => Stmt::IfElse(
+            expr => Stmt::IfThenElse(
                 Box::new(optimize_expr(expr, state)),
                 Box::new(optimize_stmt(*if_block, state, true)),
                 match optimize_stmt(*else_block, state, true) {
@@ -584,8 +584,9 @@ pub fn optimize_into_ast(
     AST(
         match engine.optimization_level {
             OptimizationLevel::None => statements,
-            OptimizationLevel::Simple => optimize(statements, engine, &scope),
-            OptimizationLevel::Full => optimize(statements, engine, &scope),
+            OptimizationLevel::Simple | OptimizationLevel::Full => {
+                optimize(statements, engine, &scope)
+            }
         },
         functions
             .into_iter()

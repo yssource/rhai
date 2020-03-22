@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::any::{Any, Dynamic};
+use crate::parser::INT;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
@@ -36,11 +37,8 @@ impl_std_args!(Array);
 #[cfg(not(feature = "only_i64"))]
 impl_std_args!(u8, i8, u16, i16, u32, i32, u64, i64);
 
-#[cfg(feature = "only_i32")]
-impl_std_args!(i32);
-
-#[cfg(feature = "only_i64")]
-impl_std_args!(i64);
+#[cfg(any(feature = "only_i32", feature = "only_i64"))]
+impl_std_args!(INT);
 
 #[cfg(not(feature = "no_float"))]
 impl_std_args!(f32, f64);
