@@ -1,15 +1,12 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::any::{Any, AnyExt, Dynamic, Variant};
-use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt};
+use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, INT};
 use crate::result::EvalAltResult;
 use crate::scope::{Scope, ScopeSource, VariableType};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::OptimizationLevel;
-
-#[cfg(not(feature = "no_index"))]
-use crate::INT;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -1156,7 +1153,7 @@ impl Engine<'_> {
             }
 
             // If-else statement
-            Stmt::IfElse(guard, if_body, else_body) => self
+            Stmt::IfThenElse(guard, if_body, else_body) => self
                 .eval_expr(scope, guard)?
                 .downcast::<bool>()
                 .map_err(|_| EvalAltResult::ErrorLogicGuard(guard.position()))

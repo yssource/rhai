@@ -1,16 +1,41 @@
-use rhai::{Engine, EvalAltResult, RegisterFn, Scope};
-use std::cell::Cell;
+///! This test simulates an external command object that is driven by a script.
+use rhai::{Engine, EvalAltResult, RegisterFn, Scope, INT};
+use std::cell::RefCell;
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+/// External command.
+struct Command {
+    state: i64,
+}
+
+impl Command {
+    /// Do some action.
+    pub fn action(&mut self, val: i64) {
+        self.state = val;
+    }
+    /// Get current value.
+    pub fn get(&self) -> i64 {
+        self.state
+    }
+}
+
+/// Wrapper object to wrap a command object.
+#[derive(Clone)]
 struct CommandWrapper {
-    value: Rc<Cell<i64>>,
+    command: Rc<RefCell<Command>>,
 }
 
 impl CommandWrapper {
-    pub fn set_value(&mut self, x: i64) {
-        let val = self.value.get();
-        self.value.set(val + x);
+    /// Delegate command action.
+    pub fn do_action(&mut self, x: i64) {
+        let mut command = self.command.borrow_mut();
+        let val = command.get();
+        command.action(val + x);
+    }
+    /// Delegate get value action.
+    pub fn get_value(&mut self) -> i64 {
+        let command = self.command.borrow();
+        command.get()
     }
 }
 
@@ -19,21 +44,37 @@ fn test_side_effects() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
     let mut scope = Scope::new();
 
-    let payload = Rc::new(Cell::new(12));
-    assert_eq!(payload.get(), 12);
+    // Create the command object with initial state, handled by an `Rc`.
+    let command = Rc::new(RefCell::new(Command { state: 12 }));
+    assert_eq!(command.borrow().get(), 12);
 
-    let command = CommandWrapper {
-        value: payload.clone(),
+    // Create the wrapper.
+    let wrapper = CommandWrapper {
+        command: command.clone(), // Notice this clones the `Rc` only
     };
 
-    scope.push_constant("Command", command);
+    // Make the wrapper a singleton in the script environment.
+    scope.push_constant("Command", wrapper);
 
+    // Register type.
     engine.register_type_with_name::<CommandWrapper>("CommandType");
-    engine.register_fn("action", CommandWrapper::set_value);
+    engine.register_fn("action", CommandWrapper::do_action);
+    engine.register_get("value", CommandWrapper::get_value);
 
-    engine.eval_with_scope::<()>(&mut scope, "Command.action(30)")?;
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            r"
+                // Drive the command object via the wrapper
+                Command.action(30);
+                Command.value
+            "
+        )?,
+        42
+    );
 
-    assert_eq!(payload.get(), 42);
+    // Make sure the actions are properly performed
+    assert_eq!(command.borrow().get(), 42);
 
     Ok(())
 }

@@ -1,6 +1,13 @@
 Rhai - Embedded Scripting for Rust
 =================================
 
+![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai)
+[![Travis (.org)](https://img.shields.io/travis/jonathandturner/rhai)](http://travis-ci.org/jonathandturner/rhai)
+[![license](https://img.shields.io/github/license/jonathandturner/rhai)](https://github.com/license/jonathandturner/rhai)
+[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https::/crates.io/crates/rhai/)
+![crates.io](https://img.shields.io/crates/d/rhai)
+[![API Docs](https://docs.rs/rhai/badge.svg)](https://docs.rs/rhai/)
+
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way to add scripting to any application.
 
 Rhai's current features set:
@@ -176,10 +183,6 @@ let result = engine.eval_file::<i64>("hello_world.rhai".into())?;       // 'eval
 To repeatedly evaluate a script, _compile_ it first into an AST (abstract syntax tree) form:
 
 ```rust
-use rhai::Engine;
-
-let mut engine = Engine::new();
-
 // Compile to an AST and store it for later evaluations
 let ast = engine.compile("40 + 2")?;
 
@@ -193,20 +196,12 @@ for _ in 0..42 {
 Compiling a script file is also supported:
 
 ```rust
-use rhai::Engine;
-
-let mut engine = Engine::new();
-
 let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
 
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust - via `call_fn`:
 
 ```rust
-use rhai::Engine;
-
-let mut engine = Engine::new();
-
 // Define a function in a script and load it into the Engine.
 // Pass true to 'retain_functions' otherwise these functions will be cleared at the end of consume()
 engine.consume(true,
@@ -232,6 +227,26 @@ let result: i64 = engine.call_fn("hello", &ast, ( String::from("abc"), 123_i64 )
 
 let result: i64 = engine.call_fn("hello", 123_i64)?
 //                                        ^^^^^^^ calls 'hello' with one parameter (no need for tuple)
+```
+
+Evaluate expressions only
+-------------------------
+
+Sometimes a use case does not require a full-blown scripting _language_, but only needs to evaluate _expressions_.
+In these cases, use the `compile_expression` and `eval_expression` methods or their `_with_scope` variants.
+
+```rust
+let result = engine.eval_expression::<i64>("2 + (10 + 10) * 2")?;
+```
+
+When evaluation _expressions_, no control-flow statement (e.g. `if`, `while`, `for`) is not supported and will be
+parse errors when encountered - not even variable assignments.
+
+```rust
+// The following are all syntax errors because the script is not an expression.
+engine.eval_expression::<()>("x = 42")?;
+let ast = engine.compile_expression("let x = 42")?;
+let result = engine.eval_expression_with_scope::<i64>(&mut scope, "if x { 42 } else { 123 }")?;
 ```
 
 Values and types
@@ -1464,9 +1479,9 @@ Function volatility considerations
 
 Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_ on the external
 environment and not _pure_. A perfect example is a function that gets the current time - obviously each run will return a different value!
-The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments.
-This may cause the script to behave differently from the intended semantics because essentially the result of each function call will
-always be the same value.
+The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments
+it will eagerly run execute the function call. This causes the script to behave differently from the intended semantics because
+essentially the result of the function call will always be the same value.
 
 Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.
 
