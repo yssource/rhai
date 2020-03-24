@@ -13,7 +13,7 @@ fn test_math() -> Result<(), EvalAltResult> {
     #[cfg(not(feature = "only_i32"))]
     assert_eq!(
         engine.eval::<INT>("(-9223372036854775807).abs()")?,
-        9223372036854775807
+        9_223_372_036_854_775_807
     );
 
     #[cfg(feature = "only_i32")]

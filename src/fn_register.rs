@@ -100,6 +100,11 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
 pub struct Ref<A>(A);
 pub struct Mut<A>(A);
 
+#[inline]
+fn identity<T>(data: T) -> T {
+    data
+}
+
 macro_rules! count_args {
     () => { 0_usize };
     ( $head:ident $($tail:ident)* ) => { 1_usize + count_args!($($tail)*) };
@@ -212,9 +217,9 @@ macro_rules! def_register {
         //def_register!(imp_pop $($par => $mark => $param),*);
     };
     ($p0:ident $(, $p:ident)*) => {
-        def_register!(imp $p0 => $p0 => $p0 => Clone::clone $(, $p => $p => $p => Clone::clone)*);
-        def_register!(imp $p0 => Ref<$p0> => &$p0 => |x| { x } $(, $p => $p => $p => Clone::clone)*);
-        def_register!(imp $p0 => Mut<$p0> => &mut $p0 => |x| { x } $(, $p => $p => $p => Clone::clone)*);
+        def_register!(imp $p0 => $p0      => $p0      => Clone::clone   $(, $p => $p => $p => Clone::clone)*);
+        def_register!(imp $p0 => Ref<$p0> => &$p0     => identity       $(, $p => $p => $p => Clone::clone)*);
+        def_register!(imp $p0 => Mut<$p0> => &mut $p0 => identity       $(, $p => $p => $p => Clone::clone)*);
 
         def_register!($($p),*);
     };
@@ -224,5 +229,5 @@ macro_rules! def_register {
 //    };
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 def_register!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);

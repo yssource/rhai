@@ -8,7 +8,7 @@
 //! ```,ignore
 //! fn factorial(x) {
 //!     if x == 1 { return 1; }
-//!	    x * factorial(x - 1)
+//!     x * factorial(x - 1)
 //! }
 //!
 //! compute_something(factorial(10))
@@ -22,7 +22,7 @@
 //! fn main() -> Result<(), EvalAltResult>
 //! {
 //!     fn compute_something(x: i64) -> bool {
-//!	        (x % 40) == 0
+//!         (x % 40) == 0
 //!     }
 //!
 //!     let mut engine = Engine::new();

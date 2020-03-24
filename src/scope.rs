@@ -77,6 +77,11 @@ impl<'a> Scope<'a> {
         self.0.len()
     }
 
+    /// Is the Scope empty?
+    pub fn is_empty(&self) -> bool {
+        self.0.len() == 0
+    }
+
     /// Add (push) a new variable to the Scope.
     pub fn push<K: Into<Cow<'a, str>>, T: Any + Clone>(&mut self, name: K, value: T) {
         let value = value.into_dynamic();
@@ -152,8 +157,7 @@ impl<'a> Scope<'a> {
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find(|(_, ScopeEntry { name, .. })| name == key)
-            .is_some()
+            .any(|(_, ScopeEntry { name, .. })| name == key)
     }
 
     /// Find a variable in the Scope, starting from the last.
@@ -221,6 +225,12 @@ impl<'a> Scope<'a> {
     /// Get an iterator to variables in the Scope.
     pub fn iter(&self) -> impl Iterator<Item = &ScopeEntry> {
         self.0.iter().rev() // Always search a Scope in reverse order
+    }
+}
+
+impl Default for Scope<'_> {
+    fn default() -> Self {
+        Scope::new()
     }
 }
 

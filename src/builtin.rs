@@ -837,10 +837,10 @@ impl Engine<'_> {
         }
 
         reg_fn2x!(self, "+", append, String, String, INT, bool, char);
-        self.register_fn("+", |x: String, _: ()| format!("{}", x));
+        self.register_fn("+", |x: String, _: ()| x);
 
         reg_fn2y!(self, "+", prepend, String, String, INT, bool, char);
-        self.register_fn("+", |_: (), y: String| format!("{}", y));
+        self.register_fn("+", |_: (), y: String| y);
 
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]

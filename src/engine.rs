@@ -31,13 +31,13 @@ pub type FnAny = dyn Fn(FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
 
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
-pub(crate) const KEYWORD_PRINT: &'static str = "print";
-pub(crate) const KEYWORD_DEBUG: &'static str = "debug";
-pub(crate) const KEYWORD_DUMP_AST: &'static str = "dump_ast";
-pub(crate) const KEYWORD_TYPE_OF: &'static str = "type_of";
-pub(crate) const KEYWORD_EVAL: &'static str = "eval";
-pub(crate) const FUNC_GETTER: &'static str = "get$";
-pub(crate) const FUNC_SETTER: &'static str = "set$";
+pub(crate) const KEYWORD_PRINT: &str = "print";
+pub(crate) const KEYWORD_DEBUG: &str = "debug";
+pub(crate) const KEYWORD_DUMP_AST: &str = "dump_ast";
+pub(crate) const KEYWORD_TYPE_OF: &str = "type_of";
+pub(crate) const KEYWORD_EVAL: &str = "eval";
+pub(crate) const FUNC_GETTER: &str = "get$";
+pub(crate) const FUNC_SETTER: &str = "set$";
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 #[cfg(not(feature = "no_index"))]
@@ -200,7 +200,7 @@ impl Engine<'_> {
         };
 
         // Argument must be a string
-        fn cast_to_string<'a>(r: &'a Variant, pos: Position) -> Result<&'a str, EvalAltResult> {
+        fn cast_to_string(r: &Variant, pos: Position) -> Result<&str, EvalAltResult> {
             r.downcast_ref::<String>()
                 .map(String::as_str)
                 .ok_or_else(|| EvalAltResult::ErrorMismatchOutputType(r.type_name().into(), pos))
@@ -615,7 +615,8 @@ impl Engine<'_> {
             // array_id[idx] = val
             IndexSourceType::Array => {
                 let arr = scope.get_mut_by_type::<Array>(src.name, src.idx);
-                Ok((arr[idx as usize] = new_val.0).into_dynamic())
+                arr[idx as usize] = new_val.0;
+                Ok(().into_dynamic())
             }
 
             // string_id[idx] = val
@@ -627,7 +628,8 @@ impl Engine<'_> {
                     .0
                     .downcast::<char>()
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
-                Ok(Self::str_replace_char(s, idx as usize, ch).into_dynamic())
+                Self::str_replace_char(s, idx as usize, ch);
+                Ok(().into_dynamic())
             }
 
             IndexSourceType::Expression => panic!("expression cannot be indexed for update"),
@@ -795,21 +797,19 @@ impl Engine<'_> {
                     Self::search_scope(scope, id, Ok, *pos)?;
 
                 match var_type {
-                    VariableType::Constant => {
-                        return Err(EvalAltResult::ErrorAssignmentToConstant(
-                            id.to_string(),
-                            op_pos,
-                        ))
+                    VariableType::Constant => Err(EvalAltResult::ErrorAssignmentToConstant(
+                        id.to_string(),
+                        op_pos,
+                    )),
+                    _ => {
+                        let val = self.set_dot_val_helper(scope, target.as_mut(), dot_rhs, new_val);
+
+                        // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
+                        *scope.get_mut(id, idx) = target;
+
+                        val
                     }
-                    _ => (),
                 }
-
-                let val = self.set_dot_val_helper(scope, target.as_mut(), dot_rhs, new_val);
-
-                // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                *scope.get_mut(id, idx) = target;
-
-                val
             }
 
             // lhs[idx_expr].???
@@ -914,10 +914,10 @@ impl Engine<'_> {
                         if let Some(src) = src {
                             match src.var_type {
                                 VariableType::Constant => {
-                                    return Err(EvalAltResult::ErrorAssignmentToConstant(
+                                    Err(EvalAltResult::ErrorAssignmentToConstant(
                                         src.name.to_string(),
                                         idx_lhs.position(),
-                                    ));
+                                    ))
                                 }
                                 VariableType::Normal => Ok(Self::update_indexed_var_in_scope(
                                     src_type,
@@ -985,7 +985,7 @@ impl Engine<'_> {
                 match fn_name.as_str() {
                     // Dump AST
                     KEYWORD_DUMP_AST => {
-                        let pos = if args_expr_list.len() == 0 {
+                        let pos = if args_expr_list.is_empty() {
                             *pos
                         } else {
                             args_expr_list[0].position()
@@ -993,7 +993,7 @@ impl Engine<'_> {
 
                         // Change the argument to a debug dump of the expressions
                         let result = args_expr_list
-                            .into_iter()
+                            .iter()
                             .map(|expr| format!("{:#?}", expr))
                             .collect::<Vec<_>>()
                             .join("\n");
@@ -1049,12 +1049,12 @@ impl Engine<'_> {
                         #[cfg(feature = "no_optimize")]
                         let ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
 
-                        return Ok(self.eval_ast_with_scope_raw(scope, true, &ast).map_err(
-                            |mut err| {
+                        Ok(self
+                            .eval_ast_with_scope_raw(scope, true, &ast)
+                            .map_err(|mut err| {
                                 err.set_position(pos);
                                 err
-                            },
-                        )?);
+                            })?)
                     }
 
                     // Normal function call
@@ -1217,7 +1217,7 @@ impl Engine<'_> {
                     scope.pop();
                     Ok(().into_dynamic())
                 } else {
-                    return Err(EvalAltResult::ErrorFor(expr.position()));
+                    Err(EvalAltResult::ErrorFor(expr.position()))
                 }
             }
 
@@ -1245,7 +1245,7 @@ impl Engine<'_> {
                 Err(EvalAltResult::ErrorRuntime(
                     val.downcast::<String>()
                         .map(|s| *s)
-                        .unwrap_or("".to_string()),
+                        .unwrap_or_else(|_| "".to_string()),
                     *pos,
                 ))
             }
