@@ -177,7 +177,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T) -> U + 'static,
     ) {
-        let get_fn_name = format!("{}{}", FUNC_GETTER, name);
+        let get_fn_name = FUNC_GETTER.to_string() + name;
         self.register_fn(&get_fn_name, callback);
     }
 
@@ -219,7 +219,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T, U) -> () + 'static,
     ) {
-        let set_fn_name = format!("{}{}", FUNC_SETTER, name);
+        let set_fn_name = FUNC_SETTER.to_string() + name;
         self.register_fn(&set_fn_name, callback);
     }
 

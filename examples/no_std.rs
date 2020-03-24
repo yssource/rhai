@@ -7,7 +7,11 @@ fn main() -> Result<(), EvalAltResult> {
 
     let result = engine.eval::<INT>("40 + 2")?;
 
-    println!("Answer: {}", 42);
+    #[cfg(not(feature = "no_std"))]
+    println!("Answer: {}", result);
+
+    #[cfg(feature = "no_std")]
+    assert_eq!(result, 42);
 
     Ok(())
 }
