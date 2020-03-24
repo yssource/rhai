@@ -13,7 +13,7 @@ fn print_error(input: &str, err: EvalAltResult) {
         iter::repeat(pad).take(len).collect::<String>()
     }
 
-    let lines: Vec<_> = input.trim().split("\n").collect();
+    let lines: Vec<_> = input.trim().split('\n').collect();
 
     let line_no = if lines.len() > 1 {
         match err.position() {
@@ -161,7 +161,7 @@ fn main() {
                 #[cfg(not(feature = "no_optimize"))]
                 {
                     engine.set_optimization_level(OptimizationLevel::Full);
-                    ast = Some(engine.optimize_ast(&mut scope, ast_u.as_ref().unwrap()));
+                    ast = Some(engine.optimize_ast(&scope, ast_u.as_ref().unwrap()));
                     engine.set_optimization_level(OptimizationLevel::None);
                 }
 
@@ -178,9 +178,9 @@ fn main() {
                     })
             })
         {
-            println!("");
+            println!();
             print_error(&input, err);
-            println!("");
+            println!();
         }
     }
 }

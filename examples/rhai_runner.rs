@@ -10,7 +10,7 @@ fn padding(pad: &str, len: usize) -> String {
 }
 
 fn eprint_error(input: &str, err: EvalAltResult) {
-    fn eprint_line(lines: &Vec<&str>, line: usize, pos: usize, err: &str) {
+    fn eprint_line(lines: &[&str], line: usize, pos: usize, err: &str) {
         let line_no = format!("{}: ", line);
         let pos_text = format!(" (line {}, position {})", line, pos);
 
@@ -23,7 +23,7 @@ fn eprint_error(input: &str, err: EvalAltResult) {
         eprintln!("");
     }
 
-    let lines: Vec<_> = input.split("\n").collect();
+    let lines: Vec<_> = input.split('\n').collect();
 
     // Print error
     match err.position() {
@@ -72,12 +72,9 @@ fn main() {
 
         let mut contents = String::new();
 
-        match f.read_to_string(&mut contents) {
-            Err(err) => {
-                eprintln!("Error reading script file: {}\n{}", filename, err);
-                exit(1);
-            }
-            _ => (),
+        if let Err(err) = f.read_to_string(&mut contents) {
+            eprintln!("Error reading script file: {}\n{}", filename, err);
+            exit(1);
         }
 
         if let Err(err) = engine.consume(false, &contents) {
