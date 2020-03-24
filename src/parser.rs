@@ -516,7 +516,7 @@ pub enum Token {
     XOrAssign,
     ModuloAssign,
     PowerOfAssign,
-    LexError(LexError),
+    LexError(Box<LexError>),
 }
 
 impl Token {
@@ -955,7 +955,9 @@ impl<'a> TokenIterator<'a> {
                             INT::from_str_radix(&out, radix)
                                 .map(Token::IntegerConstant)
                                 .unwrap_or_else(|_| {
-                                    Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                    Token::LexError(Box::new(LERR::MalformedNumber(
+                                        result.iter().collect(),
+                                    )))
                                 }),
                             pos,
                         ));
@@ -969,7 +971,9 @@ impl<'a> TokenIterator<'a> {
 
                         return Some((
                             num.unwrap_or_else(|_| {
-                                Token::LexError(LERR::MalformedNumber(result.iter().collect()))
+                                Token::LexError(Box::new(LERR::MalformedNumber(
+                                    result.iter().collect(),
+                                )))
                             }),
                             pos,
                         ));
@@ -1000,7 +1004,10 @@ impl<'a> TokenIterator<'a> {
                     let identifier: String = result.iter().collect();
 
                     if !is_valid_identifier {
-                        return Some((Token::LexError(LERR::MalformedIdentifier(identifier)), pos));
+                        return Some((
+                            Token::LexError(Box::new(LERR::MalformedIdentifier(identifier))),
+                            pos,
+                        ));
                     }
 
                     return Some((
@@ -1031,7 +1038,7 @@ impl<'a> TokenIterator<'a> {
                 '"' => {
                     return match self.parse_string_literal('"') {
                         Ok(out) => Some((Token::StringConst(out), pos)),
-                        Err(e) => Some((Token::LexError(e.0), e.1)),
+                        Err(e) => Some((Token::LexError(Box::new(e.0)), e.1)),
                     }
                 }
                 // ' - character literal
@@ -1042,17 +1049,23 @@ impl<'a> TokenIterator<'a> {
                         return Some((
                             if let Some(first_char) = chars.next() {
                                 if chars.count() != 0 {
-                                    Token::LexError(LERR::MalformedChar(format!("'{}'", result)))
+                                    Token::LexError(Box::new(LERR::MalformedChar(format!(
+                                        "'{}'",
+                                        result
+                                    ))))
                                 } else {
                                     Token::CharConstant(first_char)
                                 }
                             } else {
-                                Token::LexError(LERR::MalformedChar(format!("'{}'", result)))
+                                Token::LexError(Box::new(LERR::MalformedChar(format!(
+                                    "'{}'",
+                                    result
+                                ))))
                             },
                             pos,
                         ));
                     }
-                    Err(e) => return Some((Token::LexError(e.0), e.1)),
+                    Err(e) => return Some((Token::LexError(Box::new(e.0)), e.1)),
                 },
 
                 // Braces
@@ -1313,7 +1326,7 @@ impl<'a> TokenIterator<'a> {
                     ))
                 }
                 x if x.is_whitespace() => (),
-                x => return Some((Token::LexError(LERR::UnexpectedChar(x)), pos)),
+                x => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(x))), pos)),
             }
         }
 
@@ -1336,7 +1349,7 @@ impl<'a> Iterator for TokenIterator<'a> {
 /// Tokenize an input text stream.
 pub fn lex(input: &str) -> TokenIterator<'_> {
     TokenIterator {
-        last: Token::LexError(LERR::InputError("".into())),
+        last: Token::LexError(Box::new(LERR::InputError("".into()))),
         pos: Position::new(1, 0),
         char_stream: input.chars().peekable(),
     }

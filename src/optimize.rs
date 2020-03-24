@@ -591,29 +591,25 @@ pub fn optimize_into_ast(
         functions
             .into_iter()
             .map(|mut fn_def| {
-                match engine.optimization_level {
-                    OptimizationLevel::None => (),
-                    OptimizationLevel::Simple | OptimizationLevel::Full => {
-                        let pos = fn_def.body.position();
+                if engine.optimization_level != OptimizationLevel::None {
+                    let pos = fn_def.body.position();
 
-                        // Optimize the function body
-                        let mut body = optimize(vec![fn_def.body], engine, &Scope::new());
+                    // Optimize the function body
+                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new());
 
-                        // {} -> Noop
-                        fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
-                            // { return val; } -> val
-                            Stmt::ReturnWithVal(Some(val), ReturnType::Return, _) => {
-                                Stmt::Expr(val)
-                            }
-                            // { return; } -> ()
-                            Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
-                                Stmt::Expr(Box::new(Expr::Unit(pos)))
-                            }
-                            // All others
-                            stmt => stmt,
-                        };
-                    }
+                    // {} -> Noop
+                    fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                        // { return val; } -> val
+                        Stmt::ReturnWithVal(Some(val), ReturnType::Return, _) => Stmt::Expr(val),
+                        // { return; } -> ()
+                        Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
+                            Stmt::Expr(Box::new(Expr::Unit(pos)))
+                        }
+                        // All others
+                        stmt => stmt,
+                    };
                 }
+
                 Arc::new(fn_def)
             })
             .collect(),
