@@ -36,14 +36,20 @@ Install the Rhai crate by adding this line to `dependencies`:
 rhai = "0.11.0"
 ```
 
-or simply:
+Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
 
 ```toml
 [dependencies]
 rhai = "*"
 ```
 
-to use the latest version.
+Crate versions are released on [`crates.io`](https::/crates.io/crates/rhai/) infrequently, so if you want to track the
+latest features, enhancements and bug fixes, pull directly from GitHub:
+
+```toml
+[dependencies]
+rhai = { git = "https://github.com/jonathandturner/rhai" }
+```
 
 Beware that in order to use pre-releases (e.g. alpha and beta), the exact version must be specified in the `Cargo.toml`.
 
@@ -80,7 +86,7 @@ Related
 
 Other cool projects to check out:
 
-* [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
+* [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being led by my cousin.
 * Check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
 
 Examples
@@ -1225,7 +1231,7 @@ fn change(s) {  // 's' is passed by value
 }
 
 let x = 500;
-x.change();     // desugars to change(x)
+x.change();     // de-sugars to change(x)
 x == 500;       // 'x' is NOT changed!
 ```
 
