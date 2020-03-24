@@ -17,8 +17,6 @@ pub enum LexError {
     MalformedNumber(String),
     /// An character literal is in an invalid format.
     MalformedChar(String),
-    /// Error in the script text.
-    InputError(String),
     /// An identifier is in an invalid format.
     MalformedIdentifier(String),
 }
@@ -35,7 +33,6 @@ impl fmt::Display for LexError {
             Self::MalformedIdentifier(s) => {
                 write!(f, "Variable name is not in a legal format: '{}'", s)
             }
-            Self::InputError(s) => write!(f, "{}", s),
             Self::UnterminatedString => write!(f, "Open string is not terminated"),
         }
     }
@@ -98,16 +95,20 @@ pub enum ParseErrorType {
     LoopBreak,
 }
 
+impl ParseErrorType {
+    pub(crate) fn into_err(self, pos: Position) -> ParseError {
+        ParseError(self, pos)
+    }
+    pub(crate) fn into_err_eof(self) -> ParseError {
+        ParseError(self, Position::eof())
+    }
+}
+
 /// Error when parsing a script.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParseError(pub(crate) ParseErrorType, pub(crate) Position);
 
 impl ParseError {
-    /// Create a new `ParseError`.
-    pub(crate) fn new(err: ParseErrorType, pos: Position) -> Self {
-        Self(err, pos)
-    }
-
     /// Get the parse error.
     pub fn error_type(&self) -> &ParseErrorType {
         &self.0
