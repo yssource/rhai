@@ -3,7 +3,7 @@
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::engine::Engine;
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::scope::{Scope, VariableType};
+use crate::scope::{EntryType as ScopeEntryType, Scope};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;
@@ -2024,7 +2024,7 @@ fn parse_for<'a>(
 /// Parse a variable definition statement.
 fn parse_let<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    var_type: VariableType,
+    var_type: ScopeEntryType,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
@@ -2049,13 +2049,13 @@ fn parse_let<'a>(
 
         match var_type {
             // let name = expr
-            VariableType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
+            ScopeEntryType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
             // const name = { expr:constant }
-            VariableType::Constant if init_value.is_constant() => {
+            ScopeEntryType::Constant if init_value.is_constant() => {
                 Ok(Stmt::Const(name, Box::new(init_value), pos))
             }
             // const name = expr - error
-            VariableType::Constant => Err(ParseError(
+            ScopeEntryType::Constant => Err(ParseError(
                 PERR::ForbiddenConstantExpr(name),
                 init_value.position(),
             )),
@@ -2186,8 +2186,8 @@ fn parse_stmt<'a>(
             }
         }
         (Token::LeftBrace, _) => parse_block(input, breakable, allow_stmt_expr),
-        (Token::Let, _) => parse_let(input, VariableType::Normal, allow_stmt_expr),
-        (Token::Const, _) => parse_let(input, VariableType::Constant, allow_stmt_expr),
+        (Token::Let, _) => parse_let(input, ScopeEntryType::Normal, allow_stmt_expr),
+        (Token::Const, _) => parse_let(input, ScopeEntryType::Constant, allow_stmt_expr),
         _ => parse_expr_stmt(input, allow_stmt_expr),
     }
 }

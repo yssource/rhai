@@ -6,7 +6,7 @@ use crate::engine::{
     KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
-use crate::scope::{Scope, ScopeEntry, VariableType};
+use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
     boxed::Box,
@@ -512,9 +512,9 @@ pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &S
     // Add constants from the scope into the state
     scope
         .iter()
-        .filter(|ScopeEntry { var_type, expr, .. }| {
+        .filter(|ScopeEntry { typ, expr, .. }| {
             // Get all the constants with definite constant expressions
-            *var_type == VariableType::Constant
+            *typ == ScopeEntryType::Constant
                 && expr.as_ref().map(Expr::is_constant).unwrap_or(false)
         })
         .for_each(|ScopeEntry { name, expr, .. }| {

@@ -3,7 +3,7 @@
 use crate::any::{Any, AnyExt, Dynamic, Variant};
 use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, INT};
 use crate::result::EvalAltResult;
-use crate::scope::{Scope, ScopeSource, VariableType};
+use crate::scope::{EntryRef as ScopeSource, EntryType as ScopeEntryType, Scope};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::OptimizationLevel;
@@ -86,9 +86,8 @@ pub struct Engine<'e> {
     pub(crate) on_debug: Box<dyn FnMut(&str) + 'e>,
 }
 
-impl Engine<'_> {
-    /// Create a new `Engine`
-    pub fn new() -> Self {
+impl Default for Engine<'_> {
+    fn default() -> Self {
         // User-friendly names for built-in types
         let type_names = [
             #[cfg(not(feature = "no_index"))]
@@ -97,7 +96,7 @@ impl Engine<'_> {
             (type_name::<Dynamic>(), "dynamic"),
         ]
         .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
         .collect();
 
         // Create the new scripting Engine
@@ -124,6 +123,13 @@ impl Engine<'_> {
         engine.register_stdlib(); // Register the standard library when no_stdlib is not set
 
         engine
+    }
+}
+
+impl Engine<'_> {
+    /// Create a new `Engine`
+    pub fn new() -> Self {
+        Default::default()
     }
 
     /// Control whether and how the `Engine` will optimize an AST after compilation
@@ -178,7 +184,7 @@ impl Engine<'_> {
                     .params
                     .iter()
                     .zip(args.iter().map(|x| (*x).into_dynamic()))
-                    .map(|(name, value)| (name, VariableType::Normal, value)),
+                    .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
             );
 
             // Evaluate
@@ -288,8 +294,9 @@ impl Engine<'_> {
             } else {
                 // Otherwise, if `src` is `Some`, then it holds a name and index into `scope`;
                 // using `get_mut` on `scope` to retrieve a mutable reference for return.
-                let ScopeSource { name, idx, .. } = src.expect("expected source in scope");
-                scope.get_mut(name, idx).as_mut()
+                scope
+                    .get_mut(src.expect("expected source in scope"))
+                    .as_mut()
             }
         }
 
@@ -419,18 +426,14 @@ impl Engine<'_> {
         match dot_lhs {
             // id.???
             Expr::Variable(id, pos) => {
-                let (ScopeSource { idx, var_type, .. }, _) =
-                    Self::search_scope(scope, id, Ok, *pos)?;
+                let (entry, _) = Self::search_scope(scope, id, Ok, *pos)?;
+
+                // Avoid referencing scope which is used below as mut
+                let entry = ScopeSource { name: id, ..entry };
 
                 // This is a variable property access (potential function call).
                 // Use a direct index into `scope` to directly mutate the variable value.
-                let src = ScopeSource {
-                    name: id,
-                    idx,
-                    var_type,
-                };
-
-                self.get_dot_val_helper(scope, Some(src), None, dot_rhs)
+                self.get_dot_val_helper(scope, Some(entry), None, dot_rhs)
             }
 
             // idx_lhs[idx_expr].???
@@ -442,14 +445,14 @@ impl Engine<'_> {
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
-                    match src.var_type {
-                        VariableType::Constant => {
+                    match src.typ {
+                        ScopeEntryType::Constant => {
                             return Err(EvalAltResult::ErrorAssignmentToConstant(
                                 src.name.to_string(),
                                 idx_lhs.position(),
                             ));
                         }
-                        VariableType::Normal => {
+                        ScopeEntryType::Normal => {
                             Self::update_indexed_var_in_scope(
                                 src_type,
                                 scope,
@@ -570,8 +573,8 @@ impl Engine<'_> {
                     src_type,
                     Some(ScopeSource {
                         name: &id,
-                        var_type: src.var_type,
-                        idx: src.idx,
+                        typ: src.typ,
+                        index: src.index,
                     }),
                     idx as usize,
                     val,
@@ -614,14 +617,14 @@ impl Engine<'_> {
         match src_type {
             // array_id[idx] = val
             IndexSourceType::Array => {
-                let arr = scope.get_mut_by_type::<Array>(src.name, src.idx);
+                let arr = scope.get_mut_by_type::<Array>(src);
                 arr[idx as usize] = new_val.0;
                 Ok(().into_dynamic())
             }
 
             // string_id[idx] = val
             IndexSourceType::String => {
-                let s = scope.get_mut_by_type::<String>(src.name, src.idx);
+                let s = scope.get_mut_by_type::<String>(src);
                 let pos = new_val.1;
                 // Value must be a character
                 let ch = *new_val
@@ -793,19 +796,21 @@ impl Engine<'_> {
         match dot_lhs {
             // id.???
             Expr::Variable(id, pos) => {
-                let (ScopeSource { idx, var_type, .. }, mut target) =
-                    Self::search_scope(scope, id, Ok, *pos)?;
+                let (entry, mut target) = Self::search_scope(scope, id, Ok, *pos)?;
 
-                match var_type {
-                    VariableType::Constant => Err(EvalAltResult::ErrorAssignmentToConstant(
+                match entry.typ {
+                    ScopeEntryType::Constant => Err(EvalAltResult::ErrorAssignmentToConstant(
                         id.to_string(),
                         op_pos,
                     )),
                     _ => {
+                        // Avoid referencing scope which is used below as mut
+                        let entry = ScopeSource { name: id, ..entry };
+
                         let val = self.set_dot_val_helper(scope, target.as_mut(), dot_rhs, new_val);
 
                         // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                        *scope.get_mut(id, idx) = target;
+                        *scope.get_mut(entry) = target;
 
                         val
                     }
@@ -823,14 +828,14 @@ impl Engine<'_> {
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
-                    match src.var_type {
-                        VariableType::Constant => {
+                    match src.typ {
+                        ScopeEntryType::Constant => {
                             return Err(EvalAltResult::ErrorAssignmentToConstant(
                                 src.name.to_string(),
                                 lhs.position(),
                             ));
                         }
-                        VariableType::Normal => {
+                        ScopeEntryType::Normal => {
                             Self::update_indexed_var_in_scope(
                                 src_type,
                                 scope,
@@ -880,29 +885,30 @@ impl Engine<'_> {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(name, pos) => match scope.get(name) {
-                        Some((
-                            ScopeSource {
-                                idx,
-                                var_type: VariableType::Normal,
-                                ..
-                            },
-                            _,
-                        )) => {
-                            *scope.get_mut(name, idx) = rhs_val.clone();
+                    Expr::Variable(name, pos) => match scope
+                        .get(name)
+                        .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.clone(), *pos))?
+                        .0
+                    {
+                        entry
+                        @
+                        ScopeSource {
+                            typ: ScopeEntryType::Normal,
+                            ..
+                        } => {
+                            // Avoid referencing scope which is used below as mut
+                            let entry = ScopeSource { name, ..entry };
+
+                            *scope.get_mut(entry) = rhs_val.clone();
                             Ok(rhs_val)
                         }
-                        Some((
-                            ScopeSource {
-                                var_type: VariableType::Constant,
-                                ..
-                            },
-                            _,
-                        )) => Err(EvalAltResult::ErrorAssignmentToConstant(
+                        ScopeSource {
+                            typ: ScopeEntryType::Constant,
+                            ..
+                        } => Err(EvalAltResult::ErrorAssignmentToConstant(
                             name.to_string(),
                             *op_pos,
                         )),
-                        _ => Err(EvalAltResult::ErrorVariableNotFound(name.clone(), *pos)),
                     },
 
                     // idx_lhs[idx_expr] = rhs
@@ -912,14 +918,14 @@ impl Engine<'_> {
                             self.eval_index_expr(scope, idx_lhs, idx_expr, *op_pos)?;
 
                         if let Some(src) = src {
-                            match src.var_type {
-                                VariableType::Constant => {
+                            match src.typ {
+                                ScopeEntryType::Constant => {
                                     Err(EvalAltResult::ErrorAssignmentToConstant(
                                         src.name.to_string(),
                                         idx_lhs.position(),
                                     ))
                                 }
-                                VariableType::Normal => Ok(Self::update_indexed_var_in_scope(
+                                ScopeEntryType::Normal => Ok(Self::update_indexed_var_in_scope(
                                     src_type,
                                     scope,
                                     src,
@@ -1203,10 +1209,15 @@ impl Engine<'_> {
 
                 if let Some(iter_fn) = self.type_iterators.get(&tid) {
                     scope.push(name.clone(), ());
-                    let idx = scope.len() - 1;
+
+                    let entry = ScopeSource {
+                        name,
+                        index: scope.len() - 1,
+                        typ: ScopeEntryType::Normal,
+                    };
 
                     for a in iter_fn(&arr) {
-                        *scope.get_mut(name, idx) = a;
+                        *scope.get_mut(entry) = a;
 
                         match self.eval_stmt(scope, body) {
                             Ok(_) => (),
@@ -1214,7 +1225,8 @@ impl Engine<'_> {
                             Err(x) => return Err(x),
                         }
                     }
-                    scope.pop();
+
+                    scope.rewind(scope.len() - 1);
                     Ok(().into_dynamic())
                 } else {
                     Err(EvalAltResult::ErrorFor(expr.position()))
@@ -1253,7 +1265,7 @@ impl Engine<'_> {
             // Let statement
             Stmt::Let(name, Some(expr), _) => {
                 let val = self.eval_expr(scope, expr)?;
-                scope.push_dynamic(name.clone(), VariableType::Normal, val);
+                scope.push_dynamic_value(name.clone(), ScopeEntryType::Normal, val, false);
                 Ok(().into_dynamic())
             }
 
@@ -1265,7 +1277,7 @@ impl Engine<'_> {
             // Const statement
             Stmt::Const(name, expr, _) if expr.is_constant() => {
                 let val = self.eval_expr(scope, expr)?;
-                scope.push_dynamic(name.clone(), VariableType::Constant, val);
+                scope.push_dynamic_value(name.clone(), ScopeEntryType::Constant, val, true);
                 Ok(().into_dynamic())
             }
 
