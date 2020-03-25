@@ -23,3 +23,52 @@ fn test_expressions() -> Result<(), EvalAltResult> {
 
     Ok(())
 }
+
+/// This example taken from https://github.com/jonathandturner/rhai/issues/115
+#[test]
+fn test_expressions_eval() -> Result<(), EvalAltResult> {
+    #[derive(Debug, Clone)]
+    struct AGENT {
+        pub gender: String,
+        pub age: INT,
+    }
+
+    impl AGENT {
+        pub fn get_gender(&mut self) -> String {
+            self.gender.clone()
+        }
+        pub fn get_age(&mut self) -> INT {
+            self.age
+        }
+    }
+
+    // This is your agent
+    let my_agent = AGENT {
+        gender: "male".into(),
+        age: 42,
+    };
+
+    // Create the engine
+    let mut engine = Engine::new();
+
+    // Register your AGENT type
+    engine.register_type_with_name::<AGENT>("AGENT");
+    engine.register_get("gender", AGENT::get_gender);
+    engine.register_get("age", AGENT::get_age);
+
+    // Create your context, add the agent as a constant
+    let mut scope = Scope::new();
+    scope.push_constant("agent", my_agent);
+
+    // Evaluate the expression
+    let result: bool = engine.eval_expression_with_scope(
+        &mut scope,
+        r#"
+                agent.age > 10 && agent.gender == "male"
+        "#,
+    )?;
+
+    assert_eq!(result, true);
+
+    Ok(())
+}
