@@ -80,7 +80,8 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
     /// // Normal function
     /// fn div(x: i64, y: i64) -> Result<i64, EvalAltResult> {
     ///     if y == 0 {
-    ///         Err("division by zero!".into())     // '.into()' automatically converts to 'EvalAltResult::ErrorRuntime'
+    ///         // '.into()' automatically converts to 'EvalAltResult::ErrorRuntime'
+    ///         Err("division by zero!".into())
     ///     } else {
     ///         Ok(x / y)
     ///     }
@@ -97,14 +98,28 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
     fn register_result_fn(&mut self, name: &str, f: FN);
 }
 
+// These types are used to build a unique _marker_ tuple type for each combination
+// of function parameter types in order to make each trait implementation unique.
+//
+// For example:
+//
+// `RegisterFn<FN, (Mut<A>, B, Ref<C>), R>`
+//
+// will have the function prototype constraint to:
+//
+// `FN: (&mut A, B, &C) -> R`
+//
+// These types are not actually used anywhere.
 pub struct Ref<A>(A);
 pub struct Mut<A>(A);
 
+/// Identity dereferencing function.
 #[inline]
 fn identity<T>(data: T) -> T {
     data
 }
 
+/// This macro counts the number of arguments via recursion.
 macro_rules! count_args {
     () => { 0_usize };
     ( $head:ident $($tail:ident)* ) => { 1_usize + count_args!($($tail)*) };
@@ -115,6 +130,10 @@ macro_rules! def_register {
         def_register!(imp);
     };
     (imp $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
+    //     ^ function parameter generic type name
+    //                   ^ function parameter marker type (A, Ref<A> or Mut<A>)
+    //                               ^ function parameter actual type
+    //                                            ^ dereferencing function
         impl<
             $($par: Any + Clone,)*
             FN: Fn($($param),*) -> RET + 'static,
@@ -220,6 +239,8 @@ macro_rules! def_register {
         def_register!(imp $p0 => $p0      => $p0      => Clone::clone   $(, $p => $p => $p => Clone::clone)*);
         def_register!(imp $p0 => Ref<$p0> => &$p0     => identity       $(, $p => $p => $p => Clone::clone)*);
         def_register!(imp $p0 => Mut<$p0> => &mut $p0 => identity       $(, $p => $p => $p => Clone::clone)*);
+        // handle the first parameter                    ^ first parameter passed through
+        //                                                    others passed by value (cloned) ^
 
         def_register!($($p),*);
     };
