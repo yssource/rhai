@@ -100,6 +100,8 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
 
 // These types are used to build a unique _marker_ tuple type for each combination
 // of function parameter types in order to make each trait implementation unique.
+// That is because stable Rust currently does not allow distinguishing implementations
+// based purely on parameter types of traits (Fn, FnOnce and FnMut).
 //
 // For example:
 //
@@ -110,8 +112,8 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
 // `FN: (&mut A, B, &C) -> R`
 //
 // These types are not actually used anywhere.
-pub struct Ref<A>(A);
-pub struct Mut<A>(A);
+pub struct Mut<T>(T);
+//pub struct Ref<T>(T);
 
 /// Identity dereferencing function.
 #[inline]
@@ -131,7 +133,7 @@ macro_rules! def_register {
     };
     (imp $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
     //     ^ function parameter generic type name
-    //                   ^ function parameter marker type (A, Ref<A> or Mut<A>)
+    //                   ^ function parameter marker type (T, Ref<T> or Mut<T>)
     //                               ^ function parameter actual type
     //                                            ^ dereferencing function
         impl<
@@ -237,10 +239,12 @@ macro_rules! def_register {
     };
     ($p0:ident $(, $p:ident)*) => {
         def_register!(imp $p0 => $p0      => $p0      => Clone::clone   $(, $p => $p => $p => Clone::clone)*);
-        def_register!(imp $p0 => Ref<$p0> => &$p0     => identity       $(, $p => $p => $p => Clone::clone)*);
         def_register!(imp $p0 => Mut<$p0> => &mut $p0 => identity       $(, $p => $p => $p => Clone::clone)*);
         // handle the first parameter                    ^ first parameter passed through
         //                                                    others passed by value (cloned) ^
+
+        // No support for functions where the first argument is a reference
+        //def_register!(imp $p0 => Ref<$p0> => &$p0     => identity       $(, $p => $p => $p => Clone::clone)*);
 
         def_register!($($p),*);
     };
@@ -251,4 +255,4 @@ macro_rules! def_register {
 }
 
 #[rustfmt::skip]
-def_register!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
+def_register!(A, B, C, D, E, F, G, H, J, K, L, M, N, P, Q, R, S, T, U, V);
