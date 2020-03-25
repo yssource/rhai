@@ -63,7 +63,7 @@ pub use error::{ParseError, ParseErrorType};
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 pub use parser::{Position, AST, INT};
 pub use result::EvalAltResult;
-pub use scope::{Scope, ScopeEntry, VariableType};
+pub use scope::Scope;
 
 #[cfg(not(feature = "no_index"))]
 pub use engine::Array;
