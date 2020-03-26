@@ -621,10 +621,6 @@ impl Engine<'_> {
             });
         }
 
-        fn range<T>(from: T, to: T) -> Range<T> {
-            from..to
-        }
-
         reg_iterator::<INT>(self);
         self.register_fn("range", |i1: INT, i2: INT| (i1..i2));
 
@@ -632,15 +628,15 @@ impl Engine<'_> {
         #[cfg(not(feature = "only_i64"))]
         {
             macro_rules! reg_range {
-                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+                ($self:expr, $x:expr, $( $y:ty ),*) => (
                     $(
                         reg_iterator::<$y>(self);
-                        $self.register_fn($x, $op as fn(x: $y, y: $y)->Range<$y>);
+                        $self.register_fn($x, (|x: $y, y: $y| x..y) as fn(x: $y, y: $y)->Range<$y>);
                     )*
                 )
             }
 
-            reg_range!(self, "range", range, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_range!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64);
         }
     }
 }
@@ -889,9 +885,7 @@ impl Engine<'_> {
             let trimmed = s.trim();
 
             if trimmed.len() < s.len() {
-                let chars: Vec<_> = trimmed.chars().collect();
-                s.clear();
-                chars.iter().for_each(|&ch| s.push(ch));
+                *s = trimmed.to_string();
             }
         });
     }
