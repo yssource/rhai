@@ -2,8 +2,7 @@
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
@@ -452,7 +451,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
-            let call_args: FnCallArgs = arg_values.iter_mut().map(Dynamic::as_mut).collect();
+            let mut call_args: Vec<_> = arg_values.iter_mut().map(Dynamic::as_mut).collect();
 
             // Save the typename of the first argument if it is `type_of()`
             // This is to avoid `call_args` being passed into the closure
@@ -462,7 +461,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            state.engine.call_ext_fn_raw(&id, call_args, pos).ok().map(|r|
+            state.engine.call_ext_fn_raw(&id, &mut call_args, pos).ok().map(|r|
                 r.or_else(|| {
                     if !arg_for_type_of.is_empty() {
                         // Handle `type_of()`

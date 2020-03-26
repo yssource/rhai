@@ -25,9 +25,9 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
-pub type FnCallArgs<'a> = Vec<&'a mut Variant>;
+pub type FnCallArgs<'a> = [&'a mut Variant];
 
-pub type FnAny = dyn Fn(FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
+pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
 
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
@@ -143,7 +143,7 @@ impl Engine<'_> {
     pub(crate) fn call_ext_fn_raw(
         &self,
         fn_name: &str,
-        args: FnCallArgs,
+        args: &mut FnCallArgs,
         pos: Position,
     ) -> Result<Option<Dynamic>, EvalAltResult> {
         let spec = FnSpec {
@@ -165,7 +165,7 @@ impl Engine<'_> {
     pub(crate) fn call_fn_raw(
         &mut self,
         fn_name: &str,
-        args: FnCallArgs,
+        args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
@@ -255,11 +255,11 @@ impl Engine<'_> {
         }
 
         // Raise error
-        let types_list = args
+        let types_list: Vec<_> = args
             .iter()
             .map(|x| (*x).type_name())
             .map(|name| self.map_type_name(name))
-            .collect::<Vec<_>>();
+            .collect();
 
         Err(EvalAltResult::ErrorFunctionNotFound(
             format!("{} ({})", fn_name, types_list.join(", ")),
@@ -310,18 +310,18 @@ impl Engine<'_> {
 
                 let this_ptr = get_this_ptr(scope, src, target);
 
-                let args = once(this_ptr)
+                let mut arg_values: Vec<_> = once(this_ptr)
                     .chain(values.iter_mut().map(Dynamic::as_mut))
                     .collect();
 
-                self.call_fn_raw(fn_name, args, def_val.as_ref(), *pos)
+                self.call_fn_raw(fn_name, &mut arg_values, def_val.as_ref(), *pos)
             }
 
             // xxx.id
             Expr::Property(id, pos) => {
                 let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                 let this_ptr = get_this_ptr(scope, src, target);
-                self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos)
             }
 
             // xxx.idx_lhs[idx_expr]
@@ -333,7 +333,7 @@ impl Engine<'_> {
                         let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                         let this_ptr = get_this_ptr(scope, src, target);
                         (
-                            self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
+                            self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos)?,
                             *pos,
                         )
                     }
@@ -363,7 +363,7 @@ impl Engine<'_> {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                     let this_ptr = get_this_ptr(scope, src, target);
 
-                    self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                    self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos)
                         .and_then(|mut v| {
                             self.get_dot_val_helper(scope, None, Some(v.as_mut()), rhs)
                         })
@@ -377,7 +377,7 @@ impl Engine<'_> {
                             let get_fn_name = format!("{}{}", FUNC_GETTER, id);
                             let this_ptr = get_this_ptr(scope, src, target);
                             (
-                                self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)?,
+                                self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos)?,
                                 *pos,
                             )
                         }
@@ -678,7 +678,12 @@ impl Engine<'_> {
             Expr::Property(id, pos) => {
                 let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
-                self.call_fn_raw(&set_fn_name, vec![this_ptr, new_val.0.as_mut()], None, *pos)
+                self.call_fn_raw(
+                    &set_fn_name,
+                    &mut [this_ptr, new_val.0.as_mut()],
+                    None,
+                    *pos,
+                )
             }
 
             // xxx.lhs[idx_expr]
@@ -689,7 +694,7 @@ impl Engine<'_> {
                 Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                    self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                    self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos)
                         .and_then(|v| {
                             let idx = self.eval_index_value(scope, idx_expr)?;
                             Self::update_indexed_value(
@@ -701,7 +706,7 @@ impl Engine<'_> {
                         })
                         .and_then(|mut v| {
                             let set_fn_name = format!("{}{}", FUNC_SETTER, id);
-                            self.call_fn_raw(&set_fn_name, vec![this_ptr, v.as_mut()], None, *pos)
+                            self.call_fn_raw(&set_fn_name, &mut [this_ptr, v.as_mut()], None, *pos)
                         })
                 }
 
@@ -718,7 +723,7 @@ impl Engine<'_> {
                 Expr::Property(id, pos) => {
                     let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                    self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                    self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos)
                         .and_then(|mut v| {
                             self.set_dot_val_helper(scope, v.as_mut(), rhs, new_val)
                                 .map(|_| v) // Discard Ok return value
@@ -726,7 +731,7 @@ impl Engine<'_> {
                         .and_then(|mut v| {
                             let set_fn_name = format!("{}{}", FUNC_SETTER, id);
 
-                            self.call_fn_raw(&set_fn_name, vec![this_ptr, v.as_mut()], None, *pos)
+                            self.call_fn_raw(&set_fn_name, &mut [this_ptr, v.as_mut()], None, *pos)
                         })
                 }
 
@@ -738,7 +743,7 @@ impl Engine<'_> {
                     Expr::Property(id, pos) => {
                         let get_fn_name = format!("{}{}", FUNC_GETTER, id);
 
-                        self.call_fn_raw(&get_fn_name, vec![this_ptr], None, *pos)
+                        self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos)
                             .and_then(|v| {
                                 let idx = self.eval_index_value(scope, idx_expr)?;
                                 let (mut target, _) =
@@ -752,10 +757,9 @@ impl Engine<'_> {
                             })
                             .and_then(|mut v| {
                                 let set_fn_name = format!("{}{}", FUNC_SETTER, id);
-
                                 self.call_fn_raw(
                                     &set_fn_name,
-                                    vec![this_ptr, v.as_mut()],
+                                    &mut [this_ptr, v.as_mut()],
                                     None,
                                     *pos,
                                 )
@@ -1007,7 +1011,7 @@ impl Engine<'_> {
                         // Redirect call to `print`
                         self.call_fn_raw(
                             KEYWORD_PRINT,
-                            vec![result.into_dynamic().as_mut()],
+                            &mut [result.into_dynamic().as_mut()],
                             None,
                             pos,
                         )
@@ -1068,14 +1072,12 @@ impl Engine<'_> {
                         let mut values = args_expr_list
                             .iter()
                             .map(|expr| self.eval_expr(scope, expr))
-                            .collect::<Result<Vec<Dynamic>, _>>()?;
+                            .collect::<Result<Vec<_>, _>>()?;
 
-                        self.call_fn_raw(
-                            fn_name,
-                            values.iter_mut().map(|b| b.as_mut()).collect(),
-                            def_val.as_ref(),
-                            *pos,
-                        )
+                        let mut arg_values: Vec<_> =
+                            values.iter_mut().map(Dynamic::as_mut).collect();
+
+                        self.call_fn_raw(fn_name, &mut arg_values, def_val.as_ref(), *pos)
                     }
                 }
             }

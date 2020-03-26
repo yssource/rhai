@@ -145,7 +145,7 @@ macro_rules! def_register {
             fn register_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
 
-                let fun = move |mut args: FnCallArgs, pos: Position| {
+                let fun = move |args: &mut FnCallArgs, pos: Position| {
                     // Check for length at the beginning to avoid per-element bound checks.
                     const NUM_ARGS: usize = count_args!($($par)*);
 
@@ -154,7 +154,7 @@ macro_rules! def_register {
                     }
 
                     #[allow(unused_variables, unused_mut)]
-                    let mut drain = args.drain(..);
+                    let mut drain = args.iter_mut();
                     $(
                     // Downcast every element, return in case of a type mismatch
                     let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
@@ -177,7 +177,7 @@ macro_rules! def_register {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
 
-                let fun = move |mut args: FnCallArgs, pos: Position| {
+                let fun = move |args: &mut FnCallArgs, pos: Position| {
                     // Check for length at the beginning to avoid per-element bound checks.
                     const NUM_ARGS: usize = count_args!($($par)*);
 
@@ -186,7 +186,7 @@ macro_rules! def_register {
                     }
 
                     #[allow(unused_variables, unused_mut)]
-                    let mut drain = args.drain(..);
+                    let mut drain = args.iter_mut();
                     $(
                     // Downcast every element, return in case of a type mismatch
                     let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
@@ -209,7 +209,7 @@ macro_rules! def_register {
             fn register_result_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
 
-                let fun = move |mut args: FnCallArgs, pos: Position| {
+                let fun = move |args: &mut FnCallArgs, pos: Position| {
                     // Check for length at the beginning to avoid per-element bound checks.
                     const NUM_ARGS: usize = count_args!($($par)*);
 
@@ -218,7 +218,7 @@ macro_rules! def_register {
                     }
 
                     #[allow(unused_variables, unused_mut)]
-                    let mut drain = args.drain(..);
+                    let mut drain = args.iter_mut();
                     $(
                     // Downcast every element, return in case of a type mismatch
                     let $par = drain.next().unwrap().downcast_mut::<$par>().unwrap();
