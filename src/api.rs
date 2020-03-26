@@ -15,6 +15,7 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    format,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
@@ -177,7 +178,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T) -> U + 'static,
     ) {
-        let get_fn_name = FUNC_GETTER.to_string() + name;
+        let get_fn_name = format!("{}{}", FUNC_GETTER, name);
         self.register_fn(&get_fn_name, callback);
     }
 
@@ -219,7 +220,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T, U) -> () + 'static,
     ) {
-        let set_fn_name = FUNC_SETTER.to_string() + name;
+        let set_fn_name = format!("{}{}", FUNC_SETTER, name);
         self.register_fn(&set_fn_name, callback);
     }
 
@@ -893,8 +894,8 @@ impl<'e> Engine<'e> {
             name: &str,
             mut values: Vec<Dynamic>,
         ) -> Result<Dynamic, EvalAltResult> {
-            let values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
-            engine.call_fn_raw(name, values, None, Position::none())
+            let mut values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
+            engine.call_fn_raw(name, &mut values, None, Position::none())
         }
 
         call_fn_internal(self, name, args.into_vec()).and_then(|b| {
