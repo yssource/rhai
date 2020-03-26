@@ -76,4 +76,4 @@ macro_rules! impl_args {
 }
 
 #[rustfmt::skip]
-impl_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
+impl_args!(A, B, C, D, E, F, G, H, J, K, L, M, N, P, Q, R, S, T, U, V);
