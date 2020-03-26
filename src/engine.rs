@@ -12,6 +12,7 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     borrow::Cow,
     boxed::Box,
+    cmp::Ordering,
     collections::HashMap,
     format,
     iter::once,
@@ -53,6 +54,64 @@ pub struct FnSpec<'a> {
     pub args: Option<Vec<TypeId>>,
 }
 
+/// A type that holds a library of script-defined functions.
+///
+/// Since script-defined functions have `Dynamic` parameters, functions with the same name
+/// and number of parameters are considered equivalent.
+///
+/// Since the key is a combination of the function name (a String) plus the number of parameters,
+/// we cannot use a `HashMap` because we don't want to clone the function name string just
+/// to search for it.
+///
+/// So instead this is implemented as a sorted list and binary searched.
+#[derive(Debug)]
+pub struct FunctionsLib(Vec<Arc<FnDef>>);
+
+impl FnDef {
+    /// Function to order two FnDef records, for binary search.
+    pub fn compare(&self, name: &str, params_len: usize) -> Ordering {
+        // First order by name
+        match self.name.as_str().cmp(name) {
+            // Then by number of parameters
+            Ordering::Equal => self.params.len().cmp(&params_len),
+            order => order,
+        }
+    }
+}
+
+impl FunctionsLib {
+    /// Create a new `FunctionsLib`.
+    pub fn new() -> Self {
+        FunctionsLib(Vec::new())
+    }
+    /// Clear the `FunctionsLib`.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+    /// Does a certain function exist in the `FunctionsLib`?
+    pub fn has_function(&self, name: &str, params: usize) -> bool {
+        self.0.binary_search_by(|f| f.compare(name, params)).is_ok()
+    }
+    /// Add a function (or replace an existing one) in the `FunctionsLib`.
+    pub fn add_or_replace_function(&mut self, fn_def: Arc<FnDef>) {
+        match self
+            .0
+            .binary_search_by(|f| f.compare(&fn_def.name, fn_def.params.len()))
+        {
+            Ok(n) => self.0[n] = fn_def,
+            Err(n) => self.0.insert(n, fn_def),
+        }
+    }
+    /// Get a function definition from the `FunctionsLib`.
+    pub fn get_function(&self, name: &str, params: usize) -> Option<Arc<FnDef>> {
+        if let Ok(n) = self.0.binary_search_by(|f| f.compare(name, params)) {
+            Some(self.0[n].clone())
+        } else {
+            None
+        }
+    }
+}
+
 /// Rhai main scripting engine.
 ///
 /// ```
@@ -72,9 +131,9 @@ pub struct Engine<'e> {
     #[cfg(not(feature = "no_optimize"))]
     pub(crate) optimization_level: OptimizationLevel,
     /// A hashmap containing all compiled functions known to the engine
-    pub(crate) ext_functions: HashMap<FnSpec<'e>, Box<FnAny>>,
+    pub(crate) functions: HashMap<FnSpec<'e>, Box<FnAny>>,
     /// A hashmap containing all script-defined functions
-    pub(crate) script_functions: Vec<Arc<FnDef>>,
+    pub(crate) fn_lib: FunctionsLib,
     /// A hashmap containing all iterators known to the engine
     pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
     /// A hashmap mapping type names to pretty-print names
@@ -101,8 +160,8 @@ impl Default for Engine<'_> {
 
         // Create the new scripting Engine
         let mut engine = Engine {
-            ext_functions: HashMap::new(),
-            script_functions: Vec::new(),
+            functions: HashMap::new(),
+            fn_lib: FunctionsLib::new(),
             type_iterators: HashMap::new(),
             type_names,
             on_print: Box::new(default_print), // default print/debug implementations
@@ -152,7 +211,7 @@ impl Engine<'_> {
         };
 
         // Search built-in's and external functions
-        if let Some(func) = self.ext_functions.get(&spec) {
+        if let Some(func) = self.functions.get(&spec) {
             // Run external function
             Ok(Some(func(args, pos)?))
         } else {
@@ -170,13 +229,8 @@ impl Engine<'_> {
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
         // First search in script-defined functions (can override built-in)
-        if let Ok(n) = self
-            .script_functions
-            .binary_search_by(|f| f.compare(fn_name, args.len()))
-        {
+        if let Some(fn_def) = self.fn_lib.get_function(fn_name, args.len()) {
             let mut scope = Scope::new();
-
-            let fn_def = self.script_functions[n].clone();
 
             scope.extend(
                 // Put arguments into scope as variables
@@ -191,12 +245,9 @@ impl Engine<'_> {
             // Convert return statement to return value
             return self
                 .eval_stmt(&mut scope, &fn_def.body)
-                .or_else(|mut err| match err {
+                .or_else(|err| match err {
                     EvalAltResult::Return(x, _) => Ok(x),
-                    _ => {
-                        err.set_position(pos);
-                        Err(err)
-                    }
+                    err => Err(err.set_position(pos)),
                 });
         }
 
@@ -213,7 +264,7 @@ impl Engine<'_> {
         }
 
         // Search built-in's and external functions
-        if let Some(func) = self.ext_functions.get(&spec) {
+        if let Some(func) = self.functions.get(&spec) {
             // Run external function
             let result = func(args, pos)?;
 
@@ -985,11 +1036,7 @@ impl Engine<'_> {
                         args: Some(vec![TypeId::of::<String>()]),
                     };
 
-                    engine.ext_functions.contains_key(&spec)
-                        || engine
-                            .script_functions
-                            .binary_search_by(|f| f.compare(name, 1))
-                            .is_ok()
+                    engine.functions.contains_key(&spec) || engine.fn_lib.has_function(name, 1)
                 }
 
                 match fn_name.as_str() {
@@ -1005,13 +1052,12 @@ impl Engine<'_> {
                         let result = args_expr_list
                             .iter()
                             .map(|expr| format!("{:#?}", expr))
-                            .collect::<Vec<_>>()
-                            .join("\n");
+                            .collect::<Vec<_>>();
 
                         // Redirect call to `print`
                         self.call_fn_raw(
                             KEYWORD_PRINT,
-                            &mut [result.into_dynamic().as_mut()],
+                            &mut [result.join("\n").into_dynamic().as_mut()],
                             None,
                             pos,
                         )
@@ -1061,10 +1107,7 @@ impl Engine<'_> {
 
                         Ok(self
                             .eval_ast_with_scope_raw(scope, true, &ast)
-                            .map_err(|mut err| {
-                                err.set_position(pos);
-                                err
-                            })?)
+                            .map_err(|err| err.set_position(pos))?)
                     }
 
                     // Normal function call
@@ -1297,7 +1340,7 @@ impl Engine<'_> {
 
     /// Clean up all script-defined functions within the `Engine`.
     pub fn clear_functions(&mut self) {
-        self.script_functions.clear();
+        self.fn_lib.clear();
     }
 }
 

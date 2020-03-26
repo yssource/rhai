@@ -11,9 +11,7 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    char,
-    cmp::Ordering,
-    fmt, format,
+    char, fmt, format,
     iter::Peekable,
     str::Chars,
     str::FromStr,
@@ -173,18 +171,6 @@ pub struct FnDef {
     pub body: Stmt,
     /// Position of the function definition.
     pub pos: Position,
-}
-
-impl FnDef {
-    /// Function to order two FnDef records, for binary search.
-    pub fn compare(&self, name: &str, params_len: usize) -> Ordering {
-        // First order by name
-        match self.name.as_str().cmp(name) {
-            // Then by number of parameters
-            Ordering::Equal => self.params.len().cmp(&params_len),
-            order => order,
-        }
-    }
 }
 
 /// `return`/`throw` statement.

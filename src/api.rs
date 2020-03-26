@@ -36,7 +36,7 @@ impl<'e> Engine<'e> {
             args,
         };
 
-        self.ext_functions.insert(spec, f);
+        self.functions.insert(spec, f);
     }
 
     /// Register a custom type for use with the `Engine`.
@@ -848,13 +848,7 @@ impl<'e> Engine<'e> {
         functions: impl IntoIterator<Item = &'a Arc<FnDef>>,
     ) {
         for f in functions.into_iter() {
-            match self
-                .script_functions
-                .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
-            {
-                Ok(n) => self.script_functions[n] = f.clone(),
-                Err(n) => self.script_functions.insert(n, f.clone()),
-            }
+            self.fn_lib.add_or_replace_function(f.clone());
         }
     }
 

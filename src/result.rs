@@ -236,7 +236,9 @@ impl EvalAltResult {
         }
     }
 
-    pub(crate) fn set_position(&mut self, new_position: Position) {
+    /// Consume the current `EvalAltResult` and return a new one
+    /// with the specified `Position`.
+    pub(crate) fn set_position(mut self, new_position: Position) -> Self {
         match self {
             #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => (),
@@ -262,5 +264,7 @@ impl EvalAltResult {
             | Self::ErrorLoopBreak(ref mut pos)
             | Self::Return(_, ref mut pos) => *pos = new_position,
         }
+
+        self
     }
 }
