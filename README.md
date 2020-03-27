@@ -651,6 +651,18 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
+Engine configuration options
+---------------------------
+
+| Method                   | Description                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [`script optimization`].         |
+| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. |
+
+[`script optimization`]: #script-optimization
+
+-------
+
 Rhai Language Guide
 ===================
 

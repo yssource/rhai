@@ -726,11 +726,9 @@ impl<'e> Engine<'e> {
                 statements
             };
 
-            let mut result = ().into_dynamic();
-
-            for stmt in statements {
-                result = engine.eval_stmt(scope, stmt)?;
-            }
+            let result = statements.iter().try_fold(().into_dynamic(), |_, stmt| {
+                engine.eval_stmt(scope, stmt, 0)
+            })?;
 
             if !retain_functions {
                 engine.clear_functions();
@@ -829,7 +827,7 @@ impl<'e> Engine<'e> {
 
         let result = statements
             .iter()
-            .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
+            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt, 0))
             .map(|_| ());
 
         if !retain_functions {
@@ -889,7 +887,7 @@ impl<'e> Engine<'e> {
             mut values: Vec<Dynamic>,
         ) -> Result<Dynamic, EvalAltResult> {
             let mut values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
-            engine.call_fn_raw(name, &mut values, None, Position::none())
+            engine.call_fn_raw(name, &mut values, None, Position::none(), 0)
         }
 
         call_fn_internal(self, name, args.into_vec()).and_then(|b| {
