@@ -880,24 +880,18 @@ impl<'e> Engine<'e> {
         name: &str,
         args: A,
     ) -> Result<T, EvalAltResult> {
-        // Split out non-generic portion to avoid exploding code size
-        fn call_fn_internal(
-            engine: &mut Engine,
-            name: &str,
-            mut values: Vec<Dynamic>,
-        ) -> Result<Dynamic, EvalAltResult> {
-            let mut values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
-            engine.call_fn_raw(name, &mut values, None, Position::none(), 0)
-        }
+        let mut values = args.into_vec();
+        let mut arg_values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
-        call_fn_internal(self, name, args.into_vec()).and_then(|b| {
-            b.downcast().map(|b| *b).map_err(|a| {
-                EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name((*a).type_name()).into(),
-                    Position::none(),
-                )
+        self.call_fn_raw(name, &mut arg_values, None, Position::none(), 0)
+            .and_then(|b| {
+                b.downcast().map(|b| *b).map_err(|a| {
+                    EvalAltResult::ErrorMismatchOutputType(
+                        self.map_type_name((*a).type_name()).into(),
+                        Position::none(),
+                    )
+                })
             })
-        })
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
