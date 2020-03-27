@@ -13,6 +13,7 @@ use crate::stdlib::{
     boxed::Box,
     char, fmt, format,
     iter::Peekable,
+    ops::Add,
     str::Chars,
     str::FromStr,
     string::{String, ToString},
@@ -159,6 +160,75 @@ impl fmt::Debug for Position {
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 #[derive(Debug, Clone)]
 pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<Arc<FnDef>>);
+
+impl AST {
+    /// Merge two `AST` into one.  Both `AST`'s are consumed and a new, merged, version
+    /// is returned.
+    ///
+    /// The second `AST` is simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
+    /// Of course, if the first `AST` uses a `return` statement at the end, then
+    /// the second `AST` will essentially be dead code.
+    ///
+    /// All script-defined functions in the second `AST` overwrite similarly-named functions
+    /// in the first `AST` with the same number of parameters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
+    /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo(2)"#)?;
+    ///
+    /// let ast = ast1.merge(ast2);     // Merge 'ast2' into 'ast1'
+    ///
+    /// // Notice that using the '+' operator also works:
+    /// // let ast = ast1 + ast2;
+    ///
+    /// // 'ast' is essentially:
+    /// //
+    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
+    /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
+    /// //                              //    but it is no longer the return value
+    /// //    foo(2)                    // returns "hello2"
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "hello2");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn merge(self, mut other: Self) -> Self {
+        let Self(mut ast, mut functions) = self;
+
+        ast.append(&mut other.0);
+
+        for fn_def in other.1 {
+            if let Some((n, _)) = functions
+                .iter()
+                .enumerate()
+                .find(|(_, f)| f.name == fn_def.name && f.params.len() == fn_def.params.len())
+            {
+                functions[n] = fn_def;
+            } else {
+                functions.push(fn_def);
+            }
+        }
+
+        Self(ast, functions)
+    }
+}
+
+impl Add<Self> for AST {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.merge(rhs)
+    }
+}
 
 /// A script-function definition.
 #[derive(Debug, Clone)]

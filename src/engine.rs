@@ -269,13 +269,17 @@ impl Engine<'_> {
             let result = func(args, pos)?;
 
             // See if the function match print/debug (which requires special processing)
-            match fn_name {
-                KEYWORD_PRINT => self.on_print.as_mut()(cast_to_string(result.as_ref(), pos)?),
-                KEYWORD_DEBUG => self.on_debug.as_mut()(cast_to_string(result.as_ref(), pos)?),
-                _ => (),
-            }
-
-            return Ok(result);
+            return Ok(match fn_name {
+                KEYWORD_PRINT => {
+                    self.on_print.as_mut()(cast_to_string(result.as_ref(), pos)?);
+                    ().into_dynamic()
+                }
+                KEYWORD_DEBUG => {
+                    self.on_debug.as_mut()(cast_to_string(result.as_ref(), pos)?);
+                    ().into_dynamic()
+                }
+                _ => result,
+            });
         }
 
         if fn_name.starts_with(FUNC_GETTER) {
