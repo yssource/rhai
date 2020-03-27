@@ -2287,8 +2287,8 @@ fn parse_fn<'a>(
                 .next()
                 .ok_or_else(|| PERR::MissingRightParen(end_err.to_string()).into_err_eof())?
             {
-                (Token::Identifier(s), _) => {
-                    params.push(s);
+                (Token::Identifier(s), pos) => {
+                    params.push((s, pos));
                 }
                 (_, pos) => return Err(PERR::MissingRightParen(end_err).into_err(pos)),
             }
@@ -2305,6 +2305,22 @@ fn parse_fn<'a>(
         }
     }
 
+    // Check for duplicating parameters
+    params
+        .iter()
+        .enumerate()
+        .try_for_each(|(i, (p1, _))| {
+            params
+                .iter()
+                .skip(i + 1)
+                .find(|(p2, _)| p2 == p1)
+                .map_or_else(|| Ok(()), |(p2, pos)| Err((p2, *pos)))
+        })
+        .map_err(|(p, pos)| {
+            PERR::FnDuplicateParam(name.to_string(), p.to_string()).into_err(pos)
+        })?;
+
+    // Parse function body
     let body = match input.peek() {
         Some((Token::LeftBrace, _)) => parse_block(input, false, allow_stmt_expr)?,
         Some((_, pos)) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
@@ -2313,7 +2329,7 @@ fn parse_fn<'a>(
 
     Ok(FnDef {
         name,
-        params,
+        params: params.into_iter().map(|(p, _)| p).collect(),
         body,
         pos,
     })

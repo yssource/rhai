@@ -82,6 +82,9 @@ pub enum ParseErrorType {
     /// A function definition is missing the parameters list. Wrapped value is the function name.
     #[cfg(not(feature = "no_function"))]
     FnMissingParams(String),
+    /// A function definition has duplicated parameters. Wrapped values are the function name and parameter name.
+    #[cfg(not(feature = "no_function"))]
+    FnDuplicateParam(String, String),
     /// A function definition is missing the body. Wrapped value is the function name.
     #[cfg(not(feature = "no_function"))]
     FnMissingBody(String),
@@ -146,6 +149,8 @@ impl ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             #[cfg(not(feature = "no_function"))]
+            ParseErrorType::FnDuplicateParam(_,_) => "Duplicated parameters in function declaration",
+            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
@@ -185,6 +190,11 @@ impl fmt::Display for ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingBody(ref s) => {
                 write!(f, "Expecting body statement block for function '{}'", s)?
+            }
+
+            #[cfg(not(feature = "no_function"))]
+            ParseErrorType::FnDuplicateParam(ref s, ref arg) => {
+                write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
             }
 
             ParseErrorType::MissingRightParen(ref s) | ParseErrorType::MissingRightBrace(ref s) => {

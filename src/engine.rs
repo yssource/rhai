@@ -32,7 +32,7 @@ pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltRes
 
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
-pub(crate) const MAX_CALL_STACK_DEPTH: usize = 50;
+pub(crate) const MAX_CALL_STACK_DEPTH: usize = 64;
 pub(crate) const KEYWORD_PRINT: &str = "print";
 pub(crate) const KEYWORD_DEBUG: &str = "debug";
 pub(crate) const KEYWORD_DUMP_AST: &str = "dump_ast";
@@ -242,10 +242,6 @@ impl Engine<'_> {
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
-        if level >= self.max_call_stack_depth {
-            return Err(EvalAltResult::ErrorStackOverflow(pos));
-        }
-
         // First search in script-defined functions (can override built-in)
         if let Some(fn_def) = self.fn_lib.get_function(fn_name, args.len()) {
             let mut scope = Scope::new();
