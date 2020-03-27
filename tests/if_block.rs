@@ -27,3 +27,21 @@ fn test_if() -> Result<(), EvalAltResult> {
 
     Ok(())
 }
+
+#[test]
+fn test_if_expr() -> Result<(), EvalAltResult> {
+    let mut engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = 42;
+                let y = 1 + if x > 40 { 100 } else { 0 } / x;
+                y
+        "
+        )?,
+        3
+    );
+
+    Ok(())
+}

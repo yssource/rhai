@@ -1555,20 +1555,17 @@ fn parse_array_literal<'a>(
             arr.push(parse_expr(input, allow_stmt_expr)?);
 
             match input.peek().ok_or_else(|| {
-                ParseError(
-                    PERR::MissingRightBracket("separating items in array literal".into()),
-                    Position::eof(),
-                )
+                PERR::MissingRightBracket("separating items in array literal".into()).into_err_eof()
             })? {
                 (Token::Comma, _) => {
                     input.next();
                 }
                 (Token::RightBracket, _) => break,
                 (_, pos) => {
-                    return Err(ParseError(
-                        PERR::MissingComma("separating items in array literal".into()),
-                        *pos,
-                    ))
+                    return Err(
+                        PERR::MissingComma("separating items in array literal".into())
+                            .into_err(*pos),
+                    )
                 }
             }
         }
@@ -1660,6 +1657,14 @@ fn parse_unary<'a>(
         .peek()
         .ok_or_else(|| PERR::UnexpectedEOF.into_err_eof())?
     {
+        // If statement is allowed to act as expressions
+        (Token::If, pos) => {
+            let pos = *pos;
+            Ok(Expr::Stmt(
+                Box::new(parse_if(input, false, allow_stmt_expr)?),
+                pos,
+            ))
+        }
         // -expr
         (Token::UnaryMinus, pos) => {
             let pos = *pos;
@@ -1956,6 +1961,7 @@ fn parse_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
+    // Parse a real expression
     let lhs = parse_unary(input, allow_stmt_expr)?;
     parse_binary_op(input, 1, lhs, allow_stmt_expr)
 }
@@ -1967,10 +1973,10 @@ fn ensure_not_statement_expr<'a>(
 ) -> Result<(), ParseError> {
     match input
         .peek()
-        .ok_or_else(|| ParseError(PERR::ExprExpected(type_name.to_string()), Position::eof()))?
+        .ok_or_else(|| PERR::ExprExpected(type_name.to_string()).into_err_eof())?
     {
         // Disallow statement expressions
-        (Token::LeftBrace, pos) => Err(ParseError(PERR::ExprExpected(type_name.to_string()), *pos)),
+        (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
         // No need to check for others at this time - leave it for the expr parser
         _ => Ok(()),
     }
@@ -2111,10 +2117,9 @@ fn parse_let<'a>(
                 Ok(Stmt::Const(name, Box::new(init_value), pos))
             }
             // const name = expr - error
-            ScopeEntryType::Constant => Err(ParseError(
-                PERR::ForbiddenConstantExpr(name),
-                init_value.position(),
-            )),
+            ScopeEntryType::Constant => {
+                Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
+            }
         }
     } else {
         // let name

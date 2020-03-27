@@ -1,9 +1,9 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_fn() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     // Expect duplicated parameters error
     match engine
