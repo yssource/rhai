@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, Position};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -10,7 +10,7 @@ fn padding(pad: &str, len: usize) -> String {
 }
 
 fn eprint_error(input: &str, err: EvalAltResult) {
-    fn eprint_line(lines: &Vec<&str>, line: usize, pos: usize, err: &str) {
+    fn eprint_line(lines: &[&str], line: usize, pos: usize, err: &str) {
         let line_no = format!("{}: ", line);
         let pos_text = format!(" (line {}, position {})", line, pos);
 
@@ -23,34 +23,32 @@ fn eprint_error(input: &str, err: EvalAltResult) {
         eprintln!("");
     }
 
-    let lines: Vec<_> = input.split("\n").collect();
+    let lines: Vec<_> = input.split('\n').collect();
 
     // Print error
-    match err.position() {
-        p if p.is_eof() => {
-            // EOF
-            let line = lines.len() - 1;
-            let pos = lines[line - 1].len();
-            let err_text = match err {
-                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
-                    format!("Runtime error: {}", err)
-                }
-                _ => err.to_string(),
-            };
-            eprint_line(&lines, line, pos, &err_text);
-        }
+    let pos = if err.position().is_eof() {
+        let last = lines[lines.len() - 1];
+        Position::new(lines.len(), last.len() + 1)
+    } else {
+        err.position()
+    };
+
+    match pos {
+        p if p.is_eof() => panic!("should not be EOF"),
         p if p.is_none() => {
             // No position
             eprintln!("{}", err);
         }
         p => {
             // Specific position
-            eprint_line(
-                &lines,
-                p.line().unwrap(),
-                p.position().unwrap(),
-                &err.to_string(),
-            )
+            let err_text = match err {
+                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
+                    format!("Runtime error: {}", err)
+                }
+                err => err.to_string(),
+            };
+
+            eprint_line(&lines, p.line().unwrap(), p.position().unwrap(), &err_text)
         }
     }
 }
@@ -72,12 +70,9 @@ fn main() {
 
         let mut contents = String::new();
 
-        match f.read_to_string(&mut contents) {
-            Err(err) => {
-                eprintln!("Error reading script file: {}\n{}", filename, err);
-                exit(1);
-            }
-            _ => (),
+        if let Err(err) = f.read_to_string(&mut contents) {
+            eprintln!("Error reading script file: {}\n{}", filename, err);
+            exit(1);
         }
 
         if let Err(err) = engine.consume(false, &contents) {

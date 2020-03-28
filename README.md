@@ -36,14 +36,20 @@ Install the Rhai crate by adding this line to `dependencies`:
 rhai = "0.11.0"
 ```
 
-or simply:
+Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
 
 ```toml
 [dependencies]
 rhai = "*"
 ```
 
-to use the latest version.
+Crate versions are released on [`crates.io`](https::/crates.io/crates/rhai/) infrequently, so if you want to track the
+latest features, enhancements and bug fixes, pull directly from GitHub:
+
+```toml
+[dependencies]
+rhai = { git = "https://github.com/jonathandturner/rhai" }
+```
 
 Beware that in order to use pre-releases (e.g. alpha and beta), the exact version must be specified in the `Cargo.toml`.
 
@@ -80,7 +86,7 @@ Related
 
 Other cool projects to check out:
 
-* [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being lead by my cousin.
+* [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being led by my cousin.
 * Check out the list of [scripting languages for Rust](https://github.com/rust-unofficial/awesome-rust#scripting) on [awesome-rust](https://github.com/rust-unofficial/awesome-rust)
 
 Examples
@@ -252,7 +258,7 @@ let result = engine.eval_expression_with_scope::<i64>(&mut scope, "if x { 42 } e
 Values and types
 ----------------
 
-[`type_of`]: #values-and-types
+[`type_of()`]: #values-and-types
 
 The following primitive types are supported natively:
 
@@ -547,8 +553,8 @@ let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
 println!("result: {}", result);                     // prints 1
 ```
 
-[`type_of`] works fine with custom types and returns the name of the type. If `register_type_with_name` is used to register the custom type
-with a special "pretty-print" name, [`type_of`] will return that name instead.
+[`type_of()`] works fine with custom types and returns the name of the type. If `register_type_with_name` is used to register the custom type
+with a special "pretty-print" name, [`type_of()`] will return that name instead.
 
 ```rust
 engine.register_type::<TestStruct>();
@@ -644,6 +650,18 @@ fn main() -> Result<(), EvalAltResult>
     Ok(())
 }
 ```
+
+Engine configuration options
+---------------------------
+
+| Method                   | Description                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [`script optimization`].         |
+| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. |
+
+[`script optimization`]: #script-optimization
+
+-------
 
 Rhai Language Guide
 ===================
@@ -832,9 +850,11 @@ String and char literals follow C-style formatting, with support for Unicode ('`
 
 Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full, 32-bit extended Unicode code points.
 
-Although internally Rhai strings are stored as UTF-8 just like in Rust (they _are_ Rust `String`s),
-in the Rhai language they can be considered a stream of Unicode characters, and can be directly indexed (unlike Rust).
-Individual characters within a Rhai string can be replaced. In Rhai, there is no separate concepts of `String` and `&str` as in Rust.
+Internally Rhai strings are stored as UTF-8 just like Rust (they _are_ Rust `String`s!), but there are major differences.
+In Rhai a string is the same as an array of Unicode characters and can be directly indexed (unlike Rust).
+This is similar to most other languages where strings are internally represented not as UTF-8 but as arrays of multi-byte Unicode characters.
+Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
+In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
 
 Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded if [`no_stdlib`]).
 This is particularly useful when printing output.
@@ -926,9 +946,11 @@ Arrays
 ------
 
 Arrays are first-class citizens in Rhai. Like C, arrays are accessed with zero-based, non-negative integer indices.
-Array literals are built within square brackets '`[`' ,, '`]`' and separated by commas '`,`'.
+Array literals are built within square brackets '`[`' ... '`]`' and separated by commas '`,`'.
 
-The type of a Rhai array is `rhai::Array`. [`type_of()`] an array returns `"array"`.
+The Rust type of a Rhai array is `rhai::Array`.
+
+[`type_of()`] an array returns `"array"`.
 
 Arrays are disabled via the [`no_index`] feature.
 
@@ -1075,17 +1097,13 @@ my_str += 12345;
 my_str == "abcABC12345"
 ```
 
-If statements
--------------
-
-All branches of an `if` statement must be enclosed within braces '`{`' .. '`}`', even when there is only one statement.
-
-Like Rust, there is no ambiguity regarding which `if` clause a statement belongs to.
+`if` statements
+---------------
 
 ```rust
-if true {
+if foo(x) {
     print("It's true!");
-} else if true {
+} else if bar == baz {
     print("It's true again!");
 } else if ... {
         :
@@ -1094,13 +1112,28 @@ if true {
 } else {
     print("It's finally false!");
 }
+```
 
+All branches of an `if` statement must be enclosed within braces '`{`' .. '`}`', even when there is only one statement.
+Like Rust, there is no ambiguity regarding which `if` clause a statement belongs to.
+
+```rust
 if (decision) print("I've decided!");
 //            ^ syntax error, expecting '{' in statement block
 ```
 
-While loops
------------
+Like Rust, `if` statements can also be used as _expressions_, replacing the `? :` conditional operators in other C-like languages.
+
+```rust
+let x = 1 + if true { 42 } else { 123 } / 2;
+x == 22;
+
+let x = if false { 42 };    // No else branch defaults to '()'
+x == ();
+```
+
+`while` loops
+-------------
 
 ```rust
 let x = 10;
@@ -1112,8 +1145,8 @@ while x > 0 {
 }
 ```
 
-Infinite loops
---------------
+Infinite `loop`
+---------------
 
 ```rust
 let x = 10;
@@ -1125,8 +1158,8 @@ loop {
 }
 ```
 
-For loops
----------
+`for` loops
+-----------
 
 Iterating through a range or an array is provided by the `for` ... `in` loop.
 
@@ -1146,8 +1179,8 @@ for x in range(0, 50) {
 }
 ```
 
-Returning values
-----------------
+`return`-ing values
+-------------------
 
 ```rust
 return;             // equivalent to return ();
@@ -1155,8 +1188,8 @@ return;             // equivalent to return ();
 return 123 + 456;   // returns 579
 ```
 
-Errors and exceptions
----------------------
+Errors and `throw`-ing exceptions
+--------------------------------
 
 All of [`Engine`]'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
 To deliberately return an error during an evaluation, use the `throw` keyword.
@@ -1197,8 +1230,10 @@ fn add(x, y) {
 print(add(2, 3));
 ```
 
+### Implicit return
+
 Just like in Rust, an implicit return can be used. In fact, the last statement of a block is _always_ the block's return value
-regardless of whether it is terminated with a semicolon `;`. This is different from Rust.
+regardless of whether it is terminated with a semicolon `';'`. This is different from Rust.
 
 ```rust
 fn add(x, y) {
@@ -1213,6 +1248,16 @@ print(add(2, 3));   // prints 5
 print(add2(42));    // prints 44
 ```
 
+### No access to external scope
+
+Functions can only access their parameters.  They cannot access external variables (even _global_ variables).
+
+```rust
+let x = 42;
+
+fn foo() { x }      // syntax error - variable 'x' doesn't exist
+```
+
 ### Passing arguments by value
 
 Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
@@ -1225,7 +1270,7 @@ fn change(s) {  // 's' is passed by value
 }
 
 let x = 500;
-x.change();     // desugars to change(x)
+x.change();     // de-sugars to change(x)
 x == 500;       // 'x' is NOT changed!
 ```
 
@@ -1251,31 +1296,34 @@ fn do_addition(x) {
 
 ### Functions overloading
 
-Functions can be _overloaded_ based on the _number_ of parameters (but not parameter _types_, since all parameters are the same type - [`Dynamic`]).
-New definitions of the same name and number of parameters overwrite previous definitions.
+Functions can be _overloaded_ and are resolved purely upon the function's _name_ and the _number_ of parameters
+(but not parameter _types_, since all parameters are the same type - [`Dynamic`]).
+New definitions _overwrite_ previous definitions of the same name and number of parameters.
 
 ```rust
-fn abc(x,y,z) { print("Three!!! " + x + "," + y + "," + z) }
-fn abc(x) { print("One! " + x) }
-fn abc(x,y) { print("Two! " + x + "," + y) }
-fn abc() { print("None.") }
-fn abc(x) { print("HA! NEW ONE! " + x) }    // overwrites previous definition
+fn foo(x,y,z) { print("Three!!! " + x + "," + y + "," + z) }
+fn foo(x) { print("One! " + x) }
+fn foo(x,y) { print("Two! " + x + "," + y) }
+fn foo() { print("None.") }
+fn foo(x) { print("HA! NEW ONE! " + x) }    // overwrites previous definition
 
-abc(1,2,3);     // prints "Three!!! 1,2,3"
-abc(42);        // prints "HA! NEW ONE! 42"
-abc(1,2);       // prints "Two!! 1,2"
-abc();          // prints "None."
+foo(1,2,3);     // prints "Three!!! 1,2,3"
+foo(42);        // prints "HA! NEW ONE! 42"
+foo(1,2);       // prints "Two!! 1,2"
+foo();          // prints "None."
 ```
 
 Members and methods
 -------------------
 
-Properties and methods in a Rust custom type registered with the [`Engine`] can be called just like in Rust:
+Properties and methods in a Rust custom type registered with the [`Engine`] can be called just like in Rust.
 
 ```rust
 let a = new_ts();       // constructor function
 a.field = 500;          // property access
 a.update();             // method call
+
+update(a);              // this works, but 'a' is unchanged because only a COPY of 'a' is passed to 'update' by VALUE
 ```
 
 `print` and `debug`

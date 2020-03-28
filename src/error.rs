@@ -17,8 +17,6 @@ pub enum LexError {
     MalformedNumber(String),
     /// An character literal is in an invalid format.
     MalformedChar(String),
-    /// Error in the script text.
-    InputError(String),
     /// An identifier is in an invalid format.
     MalformedIdentifier(String),
 }
@@ -35,7 +33,6 @@ impl fmt::Display for LexError {
             Self::MalformedIdentifier(s) => {
                 write!(f, "Variable name is not in a legal format: '{}'", s)
             }
-            Self::InputError(s) => write!(f, "{}", s),
             Self::UnterminatedString => write!(f, "Open string is not terminated"),
         }
     }
@@ -85,6 +82,9 @@ pub enum ParseErrorType {
     /// A function definition is missing the parameters list. Wrapped value is the function name.
     #[cfg(not(feature = "no_function"))]
     FnMissingParams(String),
+    /// A function definition has duplicated parameters. Wrapped values are the function name and parameter name.
+    #[cfg(not(feature = "no_function"))]
+    FnDuplicateParam(String, String),
     /// A function definition is missing the body. Wrapped value is the function name.
     #[cfg(not(feature = "no_function"))]
     FnMissingBody(String),
@@ -98,16 +98,23 @@ pub enum ParseErrorType {
     LoopBreak,
 }
 
+impl ParseErrorType {
+    /// Make a `ParseError` using the current type and position.
+    pub(crate) fn into_err(self, pos: Position) -> ParseError {
+        ParseError(self, pos)
+    }
+
+    /// Make a `ParseError` using the current type and EOF position.
+    pub(crate) fn into_err_eof(self) -> ParseError {
+        ParseError(self, Position::eof())
+    }
+}
+
 /// Error when parsing a script.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParseError(pub(crate) ParseErrorType, pub(crate) Position);
 
 impl ParseError {
-    /// Create a new `ParseError`.
-    pub(crate) fn new(err: ParseErrorType, pos: Position) -> Self {
-        Self(err, pos)
-    }
-
     /// Get the parse error.
     pub fn error_type(&self) -> &ParseErrorType {
         &self.0
@@ -141,6 +148,8 @@ impl ParseError {
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
+            #[cfg(not(feature = "no_function"))]
+            ParseErrorType::FnDuplicateParam(_,_) => "Duplicated parameters in function declaration",
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
             #[cfg(not(feature = "no_function"))]
@@ -181,6 +190,11 @@ impl fmt::Display for ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingBody(ref s) => {
                 write!(f, "Expecting body statement block for function '{}'", s)?
+            }
+
+            #[cfg(not(feature = "no_function"))]
+            ParseErrorType::FnDuplicateParam(ref s, ref arg) => {
+                write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
             }
 
             ParseErrorType::MissingRightParen(ref s) | ParseErrorType::MissingRightBrace(ref s) => {

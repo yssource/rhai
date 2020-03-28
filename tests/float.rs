@@ -1,5 +1,7 @@
 #![cfg(not(feature = "no_float"))]
-use rhai::{Engine, EvalAltResult, RegisterFn};
+use rhai::{Engine, EvalAltResult, RegisterFn, FLOAT};
+
+const EPSILON: FLOAT = 0.000_000_000_1;
 
 #[test]
 fn test_float() -> Result<(), EvalAltResult> {
@@ -13,7 +15,7 @@ fn test_float() -> Result<(), EvalAltResult> {
         engine.eval::<bool>("let x = 0.0; let y = 1.0; x > y")?,
         false
     );
-    assert_eq!(engine.eval::<f64>("let x = 9.9999; x")?, 9.9999);
+    assert!((engine.eval::<FLOAT>("let x = 9.9999; x")? - 9.9999 as FLOAT).abs() < EPSILON);
 
     Ok(())
 }
@@ -51,13 +53,12 @@ fn struct_with_float() -> Result<(), EvalAltResult> {
     engine.register_fn("update", TestStruct::update);
     engine.register_fn("new_ts", TestStruct::new);
 
-    assert_eq!(
-        engine.eval::<f64>("let ts = new_ts(); ts.update(); ts.x")?,
-        6.789
+    assert!(
+        (engine.eval::<FLOAT>("let ts = new_ts(); ts.update(); ts.x")? - 6.789).abs() < EPSILON
     );
-    assert_eq!(
-        engine.eval::<f64>("let ts = new_ts(); ts.x = 10.1001; ts.x")?,
-        10.1001
+    assert!(
+        (engine.eval::<FLOAT>("let ts = new_ts(); ts.x = 10.1001; ts.x")? - 10.1001).abs()
+            < EPSILON
     );
 
     Ok(())

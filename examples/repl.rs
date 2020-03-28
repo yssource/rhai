@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Scope, AST};
+use rhai::{Engine, EvalAltResult, Position, Scope, AST};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -13,7 +13,7 @@ fn print_error(input: &str, err: EvalAltResult) {
         iter::repeat(pad).take(len).collect::<String>()
     }
 
-    let lines: Vec<_> = input.trim().split("\n").collect();
+    let lines: Vec<_> = input.trim().split('\n').collect();
 
     let line_no = if lines.len() > 1 {
         match err.position() {
@@ -26,27 +26,18 @@ fn print_error(input: &str, err: EvalAltResult) {
     };
 
     // Print error
-    let pos_text = format!(" ({})", err.position());
+    let pos = err.position();
+    let pos_text = format!(" ({})", pos);
 
-    match err.position() {
-        p if p.is_eof() => {
-            // EOF
-            let last = lines[lines.len() - 1];
-            println!("{}{}", line_no, last);
+    let pos = if pos.is_eof() {
+        let last = lines[lines.len() - 1];
+        Position::new(lines.len(), last.len() + 1)
+    } else {
+        pos
+    };
 
-            let err_text = match err {
-                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
-                    format!("Runtime error: {}", err)
-                }
-                _ => err.to_string(),
-            };
-
-            println!(
-                "{}^ {}",
-                padding(" ", line_no.len() + last.len() - 1),
-                err_text.replace(&pos_text, "")
-            );
-        }
+    match pos {
+        p if p.is_eof() => panic!("should not be EOF"),
         p if p.is_none() => {
             // No position
             println!("{}", err);
@@ -59,7 +50,7 @@ fn print_error(input: &str, err: EvalAltResult) {
                 EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
                     format!("Runtime error: {}", err)
                 }
-                _ => err.to_string(),
+                err => err.to_string(),
             };
 
             println!(
@@ -161,7 +152,7 @@ fn main() {
                 #[cfg(not(feature = "no_optimize"))]
                 {
                     engine.set_optimization_level(OptimizationLevel::Full);
-                    ast = Some(engine.optimize_ast(&mut scope, ast_u.as_ref().unwrap()));
+                    ast = Some(engine.optimize_ast(&scope, ast_u.as_ref().unwrap()));
                     engine.set_optimization_level(OptimizationLevel::None);
                 }
 
@@ -178,9 +169,9 @@ fn main() {
                     })
             })
         {
-            println!("");
+            println!();
             print_error(&input, err);
-            println!("");
+            println!();
         }
     }
 }

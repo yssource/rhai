@@ -1,8 +1,8 @@
-use rhai::{Engine, RegisterFn};
+use rhai::{Engine, RegisterFn, INT};
 
 #[derive(Clone, Debug)]
 struct TestStruct {
-    x: i64,
+    x: INT,
 }
 
 impl TestStruct {

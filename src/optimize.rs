@@ -2,11 +2,10 @@
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, FnCallArgs, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
-use crate::scope::{Scope, ScopeEntry, VariableType};
+use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
     boxed::Box,
@@ -181,16 +180,15 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
             // Optimize each statement in the block
             let mut result: Vec<_> = block
                 .into_iter()
-                .map(|stmt| {
-                    if let Stmt::Const(name, value, pos) = stmt {
-                        // Add constant into the state
+                .map(|stmt| match stmt {
+                    // Add constant into the state
+                    Stmt::Const(name, value, pos) => {
                         state.push_constant(&name, *value);
                         state.set_dirty();
                         Stmt::Noop(pos) // No need to keep constants
-                    } else {
-                        // Optimize the statement
-                        optimize_stmt(stmt, state, preserve_result)
                     }
+                    // Optimize the statement
+                    _ => optimize_stmt(stmt, state, preserve_result),
                 })
                 .collect();
 
@@ -446,13 +444,13 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if state.engine.script_functions.binary_search_by(|f| f.compare(&id, args.len())).is_ok() {
+            if state.engine.fn_lib.has_function(&id, args.len()) {
                 // A script-defined function overrides the built-in function - do not make the call
                 return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
-            let call_args: FnCallArgs = arg_values.iter_mut().map(Dynamic::as_mut).collect();
+            let mut call_args: Vec<_> = arg_values.iter_mut().map(Dynamic::as_mut).collect();
 
             // Save the typename of the first argument if it is `type_of()`
             // This is to avoid `call_args` being passed into the closure
@@ -462,7 +460,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            state.engine.call_ext_fn_raw(&id, call_args, pos).ok().map(|r|
+            state.engine.call_ext_fn_raw(&id, &mut call_args, pos).ok().map(|r|
                 r.or_else(|| {
                     if !arg_for_type_of.is_empty() {
                         // Handle `type_of()`
@@ -512,9 +510,9 @@ pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &S
     // Add constants from the scope into the state
     scope
         .iter()
-        .filter(|ScopeEntry { var_type, expr, .. }| {
+        .filter(|ScopeEntry { typ, expr, .. }| {
             // Get all the constants with definite constant expressions
-            *var_type == VariableType::Constant
+            *typ == ScopeEntryType::Constant
                 && expr.as_ref().map(Expr::is_constant).unwrap_or(false)
         })
         .for_each(|ScopeEntry { name, expr, .. }| {
@@ -566,7 +564,7 @@ pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &S
 
     // Add back the last statement unless it is a lone No-op
     if let Some(stmt) = last_stmt {
-        if result.len() > 0 || !matches!(stmt, Stmt::Noop(_)) {
+        if !result.is_empty() || !matches!(stmt, Stmt::Noop(_)) {
             result.push(stmt);
         }
     }
@@ -591,29 +589,25 @@ pub fn optimize_into_ast(
         functions
             .into_iter()
             .map(|mut fn_def| {
-                match engine.optimization_level {
-                    OptimizationLevel::None => (),
-                    OptimizationLevel::Simple | OptimizationLevel::Full => {
-                        let pos = fn_def.body.position();
+                if engine.optimization_level != OptimizationLevel::None {
+                    let pos = fn_def.body.position();
 
-                        // Optimize the function body
-                        let mut body = optimize(vec![fn_def.body], engine, &Scope::new());
+                    // Optimize the function body
+                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new());
 
-                        // {} -> Noop
-                        fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
-                            // { return val; } -> val
-                            Stmt::ReturnWithVal(Some(val), ReturnType::Return, _) => {
-                                Stmt::Expr(val)
-                            }
-                            // { return; } -> ()
-                            Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
-                                Stmt::Expr(Box::new(Expr::Unit(pos)))
-                            }
-                            // All others
-                            stmt => stmt,
-                        };
-                    }
+                    // {} -> Noop
+                    fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                        // { return val; } -> val
+                        Stmt::ReturnWithVal(Some(val), ReturnType::Return, _) => Stmt::Expr(val),
+                        // { return; } -> ()
+                        Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
+                            Stmt::Expr(Box::new(Expr::Unit(pos)))
+                        }
+                        // All others
+                        stmt => stmt,
+                    };
                 }
+
                 Arc::new(fn_def)
             })
             .collect(),

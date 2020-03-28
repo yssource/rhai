@@ -11,11 +11,15 @@ use crate::engine::Array;
 use crate::stdlib::{string::String, vec, vec::Vec};
 
 /// Trait that represent arguments to a function call.
+/// Any data type that can be converted into a `Vec` of `Dynamic` values can be used
+/// as arguments to a function call.
 pub trait FuncArgs {
     /// Convert to a `Vec` of `Dynamic` arguments.
     fn into_vec(self) -> Vec<Dynamic>;
 }
 
+/// Macro to implement `FuncArgs` for a single standard type that can be converted
+/// into `Dynamic`.
 macro_rules! impl_std_args {
     ($($p:ty),*) => {
         $(
@@ -43,6 +47,8 @@ impl_std_args!(INT);
 #[cfg(not(feature = "no_float"))]
 impl_std_args!(f32, f64);
 
+/// Macro to implement `FuncArgs` for tuples of standard types (each can be
+/// converted into `Dynamic`).
 macro_rules! impl_args {
     ($($p:ident),*) => {
         impl<$($p: Any + Clone),*> FuncArgs for ($($p,)*)
@@ -69,5 +75,5 @@ macro_rules! impl_args {
     };
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
-impl_args!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
+#[rustfmt::skip]
+impl_args!(A, B, C, D, E, F, G, H, J, K, L, M, N, P, Q, R, S, T, U, V);

@@ -15,6 +15,7 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    format,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
@@ -35,7 +36,7 @@ impl<'e> Engine<'e> {
             args,
         };
 
-        self.ext_functions.insert(spec, f);
+        self.functions.insert(spec, f);
     }
 
     /// Register a custom type for use with the `Engine`.
@@ -725,11 +726,9 @@ impl<'e> Engine<'e> {
                 statements
             };
 
-            let mut result = ().into_dynamic();
-
-            for stmt in statements {
-                result = engine.eval_stmt(scope, stmt)?;
-            }
+            let result = statements.iter().try_fold(().into_dynamic(), |_, stmt| {
+                engine.eval_stmt(scope, stmt, 0)
+            })?;
 
             if !retain_functions {
                 engine.clear_functions();
@@ -828,7 +827,7 @@ impl<'e> Engine<'e> {
 
         let result = statements
             .iter()
-            .try_fold(().into_dynamic(), |_, o| self.eval_stmt(scope, o))
+            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt, 0))
             .map(|_| ());
 
         if !retain_functions {
@@ -847,13 +846,7 @@ impl<'e> Engine<'e> {
         functions: impl IntoIterator<Item = &'a Arc<FnDef>>,
     ) {
         for f in functions.into_iter() {
-            match self
-                .script_functions
-                .binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len()))
-            {
-                Ok(n) => self.script_functions[n] = f.clone(),
-                Err(n) => self.script_functions.insert(n, f.clone()),
-            }
+            self.fn_lib.add_or_replace_function(f.clone());
         }
     }
 
@@ -887,27 +880,18 @@ impl<'e> Engine<'e> {
         name: &str,
         args: A,
     ) -> Result<T, EvalAltResult> {
-        // Split out non-generic portion to avoid exploding code size
-        fn call_fn_internal(
-            engine: &mut Engine,
-            name: &str,
-            mut values: Vec<Dynamic>,
-        ) -> Result<Dynamic, EvalAltResult> {
-            let values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
+        let mut values = args.into_vec();
+        let mut arg_values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
-            let result = engine.call_fn_raw(name, values, None, Position::none());
-
-            result
-        }
-
-        call_fn_internal(self, name, args.into_vec()).and_then(|b| {
-            b.downcast().map(|b| *b).map_err(|a| {
-                EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name((*a).type_name()).into(),
-                    Position::none(),
-                )
+        self.call_fn_raw(name, &mut arg_values, None, Position::none(), 0)
+            .and_then(|b| {
+                b.downcast().map(|b| *b).map_err(|a| {
+                    EvalAltResult::ErrorMismatchOutputType(
+                        self.map_type_name((*a).type_name()).into(),
+                        Position::none(),
+                    )
+                })
             })
-        })
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.

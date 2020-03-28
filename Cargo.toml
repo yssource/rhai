@@ -42,21 +42,21 @@ codegen-units = 1
 #panic = 'abort'     # remove stack backtrace for no-std
 
 [dependencies.libm]
-version = "0.2.1"
+version = "*"
 optional = true
 
 [dependencies.core-error]
-version = "0.0.1-rc4"
+version = "*"
 features = ["alloc"]
 optional = true
 
 [dependencies.hashbrown]
-version = "0.7.1"
+version = "*"
 default-features = false
 features = ["ahash", "nightly", "inline-more"]
 optional = true
 
 [dependencies.ahash]
-version = "0.3.2"
+version = "*"
 default-features = false
 optional = true
