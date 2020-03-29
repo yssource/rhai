@@ -54,8 +54,13 @@ pub enum ParseErrorType {
     /// An expression in indexing brackets `[]` has syntax error.
     #[cfg(not(feature = "no_index"))]
     MalformedIndexExpr(String),
+    /// A map definition has duplicated property names. Wrapped is the property name.
+    #[cfg(not(feature = "no_object"))]
+    DuplicatedProperty(String),
     /// Invalid expression assigned to constant.
     ForbiddenConstantExpr(String),
+    /// Missing a property name for maps.
+    PropertyExpected,
     /// Missing a variable name after the `let`, `const` or `for` keywords.
     VariableExpected,
     /// Missing an expression.
@@ -121,7 +126,10 @@ impl ParseError {
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
+            #[cfg(not(feature = "no_object"))]
+            ParseErrorType::DuplicatedProperty(_) => "Duplicated property in object map literal",
             ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
+            ParseErrorType::PropertyExpected => "Expecting name of a property",
             ParseErrorType::VariableExpected => "Expecting name of a variable",
             ParseErrorType::ExprExpected(_) => "Expecting an expression",
             #[cfg(not(feature = "no_function"))]
@@ -158,6 +166,11 @@ impl fmt::Display for ParseError {
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(ref s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
+            }
+
+            #[cfg(not(feature = "no_object"))]
+            ParseErrorType::DuplicatedProperty(ref s) => {
+                write!(f, "Duplicated property '{}' for object map literal", s)?
             }
 
             ParseErrorType::ExprExpected(ref s) => write!(f, "Expecting {} expression", s)?,
