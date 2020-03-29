@@ -21,6 +21,7 @@ fn test_float() -> Result<(), EvalAltResult> {
 }
 
 #[test]
+#[cfg(not(feature = "no_object"))]
 fn struct_with_float() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {

@@ -334,6 +334,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             expr => Expr::Assignment(id, Box::new(optimize_expr(expr, state)), pos),
         },
         // lhs.rhs
+        #[cfg(not(feature = "no_object"))]
         Expr::Dot(lhs, rhs, pos) => Expr::Dot(
             Box::new(optimize_expr(*lhs, state)),
             Box::new(optimize_expr(*rhs, state)),

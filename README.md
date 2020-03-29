@@ -62,6 +62,7 @@ Optional features
 | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
 | `no_function` | Disable script-defined functions if not needed.                                                                                                          |
 | `no_index`    | Disable arrays and indexing features if not needed.                                                                                                      |
+| `no_object`   | Disable support for custom types and objects.                                                                                                            |
 | `no_float`    | Disable floating-point numbers and math if not needed.                                                                                                   |
 | `no_optimize` | Disable the script optimizer.                                                                                                                            |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
@@ -76,6 +77,7 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`no_index`]: #optional-features
 [`no_float`]: #optional-features
 [`no_function`]: #optional-features
+[`no_object`]: #optional-features
 [`no_optimize`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
@@ -294,7 +296,7 @@ type_of('c') == "char";
 type_of(42) == "i64";
 
 let x = 123;
-x.type_of();                // error - 'type_of' cannot use postfix notation
+x.type_of();                // error - 'type_of' cannot use method-call style
 type_of(x) == "i64";
 
 x = 99.999;
@@ -496,6 +498,7 @@ fn main() -> Result<(), EvalAltResult>
 ```
 
 All custom types must implement `Clone`.  This allows the [`Engine`] to pass by value.
+You can turn off support for custom types via the [`no_object`] feature.
 
 ```rust
 #[derive(Clone)]
@@ -522,7 +525,8 @@ let mut engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-To use methods and functions with the [`Engine`], we need to register them.  There are some convenience functions to help with this.  Below I register update and new with the [`Engine`].
+To use methods and functions with the [`Engine`], we need to register them. There are some convenience functions to help with this.
+Below I register update and new with the [`Engine`].
 
 *Note: [`Engine`] follows the convention that methods use a `&mut` first parameter so that invoking methods can update the value in memory.*
 
@@ -531,7 +535,8 @@ engine.register_fn("update", TestStruct::update);   // registers 'update(&mut ts
 engine.register_fn("new_ts", TestStruct::new);      // registers 'new'
 ```
 
-Finally, we call our script.  The script can see the function and method we registered earlier.  We need to get the result back out from script land just as before, this time casting to our custom struct type.
+Finally, we call our script.  The script can see the function and method we registered earlier.
+We need to get the result back out from script land just as before, this time casting to our custom struct type.
 
 ```rust
 let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
@@ -539,7 +544,8 @@ let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 println!("result: {}", result.field);               // prints 42
 ```
 
-In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method-call on that type because internally they are the same thing: methods on a type is implemented as a functions taking an first argument.
+In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method-call on that type because internally they are the same thing:
+methods on a type is implemented as a functions taking an first argument.
 
 ```rust
 fn foo(ts: &mut TestStruct) -> i64 {
@@ -553,7 +559,15 @@ let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
 println!("result: {}", result);                     // prints 1
 ```
 
-[`type_of()`] works fine with custom types and returns the name of the type. If `register_type_with_name` is used to register the custom type
+If the [`no_object`] feature is turned on, however, the _method_ style of function calls (i.e. calling a function as an object-method) is no longer supported.
+
+```rust
+// Below is a syntax error under 'no_object' because 'len' cannot be called in method style.
+let result = engine.eval::<i64>("let x = [1, 2, 3]; x.len()")?;
+```
+
+[`type_of()`] works fine with custom types and returns the name of the type.
+If `register_type_with_name` is used to register the custom type
 with a special "pretty-print" name, [`type_of()`] will return that name instead.
 
 ```rust
@@ -604,6 +618,9 @@ let result = engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
+
+Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set` and `register_get_set`
+are not available when the [`no_object`] feature is turned on.
 
 Initializing and maintaining state
 ---------------------------------
@@ -1326,6 +1343,8 @@ a.update();             // method call
 update(a);              // this works, but 'a' is unchanged because only a COPY of 'a' is passed to 'update' by VALUE
 ```
 
+Custom types, properties and methods can be disabled via the [`no_object`] feature.
+
 `print` and `debug`
 -------------------
 
@@ -1606,7 +1625,7 @@ eval("{ let z = y }");          // to keep a variable local, use a statement blo
 
 print("z = " + z);              // error - variable 'z' not found
 
-"print(42)".eval();             // nope - just like 'type_of' postfix notation doesn't work
+"print(42)".eval();             // nope - just like 'type_of', method-call style doesn't work
 ```
 
 Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,

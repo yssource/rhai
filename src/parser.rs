@@ -357,6 +357,7 @@ pub enum Expr {
     /// expr = expr
     Assignment(Box<Expr>, Box<Expr>, Position),
     /// lhs.rhs
+    #[cfg(not(feature = "no_object"))]
     Dot(Box<Expr>, Box<Expr>, Position),
     /// expr[expr]
     #[cfg(not(feature = "no_index"))]
@@ -443,10 +444,12 @@ impl Expr {
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Assignment(expr, _, _)
-            | Expr::Dot(expr, _, _)
-            | Expr::And(expr, _)
-            | Expr::Or(expr, _) => expr.position(),
+            Expr::Assignment(expr, _, _) | Expr::And(expr, _) | Expr::Or(expr, _) => {
+                expr.position()
+            }
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Dot(expr, _, _) => expr.position(),
 
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, pos) => *pos,
@@ -1767,6 +1770,7 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
             },
 
             // dot_lhs.dot_rhs
+            #[cfg(not(feature = "no_object"))]
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
                 // var.dot_rhs
                 Expr::Variable(_, _) if is_top => valid_assignment_chain(dot_rhs, false),
@@ -1875,6 +1879,7 @@ fn parse_binary_op<'a>(
                 Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
                 Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
 
+                #[cfg(not(feature = "no_object"))]
                 Token::Period => {
                     fn change_var_to_property(expr: Expr) -> Expr {
                         match expr {

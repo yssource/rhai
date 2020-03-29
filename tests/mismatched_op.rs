@@ -12,6 +12,7 @@ fn test_mismatched_op() {
 }
 
 #[test]
+#[cfg(not(feature = "no_object"))]
 fn test_mismatched_op_custom_type() {
     #[derive(Clone)]
     struct TestStruct {

@@ -1,3 +1,5 @@
+#![cfg(not(feature = "no_object"))]
+
 use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]

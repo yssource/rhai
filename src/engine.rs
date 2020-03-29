@@ -344,6 +344,7 @@ impl Engine<'_> {
     ///
     /// Otherwise, if `src` is `Some`, then it holds a name and index into `scope`; using `get_mut` on
     /// `scope` can retrieve a mutable reference to the variable's value to use as `this`.
+    #[cfg(not(feature = "no_object"))]
     fn get_dot_val_helper(
         &mut self,
         scope: &mut Scope,
@@ -487,6 +488,7 @@ impl Engine<'_> {
     }
 
     /// Evaluate a dot chain getter
+    #[cfg(not(feature = "no_object"))]
     fn get_dot_val(
         &mut self,
         scope: &mut Scope,
@@ -741,6 +743,7 @@ impl Engine<'_> {
     }
 
     /// Chain-evaluate a dot setter
+    #[cfg(not(feature = "no_object"))]
     fn set_dot_val_helper(
         &mut self,
         scope: &mut Scope,
@@ -858,6 +861,7 @@ impl Engine<'_> {
     }
 
     // Evaluate a dot chain setter
+    #[cfg(not(feature = "no_object"))]
     fn set_dot_val(
         &mut self,
         scope: &mut Scope,
@@ -1021,6 +1025,7 @@ impl Engine<'_> {
                     }
 
                     // dot_lhs.dot_rhs = rhs
+                    #[cfg(not(feature = "no_object"))]
                     Expr::Dot(dot_lhs, dot_rhs, _) => self.set_dot_val(
                         scope,
                         dot_lhs,
@@ -1041,6 +1046,7 @@ impl Engine<'_> {
                 }
             }
 
+            #[cfg(not(feature = "no_object"))]
             Expr::Dot(lhs, rhs, _) => self.get_dot_val(scope, lhs, rhs, level),
 
             #[cfg(not(feature = "no_index"))]

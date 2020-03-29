@@ -20,13 +20,14 @@ categories = [ "no-std", "embedded", "parser-implementations" ]
 num-traits = "0.2.11"
 
 [features]
-#default = ["no_function", "no_index", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize"]
+#default = ["no_function", "no_index", "no_object", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize"]
 default = []
 unchecked = []      # unchecked arithmetic
 no_stdlib = []      # no standard library of utility functions
 no_index = []       # no arrays and indexing
 no_float = []       # no floating-point
 no_function = []    # no script-defined functions
+no_object = []      # no custom objects
 no_optimize = []    # no script optimizer
 optimize_full = []  # set optimization level to Full (default is Simple) - this is a feature used only to simplify testing
 only_i32 = []       # set INT=i32 (useful for 32-bit systems)

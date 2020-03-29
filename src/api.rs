@@ -75,6 +75,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "no_object"))]
     pub fn register_type<T: Any + Clone>(&mut self) {
         self.register_type_with_name::<T>(type_name::<T>());
     }
@@ -122,6 +123,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "no_object"))]
     pub fn register_type_with_name<T: Any + Clone>(&mut self, name: &str) {
         // Add the pretty-print type name into the map
         self.type_names
@@ -173,6 +175,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "no_object"))]
     pub fn register_get<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
@@ -215,6 +218,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "no_object"))]
     pub fn register_set<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
@@ -262,6 +266,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "no_object"))]
     pub fn register_get_set<T: Any + Clone, U: Any + Clone>(
         &mut self,
         name: &str,
@@ -864,7 +869,7 @@ impl<'e> Engine<'e> {
     /// let mut engine = Engine::new();
     ///
     /// // Set 'retain_functions' in 'consume' to keep the function definitions
-    /// engine.consume(true, "fn add(x, y) { x.len() + y }")?;
+    /// engine.consume(true, "fn add(x, y) { len(x) + y }")?;
     ///
     /// // Call the script-defined function
     /// let result: i64 = engine.call_fn("add", (String::from("abc"), 123_i64))?;

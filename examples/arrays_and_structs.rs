@@ -15,6 +15,8 @@ impl TestStruct {
     }
 }
 
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
 fn main() {
     let mut engine = Engine::new();
 
@@ -32,3 +34,6 @@ fn main() {
         engine.eval::<TestStruct>("let x = [new_ts()]; x[0].update(); x[0]")
     );
 }
+
+#[cfg(any(feature = "no_index", feature = "no_object"))]
+fn main() {}

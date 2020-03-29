@@ -16,6 +16,7 @@ fn test_arrays() -> Result<(), EvalAltResult> {
 }
 
 #[test]
+#[cfg(not(feature = "no_object"))]
 fn test_array_with_structs() -> Result<(), EvalAltResult> {
     #[derive(Clone)]
     struct TestStruct {

@@ -15,6 +15,7 @@ impl TestStruct {
     }
 }
 
+#[cfg(not(feature = "no_object"))]
 fn main() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
@@ -29,3 +30,6 @@ fn main() -> Result<(), EvalAltResult> {
 
     Ok(())
 }
+
+#[cfg(feature = "no_object")]
+fn main() {}
