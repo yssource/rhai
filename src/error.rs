@@ -47,19 +47,8 @@ pub enum ParseErrorType {
     UnexpectedEOF,
     /// An unknown operator is encountered. Wrapped value is the operator.
     UnknownOperator(String),
-    /// An open `(` is missing the corresponding closing `)`.
-    MissingRightParen(String),
-    /// Expecting `(` but not finding one.
-    MissingLeftBrace,
-    /// An open `{` is missing the corresponding closing `}`.
-    MissingRightBrace(String),
-    /// An open `[` is missing the corresponding closing `]`.
-    #[cfg(not(feature = "no_index"))]
-    MissingRightBracket(String),
-    /// A list of expressions is missing the separating ','.
-    MissingComma(String),
-    /// A statement is missing the ending ';'.
-    MissingSemicolon(String),
+    /// Expecting a particular token but not finding one. Wrapped values are the token and usage.
+    MissingToken(String, String),
     /// An expression in function call arguments `()` has syntax error.
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error.
@@ -71,8 +60,6 @@ pub enum ParseErrorType {
     VariableExpected,
     /// Missing an expression.
     ExprExpected(String),
-    /// A `for` statement is missing the `in` keyword.
-    MissingIn,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
     #[cfg(not(feature = "no_function"))]
     WrongFnDefinition,
@@ -84,7 +71,7 @@ pub enum ParseErrorType {
     FnMissingParams(String),
     /// A function definition has duplicated parameters. Wrapped values are the function name and parameter name.
     #[cfg(not(feature = "no_function"))]
-    FnDuplicateParam(String, String),
+    FnDuplicatedParam(String, String),
     /// A function definition is missing the body. Wrapped value is the function name.
     #[cfg(not(feature = "no_function"))]
     FnMissingBody(String),
@@ -130,18 +117,11 @@ impl ParseError {
             ParseErrorType::BadInput(ref p) => p,
             ParseErrorType::UnexpectedEOF => "Script is incomplete",
             ParseErrorType::UnknownOperator(_) => "Unknown operator",
-            ParseErrorType::MissingRightParen(_) => "Expecting ')'",
-            ParseErrorType::MissingLeftBrace => "Expecting '{'",
-            ParseErrorType::MissingRightBrace(_) => "Expecting '}'",
-            #[cfg(not(feature = "no_index"))]
-            ParseErrorType::MissingRightBracket(_) => "Expecting ']'",
-            ParseErrorType::MissingComma(_) => "Expecting ','",
-            ParseErrorType::MissingSemicolon(_) => "Expecting ';'",
+            ParseErrorType::MissingToken(_, _) => "Expecting a certain token that is missing",
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
             ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
-            ParseErrorType::MissingIn => "Expecting 'in'",
             ParseErrorType::VariableExpected => "Expecting name of a variable",
             ParseErrorType::ExprExpected(_) => "Expecting an expression",
             #[cfg(not(feature = "no_function"))]
@@ -149,7 +129,7 @@ impl ParseError {
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
             #[cfg(not(feature = "no_function"))]
-            ParseErrorType::FnDuplicateParam(_,_) => "Duplicated parameters in function declaration",
+            ParseErrorType::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
             #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
             #[cfg(not(feature = "no_function"))]
@@ -193,19 +173,12 @@ impl fmt::Display for ParseError {
             }
 
             #[cfg(not(feature = "no_function"))]
-            ParseErrorType::FnDuplicateParam(ref s, ref arg) => {
+            ParseErrorType::FnDuplicatedParam(ref s, ref arg) => {
                 write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
             }
 
-            ParseErrorType::MissingRightParen(ref s) | ParseErrorType::MissingRightBrace(ref s) => {
-                write!(f, "{} for {}", self.desc(), s)?
-            }
-
-            #[cfg(not(feature = "no_index"))]
-            ParseErrorType::MissingRightBracket(ref s) => write!(f, "{} for {}", self.desc(), s)?,
-
-            ParseErrorType::MissingSemicolon(ref s) | ParseErrorType::MissingComma(ref s) => {
-                write!(f, "{} for {}", self.desc(), s)?
+            ParseErrorType::MissingToken(ref token, ref s) => {
+                write!(f, "Expecting '{}' {}", token, s)?
             }
 
             ParseErrorType::AssignmentToConstant(ref s) if s.is_empty() => {

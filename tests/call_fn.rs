@@ -11,7 +11,7 @@ fn test_fn() -> Result<(), EvalAltResult> {
         .expect_err("should be error")
         .error_type()
     {
-        ParseErrorType::FnDuplicateParam(f, p) if f == "hello" && p == "x" => (),
+        ParseErrorType::FnDuplicatedParam(f, p) if f == "hello" && p == "x" => (),
         _ => assert!(false, "wrong error"),
     }
 

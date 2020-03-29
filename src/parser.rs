@@ -1370,13 +1370,16 @@ fn parse_paren_expr<'a>(
         // ( xxx )
         Some((Token::RightParen, _)) => Ok(expr),
         // ( xxx ???
-        Some((_, pos)) => {
-            Err(PERR::MissingRightParen("a matching ( in the expression".into()).into_err(pos))
-        }
+        Some((_, pos)) => Err(PERR::MissingToken(
+            ")".into(),
+            "for a matching ( in this expression".into(),
+        )
+        .into_err(pos)),
         // ( xxx
-        None => {
-            Err(PERR::MissingRightParen("a matching ( in the expression".into()).into_err_eof())
-        }
+        None => Err(
+            PERR::MissingToken(")".into(), "for a matching ( in this expression".into())
+                .into_err_eof(),
+        ),
     }
 }
 
@@ -1391,10 +1394,10 @@ fn parse_call_expr<'a>(
 
     // id()
     if let (Token::RightParen, _) = input.peek().ok_or_else(|| {
-        PERR::MissingRightParen(format!(
-            "closing the arguments to call of function '{}'",
-            id
-        ))
+        PERR::MissingToken(
+            ")".into(),
+            format!("to close the arguments list of this function call '{}'", id),
+        )
         .into_err_eof()
     })? {
         input.next();
@@ -1405,10 +1408,10 @@ fn parse_call_expr<'a>(
         args_expr_list.push(parse_expr(input, allow_stmt_expr)?);
 
         match input.peek().ok_or_else(|| {
-            PERR::MissingRightParen(format!(
-                "closing the arguments to call of function '{}'",
-                id
-            ))
+            PERR::MissingToken(
+                ")".into(),
+                format!("to close the arguments list of this function call '{}'", id),
+            )
             .into_err_eof()
         })? {
             (Token::RightParen, _) => {
@@ -1417,10 +1420,10 @@ fn parse_call_expr<'a>(
             }
             (Token::Comma, _) => (),
             (_, pos) => {
-                return Err(PERR::MissingComma(format!(
-                    "separating the arguments to call of function '{}'",
-                    id
-                ))
+                return Err(PERR::MissingToken(
+                    ",".into(),
+                    format!("to separate the arguments to function call '{}'", id),
+                )
                 .into_err(*pos))
             }
         }
@@ -1497,15 +1500,22 @@ fn parse_index_expr<'a>(
     }
 
     // Check if there is a closing bracket
-    match input
-        .peek()
-        .ok_or_else(|| PERR::MissingRightBracket("index expression".into()).into_err_eof())?
-    {
+    match input.peek().ok_or_else(|| {
+        PERR::MissingToken(
+            "]".into(),
+            "for a matching [ in this index expression".into(),
+        )
+        .into_err_eof()
+    })? {
         (Token::RightBracket, _) => {
             input.next();
             Ok(Expr::Index(lhs, Box::new(idx_expr), pos))
         }
-        (_, pos) => Err(PERR::MissingRightBracket("index expression".into()).into_err(*pos)),
+        (_, pos) => Err(PERR::MissingToken(
+            "]".into(),
+            "for a matching [ in this index expression".into(),
+        )
+        .into_err(*pos)),
     }
 }
 
@@ -1555,31 +1565,32 @@ fn parse_array_literal<'a>(
             arr.push(parse_expr(input, allow_stmt_expr)?);
 
             match input.peek().ok_or_else(|| {
-                PERR::MissingRightBracket("separating items in array literal".into()).into_err_eof()
+                PERR::MissingToken("]".into(), "to end this array literal".into()).into_err_eof()
             })? {
                 (Token::Comma, _) => {
                     input.next();
                 }
                 (Token::RightBracket, _) => break,
                 (_, pos) => {
-                    return Err(
-                        PERR::MissingComma("separating items in array literal".into())
-                            .into_err(*pos),
+                    return Err(PERR::MissingToken(
+                        ",".into(),
+                        "separate the item of this array literal".into(),
                     )
+                    .into_err(*pos))
                 }
             }
         }
     }
 
     match input.peek().ok_or_else(|| {
-        PERR::MissingRightBracket("the end of array literal".into()).into_err_eof()
+        PERR::MissingToken("]".into(), "to end this array literal".into()).into_err_eof()
     })? {
         (Token::RightBracket, _) => {
             input.next();
             Ok(Expr::Array(arr, begin))
         }
         (_, pos) => {
-            Err(PERR::MissingRightBracket("the end of array literal".into()).into_err(*pos))
+            Err(PERR::MissingToken("]".into(), "to end this array literal".into()).into_err(*pos))
         }
     }
 }
@@ -2070,9 +2081,12 @@ fn parse_for<'a>(
     };
 
     // for name in ...
-    match input.next().ok_or_else(|| PERR::MissingIn.into_err_eof())? {
+    match input
+        .next()
+        .ok_or_else(|| PERR::MissingToken("in".into(), "here".into()).into_err_eof())?
+    {
         (Token::In, _) => (),
-        (_, pos) => return Err(PERR::MissingIn.into_err(pos)),
+        (_, pos) => return Err(PERR::MissingToken("in".into(), "here".into()).into_err(pos)),
     }
 
     // for name in expr { body }
@@ -2136,10 +2150,14 @@ fn parse_block<'a>(
     // Must start with {
     let pos = match input
         .next()
-        .ok_or_else(|| PERR::MissingLeftBrace.into_err_eof())?
+        .ok_or_else(|| PERR::UnexpectedEOF.into_err_eof())?
     {
         (Token::LeftBrace, pos) => pos,
-        (_, pos) => return Err(PERR::MissingLeftBrace.into_err(pos)),
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken("{".into(), "to start a statement block".into()).into_err(pos),
+            )
+        }
     };
 
     let mut statements = Vec::new();
@@ -2169,20 +2187,24 @@ fn parse_block<'a>(
             // { ... stmt ??? - error
             Some((_, pos)) => {
                 // Semicolons are not optional between statements
-                return Err(PERR::MissingSemicolon("terminating a statement".into()).into_err(*pos));
+                return Err(
+                    PERR::MissingToken(";".into(), "to terminate this statement".into())
+                        .into_err(*pos),
+                );
             }
         }
     }
 
-    match input
-        .peek()
-        .ok_or_else(|| PERR::MissingRightBrace("end of block".into()).into_err_eof())?
-    {
+    match input.peek().ok_or_else(|| {
+        PERR::MissingToken("}".into(), "to end this statement block".into()).into_err_eof()
+    })? {
         (Token::RightBrace, _) => {
             input.next();
             Ok(Stmt::Block(statements, pos))
         }
-        (_, pos) => Err(PERR::MissingRightBrace("end of block".into()).into_err(*pos)),
+        (_, pos) => {
+            Err(PERR::MissingToken("}".into(), "to end this statement block".into()).into_err(*pos))
+        }
     }
 }
 
@@ -2284,28 +2306,30 @@ fn parse_fn<'a>(
     if matches!(input.peek(), Some((Token::RightParen, _))) {
         input.next();
     } else {
-        let end_err = format!("closing the parameters list of function '{}'", name);
-        let sep_err = format!("separating the parameters of function '{}'", name);
+        let end_err = format!("to close the parameters list of function '{}'", name);
+        let sep_err = format!("to separate the parameters of function '{}'", name);
 
         loop {
             match input
                 .next()
-                .ok_or_else(|| PERR::MissingRightParen(end_err.to_string()).into_err_eof())?
+                .ok_or_else(|| PERR::MissingToken(")".into(), end_err.to_string()).into_err_eof())?
             {
                 (Token::Identifier(s), pos) => {
                     params.push((s, pos));
                 }
-                (_, pos) => return Err(PERR::MissingRightParen(end_err).into_err(pos)),
+                (_, pos) => return Err(PERR::MissingToken(")".into(), end_err).into_err(pos)),
             }
 
             match input
                 .next()
-                .ok_or_else(|| PERR::MissingRightParen(end_err.to_string()).into_err_eof())?
+                .ok_or_else(|| PERR::MissingToken(")".into(), end_err.to_string()).into_err_eof())?
             {
                 (Token::RightParen, _) => break,
                 (Token::Comma, _) => (),
-                (Token::Identifier(_), _) => return Err(PERR::MissingComma(sep_err).into_err(pos)),
-                (_, pos) => return Err(PERR::MissingRightParen(sep_err).into_err(pos)),
+                (Token::Identifier(_), pos) => {
+                    return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos))
+                }
+                (_, pos) => return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos)),
             }
         }
     }
@@ -2322,7 +2346,7 @@ fn parse_fn<'a>(
                 .map_or_else(|| Ok(()), |(p2, pos)| Err((p2, *pos)))
         })
         .map_err(|(p, pos)| {
-            PERR::FnDuplicateParam(name.to_string(), p.to_string()).into_err(pos)
+            PERR::FnDuplicatedParam(name.to_string(), p.to_string()).into_err(pos)
         })?;
 
     // Parse function body
@@ -2408,7 +2432,10 @@ fn parse_global_level<'a>(
             // stmt ??? - error
             Some((_, pos)) => {
                 // Semicolons are not optional between statements
-                return Err(PERR::MissingSemicolon("terminating a statement".into()).into_err(*pos));
+                return Err(
+                    PERR::MissingToken(";".into(), "to terminate this statement".into())
+                        .into_err(*pos),
+                );
             }
         }
     }
