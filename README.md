@@ -1047,7 +1047,7 @@ Object maps
 -----------
 
 Object maps are dictionaries. Properties of any type (`Dynamic`) can be freely added and retrieved.
-Object map literals are built within braces '`${`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
+Object map literals are built within braces '`#{`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
 and separated by commas '`,`'.  The property _name_ can be a simple variable name following the same
 naming rules as [variables], or an arbitrary string literal.
 
@@ -1074,7 +1074,7 @@ The following functions (defined in the standard library but excluded if [`no_st
 Examples:
 
 ```rust
-let y = ${              // object map literal with 3 properties
+let y = #{              // object map literal with 3 properties
     a: 1,
     bar: "hello",
     "baz!$@": 123.456,  // like JS, you can use any string as property names...
@@ -1095,11 +1095,11 @@ ts.obj = y;             // object maps can be assigned completely (by value copy
 let foo = ts.list.a;
 foo == 42;
 
-let foo = ${ a:1, b:2, c:3 }["a"];
+let foo = #{ a:1, b:2, c:3 }["a"];
 foo == 1;
 
 fn abc() {
-    ${ a:1, b:2, c:3 }  // a function returning an object map
+    #{ a:1, b:2, c:3 }  // a function returning an object map
 }
 
 let foo = abc().b;

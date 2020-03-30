@@ -1,31 +1,34 @@
 #![cfg(not(feature = "no_object"))]
-#![cfg(not(feature = "no_index"))]
 
-use rhai::{AnyExt, Dynamic, Engine, EvalAltResult, Map, RegisterFn, INT};
+use rhai::{AnyExt, Engine, EvalAltResult, Map, INT};
 
 #[test]
 fn test_map_indexing() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
+    #[cfg(not(feature = "no_index"))]
     assert_eq!(
-        engine.eval::<INT>(r#"let x = ${a: 1, b: 2, c: 3}; x["b"]"#)?,
+        engine.eval::<INT>(r#"let x = #{a: 1, b: 2, c: 3}; x["b"]"#)?,
         2
     );
+
     assert_eq!(
-        engine.eval::<INT>("let y = ${a: 1, b: 2, c: 3}; y.a = 5; y.a")?,
+        engine.eval::<INT>("let y = #{a: 1, b: 2, c: 3}; y.a = 5; y.a")?,
         5
     );
+
+    #[cfg(not(feature = "no_index"))]
     assert_eq!(
         engine.eval::<char>(
             r#"
-                let y = ${d: 1, "e": ${a: 42, b: 88, "": "93"}, " 123 xyz": 9};
-                y.e[""][1]
+                let y = #{d: 1, "e": #{a: 42, b: 88, "": "hello"}, " 123 xyz": 9};
+                y.e[""][4]
             "#
         )?,
-        '3'
+        'o'
     );
 
-    engine.eval::<()>("let y = ${a: 1, b: 2, c: 3}; y.z")?;
+    engine.eval::<()>("let y = #{a: 1, b: 2, c: 3}; y.z")?;
 
     Ok(())
 }
@@ -34,14 +37,14 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
 fn test_map_assign() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    let mut x = engine.eval::<Map>("let x = ${a: 1, b: true, c: \"3\"}; x")?;
-    let box_a = x.remove("a").unwrap();
-    let box_b = x.remove("b").unwrap();
-    let box_c = x.remove("c").unwrap();
+    let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c#": "hello"}; x"#)?;
+    let a = x.get("a").cloned().unwrap();
+    let b = x.get("b").cloned().unwrap();
+    let c = x.get("c#").cloned().unwrap();
 
-    assert_eq!(*box_a.downcast::<INT>().unwrap(), 1);
-    assert_eq!(*box_b.downcast::<bool>().unwrap(), true);
-    assert_eq!(*box_c.downcast::<String>().unwrap(), "3");
+    assert_eq!(*a.downcast::<INT>().unwrap(), 1);
+    assert_eq!(*b.downcast::<bool>().unwrap(), true);
+    assert_eq!(*c.downcast::<String>().unwrap(), "hello");
 
     Ok(())
 }
@@ -50,14 +53,14 @@ fn test_map_assign() -> Result<(), EvalAltResult> {
 fn test_map_return() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    let mut x = engine.eval::<Map>("${a: 1, b: true, c: \"3\"}")?;
-    let box_a = x.remove("a").unwrap();
-    let box_b = x.remove("b").unwrap();
-    let box_c = x.remove("c").unwrap();
+    let x = engine.eval::<Map>(r#"#{a: 1, b: true, c: "hello"}"#)?;
+    let a = x.get("a").cloned().unwrap();
+    let b = x.get("b").cloned().unwrap();
+    let c = x.get("c").cloned().unwrap();
 
-    assert_eq!(*box_a.downcast::<INT>().unwrap(), 1);
-    assert_eq!(*box_b.downcast::<bool>().unwrap(), true);
-    assert_eq!(*box_c.downcast::<String>().unwrap(), "3".to_string());
+    assert_eq!(*a.downcast::<INT>().unwrap(), 1);
+    assert_eq!(*b.downcast::<bool>().unwrap(), true);
+    assert_eq!(*c.downcast::<String>().unwrap(), "hello");
 
     Ok(())
 }

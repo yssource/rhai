@@ -610,8 +610,8 @@ impl Engine<'_> {
 
             #[cfg(not(feature = "no_object"))]
             {
-                self.register_fn("print", |x: &mut Map| -> String { format!("${:?}", x) });
-                self.register_fn("debug", |x: &mut Map| -> String { format!("${:?}", x) });
+                self.register_fn("print", |x: &mut Map| -> String { format!("#{:?}", x) });
+                self.register_fn("debug", |x: &mut Map| -> String { format!("#{:?}", x) });
             }
         }
 

@@ -24,11 +24,11 @@ fn test_type_of() -> Result<(), EvalAltResult> {
         "array"
     );
 
-    // #[cfg(not(feature = "no_object"))]
-    // assert_eq!(
-    //     engine.eval::<String>(r#"type_of(${a:true, "":2, "z":"hello"})"#)?,
-    //     "map"
-    // );
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<String>(r#"type_of(#{a:true, "":2, "z":"hello"})"#)?,
+        "map"
+    );
 
     #[cfg(not(feature = "no_object"))]
     {

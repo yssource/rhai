@@ -368,7 +368,7 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Vec<Expr>, Position),
     #[cfg(not(feature = "no_object"))]
-    /// ${ name:expr, ... }
+    /// #{ name:expr, ... }
     Map(Vec<(String, Expr, Position)>, Position),
     /// lhs && rhs
     And(Box<Expr>, Box<Expr>),
@@ -627,7 +627,7 @@ impl Token {
                 Comma => ",",
                 Period => ".",
                 #[cfg(not(feature = "no_object"))]
-                MapStart => "${",
+                MapStart => "#{",
                 Equals => "=",
                 True => "true",
                 False => "false",
@@ -1159,7 +1159,7 @@ impl<'a> TokenIterator<'a> {
 
                 // Map literal
                 #[cfg(not(feature = "no_object"))]
-                ('$', '{') => {
+                ('#', '{') => {
                     self.eat_next();
                     return Some((Token::MapStart, pos));
                 }
