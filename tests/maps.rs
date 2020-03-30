@@ -18,8 +18,8 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
     assert_eq!(
         engine.eval::<char>(
             r#"
-                let y = ${d: 1, e: ${a: 42, b: 88, c: "93"}, x: 9};
-                y.e["c"][1]
+                let y = ${d: 1, "e": ${a: 42, b: 88, "": "93"}, " 123 xyz": 9};
+                y.e[""][1]
             "#
         )?,
         '3'

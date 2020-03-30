@@ -729,6 +729,8 @@ let a = { 40 + 2 };     // 'a' is set to the value of the statement block, which
 Variables
 ---------
 
+[variables]: #variables
+
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
 
 Variable names must start with an ASCII letter or an underscore '`_`', must contain at least one ASCII letter, and must start with an ASCII letter before a digit.
@@ -761,7 +763,7 @@ x == 42;            // the parent block's 'x' is not changed
 Constants
 ---------
 
-Constants can be defined using the `const` keyword and are immutable.  Constants follow the same naming rules as [variables](#variables).
+Constants can be defined using the `const` keyword and are immutable.  Constants follow the same naming rules as [variables].
 
 ```rust
 const x = 42;
@@ -1046,7 +1048,14 @@ Object maps
 
 Object maps are dictionaries. Properties of any type (`Dynamic`) can be freely added and retrieved.
 Object map literals are built within braces '`${`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
-and separated by commas '`,`'.
+and separated by commas '`,`'.  The property _name_ can be a simple variable name following the same
+naming rules as [variables], or an arbitrary string literal.
+
+Property values can be accessed via the dot notation (_object_ `.` _property_) or index notation (_object_ `[` _property_ `]`).
+The dot notation allows only property names that follow the same naming rules as [variables].
+The index notation allows setting/getting properties of arbitrary names (even the empty string).
+
+**Important:** Trying to read a non-existent property returns `()` instead of causing an error.
 
 The Rust type of a Rhai object map is `rhai::Map`.
 
@@ -1068,13 +1077,19 @@ Examples:
 let y = ${              // object map literal with 3 properties
     a: 1,
     bar: "hello",
-    baz: 123.456
+    "baz!$@": 123.456,  // like JS, you can use any string as property names...
+    "": false,          // even the empty string!
+
+    a: 42               // <- syntax error: duplicated property name
 };
-y.a = 42;
+
+y.a = 42;               // access via dot notation
+y.baz!$@ = 42;          // <- syntax error: only proper variable names allowed in dot notation
+y."baz!$@" = 42;        // <- syntax error: strings not allowed in dot notation
 
 print(y.a);             // prints 42
 
-print(y["bar"]);        // prints "hello" - access via string index
+print(y["baz!$@"]);     // prints 123.456 - access via index notation
 
 ts.obj = y;             // object maps can be assigned completely (by value copy)
 let foo = ts.list.a;
@@ -1095,6 +1110,9 @@ foo == 42;
 
 y.has("a") == true;
 y.has("xyz") == false;
+
+y.xyz == ();            // A non-existing property returns '()'
+y["xyz"] == ();
 
 print(y.len());         // prints 3
 

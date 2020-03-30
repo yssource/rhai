@@ -59,7 +59,7 @@ pub enum ParseErrorType {
     DuplicatedProperty(String),
     /// Invalid expression assigned to constant.
     ForbiddenConstantExpr(String),
-    /// Missing a property name for maps.
+    /// Missing a property name for custom types and maps.
     PropertyExpected,
     /// Missing a variable name after the `let`, `const` or `for` keywords.
     VariableExpected,

@@ -1677,6 +1677,7 @@ fn parse_map_literal<'a>(
                     .into_err_eof()
             })? {
                 (Token::Identifier(s), pos) => (s.clone(), pos),
+                (Token::StringConst(s), pos) => (s.clone(), pos),
                 (_, pos) if map.is_empty() => {
                     return Err(PERR::MissingToken(
                         "}".into(),
@@ -2053,27 +2054,30 @@ fn parse_binary_op<'a>(
 
                 #[cfg(not(feature = "no_object"))]
                 Token::Period => {
-                    fn change_var_to_property(expr: Expr) -> Expr {
+                    fn check_property(expr: Expr) -> Result<Expr, ParseError> {
                         match expr {
-                            Expr::Dot(lhs, rhs, pos) => Expr::Dot(
-                                Box::new(change_var_to_property(*lhs)),
-                                Box::new(change_var_to_property(*rhs)),
+                            // xxx.lhs.rhs
+                            Expr::Dot(lhs, rhs, pos) => Ok(Expr::Dot(
+                                Box::new(check_property(*lhs)?),
+                                Box::new(check_property(*rhs)?),
                                 pos,
-                            ),
+                            )),
+                            // xxx.lhs[idx]
                             #[cfg(not(feature = "no_index"))]
                             Expr::Index(lhs, idx, pos) => {
-                                Expr::Index(Box::new(change_var_to_property(*lhs)), idx, pos)
+                                Ok(Expr::Index(Box::new(check_property(*lhs)?), idx, pos))
                             }
-                            Expr::Variable(s, pos) => Expr::Property(s, pos),
-                            expr => expr,
+                            // xxx.id
+                            Expr::Variable(id, pos) => Ok(Expr::Property(id, pos)),
+                            // xxx.prop
+                            expr @ Expr::Property(_, _) => Ok(expr),
+                            // xxx.fn()
+                            expr @ Expr::FunctionCall(_, _, _, _) => Ok(expr),
+                            expr => Err(PERR::PropertyExpected.into_err(expr.position())),
                         }
                     }
 
-                    Expr::Dot(
-                        Box::new(current_lhs),
-                        Box::new(change_var_to_property(rhs)),
-                        pos,
-                    )
+                    Expr::Dot(Box::new(current_lhs), Box::new(check_property(rhs)?), pos)
                 }
 
                 // Comparison operators default to false when passed invalid operands
@@ -2258,12 +2262,16 @@ fn parse_for<'a>(
     };
 
     // for name in ...
-    match input
-        .next()
-        .ok_or_else(|| PERR::MissingToken("in".into(), "here".into()).into_err_eof())?
-    {
+    match input.next().ok_or_else(|| {
+        PERR::MissingToken("in".into(), "after the iteration variable".into()).into_err_eof()
+    })? {
         (Token::In, _) => (),
-        (_, pos) => return Err(PERR::MissingToken("in".into(), "here".into()).into_err(pos)),
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken("in".into(), "after the iteration variable".into())
+                    .into_err(pos),
+            )
+        }
     }
 
     // for name in expr { body }
