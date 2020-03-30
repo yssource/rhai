@@ -24,12 +24,7 @@ use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 impl<'e> Engine<'e> {
     /// Register a custom function.
-    pub(crate) fn register_fn_raw(
-        &mut self,
-        fn_name: &str,
-        args: Option<Vec<TypeId>>,
-        f: Box<FnAny>,
-    ) {
+    pub(crate) fn register_fn_raw(&mut self, fn_name: &str, args: Vec<TypeId>, f: Box<FnAny>) {
         let spec = FnSpec {
             name: fn_name.to_string().into(),
             args,
@@ -180,8 +175,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T) -> U + 'static,
     ) {
-        let get_fn_name = make_getter(name);
-        self.register_fn(&get_fn_name, callback);
+        self.register_fn(&make_getter(name), callback);
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
@@ -226,8 +220,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T, U) -> () + 'static,
     ) {
-        let set_fn_name = make_setter(name);
-        self.register_fn(&set_fn_name, callback);
+        self.register_fn(&make_setter(name), callback);
     }
 
     /// Shorthand for registering both getter and setter functions
@@ -353,8 +346,9 @@ impl<'e> Engine<'e> {
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(path.clone(), err))
-            .map(|_| contents)
+            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(path.clone(), err))?;
+
+        Ok(contents)
     }
 
     /// Compile a script file into an `AST`, which can be used later for evaluation.
@@ -559,8 +553,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     pub fn eval<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
-        let mut scope = Scope::new();
-        self.eval_with_scope(&mut scope, input)
+        self.eval_with_scope(&mut Scope::new(), input)
     }
 
     /// Evaluate a string with own scope.
@@ -609,8 +602,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     pub fn eval_expression<T: Any + Clone>(&mut self, input: &str) -> Result<T, EvalAltResult> {
-        let mut scope = Scope::new();
-        self.eval_expression_with_scope(&mut scope, input)
+        self.eval_expression_with_scope(&mut Scope::new(), input)
     }
 
     /// Evaluate a string containing an expression with own scope.
@@ -662,8 +654,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     pub fn eval_ast<T: Any + Clone>(&mut self, ast: &AST) -> Result<T, EvalAltResult> {
-        let mut scope = Scope::new();
-        self.eval_ast_with_scope(&mut scope, ast)
+        self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
 
     /// Evaluate an `AST` with own scope.
@@ -701,8 +692,8 @@ impl<'e> Engine<'e> {
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
         self.eval_ast_with_scope_raw(scope, false, ast)
-            .and_then(|out| {
-                out.downcast::<T>().map(|v| *v).map_err(|a| {
+            .and_then(|result| {
+                result.downcast::<T>().map(|v| *v).map_err(|a| {
                     EvalAltResult::ErrorMismatchOutputType(
                         self.map_type_name((*a).type_name()).to_string(),
                         Position::none(),
@@ -717,34 +708,25 @@ impl<'e> Engine<'e> {
         retain_functions: bool,
         ast: &AST,
     ) -> Result<Dynamic, EvalAltResult> {
-        fn eval_ast_internal(
-            engine: &mut Engine,
-            scope: &mut Scope,
-            retain_functions: bool,
-            ast: &AST,
-        ) -> Result<Dynamic, EvalAltResult> {
-            if !retain_functions {
-                engine.clear_functions();
-            }
-
-            let statements = {
-                let AST(statements, functions) = ast;
-                engine.load_script_functions(functions);
-                statements
-            };
-
-            let result = statements.iter().try_fold(().into_dynamic(), |_, stmt| {
-                engine.eval_stmt(scope, stmt, 0)
-            })?;
-
-            if !retain_functions {
-                engine.clear_functions();
-            }
-
-            Ok(result)
+        if !retain_functions {
+            self.clear_functions();
         }
 
-        eval_ast_internal(self, scope, retain_functions, ast).or_else(|err| match err {
+        let statements = {
+            let AST(statements, functions) = ast;
+            self.load_script_functions(functions);
+            statements
+        };
+
+        let result = statements
+            .iter()
+            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt, 0));
+
+        if !retain_functions {
+            self.clear_functions();
+        }
+
+        result.or_else(|err| match err {
             EvalAltResult::Return(out, _) => Ok(out),
             _ => Err(err),
         })
@@ -834,14 +816,13 @@ impl<'e> Engine<'e> {
 
         let result = statements
             .iter()
-            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt, 0))
-            .map(|_| ());
+            .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt, 0));
 
         if !retain_functions {
             self.clear_functions();
         }
 
-        result.or_else(|err| match err {
+        result.map(|_| ()).or_else(|err| match err {
             EvalAltResult::Return(_, _) => Ok(()),
             _ => Err(err),
         })
