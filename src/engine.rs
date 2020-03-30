@@ -192,6 +192,34 @@ impl Default for Engine<'_> {
     }
 }
 
+/// Make getter function
+pub fn make_getter(id: &str) -> String {
+    format!("{}{}", FUNC_GETTER, id)
+}
+
+/// Extract the property name from a getter function name.
+fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
+    if fn_name.starts_with(FUNC_GETTER) {
+        Some(&fn_name[FUNC_GETTER.len()..])
+    } else {
+        None
+    }
+}
+
+/// Make setter function
+pub fn make_setter(id: &str) -> String {
+    format!("{}{}", FUNC_SETTER, id)
+}
+
+/// Extract the property name from a setter function name.
+fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
+    if fn_name.starts_with(FUNC_SETTER) {
+        Some(&fn_name[FUNC_SETTER.len()..])
+    } else {
+        None
+    }
+}
+
 impl Engine<'_> {
     /// Create a new `Engine`
     pub fn new() -> Self {
@@ -296,24 +324,18 @@ impl Engine<'_> {
             });
         }
 
-        if fn_name.starts_with(FUNC_GETTER) {
+        if let Some(prop) = extract_prop_from_getter(fn_name) {
             // Getter function not found
             return Err(EvalAltResult::ErrorDotExpr(
-                format!(
-                    "- property '{}' unknown or write-only",
-                    &fn_name[FUNC_GETTER.len()..]
-                ),
+                format!("- property '{}' unknown or write-only", prop),
                 pos,
             ));
         }
 
-        if fn_name.starts_with(FUNC_SETTER) {
+        if let Some(prop) = extract_prop_from_setter(fn_name) {
             // Setter function not found
             return Err(EvalAltResult::ErrorDotExpr(
-                format!(
-                    "- property '{}' unknown or read-only",
-                    &fn_name[FUNC_SETTER.len()..]
-                ),
+                format!("- property '{}' unknown or read-only", prop),
                 pos,
             ));
         }
@@ -390,7 +412,7 @@ impl Engine<'_> {
 
             // xxx.id
             Expr::Property(id, pos) => {
-                let get_fn_name = format!("{}{}", FUNC_GETTER, id);
+                let get_fn_name = make_getter(id);
                 let this_ptr = get_this_ptr(scope, src, target);
                 self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos, 0)
             }
@@ -401,7 +423,7 @@ impl Engine<'_> {
                 let (val, _) = match idx_lhs.as_ref() {
                     // xxx.id[idx_expr]
                     Expr::Property(id, pos) => {
-                        let get_fn_name = format!("{}{}", FUNC_GETTER, id);
+                        let get_fn_name = make_getter(id);
                         let this_ptr = get_this_ptr(scope, src, target);
                         (
                             self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos, 0)?,
@@ -431,7 +453,7 @@ impl Engine<'_> {
             Expr::Dot(dot_lhs, rhs, _) => match dot_lhs.as_ref() {
                 // xxx.id.rhs
                 Expr::Property(id, pos) => {
-                    let get_fn_name = format!("{}{}", FUNC_GETTER, id);
+                    let get_fn_name = make_getter(id);
                     let this_ptr = get_this_ptr(scope, src, target);
 
                     self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos, 0)
@@ -445,7 +467,7 @@ impl Engine<'_> {
                     let (val, _) = match idx_lhs.as_ref() {
                         // xxx.id[idx_expr].rhs
                         Expr::Property(id, pos) => {
-                            let get_fn_name = format!("{}{}", FUNC_GETTER, id);
+                            let get_fn_name = make_getter(id);
                             let this_ptr = get_this_ptr(scope, src, target);
                             (
                                 self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos, 0)?,
@@ -755,7 +777,7 @@ impl Engine<'_> {
         match dot_rhs {
             // xxx.id
             Expr::Property(id, pos) => {
-                let set_fn_name = format!("{}{}", FUNC_SETTER, id);
+                let set_fn_name = make_setter(id);
                 let mut args = [this_ptr, new_val.0.as_mut()];
                 self.call_fn_raw(&set_fn_name, &mut args, None, *pos, 0)
             }
@@ -766,7 +788,7 @@ impl Engine<'_> {
             Expr::Index(lhs, idx_expr, op_pos) => match lhs.as_ref() {
                 // xxx.id[idx_expr]
                 Expr::Property(id, pos) => {
-                    let get_fn_name = format!("{}{}", FUNC_GETTER, id);
+                    let get_fn_name = make_getter(id);
 
                     self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|v| {
@@ -779,7 +801,7 @@ impl Engine<'_> {
                             )
                         })
                         .and_then(|mut v| {
-                            let set_fn_name = format!("{}{}", FUNC_SETTER, id);
+                            let set_fn_name = make_setter(id);
                             let mut args = [this_ptr, v.as_mut()];
                             self.call_fn_raw(&set_fn_name, &mut args, None, *pos, 0)
                         })
@@ -796,7 +818,7 @@ impl Engine<'_> {
             Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 // xxx.id.rhs
                 Expr::Property(id, pos) => {
-                    let get_fn_name = format!("{}{}", FUNC_GETTER, id);
+                    let get_fn_name = make_getter(id);
 
                     self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|mut v| {
@@ -804,7 +826,7 @@ impl Engine<'_> {
                                 .map(|_| v) // Discard Ok return value
                         })
                         .and_then(|mut v| {
-                            let set_fn_name = format!("{}{}", FUNC_SETTER, id);
+                            let set_fn_name = make_setter(id);
                             let mut args = [this_ptr, v.as_mut()];
                             self.call_fn_raw(&set_fn_name, &mut args, None, *pos, 0)
                         })
@@ -816,7 +838,7 @@ impl Engine<'_> {
                 Expr::Index(lhs, idx_expr, op_pos) => match lhs.as_ref() {
                     // xxx.id[idx_expr].rhs
                     Expr::Property(id, pos) => {
-                        let get_fn_name = format!("{}{}", FUNC_GETTER, id);
+                        let get_fn_name = make_getter(id);
 
                         self.call_fn_raw(&get_fn_name, &mut [this_ptr], None, *pos, 0)
                             .and_then(|v| {
@@ -832,7 +854,7 @@ impl Engine<'_> {
                                 Self::update_indexed_value(v, idx as usize, target, val_pos)
                             })
                             .and_then(|mut v| {
-                                let set_fn_name = format!("{}{}", FUNC_SETTER, id);
+                                let set_fn_name = make_setter(id);
                                 let mut args = [this_ptr, v.as_mut()];
                                 self.call_fn_raw(&set_fn_name, &mut args, None, *pos, 0)
                             })

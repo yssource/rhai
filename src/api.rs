@@ -2,7 +2,7 @@
 
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
-use crate::engine::{Engine, FnAny, FnSpec, FUNC_GETTER, FUNC_SETTER};
+use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, parse_global_expr, FnDef, Position, AST};
@@ -15,7 +15,6 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    format,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
@@ -45,7 +44,7 @@ impl<'e> Engine<'e> {
     /// # Example
     ///
     /// ```
-    /// #[derive(Clone)]
+    /// #[derive(Debug, Clone, Eq, PartialEq)]
     /// struct TestStruct {
     ///     field: i64
     /// }
@@ -69,8 +68,8 @@ impl<'e> Engine<'e> {
     /// engine.register_fn("update", TestStruct::update);
     ///
     /// assert_eq!(
-    ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(41); x")?.field,
-    ///     42
+    ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(41); x")?,
+    ///     TestStruct { field: 42 }
     /// );
     /// # Ok(())
     /// # }
@@ -87,7 +86,7 @@ impl<'e> Engine<'e> {
     ///
     /// ```
     /// #[derive(Clone)]
-    ///     struct TestStruct {
+    /// struct TestStruct {
     ///     field: i64
     /// }
     ///
@@ -147,7 +146,7 @@ impl<'e> Engine<'e> {
     ///
     /// ```
     /// #[derive(Clone)]
-    ///     struct TestStruct {
+    /// struct TestStruct {
     ///     field: i64
     /// }
     ///
@@ -181,7 +180,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T) -> U + 'static,
     ) {
-        let get_fn_name = format!("{}{}", FUNC_GETTER, name);
+        let get_fn_name = make_getter(name);
         self.register_fn(&get_fn_name, callback);
     }
 
@@ -190,7 +189,7 @@ impl<'e> Engine<'e> {
     /// # Example
     ///
     /// ```
-    /// #[derive(Clone)]
+    /// #[derive(Debug, Clone, Eq, PartialEq)]
     /// struct TestStruct {
     ///     field: i64
     /// }
@@ -214,7 +213,10 @@ impl<'e> Engine<'e> {
     /// engine.register_set("xyz", TestStruct::set_field);
     ///
     /// // Notice that, with a getter, there is no way to get the property value
-    /// engine.eval("let a = new_ts(); a.xyz = 42;")?;
+    /// assert_eq!(
+    ///     engine.eval::<TestStruct>("let a = new_ts(); a.xyz = 42; a")?,
+    ///     TestStruct { field: 42 }
+    /// );
     /// # Ok(())
     /// # }
     /// ```
@@ -224,7 +226,7 @@ impl<'e> Engine<'e> {
         name: &str,
         callback: impl Fn(&mut T, U) -> () + 'static,
     ) {
-        let set_fn_name = format!("{}{}", FUNC_SETTER, name);
+        let set_fn_name = make_setter(name);
         self.register_fn(&set_fn_name, callback);
     }
 
