@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
 fn test_type_of() -> Result<(), EvalAltResult> {
@@ -32,7 +32,7 @@ fn test_type_of() -> Result<(), EvalAltResult> {
 
     #[cfg(not(feature = "no_object"))]
     {
-        engine.register_type::<TestStruct>("Hello");
+        engine.register_type_with_name::<TestStruct>("Hello");
         engine.register_fn("new_ts", || TestStruct { x: 1 });
 
         assert_eq!(engine.eval::<String>("type_of(new_ts())")?, "Hello");
