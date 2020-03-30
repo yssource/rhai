@@ -2,6 +2,11 @@ use rhai::{Engine, EvalAltResult};
 
 #[test]
 fn test_type_of() -> Result<(), EvalAltResult> {
+    #[derive(Clone)]
+    struct TestStruct {
+        x: INT,
+    }
+
     let mut engine = Engine::new();
 
     #[cfg(not(feature = "only_i32"))]
@@ -14,11 +19,24 @@ fn test_type_of() -> Result<(), EvalAltResult> {
     assert_eq!(engine.eval::<String>("type_of(1.0 + 2.0)")?, "f64");
 
     #[cfg(not(feature = "no_index"))]
-    #[cfg(not(feature = "no_float"))]
     assert_eq!(
-        engine.eval::<String>(r#"type_of([1.0, 2, "hello"])"#)?,
+        engine.eval::<String>(r#"type_of([true, 2, "hello"])"#)?,
         "array"
     );
+
+    // #[cfg(not(feature = "no_object"))]
+    // assert_eq!(
+    //     engine.eval::<String>(r#"type_of(${a:true, "":2, "z":"hello"})"#)?,
+    //     "map"
+    // );
+
+    #[cfg(not(feature = "no_object"))]
+    {
+        engine.register_type::<TestStruct>("Hello");
+        engine.register_fn("new_ts", || TestStruct { x: 1 });
+
+        assert_eq!(engine.eval::<String>("type_of(new_ts())")?, "Hello");
+    }
 
     assert_eq!(engine.eval::<String>(r#"type_of("hello")"#)?, "string");
 
