@@ -11,7 +11,9 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    char, fmt, format,
+    char,
+    collections::HashMap,
+    fmt, format,
     iter::Peekable,
     ops::Add,
     str::Chars,
@@ -365,6 +367,9 @@ pub enum Expr {
     #[cfg(not(feature = "no_index"))]
     /// [ expr, ... ]
     Array(Vec<Expr>, Position),
+    #[cfg(not(feature = "no_object"))]
+    /// ${ name:expr, ... }
+    Map(Vec<(String, Expr, Position)>, Position),
     /// lhs && rhs
     And(Box<Expr>, Box<Expr>),
     /// lhs || rhs
@@ -397,6 +402,13 @@ impl Expr {
                 .iter()
                 .map(Expr::get_constant_value)
                 .collect::<Vec<_>>()
+                .into_dynamic(),
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => items
+                .iter()
+                .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
+                .collect::<HashMap<_, _>>()
                 .into_dynamic(),
 
             #[cfg(not(feature = "no_float"))]
@@ -456,6 +468,9 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(_, pos) => *pos,
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(_, pos) => *pos,
 
             #[cfg(not(feature = "no_index"))]
             Expr::Index(expr, _, _) => expr.position(),
@@ -534,6 +549,8 @@ pub enum Token {
     Colon,
     Comma,
     Period,
+    #[cfg(not(feature = "no_object"))]
+    MapStart,
     Equals,
     True,
     False,
@@ -609,6 +626,8 @@ impl Token {
                 Colon => ":",
                 Comma => ",",
                 Period => ".",
+                #[cfg(not(feature = "no_object"))]
+                MapStart => "${",
                 Equals => "=",
                 True => "true",
                 False => "false",
@@ -797,6 +816,11 @@ pub struct TokenIterator<'a> {
 }
 
 impl<'a> TokenIterator<'a> {
+    /// Consume the next character.
+    fn eat_next(&mut self) {
+        self.stream.next();
+        self.advance();
+    }
     /// Move the current position one character ahead.
     fn advance(&mut self) {
         self.pos.advance();
@@ -936,20 +960,17 @@ impl<'a> TokenIterator<'a> {
                         match next_char {
                             '0'..='9' | '_' => {
                                 result.push(next_char);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
                             }
                             #[cfg(not(feature = "no_float"))]
                             '.' => {
                                 result.push(next_char);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
                                 while let Some(&next_char_in_float) = self.stream.peek() {
                                     match next_char_in_float {
                                         '0'..='9' | '_' => {
                                             result.push(next_char_in_float);
-                                            self.stream.next();
-                                            self.advance();
+                                            self.eat_next();
                                         }
                                         _ => break,
                                     }
@@ -960,8 +981,7 @@ impl<'a> TokenIterator<'a> {
                                 if c == '0' =>
                             {
                                 result.push(next_char);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
 
                                 let valid = match ch {
                                     'x' | 'X' => [
@@ -992,8 +1012,7 @@ impl<'a> TokenIterator<'a> {
                                     }
 
                                     result.push(next_char_in_hex);
-                                    self.stream.next();
-                                    self.advance();
+                                    self.eat_next();
                                 }
                             }
 
@@ -1047,8 +1066,7 @@ impl<'a> TokenIterator<'a> {
                         match next_char {
                             x if x.is_ascii_alphanumeric() || x == '_' => {
                                 result.push(x);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
                             }
                             _ => break,
                         }
@@ -1139,10 +1157,16 @@ impl<'a> TokenIterator<'a> {
                 #[cfg(not(feature = "no_index"))]
                 (']', _) => return Some((Token::RightBracket, pos)),
 
+                // Map literal
+                #[cfg(not(feature = "no_object"))]
+                ('$', '{') => {
+                    self.eat_next();
+                    return Some((Token::MapStart, pos));
+                }
+
                 // Operators
                 ('+', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::PlusAssign, pos));
                 }
                 ('+', _) if self.can_be_unary => return Some((Token::UnaryPlus, pos)),
@@ -1151,24 +1175,21 @@ impl<'a> TokenIterator<'a> {
                 ('-', '0'..='9') if self.can_be_unary => negated = true,
                 ('-', '0'..='9') => return Some((Token::Minus, pos)),
                 ('-', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::MinusAssign, pos));
                 }
                 ('-', _) if self.can_be_unary => return Some((Token::UnaryMinus, pos)),
                 ('-', _) => return Some((Token::Minus, pos)),
 
                 ('*', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::MultiplyAssign, pos));
                 }
                 ('*', _) => return Some((Token::Multiply, pos)),
 
                 // Comments
                 ('/', '/') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     while let Some(c) = self.stream.next() {
                         if c == '\n' {
@@ -1182,8 +1203,7 @@ impl<'a> TokenIterator<'a> {
                 ('/', '*') => {
                     let mut level = 1;
 
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     while let Some(c) = self.stream.next() {
                         self.advance();
@@ -1212,8 +1232,7 @@ impl<'a> TokenIterator<'a> {
                 }
 
                 ('/', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::DivideAssign, pos));
                 }
                 ('/', _) => return Some((Token::Divide, pos)),
@@ -1224,25 +1243,21 @@ impl<'a> TokenIterator<'a> {
                 ('.', _) => return Some((Token::Period, pos)),
 
                 ('=', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::EqualsTo, pos));
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
 
                 ('<', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::LessThanEqualsTo, pos));
                 }
                 ('<', '<') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     return Some((
                         if self.stream.peek() == Some(&'=') {
-                            self.stream.next();
-                            self.advance();
+                            self.eat_next();
                             Token::LeftShiftAssign
                         } else {
                             Token::LeftShift
@@ -1253,18 +1268,15 @@ impl<'a> TokenIterator<'a> {
                 ('<', _) => return Some((Token::LessThan, pos)),
 
                 ('>', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::GreaterThanEqualsTo, pos));
                 }
                 ('>', '>') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     return Some((
                         if self.stream.peek() == Some(&'=') {
-                            self.stream.next();
-                            self.advance();
+                            self.eat_next();
                             Token::RightShiftAssign
                         } else {
                             Token::RightShift
@@ -1275,53 +1287,45 @@ impl<'a> TokenIterator<'a> {
                 ('>', _) => return Some((Token::GreaterThan, pos)),
 
                 ('!', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::NotEqualsTo, pos));
                 }
                 ('!', _) => return Some((Token::Bang, pos)),
 
                 ('|', '|') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::Or, pos));
                 }
                 ('|', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::OrAssign, pos));
                 }
                 ('|', _) => return Some((Token::Pipe, pos)),
 
                 ('&', '&') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::And, pos));
                 }
                 ('&', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::AndAssign, pos));
                 }
                 ('&', _) => return Some((Token::Ampersand, pos)),
 
                 ('^', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::XOrAssign, pos));
                 }
                 ('^', _) => return Some((Token::XOr, pos)),
 
                 ('%', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::ModuloAssign, pos));
                 }
                 ('%', _) => return Some((Token::Modulo, pos)),
 
                 ('~', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::PowerOfAssign, pos));
                 }
                 ('~', _) => return Some((Token::PowerOf, pos)),
@@ -1435,7 +1439,7 @@ fn parse_call_expr<'a>(
     }
 }
 
-/// Parse an indexing expression.s
+/// Parse an indexing expression.
 #[cfg(not(feature = "no_index"))]
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
@@ -1445,7 +1449,7 @@ fn parse_index_expr<'a>(
 ) -> Result<Expr, ParseError> {
     let idx_expr = parse_expr(input, allow_stmt_expr)?;
 
-    // Check type of indexing - must be integer
+    // Check type of indexing - must be integer or string
     match &idx_expr {
         // lhs[int]
         Expr::IntegerConstant(i, pos) if *i < 0 => {
@@ -1455,6 +1459,72 @@ fn parse_index_expr<'a>(
             ))
             .into_err(*pos))
         }
+        Expr::IntegerConstant(_, pos) => match *lhs {
+            Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(_, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Object map access expects string index, not a number".into(),
+                )
+                .into_err(*pos))
+            }
+
+            Expr::FloatConstant(_, pos)
+            | Expr::CharConstant(_, pos)
+            | Expr::Assignment(_, _, pos)
+            | Expr::Unit(pos)
+            | Expr::True(pos)
+            | Expr::False(pos) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(pos))
+            }
+
+            Expr::And(lhs, _) | Expr::Or(lhs, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(lhs.position()))
+            }
+
+            _ => (),
+        },
+
+        // lhs[string]
+        Expr::StringConstant(_, pos) => match *lhs {
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(_, _) => (),
+
+            Expr::Array(_, _) | Expr::StringConstant(_, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Array or string expects numeric index, not a string".into(),
+                )
+                .into_err(*pos))
+            }
+            Expr::FloatConstant(_, pos)
+            | Expr::CharConstant(_, pos)
+            | Expr::Assignment(_, _, pos)
+            | Expr::Unit(pos)
+            | Expr::True(pos)
+            | Expr::False(pos) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(pos))
+            }
+
+            Expr::And(lhs, _) | Expr::Or(lhs, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(lhs.position()))
+            }
+
+            _ => (),
+        },
+
         // lhs[float]
         #[cfg(not(feature = "no_float"))]
         Expr::FloatConstant(_, pos) => {
@@ -1467,13 +1537,6 @@ fn parse_index_expr<'a>(
         Expr::CharConstant(_, pos) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
-            )
-            .into_err(*pos))
-        }
-        // lhs[string]
-        Expr::StringConstant(_, pos) => {
-            return Err(PERR::MalformedIndexExpr(
-                "Array access expects integer index, not a string".into(),
             )
             .into_err(*pos))
         }
@@ -1577,7 +1640,7 @@ fn parse_array_literal<'a>(
                 (_, pos) => {
                     return Err(PERR::MissingToken(
                         ",".into(),
-                        "separate the item of this array literal".into(),
+                        "to separate the items of this array literal".into(),
                     )
                     .into_err(*pos))
                 }
@@ -1595,6 +1658,111 @@ fn parse_array_literal<'a>(
         (_, pos) => {
             Err(PERR::MissingToken("]".into(), "to end this array literal".into()).into_err(*pos))
         }
+    }
+}
+
+/// Parse a map literal.
+#[cfg(not(feature = "no_object"))]
+fn parse_map_literal<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    begin: Position,
+    allow_stmt_expr: bool,
+) -> Result<Expr, ParseError> {
+    let mut map = Vec::new();
+
+    if !matches!(input.peek(), Some((Token::RightBrace, _))) {
+        while input.peek().is_some() {
+            let (name, pos) = match input.next().ok_or_else(|| {
+                PERR::MissingToken("}".into(), "to end this object map literal".into())
+                    .into_err_eof()
+            })? {
+                (Token::Identifier(s), pos) => (s.clone(), pos),
+                (Token::StringConst(s), pos) => (s.clone(), pos),
+                (_, pos) if map.is_empty() => {
+                    return Err(PERR::MissingToken(
+                        "}".into(),
+                        "to end this object map literal".into(),
+                    )
+                    .into_err(pos))
+                }
+                (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
+            };
+
+            match input.next().ok_or_else(|| {
+                PERR::MissingToken(
+                    ":".into(),
+                    format!(
+                        "to follow the property '{}' in this object map literal",
+                        name
+                    ),
+                )
+                .into_err_eof()
+            })? {
+                (Token::Colon, _) => (),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        ":".into(),
+                        format!(
+                            "to follow the property '{}' in this object map literal",
+                            name
+                        ),
+                    )
+                    .into_err(pos))
+                }
+            };
+
+            let expr = parse_expr(input, allow_stmt_expr)?;
+
+            map.push((name, expr, pos));
+
+            match input.peek().ok_or_else(|| {
+                PERR::MissingToken("}".into(), "to end this object map literal".into())
+                    .into_err_eof()
+            })? {
+                (Token::Comma, _) => {
+                    input.next();
+                }
+                (Token::RightBrace, _) => break,
+                (Token::Identifier(_), pos) => {
+                    return Err(PERR::MissingToken(
+                        ",".into(),
+                        "to separate the items of this object map literal".into(),
+                    )
+                    .into_err(*pos))
+                }
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        "}".into(),
+                        "to end this object map literal".into(),
+                    )
+                    .into_err(*pos))
+                }
+            }
+        }
+    }
+
+    // Check for duplicating properties
+    map.iter()
+        .enumerate()
+        .try_for_each(|(i, (k1, _, _))| {
+            map.iter()
+                .skip(i + 1)
+                .find(|(k2, _, _)| k2 == k1)
+                .map_or_else(|| Ok(()), |(k2, _, pos)| Err((k2, *pos)))
+        })
+        .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
+
+    // Ending brace
+    match input.peek().ok_or_else(|| {
+        PERR::MissingToken("}".into(), "to end this object map literal".into()).into_err_eof()
+    })? {
+        (Token::RightBrace, _) => {
+            input.next();
+            Ok(Expr::Map(map, begin))
+        }
+        (_, pos) => Err(
+            PERR::MissingToken("]".into(), "to end this object map literal".into()).into_err(*pos),
+        ),
     }
 }
 
@@ -1640,6 +1808,11 @@ fn parse_primary<'a>(
         (Token::LeftBracket, pos) => {
             can_be_indexed = true;
             parse_array_literal(input, pos, allow_stmt_expr)
+        }
+        #[cfg(not(feature = "no_object"))]
+        (Token::MapStart, pos) => {
+            can_be_indexed = true;
+            parse_map_literal(input, pos, allow_stmt_expr)
         }
         (Token::True, pos) => Ok(Expr::True(pos)),
         (Token::False, pos) => Ok(Expr::False(pos)),
@@ -1881,27 +2054,30 @@ fn parse_binary_op<'a>(
 
                 #[cfg(not(feature = "no_object"))]
                 Token::Period => {
-                    fn change_var_to_property(expr: Expr) -> Expr {
+                    fn check_property(expr: Expr) -> Result<Expr, ParseError> {
                         match expr {
-                            Expr::Dot(lhs, rhs, pos) => Expr::Dot(
-                                Box::new(change_var_to_property(*lhs)),
-                                Box::new(change_var_to_property(*rhs)),
+                            // xxx.lhs.rhs
+                            Expr::Dot(lhs, rhs, pos) => Ok(Expr::Dot(
+                                Box::new(check_property(*lhs)?),
+                                Box::new(check_property(*rhs)?),
                                 pos,
-                            ),
+                            )),
+                            // xxx.lhs[idx]
                             #[cfg(not(feature = "no_index"))]
                             Expr::Index(lhs, idx, pos) => {
-                                Expr::Index(Box::new(change_var_to_property(*lhs)), idx, pos)
+                                Ok(Expr::Index(Box::new(check_property(*lhs)?), idx, pos))
                             }
-                            Expr::Variable(s, pos) => Expr::Property(s, pos),
-                            expr => expr,
+                            // xxx.id
+                            Expr::Variable(id, pos) => Ok(Expr::Property(id, pos)),
+                            // xxx.prop
+                            expr @ Expr::Property(_, _) => Ok(expr),
+                            // xxx.fn()
+                            expr @ Expr::FunctionCall(_, _, _, _) => Ok(expr),
+                            expr => Err(PERR::PropertyExpected.into_err(expr.position())),
                         }
                     }
 
-                    Expr::Dot(
-                        Box::new(current_lhs),
-                        Box::new(change_var_to_property(rhs)),
-                        pos,
-                    )
+                    Expr::Dot(Box::new(current_lhs), Box::new(check_property(rhs)?), pos)
                 }
 
                 // Comparison operators default to false when passed invalid operands
@@ -2086,12 +2262,16 @@ fn parse_for<'a>(
     };
 
     // for name in ...
-    match input
-        .next()
-        .ok_or_else(|| PERR::MissingToken("in".into(), "here".into()).into_err_eof())?
-    {
+    match input.next().ok_or_else(|| {
+        PERR::MissingToken("in".into(), "after the iteration variable".into()).into_err_eof()
+    })? {
         (Token::In, _) => (),
-        (_, pos) => return Err(PERR::MissingToken("in".into(), "here".into()).into_err(pos)),
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken("in".into(), "after the iteration variable".into())
+                    .into_err(pos),
+            )
+        }
     }
 
     // for name in expr { body }

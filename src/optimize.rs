@@ -371,18 +371,22 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
         Expr::Array(items, pos) => {
-            let orig_len = items.len();
-
             let items: Vec<_> = items
                 .into_iter()
                 .map(|expr| optimize_expr(expr, state))
                 .collect();
 
-            if orig_len != items.len() {
-                state.set_dirty();
-            }
-
             Expr::Array(items, pos)
+        }
+        // [ items .. ]
+        #[cfg(not(feature = "no_object"))]
+        Expr::Map(items, pos) => {
+            let items: Vec<_> = items
+                .into_iter()
+                .map(|(key, expr, pos)| (key, optimize_expr(expr, state), pos))
+                .collect();
+
+            Expr::Map(items, pos)
         }
         // lhs && rhs
         Expr::And(lhs, rhs) => match (*lhs, *rhs) {

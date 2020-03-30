@@ -272,6 +272,7 @@ The following primitive types are supported natively:
 | **Unicode character**                                       | `char`                                                                                               | `"char"`          |
 | **Unicode string**                                          | `String` (_not_ `&str`)                                                                              | `"string"`        |
 | **Array** (disabled with [`no_index`])                      | `rhai::Array`                                                                                        | `"array"`         |
+| **Object map** (disabled with [`no_object`])                | `rhai::Map`                                                                                          | `"map"`           |
 | **Dynamic value** (i.e. can be anything)                    | `rhai::Dynamic`                                                                                      | _the actual type_ |
 | **System number** (current configuration)                   | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                     | _same as type_    |
 | **Nothing/void/nil/null** (or whatever you want to call it) | `()`                                                                                                 | `"()"`            |
@@ -728,6 +729,8 @@ let a = { 40 + 2 };     // 'a' is set to the value of the statement block, which
 Variables
 ---------
 
+[variables]: #variables
+
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
 
 Variable names must start with an ASCII letter or an underscore '`_`', must contain at least one ASCII letter, and must start with an ASCII letter before a digit.
@@ -760,7 +763,7 @@ x == 42;            // the parent block's 'x' is not changed
 Constants
 ---------
 
-Constants can be defined using the `const` keyword and are immutable.  Constants follow the same naming rules as [variables](#variables).
+Constants can be defined using the `const` keyword and are immutable.  Constants follow the same naming rules as [variables].
 
 ```rust
 const x = 42;
@@ -999,7 +1002,7 @@ let foo = [1, 2, 3][0];
 foo == 1;
 
 fn abc() {
-    [42, 43, 44]        // a function returning an array literal
+    [42, 43, 44]        // a function returning an array
 }
 
 let foo = abc()[0];
@@ -1038,6 +1041,84 @@ print(y.len());         // prints 0
 
 ```rust
 engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(item)) );
+```
+
+Object maps
+-----------
+
+Object maps are dictionaries. Properties of any type (`Dynamic`) can be freely added and retrieved.
+Object map literals are built within braces '`${`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
+and separated by commas '`,`'.  The property _name_ can be a simple variable name following the same
+naming rules as [variables], or an arbitrary string literal.
+
+Property values can be accessed via the dot notation (_object_ `.` _property_) or index notation (_object_ `[` _property_ `]`).
+The dot notation allows only property names that follow the same naming rules as [variables].
+The index notation allows setting/getting properties of arbitrary names (even the empty string).
+
+**Important:** Trying to read a non-existent property returns `()` instead of causing an error.
+
+The Rust type of a Rhai object map is `rhai::Map`.
+
+[`type_of()`] an object map returns `"map"`.
+
+Object maps are disabled via the [`no_object`] feature.
+
+The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on object maps:
+
+| Function | Description                                                  |
+| -------- | ------------------------------------------------------------ |
+| `has`    | does the object map contain a property of a particular name? |
+| `len`    | returns the number of properties                             |
+| `clear`  | empties the object map                                       |
+
+Examples:
+
+```rust
+let y = ${              // object map literal with 3 properties
+    a: 1,
+    bar: "hello",
+    "baz!$@": 123.456,  // like JS, you can use any string as property names...
+    "": false,          // even the empty string!
+
+    a: 42               // <- syntax error: duplicated property name
+};
+
+y.a = 42;               // access via dot notation
+y.baz!$@ = 42;          // <- syntax error: only proper variable names allowed in dot notation
+y."baz!$@" = 42;        // <- syntax error: strings not allowed in dot notation
+
+print(y.a);             // prints 42
+
+print(y["baz!$@"]);     // prints 123.456 - access via index notation
+
+ts.obj = y;             // object maps can be assigned completely (by value copy)
+let foo = ts.list.a;
+foo == 42;
+
+let foo = ${ a:1, b:2, c:3 }["a"];
+foo == 1;
+
+fn abc() {
+    ${ a:1, b:2, c:3 }  // a function returning an object map
+}
+
+let foo = abc().b;
+foo == 2;
+
+let foo = y["a"];
+foo == 42;
+
+y.has("a") == true;
+y.has("xyz") == false;
+
+y.xyz == ();            // A non-existing property returns '()'
+y["xyz"] == ();
+
+print(y.len());         // prints 3
+
+y.clear();              // empty the object map
+
+print(y.len());         // prints 0
 ```
 
 Comparison operators

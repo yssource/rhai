@@ -36,10 +36,12 @@ pub enum EvalAltResult {
     /// String indexing out-of-bounds.
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, INT, Position),
-    /// Trying to index into a type that is not an array and not a string.
+    /// Trying to index into a type that is not an array, an object map, or a string.
     ErrorIndexingType(String, Position),
     /// Trying to index into an array or string with an index that is not `i64`.
-    ErrorIndexExpr(Position),
+    ErrorNumericIndexExpr(Position),
+    /// Trying to index into a map with an index that is not `String`.
+    ErrorStringIndexExpr(Position),
     /// The guard expression in an `if` or `while` statement does not return a boolean value.
     ErrorLogicGuard(Position),
     /// The `for` statement encounters a type that is not an iterator.
@@ -81,9 +83,12 @@ impl EvalAltResult {
             }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorCharMismatch(_) => "Character expected",
-            Self::ErrorIndexExpr(_) => "Indexing into an array or string expects an integer index",
+            Self::ErrorNumericIndexExpr(_) => {
+                "Indexing into an array or string expects an integer index"
+            }
+            Self::ErrorStringIndexExpr(_) => "Indexing into an object map expects a string index",
             Self::ErrorIndexingType(_, _) => {
-                "Indexing can only be performed on an array or a string"
+                "Indexing can only be performed on an array, an object map, or a string"
             }
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
@@ -122,22 +127,26 @@ impl fmt::Display for EvalAltResult {
         let desc = self.desc();
 
         match self {
-            Self::ErrorFunctionNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorVariableNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorIndexingType(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorIndexExpr(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorLogicGuard(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorFor(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorAssignmentToUnknownLHS(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorFunctionNotFound(s, pos) | Self::ErrorVariableNotFound(s, pos) => {
+                write!(f, "{}: '{}' ({})", desc, s, pos)
+            }
+            Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
+
+            Self::ErrorIndexingType(_, pos)
+            | Self::ErrorNumericIndexExpr(pos)
+            | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorLogicGuard(pos)
+            | Self::ErrorFor(pos)
+            | Self::ErrorAssignmentToUnknownLHS(pos)
+            | Self::ErrorDotExpr(_, pos)
+            | Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
+
             Self::ErrorAssignmentToConstant(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
             Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
-            Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
-            Self::ErrorDotExpr(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorArithmetic(s, pos) => write!(f, "{} ({})", s, pos),
-            Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
             Self::ErrorRuntime(s, pos) => {
                 write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
             }
+            Self::ErrorArithmetic(s, pos) => write!(f, "{} ({})", s, pos),
             Self::ErrorLoopBreak(pos) => write!(f, "{} ({})", desc, pos),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
             #[cfg(not(feature = "no_std"))]
@@ -225,7 +234,8 @@ impl EvalAltResult {
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
-            | Self::ErrorIndexExpr(pos)
+            | Self::ErrorNumericIndexExpr(pos)
+            | Self::ErrorStringIndexExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
@@ -256,7 +266,8 @@ impl EvalAltResult {
             | Self::ErrorArrayBounds(_, _, ref mut pos)
             | Self::ErrorStringBounds(_, _, ref mut pos)
             | Self::ErrorIndexingType(_, ref mut pos)
-            | Self::ErrorIndexExpr(ref mut pos)
+            | Self::ErrorNumericIndexExpr(ref mut pos)
+            | Self::ErrorStringIndexExpr(ref mut pos)
             | Self::ErrorLogicGuard(ref mut pos)
             | Self::ErrorFor(ref mut pos)
             | Self::ErrorVariableNotFound(_, ref mut pos)

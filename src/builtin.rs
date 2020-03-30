@@ -10,6 +10,9 @@ use crate::result::EvalAltResult;
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
 
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
+
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
@@ -596,13 +599,19 @@ impl Engine<'_> {
 
             #[cfg(not(feature = "no_index"))]
             {
-                reg_fn1!(self, "print", debug, String, Array);
-                reg_fn1!(self, "debug", debug, String, Array);
+                self.register_fn("print", |x: &mut Array| -> String { format!("{:?}", x) });
+                self.register_fn("debug", |x: &mut Array| -> String { format!("{:?}", x) });
 
                 // Register array iterator
                 self.register_iterator::<Array, _>(|a| {
                     Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
                 });
+            }
+
+            #[cfg(not(feature = "no_object"))]
+            {
+                self.register_fn("print", |x: &mut Map| -> String { format!("${:?}", x) });
+                self.register_fn("debug", |x: &mut Map| -> String { format!("${:?}", x) });
             }
         }
 
@@ -820,6 +829,14 @@ impl Engine<'_> {
                     list.truncate(len as usize);
                 }
             });
+        }
+
+        // Register map functions
+        #[cfg(not(feature = "no_object"))]
+        {
+            self.register_fn("has", |map: &mut Map, prop: String| map.contains_key(&prop));
+            self.register_fn("len", |map: &mut Map| map.len() as INT);
+            self.register_fn("clear", |map: &mut Map| map.clear());
         }
 
         // Register string concatenate functions
