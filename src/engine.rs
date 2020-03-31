@@ -42,6 +42,7 @@ pub(crate) const KEYWORD_DEBUG: &str = "debug";
 pub(crate) const KEYWORD_DUMP_AST: &str = "dump_ast";
 pub(crate) const KEYWORD_TYPE_OF: &str = "type_of";
 pub(crate) const KEYWORD_EVAL: &str = "eval";
+pub(crate) const FUNC_TO_STRING: &str = "to_string";
 pub(crate) const FUNC_GETTER: &str = "get$";
 pub(crate) const FUNC_SETTER: &str = "set$";
 

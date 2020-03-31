@@ -261,21 +261,23 @@ Values and types
 ----------------
 
 [`type_of()`]: #values-and-types
+[`to_string()`]: #values-and-types
 
 The following primitive types are supported natively:
 
-| Category                                                    | Equivalent Rust types                                                                                | `type_of()` name  |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------- |
-| **Integer number**                                          | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`]),<br/>`u64`, `i64` _(default)_ | _same as type_    |
-| **Floating-point number** (disabled with [`no_float`])      | `f32`, `f64` _(default)_                                                                             | _same as type_    |
-| **Boolean value**                                           | `bool`                                                                                               | `"bool"`          |
-| **Unicode character**                                       | `char`                                                                                               | `"char"`          |
-| **Unicode string**                                          | `String` (_not_ `&str`)                                                                              | `"string"`        |
-| **Array** (disabled with [`no_index`])                      | `rhai::Array`                                                                                        | `"array"`         |
-| **Object map** (disabled with [`no_object`])                | `rhai::Map`                                                                                          | `"map"`           |
-| **Dynamic value** (i.e. can be anything)                    | `rhai::Dynamic`                                                                                      | _the actual type_ |
-| **System number** (current configuration)                   | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                     | _same as type_    |
-| **Nothing/void/nil/null** (or whatever you want to call it) | `()`                                                                                                 | `"()"`            |
+| Category                                                                      | Equivalent Rust types                                                                                | `type_of()`           | `to_string()`         |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------- | --------------------- |
+| **Integer number**                                                            | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`]),<br/>`u64`, `i64` _(default)_ | `"i32"`, `"u64"` etc. | `"42"`, `"123"` etc.  |
+| **Floating-point number** (disabled with [`no_float`])                        | `f32`, `f64` _(default)_                                                                             | `"f32"` or `"f64"`    | `"123.4567"` etc.     |
+| **Boolean value**                                                             | `bool`                                                                                               | `"bool"`              | `"true"` or `"false"` |
+| **Unicode character**                                                         | `char`                                                                                               | `"char"`              | `"A"`, `"x"` etc.     |
+| **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
+| **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
+| **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
+| **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
+| **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
+| **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
+| **Nothing/void/nil/null** (or whatever you want to call it)                   | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
 
 [`Dynamic`]: #values-and-types
 [`()`]: #values-and-types
@@ -289,7 +291,9 @@ This is useful on some 32-bit systems where using 64-bit integers incurs a perfo
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
-There is a `type_of` function to detect the actual type of a value. This is useful because all variables are `Dynamic`.
+The `to_string` function converts a standard type into a string for display purposes.
+
+The `type_of` function detects the actual type of a value. This is useful because all variables are `Dynamic`.
 
 ```rust
 // Use 'type_of()' to get the actual types of values
@@ -315,8 +319,9 @@ Value conversions
 [`to_int`]: #value-conversions
 [`to_float`]: #value-conversions
 
-There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it.
-For other conversions, register custom conversion functions.
+The `to_float` function converts a supported number to `FLOAT` (`f32` or `f64`),
+and the `to_int` function converts a supported number to `INT` (`i32` or `i64`).
+That's about it. For other conversions, register custom conversion functions.
 
 ```rust
 let x = 42;
