@@ -179,12 +179,14 @@ impl AST {
     ///
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
     /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
     /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
-    /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo(2)"#)?;
+    /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo("!")"#)?;
     ///
     /// let ast = ast1.merge(ast2);     // Merge 'ast2' into 'ast1'
     ///
@@ -196,10 +198,11 @@ impl AST {
     /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
     /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
     /// //                              //    but it is no longer the return value
-    /// //    foo(2)                    // returns "hello2"
+    /// //    foo("!")                  // returns "hello!"
     ///
     /// // Evaluate it
-    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "hello2");
+    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "hello!");
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
