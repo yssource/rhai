@@ -70,7 +70,9 @@ pub enum EvalAltResult {
     ErrorRuntime(String, Position),
 
     /// Breaking out of loops - not an error if within a loop.
-    ErrorLoopBreak(Position),
+    /// The wrapped value, if true, means breaking clean out of the loop (i.e. a `break` statement).
+    /// The wrapped value, if false, means breaking the current context (i.e. a `continue` statement).
+    ErrorLoopBreak(bool, Position),
     /// Not an error: Value returned from a script via the `return` keyword.
     /// Wrapped value is the result value.
     Return(Dynamic, Position),
@@ -118,7 +120,8 @@ impl EvalAltResult {
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorStackOverflow(_) => "Stack overflow",
             Self::ErrorRuntime(_, _) => "Runtime error",
-            Self::ErrorLoopBreak(_) => "Break statement not inside a loop",
+            Self::ErrorLoopBreak(true, _) => "Break statement not inside a loop",
+            Self::ErrorLoopBreak(false, _) => "Continue statement not inside a loop",
             Self::Return(_, _) => "[Not Error] Function returns value",
         }
     }
@@ -160,7 +163,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
             Self::ErrorArithmetic(s, pos) => write!(f, "{} ({})", s, pos),
 
-            Self::ErrorLoopBreak(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorLoopBreak(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
 
             Self::ErrorFunctionArgsMismatch(fn_name, 0, n, pos) => write!(
@@ -255,7 +258,7 @@ impl EvalAltResult {
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorStackOverflow(pos)
             | Self::ErrorRuntime(_, pos)
-            | Self::ErrorLoopBreak(pos)
+            | Self::ErrorLoopBreak(_, pos)
             | Self::Return(_, pos) => *pos,
         }
     }
@@ -287,7 +290,7 @@ impl EvalAltResult {
             | Self::ErrorArithmetic(_, ref mut pos)
             | Self::ErrorStackOverflow(ref mut pos)
             | Self::ErrorRuntime(_, ref mut pos)
-            | Self::ErrorLoopBreak(ref mut pos)
+            | Self::ErrorLoopBreak(_, ref mut pos)
             | Self::Return(_, ref mut pos) => *pos = new_position,
         }
 

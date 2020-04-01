@@ -1242,9 +1242,10 @@ x == ();
 let x = 10;
 
 while x > 0 {
+    x = x - 1;
+    if x < 6 { continue; }  // skip to the next iteration
     print(x);
     if x == 5 { break; }    // break out of while loop
-    x = x - 1;
 }
 ```
 
@@ -1255,8 +1256,9 @@ Infinite `loop`
 let x = 10;
 
 loop {
-    print(x);
     x = x - 1;
+    if x > 5 { continue; }  // skip to the next iteration
+    print(x);
     if x == 0 { break; }    // break out of loop
 }
 ```
@@ -1271,14 +1273,16 @@ let array = [1, 3, 5, 7, 9, 42];
 
 // Iterate through array
 for x in array {
+    if x > 10 { continue; } // skip to the next iteration
     print(x);
-    if x == 42 { break; }
+    if x == 42 { break; }   // break out of for loop
 }
 
 // The 'range' function allows iterating from first to last-1
 for x in range(0, 50) {
+    if x > 10 { continue; } // skip to the next iteration
     print(x);
-    if x == 42 { break; }
+    if x == 42 { break; }   // break out of for loop
 }
 ```
 
@@ -1305,7 +1309,7 @@ if some_bad_condition_has_happened {
 throw;                      // defaults to empty exception text: ""
 ```
 
-Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(`_reason_`, `_position_`))`
+Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(` _reason_ `,` _position_ `))`
 with the exception text captured by the first parameter.
 
 ```rust
@@ -1354,7 +1358,8 @@ print(add2(42));            // prints 44
 
 ### No access to external scope
 
-Functions can only access their parameters.  They cannot access external variables (even _global_ variables).
+Functions are not _closures_. They do not capture the calling environment and can only access their own parameters.
+They cannot access variables external to the function itself.
 
 ```rust
 let x = 42;
@@ -1390,7 +1395,7 @@ fn add(x, y) {
 
 // The following will not compile
 fn do_addition(x) {
-    fn add_y(n) {           // functions cannot be defined inside another function
+    fn add_y(n) {           // <- syntax error: functions cannot be defined inside another function
         n + y
     }
 

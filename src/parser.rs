@@ -278,6 +278,8 @@ pub enum Stmt {
     Block(Vec<Stmt>, Position),
     /// { stmt }
     Expr(Box<Expr>),
+    /// continue
+    Continue(Position),
     /// break
     Break(Position),
     /// `return`/`throw`
@@ -292,6 +294,7 @@ impl Stmt {
             | Stmt::Let(_, _, pos)
             | Stmt::Const(_, _, pos)
             | Stmt::Block(_, pos)
+            | Stmt::Continue(pos)
             | Stmt::Break(pos)
             | Stmt::ReturnWithVal(_, _, pos) => *pos,
             Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
@@ -314,6 +317,7 @@ impl Stmt {
             Stmt::Let(_, _, _)
             | Stmt::Const(_, _, _)
             | Stmt::Expr(_)
+            | Stmt::Continue(_)
             | Stmt::Break(_)
             | Stmt::ReturnWithVal(_, _, _) => false,
         }
@@ -334,7 +338,7 @@ impl Stmt {
             Stmt::For(_, range, block) => range.is_pure() && block.is_pure(),
             Stmt::Let(_, _, _) | Stmt::Const(_, _, _) => false,
             Stmt::Block(statements, _) => statements.iter().all(Stmt::is_pure),
-            Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
+            Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
         }
     }
 }
@@ -579,6 +583,7 @@ pub enum Token {
     And,
     #[cfg(not(feature = "no_function"))]
     Fn,
+    Continue,
     Break,
     Return,
     Throw,
@@ -653,6 +658,7 @@ impl Token {
                 And => "&&",
                 #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
+                Continue => "continue",
                 Break => "break",
                 Return => "return",
                 Throw => "throw",
@@ -1100,6 +1106,7 @@ impl<'a> TokenIterator<'a> {
                             "else" => Token::Else,
                             "while" => Token::While,
                             "loop" => Token::Loop,
+                            "continue" => Token::Continue,
                             "break" => Token::Break,
                             "return" => Token::Return,
                             "throw" => Token::Throw,
@@ -2419,6 +2426,8 @@ fn parse_stmt<'a>(
         // Semicolon - empty statement
         (Token::SemiColon, pos) => Ok(Stmt::Noop(*pos)),
 
+        (Token::LeftBrace, _) => parse_block(input, breakable, allow_stmt_expr),
+
         // fn ...
         #[cfg(not(feature = "no_function"))]
         (Token::Fn, pos) => Err(PERR::WrongFnDefinition.into_err(*pos)),
@@ -2427,12 +2436,19 @@ fn parse_stmt<'a>(
         (Token::While, _) => parse_while(input, allow_stmt_expr),
         (Token::Loop, _) => parse_loop(input, allow_stmt_expr),
         (Token::For, _) => parse_for(input, allow_stmt_expr),
+
+        (Token::Continue, pos) if breakable => {
+            let pos = *pos;
+            input.next();
+            Ok(Stmt::Continue(pos))
+        }
         (Token::Break, pos) if breakable => {
             let pos = *pos;
             input.next();
             Ok(Stmt::Break(pos))
         }
-        (Token::Break, pos) => Err(PERR::LoopBreak.into_err(*pos)),
+        (Token::Continue, pos) | (Token::Break, pos) => Err(PERR::LoopBreak.into_err(*pos)),
+
         (token @ Token::Return, pos) | (token @ Token::Throw, pos) => {
             let return_type = match token {
                 Token::Return => ReturnType::Return,
@@ -2456,9 +2472,10 @@ fn parse_stmt<'a>(
                 }
             }
         }
-        (Token::LeftBrace, _) => parse_block(input, breakable, allow_stmt_expr),
+
         (Token::Let, _) => parse_let(input, ScopeEntryType::Normal, allow_stmt_expr),
         (Token::Const, _) => parse_let(input, ScopeEntryType::Constant, allow_stmt_expr),
+
         _ => parse_expr_stmt(input, allow_stmt_expr),
     }
 }

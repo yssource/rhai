@@ -1349,19 +1349,12 @@ impl Engine<'_> {
             // While loop
             Stmt::While(guard, body) => loop {
                 match self.eval_expr(scope, guard, level)?.downcast::<bool>() {
-                    Ok(guard_val) => {
-                        if *guard_val {
-                            match self.eval_stmt(scope, body, level) {
-                                Ok(_) => (),
-                                Err(EvalAltResult::ErrorLoopBreak(_)) => {
-                                    return Ok(().into_dynamic())
-                                }
-                                Err(x) => return Err(x),
-                            }
-                        } else {
-                            return Ok(().into_dynamic());
-                        }
-                    }
+                    Ok(guard_val) if *guard_val => match self.eval_stmt(scope, body, level) {
+                        Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
+                        Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(().into_dynamic()),
+                        Err(x) => return Err(x),
+                    },
+                    Ok(_) => return Ok(().into_dynamic()),
                     Err(_) => return Err(EvalAltResult::ErrorLogicGuard(guard.position())),
                 }
             },
@@ -1369,8 +1362,8 @@ impl Engine<'_> {
             // Loop statement
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, body, level) {
-                    Ok(_) => (),
-                    Err(EvalAltResult::ErrorLoopBreak(_)) => return Ok(().into_dynamic()),
+                    Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
+                    Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(().into_dynamic()),
                     Err(x) => return Err(x),
                 }
             },
@@ -1393,8 +1386,8 @@ impl Engine<'_> {
                         *scope.get_mut(entry) = a;
 
                         match self.eval_stmt(scope, body, level) {
-                            Ok(_) => (),
-                            Err(EvalAltResult::ErrorLoopBreak(_)) => break,
+                            Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
+                            Err(EvalAltResult::ErrorLoopBreak(true, _)) => break,
                             Err(x) => return Err(x),
                         }
                     }
@@ -1406,8 +1399,11 @@ impl Engine<'_> {
                 }
             }
 
+            // Continue statement
+            Stmt::Continue(pos) => Err(EvalAltResult::ErrorLoopBreak(false, *pos)),
+
             // Break statement
-            Stmt::Break(pos) => Err(EvalAltResult::ErrorLoopBreak(*pos)),
+            Stmt::Break(pos) => Err(EvalAltResult::ErrorLoopBreak(true, *pos)),
 
             // Empty return
             Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {

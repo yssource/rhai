@@ -12,8 +12,9 @@ fn test_loop() -> Result<(), EvalAltResult> {
 
 				loop {
 					if i < 10 {
+						i += 1;
+						if x > 20 { continue; }
 						x = x + i;
-						i = i + 1;
 					} else {
 						break;
 					}
@@ -22,7 +23,7 @@ fn test_loop() -> Result<(), EvalAltResult> {
 				return x;
 		"
         )?,
-        45
+        21
     );
 
     Ok(())
