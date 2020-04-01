@@ -691,14 +691,14 @@ impl<'e> Engine<'e> {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
-        self.eval_ast_with_scope_raw(scope, false, ast)
-            .and_then(|result| {
-                result.downcast::<T>().map(|v| *v).map_err(|a| {
-                    EvalAltResult::ErrorMismatchOutputType(
-                        self.map_type_name((*a).type_name()).to_string(),
-                        Position::none(),
-                    )
-                })
+        self.eval_ast_with_scope_raw(scope, false, ast)?
+            .downcast::<T>()
+            .map(|v| *v)
+            .map_err(|a| {
+                EvalAltResult::ErrorMismatchOutputType(
+                    self.map_type_name((*a).type_name()).to_string(),
+                    Position::none(),
+                )
             })
     }
 
@@ -735,7 +735,9 @@ impl<'e> Engine<'e> {
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
+    /// # Note
+    ///
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
     pub fn consume_file(
         &mut self,
@@ -748,7 +750,9 @@ impl<'e> Engine<'e> {
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
+    /// # Note
+    ///
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
     pub fn consume_file_with_scope(
         &mut self,
@@ -763,7 +767,9 @@ impl<'e> Engine<'e> {
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// # Note
+    ///
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume(&mut self, retain_functions: bool, input: &str) -> Result<(), EvalAltResult> {
         self.consume_with_scope(&mut Scope::new(), retain_functions, input)
     }
@@ -771,7 +777,9 @@ impl<'e> Engine<'e> {
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// # Note
+    ///
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume_with_scope(
         &mut self,
         scope: &mut Scope,
@@ -789,7 +797,9 @@ impl<'e> Engine<'e> {
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// # Note
+    ///
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume_ast(&mut self, retain_functions: bool, ast: &AST) -> Result<(), EvalAltResult> {
         self.consume_ast_with_scope(&mut Scope::new(), retain_functions, ast)
     }
@@ -797,7 +807,9 @@ impl<'e> Engine<'e> {
     /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// Note - if `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// # Note
+    ///
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
     pub fn consume_ast_with_scope(
         &mut self,
         scope: &mut Scope,
@@ -833,9 +845,9 @@ impl<'e> Engine<'e> {
         &mut self,
         functions: impl IntoIterator<Item = &'a Arc<FnDef>>,
     ) {
-        for f in functions.into_iter() {
-            self.fn_lib.add_or_replace_function(f.clone());
-        }
+        functions.into_iter().cloned().for_each(|f| {
+            self.fn_lib.add_or_replace_function(f);
+        });
     }
 
     /// Call a script function retained inside the Engine.
@@ -871,14 +883,14 @@ impl<'e> Engine<'e> {
         let mut values = args.into_vec();
         let mut arg_values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
-        self.call_fn_raw(name, &mut arg_values, None, Position::none(), 0)
-            .and_then(|b| {
-                b.downcast().map(|b| *b).map_err(|a| {
-                    EvalAltResult::ErrorMismatchOutputType(
-                        self.map_type_name((*a).type_name()).into(),
-                        Position::none(),
-                    )
-                })
+        self.call_fn_raw(name, &mut arg_values, None, Position::none(), 0)?
+            .downcast()
+            .map(|b| *b)
+            .map_err(|a| {
+                EvalAltResult::ErrorMismatchOutputType(
+                    self.map_type_name((*a).type_name()).into(),
+                    Position::none(),
+                )
             })
     }
 

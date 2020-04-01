@@ -36,15 +36,15 @@ pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltRes
 
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
-pub(crate) const MAX_CALL_STACK_DEPTH: usize = 64;
-pub(crate) const KEYWORD_PRINT: &str = "print";
-pub(crate) const KEYWORD_DEBUG: &str = "debug";
-pub(crate) const KEYWORD_DUMP_AST: &str = "dump_ast";
-pub(crate) const KEYWORD_TYPE_OF: &str = "type_of";
-pub(crate) const KEYWORD_EVAL: &str = "eval";
-pub(crate) const FUNC_TO_STRING: &str = "to_string";
-pub(crate) const FUNC_GETTER: &str = "get$";
-pub(crate) const FUNC_SETTER: &str = "set$";
+pub const MAX_CALL_STACK_DEPTH: usize = 64;
+pub const KEYWORD_PRINT: &str = "print";
+pub const KEYWORD_DEBUG: &str = "debug";
+pub const KEYWORD_DUMP_AST: &str = "dump_ast";
+pub const KEYWORD_TYPE_OF: &str = "type_of";
+pub const KEYWORD_EVAL: &str = "eval";
+pub const FUNC_TO_STRING: &str = "to_string";
+pub const FUNC_GETTER: &str = "get$";
+pub const FUNC_SETTER: &str = "set$";
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 #[cfg(not(feature = "no_index"))]
@@ -317,8 +317,7 @@ impl Engine<'_> {
         }
     }
 
-    /// Universal method for calling functions, that are either
-    /// registered with the `Engine` or written in Rhai
+    /// Universal method for calling functions either registered with the `Engine` or written in Rhai
     pub(crate) fn call_fn_raw(
         &mut self,
         fn_name: &str,
@@ -370,12 +369,10 @@ impl Engine<'_> {
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
                 KEYWORD_PRINT => {
-                    self.on_print.as_mut()(cast_to_string(result.as_ref(), pos)?);
-                    ().into_dynamic()
+                    self.on_print.as_mut()(cast_to_string(result.as_ref(), pos)?).into_dynamic()
                 }
                 KEYWORD_DEBUG => {
-                    self.on_debug.as_mut()(cast_to_string(result.as_ref(), pos)?);
-                    ().into_dynamic()
+                    self.on_debug.as_mut()(cast_to_string(result.as_ref(), pos)?).into_dynamic()
                 }
                 _ => result,
             });
@@ -400,11 +397,11 @@ impl Engine<'_> {
         if let Some(prop) = extract_prop_from_setter(fn_name) {
             #[cfg(not(feature = "no_object"))]
             {
-                let val = args[1].into_dynamic();
+                let value = args[1].into_dynamic();
 
                 // Map property update
                 if let Some(map) = args[0].downcast_mut::<Map>() {
-                    map.insert(prop.to_string(), val);
+                    map.insert(prop.to_string(), value);
                     return Ok(().into_dynamic());
                 }
             }
@@ -469,7 +466,7 @@ impl Engine<'_> {
             // xxx.idx_lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
-                let val = match idx_lhs.as_ref() {
+                let value = match idx_lhs.as_ref() {
                     // xxx.id[idx_expr]
                     Expr::Property(id, pos) => {
                         let this_ptr = target.get_mut(scope);
@@ -488,8 +485,8 @@ impl Engine<'_> {
                     }
                 };
 
-                self.get_indexed_value(scope, &val, idx_expr, *op_pos, level)
-                    .map(|(v, _, _)| v)
+                self.get_indexed_value(scope, &value, idx_expr, *op_pos, level)
+                    .map(|(val, _, _)| val)
             }
 
             // xxx.dot_lhs.rhs
@@ -498,8 +495,8 @@ impl Engine<'_> {
                 Expr::Property(id, pos) => {
                     let this_ptr = target.get_mut(scope);
                     self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
-                        .and_then(|mut v| {
-                            self.get_dot_val_helper(scope, Target::from(v.as_mut()), rhs, level)
+                        .and_then(|mut val| {
+                            self.get_dot_val_helper(scope, Target::from(val.as_mut()), rhs, level)
                         })
                 }
                 // xxx.idx_lhs[idx_expr].rhs
@@ -525,8 +522,8 @@ impl Engine<'_> {
                     };
 
                     self.get_indexed_value(scope, &val, idx_expr, *op_pos, level)
-                        .and_then(|(mut v, _, _)| {
-                            self.get_dot_val_helper(scope, Target::from(v.as_mut()), rhs, level)
+                        .and_then(|(mut val, _, _)| {
+                            self.get_dot_val_helper(scope, Target::from(val.as_mut()), rhs, level)
                         })
                 }
                 // Syntax error
@@ -569,10 +566,10 @@ impl Engine<'_> {
             // idx_lhs[idx_expr].???
             #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
-                let (idx_src_type, src, idx, mut value) =
+                let (idx_src_type, src, idx, mut val) =
                     self.eval_index_expr(scope, idx_lhs, idx_expr, *op_pos, level)?;
-                let val =
-                    self.get_dot_val_helper(scope, Target::from(value.as_mut()), dot_rhs, level);
+                let value =
+                    self.get_dot_val_helper(scope, Target::from(val.as_mut()), dot_rhs, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
@@ -589,19 +586,19 @@ impl Engine<'_> {
                                 scope,
                                 src,
                                 idx,
-                                (value, dot_rhs.position()),
+                                (val, dot_rhs.position()),
                             )?;
                         }
                     }
                 }
 
-                val
+                value
             }
 
             // {expr}.???
             expr => {
-                let mut value = self.eval_expr(scope, expr, level)?;
-                self.get_dot_val_helper(scope, Target::from(value.as_mut()), dot_rhs, level)
+                let mut val = self.eval_expr(scope, expr, level)?;
+                self.get_dot_val_helper(scope, Target::from(val.as_mut()), dot_rhs, level)
             }
         }
     }
@@ -629,10 +626,8 @@ impl Engine<'_> {
     ) -> Result<(Dynamic, IndexSourceType, IndexValue), EvalAltResult> {
         let idx_pos = idx_expr.position();
 
-        if val.is::<Array>() {
-            // val_array[idx]
-            let arr = val.downcast_ref::<Array>().expect("array expected");
-
+        // val_array[idx]
+        if let Some(arr) = val.downcast_ref::<Array>() {
             let idx = *self
                 .eval_expr(scope, idx_expr, level)?
                 .downcast::<INT>()
@@ -650,10 +645,8 @@ impl Engine<'_> {
 
         #[cfg(not(feature = "no_object"))]
         {
-            if val.is::<Map>() {
-                // val_map[idx]
-                let map = val.downcast_ref::<Map>().expect("array expected");
-
+            // val_map[idx]
+            if let Some(map) = val.downcast_ref::<Map>() {
                 let idx = *self
                     .eval_expr(scope, idx_expr, level)?
                     .downcast::<String>()
@@ -667,10 +660,8 @@ impl Engine<'_> {
             }
         }
 
-        if val.is::<String>() {
-            // val_string[idx]
-            let s = val.downcast_ref::<String>().expect("string expected");
-
+        // val_string[idx]
+        if let Some(s) = val.downcast_ref::<String>() {
             let idx = *self
                 .eval_expr(scope, idx_expr, level)?
                 .downcast::<INT>()
@@ -699,10 +690,10 @@ impl Engine<'_> {
         }
 
         // Error - cannot be indexed
-        return Err(EvalAltResult::ErrorIndexingType(
+        Err(EvalAltResult::ErrorIndexingType(
             self.map_type_name(val.type_name()).to_string(),
             op_pos,
-        ));
+        ))
     }
 
     /// Evaluate an index expression
@@ -755,7 +746,7 @@ impl Engine<'_> {
                 let val = self.eval_expr(scope, expr, level)?;
 
                 self.get_indexed_value(scope, &val, idx_expr, op_pos, level)
-                    .map(|(v, _, idx)| (IndexSourceType::Expression, None, idx, v))
+                    .map(|(val, _, idx)| (IndexSourceType::Expression, None, idx, val))
             }
         }
     }
@@ -824,23 +815,20 @@ impl Engine<'_> {
         new_val: Dynamic,
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
-        if target.is::<Array>() {
-            let arr = target.downcast_mut::<Array>().expect("array expected");
+        if let Some(arr) = target.downcast_mut::<Array>() {
             arr[idx.as_num()] = new_val;
             return Ok(target);
         }
 
         #[cfg(not(feature = "no_object"))]
         {
-            if target.is::<Map>() {
-                let map = target.downcast_mut::<Map>().expect("array expected");
+            if let Some(map) = target.downcast_mut::<Map>() {
                 map.insert(idx.as_str(), new_val);
                 return Ok(target);
             }
         }
 
-        if target.is::<String>() {
-            let s = target.downcast_mut::<String>().expect("string expected");
+        if let Some(s) = target.downcast_mut::<String>() {
             // Value must be a character
             let ch = *new_val
                 .downcast::<char>()
@@ -877,14 +865,14 @@ impl Engine<'_> {
                 // xxx.id[idx_expr]
                 Expr::Property(id, pos) => self
                     .call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
-                    .and_then(|v| {
+                    .and_then(|val| {
                         let (_, _, idx) =
-                            self.get_indexed_value(scope, &v, idx_expr, *op_pos, level)?;
+                            self.get_indexed_value(scope, &val, idx_expr, *op_pos, level)?;
 
-                        Self::update_indexed_value(v, idx, new_val.0.clone(), new_val.1)
+                        Self::update_indexed_value(val, idx, new_val.0.clone(), new_val.1)
                     })
-                    .and_then(|mut v| {
-                        let mut args = [this_ptr, v.as_mut()];
+                    .and_then(|mut val| {
+                        let mut args = [this_ptr, val.as_mut()];
                         self.call_fn_raw(&make_setter(id), &mut args, None, *pos, 0)
                     }),
 
@@ -900,12 +888,12 @@ impl Engine<'_> {
                 // xxx.id.rhs
                 Expr::Property(id, pos) => {
                     self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
-                        .and_then(|mut v| {
-                            self.set_dot_val_helper(scope, v.as_mut(), rhs, new_val, level)
-                                .map(|_| v) // Discard Ok return value
+                        .and_then(|mut val| {
+                            self.set_dot_val_helper(scope, val.as_mut(), rhs, new_val, level)
+                                .map(|_| val) // Discard Ok return value
                         })
-                        .and_then(|mut v| {
-                            let mut args = [this_ptr, v.as_mut()];
+                        .and_then(|mut val| {
+                            let mut args = [this_ptr, val.as_mut()];
                             self.call_fn_raw(&make_setter(id), &mut args, None, *pos, 0)
                         })
                 }
@@ -986,12 +974,13 @@ impl Engine<'_> {
                         // Avoid referencing scope which is used below as mut
                         let entry = ScopeSource { name: id, ..entry };
                         let this_ptr = target.as_mut();
-                        let val = self.set_dot_val_helper(scope, this_ptr, dot_rhs, new_val, level);
+                        let value =
+                            self.set_dot_val_helper(scope, this_ptr, dot_rhs, new_val, level);
 
                         // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                         *scope.get_mut(entry) = target;
 
-                        val
+                        value
                     }
                 }
             }
@@ -1004,7 +993,7 @@ impl Engine<'_> {
                     self.eval_index_expr(scope, lhs, idx_expr, *op_pos, level)?;
                 let val_pos = new_val.1;
                 let this_ptr = target.as_mut();
-                let val = self.set_dot_val_helper(scope, this_ptr, dot_rhs, new_val, level);
+                let value = self.set_dot_val_helper(scope, this_ptr, dot_rhs, new_val, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
@@ -1027,7 +1016,7 @@ impl Engine<'_> {
                     }
                 }
 
-                val
+                value
             }
 
             // Syntax error
@@ -1474,7 +1463,7 @@ impl Engine<'_> {
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
             .get(name)
-            .map(|s| s.as_str())
+            .map(String::as_str)
             .unwrap_or(name)
     }
 

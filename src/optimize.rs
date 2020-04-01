@@ -37,7 +37,15 @@ struct State<'a> {
     engine: &'a Engine<'a>,
 }
 
-impl State<'_> {
+impl<'a> State<'a> {
+    /// Create a new State.
+    pub fn new(engine: &'a Engine<'a>) -> Self {
+        Self {
+            changed: false,
+            constants: vec![],
+            engine,
+        }
+    }
     /// Reset the state from dirty to clean.
     pub fn reset(&mut self) {
         self.changed = false;
@@ -370,24 +378,16 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         },
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
-        Expr::Array(items, pos) => {
-            let items: Vec<_> = items
+        Expr::Array(items, pos) => Expr::Array(items
                 .into_iter()
                 .map(|expr| optimize_expr(expr, state))
-                .collect();
-
-            Expr::Array(items, pos)
-        }
+                .collect(), pos),
         // [ items .. ]
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(items, pos) => {
-            let items: Vec<_> = items
+        Expr::Map(items, pos) => Expr::Map(items
                 .into_iter()
                 .map(|(key, expr, pos)| (key, optimize_expr(expr, state), pos))
-                .collect();
-
-            Expr::Map(items, pos)
-        }
+                .collect(), pos),
         // lhs && rhs
         Expr::And(lhs, rhs) => match (*lhs, *rhs) {
             // true && rhs -> rhs
@@ -439,7 +439,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST =>
             Expr::FunctionCall(id, args, def_value, pos),
 
-        // Do not optimize anything within built-in function keywords
+        // Do not call some special keywords
         Expr::FunctionCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_str())=>
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
@@ -465,8 +465,8 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            state.engine.call_ext_fn_raw(&id, &mut call_args, pos).ok().map(|r|
-                r.or_else(|| {
+            state.engine.call_ext_fn_raw(&id, &mut call_args, pos).ok().map(|result|
+                result.or_else(|| {
                     if !arg_for_type_of.is_empty() {
                         // Handle `type_of()`
                         Some(arg_for_type_of.to_string().into_dynamic())
@@ -506,11 +506,7 @@ pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &S
     }
 
     // Set up the state
-    let mut state = State {
-        changed: false,
-        constants: vec![],
-        engine,
-    };
+    let mut state = State::new(engine);
 
     // Add constants from the scope into the state
     scope
