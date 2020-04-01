@@ -17,7 +17,7 @@ keywords = [ "scripting" ]
 categories = [ "no-std", "embedded", "parser-implementations" ]
 
 [dependencies]
-num-traits = "0.2.11"
+num-traits = "*"
 
 [features]
 #default = ["no_function", "no_index", "no_object", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize"]
