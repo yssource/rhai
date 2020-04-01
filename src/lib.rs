@@ -68,6 +68,9 @@ pub use scope::Scope;
 #[cfg(not(feature = "no_index"))]
 pub use engine::Array;
 
+#[cfg(not(feature = "no_object"))]
+pub use engine::Map;
+
 #[cfg(not(feature = "no_float"))]
 pub use parser::FLOAT;
 

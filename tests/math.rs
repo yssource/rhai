@@ -12,12 +12,12 @@ fn test_math() -> Result<(), EvalAltResult> {
 
     #[cfg(not(feature = "only_i32"))]
     assert_eq!(
-        engine.eval::<INT>("(-9223372036854775807).abs()")?,
+        engine.eval::<INT>("abs(-9223372036854775807)")?,
         9_223_372_036_854_775_807
     );
 
     #[cfg(feature = "only_i32")]
-    assert_eq!(engine.eval::<INT>("(-2147483647).abs()")?, 2147483647);
+    assert_eq!(engine.eval::<INT>("abs(-2147483647)")?, 2147483647);
 
     // Overflow/underflow/division-by-zero errors
     #[cfg(not(feature = "unchecked"))]
@@ -26,7 +26,7 @@ fn test_math() -> Result<(), EvalAltResult> {
         {
             assert!(matches!(
                 engine
-                    .eval::<INT>("(-9223372036854775808).abs()")
+                    .eval::<INT>("abs(-9223372036854775808)")
                     .expect_err("expects negation overflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));

@@ -11,7 +11,9 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    char, fmt, format,
+    char,
+    collections::HashMap,
+    fmt, format,
     iter::Peekable,
     ops::Add,
     str::Chars,
@@ -177,12 +179,14 @@ impl AST {
     ///
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
     /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
     /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
-    /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo(2)"#)?;
+    /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo("!")"#)?;
     ///
     /// let ast = ast1.merge(ast2);     // Merge 'ast2' into 'ast1'
     ///
@@ -194,10 +198,11 @@ impl AST {
     /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
     /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
     /// //                              //    but it is no longer the return value
-    /// //    foo(2)                    // returns "hello2"
+    /// //    foo("!")                  // returns "hello!"
     ///
     /// // Evaluate it
-    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "hello2");
+    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "hello!");
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
@@ -357,6 +362,7 @@ pub enum Expr {
     /// expr = expr
     Assignment(Box<Expr>, Box<Expr>, Position),
     /// lhs.rhs
+    #[cfg(not(feature = "no_object"))]
     Dot(Box<Expr>, Box<Expr>, Position),
     /// expr[expr]
     #[cfg(not(feature = "no_index"))]
@@ -364,6 +370,9 @@ pub enum Expr {
     #[cfg(not(feature = "no_index"))]
     /// [ expr, ... ]
     Array(Vec<Expr>, Position),
+    #[cfg(not(feature = "no_object"))]
+    /// #{ name:expr, ... }
+    Map(Vec<(String, Expr, Position)>, Position),
     /// lhs && rhs
     And(Box<Expr>, Box<Expr>),
     /// lhs || rhs
@@ -396,6 +405,13 @@ impl Expr {
                 .iter()
                 .map(Expr::get_constant_value)
                 .collect::<Vec<_>>()
+                .into_dynamic(),
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => items
+                .iter()
+                .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
+                .collect::<HashMap<_, _>>()
                 .into_dynamic(),
 
             #[cfg(not(feature = "no_float"))]
@@ -443,16 +459,21 @@ impl Expr {
             | Expr::False(pos)
             | Expr::Unit(pos) => *pos,
 
-            Expr::Assignment(expr, _, _)
-            | Expr::Dot(expr, _, _)
-            | Expr::And(expr, _)
-            | Expr::Or(expr, _) => expr.position(),
+            Expr::Assignment(expr, _, _) | Expr::And(expr, _) | Expr::Or(expr, _) => {
+                expr.position()
+            }
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Dot(expr, _, _) => expr.position(),
 
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(_, pos) => *pos,
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(_, pos) => *pos,
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(_, pos) => *pos,
 
             #[cfg(not(feature = "no_index"))]
             Expr::Index(expr, _, _) => expr.position(),
@@ -531,6 +552,8 @@ pub enum Token {
     Colon,
     Comma,
     Period,
+    #[cfg(not(feature = "no_object"))]
+    MapStart,
     Equals,
     True,
     False,
@@ -606,6 +629,8 @@ impl Token {
                 Colon => ":",
                 Comma => ",",
                 Period => ".",
+                #[cfg(not(feature = "no_object"))]
+                MapStart => "#{",
                 Equals => "=",
                 True => "true",
                 False => "false",
@@ -794,6 +819,11 @@ pub struct TokenIterator<'a> {
 }
 
 impl<'a> TokenIterator<'a> {
+    /// Consume the next character.
+    fn eat_next(&mut self) {
+        self.stream.next();
+        self.advance();
+    }
     /// Move the current position one character ahead.
     fn advance(&mut self) {
         self.pos.advance();
@@ -933,20 +963,17 @@ impl<'a> TokenIterator<'a> {
                         match next_char {
                             '0'..='9' | '_' => {
                                 result.push(next_char);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
                             }
                             #[cfg(not(feature = "no_float"))]
                             '.' => {
                                 result.push(next_char);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
                                 while let Some(&next_char_in_float) = self.stream.peek() {
                                     match next_char_in_float {
                                         '0'..='9' | '_' => {
                                             result.push(next_char_in_float);
-                                            self.stream.next();
-                                            self.advance();
+                                            self.eat_next();
                                         }
                                         _ => break,
                                     }
@@ -957,8 +984,7 @@ impl<'a> TokenIterator<'a> {
                                 if c == '0' =>
                             {
                                 result.push(next_char);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
 
                                 let valid = match ch {
                                     'x' | 'X' => [
@@ -989,8 +1015,7 @@ impl<'a> TokenIterator<'a> {
                                     }
 
                                     result.push(next_char_in_hex);
-                                    self.stream.next();
-                                    self.advance();
+                                    self.eat_next();
                                 }
                             }
 
@@ -1044,8 +1069,7 @@ impl<'a> TokenIterator<'a> {
                         match next_char {
                             x if x.is_ascii_alphanumeric() || x == '_' => {
                                 result.push(x);
-                                self.stream.next();
-                                self.advance();
+                                self.eat_next();
                             }
                             _ => break,
                         }
@@ -1136,10 +1160,16 @@ impl<'a> TokenIterator<'a> {
                 #[cfg(not(feature = "no_index"))]
                 (']', _) => return Some((Token::RightBracket, pos)),
 
+                // Map literal
+                #[cfg(not(feature = "no_object"))]
+                ('#', '{') => {
+                    self.eat_next();
+                    return Some((Token::MapStart, pos));
+                }
+
                 // Operators
                 ('+', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::PlusAssign, pos));
                 }
                 ('+', _) if self.can_be_unary => return Some((Token::UnaryPlus, pos)),
@@ -1148,24 +1178,21 @@ impl<'a> TokenIterator<'a> {
                 ('-', '0'..='9') if self.can_be_unary => negated = true,
                 ('-', '0'..='9') => return Some((Token::Minus, pos)),
                 ('-', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::MinusAssign, pos));
                 }
                 ('-', _) if self.can_be_unary => return Some((Token::UnaryMinus, pos)),
                 ('-', _) => return Some((Token::Minus, pos)),
 
                 ('*', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::MultiplyAssign, pos));
                 }
                 ('*', _) => return Some((Token::Multiply, pos)),
 
                 // Comments
                 ('/', '/') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     while let Some(c) = self.stream.next() {
                         if c == '\n' {
@@ -1179,8 +1206,7 @@ impl<'a> TokenIterator<'a> {
                 ('/', '*') => {
                     let mut level = 1;
 
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     while let Some(c) = self.stream.next() {
                         self.advance();
@@ -1209,8 +1235,7 @@ impl<'a> TokenIterator<'a> {
                 }
 
                 ('/', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::DivideAssign, pos));
                 }
                 ('/', _) => return Some((Token::Divide, pos)),
@@ -1221,25 +1246,21 @@ impl<'a> TokenIterator<'a> {
                 ('.', _) => return Some((Token::Period, pos)),
 
                 ('=', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::EqualsTo, pos));
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
 
                 ('<', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::LessThanEqualsTo, pos));
                 }
                 ('<', '<') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     return Some((
                         if self.stream.peek() == Some(&'=') {
-                            self.stream.next();
-                            self.advance();
+                            self.eat_next();
                             Token::LeftShiftAssign
                         } else {
                             Token::LeftShift
@@ -1250,18 +1271,15 @@ impl<'a> TokenIterator<'a> {
                 ('<', _) => return Some((Token::LessThan, pos)),
 
                 ('>', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::GreaterThanEqualsTo, pos));
                 }
                 ('>', '>') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
 
                     return Some((
                         if self.stream.peek() == Some(&'=') {
-                            self.stream.next();
-                            self.advance();
+                            self.eat_next();
                             Token::RightShiftAssign
                         } else {
                             Token::RightShift
@@ -1272,53 +1290,45 @@ impl<'a> TokenIterator<'a> {
                 ('>', _) => return Some((Token::GreaterThan, pos)),
 
                 ('!', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::NotEqualsTo, pos));
                 }
                 ('!', _) => return Some((Token::Bang, pos)),
 
                 ('|', '|') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::Or, pos));
                 }
                 ('|', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::OrAssign, pos));
                 }
                 ('|', _) => return Some((Token::Pipe, pos)),
 
                 ('&', '&') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::And, pos));
                 }
                 ('&', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::AndAssign, pos));
                 }
                 ('&', _) => return Some((Token::Ampersand, pos)),
 
                 ('^', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::XOrAssign, pos));
                 }
                 ('^', _) => return Some((Token::XOr, pos)),
 
                 ('%', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::ModuloAssign, pos));
                 }
                 ('%', _) => return Some((Token::Modulo, pos)),
 
                 ('~', '=') => {
-                    self.stream.next();
-                    self.advance();
+                    self.eat_next();
                     return Some((Token::PowerOfAssign, pos));
                 }
                 ('~', _) => return Some((Token::PowerOf, pos)),
@@ -1370,13 +1380,16 @@ fn parse_paren_expr<'a>(
         // ( xxx )
         Some((Token::RightParen, _)) => Ok(expr),
         // ( xxx ???
-        Some((_, pos)) => {
-            Err(PERR::MissingRightParen("a matching ( in the expression".into()).into_err(pos))
-        }
+        Some((_, pos)) => Err(PERR::MissingToken(
+            ")".into(),
+            "for a matching ( in this expression".into(),
+        )
+        .into_err(pos)),
         // ( xxx
-        None => {
-            Err(PERR::MissingRightParen("a matching ( in the expression".into()).into_err_eof())
-        }
+        None => Err(
+            PERR::MissingToken(")".into(), "for a matching ( in this expression".into())
+                .into_err_eof(),
+        ),
     }
 }
 
@@ -1391,10 +1404,10 @@ fn parse_call_expr<'a>(
 
     // id()
     if let (Token::RightParen, _) = input.peek().ok_or_else(|| {
-        PERR::MissingRightParen(format!(
-            "closing the arguments to call of function '{}'",
-            id
-        ))
+        PERR::MissingToken(
+            ")".into(),
+            format!("to close the arguments list of this function call '{}'", id),
+        )
         .into_err_eof()
     })? {
         input.next();
@@ -1405,10 +1418,10 @@ fn parse_call_expr<'a>(
         args_expr_list.push(parse_expr(input, allow_stmt_expr)?);
 
         match input.peek().ok_or_else(|| {
-            PERR::MissingRightParen(format!(
-                "closing the arguments to call of function '{}'",
-                id
-            ))
+            PERR::MissingToken(
+                ")".into(),
+                format!("to close the arguments list of this function call '{}'", id),
+            )
             .into_err_eof()
         })? {
             (Token::RightParen, _) => {
@@ -1417,10 +1430,10 @@ fn parse_call_expr<'a>(
             }
             (Token::Comma, _) => (),
             (_, pos) => {
-                return Err(PERR::MissingComma(format!(
-                    "separating the arguments to call of function '{}'",
-                    id
-                ))
+                return Err(PERR::MissingToken(
+                    ",".into(),
+                    format!("to separate the arguments to function call '{}'", id),
+                )
                 .into_err(*pos))
             }
         }
@@ -1429,7 +1442,7 @@ fn parse_call_expr<'a>(
     }
 }
 
-/// Parse an indexing expression.s
+/// Parse an indexing expression.
 #[cfg(not(feature = "no_index"))]
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
@@ -1439,7 +1452,7 @@ fn parse_index_expr<'a>(
 ) -> Result<Expr, ParseError> {
     let idx_expr = parse_expr(input, allow_stmt_expr)?;
 
-    // Check type of indexing - must be integer
+    // Check type of indexing - must be integer or string
     match &idx_expr {
         // lhs[int]
         Expr::IntegerConstant(i, pos) if *i < 0 => {
@@ -1449,6 +1462,72 @@ fn parse_index_expr<'a>(
             ))
             .into_err(*pos))
         }
+        Expr::IntegerConstant(_, pos) => match *lhs {
+            Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(_, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Object map access expects string index, not a number".into(),
+                )
+                .into_err(*pos))
+            }
+
+            Expr::FloatConstant(_, pos)
+            | Expr::CharConstant(_, pos)
+            | Expr::Assignment(_, _, pos)
+            | Expr::Unit(pos)
+            | Expr::True(pos)
+            | Expr::False(pos) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(pos))
+            }
+
+            Expr::And(lhs, _) | Expr::Or(lhs, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(lhs.position()))
+            }
+
+            _ => (),
+        },
+
+        // lhs[string]
+        Expr::StringConstant(_, pos) => match *lhs {
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(_, _) => (),
+
+            Expr::Array(_, _) | Expr::StringConstant(_, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Array or string expects numeric index, not a string".into(),
+                )
+                .into_err(*pos))
+            }
+            Expr::FloatConstant(_, pos)
+            | Expr::CharConstant(_, pos)
+            | Expr::Assignment(_, _, pos)
+            | Expr::Unit(pos)
+            | Expr::True(pos)
+            | Expr::False(pos) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(pos))
+            }
+
+            Expr::And(lhs, _) | Expr::Or(lhs, _) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(lhs.position()))
+            }
+
+            _ => (),
+        },
+
         // lhs[float]
         #[cfg(not(feature = "no_float"))]
         Expr::FloatConstant(_, pos) => {
@@ -1461,13 +1540,6 @@ fn parse_index_expr<'a>(
         Expr::CharConstant(_, pos) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
-            )
-            .into_err(*pos))
-        }
-        // lhs[string]
-        Expr::StringConstant(_, pos) => {
-            return Err(PERR::MalformedIndexExpr(
-                "Array access expects integer index, not a string".into(),
             )
             .into_err(*pos))
         }
@@ -1497,15 +1569,22 @@ fn parse_index_expr<'a>(
     }
 
     // Check if there is a closing bracket
-    match input
-        .peek()
-        .ok_or_else(|| PERR::MissingRightBracket("index expression".into()).into_err_eof())?
-    {
+    match input.peek().ok_or_else(|| {
+        PERR::MissingToken(
+            "]".into(),
+            "for a matching [ in this index expression".into(),
+        )
+        .into_err_eof()
+    })? {
         (Token::RightBracket, _) => {
             input.next();
             Ok(Expr::Index(lhs, Box::new(idx_expr), pos))
         }
-        (_, pos) => Err(PERR::MissingRightBracket("index expression".into()).into_err(*pos)),
+        (_, pos) => Err(PERR::MissingToken(
+            "]".into(),
+            "for a matching [ in this index expression".into(),
+        )
+        .into_err(*pos)),
     }
 }
 
@@ -1555,32 +1634,138 @@ fn parse_array_literal<'a>(
             arr.push(parse_expr(input, allow_stmt_expr)?);
 
             match input.peek().ok_or_else(|| {
-                PERR::MissingRightBracket("separating items in array literal".into()).into_err_eof()
+                PERR::MissingToken("]".into(), "to end this array literal".into()).into_err_eof()
             })? {
                 (Token::Comma, _) => {
                     input.next();
                 }
                 (Token::RightBracket, _) => break,
                 (_, pos) => {
-                    return Err(
-                        PERR::MissingComma("separating items in array literal".into())
-                            .into_err(*pos),
+                    return Err(PERR::MissingToken(
+                        ",".into(),
+                        "to separate the items of this array literal".into(),
                     )
+                    .into_err(*pos))
                 }
             }
         }
     }
 
     match input.peek().ok_or_else(|| {
-        PERR::MissingRightBracket("the end of array literal".into()).into_err_eof()
+        PERR::MissingToken("]".into(), "to end this array literal".into()).into_err_eof()
     })? {
         (Token::RightBracket, _) => {
             input.next();
             Ok(Expr::Array(arr, begin))
         }
         (_, pos) => {
-            Err(PERR::MissingRightBracket("the end of array literal".into()).into_err(*pos))
+            Err(PERR::MissingToken("]".into(), "to end this array literal".into()).into_err(*pos))
         }
+    }
+}
+
+/// Parse a map literal.
+#[cfg(not(feature = "no_object"))]
+fn parse_map_literal<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    begin: Position,
+    allow_stmt_expr: bool,
+) -> Result<Expr, ParseError> {
+    let mut map = Vec::new();
+
+    if !matches!(input.peek(), Some((Token::RightBrace, _))) {
+        while input.peek().is_some() {
+            let (name, pos) = match input.next().ok_or_else(|| {
+                PERR::MissingToken("}".into(), "to end this object map literal".into())
+                    .into_err_eof()
+            })? {
+                (Token::Identifier(s), pos) => (s.clone(), pos),
+                (Token::StringConst(s), pos) => (s.clone(), pos),
+                (_, pos) if map.is_empty() => {
+                    return Err(PERR::MissingToken(
+                        "}".into(),
+                        "to end this object map literal".into(),
+                    )
+                    .into_err(pos))
+                }
+                (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
+            };
+
+            match input.next().ok_or_else(|| {
+                PERR::MissingToken(
+                    ":".into(),
+                    format!(
+                        "to follow the property '{}' in this object map literal",
+                        name
+                    ),
+                )
+                .into_err_eof()
+            })? {
+                (Token::Colon, _) => (),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        ":".into(),
+                        format!(
+                            "to follow the property '{}' in this object map literal",
+                            name
+                        ),
+                    )
+                    .into_err(pos))
+                }
+            };
+
+            let expr = parse_expr(input, allow_stmt_expr)?;
+
+            map.push((name, expr, pos));
+
+            match input.peek().ok_or_else(|| {
+                PERR::MissingToken("}".into(), "to end this object map literal".into())
+                    .into_err_eof()
+            })? {
+                (Token::Comma, _) => {
+                    input.next();
+                }
+                (Token::RightBrace, _) => break,
+                (Token::Identifier(_), pos) => {
+                    return Err(PERR::MissingToken(
+                        ",".into(),
+                        "to separate the items of this object map literal".into(),
+                    )
+                    .into_err(*pos))
+                }
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        "}".into(),
+                        "to end this object map literal".into(),
+                    )
+                    .into_err(*pos))
+                }
+            }
+        }
+    }
+
+    // Check for duplicating properties
+    map.iter()
+        .enumerate()
+        .try_for_each(|(i, (k1, _, _))| {
+            map.iter()
+                .skip(i + 1)
+                .find(|(k2, _, _)| k2 == k1)
+                .map_or_else(|| Ok(()), |(k2, _, pos)| Err((k2, *pos)))
+        })
+        .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
+
+    // Ending brace
+    match input.peek().ok_or_else(|| {
+        PERR::MissingToken("}".into(), "to end this object map literal".into()).into_err_eof()
+    })? {
+        (Token::RightBrace, _) => {
+            input.next();
+            Ok(Expr::Map(map, begin))
+        }
+        (_, pos) => Err(
+            PERR::MissingToken("]".into(), "to end this object map literal".into()).into_err(*pos),
+        ),
     }
 }
 
@@ -1626,6 +1811,11 @@ fn parse_primary<'a>(
         (Token::LeftBracket, pos) => {
             can_be_indexed = true;
             parse_array_literal(input, pos, allow_stmt_expr)
+        }
+        #[cfg(not(feature = "no_object"))]
+        (Token::MapStart, pos) => {
+            can_be_indexed = true;
+            parse_map_literal(input, pos, allow_stmt_expr)
         }
         (Token::True, pos) => Ok(Expr::True(pos)),
         (Token::False, pos) => Ok(Expr::False(pos)),
@@ -1756,6 +1946,7 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
             },
 
             // dot_lhs.dot_rhs
+            #[cfg(not(feature = "no_object"))]
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
                 // var.dot_rhs
                 Expr::Variable(_, _) if is_top => valid_assignment_chain(dot_rhs, false),
@@ -1864,28 +2055,32 @@ fn parse_binary_op<'a>(
                 Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
                 Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
 
+                #[cfg(not(feature = "no_object"))]
                 Token::Period => {
-                    fn change_var_to_property(expr: Expr) -> Expr {
+                    fn check_property(expr: Expr) -> Result<Expr, ParseError> {
                         match expr {
-                            Expr::Dot(lhs, rhs, pos) => Expr::Dot(
-                                Box::new(change_var_to_property(*lhs)),
-                                Box::new(change_var_to_property(*rhs)),
+                            // xxx.lhs.rhs
+                            Expr::Dot(lhs, rhs, pos) => Ok(Expr::Dot(
+                                Box::new(check_property(*lhs)?),
+                                Box::new(check_property(*rhs)?),
                                 pos,
-                            ),
+                            )),
+                            // xxx.lhs[idx]
                             #[cfg(not(feature = "no_index"))]
                             Expr::Index(lhs, idx, pos) => {
-                                Expr::Index(Box::new(change_var_to_property(*lhs)), idx, pos)
+                                Ok(Expr::Index(Box::new(check_property(*lhs)?), idx, pos))
                             }
-                            Expr::Variable(s, pos) => Expr::Property(s, pos),
-                            expr => expr,
+                            // xxx.id
+                            Expr::Variable(id, pos) => Ok(Expr::Property(id, pos)),
+                            // xxx.prop
+                            expr @ Expr::Property(_, _) => Ok(expr),
+                            // xxx.fn()
+                            expr @ Expr::FunctionCall(_, _, _, _) => Ok(expr),
+                            expr => Err(PERR::PropertyExpected.into_err(expr.position())),
                         }
                     }
 
-                    Expr::Dot(
-                        Box::new(current_lhs),
-                        Box::new(change_var_to_property(rhs)),
-                        pos,
-                    )
+                    Expr::Dot(Box::new(current_lhs), Box::new(check_property(rhs)?), pos)
                 }
 
                 // Comparison operators default to false when passed invalid operands
@@ -2070,9 +2265,16 @@ fn parse_for<'a>(
     };
 
     // for name in ...
-    match input.next().ok_or_else(|| PERR::MissingIn.into_err_eof())? {
+    match input.next().ok_or_else(|| {
+        PERR::MissingToken("in".into(), "after the iteration variable".into()).into_err_eof()
+    })? {
         (Token::In, _) => (),
-        (_, pos) => return Err(PERR::MissingIn.into_err(pos)),
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken("in".into(), "after the iteration variable".into())
+                    .into_err(pos),
+            )
+        }
     }
 
     // for name in expr { body }
@@ -2136,10 +2338,14 @@ fn parse_block<'a>(
     // Must start with {
     let pos = match input
         .next()
-        .ok_or_else(|| PERR::MissingLeftBrace.into_err_eof())?
+        .ok_or_else(|| PERR::UnexpectedEOF.into_err_eof())?
     {
         (Token::LeftBrace, pos) => pos,
-        (_, pos) => return Err(PERR::MissingLeftBrace.into_err(pos)),
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken("{".into(), "to start a statement block".into()).into_err(pos),
+            )
+        }
     };
 
     let mut statements = Vec::new();
@@ -2169,20 +2375,24 @@ fn parse_block<'a>(
             // { ... stmt ??? - error
             Some((_, pos)) => {
                 // Semicolons are not optional between statements
-                return Err(PERR::MissingSemicolon("terminating a statement".into()).into_err(*pos));
+                return Err(
+                    PERR::MissingToken(";".into(), "to terminate this statement".into())
+                        .into_err(*pos),
+                );
             }
         }
     }
 
-    match input
-        .peek()
-        .ok_or_else(|| PERR::MissingRightBrace("end of block".into()).into_err_eof())?
-    {
+    match input.peek().ok_or_else(|| {
+        PERR::MissingToken("}".into(), "to end this statement block".into()).into_err_eof()
+    })? {
         (Token::RightBrace, _) => {
             input.next();
             Ok(Stmt::Block(statements, pos))
         }
-        (_, pos) => Err(PERR::MissingRightBrace("end of block".into()).into_err(*pos)),
+        (_, pos) => {
+            Err(PERR::MissingToken("}".into(), "to end this statement block".into()).into_err(*pos))
+        }
     }
 }
 
@@ -2284,28 +2494,30 @@ fn parse_fn<'a>(
     if matches!(input.peek(), Some((Token::RightParen, _))) {
         input.next();
     } else {
-        let end_err = format!("closing the parameters list of function '{}'", name);
-        let sep_err = format!("separating the parameters of function '{}'", name);
+        let end_err = format!("to close the parameters list of function '{}'", name);
+        let sep_err = format!("to separate the parameters of function '{}'", name);
 
         loop {
             match input
                 .next()
-                .ok_or_else(|| PERR::MissingRightParen(end_err.to_string()).into_err_eof())?
+                .ok_or_else(|| PERR::MissingToken(")".into(), end_err.to_string()).into_err_eof())?
             {
                 (Token::Identifier(s), pos) => {
                     params.push((s, pos));
                 }
-                (_, pos) => return Err(PERR::MissingRightParen(end_err).into_err(pos)),
+                (_, pos) => return Err(PERR::MissingToken(")".into(), end_err).into_err(pos)),
             }
 
             match input
                 .next()
-                .ok_or_else(|| PERR::MissingRightParen(end_err.to_string()).into_err_eof())?
+                .ok_or_else(|| PERR::MissingToken(")".into(), end_err.to_string()).into_err_eof())?
             {
                 (Token::RightParen, _) => break,
                 (Token::Comma, _) => (),
-                (Token::Identifier(_), _) => return Err(PERR::MissingComma(sep_err).into_err(pos)),
-                (_, pos) => return Err(PERR::MissingRightParen(sep_err).into_err(pos)),
+                (Token::Identifier(_), pos) => {
+                    return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos))
+                }
+                (_, pos) => return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos)),
             }
         }
     }
@@ -2322,7 +2534,7 @@ fn parse_fn<'a>(
                 .map_or_else(|| Ok(()), |(p2, pos)| Err((p2, *pos)))
         })
         .map_err(|(p, pos)| {
-            PERR::FnDuplicateParam(name.to_string(), p.to_string()).into_err(pos)
+            PERR::FnDuplicatedParam(name.to_string(), p.to_string()).into_err(pos)
         })?;
 
     // Parse function body
@@ -2408,7 +2620,10 @@ fn parse_global_level<'a>(
             // stmt ??? - error
             Some((_, pos)) => {
                 // Semicolons are not optional between statements
-                return Err(PERR::MissingSemicolon("terminating a statement".into()).into_err(*pos));
+                return Err(
+                    PERR::MissingToken(";".into(), "to terminate this statement".into())
+                        .into_err(*pos),
+                );
             }
         }
     }

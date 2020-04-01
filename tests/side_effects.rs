@@ -1,3 +1,5 @@
+#![cfg(not(feature = "no_object"))]
+
 ///! This test simulates an external command object that is driven by a script.
 use rhai::{Engine, EvalAltResult, RegisterFn, Scope, INT};
 use std::cell::RefCell;

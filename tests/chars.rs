@@ -12,7 +12,7 @@ fn test_chars() -> Result<(), EvalAltResult> {
         assert_eq!(engine.eval::<char>(r#"let x="hello"; x[2]"#)?, 'l');
         assert_eq!(
             engine.eval::<String>(r#"let y="hello"; y[2]='$'; y"#)?,
-            "he$lo".to_string()
+            "he$lo"
         );
     }
 

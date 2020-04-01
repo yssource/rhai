@@ -6,30 +6,24 @@ fn test_string() -> Result<(), EvalAltResult> {
 
     assert_eq!(
         engine.eval::<String>(r#""Test string: \u2764""#)?,
-        "Test string: ❤".to_string()
+        "Test string: ❤"
     );
     assert_eq!(
         engine.eval::<String>(r#""Test string: \x58""#)?,
-        "Test string: X".to_string()
+        "Test string: X"
     );
 
-    assert_eq!(
-        engine.eval::<String>(r#""foo" + "bar""#)?,
-        "foobar".to_string()
-    );
+    assert_eq!(engine.eval::<String>(r#""foo" + "bar""#)?, "foobar");
 
     #[cfg(not(feature = "no_stdlib"))]
-    assert_eq!(
-        engine.eval::<String>(r#""foo" + 123"#)?,
-        "foo123".to_string()
-    );
+    assert_eq!(engine.eval::<String>(r#""foo" + 123"#)?, "foo123");
 
     #[cfg(not(feature = "no_float"))]
     #[cfg(not(feature = "no_stdlib"))]
-    assert_eq!(
-        engine.eval::<String>(r#""foo" + 123.4556"#)?,
-        "foo123.4556".to_string()
-    );
+    assert_eq!(engine.eval::<String>(r#""foo" + 123.4556"#)?, "foo123.4556");
+
+    #[cfg(not(feature = "no_stdlib"))]
+    assert_eq!(engine.eval::<String>("(42).to_string()")?, "42");
 
     Ok(())
 }

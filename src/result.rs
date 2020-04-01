@@ -20,6 +20,11 @@ use crate::stdlib::path::PathBuf;
 pub enum EvalAltResult {
     /// Syntax error.
     ErrorParsing(ParseError),
+
+    /// Error reading from a script file. Wrapped value is the path of the script file.
+    #[cfg(not(feature = "no_std"))]
+    ErrorReadingScriptFile(PathBuf, std::io::Error),
+
     /// Call to an unknown function. Wrapped value is the name of the function.
     ErrorFunctionNotFound(String, Position),
     /// Function call has incorrect number of arguments.
@@ -36,10 +41,12 @@ pub enum EvalAltResult {
     /// String indexing out-of-bounds.
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, INT, Position),
-    /// Trying to index into a type that is not an array and not a string.
+    /// Trying to index into a type that is not an array, an object map, or a string.
     ErrorIndexingType(String, Position),
     /// Trying to index into an array or string with an index that is not `i64`.
-    ErrorIndexExpr(Position),
+    ErrorNumericIndexExpr(Position),
+    /// Trying to index into a map with an index that is not `String`.
+    ErrorStringIndexExpr(Position),
     /// The guard expression in an `if` or `while` statement does not return a boolean value.
     ErrorLogicGuard(Position),
     /// The `for` statement encounters a type that is not an iterator.
@@ -53,9 +60,6 @@ pub enum EvalAltResult {
     /// Returned type is not the same as the required output type.
     /// Wrapped value is the type of the actual result.
     ErrorMismatchOutputType(String, Position),
-    /// Error reading from a script file. Wrapped value is the path of the script file.
-    #[cfg(not(feature = "no_std"))]
-    ErrorReadingScriptFile(PathBuf, std::io::Error),
     /// Inappropriate member access.
     ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
@@ -64,6 +68,7 @@ pub enum EvalAltResult {
     ErrorStackOverflow(Position),
     /// Run-time error encountered. Wrapped value is the error message.
     ErrorRuntime(String, Position),
+
     /// Breaking out of loops - not an error if within a loop.
     ErrorLoopBreak(Position),
     /// Not an error: Value returned from a script via the `return` keyword.
@@ -74,6 +79,9 @@ pub enum EvalAltResult {
 impl EvalAltResult {
     pub(crate) fn desc(&self) -> &str {
         match self {
+            #[cfg(not(feature = "no_std"))]
+            Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
+
             Self::ErrorParsing(p) => p.desc(),
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorFunctionArgsMismatch(_, _, _, _) => {
@@ -81,9 +89,12 @@ impl EvalAltResult {
             }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorCharMismatch(_) => "Character expected",
-            Self::ErrorIndexExpr(_) => "Indexing into an array or string expects an integer index",
+            Self::ErrorNumericIndexExpr(_) => {
+                "Indexing into an array or string expects an integer index"
+            }
+            Self::ErrorStringIndexExpr(_) => "Indexing into an object map expects a string index",
             Self::ErrorIndexingType(_, _) => {
-                "Indexing can only be performed on an array or a string"
+                "Indexing can only be performed on an array, an object map, or a string"
             }
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
@@ -103,8 +114,6 @@ impl EvalAltResult {
             }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
-            #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorStackOverflow(_) => "Stack overflow",
@@ -122,43 +131,52 @@ impl fmt::Display for EvalAltResult {
         let desc = self.desc();
 
         match self {
-            Self::ErrorFunctionNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorVariableNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorIndexingType(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorIndexExpr(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorLogicGuard(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorFor(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorAssignmentToUnknownLHS(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorAssignmentToConstant(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
-            Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
-            Self::ErrorDotExpr(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorArithmetic(s, pos) => write!(f, "{} ({})", s, pos),
-            Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorRuntime(s, pos) => {
-                write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
-            }
-            Self::ErrorLoopBreak(pos) => write!(f, "{} ({})", desc, pos),
-            Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
             #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(path, err) => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)
             }
+
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
-            Self::ErrorFunctionArgsMismatch(fun, 0, n, pos) => write!(
+
+            Self::ErrorFunctionNotFound(s, pos) | Self::ErrorVariableNotFound(s, pos) => {
+                write!(f, "{}: '{}' ({})", desc, s, pos)
+            }
+            Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
+
+            Self::ErrorIndexingType(_, pos)
+            | Self::ErrorNumericIndexExpr(pos)
+            | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorLogicGuard(pos)
+            | Self::ErrorFor(pos)
+            | Self::ErrorAssignmentToUnknownLHS(pos)
+            | Self::ErrorDotExpr(_, pos)
+            | Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
+
+            Self::ErrorRuntime(s, pos) => {
+                write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
+            }
+
+            Self::ErrorAssignmentToConstant(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
+            Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
+            Self::ErrorArithmetic(s, pos) => write!(f, "{} ({})", s, pos),
+
+            Self::ErrorLoopBreak(pos) => write!(f, "{} ({})", desc, pos),
+            Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
+
+            Self::ErrorFunctionArgsMismatch(fn_name, 0, n, pos) => write!(
                 f,
                 "Function '{}' expects no argument but {} found ({})",
-                fun, n, pos
+                fn_name, n, pos
             ),
-            Self::ErrorFunctionArgsMismatch(fun, 1, n, pos) => write!(
+            Self::ErrorFunctionArgsMismatch(fn_name, 1, n, pos) => write!(
                 f,
                 "Function '{}' expects one argument but {} found ({})",
-                fun, n, pos
+                fn_name, n, pos
             ),
-            Self::ErrorFunctionArgsMismatch(fun, need, n, pos) => write!(
+            Self::ErrorFunctionArgsMismatch(fn_name, need, n, pos) => write!(
                 f,
                 "Function '{}' expects {} argument(s) but {} found ({})",
-                fun, need, n, pos
+                fn_name, need, n, pos
             ),
             Self::ErrorBooleanArgMismatch(op, pos) => {
                 write!(f, "{} operator expects boolean operands ({})", op, pos)
@@ -225,7 +243,8 @@ impl EvalAltResult {
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
-            | Self::ErrorIndexExpr(pos)
+            | Self::ErrorNumericIndexExpr(pos)
+            | Self::ErrorStringIndexExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
@@ -256,7 +275,8 @@ impl EvalAltResult {
             | Self::ErrorArrayBounds(_, _, ref mut pos)
             | Self::ErrorStringBounds(_, _, ref mut pos)
             | Self::ErrorIndexingType(_, ref mut pos)
-            | Self::ErrorIndexExpr(ref mut pos)
+            | Self::ErrorNumericIndexExpr(ref mut pos)
+            | Self::ErrorStringIndexExpr(ref mut pos)
             | Self::ErrorLogicGuard(ref mut pos)
             | Self::ErrorFor(ref mut pos)
             | Self::ErrorVariableNotFound(_, ref mut pos)

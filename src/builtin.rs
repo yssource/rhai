@@ -2,13 +2,16 @@
 //! _standard library_ of utility functions.
 
 use crate::any::Any;
-use crate::engine::Engine;
+use crate::engine::{Engine, FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 use crate::parser::{Position, INT};
 use crate::result::EvalAltResult;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -558,10 +561,10 @@ impl Engine<'_> {
         self.register_fn("==", |_: (), _: ()| true); // () == ()
 
         // Register print and debug
-        fn debug<T: Debug>(x: T) -> String {
+        fn to_debug<T: Debug>(x: T) -> String {
             format!("{:?}", x)
         }
-        fn print<T: Display>(x: T) -> String {
+        fn to_string<T: Display>(x: T) -> String {
             format!("{}", x)
         }
 
@@ -574,34 +577,56 @@ impl Engine<'_> {
                 )
             }
 
-            reg_fn1!(self, "print", print, String, INT, bool, char, String);
-            self.register_fn("print", || "".to_string());
-            self.register_fn("print", |_: ()| "".to_string());
-            reg_fn1!(self, "debug", debug, String, INT, bool, char, String, ());
+            reg_fn1!(self, KEYWORD_PRINT, to_string, String, INT, bool);
+            reg_fn1!(self, FUNC_TO_STRING, to_string, String, INT, bool);
+            reg_fn1!(self, KEYWORD_PRINT, to_string, String, char, String);
+            reg_fn1!(self, FUNC_TO_STRING, to_string, String, char, String);
+            self.register_fn(KEYWORD_PRINT, || "".to_string());
+            self.register_fn(KEYWORD_PRINT, |_: ()| "".to_string());
+            self.register_fn(FUNC_TO_STRING, |_: ()| "".to_string());
+            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, INT, bool, ());
+            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, char, String);
 
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_fn1!(self, "print", print, String, i8, u8, i16, u16);
-                reg_fn1!(self, "print", print, String, i32, i64, u32, u64);
-                reg_fn1!(self, "debug", debug, String, i8, u8, i16, u16);
-                reg_fn1!(self, "debug", debug, String, i32, i64, u32, u64);
+                reg_fn1!(self, KEYWORD_PRINT, to_string, String, i8, u8, i16, u16);
+                reg_fn1!(self, FUNC_TO_STRING, to_string, String, i8, u8, i16, u16);
+                reg_fn1!(self, KEYWORD_PRINT, to_string, String, i32, i64, u32, u64);
+                reg_fn1!(self, FUNC_TO_STRING, to_string, String, i32, i64, u32, u64);
+                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i8, u8, i16, u16);
+                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i32, i64, u32, u64);
             }
 
             #[cfg(not(feature = "no_float"))]
             {
-                reg_fn1!(self, "print", print, String, f32, f64);
-                reg_fn1!(self, "debug", debug, String, f32, f64);
+                reg_fn1!(self, KEYWORD_PRINT, to_string, String, f32, f64);
+                reg_fn1!(self, FUNC_TO_STRING, to_string, String, f32, f64);
+                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, f32, f64);
             }
 
             #[cfg(not(feature = "no_index"))]
             {
-                reg_fn1!(self, "print", debug, String, Array);
-                reg_fn1!(self, "debug", debug, String, Array);
+                reg_fn1!(self, KEYWORD_PRINT, to_debug, String, Array);
+                reg_fn1!(self, FUNC_TO_STRING, to_debug, String, Array);
+                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, Array);
 
                 // Register array iterator
                 self.register_iterator::<Array, _>(|a| {
                     Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
+                });
+            }
+
+            #[cfg(not(feature = "no_object"))]
+            {
+                self.register_fn(KEYWORD_PRINT, |x: &mut Map| -> String {
+                    format!("#{:?}", x)
+                });
+                self.register_fn(FUNC_TO_STRING, |x: &mut Map| -> String {
+                    format!("#{:?}", x)
+                });
+                self.register_fn(KEYWORD_DEBUG, |x: &mut Map| -> String {
+                    format!("#{:?}", x)
                 });
             }
         }
@@ -820,6 +845,14 @@ impl Engine<'_> {
                     list.truncate(len as usize);
                 }
             });
+        }
+
+        // Register map functions
+        #[cfg(not(feature = "no_object"))]
+        {
+            self.register_fn("has", |map: &mut Map, prop: String| map.contains_key(&prop));
+            self.register_fn("len", |map: &mut Map| map.len() as INT);
+            self.register_fn("clear", |map: &mut Map| map.clear());
         }
 
         // Register string concatenate functions

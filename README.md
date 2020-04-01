@@ -62,6 +62,7 @@ Optional features
 | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
 | `no_function` | Disable script-defined functions if not needed.                                                                                                          |
 | `no_index`    | Disable arrays and indexing features if not needed.                                                                                                      |
+| `no_object`   | Disable support for custom types and objects.                                                                                                            |
 | `no_float`    | Disable floating-point numbers and math if not needed.                                                                                                   |
 | `no_optimize` | Disable the script optimizer.                                                                                                                            |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
@@ -76,6 +77,7 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`no_index`]: #optional-features
 [`no_float`]: #optional-features
 [`no_function`]: #optional-features
+[`no_object`]: #optional-features
 [`no_optimize`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
@@ -177,7 +179,7 @@ let result = engine.eval::<i64>("40 + 2")?;     // return type is i64, specified
 
 let result: i64 = engine.eval("40 + 2")?;       // return type is inferred to be i64
 
-let result = engine.eval<String>("40 + 2")?;    // returns an error because the actual return type is i64, not String
+let result = engine.eval::<String>("40 + 2")?;  // returns an error because the actual return type is i64, not String
 ```
 
 Evaluate a script file directly:
@@ -259,20 +261,23 @@ Values and types
 ----------------
 
 [`type_of()`]: #values-and-types
+[`to_string()`]: #values-and-types
 
 The following primitive types are supported natively:
 
-| Category                                                    | Equivalent Rust types                                                                                | `type_of()` name  |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------- |
-| **Integer number**                                          | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`]),<br/>`u64`, `i64` _(default)_ | _same as type_    |
-| **Floating-point number** (disabled with [`no_float`])      | `f32`, `f64` _(default)_                                                                             | _same as type_    |
-| **Boolean value**                                           | `bool`                                                                                               | `"bool"`          |
-| **Unicode character**                                       | `char`                                                                                               | `"char"`          |
-| **Unicode string**                                          | `String` (_not_ `&str`)                                                                              | `"string"`        |
-| **Array** (disabled with [`no_index`])                      | `rhai::Array`                                                                                        | `"array"`         |
-| **Dynamic value** (i.e. can be anything)                    | `rhai::Dynamic`                                                                                      | _the actual type_ |
-| **System number** (current configuration)                   | `rhai::INT` (`i32` or `i64`),<br/>`rhai::FLOAT` (`f32` or `f64`)                                     | _same as type_    |
-| **Nothing/void/nil/null** (or whatever you want to call it) | `()`                                                                                                 | `"()"`            |
+| Category                                                                      | Equivalent Rust types                                                                                | `type_of()`           | `to_string()`         |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------- | --------------------- |
+| **Integer number**                                                            | `u8`, `i8`, `u16`, `i16`, <br/>`u32`, `i32` (default for [`only_i32`]),<br/>`u64`, `i64` _(default)_ | `"i32"`, `"u64"` etc. | `"42"`, `"123"` etc.  |
+| **Floating-point number** (disabled with [`no_float`])                        | `f32`, `f64` _(default)_                                                                             | `"f32"` or `"f64"`    | `"123.4567"` etc.     |
+| **Boolean value**                                                             | `bool`                                                                                               | `"bool"`              | `"true"` or `"false"` |
+| **Unicode character**                                                         | `char`                                                                                               | `"char"`              | `"A"`, `"x"` etc.     |
+| **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
+| **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
+| **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
+| **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
+| **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
+| **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
+| **Nothing/void/nil/null** (or whatever you want to call it)                   | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
 
 [`Dynamic`]: #values-and-types
 [`()`]: #values-and-types
@@ -286,7 +291,9 @@ This is useful on some 32-bit systems where using 64-bit integers incurs a perfo
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
-There is a `type_of` function to detect the actual type of a value. This is useful because all variables are `Dynamic`.
+The `to_string` function converts a standard type into a string for display purposes.
+
+The `type_of` function detects the actual type of a value. This is useful because all variables are `Dynamic`.
 
 ```rust
 // Use 'type_of()' to get the actual types of values
@@ -294,7 +301,7 @@ type_of('c') == "char";
 type_of(42) == "i64";
 
 let x = 123;
-x.type_of();                // error - 'type_of' cannot use postfix notation
+x.type_of();                    // <- error: 'type_of' cannot use method-call style
 type_of(x) == "i64";
 
 x = 99.999;
@@ -312,12 +319,13 @@ Value conversions
 [`to_int`]: #value-conversions
 [`to_float`]: #value-conversions
 
-There is a `to_float` function to convert a supported number to an `f64`, and a `to_int` function to convert a supported number to `i64` and that's about it.
-For other conversions, register custom conversion functions.
+The `to_float` function converts a supported number to `FLOAT` (`f32` or `f64`),
+and the `to_int` function converts a supported number to `INT` (`i32` or `i64`).
+That's about it. For other conversions, register custom conversion functions.
 
 ```rust
 let x = 42;
-let y = x * 100.0;              // error: cannot multiply i64 with f64
+let y = x * 100.0;              // <- error: cannot multiply i64 with f64
 let y = x.to_float() * 100.0;   // works
 let z = y.to_int() + x;         // works
 
@@ -333,8 +341,8 @@ To call these functions, they need to be registered with the [`Engine`].
 
 ```rust
 use rhai::{Engine, EvalAltResult};
-use rhai::RegisterFn;                       // use `RegisterFn` trait for `register_fn`
-use rhai::{Dynamic, RegisterDynamicFn};     // use `RegisterDynamicFn` trait for `register_dynamic_fn`
+use rhai::RegisterFn;                           // use `RegisterFn` trait for `register_fn`
+use rhai::{Dynamic, RegisterDynamicFn};         // use `RegisterDynamicFn` trait for `register_dynamic_fn`
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -354,14 +362,14 @@ fn main() -> Result<(), EvalAltResult>
 
     let result = engine.eval::<i64>("add(40, 2)")?;
 
-    println!("Answer: {}", result);  // prints 42
+    println!("Answer: {}", result);             // prints 42
 
     // Functions that return Dynamic values must use register_dynamic_fn()
     engine.register_dynamic_fn("get_an_any", get_an_any);
 
     let result = engine.eval::<i64>("get_an_any()")?;
 
-    println!("Answer: {}", result);  // prints 42
+    println!("Answer: {}", result);             // prints 42
 
     Ok(())
 }
@@ -415,13 +423,13 @@ The function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements 
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
-use rhai::RegisterResultFn;     // use `RegisterResultFn` trait for `register_result_fn`
+use rhai::RegisterResultFn;                         // use `RegisterResultFn` trait for `register_result_fn`
 
 // Function that may fail
 fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero detected!".into())  // short-cut to create EvalAltResult
+        Err("Division by zero detected!".into())    // short-cut to create EvalAltResult
     } else {
         Ok(x / y)
     }
@@ -435,7 +443,7 @@ fn main()
     engine.register_result_fn("divide", safe_divide);
 
     if let Err(error) = engine.eval::<i64>("divide(40, 0)") {
-       println!("Error: {:?}", error);  // prints ErrorRuntime("Division by zero detected!", (1, 1)")
+       println!("Error: {:?}", error);              // prints ErrorRuntime("Division by zero detected!", (1, 1)")
     }
 }
 ```
@@ -496,6 +504,7 @@ fn main() -> Result<(), EvalAltResult>
 ```
 
 All custom types must implement `Clone`.  This allows the [`Engine`] to pass by value.
+You can turn off support for custom types via the [`no_object`] feature.
 
 ```rust
 #[derive(Clone)]
@@ -522,7 +531,8 @@ let mut engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-To use methods and functions with the [`Engine`], we need to register them.  There are some convenience functions to help with this.  Below I register update and new with the [`Engine`].
+To use methods and functions with the [`Engine`], we need to register them. There are some convenience functions to help with this.
+Below I register update and new with the [`Engine`].
 
 *Note: [`Engine`] follows the convention that methods use a `&mut` first parameter so that invoking methods can update the value in memory.*
 
@@ -531,7 +541,8 @@ engine.register_fn("update", TestStruct::update);   // registers 'update(&mut ts
 engine.register_fn("new_ts", TestStruct::new);      // registers 'new'
 ```
 
-Finally, we call our script.  The script can see the function and method we registered earlier.  We need to get the result back out from script land just as before, this time casting to our custom struct type.
+Finally, we call our script.  The script can see the function and method we registered earlier.
+We need to get the result back out from script land just as before, this time casting to our custom struct type.
 
 ```rust
 let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
@@ -539,7 +550,8 @@ let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 println!("result: {}", result.field);               // prints 42
 ```
 
-In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method-call on that type because internally they are the same thing: methods on a type is implemented as a functions taking an first argument.
+In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method-call on that type because internally they are the same thing:
+methods on a type is implemented as a functions taking an first argument.
 
 ```rust
 fn foo(ts: &mut TestStruct) -> i64 {
@@ -553,7 +565,15 @@ let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
 println!("result: {}", result);                     // prints 1
 ```
 
-[`type_of()`] works fine with custom types and returns the name of the type. If `register_type_with_name` is used to register the custom type
+If the [`no_object`] feature is turned on, however, the _method_ style of function calls (i.e. calling a function as an object-method) is no longer supported.
+
+```rust
+// Below is a syntax error under 'no_object' because 'len' cannot be called in method style.
+let result = engine.eval::<i64>("let x = [1, 2, 3]; x.len()")?;
+```
+
+[`type_of()`] works fine with custom types and returns the name of the type.
+If `register_type_with_name` is used to register the custom type
 with a special "pretty-print" name, [`type_of()`] will return that name instead.
 
 ```rust
@@ -604,6 +624,9 @@ let result = engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
+
+Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set` and `register_get_set`
+are not available when the [`no_object`] feature is turned on.
 
 Initializing and maintaining state
 ---------------------------------
@@ -711,6 +734,8 @@ let a = { 40 + 2 };     // 'a' is set to the value of the statement block, which
 Variables
 ---------
 
+[variables]: #variables
+
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
 
 Variable names must start with an ASCII letter or an underscore '`_`', must contain at least one ASCII letter, and must start with an ASCII letter before a digit.
@@ -720,41 +745,41 @@ Variable names are also case _sensitive_.
 Variables are defined using the `let` keyword. A variable defined within a statement block is _local_ to that block.
 
 ```rust
-let x = 3;          // ok
-let _x = 42;        // ok
-let x_ = 42;        // also ok
-let _x_ = 42;       // still ok
+let x = 3;              // ok
+let _x = 42;            // ok
+let x_ = 42;            // also ok
+let _x_ = 42;           // still ok
 
-let _ = 123;        // syntax error - illegal variable name
-let _9 = 9;         // syntax error - illegal variable name
+let _ = 123;            // <- syntax error: illegal variable name
+let _9 = 9;             // <- syntax error: illegal variable name
 
-let x = 42;         // variable is 'x', lower case
-let X = 123;        // variable is 'X', upper case
+let x = 42;             // variable is 'x', lower case
+let X = 123;            // variable is 'X', upper case
 x == 42;
 X == 123;
 
 {
-    let x = 999;    // local variable 'x' shadows the 'x' in parent block
-    x == 999;       // access to local 'x'
+    let x = 999;        // local variable 'x' shadows the 'x' in parent block
+    x == 999;           // access to local 'x'
 }
-x == 42;            // the parent block's 'x' is not changed
+x == 42;                // the parent block's 'x' is not changed
 ```
 
 Constants
 ---------
 
-Constants can be defined using the `const` keyword and are immutable.  Constants follow the same naming rules as [variables](#variables).
+Constants can be defined using the `const` keyword and are immutable.  Constants follow the same naming rules as [variables].
 
 ```rust
 const x = 42;
-print(x * 2);       // prints 84
-x = 123;            // syntax error - cannot assign to constant
+print(x * 2);           // prints 84
+x = 123;                // <- syntax error: cannot assign to constant
 ```
 
 Constants must be assigned a _value_, not an expression.
 
 ```rust
-const x = 40 + 2;   // syntax error - cannot assign expression to constant
+const x = 40 + 2;       // <- syntax error: cannot assign expression to constant
 ```
 
 Numbers
@@ -982,7 +1007,7 @@ let foo = [1, 2, 3][0];
 foo == 1;
 
 fn abc() {
-    [42, 43, 44]        // a function returning an array literal
+    [42, 43, 44]        // a function returning an array
 }
 
 let foo = abc()[0];
@@ -1023,6 +1048,84 @@ print(y.len());         // prints 0
 engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(item)) );
 ```
 
+Object maps
+-----------
+
+Object maps are dictionaries. Properties of any type (`Dynamic`) can be freely added and retrieved.
+Object map literals are built within braces '`#{`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
+and separated by commas '`,`'.  The property _name_ can be a simple variable name following the same
+naming rules as [variables], or an arbitrary string literal.
+
+Property values can be accessed via the dot notation (_object_ `.` _property_) or index notation (_object_ `[` _property_ `]`).
+The dot notation allows only property names that follow the same naming rules as [variables].
+The index notation allows setting/getting properties of arbitrary names (even the empty string).
+
+**Important:** Trying to read a non-existent property returns `()` instead of causing an error.
+
+The Rust type of a Rhai object map is `rhai::Map`.
+
+[`type_of()`] an object map returns `"map"`.
+
+Object maps are disabled via the [`no_object`] feature.
+
+The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on object maps:
+
+| Function | Description                                                  |
+| -------- | ------------------------------------------------------------ |
+| `has`    | does the object map contain a property of a particular name? |
+| `len`    | returns the number of properties                             |
+| `clear`  | empties the object map                                       |
+
+Examples:
+
+```rust
+let y = #{              // object map literal with 3 properties
+    a: 1,
+    bar: "hello",
+    "baz!$@": 123.456,  // like JS, you can use any string as property names...
+    "": false,          // even the empty string!
+
+    a: 42               // <- syntax error: duplicated property name
+};
+
+y.a = 42;               // access via dot notation
+y.baz!$@ = 42;          // <- syntax error: only proper variable names allowed in dot notation
+y."baz!$@" = 42;        // <- syntax error: strings not allowed in dot notation
+
+print(y.a);             // prints 42
+
+print(y["baz!$@"]);     // prints 123.456 - access via index notation
+
+ts.obj = y;             // object maps can be assigned completely (by value copy)
+let foo = ts.list.a;
+foo == 42;
+
+let foo = #{ a:1, b:2, c:3 }["a"];
+foo == 1;
+
+fn abc() {
+    #{ a:1, b:2, c:3 }  // a function returning an object map
+}
+
+let foo = abc().b;
+foo == 2;
+
+let foo = y["a"];
+foo == 42;
+
+y.has("a") == true;
+y.has("xyz") == false;
+
+y.xyz == ();            // A non-existing property returns '()'
+y["xyz"] == ();
+
+print(y.len());         // prints 3
+
+y.clear();              // empty the object map
+
+print(y.len());         // prints 0
+```
+
 Comparison operators
 --------------------
 
@@ -1032,21 +1135,21 @@ However, if the [`no_stdlib`] feature is turned on, comparisons can only be made
 types - `INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), string, array, `bool`, `char`.
 
 ```rust
-42 == 42;           // true
-42 > 42;            // false
-"hello" > "foo";    // true
-"42" == 42;         // false
+42 == 42;               // true
+42 > 42;                // false
+"hello" > "foo";        // true
+"42" == 42;             // false
 ```
 
 Comparing two values of _different_ data types, or of unknown data types, always results in `false`.
 
 ```rust
-42 == 42.0;         // false - i64 is different from f64
-42 > "42";          // false - i64 is different from string
-42 <= "42";         // false again
+42 == 42.0;             // false - i64 is different from f64
+42 > "42";              // false - i64 is different from string
+42 <= "42";             // false again
 
-let ts = new_ts();  // custom type
-ts == 42;           // false - types are not the same
+let ts = new_ts();      // custom type
+ts == 42;               // false - types are not the same
 ```
 
 Boolean operators
@@ -1066,11 +1169,11 @@ if the first one already proves the condition wrong.
 Single boolean operators `&` and `|` always evaluate both operands.
 
 ```rust
-this() || that();   // that() is not evaluated if this() is true
-this() && that();   // that() is not evaluated if this() is false
+this() || that();       // that() is not evaluated if this() is true
+this() && that();       // that() is not evaluated if this() is false
 
-this() | that();    // both this() and that() are evaluated
-this() & that();    // both this() and that() are evaluated
+this() | that();        // both this() and that() are evaluated
+this() & that();        // both this() and that() are evaluated
 ```
 
 Compound assignment operators
@@ -1078,13 +1181,13 @@ Compound assignment operators
 
 ```rust
 let number = 5;
-number += 4;        // number = number + 4
-number -= 3;        // number = number - 3
-number *= 2;        // number = number * 2
-number /= 1;        // number = number / 1
-number %= 3;        // number = number % 3
-number <<= 2;       // number = number << 2
-number >>= 1;       // number = number >> 1
+number += 4;            // number = number + 4
+number -= 3;            // number = number - 3
+number *= 2;            // number = number * 2
+number /= 1;            // number = number / 1
+number %= 3;            // number = number % 3
+number <<= 2;           // number = number << 2
+number >>= 1;           // number = number >> 1
 ```
 
 The `+=` operator can also be used to build strings:
@@ -1183,9 +1286,9 @@ for x in range(0, 50) {
 -------------------
 
 ```rust
-return;             // equivalent to return ();
+return;                     // equivalent to return ();
 
-return 123 + 456;   // returns 579
+return 123 + 456;           // returns 579
 ```
 
 Errors and `throw`-ing exceptions
@@ -1196,10 +1299,10 @@ To deliberately return an error during an evaluation, use the `throw` keyword.
 
 ```rust
 if some_bad_condition_has_happened {
-    throw error;  // 'throw' takes a string to form the exception text
+    throw error;            // 'throw' takes a string as the exception text
 }
 
-throw;            // empty exception text: ""
+throw;                      // defaults to empty exception text: ""
 ```
 
 Exceptions thrown via `throw` in the script can be captured by matching `Err(EvalAltResult::ErrorRuntime(`_reason_`, `_position_`))`
@@ -1214,7 +1317,7 @@ let result = engine.eval::<i64>(r#"
     }
 "#);
 
-println!(result);   // prints "Runtime error: 42 is too large! (line 5, position 15)"
+println!(result);           // prints "Runtime error: 42 is too large! (line 5, position 15)"
 ```
 
 Functions
@@ -1236,16 +1339,17 @@ Just like in Rust, an implicit return can be used. In fact, the last statement o
 regardless of whether it is terminated with a semicolon `';'`. This is different from Rust.
 
 ```rust
-fn add(x, y) {
-    x + y;          // value of the last statement (no need for ending semicolon) is used as the return value
+fn add(x, y) {              // implicit return:
+    x + y;                  // value of the last statement (no need for ending semicolon)
+                            // is used as the return value
 }
 
 fn add2(x) {
-    return x + 2;   // explicit return
+    return x + 2;           // explicit return
 }
 
-print(add(2, 3));   // prints 5
-print(add2(42));    // prints 44
+print(add(2, 3));           // prints 5
+print(add2(42));            // prints 44
 ```
 
 ### No access to external scope
@@ -1255,7 +1359,7 @@ Functions can only access their parameters.  They cannot access external variabl
 ```rust
 let x = 42;
 
-fn foo() { x }      // syntax error - variable 'x' doesn't exist
+fn foo() { x }              // <- syntax error: variable 'x' doesn't exist
 ```
 
 ### Passing arguments by value
@@ -1265,13 +1369,13 @@ It is important to remember that all arguments are passed by _value_, so all fun
 Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if not careful.
 
 ```rust
-fn change(s) {  // 's' is passed by value
-    s = 42;     // only a COPY of 's' is changed
+fn change(s) {              // 's' is passed by value
+    s = 42;                 // only a COPY of 's' is changed
 }
 
 let x = 500;
-x.change();     // de-sugars to change(x)
-x == 500;       // 'x' is NOT changed!
+x.change();                 // de-sugars to change(x)
+x == 500;                   // 'x' is NOT changed!
 ```
 
 ### Global definitions only
@@ -1286,7 +1390,7 @@ fn add(x, y) {
 
 // The following will not compile
 fn do_addition(x) {
-    fn add_y(n) {   // functions cannot be defined inside another function
+    fn add_y(n) {           // functions cannot be defined inside another function
         n + y
     }
 
@@ -1307,10 +1411,10 @@ fn foo(x,y) { print("Two! " + x + "," + y) }
 fn foo() { print("None.") }
 fn foo(x) { print("HA! NEW ONE! " + x) }    // overwrites previous definition
 
-foo(1,2,3);     // prints "Three!!! 1,2,3"
-foo(42);        // prints "HA! NEW ONE! 42"
-foo(1,2);       // prints "Two!! 1,2"
-foo();          // prints "None."
+foo(1,2,3);                 // prints "Three!!! 1,2,3"
+foo(42);                    // prints "HA! NEW ONE! 42"
+foo(1,2);                   // prints "Two!! 1,2"
+foo();                      // prints "None."
 ```
 
 Members and methods
@@ -1319,12 +1423,15 @@ Members and methods
 Properties and methods in a Rust custom type registered with the [`Engine`] can be called just like in Rust.
 
 ```rust
-let a = new_ts();       // constructor function
-a.field = 500;          // property access
-a.update();             // method call
+let a = new_ts();           // constructor function
+a.field = 500;              // property access
+a.update();                 // method call
 
-update(a);              // this works, but 'a' is unchanged because only a COPY of 'a' is passed to 'update' by VALUE
+update(a);                  // this works, but 'a' is unchanged because only
+                            // a COPY of 'a' is passed to 'update' by VALUE
 ```
+
+Custom types, properties and methods can be disabled via the [`no_object`] feature.
 
 `print` and `debug`
 -------------------
@@ -1332,10 +1439,10 @@ update(a);              // this works, but 'a' is unchanged because only a COPY 
 The `print` and `debug` functions default to printing to `stdout`, with `debug` using standard debug formatting.
 
 ```rust
-print("hello");         // prints hello to stdout
-print(1 + 2 + 3);       // prints 6 to stdout
-print("hello" + 42);    // prints hello42 to stdout
-debug("world!");        // prints "world!" to stdout using debug formatting
+print("hello");             // prints hello to stdout
+print(1 + 2 + 3);           // prints 6 to stdout
+print("hello" + 42);        // prints hello42 to stdout
+debug("world!");            // prints "world!" to stdout using debug formatting
 ```
 
 ### Overriding `print` and `debug` with callback functions
@@ -1376,14 +1483,13 @@ For example, in the following:
 
 ```rust
 {
-    let x = 999;        // NOT eliminated - Rhai doesn't check yet whether a variable is used later on
-    123;                // eliminated - no effect
-    "hello";            // eliminated - no effect
-    [1, 2, x, x*2, 5];  // eliminated - no effect
-    foo(42);            // NOT eliminated - the function 'foo' may have side effects
-    666                 // NOT eliminated - this is the return value of the block,
-                        //                  and the block is the last one
-                        //                  so this is the return value of the whole script
+    let x = 999;            // NOT eliminated: Rhai doesn't check yet whether a variable is used later on
+    123;                    // eliminated: no effect
+    "hello";                // eliminated: no effect
+    [1, 2, x, x*2, 5];      // eliminated: no effect
+    foo(42);                // NOT eliminated: the function 'foo' may have side effects
+    666                     // NOT eliminated: this is the return value of the block,
+                            // and the block is the last one so this is the return value of the whole script
 }
 ```
 
@@ -1406,7 +1512,7 @@ if ABC || some_work() { print("done!"); }   // 'ABC' is constant so it is replac
 if true || some_work() { print("done!"); }  // since '||' short-circuits, 'some_work' is never called
 if true { print("done!"); }                 // <- the line above is equivalent to this
 print("done!");                             // <- the line above is further simplified to this
-                                            //     because the condition is always true
+                                            //    because the condition is always true
 ```
 
 These are quite effective for template-based machine-generated scripts where certain constant values
@@ -1421,7 +1527,7 @@ so they are not optimized away:
 const DECISION = 1;
 
 if DECISION == 1 {          // NOT optimized away because you can define
-    :                       //   your own '==' function to override the built-in default!
+    :                       // your own '==' function to override the built-in default!
     :
 } else if DECISION == 2 {   // same here, NOT optimized away
     :
@@ -1491,14 +1597,15 @@ evaluated all function calls with constant arguments, using the result to replac
 // When compiling the following with OptimizationLevel::Full...
 
 const DECISION = 1;
-                        // this condition is now eliminated because 'DECISION == 1'
-if DECISION == 1 {      // is a function call to the '==' function, and it returns 'true'
-    print("hello!");    // this block is promoted to the parent level
+                            // this condition is now eliminated because 'DECISION == 1'
+if DECISION == 1 {          // is a function call to the '==' function, and it returns 'true'
+    print("hello!");        // this block is promoted to the parent level
 } else {
-    print("boo!");      // this block is eliminated because it is never reached
+    print("boo!");          // this block is eliminated because it is never reached
 }
 
-print("hello!");        // <- the above is equivalent to this ('print' and 'debug' are handled specially)
+print("hello!");            // <- the above is equivalent to this
+                            //    ('print' and 'debug' are handled specially)
 ```
 
 Because of the eager evaluation of functions, many constant expressions will be evaluated and replaced by the result.
@@ -1507,8 +1614,8 @@ This does not happen with [`OptimizationLevel::Simple`] which doesn't assume all
 ```rust
 // When compiling the following with OptimizationLevel::Full...
 
-let x = (1 + 2) * 3 - 4 / 5 % 6;    // <- will be replaced by 'let x = 9'
-let y = (1 > 2) || (3 <= 4);        // <- will be replaced by 'let y = true'
+let x = (1+2)*3-4/5%6;      // <- will be replaced by 'let x = 9'
+let y = (1>2) || (3<=4);    // <- will be replaced by 'let y = true'
 ```
 
 Function side effect considerations
@@ -1539,13 +1646,13 @@ Subtle semantic changes
 Some optimizations can alter subtle semantics of the script.  For example:
 
 ```rust
-if true {       // condition always true
-    123.456;    // eliminated
-    hello;      // eliminated, EVEN THOUGH the variable doesn't exist!
-    foo(42)     // promoted up-level
+if true {                   // condition always true
+    123.456;                // eliminated
+    hello;                  // eliminated, EVEN THOUGH the variable doesn't exist!
+    foo(42)                 // promoted up-level
 }
 
-foo(42)         // <- the above optimizes to this
+foo(42)                     // <- the above optimizes to this
 ```
 
 Nevertheless, if the original script were evaluated instead, it would have been an error - the variable `hello` doesn't exist,
@@ -1591,22 +1698,22 @@ let x = 10;
 
 fn foo(x) { x += 12; x }
 
-let script = "let y = x;";      // build a script
+let script = "let y = x;";  // build a script
 script +=    "y += foo(y);";
 script +=    "x + y";
 
-let result = eval(script);      // <- look, JS, we can also do this!
+let result = eval(script);  // <- look, JS, we can also do this!
 
-print("Answer: " + result);     // prints 42
+print("Answer: " + result); // prints 42
 
-print("x = " + x);              // prints 10 - functions call arguments are passed by value
-print("y = " + y);              // prints 32 - variables defined in 'eval' persist!
+print("x = " + x);          // prints 10: functions call arguments are passed by value
+print("y = " + y);          // prints 32: variables defined in 'eval' persist!
 
-eval("{ let z = y }");          // to keep a variable local, use a statement block
+eval("{ let z = y }");      // to keep a variable local, use a statement block
 
-print("z = " + z);              // error - variable 'z' not found
+print("z = " + z);          // <- error: variable 'z' not found
 
-"print(42)".eval();             // nope - just like 'type_of' postfix notation doesn't work
+"print(42)".eval();         // <- nope... just like 'type_of', method-call style doesn't work
 ```
 
 Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,
@@ -1616,8 +1723,8 @@ physically pasted in at the position of the `eval` call.
 ```rust
 let script = "x += 32";
 let x = 10;
-eval(script);                   // variable 'x' in the current scope is visible!
-print(x);                       // prints 42
+eval(script);               // variable 'x' in the current scope is visible!
+print(x);                   // prints 42
 
 // The above is equivalent to:
 let script = "x += 32";
@@ -1632,7 +1739,7 @@ disable `eval` by overriding it, probably with something that throws.
 ```rust
 fn eval(script) { throw "eval is evil! I refuse to run " + script }
 
-let x = eval("40 + 2");         // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
+let x = eval("40 + 2");     // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
 ```
 
 Or override it from Rust:
