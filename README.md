@@ -981,15 +981,17 @@ Arrays are disabled via the [`no_index`] feature.
 
 The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on arrays:
 
-| Function   | Description                                                                           |
-| ---------- | ------------------------------------------------------------------------------------- |
-| `push`     | inserts an element at the end                                                         |
-| `pop`      | removes the last element and returns it ([`()`] if empty)                             |
-| `shift`    | removes the first element and returns it ([`()`] if empty)                            |
-| `len`      | returns the number of elements                                                        |
-| `pad`      | pads the array with an element until a specified length                               |
-| `clear`    | empties the array                                                                     |
-| `truncate` | cuts off the array at exactly a specified length (discarding all subsequent elements) |
+| Function     | Description                                                                           |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `push`       | inserts an element at the end                                                         |
+| `append`     | concatenates the second array to the end of the first                                 |
+| `+` operator | concatenates the first array with the second                                          |
+| `pop`        | removes the last element and returns it ([`()`] if empty)                             |
+| `shift`      | removes the first element and returns it ([`()`] if empty)                            |
+| `len`        | returns the number of elements                                                        |
+| `pad`        | pads the array with an element until a specified length                               |
+| `clear`      | empties the array                                                                     |
+| `truncate`   | cuts off the array at exactly a specified length (discarding all subsequent elements) |
 
 Examples:
 
@@ -1070,11 +1072,13 @@ Object maps are disabled via the [`no_object`] feature.
 
 The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on object maps:
 
-| Function | Description                                                  |
-| -------- | ------------------------------------------------------------ |
-| `has`    | does the object map contain a property of a particular name? |
-| `len`    | returns the number of properties                             |
-| `clear`  | empties the object map                                       |
+| Function     | Description                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `has`        | does the object map contain a property of a particular name?                                                                             |
+| `len`        | returns the number of properties                                                                                                         |
+| `clear`      | empties the object map                                                                                                                   |
+| `mixin`      | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
+| `+` operator | merges the first object map with the second                                                                                              |
 
 Examples:
 

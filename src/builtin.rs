@@ -813,6 +813,14 @@ impl Engine<'_> {
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), INT, bool, char);
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), String, Array, ());
 
+            self.register_fn("append", |list: &mut Array, array: Array| {
+                list.extend(array)
+            });
+            self.register_fn("+", |mut list: Array, array: Array| {
+                list.extend(array);
+                list
+            });
+
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
@@ -853,6 +861,17 @@ impl Engine<'_> {
             self.register_fn("has", |map: &mut Map, prop: String| map.contains_key(&prop));
             self.register_fn("len", |map: &mut Map| map.len() as INT);
             self.register_fn("clear", |map: &mut Map| map.clear());
+            self.register_fn("mixin", |map1: &mut Map, map2: Map| {
+                map2.into_iter().for_each(|(key, value)| {
+                    map1.insert(key, value);
+                });
+            });
+            self.register_fn("+", |mut map1: Map, map2: Map| {
+                map2.into_iter().for_each(|(key, value)| {
+                    map1.insert(key, value);
+                });
+                map1
+            });
         }
 
         // Register string concatenate functions

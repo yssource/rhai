@@ -7,28 +7,64 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     #[cfg(not(feature = "no_index"))]
-    assert_eq!(
-        engine.eval::<INT>(r#"let x = #{a: 1, b: 2, c: 3}; x["b"]"#)?,
-        2
-    );
+    {
+        assert_eq!(
+            engine.eval::<INT>(r#"let x = #{a: 1, b: 2, c: 3}; x["b"]"#)?,
+            2
+        );
+        assert_eq!(
+            engine.eval::<char>(
+                r#"
+                    let y = #{d: 1, "e": #{a: 42, b: 88, "": "hello"}, " 123 xyz": 9};
+                    y.e[""][4]
+            "#
+            )?,
+            'o'
+        );
+    }
 
     assert_eq!(
         engine.eval::<INT>("let y = #{a: 1, b: 2, c: 3}; y.a = 5; y.a")?,
         5
     );
-
-    #[cfg(not(feature = "no_index"))]
-    assert_eq!(
-        engine.eval::<char>(
-            r#"
-                let y = #{d: 1, "e": #{a: 42, b: 88, "": "hello"}, " 123 xyz": 9};
-                y.e[""][4]
-            "#
-        )?,
-        'o'
-    );
-
     engine.eval::<()>("let y = #{a: 1, b: 2, c: 3}; y.z")?;
+
+    #[cfg(not(feature = "no_stdlib"))]
+    {
+        assert_eq!(
+            engine.eval::<INT>(
+                r"
+                    let x = #{a: 1, b: 2, c: 3};
+                    let y = #{b: 42, d: 9};
+                    x.mixin(y);
+                    x.len() + x.b
+           "
+            )?,
+            46
+        );
+        assert_eq!(
+            engine.eval::<INT>(
+                r"
+                    let x = #{a: 1, b: 2, c: 3};
+                    x += #{b: 42, d: 9};
+                    x.len() + x.b
+           "
+            )?,
+            46
+        );
+        assert_eq!(
+            engine
+                .eval::<Map>(
+                    r"
+                        let x = #{a: 1, b: 2, c: 3};
+                        let y = #{b: 42, d: 9};
+                        x + y
+           "
+                )?
+                .len(),
+            4
+        );
+    }
 
     Ok(())
 }
