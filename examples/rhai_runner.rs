@@ -5,10 +5,6 @@ use rhai::OptimizationLevel;
 
 use std::{env, fs::File, io::Read, iter, process::exit};
 
-fn padding(pad: &str, len: usize) -> String {
-    iter::repeat(pad).take(len).collect::<String>()
-}
-
 fn eprint_error(input: &str, err: EvalAltResult) {
     fn eprint_line(lines: &[&str], line: usize, pos: usize, err: &str) {
         let line_no = format!("{}: ", line);
@@ -16,8 +12,9 @@ fn eprint_error(input: &str, err: EvalAltResult) {
 
         eprintln!("{}{}", line_no, lines[line - 1]);
         eprintln!(
-            "{}^ {}",
-            padding(" ", line_no.len() + pos - 1),
+            "{:>1$} {2}",
+            "^",
+            line_no.len() + pos,
             err.replace(&pos_text, "")
         );
         eprintln!("");
@@ -76,9 +73,9 @@ fn main() {
         }
 
         if let Err(err) = engine.consume(false, &contents) {
-            eprintln!("{}", padding("=", filename.len()));
+            eprintln!("{:=<1$}", "", filename.len());
             eprintln!("{}", filename);
-            eprintln!("{}", padding("=", filename.len()));
+            eprintln!("{:=<1$}", "", filename.len());
             eprintln!("");
 
             eprint_error(&contents, err);

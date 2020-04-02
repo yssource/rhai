@@ -9,10 +9,6 @@ use std::{
 };
 
 fn print_error(input: &str, err: EvalAltResult) {
-    fn padding(pad: &str, len: usize) -> String {
-        iter::repeat(pad).take(len).collect::<String>()
-    }
-
     let lines: Vec<_> = input.trim().split('\n').collect();
 
     let line_no = if lines.len() > 1 {
@@ -54,8 +50,9 @@ fn print_error(input: &str, err: EvalAltResult) {
             };
 
             println!(
-                "{}^ {}",
-                padding(" ", line_no.len() + p.position().unwrap() - 1),
+                "{0:>1$} {2}",
+                "^",
+                line_no.len() + p.position().unwrap(),
                 err_text.replace(&pos_text, "")
             );
         }
