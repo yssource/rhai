@@ -2673,41 +2673,21 @@ pub fn parse<'a, 'e>(
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> (Option<Expr>, Dynamic) {
     if value.is::<INT>() {
         let value2 = value.clone();
-        (
-            Some(Expr::IntegerConstant(
-                *value.downcast::<INT>().expect("value should be INT"),
-                pos,
-            )),
-            value2,
-        )
+        (Some(Expr::IntegerConstant(value.cast(), pos)), value2)
     } else if value.is::<char>() {
         let value2 = value.clone();
-        (
-            Some(Expr::CharConstant(
-                *value.downcast::<char>().expect("value should be char"),
-                pos,
-            )),
-            value2,
-        )
+        (Some(Expr::CharConstant(value.cast(), pos)), value2)
     } else if value.is::<String>() {
         let value2 = value.clone();
-        (
-            Some(Expr::StringConstant(
-                *value.downcast::<String>().expect("value should be String"),
-                pos,
-            )),
-            value2,
-        )
+        (Some(Expr::StringConstant(value.cast(), pos)), value2)
     } else if value.is::<bool>() {
         let value2 = value.clone();
         (
-            Some(
-                if *value.downcast::<bool>().expect("value should be bool") {
-                    Expr::True(pos)
-                } else {
-                    Expr::False(pos)
-                },
-            ),
+            Some(if value.cast::<bool>() {
+                Expr::True(pos)
+            } else {
+                Expr::False(pos)
+            }),
             value2,
         )
     } else {
@@ -2715,13 +2695,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> (Option<Expr>, Dyna
         {
             if value.is::<FLOAT>() {
                 let value2 = value.clone();
-                return (
-                    Some(Expr::FloatConstant(
-                        *value.downcast::<FLOAT>().expect("value should be FLOAT"),
-                        pos,
-                    )),
-                    value2,
-                );
+                return (Some(Expr::FloatConstant(value.cast(), pos)), value2);
             }
         }
 

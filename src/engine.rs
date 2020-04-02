@@ -628,9 +628,9 @@ impl Engine<'_> {
 
         // val_array[idx]
         if let Some(arr) = val.downcast_ref::<Array>() {
-            let idx = *self
+            let idx = self
                 .eval_expr(scope, idx_expr, level)?
-                .downcast::<INT>()
+                .try_cast::<INT>()
                 .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
             return if idx >= 0 {
@@ -647,9 +647,9 @@ impl Engine<'_> {
         {
             // val_map[idx]
             if let Some(map) = val.downcast_ref::<Map>() {
-                let idx = *self
+                let idx = self
                     .eval_expr(scope, idx_expr, level)?
-                    .downcast::<String>()
+                    .try_cast::<String>()
                     .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_expr.position()))?;
 
                 return Ok((
@@ -662,9 +662,9 @@ impl Engine<'_> {
 
         // val_string[idx]
         if let Some(s) = val.downcast_ref::<String>() {
-            let idx = *self
+            let idx = self
                 .eval_expr(scope, idx_expr, level)?
-                .downcast::<INT>()
+                .try_cast::<INT>()
                 .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
             return if idx >= 0 {
@@ -795,9 +795,9 @@ impl Engine<'_> {
                 let s = scope.get_mut_by_type::<String>(src);
                 let pos = new_val.1;
                 // Value must be a character
-                let ch = *new_val
+                let ch = new_val
                     .0
-                    .downcast::<char>()
+                    .try_cast::<char>()
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
                 Self::str_replace_char(s, idx.as_num(), ch);
                 Ok(().into_dynamic())
@@ -830,8 +830,8 @@ impl Engine<'_> {
 
         if let Some(s) = target.downcast_mut::<String>() {
             // Value must be a character
-            let ch = *new_val
-                .downcast::<char>()
+            let ch = new_val
+                .try_cast::<char>()
                 .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
             Self::str_replace_char(s, idx.as_num(), ch);
             return Ok(target);
@@ -1258,32 +1258,32 @@ impl Engine<'_> {
             }
 
             Expr::And(lhs, rhs) => Ok(Box::new(
-                *self
+                self
                     .eval_expr(scope, &*lhs, level)?
-                    .downcast::<bool>()
+                    .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
                     })?
                     && // Short-circuit using &&
-                *self
+                self
                     .eval_expr(scope, &*rhs, level)?
-                    .downcast::<bool>()
+                    .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
                     })?,
             )),
 
             Expr::Or(lhs, rhs) => Ok(Box::new(
-                *self
+                self
                     .eval_expr(scope, &*lhs, level)?
-                    .downcast::<bool>()
+                    .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
                     })?
                     || // Short-circuit using ||
-                *self
+                self
                     .eval_expr(scope, &*rhs, level)?
-                    .downcast::<bool>()
+                    .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
                     })?,
@@ -1334,10 +1334,10 @@ impl Engine<'_> {
             // If-else statement
             Stmt::IfThenElse(guard, if_body, else_body) => self
                 .eval_expr(scope, guard, level)?
-                .downcast::<bool>()
+                .try_cast::<bool>()
                 .map_err(|_| EvalAltResult::ErrorLogicGuard(guard.position()))
                 .and_then(|guard_val| {
-                    if *guard_val {
+                    if guard_val {
                         self.eval_stmt(scope, if_body, level)
                     } else if let Some(stmt) = else_body {
                         self.eval_stmt(scope, stmt.as_ref(), level)
@@ -1348,8 +1348,8 @@ impl Engine<'_> {
 
             // While loop
             Stmt::While(guard, body) => loop {
-                match self.eval_expr(scope, guard, level)?.downcast::<bool>() {
-                    Ok(guard_val) if *guard_val => match self.eval_stmt(scope, body, level) {
+                match self.eval_expr(scope, guard, level)?.try_cast::<bool>() {
+                    Ok(guard_val) if guard_val => match self.eval_stmt(scope, body, level) {
                         Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
                         Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(().into_dynamic()),
                         Err(x) => return Err(x),
@@ -1425,9 +1425,7 @@ impl Engine<'_> {
             Stmt::ReturnWithVal(Some(a), ReturnType::Exception, pos) => {
                 let val = self.eval_expr(scope, a, level)?;
                 Err(EvalAltResult::ErrorRuntime(
-                    val.downcast::<String>()
-                        .map(|s| *s)
-                        .unwrap_or_else(|_| "".to_string()),
+                    val.try_cast::<String>().unwrap_or_else(|_| "".to_string()),
                     *pos,
                 ))
             }

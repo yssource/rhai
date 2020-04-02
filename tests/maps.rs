@@ -73,14 +73,14 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
 fn test_map_assign() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c#": "hello"}; x"#)?;
-    let a = x.get("a").cloned().unwrap();
-    let b = x.get("b").cloned().unwrap();
-    let c = x.get("c#").cloned().unwrap();
+    let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c$": "hello"}; x"#)?;
+    let a = x.get("a").cloned().expect("should have property a");
+    let b = x.get("b").cloned().expect("should have property b");
+    let c = x.get("c$").cloned().expect("should have property c$");
 
-    assert_eq!(*a.downcast::<INT>().unwrap(), 1);
-    assert_eq!(*b.downcast::<bool>().unwrap(), true);
-    assert_eq!(*c.downcast::<String>().unwrap(), "hello");
+    assert_eq!(a.cast::<INT>(), 1);
+    assert_eq!(b.cast::<bool>(), true);
+    assert_eq!(c.cast::<String>(), "hello");
 
     Ok(())
 }
@@ -89,14 +89,14 @@ fn test_map_assign() -> Result<(), EvalAltResult> {
 fn test_map_return() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
-    let x = engine.eval::<Map>(r#"#{a: 1, b: true, c: "hello"}"#)?;
-    let a = x.get("a").cloned().unwrap();
-    let b = x.get("b").cloned().unwrap();
-    let c = x.get("c").cloned().unwrap();
+    let x = engine.eval::<Map>(r#"#{a: 1, b: true, "c$": "hello"}"#)?;
+    let a = x.get("a").cloned().expect("should have property a");
+    let b = x.get("b").cloned().expect("should have property b");
+    let c = x.get("c$").cloned().expect("should have property c$");
 
-    assert_eq!(*a.downcast::<INT>().unwrap(), 1);
-    assert_eq!(*b.downcast::<bool>().unwrap(), true);
-    assert_eq!(*c.downcast::<String>().unwrap(), "hello");
+    assert_eq!(a.cast::<INT>(), 1);
+    assert_eq!(b.cast::<bool>(), true);
+    assert_eq!(c.cast::<String>(), "hello");
 
     Ok(())
 }
