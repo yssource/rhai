@@ -32,6 +32,7 @@ no_optimize = []    # no script optimizer
 optimize_full = []  # set optimization level to Full (default is Simple) - this is a feature used only to simplify testing
 only_i32 = []       # set INT=i32 (useful for 32-bit systems)
 only_i64 = []       # set INT=i64 (default) and disable support for all other integer types
+sync = []           # restrict to only types that implement Send + Sync
 
 # compiling for no-std
 no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm" ]

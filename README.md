@@ -68,6 +68,7 @@ Optional features
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                         |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                     |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Scope`] and `AST` are both `Send + Sync`.                               |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
@@ -82,6 +83,7 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
 [`no_std`]: #optional-features
+[`sync`]: #optional-features
 
 Related
 -------
@@ -312,12 +314,12 @@ if type_of(x) == "string" {
 }
 ```
 
-Dynamic values
---------------
+`Dynamic` values
+----------------
 
 [`Dynamic`]: #dynamic-values
 
-A `Dynamic` value can be _any_ type.
+A `Dynamic` value can be _any_ type. However, if the [`sync`] feature is used, then all types must be `Send + Sync`.
 
 Because [`type_of()`] a `Dynamic` value returns the type of the actual value, it is usually used to perform type-specific
 actions based on the actual value's type.
@@ -703,6 +705,9 @@ Initializing and maintaining state
 By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting only the functions that have been defined but no global state.
 This gives each evaluation a clean starting slate. In order to continue using the same global state from one invocation to the next,
 such a state must be manually created and passed in.
+
+All `Scope` variables are [`Dynamic`], meaning they can store values of any type.  If the [`sync`] feature is used, however, then only types
+that are `Send + Sync` are supported, and the entire `Scope` itself will also be `Send + Sync`.  This is extremely useful in multi-threaded applications.
 
 In this example, a global state object (a `Scope`) is created with a few initialized variables, then the same state is threaded through multiple invocations:
 

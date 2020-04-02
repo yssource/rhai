@@ -1,7 +1,7 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
 use crate::stdlib::{
-    any::{type_name, Any as StdAny, TypeId},
+    any::{type_name, TypeId},
     boxed::Box,
     fmt,
 };
@@ -13,7 +13,8 @@ pub type Variant = dyn Any;
 pub type Dynamic = Box<Variant>;
 
 /// A trait covering any type.
-pub trait Any: StdAny {
+#[cfg(feature = "sync")]
+pub trait Any: crate::stdlib::any::Any + Send + Sync {
     /// Get the `TypeId` of this type.
     fn type_id(&self) -> TypeId;
 
@@ -28,7 +29,43 @@ pub trait Any: StdAny {
     fn _closed(&self) -> _Private;
 }
 
-impl<T: Clone + StdAny + ?Sized> Any for T {
+#[cfg(feature = "sync")]
+impl<T: crate::stdlib::any::Any + Clone + Send + Sync + ?Sized> Any for T {
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
+    }
+
+    fn type_name(&self) -> &'static str {
+        type_name::<T>()
+    }
+
+    fn into_dynamic(&self) -> Dynamic {
+        Box::new(self.clone())
+    }
+
+    fn _closed(&self) -> _Private {
+        _Private
+    }
+}
+
+#[cfg(not(feature = "sync"))]
+pub trait Any: crate::stdlib::any::Any {
+    /// Get the `TypeId` of this type.
+    fn type_id(&self) -> TypeId;
+
+    /// Get the name of this type.
+    fn type_name(&self) -> &'static str;
+
+    /// Convert into `Dynamic`.
+    fn into_dynamic(&self) -> Dynamic;
+
+    /// This trait may only be implemented by `rhai`.
+    #[doc(hidden)]
+    fn _closed(&self) -> _Private;
+}
+
+#[cfg(not(feature = "sync"))]
+impl<T: crate::stdlib::any::Any + Clone + ?Sized> Any for T {
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
     }
