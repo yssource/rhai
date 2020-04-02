@@ -692,8 +692,7 @@ impl<'e> Engine<'e> {
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
         self.eval_ast_with_scope_raw(scope, false, ast)?
-            .downcast::<T>()
-            .map(|v| *v)
+            .try_cast::<T>()
             .map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name((*a).type_name()).to_string(),
@@ -735,9 +734,8 @@ impl<'e> Engine<'e> {
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// # Note
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    /// and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
     pub fn consume_file(
         &mut self,
@@ -750,9 +748,8 @@ impl<'e> Engine<'e> {
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// # Note
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_ and not cleared from run to run.
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    /// and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
     pub fn consume_file_with_scope(
         &mut self,
@@ -767,9 +764,8 @@ impl<'e> Engine<'e> {
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// # Note
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    /// and not cleared from run to run.
     pub fn consume(&mut self, retain_functions: bool, input: &str) -> Result<(), EvalAltResult> {
         self.consume_with_scope(&mut Scope::new(), retain_functions, input)
     }
@@ -777,9 +773,8 @@ impl<'e> Engine<'e> {
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// # Note
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    /// and not cleared from run to run.
     pub fn consume_with_scope(
         &mut self,
         scope: &mut Scope,
@@ -797,9 +792,8 @@ impl<'e> Engine<'e> {
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// # Note
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    /// and not cleared from run to run.
     pub fn consume_ast(&mut self, retain_functions: bool, ast: &AST) -> Result<(), EvalAltResult> {
         self.consume_ast_with_scope(&mut Scope::new(), retain_functions, ast)
     }
@@ -807,9 +801,8 @@ impl<'e> Engine<'e> {
     /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
-    /// # Note
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_and not cleared from run to run.
+    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
+    /// and not cleared from run to run.
     pub fn consume_ast_with_scope(
         &mut self,
         scope: &mut Scope,
@@ -884,8 +877,7 @@ impl<'e> Engine<'e> {
         let mut arg_values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
         self.call_fn_raw(name, &mut arg_values, None, Position::none(), 0)?
-            .downcast()
-            .map(|b| *b)
+            .try_cast()
             .map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name((*a).type_name()).into(),

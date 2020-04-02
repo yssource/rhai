@@ -279,7 +279,6 @@ The following primitive types are supported natively:
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
 | **Nothing/void/nil/null** (or whatever you want to call it)                   | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
 
-[`Dynamic`]: #values-and-types
 [`()`]: #values-and-types
 
 All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different - they even cannot be added together. This is very similar to Rust.
@@ -313,6 +312,55 @@ if type_of(x) == "string" {
 }
 ```
 
+Dynamic values
+--------------
+
+[`Dynamic`]: #dynamic-values
+
+A `Dynamic` value can be _any_ type.
+
+Because [`type_of()`] a `Dynamic` value returns the type of the actual value, it is usually used to perform type-specific
+actions based on the actual value's type.
+
+```rust
+let mystery = get_some_dynamic_value();
+
+if type_of(mystery) == "i64" {
+    print("Hey, I got an integer here!");
+} else if type_of(mystery) == "f64" {
+    print("Hey, I got a float here!");
+} else if type_of(mystery) == "string" {
+    print("Hey, I got a string here!");
+} else if type_of(mystery) == "bool" {
+    print("Hey, I got a boolean here!");
+} else if type_of(mystery) == "array" {
+    print("Hey, I got an array here!");
+} else if type_of(mystery) == "map" {
+    print("Hey, I got an object map here!");
+} else if type_of(mystery) == "TestStruct" {
+    print("Hey, I got the TestStruct custom type here!");
+} else {
+    print("I don't know what this is: " + type_of(mystery));
+}
+```
+
+In Rust, sometimes a `Dynamic` forms part of the return value - a good example is elements within an `Array` which are `Dynamic`,
+or property values in an object map.  In order to get the _real_ value, the actual value type _must_ be known in advance.
+There is no easy way for Rust to detect, at run-time, what type the `Dynamic` value is.
+
+To use a `Dynamic` value in Rust, use the `cast` function to convert the value into a specific, known type.
+Alternatively, use the `try_cast` function which does not panic but returns an error when the cast fails.
+
+```rust
+let list: Array = engine.eval("...")?;          // return type is 'Array'
+let item = list[0];                             // an element in an 'Array' is 'Dynamic'
+
+let value = item.cast::<i64>();                 // if the element is 'i64', this succeeds; otherwise it panics
+let value: i64 = item.cast();                   // type can also be inferred
+
+let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic when the cast fails, but returns an error
+```
+
 Value conversions
 -----------------
 
@@ -325,11 +373,11 @@ That's about it. For other conversions, register custom conversion functions.
 
 ```rust
 let x = 42;
-let y = x * 100.0;              // <- error: cannot multiply i64 with f64
-let y = x.to_float() * 100.0;   // works
-let z = y.to_int() + x;         // works
+let y = x * 100.0;                              // <- error: cannot multiply i64 with f64
+let y = x.to_float() * 100.0;                   // works
+let z = y.to_int() + x;                         // works
 
-let c = 'X';                    // character
+let c = 'X';                                    // character
 print("c is '" + c + "' and its code is " + c.to_int());    // prints "c is 'X' and its code is 88"
 ```
 
@@ -1642,9 +1690,9 @@ Function volatility considerations
 ---------------------------------
 
 Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_ on the external
-environment and not _pure_. A perfect example is a function that gets the current time - obviously each run will return a different value!
+environment and is not _pure_. A perfect example is a function that gets the current time - obviously each run will return a different value!
 The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments
-it will eagerly run execute the function call. This causes the script to behave differently from the intended semantics because
+it will eagerly execute the function call. This causes the script to behave differently from the intended semantics because
 essentially the result of the function call will always be the same value.
 
 Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.

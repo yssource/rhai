@@ -89,7 +89,14 @@ impl Clone for Dynamic {
 /// An extension trait that allows down-casting a `Dynamic` value to a specific type.
 pub trait AnyExt: Sized {
     /// Get a copy of a `Dynamic` value as a specific type.
-    fn downcast<T: Any + Clone>(self) -> Result<Box<T>, Self>;
+    fn try_cast<T: Any + Clone>(self) -> Result<T, Self>;
+
+    /// Get a copy of a `Dynamic` value as a specific type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cast fails (e.g. the type of the actual value is not the same as the specified type).
+    fn cast<T: Any + Clone>(self) -> T;
 
     /// This trait may only be implemented by `rhai`.
     #[doc(hidden)]
@@ -106,17 +113,36 @@ impl AnyExt for Dynamic {
     ///
     /// let x: Dynamic = 42_u32.into_dynamic();
     ///
-    /// assert_eq!(*x.downcast::<u32>().unwrap(), 42);
+    /// assert_eq!(x.try_cast::<u32>().unwrap(), 42);
     /// ```
-    fn downcast<T: Any + Clone>(self) -> Result<Box<T>, Self> {
+    fn try_cast<T: Any + Clone>(self) -> Result<T, Self> {
         if self.is::<T>() {
             unsafe {
                 let raw: *mut Variant = Box::into_raw(self);
-                Ok(Box::from_raw(raw as *mut T))
+                Ok(*Box::from_raw(raw as *mut T))
             }
         } else {
             Err(self)
         }
+    }
+
+    /// Get a copy of the `Dynamic` value as a specific type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cast fails (e.g. the type of the actual value is not the same as the specified type).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Dynamic, Any, AnyExt};
+    ///
+    /// let x: Dynamic = 42_u32.into_dynamic();
+    ///
+    /// assert_eq!(x.cast::<u32>(), 42);
+    /// ```
+    fn cast<T: Any + Clone>(self) -> T {
+        self.try_cast::<T>().expect("cast failed")
     }
 
     fn _closed(&self) -> _Private {
