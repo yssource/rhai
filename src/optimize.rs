@@ -16,6 +16,8 @@ use crate::stdlib::{
 };
 
 /// Level of optimization performed.
+///
+/// Not available under the `no_optimize` feature.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum OptimizationLevel {
     /// No optimization performed.

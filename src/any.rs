@@ -7,9 +7,15 @@ use crate::stdlib::{
 };
 
 /// An raw value of any type.
+///
+/// Currently, `Variant` is not `Send` nor `Sync`, so it can practically be any type.
+/// Turn on the `sync` feature to restrict it to only types that implement `Send + Sync`.
 pub type Variant = dyn Any;
 
 /// A boxed dynamic type containing any value.
+///
+/// Currently, `Dynamic` is not `Send` nor `Sync`, so it can practically be any type.
+/// Turn on the `sync` feature to restrict it to only types that implement `Send + Sync`.
 pub type Dynamic = Box<Variant>;
 
 /// A trait covering any type.
@@ -48,6 +54,7 @@ impl<T: crate::stdlib::any::Any + Clone + Send + Sync + ?Sized> Any for T {
     }
 }
 
+/// A trait covering any type.
 #[cfg(not(feature = "sync"))]
 pub trait Any: crate::stdlib::any::Any {
     /// Get the `TypeId` of this type.

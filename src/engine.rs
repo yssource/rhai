@@ -23,10 +23,14 @@ use crate::stdlib::{
 };
 
 /// An dynamic array of `Dynamic` values.
+///
+/// Not available under the `no_index` feature.
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
-/// An dynamic hash map of `Dynamic` values.
+/// An dynamic hash map of `Dynamic` values with `String` keys.
+///
+/// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<String, Dynamic>;
 
@@ -188,6 +192,8 @@ impl FunctionsLib {
 /// # Ok(())
 /// # }
 /// ```
+///
+/// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Engine<'e> {
     /// A hashmap containing all compiled functions known to the engine.
     pub(crate) functions: HashMap<FnSpec<'e>, Box<FnAny>>,
@@ -302,6 +308,8 @@ impl Engine<'_> {
     }
 
     /// Control whether and how the `Engine` will optimize an AST after compilation
+    ///
+    /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
     pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) {
         self.optimization_level = optimization_level

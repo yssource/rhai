@@ -61,6 +61,8 @@ pub(crate) struct EntryRef<'a> {
 ///
 /// When searching for entries, newly-added entries are found before similarly-named but older entries,
 /// allowing for automatic _shadowing_.
+///
+/// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Scope<'a>(Vec<Entry<'a>>);
 
 impl<'a> Scope<'a> {

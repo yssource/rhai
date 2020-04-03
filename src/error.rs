@@ -30,9 +30,7 @@ impl fmt::Display for LexError {
             Self::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
             Self::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
             Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
-            Self::MalformedIdentifier(s) => {
-                write!(f, "Variable name is not in a legal format: '{}'", s)
-            }
+            Self::MalformedIdentifier(s) => write!(f, "Variable name is not proper: '{}'", s),
             Self::UnterminatedString => write!(f, "Open string is not terminated"),
         }
     }
@@ -47,37 +45,51 @@ pub enum ParseErrorType {
     UnexpectedEOF,
     /// An unknown operator is encountered. Wrapped value is the operator.
     UnknownOperator(String),
-    /// Expecting a particular token but not finding one. Wrapped values are the token and usage.
+    /// Expecting a particular token but not finding one. Wrapped values are the token and description.
     MissingToken(String, String),
-    /// An expression in function call arguments `()` has syntax error.
+    /// An expression in function call arguments `()` has syntax error. Wrapped value is the error description (if any).
     MalformedCallExpr(String),
-    /// An expression in indexing brackets `[]` has syntax error.
+    /// An expression in indexing brackets `[]` has syntax error. Wrapped value is the error description (if any).
+    ///
+    /// Not available under the `no_index` feature.
     #[cfg(not(feature = "no_index"))]
     MalformedIndexExpr(String),
-    /// A map definition has duplicated property names. Wrapped is the property name.
+    /// A map definition has duplicated property names. Wrapped value is the property name.
+    ///
+    /// Not available under the `no_object` feature.
     #[cfg(not(feature = "no_object"))]
     DuplicatedProperty(String),
-    /// Invalid expression assigned to constant.
+    /// Invalid expression assigned to constant. Wrapped value is the name of the constant.
     ForbiddenConstantExpr(String),
     /// Missing a property name for custom types and maps.
     PropertyExpected,
     /// Missing a variable name after the `let`, `const` or `for` keywords.
     VariableExpected,
-    /// Missing an expression.
+    /// Missing an expression. Wrapped value is the expression type.
     ExprExpected(String),
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
+    ///
+    /// Not available under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     WrongFnDefinition,
     /// Missing a function name after the `fn` keyword.
+    ///
+    /// Not available under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     FnMissingName,
     /// A function definition is missing the parameters list. Wrapped value is the function name.
+    ///
+    /// Not available under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     FnMissingParams(String),
     /// A function definition has duplicated parameters. Wrapped values are the function name and parameter name.
+    ///
+    /// Not available under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     FnDuplicatedParam(String, String),
     /// A function definition is missing the body. Wrapped value is the function name.
+    ///
+    /// Not available under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     FnMissingBody(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.

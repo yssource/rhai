@@ -37,6 +37,8 @@ pub type INT = i64;
 pub type INT = i32;
 
 /// The system floating-point type.
+///
+/// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
 
@@ -160,6 +162,8 @@ impl fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
+///
+/// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone)]
 pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<Arc<FnDef>>);
 
