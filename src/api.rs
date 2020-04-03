@@ -967,6 +967,26 @@ impl<'e> Engine<'e> {
     pub fn on_print(&mut self, callback: impl FnMut(&str) + Send + Sync + 'e) {
         self.on_print = Box::new(callback);
     }
+    /// Override default action of `print` (print to stdout using `println!`)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut result = String::from("");
+    /// {
+    /// let mut engine = Engine::new();
+    ///
+    /// // Override action of 'print' function
+    /// engine.on_print(|s| result.push_str(s));
+    /// engine.consume(false, "print(40 + 2);")?;
+    /// }
+    /// assert_eq!(result, "42");
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_print(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_print = Box::new(callback);
@@ -996,6 +1016,26 @@ impl<'e> Engine<'e> {
     pub fn on_debug(&mut self, callback: impl FnMut(&str) + Send + Sync + 'e) {
         self.on_debug = Box::new(callback);
     }
+    /// Override default action of `debug` (print to stdout using `println!`)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::Engine;
+    ///
+    /// let mut result = String::from("");
+    /// {
+    /// let mut engine = Engine::new();
+    ///
+    /// // Override action of 'debug' function
+    /// engine.on_debug(|s| result.push_str(s));
+    /// engine.consume(false, r#"debug("hello");"#)?;
+    /// }
+    /// assert_eq!(result, "\"hello\"");
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_debug = Box::new(callback);
