@@ -32,8 +32,14 @@ pub type Map = HashMap<String, Dynamic>;
 
 pub type FnCallArgs<'a> = [&'a mut Variant];
 
+#[cfg(feature = "sync")]
+pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltResult> + Send + Sync;
+#[cfg(not(feature = "sync"))]
 pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
 
+#[cfg(feature = "sync")]
+type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
+#[cfg(not(feature = "sync"))]
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 pub const MAX_CALL_STACK_DEPTH: usize = 64;
@@ -193,8 +199,15 @@ pub struct Engine<'e> {
     pub(crate) type_names: HashMap<String, String>,
 
     /// Closure for implementing the `print` command.
+    #[cfg(feature = "sync")]
+    pub(crate) on_print: Box<dyn FnMut(&str) + Send + Sync + 'e>,
+    #[cfg(not(feature = "sync"))]
     pub(crate) on_print: Box<dyn FnMut(&str) + 'e>,
+
     /// Closure for implementing the `debug` command.
+    #[cfg(feature = "sync")]
+    pub(crate) on_debug: Box<dyn FnMut(&str) + Send + Sync + 'e>,
+    #[cfg(not(feature = "sync"))]
     pub(crate) on_debug: Box<dyn FnMut(&str) + 'e>,
 
     /// Optimize the AST after compilation.
@@ -280,6 +293,11 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
 impl Engine<'_> {
     /// Create a new `Engine`
     pub fn new() -> Self {
+        // fn abc<F: Fn() + Send + Sync>(f: F) {
+        //     f();
+        // }
+        // abc(|| ());
+
         Default::default()
     }
 

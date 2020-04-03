@@ -22,6 +22,44 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_std"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
+// Define callback function types
+#[cfg(feature = "sync")]
+pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + Send + Sync + 'static {}
+#[cfg(feature = "sync")]
+impl<F: Fn(&mut T) -> U + Send + Sync + 'static, T, U> ObjectGetCallback<T, U> for F {}
+
+#[cfg(not(feature = "sync"))]
+pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(&mut T) -> U + 'static, T, U> ObjectGetCallback<T, U> for F {}
+
+#[cfg(feature = "sync")]
+pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + Send + Sync + 'static {}
+#[cfg(feature = "sync")]
+impl<F: Fn(&mut T, U) + Send + Sync + 'static, T, U> ObjectSetCallback<T, U> for F {}
+
+#[cfg(not(feature = "sync"))]
+pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
+
+#[cfg(feature = "sync")]
+pub trait IteratorCallback:
+    Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
+{
+}
+#[cfg(feature = "sync")]
+impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
+    for F
+{
+}
+
+#[cfg(not(feature = "sync"))]
+pub trait IteratorCallback: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
+
+/// Engine public API
 impl<'e> Engine<'e> {
     /// Register a custom function.
     pub(crate) fn register_fn_raw(&mut self, fn_name: &str, args: Vec<TypeId>, f: Box<FnAny>) {
@@ -126,10 +164,7 @@ impl<'e> Engine<'e> {
 
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
-    pub fn register_iterator<T: Any, F>(&mut self, f: F)
-    where
-        F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static,
-    {
+    pub fn register_iterator<T: Any, F: IteratorCallback>(&mut self, f: F) {
         self.type_iterators.insert(TypeId::of::<T>(), Box::new(f));
     }
 
@@ -170,11 +205,12 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_get<T: Any + Clone, U: Any + Clone>(
-        &mut self,
-        name: &str,
-        callback: impl Fn(&mut T) -> U + 'static,
-    ) {
+    pub fn register_get<T, U, F>(&mut self, name: &str, callback: F)
+    where
+        T: Any + Clone,
+        U: Any + Clone,
+        F: ObjectGetCallback<T, U>,
+    {
         self.register_fn(&make_getter(name), callback);
     }
 
@@ -215,11 +251,12 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_set<T: Any + Clone, U: Any + Clone>(
-        &mut self,
-        name: &str,
-        callback: impl Fn(&mut T, U) -> () + 'static,
-    ) {
+    pub fn register_set<T, U, F>(&mut self, name: &str, callback: F)
+    where
+        T: Any + Clone,
+        U: Any + Clone,
+        F: ObjectSetCallback<T, U>,
+    {
         self.register_fn(&make_setter(name), callback);
     }
 
@@ -262,12 +299,13 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_get_set<T: Any + Clone, U: Any + Clone>(
-        &mut self,
-        name: &str,
-        get_fn: impl Fn(&mut T) -> U + 'static,
-        set_fn: impl Fn(&mut T, U) -> () + 'static,
-    ) {
+    pub fn register_get_set<T, U, G, S>(&mut self, name: &str, get_fn: G, set_fn: S)
+    where
+        T: Any + Clone,
+        U: Any + Clone,
+        G: ObjectGetCallback<T, U>,
+        S: ObjectSetCallback<T, U>,
+    {
         self.register_get(name, get_fn);
         self.register_set(name, set_fn);
     }
@@ -925,6 +963,11 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(feature = "sync")]
+    pub fn on_print(&mut self, callback: impl FnMut(&str) + Send + Sync + 'e) {
+        self.on_print = Box::new(callback);
+    }
+    #[cfg(not(feature = "sync"))]
     pub fn on_print(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_print = Box::new(callback);
     }
@@ -949,6 +992,11 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(feature = "sync")]
+    pub fn on_debug(&mut self, callback: impl FnMut(&str) + Send + Sync + 'e) {
+        self.on_debug = Box::new(callback);
+    }
+    #[cfg(not(feature = "sync"))]
     pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'e) {
         self.on_debug = Box::new(callback);
     }

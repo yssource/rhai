@@ -68,7 +68,7 @@ Optional features
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                         |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                     |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Scope`] and `AST` are both `Send + Sync`.                               |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, [`Scope`] and `AST` are all `Send + Sync`.                      |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.

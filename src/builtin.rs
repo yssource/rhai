@@ -1,7 +1,7 @@
 //! Helper module that allows registration of the _core library_ and
 //! _standard library_ of utility functions.
 
-use crate::any::Any;
+use crate::any::{Any, Dynamic};
 use crate::engine::{Engine, FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 use crate::parser::{Position, INT};
@@ -612,8 +612,9 @@ impl Engine<'_> {
                 reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, Array);
 
                 // Register array iterator
-                self.register_iterator::<Array, _>(|a| {
+                self.register_iterator::<Array, _>(|a: &Dynamic| {
                     Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
+                        as Box<dyn Iterator<Item = Dynamic>>
                 });
             }
 
@@ -636,13 +637,13 @@ impl Engine<'_> {
         where
             Range<T>: Iterator<Item = T>,
         {
-            engine.register_iterator::<Range<T>, _>(|a| {
+            engine.register_iterator::<Range<T>, _>(|a: &Dynamic| {
                 Box::new(
                     a.downcast_ref::<Range<T>>()
                         .unwrap()
                         .clone()
                         .map(|n| n.into_dynamic()),
-                )
+                ) as Box<dyn Iterator<Item = Dynamic>>
             });
         }
 

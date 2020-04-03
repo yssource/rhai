@@ -138,7 +138,13 @@ macro_rules! def_register {
     //                                            ^ dereferencing function
         impl<
             $($par: Any + Clone,)*
+
+            #[cfg(feature = "sync")]
+            FN: Fn($($param),*) -> RET + Send + Sync + 'static,
+
+            #[cfg(not(feature = "sync"))]
             FN: Fn($($param),*) -> RET + 'static,
+
             RET: Any
         > RegisterFn<FN, ($($mark,)*), RET> for Engine<'_>
         {
@@ -171,6 +177,11 @@ macro_rules! def_register {
 
         impl<
             $($par: Any + Clone,)*
+
+            #[cfg(feature = "sync")]
+            FN: Fn($($param),*) -> Dynamic + Send + Sync + 'static,
+
+            #[cfg(not(feature = "sync"))]
             FN: Fn($($param),*) -> Dynamic + 'static,
         > RegisterDynamicFn<FN, ($($mark,)*)> for Engine<'_>
         {
@@ -202,7 +213,12 @@ macro_rules! def_register {
 
         impl<
             $($par: Any + Clone,)*
+
+            #[cfg(feature = "sync")]
+            FN: Fn($($param),*) -> Result<RET, EvalAltResult> + Send + Sync + 'static,
+            #[cfg(not(feature = "sync"))]
             FN: Fn($($param),*) -> Result<RET, EvalAltResult> + 'static,
+
             RET: Any
         > RegisterResultFn<FN, ($($mark,)*), RET> for Engine<'_>
         {
