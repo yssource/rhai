@@ -236,7 +236,7 @@ impl Default for Engine<'_> {
             (type_name::<Dynamic>(), "dynamic"),
         ]
         .iter()
-        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
         // Create the new scripting Engine

@@ -100,3 +100,26 @@ fn test_map_return() -> Result<(), EvalAltResult> {
 
     Ok(())
 }
+
+#[test]
+fn test_map_for() -> Result<(), EvalAltResult> {
+    let mut engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let map = #{a: 1, b: true, c: 123.456};
+                let s = "";
+
+                for key in keys(map) {
+                    s += key;
+                }
+
+                s.len()
+        "#
+        )?,
+        3
+    );
+
+    Ok(())
+}

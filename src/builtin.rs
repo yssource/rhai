@@ -629,11 +629,22 @@ impl Engine<'_> {
                 self.register_fn(KEYWORD_DEBUG, |x: &mut Map| -> String {
                     format!("#{:?}", x)
                 });
+
+                // Register map access functions
+                self.register_fn("keys", |map: Map| {
+                    map.into_iter()
+                        .map(|(k, _)| k.into_dynamic())
+                        .collect::<Vec<_>>()
+                });
+
+                self.register_fn("values", |map: Map| {
+                    map.into_iter().map(|(_, v)| v).collect::<Vec<_>>()
+                });
             }
         }
 
         // Register range function
-        fn reg_iterator<T: Any + Clone>(engine: &mut Engine)
+        fn reg_range<T: Any + Clone>(engine: &mut Engine)
         where
             Range<T>: Iterator<Item = T>,
         {
@@ -642,12 +653,12 @@ impl Engine<'_> {
                     a.downcast_ref::<Range<T>>()
                         .unwrap()
                         .clone()
-                        .map(|n| n.into_dynamic()),
+                        .map(|x| x.into_dynamic()),
                 ) as Box<dyn Iterator<Item = Dynamic>>
             });
         }
 
-        reg_iterator::<INT>(self);
+        reg_range::<INT>(self);
         self.register_fn("range", |i1: INT, i2: INT| (i1..i2));
 
         #[cfg(not(feature = "only_i32"))]
@@ -656,13 +667,74 @@ impl Engine<'_> {
             macro_rules! reg_range {
                 ($self:expr, $x:expr, $( $y:ty ),*) => (
                     $(
-                        reg_iterator::<$y>(self);
+                        reg_range::<$y>(self);
                         $self.register_fn($x, (|x: $y, y: $y| x..y) as fn(x: $y, y: $y)->Range<$y>);
                     )*
                 )
             }
 
             reg_range!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+        }
+
+        // Register range function with step
+        #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+        struct StepRange<T>(T, T, T)
+        where
+            for<'a> &'a T: Add<&'a T, Output = T>,
+            T: Any + Clone + PartialOrd;
+
+        impl<T> Iterator for StepRange<T>
+        where
+            for<'a> &'a T: Add<&'a T, Output = T>,
+            T: Any + Clone + PartialOrd,
+        {
+            type Item = T;
+
+            fn next(&mut self) -> Option<T> {
+                if self.0 < self.1 {
+                    let v = self.0.clone();
+                    self.0 = &v + &self.2;
+                    Some(v)
+                } else {
+                    None
+                }
+            }
+        }
+
+        fn reg_step<T>(engine: &mut Engine)
+        where
+            for<'a> &'a T: Add<&'a T, Output = T>,
+            T: Any + Clone + PartialOrd,
+            StepRange<T>: Iterator<Item = T>,
+        {
+            engine.register_iterator::<StepRange<T>, _>(|a: &Dynamic| {
+                Box::new(
+                    a.downcast_ref::<StepRange<T>>()
+                        .unwrap()
+                        .clone()
+                        .map(|x| x.into_dynamic()),
+                ) as Box<dyn Iterator<Item = Dynamic>>
+            });
+        }
+
+        reg_step::<INT>(self);
+        self.register_fn("range", |i1: INT, i2: INT, step: INT| {
+            StepRange(i1, i2, step)
+        });
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            macro_rules! reg_step {
+                ($self:expr, $x:expr, $( $y:ty ),*) => (
+                    $(
+                        reg_step::<$y>(self);
+                        $self.register_fn($x, (|x: $y, y: $y, step: $y| StepRange(x,y,step)) as fn(x: $y, y: $y, step: $y)->StepRange<$y>);
+                    )*
+                )
+            }
+
+            reg_step!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64);
         }
     }
 }

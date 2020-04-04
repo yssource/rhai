@@ -68,7 +68,7 @@ Optional features
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                         |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                     |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, [`Scope`] and `AST` are all `Send + Sync`.                      |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`.                    |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
@@ -1102,6 +1102,10 @@ last == 5;
 
 print(y.len());         // prints 3
 
+for item in y {         // arrays can be iterated with a 'for' statement
+    print(item);
+}
+
 y.pad(10, "hello");     // pad the array up to 10 elements
 
 print(y.len());         // prints 10
@@ -1148,6 +1152,8 @@ The following functions (defined in the standard library but excluded if [`no_st
 | `clear`      | empties the object map                                                                                                                   |
 | `mixin`      | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
 | `+` operator | merges the first object map with the second                                                                                              |
+| `keys`       | returns an array of all the property names (in random order)                                                                             |
+| `values`     | returns an array of all the property values (in random order)                                                                            |
 
 Examples:
 
@@ -1193,6 +1199,14 @@ y.xyz == ();            // A non-existing property returns '()'
 y["xyz"] == ();
 
 print(y.len());         // prints 3
+
+for name in keys(y) {   // get an array of all the property names via the 'keys' function
+    print(name);
+}
+
+for val in values(y) {  // get an array of all the property values via the 'values' function
+    print(val);
+}
 
 y.clear();              // empty the object map
 
@@ -1353,6 +1367,24 @@ for x in array {
 
 // The 'range' function allows iterating from first to last-1
 for x in range(0, 50) {
+    if x > 10 { continue; } // skip to the next iteration
+    print(x);
+    if x == 42 { break; }   // break out of for loop
+}
+
+
+// The 'range' function also takes a step
+for x in range(0, 50, 3) {  // step by 3
+    if x > 10 { continue; } // skip to the next iteration
+    print(x);
+    if x == 42 { break; }   // break out of for loop
+}
+
+// Iterate through the values of an object map
+let map = #{a:1, b:3, c:5, d:7, e:9};
+
+// Remember that keys are returned in random order
+for x in keys(map) {
     if x > 10 { continue; } // skip to the next iteration
     print(x);
     if x == 42 { break; }   // break out of for loop
