@@ -209,12 +209,12 @@ Compiling a script file is also supported:
 let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
 
-Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust - via `call_fn`:
+Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust - via `call_fn`
+or its cousins `call_fn1` (one argument) and `call_fn0` (no argument).
 
 ```rust
-// Define a function in a script and load it into the Engine.
-// Pass true to 'retain_functions' otherwise these functions will be cleared at the end of consume()
-engine.consume(true,
+// Define functions in a script.
+let ast = engine.compile(true,
     r"
         // a function with two parameters: String and i64
         fn hello(x, y) {
@@ -225,18 +225,26 @@ engine.consume(true,
         fn hello(x) {
             x * 2
         }
+
+        // this one takes no parameters
+        fn hello() {
+            42
+        }
     ")?;
 
-// Evaluate the function in the AST, passing arguments into the script as a tuple
+// Evaluate a function defined in the script, passing arguments into the script as a tuple
 // if there are more than one. Beware, arguments must be of the correct types because
 // Rhai does not have built-in type conversions. If arguments of the wrong types are passed,
 // the Engine will not find the function.
 
-let result: i64 = engine.call_fn("hello", &ast, ( String::from("abc"), 123_i64 ) )?;
+let result: i64 = engine.call_fn(&ast, "hello", ( String::from("abc"), 123_i64 ) )?;
 //                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ put arguments in a tuple
 
-let result: i64 = engine.call_fn("hello", 123_i64)?
-//                                        ^^^^^^^ calls 'hello' with one parameter (no need for tuple)
+let result: i64 = engine.call_fn1(&ast, "hello", 123_i64)?
+//                       ^^^^^^^^ use 'call_fn1' for one argument
+
+let result: i64 = engine.call_fn0(&ast, "hello")?
+//                       ^^^^^^^^ use 'call_fn0' for no arguments
 ```
 
 Evaluate expressions only

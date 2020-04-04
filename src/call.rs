@@ -3,10 +3,6 @@
 #![allow(non_snake_case)]
 
 use crate::any::{Any, Dynamic};
-use crate::parser::INT;
-
-#[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
 
 use crate::stdlib::{string::String, vec, vec::Vec};
 
@@ -18,36 +14,7 @@ pub trait FuncArgs {
     fn into_vec(self) -> Vec<Dynamic>;
 }
 
-/// Macro to implement `FuncArgs` for a single standard type that can be converted
-/// into `Dynamic`.
-macro_rules! impl_std_args {
-    ($($p:ty),*) => {
-        $(
-            impl FuncArgs for $p {
-                fn into_vec(self) -> Vec<Dynamic> {
-                    vec![self.into_dynamic()]
-                }
-            }
-        )*
-    };
-}
-
-impl_std_args!(String, char, bool);
-
-#[cfg(not(feature = "no_index"))]
-impl_std_args!(Array);
-
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-impl_std_args!(u8, i8, u16, i16, u32, i32, u64, i64);
-
-#[cfg(any(feature = "only_i32", feature = "only_i64"))]
-impl_std_args!(INT);
-
-#[cfg(not(feature = "no_float"))]
-impl_std_args!(f32, f64);
-
-/// Macro to implement `FuncArgs` for tuples of standard types (each can be
+// Macro to implement `FuncArgs` for tuples of standard types (each can be
 /// converted into `Dynamic`).
 macro_rules! impl_args {
     ($($p:ident),*) => {

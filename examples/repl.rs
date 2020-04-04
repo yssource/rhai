@@ -77,8 +77,9 @@ fn main() {
     let mut scope = Scope::new();
 
     let mut input = String::new();
-    let mut ast_u: Option<AST> = None;
-    let mut ast: Option<AST> = None;
+    let mut main_ast = AST::new();
+    let mut ast_u = AST::new();
+    let mut ast = AST::new();
 
     println!("Rhai REPL tool");
     println!("==============");
@@ -112,6 +113,10 @@ fn main() {
 
         let script = input.trim();
 
+        if script.is_empty() {
+            continue;
+        }
+
         // Implement standard commands
         match script {
             "help" => {
@@ -120,21 +125,13 @@ fn main() {
             }
             "exit" | "quit" => break, // quit
             "astu" => {
-                if matches!(&ast_u, Some(_)) {
-                    // print the last un-optimized AST
-                    println!("{:#?}", ast_u.as_ref().unwrap());
-                } else {
-                    println!("()");
-                }
+                // print the last un-optimized AST
+                println!("{:#?}", &ast_u);
                 continue;
             }
             "ast" => {
-                if matches!(&ast, Some(_)) {
-                    // print the last AST
-                    println!("{:#?}", ast.as_ref().unwrap());
-                } else {
-                    println!("()");
-                }
+                // print the last AST
+                println!("{:#?}", &ast);
                 continue;
             }
             _ => (),
@@ -144,12 +141,12 @@ fn main() {
             .compile_with_scope(&scope, &script)
             .map_err(EvalAltResult::ErrorParsing)
             .and_then(|r| {
-                ast_u = Some(r);
+                ast_u = r;
 
                 #[cfg(not(feature = "no_optimize"))]
                 {
                     engine.set_optimization_level(OptimizationLevel::Full);
-                    ast = Some(engine.optimize_ast(&scope, ast_u.as_ref().unwrap()));
+                    ast = engine.optimize_ast(&scope, &ast_u);
                     engine.set_optimization_level(OptimizationLevel::None);
                 }
 
@@ -158,12 +155,21 @@ fn main() {
                     ast = ast_u.clone();
                 }
 
-                engine
-                    .consume_ast_with_scope(&mut scope, true, ast.as_ref().unwrap())
+                // Merge the AST into the main
+                main_ast = main_ast.merge(&ast);
+
+                // Evaluate
+                let result = engine
+                    .consume_ast_with_scope(&mut scope, &main_ast)
                     .or_else(|err| match err {
                         EvalAltResult::Return(_, _) => Ok(()),
                         err => Err(err),
-                    })
+                    });
+
+                // Throw away all the statements, leaving only the functions
+                main_ast.retain_functions();
+
+                result
             })
         {
             println!();

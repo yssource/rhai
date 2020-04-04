@@ -72,7 +72,7 @@ fn main() {
             exit(1);
         }
 
-        if let Err(err) = engine.consume(false, &contents) {
+        if let Err(err) = engine.consume(&contents) {
             eprintln!("{:=<1$}", "", filename.len());
             eprintln!("{}", filename);
             eprintln!("{:=<1$}", "", filename.len());

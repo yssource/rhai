@@ -2,10 +2,10 @@
 
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
-use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec, FunctionsLib};
+use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
-use crate::parser::{lex, parse, parse_global_expr, FnDef, Position, AST};
+use crate::parser::{lex, parse, parse_global_expr, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 
@@ -17,7 +17,6 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     string::{String, ToString},
-    sync::Arc,
     vec::Vec,
 };
 #[cfg(not(feature = "no_std"))]
@@ -746,7 +745,7 @@ impl<'e> Engine<'e> {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
-        self.eval_ast_with_scope_raw(scope, false, ast)?
+        self.eval_ast_with_scope_raw(scope, ast)?
             .try_cast::<T>()
             .map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
@@ -759,16 +758,11 @@ impl<'e> Engine<'e> {
     pub(crate) fn eval_ast_with_scope_raw(
         &mut self,
         scope: &mut Scope,
-        retain_functions: bool,
         ast: &AST,
     ) -> Result<Dynamic, EvalAltResult> {
-        if !retain_functions {
-            self.clear_functions();
-        }
-
         let statements = {
             let AST(statements, functions) = ast;
-            self.load_script_functions(functions);
+            self.fn_lib = Some(functions.clone());
             statements
         };
 
@@ -776,9 +770,7 @@ impl<'e> Engine<'e> {
             .iter()
             .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt, 0));
 
-        if !retain_functions {
-            self.clear_functions();
-        }
+        self.fn_lib = None;
 
         result.or_else(|err| match err {
             EvalAltResult::Return(out, _) => Ok(out),
@@ -788,52 +780,33 @@ impl<'e> Engine<'e> {
 
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    /// and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
-    pub fn consume_file(
-        &mut self,
-        retain_functions: bool,
-        path: PathBuf,
-    ) -> Result<(), EvalAltResult> {
-        Self::read_file(path).and_then(|contents| self.consume(retain_functions, &contents))
+    pub fn consume_file(&mut self, path: PathBuf) -> Result<(), EvalAltResult> {
+        Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
 
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    /// and not cleared from run to run.
     #[cfg(not(feature = "no_std"))]
     pub fn consume_file_with_scope(
         &mut self,
         scope: &mut Scope,
-        retain_functions: bool,
         path: PathBuf,
     ) -> Result<(), EvalAltResult> {
-        Self::read_file(path)
-            .and_then(|contents| self.consume_with_scope(scope, retain_functions, &contents))
+        Self::read_file(path).and_then(|contents| self.consume_with_scope(scope, &contents))
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    /// and not cleared from run to run.
-    pub fn consume(&mut self, retain_functions: bool, input: &str) -> Result<(), EvalAltResult> {
-        self.consume_with_scope(&mut Scope::new(), retain_functions, input)
+    pub fn consume(&mut self, input: &str) -> Result<(), EvalAltResult> {
+        self.consume_with_scope(&mut Scope::new(), input)
     }
 
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    /// and not cleared from run to run.
     pub fn consume_with_scope(
         &mut self,
         scope: &mut Scope,
-        retain_functions: bool,
         input: &str,
     ) -> Result<(), EvalAltResult> {
         let tokens_stream = lex(input);
@@ -841,36 +814,25 @@ impl<'e> Engine<'e> {
         let ast = parse(&mut tokens_stream.peekable(), self, scope)
             .map_err(EvalAltResult::ErrorParsing)?;
 
-        self.consume_ast_with_scope(scope, retain_functions, &ast)
+        self.consume_ast_with_scope(scope, &ast)
     }
 
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    /// and not cleared from run to run.
-    pub fn consume_ast(&mut self, retain_functions: bool, ast: &AST) -> Result<(), EvalAltResult> {
-        self.consume_ast_with_scope(&mut Scope::new(), retain_functions, ast)
+    pub fn consume_ast(&mut self, ast: &AST) -> Result<(), EvalAltResult> {
+        self.consume_ast_with_scope(&mut Scope::new(), ast)
     }
 
     /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    ///
-    /// If `retain_functions` is set to `true`, functions defined by previous scripts are _retained_
-    /// and not cleared from run to run.
     pub fn consume_ast_with_scope(
         &mut self,
         scope: &mut Scope,
-        retain_functions: bool,
         ast: &AST,
     ) -> Result<(), EvalAltResult> {
-        if !retain_functions {
-            self.clear_functions();
-        }
-
         let statements = {
             let AST(ref statements, ref functions) = ast;
-            self.load_script_functions(functions);
+            self.fn_lib = Some(functions.clone());
             statements
         };
 
@@ -878,9 +840,7 @@ impl<'e> Engine<'e> {
             .iter()
             .try_fold(().into_dynamic(), |_, stmt| self.eval_stmt(scope, stmt, 0));
 
-        if !retain_functions {
-            self.clear_functions();
-        }
+        self.fn_lib = None;
 
         result.map(|_| ()).or_else(|err| match err {
             EvalAltResult::Return(_, _) => Ok(()),
@@ -888,21 +848,7 @@ impl<'e> Engine<'e> {
         })
     }
 
-    /// Load a list of functions into the Engine.
-    pub(crate) fn load_script_functions<'a>(
-        &mut self,
-        functions: impl IntoIterator<Item = &'a Arc<FnDef>>,
-    ) {
-        if self.fn_lib.is_none() {
-            self.fn_lib = Some(FunctionsLib::new());
-        }
-
-        functions.into_iter().cloned().for_each(|f| {
-            self.fn_lib.as_mut().unwrap().add_or_replace_function(f);
-        });
-    }
-
-    /// Call a script function retained inside the Engine.
+    /// Call a script function defined in an `AST` with no argument.
     ///
     /// # Example
     ///
@@ -915,11 +861,71 @@ impl<'e> Engine<'e> {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Set 'retain_functions' in 'consume' to keep the function definitions
-    /// engine.consume(true, "fn add(x, y) { len(x) + y }")?;
+    /// let ast = engine.compile("fn num() { 42 }")?;
     ///
     /// // Call the script-defined function
-    /// let result: i64 = engine.call_fn("add", (String::from("abc"), 123_i64))?;
+    /// let result: i64 = engine.call_fn0(&ast, "num")?;
+    ///
+    /// assert_eq!(result, 42);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_function"))]
+    pub fn call_fn0<T: Any + Clone>(&mut self, ast: &AST, name: &str) -> Result<T, EvalAltResult> {
+        self.call_fn_internal(ast, name, vec![])
+    }
+
+    /// Call a script function defined in an `AST` with one argument.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # #[cfg(not(feature = "no_stdlib"))]
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// let ast = engine.compile("fn inc(x) { x + 1 }")?;
+    ///
+    /// // Call the script-defined function
+    /// let result: i64 = engine.call_fn1(&ast, "inc", 123_i64)?;
+    ///
+    /// assert_eq!(result, 124);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_function"))]
+    pub fn call_fn1<A: Any + Clone, T: Any + Clone>(
+        &mut self,
+        ast: &AST,
+        name: &str,
+        arg: A,
+    ) -> Result<T, EvalAltResult> {
+        self.call_fn_internal(ast, name, vec![arg.into_dynamic()])
+    }
+
+    /// Call a script function defined in an `AST` with multiple arguments.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # #[cfg(not(feature = "no_stdlib"))]
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// let ast = engine.compile("fn add(x, y) { len(x) + y }")?;
+    ///
+    /// // Call the script-defined function
+    /// let result: i64 = engine.call_fn(&ast, "add", (String::from("abc"), 123_i64))?;
     ///
     /// assert_eq!(result, 126);
     /// # }
@@ -929,20 +935,37 @@ impl<'e> Engine<'e> {
     #[cfg(not(feature = "no_function"))]
     pub fn call_fn<A: FuncArgs, T: Any + Clone>(
         &mut self,
+        ast: &AST,
         name: &str,
         args: A,
     ) -> Result<T, EvalAltResult> {
-        let mut values = args.into_vec();
+        self.call_fn_internal(ast, name, args.into_vec())
+    }
+
+    #[cfg(not(feature = "no_function"))]
+    fn call_fn_internal<T: Any + Clone>(
+        &mut self,
+        ast: &AST,
+        name: &str,
+        mut values: Vec<Dynamic>,
+    ) -> Result<T, EvalAltResult> {
         let mut arg_values: Vec<_> = values.iter_mut().map(Dynamic::as_mut).collect();
 
-        self.call_fn_raw(name, &mut arg_values, None, Position::none(), 0)?
+        self.fn_lib = Some(ast.1.clone());
+
+        let result = self
+            .call_fn_raw(name, &mut arg_values, None, Position::none(), 0)?
             .try_cast()
             .map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name((*a).type_name()).into(),
                     Position::none(),
                 )
-            })
+            });
+
+        self.fn_lib = None;
+
+        result
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
@@ -958,10 +981,12 @@ impl<'e> Engine<'e> {
     /// (i.e. with `scope.push_constant(...)`). Then, the `AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
     pub fn optimize_ast(&self, scope: &Scope, ast: &AST) -> AST {
-        let statements = ast.0.clone();
-        let functions = ast.1.iter().map(|f| (**f).clone()).collect();
-
-        optimize_into_ast(self, scope, statements, functions)
+        optimize_into_ast(
+            self,
+            scope,
+            ast.0.clone(),
+            ast.1.iter().map(|fn_def| fn_def.as_ref().clone()).collect(),
+        )
     }
 
     /// Override default action of `print` (print to stdout using `println!`)
@@ -978,7 +1003,7 @@ impl<'e> Engine<'e> {
     ///
     /// // Override action of 'print' function
     /// engine.on_print(|s| result.push_str(s));
-    /// engine.consume(false, "print(40 + 2);")?;
+    /// engine.consume("print(40 + 2);")?;
     /// }
     /// assert_eq!(result, "42");
     /// # Ok(())
@@ -1002,7 +1027,7 @@ impl<'e> Engine<'e> {
     ///
     /// // Override action of 'print' function
     /// engine.on_print(|s| result.push_str(s));
-    /// engine.consume(false, "print(40 + 2);")?;
+    /// engine.consume("print(40 + 2);")?;
     /// }
     /// assert_eq!(result, "42");
     /// # Ok(())
@@ -1027,7 +1052,7 @@ impl<'e> Engine<'e> {
     ///
     /// // Override action of 'debug' function
     /// engine.on_debug(|s| result.push_str(s));
-    /// engine.consume(false, r#"debug("hello");"#)?;
+    /// engine.consume(r#"debug("hello");"#)?;
     /// }
     /// assert_eq!(result, "\"hello\"");
     /// # Ok(())
@@ -1051,7 +1076,7 @@ impl<'e> Engine<'e> {
     ///
     /// // Override action of 'debug' function
     /// engine.on_debug(|s| result.push_str(s));
-    /// engine.consume(false, r#"debug("hello");"#)?;
+    /// engine.consume(r#"debug("hello");"#)?;
     /// }
     /// assert_eq!(result, "\"hello\"");
     /// # Ok(())

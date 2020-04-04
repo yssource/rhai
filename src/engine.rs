@@ -1,7 +1,7 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::any::{Any, AnyExt, Dynamic, Variant};
-use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, INT};
+use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, AST, INT};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryRef as ScopeSource, EntryType as ScopeEntryType, Scope};
 
@@ -16,6 +16,8 @@ use crate::stdlib::{
     collections::HashMap,
     format,
     iter::once,
+    ops::{Deref, DerefMut},
+    rc::Rc,
     string::{String, ToString},
     sync::Arc,
     vec,
@@ -130,8 +132,11 @@ pub struct FnSpec<'a> {
 /// to search for it.
 ///
 /// So instead this is implemented as a sorted list and binary searched.
-#[derive(Debug)]
-pub struct FunctionsLib(Vec<Arc<FnDef>>);
+#[derive(Debug, Clone)]
+pub struct FunctionsLib(
+    #[cfg(feature = "sync")] Vec<Arc<FnDef>>,
+    #[cfg(not(feature = "sync"))] Vec<Rc<FnDef>>,
+);
 
 impl FnDef {
     /// Function to order two FnDef records, for binary search.
@@ -150,27 +155,74 @@ impl FunctionsLib {
     pub fn new() -> Self {
         FunctionsLib(Vec::new())
     }
+    /// Create a new `FunctionsLib` from a collection of `FnDef`.
+    pub fn from_vec(vec: Vec<FnDef>) -> Self {
+        #[cfg(feature = "sync")]
+        {
+            FunctionsLib(vec.into_iter().map(Arc::new).collect())
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            FunctionsLib(vec.into_iter().map(Rc::new).collect())
+        }
+    }
     /// Does a certain function exist in the `FunctionsLib`?
     pub fn has_function(&self, name: &str, params: usize) -> bool {
         self.0.binary_search_by(|f| f.compare(name, params)).is_ok()
     }
-    /// Add a function (or replace an existing one) in the `FunctionsLib`.
-    pub fn add_or_replace_function(&mut self, fn_def: Arc<FnDef>) {
-        match self
-            .0
-            .binary_search_by(|f| f.compare(&fn_def.name, fn_def.params.len()))
-        {
-            Ok(n) => self.0[n] = fn_def,
-            Err(n) => self.0.insert(n, fn_def),
-        }
-    }
     /// Get a function definition from the `FunctionsLib`.
-    pub fn get_function(&self, name: &str, params: usize) -> Option<Arc<FnDef>> {
+    pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
         if let Ok(n) = self.0.binary_search_by(|f| f.compare(name, params)) {
-            Some(self.0[n].clone())
+            Some(&self.0[n])
         } else {
             None
         }
+    }
+    /// Merge another `FunctionsLib` into this `FunctionsLib`.
+    pub fn merge(&self, other: &Self) -> Self {
+        if self.is_empty() {
+            other.clone()
+        } else if other.is_empty() {
+            self.clone()
+        } else {
+            let mut functions = self.clone();
+
+            other.iter().cloned().for_each(|fn_def| {
+                if let Some((n, _)) = functions
+                    .iter()
+                    .enumerate()
+                    .find(|(_, f)| f.name == fn_def.name && f.params.len() == fn_def.params.len())
+                {
+                    functions[n] = fn_def;
+                } else {
+                    functions.push(fn_def);
+                }
+            });
+
+            functions
+        }
+    }
+}
+
+impl Deref for FunctionsLib {
+    #[cfg(feature = "sync")]
+    type Target = Vec<Arc<FnDef>>;
+    #[cfg(not(feature = "sync"))]
+    type Target = Vec<Rc<FnDef>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for FunctionsLib {
+    #[cfg(feature = "sync")]
+    fn deref_mut(&mut self) -> &mut Vec<Arc<FnDef>> {
+        &mut self.0
+    }
+    #[cfg(not(feature = "sync"))]
+    fn deref_mut(&mut self) -> &mut Vec<Rc<FnDef>> {
+        &mut self.0
     }
 }
 
@@ -193,8 +245,14 @@ impl FunctionsLib {
 pub struct Engine<'e> {
     /// A hashmap containing all compiled functions known to the engine.
     pub(crate) functions: Option<HashMap<FnSpec<'e>, Box<FnAny>>>,
+
     /// A hashmap containing all script-defined functions.
-    pub(crate) fn_lib: Option<FunctionsLib>,
+    #[cfg(feature = "sync")]
+    pub(crate) fn_lib: Option<Arc<FunctionsLib>>,
+    /// A hashmap containing all script-defined functions.
+    #[cfg(not(feature = "sync"))]
+    pub(crate) fn_lib: Option<Rc<FunctionsLib>>,
+
     /// A hashmap containing all iterators known to the engine.
     pub(crate) type_iterators: Option<HashMap<TypeId, Box<IteratorFn>>>,
     /// A hashmap mapping type names to pretty-print names.
@@ -203,12 +261,14 @@ pub struct Engine<'e> {
     /// Closure for implementing the `print` command.
     #[cfg(feature = "sync")]
     pub(crate) on_print: Option<Box<dyn FnMut(&str) + Send + Sync + 'e>>,
+    /// Closure for implementing the `print` command.
     #[cfg(not(feature = "sync"))]
     pub(crate) on_print: Option<Box<dyn FnMut(&str) + 'e>>,
 
     /// Closure for implementing the `debug` command.
     #[cfg(feature = "sync")]
     pub(crate) on_debug: Option<Box<dyn FnMut(&str) + Send + Sync + 'e>>,
+    /// Closure for implementing the `debug` command.
     #[cfg(not(feature = "sync"))]
     pub(crate) on_debug: Option<Box<dyn FnMut(&str) + 'e>>,
 
@@ -382,8 +442,8 @@ impl Engine<'_> {
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
         // First search in script-defined functions (can override built-in)
-        if let Some(ref fn_lib) = self.fn_lib {
-            if let Some(fn_def) = fn_lib.get_function(fn_name, args.len()) {
+        if let Some(ref fn_lib_arc) = self.fn_lib {
+            if let Some(fn_def) = fn_lib_arc.clone().get_function(fn_name, args.len()) {
                 let mut scope = Scope::new();
 
                 scope.extend(
@@ -1276,6 +1336,7 @@ impl Engine<'_> {
                         let pos = args_expr_list[0].position();
                         let r = self.eval_expr(scope, &args_expr_list[0], level)?;
 
+                        // Get the script text by evaluating the expression
                         let script =
                             r.downcast_ref::<String>()
                                 .map(String::as_str)
@@ -1286,8 +1347,9 @@ impl Engine<'_> {
                                     )
                                 })?;
 
+                        // Compile the script text
                         #[cfg(not(feature = "no_optimize"))]
-                        let ast = {
+                        let mut ast = {
                             let orig_optimization_level = self.optimization_level;
 
                             self.set_optimization_level(OptimizationLevel::None);
@@ -1298,11 +1360,38 @@ impl Engine<'_> {
                         };
 
                         #[cfg(feature = "no_optimize")]
-                        let ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
+                        let mut ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
 
-                        Ok(self
-                            .eval_ast_with_scope_raw(scope, true, &ast)
-                            .map_err(|err| err.set_position(pos))?)
+                        // If new functions are defined, merge it into the current functions library
+                        let merged = AST(
+                            ast.0,
+                            if let Some(ref fn_lib) = self.fn_lib {
+                                #[cfg(feature = "sync")]
+                                {
+                                    Arc::new(fn_lib.as_ref().merge(&ast.1))
+                                }
+                                #[cfg(not(feature = "sync"))]
+                                {
+                                    Rc::new(fn_lib.as_ref().merge(&ast.1))
+                                }
+                            } else {
+                                ast.1
+                            },
+                        );
+
+                        // Evaluate the AST
+                        let result = self
+                            .eval_ast_with_scope_raw(scope, &merged)
+                            .map_err(|err| err.set_position(pos));
+
+                        // Update the new functions library if there are new functions
+                        self.fn_lib = if !merged.1.is_empty() {
+                            Some(merged.1)
+                        } else {
+                            None
+                        };
+
+                        Ok(result?)
                     }
 
                     // Normal function call

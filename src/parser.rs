@@ -1,7 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Any, AnyExt, Dynamic};
-use crate::engine::Engine;
+use crate::engine::{Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 
@@ -16,6 +16,7 @@ use crate::stdlib::{
     fmt, format,
     iter::Peekable,
     ops::Add,
+    rc::Rc,
     str::Chars,
     str::FromStr,
     string::{String, ToString},
@@ -165,10 +166,19 @@ impl fmt::Debug for Position {
 ///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone)]
-pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<Arc<FnDef>>);
+pub struct AST(
+    pub(crate) Vec<Stmt>,
+    #[cfg(feature = "sync")] pub(crate) Arc<FunctionsLib>,
+    #[cfg(not(feature = "sync"))] pub(crate) Rc<FunctionsLib>,
+);
 
 impl AST {
-    /// Merge two `AST` into one.  Both `AST`'s are consumed and a new, merged, version
+    /// Create a new `AST`.
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
     /// The second `AST` is simply appended to the end of the first _without any processing_.
@@ -192,10 +202,10 @@ impl AST {
     /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
     /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo("!")"#)?;
     ///
-    /// let ast = ast1.merge(ast2);     // Merge 'ast2' into 'ast1'
+    /// let ast = ast1.merge(&ast2);    // Merge 'ast2' into 'ast1'
     ///
     /// // Notice that using the '+' operator also works:
-    /// // let ast = ast1 + ast2;
+    /// // let ast = &ast1 + &ast2;
     ///
     /// // 'ast' is essentially:
     /// //
@@ -210,29 +220,62 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn merge(self, mut other: Self) -> Self {
-        let Self(mut ast, mut functions) = self;
+    pub fn merge(&self, other: &Self) -> Self {
+        let Self(ast, functions) = self;
 
-        ast.append(&mut other.0);
-
-        for fn_def in other.1 {
-            if let Some((n, _)) = functions
-                .iter()
-                .enumerate()
-                .find(|(_, f)| f.name == fn_def.name && f.params.len() == fn_def.params.len())
-            {
-                functions[n] = fn_def;
-            } else {
-                functions.push(fn_def);
+        let ast = match (ast.is_empty(), other.0.is_empty()) {
+            (false, false) => {
+                let mut ast = ast.clone();
+                ast.extend(other.0.iter().cloned());
+                ast
             }
-        }
+            (false, true) => ast.clone(),
+            (true, false) => other.0.clone(),
+            (true, true) => vec![],
+        };
 
-        Self(ast, functions)
+        #[cfg(feature = "sync")]
+        {
+            Self(ast, Arc::new(functions.merge(other.1.as_ref())))
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            Self(ast, Rc::new(functions.merge(other.1.as_ref())))
+        }
+    }
+
+    /// Clear all function definitions in the `AST`.
+    pub fn clear_functions(&mut self) {
+        #[cfg(feature = "sync")]
+        {
+            self.1 = Arc::new(FunctionsLib::new());
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            self.1 = Rc::new(FunctionsLib::new());
+        }
+    }
+
+    /// Clear all statements in the `AST`, leaving only function definitions.
+    pub fn retain_functions(&mut self) {
+        self.0 = vec![];
     }
 }
 
-impl Add<Self> for AST {
-    type Output = Self;
+impl Default for AST {
+    fn default() -> Self {
+        #[cfg(feature = "sync")]
+        {
+            Self(vec![], Arc::new(FunctionsLib::new()))
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            Self(vec![], Rc::new(FunctionsLib::new()))
+        }
+    }
+}
+impl Add<Self> for &AST {
+    type Output = AST;
 
     fn add(self, rhs: Self) -> Self::Output {
         self.merge(rhs)
@@ -2592,7 +2635,17 @@ pub fn parse_global_expr<'a, 'e>(
         //
         // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]
-        AST(vec![Stmt::Expr(Box::new(expr))], vec![]),
+        AST(
+            vec![Stmt::Expr(Box::new(expr))],
+            #[cfg(feature = "sync")]
+            {
+                Arc::new(FunctionsLib::new())
+            },
+            #[cfg(not(feature = "sync"))]
+            {
+                Rc::new(FunctionsLib::new())
+            },
+        ),
     )
 }
 
@@ -2667,7 +2720,7 @@ pub fn parse<'a, 'e>(
         //
         // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]
-        AST(statements, functions.into_iter().map(Arc::new).collect()),
+        AST(statements, Arc::new(FunctionsLib::from_vec(functions))),
     )
 }
 

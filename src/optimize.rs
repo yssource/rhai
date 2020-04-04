@@ -2,13 +2,15 @@
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, FunctionsLib, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
     boxed::Box,
+    rc::Rc,
     string::{String, ToString},
     sync::Arc,
     vec,
@@ -451,8 +453,8 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if let Some(ref fn_lib) = state.engine.fn_lib {
-                if fn_lib.has_function(&id, args.len()) {
+            if let Some(ref fn_lib_arc) = state.engine.fn_lib {
+                if fn_lib_arc.has_function(&id, args.len()) {
                     // A script-defined function overrides the built-in function - do not make the call
                     return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
                 }
@@ -584,15 +586,10 @@ pub fn optimize_into_ast(
     statements: Vec<Stmt>,
     functions: Vec<FnDef>,
 ) -> AST {
-    AST(
-        match engine.optimization_level {
-            OptimizationLevel::None => statements,
-            OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize(statements, engine, &scope)
-            }
-        },
+    let fn_lib = FunctionsLib::from_vec(
         functions
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|mut fn_def| {
                 if engine.optimization_level != OptimizationLevel::None {
                     let pos = fn_def.body.position();
@@ -612,9 +609,21 @@ pub fn optimize_into_ast(
                         stmt => stmt,
                     };
                 }
-
-                Arc::new(fn_def)
+                fn_def
             })
             .collect(),
+    );
+
+    AST(
+        match engine.optimization_level {
+            OptimizationLevel::None => statements,
+            OptimizationLevel::Simple | OptimizationLevel::Full => {
+                optimize(statements, engine, &scope)
+            }
+        },
+        #[cfg(feature = "sync")]
+        Arc::new(fn_lib),
+        #[cfg(not(feature = "sync"))]
+        Rc::new(fn_lib),
     )
 }

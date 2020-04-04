@@ -20,7 +20,7 @@ categories = [ "no-std", "embedded", "parser-implementations" ]
 num-traits = "*"
 
 [features]
-#default = ["no_function", "no_index", "no_object", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize"]
+#default = ["no_function", "no_index", "no_object", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize", "sync"]
 default = []
 unchecked = []      # unchecked arithmetic
 no_stdlib = []      # no standard library of utility functions
