@@ -451,9 +451,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if state.engine.fn_lib.has_function(&id, args.len()) {
-                // A script-defined function overrides the built-in function - do not make the call
-                return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
+            if let Some(ref fn_lib) = state.engine.fn_lib {
+                if fn_lib.has_function(&id, args.len()) {
+                    // A script-defined function overrides the built-in function - do not make the call
+                    return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
+                }
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();

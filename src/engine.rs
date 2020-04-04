@@ -150,10 +150,6 @@ impl FunctionsLib {
     pub fn new() -> Self {
         FunctionsLib(Vec::new())
     }
-    /// Clear the `FunctionsLib`.
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
     /// Does a certain function exist in the `FunctionsLib`?
     pub fn has_function(&self, name: &str, params: usize) -> bool {
         self.0.binary_search_by(|f| f.compare(name, params)).is_ok()
@@ -196,25 +192,25 @@ impl FunctionsLib {
 /// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Engine<'e> {
     /// A hashmap containing all compiled functions known to the engine.
-    pub(crate) functions: HashMap<FnSpec<'e>, Box<FnAny>>,
+    pub(crate) functions: Option<HashMap<FnSpec<'e>, Box<FnAny>>>,
     /// A hashmap containing all script-defined functions.
-    pub(crate) fn_lib: FunctionsLib,
+    pub(crate) fn_lib: Option<FunctionsLib>,
     /// A hashmap containing all iterators known to the engine.
-    pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
+    pub(crate) type_iterators: Option<HashMap<TypeId, Box<IteratorFn>>>,
     /// A hashmap mapping type names to pretty-print names.
-    pub(crate) type_names: HashMap<String, String>,
+    pub(crate) type_names: Option<HashMap<String, String>>,
 
     /// Closure for implementing the `print` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_print: Box<dyn FnMut(&str) + Send + Sync + 'e>,
+    pub(crate) on_print: Option<Box<dyn FnMut(&str) + Send + Sync + 'e>>,
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_print: Box<dyn FnMut(&str) + 'e>,
+    pub(crate) on_print: Option<Box<dyn FnMut(&str) + 'e>>,
 
     /// Closure for implementing the `debug` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_debug: Box<dyn FnMut(&str) + Send + Sync + 'e>,
+    pub(crate) on_debug: Option<Box<dyn FnMut(&str) + Send + Sync + 'e>>,
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_debug: Box<dyn FnMut(&str) + 'e>,
+    pub(crate) on_debug: Option<Box<dyn FnMut(&str) + 'e>>,
 
     /// Optimize the AST after compilation.
     #[cfg(not(feature = "no_optimize"))]
@@ -241,12 +237,12 @@ impl Default for Engine<'_> {
 
         // Create the new scripting Engine
         let mut engine = Engine {
-            functions: HashMap::new(),
-            fn_lib: FunctionsLib::new(),
-            type_iterators: HashMap::new(),
-            type_names,
-            on_print: Box::new(default_print), // default print/debug implementations
-            on_debug: Box::new(default_print),
+            functions: None,
+            fn_lib: None,
+            type_iterators: None,
+            type_names: Some(type_names),
+            on_print: Some(Box::new(default_print)), // default print/debug implementations
+            on_debug: Some(Box::new(default_print)),
 
             #[cfg(not(feature = "no_optimize"))]
             #[cfg(not(feature = "optimize_full"))]
@@ -307,6 +303,35 @@ impl Engine<'_> {
         Default::default()
     }
 
+    /// Create a new `Engine` with minimal configurations - i.e. without pretty-print type names etc.
+    pub fn new_raw() -> Self {
+        let mut engine = Engine {
+            functions: None,
+            fn_lib: None,
+            type_iterators: None,
+            type_names: None,
+            on_print: None,
+            on_debug: None,
+
+            #[cfg(not(feature = "no_optimize"))]
+            #[cfg(not(feature = "optimize_full"))]
+            optimization_level: OptimizationLevel::Simple,
+
+            #[cfg(not(feature = "no_optimize"))]
+            #[cfg(feature = "optimize_full")]
+            optimization_level: OptimizationLevel::Full,
+
+            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+        };
+
+        engine.register_core_lib();
+
+        #[cfg(not(feature = "no_stdlib"))]
+        engine.register_stdlib(); // Register the standard library when no_stdlib is not set
+
+        engine
+    }
+
     /// Control whether and how the `Engine` will optimize an AST after compilation
     ///
     /// Not available under the `no_optimize` feature.
@@ -335,9 +360,13 @@ impl Engine<'_> {
         };
 
         // Search built-in's and external functions
-        if let Some(func) = self.functions.get(&spec) {
-            // Run external function
-            Ok(Some(func(args, pos)?))
+        if let Some(ref functions) = self.functions {
+            if let Some(func) = functions.get(&spec) {
+                // Run external function
+                Ok(Some(func(args, pos)?))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -353,26 +382,28 @@ impl Engine<'_> {
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
         // First search in script-defined functions (can override built-in)
-        if let Some(fn_def) = self.fn_lib.get_function(fn_name, args.len()) {
-            let mut scope = Scope::new();
+        if let Some(ref fn_lib) = self.fn_lib {
+            if let Some(fn_def) = fn_lib.get_function(fn_name, args.len()) {
+                let mut scope = Scope::new();
 
-            scope.extend(
-                // Put arguments into scope as variables
-                fn_def
-                    .params
-                    .iter()
-                    .zip(args.iter().map(|x| (*x).into_dynamic()))
-                    .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
-            );
+                scope.extend(
+                    // Put arguments into scope as variables
+                    fn_def
+                        .params
+                        .iter()
+                        .zip(args.iter().map(|x| (*x).into_dynamic()))
+                        .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
+                );
 
-            // Evaluate the function at one higher level of call depth
-            return self
-                .eval_stmt(&mut scope, &fn_def.body, level + 1)
-                .or_else(|err| match err {
-                    // Convert return statement to return value
-                    EvalAltResult::Return(x, _) => Ok(x),
-                    err => Err(err.set_position(pos)),
-                });
+                // Evaluate the function at one higher level of call depth
+                return self.eval_stmt(&mut scope, &fn_def.body, level + 1).or_else(
+                    |err| match err {
+                        // Convert return statement to return value
+                        EvalAltResult::Return(x, _) => Ok(x),
+                        err => Err(err.set_position(pos)),
+                    },
+                );
+            }
         }
 
         let spec = FnSpec {
@@ -388,20 +419,25 @@ impl Engine<'_> {
         }
 
         // Search built-in's and external functions
-        if let Some(func) = self.functions.get(&spec) {
-            // Run external function
-            let result = func(args, pos)?;
+        if let Some(ref functions) = self.functions {
+            if let Some(func) = functions.get(&spec) {
+                // Run external function
+                let result = func(args, pos)?;
 
-            // See if the function match print/debug (which requires special processing)
-            return Ok(match fn_name {
-                KEYWORD_PRINT => {
-                    self.on_print.as_mut()(cast_to_string(result.as_ref(), pos)?).into_dynamic()
-                }
-                KEYWORD_DEBUG => {
-                    self.on_debug.as_mut()(cast_to_string(result.as_ref(), pos)?).into_dynamic()
-                }
-                _ => result,
-            });
+                // See if the function match print/debug (which requires special processing)
+                return Ok(match fn_name {
+                    KEYWORD_PRINT if self.on_print.is_some() => {
+                        self.on_print.as_deref_mut().unwrap()(cast_to_string(result.as_ref(), pos)?)
+                            .into_dynamic()
+                    }
+                    KEYWORD_DEBUG if self.on_debug.is_some() => {
+                        self.on_debug.as_deref_mut().unwrap()(cast_to_string(result.as_ref(), pos)?)
+                            .into_dynamic()
+                    }
+                    KEYWORD_PRINT | KEYWORD_DEBUG => ().into_dynamic(),
+                    _ => result,
+                });
+            }
         }
 
         if let Some(prop) = extract_prop_from_getter(fn_name) {
@@ -1192,12 +1228,13 @@ impl Engine<'_> {
             Expr::FunctionCall(fn_name, args_expr_list, def_val, pos) => {
                 // Has a system function an override?
                 fn has_override(engine: &Engine, name: &str) -> bool {
-                    let spec = FnSpec {
-                        name: name.into(),
-                        args: vec![TypeId::of::<String>()],
-                    };
-
-                    engine.functions.contains_key(&spec) || engine.fn_lib.has_function(name, 1)
+                    (engine.functions.is_some() && {
+                        engine.functions.as_ref().unwrap().contains_key(&FnSpec {
+                            name: name.into(),
+                            args: vec![TypeId::of::<String>()],
+                        })
+                    }) || (engine.fn_lib.is_some()
+                        && engine.fn_lib.as_ref().unwrap().has_function(name, 1))
                 }
 
                 match fn_name.as_str() {
@@ -1399,27 +1436,31 @@ impl Engine<'_> {
                 let arr = self.eval_expr(scope, expr, level)?;
                 let tid = Any::type_id(&*arr);
 
-                if let Some(iter_fn) = self.type_iterators.get(&tid) {
-                    scope.push(name.clone(), ());
+                if let Some(ref type_iterators) = self.type_iterators {
+                    if let Some(iter_fn) = type_iterators.get(&tid) {
+                        scope.push(name.clone(), ());
 
-                    let entry = ScopeSource {
-                        name,
-                        index: scope.len() - 1,
-                        typ: ScopeEntryType::Normal,
-                    };
+                        let entry = ScopeSource {
+                            name,
+                            index: scope.len() - 1,
+                            typ: ScopeEntryType::Normal,
+                        };
 
-                    for a in iter_fn(&arr) {
-                        *scope.get_mut(entry) = a;
+                        for a in iter_fn(&arr) {
+                            *scope.get_mut(entry) = a;
 
-                        match self.eval_stmt(scope, body, level) {
-                            Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
-                            Err(EvalAltResult::ErrorLoopBreak(true, _)) => break,
-                            Err(x) => return Err(x),
+                            match self.eval_stmt(scope, body, level) {
+                                Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
+                                Err(EvalAltResult::ErrorLoopBreak(true, _)) => break,
+                                Err(x) => return Err(x),
+                            }
                         }
-                    }
 
-                    scope.rewind(scope.len() - 1);
-                    Ok(().into_dynamic())
+                        scope.rewind(scope.len() - 1);
+                        Ok(().into_dynamic())
+                    } else {
+                        Err(EvalAltResult::ErrorFor(expr.position()))
+                    }
                 } else {
                     Err(EvalAltResult::ErrorFor(expr.position()))
                 }
@@ -1481,15 +1522,21 @@ impl Engine<'_> {
 
     /// Map a type_name into a pretty-print name
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
-        self.type_names
-            .get(name)
-            .map(String::as_str)
-            .unwrap_or(name)
+        if self.type_names.is_none() {
+            name
+        } else {
+            self.type_names
+                .as_ref()
+                .unwrap()
+                .get(name)
+                .map(String::as_str)
+                .unwrap_or(name)
+        }
     }
 
     /// Clean up all script-defined functions within the `Engine`.
     pub fn clear_functions(&mut self) {
-        self.fn_lib.clear();
+        self.fn_lib = None;
     }
 }
 

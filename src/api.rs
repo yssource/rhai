@@ -2,7 +2,7 @@
 
 use crate::any::{Any, AnyExt, Dynamic};
 use crate::call::FuncArgs;
-use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec};
+use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec, FunctionsLib};
 use crate::error::ParseError;
 use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, parse_global_expr, FnDef, Position, AST};
@@ -15,6 +15,7 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    collections::HashMap,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
@@ -68,7 +69,10 @@ impl<'e> Engine<'e> {
             args,
         };
 
-        self.functions.insert(spec, f);
+        if self.functions.is_none() {
+            self.functions = Some(HashMap::new());
+        }
+        self.functions.as_mut().unwrap().insert(spec, f);
     }
 
     /// Register a custom type for use with the `Engine`.
@@ -157,15 +161,28 @@ impl<'e> Engine<'e> {
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn register_type_with_name<T: Any + Clone>(&mut self, name: &str) {
+        if self.type_names.is_none() {
+            self.type_names = Some(HashMap::new());
+        }
+
         // Add the pretty-print type name into the map
         self.type_names
+            .as_mut()
+            .unwrap()
             .insert(type_name::<T>().to_string(), name.to_string());
     }
 
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
     pub fn register_iterator<T: Any, F: IteratorCallback>(&mut self, f: F) {
-        self.type_iterators.insert(TypeId::of::<T>(), Box::new(f));
+        if self.type_iterators.is_none() {
+            self.type_iterators = Some(HashMap::new());
+        }
+
+        self.type_iterators
+            .as_mut()
+            .unwrap()
+            .insert(TypeId::of::<T>(), Box::new(f));
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
@@ -876,8 +893,12 @@ impl<'e> Engine<'e> {
         &mut self,
         functions: impl IntoIterator<Item = &'a Arc<FnDef>>,
     ) {
+        if self.fn_lib.is_none() {
+            self.fn_lib = Some(FunctionsLib::new());
+        }
+
         functions.into_iter().cloned().for_each(|f| {
-            self.fn_lib.add_or_replace_function(f);
+            self.fn_lib.as_mut().unwrap().add_or_replace_function(f);
         });
     }
 
@@ -965,7 +986,7 @@ impl<'e> Engine<'e> {
     /// ```
     #[cfg(feature = "sync")]
     pub fn on_print(&mut self, callback: impl FnMut(&str) + Send + Sync + 'e) {
-        self.on_print = Box::new(callback);
+        self.on_print = Some(Box::new(callback));
     }
     /// Override default action of `print` (print to stdout using `println!`)
     ///
@@ -989,7 +1010,7 @@ impl<'e> Engine<'e> {
     /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_print(&mut self, callback: impl FnMut(&str) + 'e) {
-        self.on_print = Box::new(callback);
+        self.on_print = Some(Box::new(callback));
     }
 
     /// Override default action of `debug` (print to stdout using `println!`)
@@ -1014,7 +1035,7 @@ impl<'e> Engine<'e> {
     /// ```
     #[cfg(feature = "sync")]
     pub fn on_debug(&mut self, callback: impl FnMut(&str) + Send + Sync + 'e) {
-        self.on_debug = Box::new(callback);
+        self.on_debug = Some(Box::new(callback));
     }
     /// Override default action of `debug` (print to stdout using `println!`)
     ///
@@ -1038,6 +1059,6 @@ impl<'e> Engine<'e> {
     /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_debug(&mut self, callback: impl FnMut(&str) + 'e) {
-        self.on_debug = Box::new(callback);
+        self.on_debug = Some(Box::new(callback));
     }
 }
