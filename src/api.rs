@@ -831,7 +831,7 @@ impl<'e> Engine<'e> {
         ast: &AST,
     ) -> Result<(), EvalAltResult> {
         let statements = {
-            let AST(ref statements, ref functions) = ast;
+            let AST(statements, functions) = ast;
             self.fn_lib = Some(functions.clone());
             statements
         };

@@ -2061,7 +2061,7 @@ fn parse_binary_op<'a>(
     let mut current_lhs = lhs;
 
     loop {
-        let (current_precedence, bind_right) = if let Some((ref current_op, _)) = input.peek() {
+        let (current_precedence, bind_right) = if let Some((current_op, _)) = input.peek() {
             (current_op.precedence(), current_op.is_bind_right())
         } else {
             (0, false)

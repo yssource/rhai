@@ -268,32 +268,32 @@ impl EvalAltResult {
     /// Consume the current `EvalAltResult` and return a new one
     /// with the specified `Position`.
     pub(crate) fn set_position(mut self, new_position: Position) -> Self {
-        match self {
+        match &mut self {
             #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => (),
 
-            Self::ErrorParsing(ParseError(_, ref mut pos))
-            | Self::ErrorFunctionNotFound(_, ref mut pos)
-            | Self::ErrorFunctionArgsMismatch(_, _, _, ref mut pos)
-            | Self::ErrorBooleanArgMismatch(_, ref mut pos)
-            | Self::ErrorCharMismatch(ref mut pos)
-            | Self::ErrorArrayBounds(_, _, ref mut pos)
-            | Self::ErrorStringBounds(_, _, ref mut pos)
-            | Self::ErrorIndexingType(_, ref mut pos)
-            | Self::ErrorNumericIndexExpr(ref mut pos)
-            | Self::ErrorStringIndexExpr(ref mut pos)
-            | Self::ErrorLogicGuard(ref mut pos)
-            | Self::ErrorFor(ref mut pos)
-            | Self::ErrorVariableNotFound(_, ref mut pos)
-            | Self::ErrorAssignmentToUnknownLHS(ref mut pos)
-            | Self::ErrorAssignmentToConstant(_, ref mut pos)
-            | Self::ErrorMismatchOutputType(_, ref mut pos)
-            | Self::ErrorDotExpr(_, ref mut pos)
-            | Self::ErrorArithmetic(_, ref mut pos)
-            | Self::ErrorStackOverflow(ref mut pos)
-            | Self::ErrorRuntime(_, ref mut pos)
-            | Self::ErrorLoopBreak(_, ref mut pos)
-            | Self::Return(_, ref mut pos) => *pos = new_position,
+            Self::ErrorParsing(ParseError(_, pos))
+            | Self::ErrorFunctionNotFound(_, pos)
+            | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
+            | Self::ErrorBooleanArgMismatch(_, pos)
+            | Self::ErrorCharMismatch(pos)
+            | Self::ErrorArrayBounds(_, _, pos)
+            | Self::ErrorStringBounds(_, _, pos)
+            | Self::ErrorIndexingType(_, pos)
+            | Self::ErrorNumericIndexExpr(pos)
+            | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorLogicGuard(pos)
+            | Self::ErrorFor(pos)
+            | Self::ErrorVariableNotFound(_, pos)
+            | Self::ErrorAssignmentToUnknownLHS(pos)
+            | Self::ErrorAssignmentToConstant(_, pos)
+            | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorDotExpr(_, pos)
+            | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorStackOverflow(pos)
+            | Self::ErrorRuntime(_, pos)
+            | Self::ErrorLoopBreak(_, pos)
+            | Self::Return(_, pos) => *pos = new_position,
         }
 
         self

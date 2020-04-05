@@ -420,7 +420,7 @@ impl Engine<'_> {
         };
 
         // Search built-in's and external functions
-        if let Some(ref functions) = self.functions {
+        if let Some(functions) = &self.functions {
             if let Some(func) = functions.get(&spec) {
                 // Run external function
                 Ok(Some(func(args, pos)?))
@@ -443,7 +443,7 @@ impl Engine<'_> {
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
         // First search in script-defined functions (can override built-in)
-        if let Some(ref fn_lib_arc) = self.fn_lib {
+        if let Some(fn_lib_arc) = &self.fn_lib {
             if let Some(fn_def) = fn_lib_arc.clone().get_function(fn_name, args.len()) {
                 match scope {
                     // Extern scope passed in which is not empty
@@ -511,7 +511,7 @@ impl Engine<'_> {
         }
 
         // Search built-in's and external functions
-        if let Some(ref functions) = self.functions {
+        if let Some(functions) = &self.functions {
             if let Some(func) = functions.get(&spec) {
                 // Run external function
                 let result = func(args, pos)?;
@@ -1395,7 +1395,7 @@ impl Engine<'_> {
                         // If new functions are defined, merge it into the current functions library
                         let merged = AST(
                             ast.0,
-                            if let Some(ref fn_lib) = self.fn_lib {
+                            if let Some(fn_lib) = &self.fn_lib {
                                 #[cfg(feature = "sync")]
                                 {
                                     Arc::new(fn_lib.as_ref().merge(&ast.1))
@@ -1557,7 +1557,7 @@ impl Engine<'_> {
                 let arr = self.eval_expr(scope, expr, level)?;
                 let tid = Any::type_id(&*arr);
 
-                if let Some(ref type_iterators) = self.type_iterators {
+                if let Some(type_iterators) = &self.type_iterators {
                     if let Some(iter_fn) = type_iterators.get(&tid) {
                         // Add the loop variable - variable name is copied
                         scope.push(name.clone(), ());

@@ -453,7 +453,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if let Some(ref fn_lib_arc) = state.engine.fn_lib {
+            if let Some(fn_lib_arc) = &state.engine.fn_lib {
                 if fn_lib_arc.has_function(&id, args.len()) {
                     // A script-defined function overrides the built-in function - do not make the call
                     return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
@@ -493,11 +493,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // constant-name
-        Expr::Variable(ref name, _) if state.contains_constant(name) => {
+        Expr::Variable(name, _) if state.contains_constant(&name) => {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(name).expect("should find constant in scope!").clone()
+            state.find_constant(&name).expect("should find constant in scope!").clone()
         }
 
         // All other expressions - skip

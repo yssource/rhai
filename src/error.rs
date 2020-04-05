@@ -130,8 +130,8 @@ impl ParseError {
     }
 
     pub(crate) fn desc(&self) -> &str {
-        match self.0 {
-            ParseErrorType::BadInput(ref p) => p,
+        match &self.0 {
+            ParseErrorType::BadInput(p) => p,
             ParseErrorType::UnexpectedEOF => "Script is incomplete",
             ParseErrorType::UnknownOperator(_) => "Unknown operator",
             ParseErrorType::MissingToken(_, _) => "Expecting a certain token that is missing",
@@ -166,50 +166,48 @@ impl Error for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            ParseErrorType::BadInput(ref s) | ParseErrorType::MalformedCallExpr(ref s) => {
+        match &self.0 {
+            ParseErrorType::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
             }
-            ParseErrorType::ForbiddenConstantExpr(ref s) => {
+            ParseErrorType::ForbiddenConstantExpr(s) => {
                 write!(f, "Expecting a constant to assign to '{}'", s)?
             }
-            ParseErrorType::UnknownOperator(ref s) => write!(f, "{}: '{}'", self.desc(), s)?,
+            ParseErrorType::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s)?,
 
             #[cfg(not(feature = "no_index"))]
-            ParseErrorType::MalformedIndexExpr(ref s) => {
+            ParseErrorType::MalformedIndexExpr(s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
             }
 
             #[cfg(not(feature = "no_object"))]
-            ParseErrorType::DuplicatedProperty(ref s) => {
+            ParseErrorType::DuplicatedProperty(s) => {
                 write!(f, "Duplicated property '{}' for object map literal", s)?
             }
 
-            ParseErrorType::ExprExpected(ref s) => write!(f, "Expecting {} expression", s)?,
+            ParseErrorType::ExprExpected(s) => write!(f, "Expecting {} expression", s)?,
 
             #[cfg(not(feature = "no_function"))]
-            ParseErrorType::FnMissingParams(ref s) => {
+            ParseErrorType::FnMissingParams(s) => {
                 write!(f, "Expecting parameters for function '{}'", s)?
             }
 
             #[cfg(not(feature = "no_function"))]
-            ParseErrorType::FnMissingBody(ref s) => {
+            ParseErrorType::FnMissingBody(s) => {
                 write!(f, "Expecting body statement block for function '{}'", s)?
             }
 
             #[cfg(not(feature = "no_function"))]
-            ParseErrorType::FnDuplicatedParam(ref s, ref arg) => {
+            ParseErrorType::FnDuplicatedParam(s, arg) => {
                 write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
             }
 
-            ParseErrorType::MissingToken(ref token, ref s) => {
-                write!(f, "Expecting '{}' {}", token, s)?
-            }
+            ParseErrorType::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s)?,
 
-            ParseErrorType::AssignmentToConstant(ref s) if s.is_empty() => {
+            ParseErrorType::AssignmentToConstant(s) if s.is_empty() => {
                 write!(f, "{}", self.desc())?
             }
-            ParseErrorType::AssignmentToConstant(ref s) => {
+            ParseErrorType::AssignmentToConstant(s) => {
                 write!(f, "Cannot assign to constant '{}'", s)?
             }
             _ => write!(f, "{}", self.desc())?,
