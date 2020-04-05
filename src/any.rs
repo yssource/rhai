@@ -92,15 +92,13 @@ impl<T: crate::stdlib::any::Any + Clone + ?Sized> Any for T {
 
 impl Variant {
     /// Is this `Variant` a specific type?
-    pub(crate) fn is<T: Any>(&self) -> bool {
-        let t = TypeId::of::<T>();
-        let boxed = <Variant as Any>::type_id(self);
-
-        t == boxed
+    pub fn is<T: Any>(&self) -> bool {
+        TypeId::of::<T>() == <Variant as Any>::type_id(self)
     }
 
     /// Get a reference of a specific type to the `Variant`.
-    pub(crate) fn downcast_ref<T: Any>(&self) -> Option<&T> {
+    /// Returns `None` if the cast fails.
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
         if self.is::<T>() {
             unsafe { Some(&*(self as *const Variant as *const T)) }
         } else {
@@ -109,7 +107,8 @@ impl Variant {
     }
 
     /// Get a mutable reference of a specific type to the `Variant`.
-    pub(crate) fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+    /// Returns `None` if the cast fails.
+    pub fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
         if self.is::<T>() {
             unsafe { Some(&mut *(self as *mut Variant as *mut T)) }
         } else {
