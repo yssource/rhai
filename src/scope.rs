@@ -179,14 +179,42 @@ impl<'a> Scope<'a> {
     }
 
     /// Get the value of an entry in the Scope, starting from the last.
-    pub fn get_value<T: Any + Clone>(&self, key: &str) -> Option<T> {
+    pub fn get_value<T: Any + Clone>(&self, name: &str) -> Option<T> {
         self.0
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find(|(_, Entry { name, .. })| name == key)
+            .find(|(_, Entry { name: key, .. })| name == key)
             .and_then(|(_, Entry { value, .. })| value.downcast_ref::<T>())
             .map(T::clone)
+    }
+
+    /// Update the value of the named variable.
+    /// Search starts from the last, and only the last variable matching the specified name is updated.
+    /// If no variable matching the specified name is found, a new variable is added.
+    ///
+    /// # Panics
+    ///
+    /// Panics when trying to update the value of a constant.
+    pub fn set_value<T: Any + Clone>(&mut self, name: &'a str, value: T) {
+        match self.get(name) {
+            Some((
+                EntryRef {
+                    typ: EntryType::Constant,
+                    ..
+                },
+                _,
+            )) => panic!("variable {} is constant", name),
+            Some((
+                EntryRef {
+                    index,
+                    typ: EntryType::Normal,
+                    ..
+                },
+                _,
+            )) => self.0.get_mut(index).unwrap().value = value.into_dynamic(),
+            None => self.push(name, value.into_dynamic()),
+        }
     }
 
     /// Get a mutable reference to an entry in the Scope.
