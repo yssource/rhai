@@ -31,10 +31,12 @@ fn test_call_fn() -> Result<(), EvalAltResult> {
                 x + y
             }
             fn hello(x) {
-                x * foo
+                x = x * foo;
+                foo = 1;
+                x
             }
             fn hello() {
-                42 + foo
+                41 + foo
             }
         ",
     )?;
@@ -46,7 +48,14 @@ fn test_call_fn() -> Result<(), EvalAltResult> {
     assert_eq!(r, 5166);
 
     let r: i64 = engine.call_fn0(&mut scope, &ast, "hello")?;
-    assert_eq!(r, 84);
+    assert_eq!(r, 42);
+
+    assert_eq!(
+        scope
+            .get_value::<INT>("foo")
+            .expect("variable foo should exist"),
+        1
+    );
 
     Ok(())
 }
