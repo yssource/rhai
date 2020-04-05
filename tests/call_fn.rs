@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_fn() -> Result<(), EvalAltResult> {
@@ -21,24 +21,41 @@ fn test_fn() -> Result<(), EvalAltResult> {
 #[test]
 fn test_call_fn() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
+    let mut scope = Scope::new();
 
-    engine.consume(
-        true,
+    scope.push("foo", 42 as INT);
+
+    let ast = engine.compile(
         r"
             fn hello(x, y) {
                 x + y
             }
             fn hello(x) {
-                x * 2
+                x = x * foo;
+                foo = 1;
+                x
             }
-                ",
+            fn hello() {
+                41 + foo
+            }
+        ",
     )?;
 
-    let r: i64 = engine.call_fn("hello", (42 as INT, 123 as INT))?;
+    let r: i64 = engine.call_fn(&mut scope, &ast, "hello", (42 as INT, 123 as INT))?;
     assert_eq!(r, 165);
 
-    let r: i64 = engine.call_fn("hello", 123 as INT)?;
-    assert_eq!(r, 246);
+    let r: i64 = engine.call_fn1(&mut scope, &ast, "hello", 123 as INT)?;
+    assert_eq!(r, 5166);
+
+    let r: i64 = engine.call_fn0(&mut scope, &ast, "hello")?;
+    assert_eq!(r, 42);
+
+    assert_eq!(
+        scope
+            .get_value::<INT>("foo")
+            .expect("variable foo should exist"),
+        1
+    );
 
     Ok(())
 }

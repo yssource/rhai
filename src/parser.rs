@@ -1,7 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Any, AnyExt, Dynamic};
-use crate::engine::Engine;
+use crate::engine::{Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 
@@ -16,6 +16,7 @@ use crate::stdlib::{
     fmt, format,
     iter::Peekable,
     ops::Add,
+    rc::Rc,
     str::Chars,
     str::FromStr,
     string::{String, ToString},
@@ -37,6 +38,8 @@ pub type INT = i64;
 pub type INT = i32;
 
 /// The system floating-point type.
+///
+/// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
 
@@ -160,11 +163,22 @@ impl fmt::Debug for Position {
 }
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
+///
+/// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone)]
-pub struct AST(pub(crate) Vec<Stmt>, pub(crate) Vec<Arc<FnDef>>);
+pub struct AST(
+    pub(crate) Vec<Stmt>,
+    #[cfg(feature = "sync")] pub(crate) Arc<FunctionsLib>,
+    #[cfg(not(feature = "sync"))] pub(crate) Rc<FunctionsLib>,
+);
 
 impl AST {
-    /// Merge two `AST` into one.  Both `AST`'s are consumed and a new, merged, version
+    /// Create a new `AST`.
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
     /// The second `AST` is simply appended to the end of the first _without any processing_.
@@ -188,10 +202,10 @@ impl AST {
     /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
     /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo("!")"#)?;
     ///
-    /// let ast = ast1.merge(ast2);     // Merge 'ast2' into 'ast1'
+    /// let ast = ast1.merge(&ast2);    // Merge 'ast2' into 'ast1'
     ///
     /// // Notice that using the '+' operator also works:
-    /// // let ast = ast1 + ast2;
+    /// // let ast = &ast1 + &ast2;
     ///
     /// // 'ast' is essentially:
     /// //
@@ -206,29 +220,62 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn merge(self, mut other: Self) -> Self {
-        let Self(mut ast, mut functions) = self;
+    pub fn merge(&self, other: &Self) -> Self {
+        let Self(statements, functions) = self;
 
-        ast.append(&mut other.0);
-
-        for fn_def in other.1 {
-            if let Some((n, _)) = functions
-                .iter()
-                .enumerate()
-                .find(|(_, f)| f.name == fn_def.name && f.params.len() == fn_def.params.len())
-            {
-                functions[n] = fn_def;
-            } else {
-                functions.push(fn_def);
+        let ast = match (statements.is_empty(), other.0.is_empty()) {
+            (false, false) => {
+                let mut statements = statements.clone();
+                statements.extend(other.0.iter().cloned());
+                statements
             }
-        }
+            (false, true) => statements.clone(),
+            (true, false) => other.0.clone(),
+            (true, true) => vec![],
+        };
 
-        Self(ast, functions)
+        #[cfg(feature = "sync")]
+        {
+            Self(ast, Arc::new(functions.merge(other.1.as_ref())))
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            Self(ast, Rc::new(functions.merge(other.1.as_ref())))
+        }
+    }
+
+    /// Clear all function definitions in the `AST`.
+    pub fn clear_functions(&mut self) {
+        #[cfg(feature = "sync")]
+        {
+            self.1 = Arc::new(FunctionsLib::new());
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            self.1 = Rc::new(FunctionsLib::new());
+        }
+    }
+
+    /// Clear all statements in the `AST`, leaving only function definitions.
+    pub fn retain_functions(&mut self) {
+        self.0 = vec![];
     }
 }
 
-impl Add<Self> for AST {
-    type Output = Self;
+impl Default for AST {
+    fn default() -> Self {
+        #[cfg(feature = "sync")]
+        {
+            Self(vec![], Arc::new(FunctionsLib::new()))
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            Self(vec![], Rc::new(FunctionsLib::new()))
+        }
+    }
+}
+impl Add<Self> for &AST {
+    type Output = AST;
 
     fn add(self, rhs: Self) -> Self::Output {
         self.merge(rhs)
@@ -278,6 +325,8 @@ pub enum Stmt {
     Block(Vec<Stmt>, Position),
     /// { stmt }
     Expr(Box<Expr>),
+    /// continue
+    Continue(Position),
     /// break
     Break(Position),
     /// `return`/`throw`
@@ -292,6 +341,7 @@ impl Stmt {
             | Stmt::Let(_, _, pos)
             | Stmt::Const(_, _, pos)
             | Stmt::Block(_, pos)
+            | Stmt::Continue(pos)
             | Stmt::Break(pos)
             | Stmt::ReturnWithVal(_, _, pos) => *pos,
             Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
@@ -314,6 +364,7 @@ impl Stmt {
             Stmt::Let(_, _, _)
             | Stmt::Const(_, _, _)
             | Stmt::Expr(_)
+            | Stmt::Continue(_)
             | Stmt::Break(_)
             | Stmt::ReturnWithVal(_, _, _) => false,
         }
@@ -334,7 +385,7 @@ impl Stmt {
             Stmt::For(_, range, block) => range.is_pure() && block.is_pure(),
             Stmt::Let(_, _, _) | Stmt::Const(_, _, _) => false,
             Stmt::Block(statements, _) => statements.iter().all(Stmt::is_pure),
-            Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
+            Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
         }
     }
 }
@@ -579,6 +630,7 @@ pub enum Token {
     And,
     #[cfg(not(feature = "no_function"))]
     Fn,
+    Continue,
     Break,
     Return,
     Throw,
@@ -653,6 +705,7 @@ impl Token {
                 And => "&&",
                 #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
+                Continue => "continue",
                 Break => "break",
                 Return => "return",
                 Throw => "throw",
@@ -1100,6 +1153,7 @@ impl<'a> TokenIterator<'a> {
                             "else" => Token::Else,
                             "while" => Token::While,
                             "loop" => Token::Loop,
+                            "continue" => Token::Continue,
                             "break" => Token::Break,
                             "return" => Token::Return,
                             "throw" => Token::Throw,
@@ -1679,8 +1733,8 @@ fn parse_map_literal<'a>(
                 PERR::MissingToken("}".into(), "to end this object map literal".into())
                     .into_err_eof()
             })? {
-                (Token::Identifier(s), pos) => (s.clone(), pos),
-                (Token::StringConst(s), pos) => (s.clone(), pos),
+                (Token::Identifier(s), pos) => (s, pos),
+                (Token::StringConst(s), pos) => (s, pos),
                 (_, pos) if map.is_empty() => {
                     return Err(PERR::MissingToken(
                         "}".into(),
@@ -2007,7 +2061,7 @@ fn parse_binary_op<'a>(
     let mut current_lhs = lhs;
 
     loop {
-        let (current_precedence, bind_right) = if let Some((ref current_op, _)) = input.peek() {
+        let (current_precedence, bind_right) = if let Some((current_op, _)) = input.peek() {
             (current_op.precedence(), current_op.is_bind_right())
         } else {
             (0, false)
@@ -2419,6 +2473,8 @@ fn parse_stmt<'a>(
         // Semicolon - empty statement
         (Token::SemiColon, pos) => Ok(Stmt::Noop(*pos)),
 
+        (Token::LeftBrace, _) => parse_block(input, breakable, allow_stmt_expr),
+
         // fn ...
         #[cfg(not(feature = "no_function"))]
         (Token::Fn, pos) => Err(PERR::WrongFnDefinition.into_err(*pos)),
@@ -2427,12 +2483,19 @@ fn parse_stmt<'a>(
         (Token::While, _) => parse_while(input, allow_stmt_expr),
         (Token::Loop, _) => parse_loop(input, allow_stmt_expr),
         (Token::For, _) => parse_for(input, allow_stmt_expr),
+
+        (Token::Continue, pos) if breakable => {
+            let pos = *pos;
+            input.next();
+            Ok(Stmt::Continue(pos))
+        }
         (Token::Break, pos) if breakable => {
             let pos = *pos;
             input.next();
             Ok(Stmt::Break(pos))
         }
-        (Token::Break, pos) => Err(PERR::LoopBreak.into_err(*pos)),
+        (Token::Continue, pos) | (Token::Break, pos) => Err(PERR::LoopBreak.into_err(*pos)),
+
         (token @ Token::Return, pos) | (token @ Token::Throw, pos) => {
             let return_type = match token {
                 Token::Return => ReturnType::Return,
@@ -2456,9 +2519,10 @@ fn parse_stmt<'a>(
                 }
             }
         }
-        (Token::LeftBrace, _) => parse_block(input, breakable, allow_stmt_expr),
+
         (Token::Let, _) => parse_let(input, ScopeEntryType::Normal, allow_stmt_expr),
         (Token::Const, _) => parse_let(input, ScopeEntryType::Constant, allow_stmt_expr),
+
         _ => parse_expr_stmt(input, allow_stmt_expr),
     }
 }
@@ -2571,7 +2635,17 @@ pub fn parse_global_expr<'a, 'e>(
         //
         // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]
-        AST(vec![Stmt::Expr(Box::new(expr))], vec![]),
+        AST(
+            vec![Stmt::Expr(Box::new(expr))],
+            #[cfg(feature = "sync")]
+            {
+                Arc::new(FunctionsLib::new())
+            },
+            #[cfg(not(feature = "sync"))]
+            {
+                Rc::new(FunctionsLib::new())
+            },
+        ),
     )
 }
 
@@ -2646,68 +2720,34 @@ pub fn parse<'a, 'e>(
         //
         // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]
-        AST(statements, functions.into_iter().map(Arc::new).collect()),
+        AST(statements, Arc::new(FunctionsLib::from_vec(functions))),
     )
 }
 
 /// Map a `Dynamic` value to an expression.
 ///
 /// Returns Some(expression) if conversion is successful.  Otherwise None.
-pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> (Option<Expr>, Dynamic) {
+pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     if value.is::<INT>() {
-        let value2 = value.clone();
-        (
-            Some(Expr::IntegerConstant(
-                *value.downcast::<INT>().expect("value should be INT"),
-                pos,
-            )),
-            value2,
-        )
+        Some(Expr::IntegerConstant(value.cast(), pos))
     } else if value.is::<char>() {
-        let value2 = value.clone();
-        (
-            Some(Expr::CharConstant(
-                *value.downcast::<char>().expect("value should be char"),
-                pos,
-            )),
-            value2,
-        )
+        Some(Expr::CharConstant(value.cast(), pos))
     } else if value.is::<String>() {
-        let value2 = value.clone();
-        (
-            Some(Expr::StringConstant(
-                *value.downcast::<String>().expect("value should be String"),
-                pos,
-            )),
-            value2,
-        )
+        Some(Expr::StringConstant(value.cast(), pos))
     } else if value.is::<bool>() {
-        let value2 = value.clone();
-        (
-            Some(
-                if *value.downcast::<bool>().expect("value should be bool") {
-                    Expr::True(pos)
-                } else {
-                    Expr::False(pos)
-                },
-            ),
-            value2,
-        )
+        Some(if value.cast::<bool>() {
+            Expr::True(pos)
+        } else {
+            Expr::False(pos)
+        })
     } else {
         #[cfg(not(feature = "no_float"))]
         {
             if value.is::<FLOAT>() {
-                let value2 = value.clone();
-                return (
-                    Some(Expr::FloatConstant(
-                        *value.downcast::<FLOAT>().expect("value should be FLOAT"),
-                        pos,
-                    )),
-                    value2,
-                );
+                return Some(Expr::FloatConstant(value.cast(), pos));
             }
         }
 
-        (None, value)
+        None
     }
 }

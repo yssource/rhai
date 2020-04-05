@@ -2,13 +2,15 @@
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, FunctionsLib, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
     boxed::Box,
+    rc::Rc,
     string::{String, ToString},
     sync::Arc,
     vec,
@@ -16,6 +18,8 @@ use crate::stdlib::{
 };
 
 /// Level of optimization performed.
+///
+/// Not available under the `no_optimize` feature.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum OptimizationLevel {
     /// No optimization performed.
@@ -449,9 +453,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if state.engine.fn_lib.has_function(&id, args.len()) {
-                // A script-defined function overrides the built-in function - do not make the call
-                return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
+            if let Some(fn_lib_arc) = &state.engine.fn_lib {
+                if fn_lib_arc.has_function(&id, args.len()) {
+                    // A script-defined function overrides the built-in function - do not make the call
+                    return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
+                }
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
@@ -474,7 +480,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                         // Otherwise use the default value, if any
                         def_value.clone()
                     }
-                }).and_then(|result| map_dynamic_to_expr(result, pos).0)
+                }).and_then(|result| map_dynamic_to_expr(result, pos))
                     .map(|expr| {
                         state.set_dirty();
                         expr
@@ -487,11 +493,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // constant-name
-        Expr::Variable(ref name, _) if state.contains_constant(name) => {
+        Expr::Variable(name, _) if state.contains_constant(&name) => {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(name).expect("should find constant in scope!").clone()
+            state.find_constant(&name).expect("should find constant in scope!").clone()
         }
 
         // All other expressions - skip
@@ -580,15 +586,10 @@ pub fn optimize_into_ast(
     statements: Vec<Stmt>,
     functions: Vec<FnDef>,
 ) -> AST {
-    AST(
-        match engine.optimization_level {
-            OptimizationLevel::None => statements,
-            OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize(statements, engine, &scope)
-            }
-        },
+    let fn_lib = FunctionsLib::from_vec(
         functions
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|mut fn_def| {
                 if engine.optimization_level != OptimizationLevel::None {
                     let pos = fn_def.body.position();
@@ -608,9 +609,21 @@ pub fn optimize_into_ast(
                         stmt => stmt,
                     };
                 }
-
-                Arc::new(fn_def)
+                fn_def
             })
             .collect(),
+    );
+
+    AST(
+        match engine.optimization_level {
+            OptimizationLevel::None => statements,
+            OptimizationLevel::Simple | OptimizationLevel::Full => {
+                optimize(statements, engine, &scope)
+            }
+        },
+        #[cfg(feature = "sync")]
+        Arc::new(fn_lib),
+        #[cfg(not(feature = "sync"))]
+        Rc::new(fn_lib),
     )
 }

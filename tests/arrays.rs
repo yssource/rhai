@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_index"))]
-use rhai::{Engine, EvalAltResult, RegisterFn, INT};
+use rhai::{Array, Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
 fn test_arrays() -> Result<(), EvalAltResult> {
@@ -11,6 +11,43 @@ fn test_arrays() -> Result<(), EvalAltResult> {
         engine.eval::<char>(r#"let y = [1, [ 42, 88, "93" ], 3]; y[1][2][1]"#)?,
         '3'
     );
+
+    #[cfg(not(feature = "no_stdlib"))]
+    {
+        assert_eq!(
+            engine.eval::<INT>(
+                r"
+                        let x = [1, 2, 3];
+                        let y = [4, 5];
+                        x.append(y);
+                        x.len()
+           "
+            )?,
+            5
+        );
+        assert_eq!(
+            engine.eval::<INT>(
+                r"
+                        let x = [1, 2, 3];
+                        x += [4, 5];
+                        x.len()
+           "
+            )?,
+            5
+        );
+        assert_eq!(
+            engine
+                .eval::<Array>(
+                    r"
+                        let x = [1, 2, 3];
+                        let y = [4, 5];
+                        x + y
+           "
+                )?
+                .len(),
+            5
+        );
+    }
 
     Ok(())
 }

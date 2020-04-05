@@ -9,8 +9,12 @@ fn test_var_scope() -> Result<(), EvalAltResult> {
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 9);
     engine.eval_with_scope::<()>(&mut scope, "x = x + 1; x = x + 2;")?;
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 12);
+
+    scope.set_value("x", 42 as INT);
+    assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 42);
+
     engine.eval_with_scope::<()>(&mut scope, "{let x = 3}")?;
-    assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 12);
+    assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 42);
 
     Ok(())
 }

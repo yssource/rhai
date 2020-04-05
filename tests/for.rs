@@ -1,8 +1,8 @@
-#![cfg(not(feature = "no_index"))]
 use rhai::{Engine, EvalAltResult, INT};
 
+#[cfg(not(feature = "no_index"))]
 #[test]
-fn test_for() -> Result<(), EvalAltResult> {
+fn test_for_array() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
 
     let script = r"
@@ -18,10 +18,39 @@ fn test_for() -> Result<(), EvalAltResult> {
             sum2 += x;
         }
 
+        for x in range(1, 6, 3) {
+            sum2 += x;
+        }
+
         sum1 + sum2
     ";
 
-    assert_eq!(engine.eval::<INT>(script)?, 30);
+    assert_eq!(engine.eval::<INT>(script)?, 35);
+
+    Ok(())
+}
+
+#[cfg(not(feature = "no_object"))]
+#[test]
+fn test_for_object() -> Result<(), EvalAltResult> {
+    let mut engine = Engine::new();
+
+    let script = r#"
+        let sum = 0;
+        let keys = "";
+        let map = #{a: 1, b: 2, c: 3};
+
+        for key in keys(map) {
+            keys += key;
+        }
+        for value in values(map) {
+            sum += value;
+        }
+
+        keys.len() + sum
+    "#;
+
+    assert_eq!(engine.eval::<INT>(script)?, 9);
 
     Ok(())
 }

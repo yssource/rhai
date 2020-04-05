@@ -2,8 +2,7 @@
 
 ///! This test simulates an external command object that is driven by a script.
 use rhai::{Engine, EvalAltResult, RegisterFn, Scope, INT};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 /// External command.
 struct Command {
@@ -24,19 +23,19 @@ impl Command {
 /// Wrapper object to wrap a command object.
 #[derive(Clone)]
 struct CommandWrapper {
-    command: Rc<RefCell<Command>>,
+    command: Arc<Mutex<Command>>,
 }
 
 impl CommandWrapper {
     /// Delegate command action.
     pub fn do_action(&mut self, x: i64) {
-        let mut command = self.command.borrow_mut();
+        let mut command = self.command.lock().unwrap();
         let val = command.get();
         command.action(val + x);
     }
     /// Delegate get value action.
     pub fn get_value(&mut self) -> i64 {
-        let command = self.command.borrow();
+        let command = self.command.lock().unwrap();
         command.get()
     }
 }
@@ -47,8 +46,8 @@ fn test_side_effects() -> Result<(), EvalAltResult> {
     let mut scope = Scope::new();
 
     // Create the command object with initial state, handled by an `Rc`.
-    let command = Rc::new(RefCell::new(Command { state: 12 }));
-    assert_eq!(command.borrow().get(), 12);
+    let command = Arc::new(Mutex::new(Command { state: 12 }));
+    assert_eq!(command.lock().unwrap().get(), 12);
 
     // Create the wrapper.
     let wrapper = CommandWrapper {
@@ -76,7 +75,7 @@ fn test_side_effects() -> Result<(), EvalAltResult> {
     );
 
     // Make sure the actions are properly performed
-    assert_eq!(command.borrow().get(), 42);
+    assert_eq!(command.lock().unwrap().get(), 42);
 
     Ok(())
 }
