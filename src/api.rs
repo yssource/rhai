@@ -986,7 +986,7 @@ impl<'e> Engine<'e> {
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
-    /// An optimized copy of the `AST` is returned while the original `AST` is untouched.
+    /// An optimized copy of the `AST` is returned while the original `AST` is consumed.
     ///
     /// Although optimization is performed by default during compilation, sometimes it is necessary to
     /// _re_-optimize an AST. For example, when working with constants that are passed in via an
@@ -997,11 +997,11 @@ impl<'e> Engine<'e> {
     /// compiled just once. Before evaluation, constants are passed into the `Engine` via an external scope
     /// (i.e. with `scope.push_constant(...)`). Then, the `AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
-    pub fn optimize_ast(&self, scope: &Scope, ast: &AST) -> AST {
+    pub fn optimize_ast(&self, scope: &Scope, ast: AST) -> AST {
         optimize_into_ast(
             self,
             scope,
-            ast.0.clone(),
+            ast.0,
             ast.1.iter().map(|fn_def| fn_def.as_ref().clone()).collect(),
         )
     }

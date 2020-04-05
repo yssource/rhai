@@ -141,18 +141,18 @@ fn main() {
             .compile_with_scope(&scope, &script)
             .map_err(EvalAltResult::ErrorParsing)
             .and_then(|r| {
-                ast_u = r;
+                ast_u = r.clone();
 
                 #[cfg(not(feature = "no_optimize"))]
                 {
                     engine.set_optimization_level(OptimizationLevel::Full);
-                    ast = engine.optimize_ast(&scope, &ast_u);
+                    ast = engine.optimize_ast(&scope, r);
                     engine.set_optimization_level(OptimizationLevel::None);
                 }
 
                 #[cfg(feature = "no_optimize")]
                 {
-                    ast = ast_u.clone();
+                    ast = r;
                 }
 
                 // Merge the AST into the main

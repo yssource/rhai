@@ -480,7 +480,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                         // Otherwise use the default value, if any
                         def_value.clone()
                     }
-                }).and_then(|result| map_dynamic_to_expr(result, pos).0)
+                }).and_then(|result| map_dynamic_to_expr(result, pos))
                     .map(|expr| {
                         state.set_dirty();
                         expr

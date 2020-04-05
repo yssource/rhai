@@ -126,17 +126,15 @@ impl<'a> Scope<'a> {
         value: Dynamic,
         map_expr: bool,
     ) {
-        let (expr, value) = if map_expr {
-            map_dynamic_to_expr(value, Position::none())
-        } else {
-            (None, value)
-        };
-
         self.0.push(Entry {
             name: name.into(),
             typ: entry_type,
-            value,
-            expr,
+            value: value.clone(),
+            expr: if map_expr {
+                map_dynamic_to_expr(value, Position::none())
+            } else {
+                None
+            },
         });
     }
 
@@ -163,15 +161,15 @@ impl<'a> Scope<'a> {
             .find(|(_, Entry { name, .. })| name == key)
             .map(
                 |(
-                    i,
+                    index,
                     Entry {
                         name, typ, value, ..
                     },
                 )| {
                     (
                         EntryRef {
-                            name: name.as_ref(),
-                            index: i,
+                            name,
+                            index,
                             typ: *typ,
                         },
                         value.clone(),

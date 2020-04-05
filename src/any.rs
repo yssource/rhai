@@ -125,7 +125,7 @@ impl fmt::Debug for Variant {
 
 impl Clone for Dynamic {
     fn clone(&self) -> Self {
-        Any::into_dynamic(self.as_ref())
+        self.as_ref().into_dynamic()
     }
 }
 

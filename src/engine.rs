@@ -452,10 +452,11 @@ impl Engine<'_> {
 
                         scope.extend(
                             // Put arguments into scope as variables - variable name is copied
+                            // TODO - avoid copying variable name
                             fn_def
                                 .params
                                 .iter()
-                                .zip(args.iter().map(|x| (*x).into_dynamic()))
+                                .zip(args.into_iter().map(|x| (*x).into_dynamic()))
                                 .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
                         );
 
@@ -481,7 +482,7 @@ impl Engine<'_> {
                             fn_def
                                 .params
                                 .iter()
-                                .zip(args.iter().map(|x| (*x).into_dynamic()))
+                                .zip(args.into_iter().map(|x| (*x).into_dynamic()))
                                 .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
                         );
 
@@ -1227,6 +1228,7 @@ impl Engine<'_> {
                             *scope.get_mut(entry) = rhs_val.clone();
                             Ok(rhs_val)
                         }
+
                         ScopeSource {
                             typ: ScopeEntryType::Constant,
                             ..
@@ -1560,6 +1562,7 @@ impl Engine<'_> {
                 if let Some(type_iterators) = &self.type_iterators {
                     if let Some(iter_fn) = type_iterators.get(&tid) {
                         // Add the loop variable - variable name is copied
+                        // TODO - avoid copying variable name
                         scope.push(name.clone(), ());
 
                         let entry = ScopeSource {
@@ -1622,11 +1625,13 @@ impl Engine<'_> {
             // Let statement
             Stmt::Let(name, Some(expr), _) => {
                 let val = self.eval_expr(scope, expr, level)?;
+                // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Normal, val, false);
                 Ok(().into_dynamic())
             }
 
             Stmt::Let(name, None, _) => {
+                // TODO - avoid copying variable name in inner block?
                 scope.push(name.clone(), ());
                 Ok(().into_dynamic())
             }
@@ -1634,6 +1639,7 @@ impl Engine<'_> {
             // Const statement
             Stmt::Const(name, expr, _) if expr.is_constant() => {
                 let val = self.eval_expr(scope, expr, level)?;
+                // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Constant, val, true);
                 Ok(().into_dynamic())
             }

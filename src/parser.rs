@@ -221,15 +221,15 @@ impl AST {
     /// # }
     /// ```
     pub fn merge(&self, other: &Self) -> Self {
-        let Self(ast, functions) = self;
+        let Self(statements, functions) = self;
 
-        let ast = match (ast.is_empty(), other.0.is_empty()) {
+        let ast = match (statements.is_empty(), other.0.is_empty()) {
             (false, false) => {
-                let mut ast = ast.clone();
-                ast.extend(other.0.iter().cloned());
-                ast
+                let mut statements = statements.clone();
+                statements.extend(other.0.iter().cloned());
+                statements
             }
-            (false, true) => ast.clone(),
+            (false, true) => statements.clone(),
             (true, false) => other.0.clone(),
             (true, true) => vec![],
         };
@@ -1733,8 +1733,8 @@ fn parse_map_literal<'a>(
                 PERR::MissingToken("}".into(), "to end this object map literal".into())
                     .into_err_eof()
             })? {
-                (Token::Identifier(s), pos) => (s.clone(), pos),
-                (Token::StringConst(s), pos) => (s.clone(), pos),
+                (Token::Identifier(s), pos) => (s, pos),
+                (Token::StringConst(s), pos) => (s, pos),
                 (_, pos) if map.is_empty() => {
                     return Err(PERR::MissingToken(
                         "}".into(),
@@ -2727,35 +2727,27 @@ pub fn parse<'a, 'e>(
 /// Map a `Dynamic` value to an expression.
 ///
 /// Returns Some(expression) if conversion is successful.  Otherwise None.
-pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> (Option<Expr>, Dynamic) {
+pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     if value.is::<INT>() {
-        let value2 = value.clone();
-        (Some(Expr::IntegerConstant(value.cast(), pos)), value2)
+        Some(Expr::IntegerConstant(value.cast(), pos))
     } else if value.is::<char>() {
-        let value2 = value.clone();
-        (Some(Expr::CharConstant(value.cast(), pos)), value2)
+        Some(Expr::CharConstant(value.cast(), pos))
     } else if value.is::<String>() {
-        let value2 = value.clone();
-        (Some(Expr::StringConstant(value.cast(), pos)), value2)
+        Some(Expr::StringConstant(value.cast(), pos))
     } else if value.is::<bool>() {
-        let value2 = value.clone();
-        (
-            Some(if value.cast::<bool>() {
-                Expr::True(pos)
-            } else {
-                Expr::False(pos)
-            }),
-            value2,
-        )
+        Some(if value.cast::<bool>() {
+            Expr::True(pos)
+        } else {
+            Expr::False(pos)
+        })
     } else {
         #[cfg(not(feature = "no_float"))]
         {
             if value.is::<FLOAT>() {
-                let value2 = value.clone();
-                return (Some(Expr::FloatConstant(value.cast(), pos)), value2);
+                return Some(Expr::FloatConstant(value.cast(), pos));
             }
         }
 
-        (None, value)
+        None
     }
 }
