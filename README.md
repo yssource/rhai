@@ -8,18 +8,21 @@ Rhai - Embedded Scripting for Rust
 ![crates.io](https://img.shields.io/crates/d/rhai)
 [![API Docs](https://docs.rs/rhai/badge.svg)](https://docs.rs/rhai/)
 
-Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way to add scripting to any application.
+Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
+to add scripting to any application.
 
 Rhai's current features set:
 
 * `no-std` support
-* Easy integration with Rust functions and data types, supporting getter/setter methods
+* Easy integration with Rust native functions and data types, including getter/setter methods
 * Easily call a script-defined function from Rust
+* Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * Easy-to-use language similar to JS+Rust
 * Support for overloaded functions
 * Compiled script is optimized for repeat evaluations
+* Support for minimal builds by excluding unneeded language features
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no_std`] builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
@@ -70,7 +73,8 @@ Optional features
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                     |
 | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`.                    |
 
-By default, Rhai includes all the standard functionalities in a small, tight package.  Most features are here to opt-**out** of certain functionalities that are not needed.
+By default, Rhai includes all the standard functionalities in a small, tight package.
+Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
 
 [`unchecked`]: #optional-features
@@ -209,8 +213,8 @@ Compiling a script file is also supported:
 let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
 
-Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust - via `call_fn`
-or its cousins `call_fn1` (one argument) and `call_fn0` (no argument).
+Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust -
+via `call_fn` or its cousins `call_fn1` (one argument) and `call_fn0` (no argument).
 
 ```rust
 // Define functions in a script.
@@ -295,12 +299,14 @@ The following primitive types are supported natively:
 
 [`()`]: #values-and-types
 
-All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different - they even cannot be added together. This is very similar to Rust.
+All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different -
+they even cannot be added together. This is very similar to Rust.
 
-The default integer type is `i64`. If other integer types are not needed, it is possible to exclude them and make a smaller build with the [`only_i64`] feature.
+The default integer type is `i64`. If other integer types are not needed, it is possible to exclude them and make a
+smaller build with the [`only_i64`] feature.
 
-If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`, including `i64`.
-This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
+If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`,
+including `i64`. This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
@@ -358,12 +364,13 @@ if type_of(mystery) == "i64" {
 }
 ```
 
-In Rust, sometimes a `Dynamic` forms part of the return value - a good example is elements within an `Array` which are `Dynamic`,
-or property values in an object map.  In order to get the _real_ value, the actual value type _must_ be known in advance.
-There is no easy way for Rust to detect, at run-time, what type the `Dynamic` value is (short of using the `type_name`
-function to get the textual name of the type and then matching on that).
+In Rust, sometimes a `Dynamic` forms part of a returned value - a good example is an array with `Dynamic` elements,
+or an object map with `Dynamic` property values.  To get the _real_ values, the actual value types _must_ be known in advance.
+There is no easy way for Rust to decide, at run-time, what type the `Dynamic` value is (short of using the `type_name`
+function and match against the name).
 
-To use a `Dynamic` value in Rust, use the `cast` method to convert the value into a specific, known type.
+A `Dynamic` value's actual type can be checked via the `is` method.
+The `cast` method (from the `rhai::AnyExt` trait) then converts the value into a specific, known type.
 Alternatively, use the `try_cast` method which does not panic but returns an error when the cast fails.
 
 ```rust
@@ -372,13 +379,15 @@ use rhai::AnyExt;                               // Pull in the trait.
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
 
+item.is::<i64>() == true;                       // 'is' returns whether a 'Dynamic' value is of a particular type
+
 let value = item.cast::<i64>();                 // if the element is 'i64', this succeeds; otherwise it panics
 let value: i64 = item.cast();                   // type can also be inferred
 
 let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic when the cast fails, but returns an error
 ```
 
-The `type_name` method gets the name of the actual type as a string, which you may match against.
+The `type_name` method gets the name of the actual type as a static string slice, which you may match against.
 
 ```rust
 use rhai::Any;                                  // Pull in the trait.
@@ -423,7 +432,7 @@ To call these functions, they need to be registered with the [`Engine`].
 ```rust
 use rhai::{Engine, EvalAltResult};
 use rhai::RegisterFn;                           // use `RegisterFn` trait for `register_fn`
-use rhai::{Dynamic, RegisterDynamicFn};         // use `RegisterDynamicFn` trait for `register_dynamic_fn`
+use rhai::{Any, Dynamic, RegisterDynamicFn};    // use `RegisterDynamicFn` trait for `register_dynamic_fn`
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -432,7 +441,7 @@ fn add(x: i64, y: i64) -> i64 {
 
 // Function that returns a Dynamic value
 fn get_an_any() -> Dynamic {
-    Box::new(42_i64)
+    (42_i64).into_dynamic()                     // 'into_dynamic' is defined by the 'rhai::Any' trait
 }
 
 fn main() -> Result<(), EvalAltResult>
@@ -456,14 +465,17 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
-To return a [`Dynamic`] value from a Rust function, simply `Box` it and return it.
+To return a [`Dynamic`] value from a Rust function, use the `into_dynamic()` method
+(under the `rhai::Any` trait) to convert it.
 
 ```rust
+use rhai::Any;                                  // Pull in the trait
+
 fn decide(yes_no: bool) -> Dynamic {
     if yes_no {
-        Box::new(42_i64)
+        (42_i64).into_dynamic()
     } else {
-        Box::new("hello world!".to_string())    // remember &str is not supported
+        String::from("hello!").into_dynamic()   // remember &str is not supported by Rhai
     }
 }
 ```
@@ -471,7 +483,8 @@ fn decide(yes_no: bool) -> Dynamic {
 Generic functions
 -----------------
 
-Generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately:
+Rust generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately.
+Essentially this is a form of function overloading as Rhai does not support generics.
 
 ```rust
 use std::fmt::Display;
@@ -492,15 +505,17 @@ fn main()
 }
 ```
 
-This example shows how to register multiple functions (or, in this case, multiple instances of the same function) to the same name in script.
-This enables function overloading based on the number and types of parameters.
+This example shows how to register multiple functions (or, in this case, multiple overloaded versions of the same function)
+under the same name. This enables function overloading based on the number and types of parameters.
 
 Fallible functions
 ------------------
 
-If a function is _fallible_ (i.e. it returns a `Result<_, Error>`), it can be registered with `register_result_fn` (using the `RegisterResultFn` trait).
+If a function is _fallible_ (i.e. it returns a `Result<_, Error>`), it can be registered with `register_result_fn`
+(using the `RegisterResultFn` trait).
 
-The function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements `From<&str>` and `From<String>` etc. and the error text gets converted into `EvalAltResult::ErrorRuntime`.
+The function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements `From<&str>` and `From<String>` etc.
+and the error text gets converted into `EvalAltResult::ErrorRuntime`.
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
@@ -612,14 +627,15 @@ let mut engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-To use methods and functions with the [`Engine`], we need to register them. There are some convenience functions to help with this.
-Below I register update and new with the [`Engine`].
+To use native types, methods and functions with the [`Engine`], we need to register them.
+There are some convenience functions to help with these. Below, the `update` and `new` methods are registered with the [`Engine`].
 
-*Note: [`Engine`] follows the convention that methods use a `&mut` first parameter so that invoking methods can update the value in memory.*
+*Note: [`Engine`] follows the convention that methods use a `&mut` first parameter so that invoking methods
+can update the value in memory.*
 
 ```rust
-engine.register_fn("update", TestStruct::update);   // registers 'update(&mut ts)'
-engine.register_fn("new_ts", TestStruct::new);      // registers 'new'
+engine.register_fn("update", TestStruct::update);   // registers 'update(&mut TestStruct)'
+engine.register_fn("new_ts", TestStruct::new);      // registers 'new()'
 ```
 
 Finally, we call our script.  The script can see the function and method we registered earlier.
@@ -631,8 +647,9 @@ let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 println!("result: {}", result.field);               // prints 42
 ```
 
-In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method-call on that type because internally they are the same thing:
-methods on a type is implemented as a functions taking an first argument.
+In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method call
+on that type because internally they are the same thing:
+methods on a type is implemented as a functions taking a `&mut` first argument.
 
 ```rust
 fn foo(ts: &mut TestStruct) -> i64 {
@@ -646,7 +663,8 @@ let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
 println!("result: {}", result);                     // prints 1
 ```
 
-If the [`no_object`] feature is turned on, however, the _method_ style of function calls (i.e. calling a function as an object-method) is no longer supported.
+If the [`no_object`] feature is turned on, however, the _method_ style of function calls
+(i.e. calling a function as an object-method) is no longer supported.
 
 ```rust
 // Below is a syntax error under 'no_object' because 'len' cannot be called in method style.
@@ -709,19 +727,21 @@ println!("Answer: {}", result);                     // prints 42
 Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set` and `register_get_set`
 are not available when the [`no_object`] feature is turned on.
 
-Initializing and maintaining state
----------------------------------
+`Scope` - Initializing and maintaining state
+-------------------------------------------
 
-[`Scope`]: #initializing-and-maintaining-state
+[`Scope`]: #scope---initializing-and-maintaining-state
 
-By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting only the functions that have been defined but no global state.
-This gives each evaluation a clean starting slate. In order to continue using the same global state from one invocation to the next,
-such a state must be manually created and passed in.
+By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting only the functions that have been defined
+but no global state. This gives each evaluation a clean starting slate. In order to continue using the same global state
+from one invocation to the next, such a state must be manually created and passed in.
 
-All `Scope` variables are [`Dynamic`], meaning they can store values of any type.  If the [`sync`] feature is used, however, then only types
-that are `Send + Sync` are supported, and the entire `Scope` itself will also be `Send + Sync`.  This is extremely useful in multi-threaded applications.
+All `Scope` variables are [`Dynamic`], meaning they can store values of any type.  If the [`sync`] feature is used, however,
+then only types that are `Send + Sync` are supported, and the entire `Scope` itself will also be `Send + Sync`.
+This is extremely useful in multi-threaded applications.
 
-In this example, a global state object (a `Scope`) is created with a few initialized variables, then the same state is threaded through multiple invocations:
+In this example, a global state object (a `Scope`) is created with a few initialized variables, then the same state is
+threaded through multiple invocations:
 
 ```rust
 use rhai::{Engine, Scope, EvalAltResult};
@@ -828,7 +848,8 @@ Variables
 
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
 
-Variable names must start with an ASCII letter or an underscore '`_`', must contain at least one ASCII letter, and must start with an ASCII letter before a digit.
+Variable names must start with an ASCII letter or an underscore '`_`', must contain at least one ASCII letter,
+and must start with an ASCII letter before a digit.
 Therefore, names like '`_`', '`_42`', '`3a`' etc. are not legal variable names, but '`_c3po`' and '`r2d2`' are.
 Variable names are also case _sensitive_.
 
@@ -879,7 +900,8 @@ Integer numbers follow C-style format with support for decimal, binary ('`0b`'),
 
 The default system integer type (also aliased to `INT`) is `i64`. It can be turned into `i32` via the [`only_i32`] feature.
 
-Floating-point numbers are also supported if not disabled with [`no_float`]. The default system floating-point type is `i64` (also aliased to `FLOAT`).
+Floating-point numbers are also supported if not disabled with [`no_float`]. The default system floating-point type is `i64`
+(also aliased to `FLOAT`).
 
 '`_`' separators can be added freely and are ignored within a number.
 
@@ -935,7 +957,8 @@ number = -5 - +5;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
+The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on
+`i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                       |
 | ------------ | --------------------------------- |
@@ -961,18 +984,21 @@ The following standard functions (defined in the standard library but excluded i
 Strings and Chars
 -----------------
 
-String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and hex ('`\x`_xx_') escape sequences.
+String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and
+hex ('`\x`_xx_') escape sequences.
 
-Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full, 32-bit extended Unicode code points.
+Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full,
+32-bit extended Unicode code points.
 
 Internally Rhai strings are stored as UTF-8 just like Rust (they _are_ Rust `String`s!), but there are major differences.
 In Rhai a string is the same as an array of Unicode characters and can be directly indexed (unlike Rust).
-This is similar to most other languages where strings are internally represented not as UTF-8 but as arrays of multi-byte Unicode characters.
+This is similar to most other languages where strings are internally represented not as UTF-8 but as arrays of multi-byte
+Unicode characters.
 Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
 In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
 
-Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded if [`no_stdlib`]).
-This is particularly useful when printing output.
+Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded
+if [`no_stdlib`]). This is particularly useful when printing output.
 
 [`type_of()`] a string returns `"string"`.
 
@@ -1236,8 +1262,8 @@ Comparison operators
 
 Comparing most values of the same data type work out-of-the-box for standard types supported by the system.
 
-However, if the [`no_stdlib`] feature is turned on, comparisons can only be made between restricted system
-types - `INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), string, array, `bool`, `char`.
+However, if the [`no_stdlib`] feature is turned on, comparisons can only be made between restricted system types -
+`INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), string, array, `bool`, `char`.
 
 ```rust
 42 == 42;               // true
@@ -1421,8 +1447,8 @@ return 123 + 456;           // returns 579
 Errors and `throw`-ing exceptions
 --------------------------------
 
-All of [`Engine`]'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult` holding error information.
-To deliberately return an error during an evaluation, use the `throw` keyword.
+All of [`Engine`]'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult`
+holding error information. To deliberately return an error during an evaluation, use the `throw` keyword.
 
 ```rust
 if some_bad_condition_has_happened {
@@ -1493,7 +1519,8 @@ fn foo() { x }              // <- syntax error: variable 'x' doesn't exist
 ### Passing arguments by value
 
 Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
-It is important to remember that all arguments are passed by _value_, so all functions are _pure_ (i.e. they never modify their arguments).
+It is important to remember that all arguments are passed by _value_, so all functions are _pure_
+(i.e. they never modifytheir arguments).
 Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if not careful.
 
 ```rust
@@ -1621,8 +1648,8 @@ For example, in the following:
 }
 ```
 
-Rhai attempts to eliminate _dead code_ (i.e. code that does nothing, for example an expression by itself as a statement, which is allowed in Rhai).
-The above script optimizes to:
+Rhai attempts to eliminate _dead code_ (i.e. code that does nothing, for example an expression by itself as a statement,
+which is allowed in Rhai). The above script optimizes to:
 
 ```rust
 {
@@ -1750,21 +1777,22 @@ Function side effect considerations
 ----------------------------------
 
 All of Rhai's built-in functions (and operators which are implemented as functions) are _pure_ (i.e. they do not mutate state
-nor cause side any effects, with the exception of `print` and `debug` which are handled specially) so using [`OptimizationLevel::Full`]
-is usually quite safe _unless_ you register your own types and functions.
+nor cause side any effects, with the exception of `print` and `debug` which are handled specially) so using
+[`OptimizationLevel::Full`] is usually quite safe _unless_ you register your own types and functions.
 
 If custom functions are registered, they _may_ be called (or maybe not, if the calls happen to lie within a pruned code block).
-If custom functions are registered to replace built-in operators, they will also be called when the operators are used (in an `if`
-statement, for example) and cause side-effects.
+If custom functions are registered to replace built-in operators, they will also be called when the operators are used
+(in an `if` statement, for example) and cause side-effects.
 
 Function volatility considerations
 ---------------------------------
 
-Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_ on the external
-environment and is not _pure_. A perfect example is a function that gets the current time - obviously each run will return a different value!
-The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that all functions are _pure_, so when it finds constant arguments
-it will eagerly execute the function call. This causes the script to behave differently from the intended semantics because
-essentially the result of the function call will always be the same value.
+Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_
+on the external environment and is not _pure_. A perfect example is a function that gets the current time -
+obviously each run will return a different value! The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that
+all functions are _pure_, so when it finds constant arguments it will eagerly execute the function call.
+This causes the script to behave differently from the intended semantics because essentially the result of the function call
+will always be the same value.
 
 Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.
 
@@ -1799,15 +1827,15 @@ print("start!");
 print("end!");
 ```
 
-In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to a type error.
-However, after optimization, the entire `if` statement is removed (because an access to `my_decision` produces no side effects),
-thus the script silently runs to completion without errors.
+In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to
+a type error. However, after optimization, the entire `if` statement is removed (because an access to `my_decision` produces
+no side effects), thus the script silently runs to completion without errors.
 
 Turning off optimizations
 -------------------------
 
-It is usually a bad idea to depend on a script failing or such kind of subtleties, but if it turns out to be necessary (why? I would never guess),
-turn it off by setting the optimization level to [`OptimizationLevel::None`].
+It is usually a bad idea to depend on a script failing or such kind of subtleties, but if it turns out to be necessary
+(why? I would never guess), turn it off by setting the optimization level to [`OptimizationLevel::None`].
 
 ```rust
 let engine = rhai::Engine::new();
