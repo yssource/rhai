@@ -63,6 +63,7 @@ pub(crate) struct EntryRef<'a> {
 /// allowing for automatic _shadowing_.
 ///
 /// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+#[derive(Debug, Clone)]
 pub struct Scope<'a>(Vec<Entry<'a>>);
 
 impl<'a> Scope<'a> {

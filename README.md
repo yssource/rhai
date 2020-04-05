@@ -232,18 +232,22 @@ let ast = engine.compile(true,
         }
     ")?;
 
+// A custom scope can also contain any variables/constants available to the functions
+let mut scope = Scope::new();
+
 // Evaluate a function defined in the script, passing arguments into the script as a tuple
 // if there are more than one. Beware, arguments must be of the correct types because
 // Rhai does not have built-in type conversions. If arguments of the wrong types are passed,
 // the Engine will not find the function.
 
-let result: i64 = engine.call_fn(&ast, "hello", ( String::from("abc"), 123_i64 ) )?;
-//                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ put arguments in a tuple
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", ( String::from("abc"), 123_i64 ) )?;
+//                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//                                                          put arguments in a tuple
 
-let result: i64 = engine.call_fn1(&ast, "hello", 123_i64)?
+let result: i64 = engine.call_fn1(&mut scope, &ast, "hello", 123_i64)?
 //                       ^^^^^^^^ use 'call_fn1' for one argument
 
-let result: i64 = engine.call_fn0(&ast, "hello")?
+let result: i64 = engine.call_fn0(&mut scope, &ast, "hello")?
 //                       ^^^^^^^^ use 'call_fn0' for no arguments
 ```
 

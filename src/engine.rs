@@ -435,6 +435,7 @@ impl Engine<'_> {
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai
     pub(crate) fn call_fn_raw(
         &mut self,
+        scope: Option<&mut Scope>,
         fn_name: &str,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
@@ -444,25 +445,56 @@ impl Engine<'_> {
         // First search in script-defined functions (can override built-in)
         if let Some(ref fn_lib_arc) = self.fn_lib {
             if let Some(fn_def) = fn_lib_arc.clone().get_function(fn_name, args.len()) {
-                let mut scope = Scope::new();
+                match scope {
+                    // Extern scope passed in which is not empty
+                    Some(scope) if scope.len() > 0 => {
+                        let scope_len = scope.len();
 
-                scope.extend(
-                    // Put arguments into scope as variables
-                    fn_def
-                        .params
-                        .iter()
-                        .zip(args.iter().map(|x| (*x).into_dynamic()))
-                        .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
-                );
+                        scope.extend(
+                            // Put arguments into scope as variables - variable name is copied
+                            fn_def
+                                .params
+                                .iter()
+                                .zip(args.iter().map(|x| (*x).into_dynamic()))
+                                .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
+                        );
 
-                // Evaluate the function at one higher level of call depth
-                return self.eval_stmt(&mut scope, &fn_def.body, level + 1).or_else(
-                    |err| match err {
-                        // Convert return statement to return value
-                        EvalAltResult::Return(x, _) => Ok(x),
-                        err => Err(err.set_position(pos)),
-                    },
-                );
+                        // Evaluate the function at one higher level of call depth
+                        let result = self.eval_stmt(scope, &fn_def.body, level + 1).or_else(
+                            |err| match err {
+                                // Convert return statement to return value
+                                EvalAltResult::Return(x, _) => Ok(x),
+                                err => Err(err.set_position(pos)),
+                            },
+                        );
+
+                        scope.rewind(scope_len);
+
+                        return result;
+                    }
+                    // No new scope - create internal scope
+                    _ => {
+                        let mut scope = Scope::new();
+
+                        scope.extend(
+                            // Put arguments into scope as variables
+                            fn_def
+                                .params
+                                .iter()
+                                .zip(args.iter().map(|x| (*x).into_dynamic()))
+                                .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
+                        );
+
+                        // Evaluate the function at one higher level of call depth
+                        return self.eval_stmt(&mut scope, &fn_def.body, level + 1).or_else(
+                            |err| match err {
+                                // Convert return statement to return value
+                                EvalAltResult::Return(x, _) => Ok(x),
+                                err => Err(err.set_position(pos)),
+                            },
+                        );
+                    }
+                }
             }
         }
 
@@ -563,7 +595,7 @@ impl Engine<'_> {
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
         match dot_rhs {
-            // xxx.fn_name(args)
+            // xxx.fn_name(arg_expr_list)
             Expr::FunctionCall(fn_name, arg_expr_list, def_val, pos) => {
                 let mut values = arg_expr_list
                     .iter()
@@ -572,17 +604,19 @@ impl Engine<'_> {
 
                 let this_ptr = target.get_mut(scope);
 
-                let mut arg_values: Vec<_> = once(this_ptr)
+                let mut args: Vec<_> = once(this_ptr)
                     .chain(values.iter_mut().map(Dynamic::as_mut))
                     .collect();
 
-                self.call_fn_raw(fn_name, &mut arg_values, def_val.as_ref(), *pos, 0)
+                let def_val = def_val.as_ref();
+
+                self.call_fn_raw(None, fn_name, &mut args, def_val, *pos, 0)
             }
 
             // xxx.id
             Expr::Property(id, pos) => {
-                let this_ptr = target.get_mut(scope);
-                self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
+                let mut args = [target.get_mut(scope)];
+                self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)
             }
 
             // xxx.idx_lhs[idx_expr]
@@ -591,8 +625,8 @@ impl Engine<'_> {
                 let value = match idx_lhs.as_ref() {
                     // xxx.id[idx_expr]
                     Expr::Property(id, pos) => {
-                        let this_ptr = target.get_mut(scope);
-                        self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)?
+                        let mut args = [target.get_mut(scope)];
+                        self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)?
                     }
                     // xxx.???[???][idx_expr]
                     Expr::Index(_, _, _) => {
@@ -615,8 +649,8 @@ impl Engine<'_> {
             Expr::Dot(dot_lhs, rhs, _) => match dot_lhs.as_ref() {
                 // xxx.id.rhs
                 Expr::Property(id, pos) => {
-                    let this_ptr = target.get_mut(scope);
-                    self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
+                    let mut args = [target.get_mut(scope)];
+                    self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)
                         .and_then(|mut val| {
                             self.get_dot_val_helper(scope, Target::from(val.as_mut()), rhs, level)
                         })
@@ -627,8 +661,8 @@ impl Engine<'_> {
                     let val = match idx_lhs.as_ref() {
                         // xxx.id[idx_expr].rhs
                         Expr::Property(id, pos) => {
-                            let this_ptr = target.get_mut(scope);
-                            self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)?
+                            let mut args = [target.get_mut(scope)];
+                            self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)?
                         }
                         // xxx.???[???][idx_expr].rhs
                         Expr::Index(_, _, _) => {
@@ -977,7 +1011,7 @@ impl Engine<'_> {
             // xxx.id
             Expr::Property(id, pos) => {
                 let mut args = [this_ptr, new_val.0.as_mut()];
-                self.call_fn_raw(&make_setter(id), &mut args, None, *pos, 0)
+                self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
             }
 
             // xxx.lhs[idx_expr]
@@ -986,7 +1020,7 @@ impl Engine<'_> {
             Expr::Index(lhs, idx_expr, op_pos) => match lhs.as_ref() {
                 // xxx.id[idx_expr]
                 Expr::Property(id, pos) => self
-                    .call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
+                    .call_fn_raw(None, &make_getter(id), &mut [this_ptr], None, *pos, 0)
                     .and_then(|val| {
                         let (_, _, idx) =
                             self.get_indexed_value(scope, &val, idx_expr, *op_pos, level)?;
@@ -995,7 +1029,7 @@ impl Engine<'_> {
                     })
                     .and_then(|mut val| {
                         let mut args = [this_ptr, val.as_mut()];
-                        self.call_fn_raw(&make_setter(id), &mut args, None, *pos, 0)
+                        self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
                     }),
 
                 // All others - syntax error for setters chain
@@ -1009,14 +1043,14 @@ impl Engine<'_> {
             Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 // xxx.id.rhs
                 Expr::Property(id, pos) => {
-                    self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
+                    self.call_fn_raw(None, &make_getter(id), &mut [this_ptr], None, *pos, 0)
                         .and_then(|mut val| {
                             self.set_dot_val_helper(scope, val.as_mut(), rhs, new_val, level)
                                 .map(|_| val) // Discard Ok return value
                         })
                         .and_then(|mut val| {
                             let mut args = [this_ptr, val.as_mut()];
-                            self.call_fn_raw(&make_setter(id), &mut args, None, *pos, 0)
+                            self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
                         })
                 }
 
@@ -1026,7 +1060,7 @@ impl Engine<'_> {
                 Expr::Index(lhs, idx_expr, op_pos) => match lhs.as_ref() {
                     // xxx.id[idx_expr].rhs
                     Expr::Property(id, pos) => {
-                        self.call_fn_raw(&make_getter(id), &mut [this_ptr], None, *pos, 0)
+                        self.call_fn_raw(None, &make_getter(id), &mut [this_ptr], None, *pos, 0)
                             .and_then(|v| {
                                 let (mut value, _, idx) =
                                     self.get_indexed_value(scope, &v, idx_expr, *op_pos, level)?;
@@ -1039,13 +1073,8 @@ impl Engine<'_> {
                                 Self::update_indexed_value(v, idx, value, val_pos)
                             })
                             .and_then(|mut v| {
-                                self.call_fn_raw(
-                                    &make_setter(id),
-                                    &mut [this_ptr, v.as_mut()],
-                                    None,
-                                    *pos,
-                                    0,
-                                )
+                                let mut args = [this_ptr, v.as_mut()];
+                                self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
                             })
                     }
 
@@ -1315,7 +1344,8 @@ impl Engine<'_> {
                             .into_dynamic();
 
                         // Redirect call to `print`
-                        self.call_fn_raw(KEYWORD_PRINT, &mut [result.as_mut()], None, pos, level)
+                        let mut args = [result.as_mut()];
+                        self.call_fn_raw(None, KEYWORD_PRINT, &mut args, None, pos, level)
                     }
 
                     // type_of
@@ -1349,7 +1379,7 @@ impl Engine<'_> {
 
                         // Compile the script text
                         #[cfg(not(feature = "no_optimize"))]
-                        let mut ast = {
+                        let ast = {
                             let orig_optimization_level = self.optimization_level;
 
                             self.set_optimization_level(OptimizationLevel::None);
@@ -1360,7 +1390,7 @@ impl Engine<'_> {
                         };
 
                         #[cfg(feature = "no_optimize")]
-                        let mut ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
+                        let ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
 
                         // If new functions are defined, merge it into the current functions library
                         let merged = AST(
@@ -1404,7 +1434,9 @@ impl Engine<'_> {
                         let mut arg_values: Vec<_> =
                             values.iter_mut().map(Dynamic::as_mut).collect();
 
-                        self.call_fn_raw(fn_name, &mut arg_values, def_val.as_ref(), *pos, level)
+                        let def_val = def_val.as_ref();
+
+                        self.call_fn_raw(None, fn_name, &mut arg_values, def_val, *pos, level)
                     }
                 }
             }
@@ -1527,6 +1559,7 @@ impl Engine<'_> {
 
                 if let Some(ref type_iterators) = self.type_iterators {
                     if let Some(iter_fn) = type_iterators.get(&tid) {
+                        // Add the loop variable - variable name is copied
                         scope.push(name.clone(), ());
 
                         let entry = ScopeSource {
