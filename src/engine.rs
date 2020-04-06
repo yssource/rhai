@@ -1191,7 +1191,7 @@ impl Engine<'_> {
             Expr::FloatConstant(f, _) => Ok(f.into_dynamic()),
 
             Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
-            Expr::StringConstant(s, _) => Ok(s.into_dynamic()),
+            Expr::StringConstant(s, _) => Ok(s.clone().into_owned().into_dynamic()),
             Expr::CharConstant(c, _) => Ok(c.into_dynamic()),
             Expr::Variable(id, pos) => Self::search_scope(scope, id, *pos).map(|(_, val)| val),
             Expr::Property(_, _) => panic!("unexpected property."),
@@ -1213,7 +1213,9 @@ impl Engine<'_> {
                     // name = rhs
                     Expr::Variable(name, pos) => match scope
                         .get(name)
-                        .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.clone(), *pos))?
+                        .ok_or_else(|| {
+                            EvalAltResult::ErrorVariableNotFound(name.clone().into_owned(), *pos)
+                        })?
                         .0
                     {
                         entry
@@ -1328,7 +1330,7 @@ impl Engine<'_> {
                         && engine.fn_lib.as_ref().unwrap().has_function(name, 1))
                 }
 
-                match fn_name.as_str() {
+                match fn_name.as_ref() {
                     // Dump AST
                     KEYWORD_DUMP_AST => {
                         let pos = if args_expr_list.is_empty() {

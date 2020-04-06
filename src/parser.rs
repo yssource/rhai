@@ -13,7 +13,9 @@ use crate::stdlib::{
     boxed::Box,
     char,
     collections::HashMap,
-    fmt, format,
+    fmt,
+    fmt::Display,
+    format,
     iter::Peekable,
     ops::Add,
     rc::Rc,
@@ -316,11 +318,11 @@ pub enum Stmt {
     /// loop { stmt }
     Loop(Box<Stmt>),
     /// for id in expr { stmt }
-    For(String, Box<Expr>, Box<Stmt>),
+    For(Cow<'static, str>, Box<Expr>, Box<Stmt>),
     /// let id = expr
-    Let(String, Option<Box<Expr>>, Position),
+    Let(Cow<'static, str>, Option<Box<Expr>>, Position),
     /// const id = expr
-    Const(String, Box<Expr>, Position),
+    Const(Cow<'static, str>, Box<Expr>, Position),
     /// { stmt; ... }
     Block(Vec<Stmt>, Position),
     /// { stmt }
@@ -401,15 +403,15 @@ pub enum Expr {
     /// Character constant.
     CharConstant(char, Position),
     /// String constant.
-    StringConstant(String, Position),
+    StringConstant(Cow<'static, str>, Position),
     /// Variable access.
-    Variable(String, Position),
+    Variable(Cow<'static, str>, Position),
     /// Property access.
-    Property(String, Position),
+    Property(Cow<'static, str>, Position),
     /// { stmt }
     Stmt(Box<Stmt>, Position),
     /// func(expr, ... )
-    FunctionCall(String, Vec<Expr>, Option<Dynamic>, Position),
+    FunctionCall(Cow<'static, str>, Vec<Expr>, Option<Dynamic>, Position),
     /// expr = expr
     Assignment(Box<Expr>, Box<Expr>, Position),
     /// lhs.rhs
@@ -446,7 +448,7 @@ impl Expr {
         match self {
             Expr::IntegerConstant(i, _) => i.into_dynamic(),
             Expr::CharConstant(c, _) => c.into_dynamic(),
-            Expr::StringConstant(s, _) => s.into_dynamic(),
+            Expr::StringConstant(s, _) => s.clone().into_owned().into_dynamic(),
             Expr::True(_) => true.into_dynamic(),
             Expr::False(_) => false.into_dynamic(),
             Expr::Unit(_) => ().into_dynamic(),
@@ -1448,42 +1450,49 @@ fn parse_paren_expr<'a>(
 }
 
 /// Parse a function call.
-fn parse_call_expr<'a>(
-    id: String,
+fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
+    id: S,
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
     let mut args_expr_list = Vec::new();
 
-    // id()
-    if let (Token::RightParen, _) = input.peek().ok_or_else(|| {
-        PERR::MissingToken(
-            ")".into(),
-            format!("to close the arguments list of this function call '{}'", id),
-        )
-        .into_err_eof()
-    })? {
-        input.next();
-        return Ok(Expr::FunctionCall(id, args_expr_list, None, begin));
+    match input.peek() {
+        //id {EOF}
+        None => {
+            return Err(PERR::MissingToken(
+                ")".into(),
+                format!("to close the arguments list of this function call '{}'", id),
+            )
+            .into_err_eof())
+        }
+        // id()
+        Some((Token::RightParen, _)) => {
+            input.next();
+            return Ok(Expr::FunctionCall(id.into(), args_expr_list, None, begin));
+        }
+        // id...
+        _ => (),
     }
 
     loop {
         args_expr_list.push(parse_expr(input, allow_stmt_expr)?);
 
-        match input.peek().ok_or_else(|| {
-            PERR::MissingToken(
-                ")".into(),
-                format!("to close the arguments list of this function call '{}'", id),
-            )
-            .into_err_eof()
-        })? {
-            (Token::RightParen, _) => {
-                input.next();
-                return Ok(Expr::FunctionCall(id, args_expr_list, None, begin));
+        match input.peek() {
+            None => {
+                return Err(PERR::MissingToken(
+                    ")".into(),
+                    format!("to close the arguments list of this function call '{}'", id),
+                )
+                .into_err_eof())
             }
-            (Token::Comma, _) => (),
-            (_, pos) => {
+            Some((Token::RightParen, _)) => {
+                input.next();
+                return Ok(Expr::FunctionCall(id.into(), args_expr_list, None, begin));
+            }
+            Some((Token::Comma, _)) => (),
+            Some((_, pos)) => {
                 return Err(PERR::MissingToken(
                     ",".into(),
                     format!("to separate the arguments to function call '{}'", id),
@@ -1643,8 +1652,8 @@ fn parse_index_expr<'a>(
 }
 
 /// Parse an expression that begins with an identifier.
-fn parse_ident_expr<'a>(
-    id: String,
+fn parse_ident_expr<'a, S: Into<Cow<'static, str>> + Display>(
+    id: S,
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
     allow_stmt_expr: bool,
@@ -1661,16 +1670,16 @@ fn parse_ident_expr<'a>(
             let pos = *pos;
             input.next();
             parse_index_expr(
-                Box::new(Expr::Variable(id, begin)),
+                Box::new(Expr::Variable(id.into(), begin)),
                 input,
                 pos,
                 allow_stmt_expr,
             )
         }
         // id - variable
-        Some(_) => Ok(Expr::Variable(id, begin)),
+        Some(_) => Ok(Expr::Variable(id.into(), begin)),
         // EOF
-        None => Ok(Expr::Variable(id, begin)),
+        None => Ok(Expr::Variable(id.into(), begin)),
     }
 }
 
@@ -1851,7 +1860,7 @@ fn parse_primary<'a>(
         (Token::CharConstant(c), pos) => Ok(Expr::CharConstant(c, pos)),
         (Token::StringConst(s), pos) => {
             can_be_indexed = true;
-            Ok(Expr::StringConstant(s, pos))
+            Ok(Expr::StringConstant(s.into(), pos))
         }
         (Token::Identifier(s), pos) => {
             can_be_indexed = true;
@@ -2040,7 +2049,12 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
 }
 
 /// Parse an operator-assignment expression.
-fn parse_op_assignment(op: &str, lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
+fn parse_op_assignment<S: Into<Cow<'static, str>>>(
+    op: S,
+    lhs: Expr,
+    rhs: Expr,
+    pos: Position,
+) -> Result<Expr, ParseError> {
     let lhs_copy = lhs.clone();
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
@@ -2336,7 +2350,7 @@ fn parse_for<'a>(
     let expr = parse_expr(input, allow_stmt_expr)?;
     let body = parse_block(input, true, allow_stmt_expr)?;
 
-    Ok(Stmt::For(name, Box::new(expr), Box::new(body)))
+    Ok(Stmt::For(name.into(), Box::new(expr), Box::new(body)))
 }
 
 /// Parse a variable definition statement.
@@ -2367,10 +2381,10 @@ fn parse_let<'a>(
 
         match var_type {
             // let name = expr
-            ScopeEntryType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
+            ScopeEntryType::Normal => Ok(Stmt::Let(name.into(), Some(Box::new(init_value)), pos)),
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
-                Ok(Stmt::Const(name, Box::new(init_value), pos))
+                Ok(Stmt::Const(name.into(), Box::new(init_value), pos))
             }
             // const name = expr - error
             ScopeEntryType::Constant => {
@@ -2379,7 +2393,7 @@ fn parse_let<'a>(
         }
     } else {
         // let name
-        Ok(Stmt::Let(name, None, pos))
+        Ok(Stmt::Let(name.into(), None, pos))
     }
 }
 
@@ -2733,7 +2747,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     } else if value.is::<char>() {
         Some(Expr::CharConstant(value.cast(), pos))
     } else if value.is::<String>() {
-        Some(Expr::StringConstant(value.cast(), pos))
+        Some(Expr::StringConstant(value.cast::<String>().into(), pos))
     } else if value.is::<bool>() {
         Some(if value.cast::<bool>() {
             Expr::True(pos)
