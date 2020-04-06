@@ -11,6 +11,7 @@ fn test_arrays() -> Result<(), EvalAltResult> {
         engine.eval::<char>(r#"let y = [1, [ 42, 88, "93" ], 3]; y[1][2][1]"#)?,
         '3'
     );
+    assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
 
     #[cfg(not(feature = "no_stdlib"))]
     {

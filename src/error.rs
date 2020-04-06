@@ -54,6 +54,8 @@ pub enum ParseErrorType {
     /// Not available under the `no_index` feature.
     #[cfg(not(feature = "no_index"))]
     MalformedIndexExpr(String),
+    /// An expression in an `in` expression has syntax error. Wrapped value is the error description (if any).
+    MalformedInExpr(String),
     /// A map definition has duplicated property names. Wrapped value is the property name.
     ///
     /// Not available under the `no_object` feature.
@@ -138,6 +140,7 @@ impl ParseError {
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
+            ParseErrorType::MalformedInExpr(_) => "Invalid 'in' expression",
             #[cfg(not(feature = "no_object"))]
             ParseErrorType::DuplicatedProperty(_) => "Duplicated property in object map literal",
             ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
@@ -177,6 +180,10 @@ impl fmt::Display for ParseError {
 
             #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(s) => {
+                write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
+            }
+
+            ParseErrorType::MalformedInExpr(s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
             }
 

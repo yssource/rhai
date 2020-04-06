@@ -49,6 +49,8 @@ pub enum EvalAltResult {
     ErrorNumericIndexExpr(Position),
     /// Trying to index into a map with an index that is not `String`.
     ErrorStringIndexExpr(Position),
+    /// Invalid arguments for `in` operator.
+    ErrorInExpr(Position),
     /// The guard expression in an `if` or `while` statement does not return a boolean value.
     ErrorLogicGuard(Position),
     /// The `for` statement encounters a type that is not an iterator.
@@ -118,6 +120,7 @@ impl EvalAltResult {
             }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
+            Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorStackOverflow(_) => "Stack overflow",
@@ -154,6 +157,7 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
+            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
 
@@ -256,6 +260,7 @@ impl EvalAltResult {
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorStackOverflow(pos)
@@ -288,6 +293,7 @@ impl EvalAltResult {
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorStackOverflow(pos)

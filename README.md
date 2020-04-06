@@ -1039,6 +1039,11 @@ record == "Bob C. Davis: age 42 ❤\n";   // '\n' = new-line
 // (disabled with 'no_index')
 record[4] = '\x58'; // 0x58 = 'X'
 record == "Bob X. Davis: age 42 ❤\n";
+
+// Use 'in' to test if a substring (or character) exists in a string
+"Davis" in record == true;
+'X' in record == true;
+'C' in record == false;
 ```
 
 The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on strings:
@@ -1113,6 +1118,9 @@ Examples:
 ```rust
 let y = [1, 2, 3];      // array literal with 3 elements
 y[1] = 42;
+
+print(1 in y);          // use 'in' to test if an item exists in the array, prints true
+print(9 in y);          // ... prints false
 
 print(y[1]);            // prints 42
 
@@ -1218,6 +1226,9 @@ y."baz!$@" = 42;        // <- syntax error: strings not allowed in dot notation
 print(y.a);             // prints 42
 
 print(y["baz!$@"]);     // prints 123.456 - access via index notation
+
+print("baz!$@" in y);   // use 'in' to test if a property exists in the object map, prints true
+print("z" in y);        // ... prints false
 
 ts.obj = y;             // object maps can be assigned completely (by value copy)
 let foo = ts.list.a;

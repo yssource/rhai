@@ -29,6 +29,10 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
     );
     engine.eval::<()>("let y = #{a: 1, b: 2, c: 3}; y.z")?;
 
+    assert!(engine.eval::<bool>(r#"let y = #{a: 1, b: 2, c: 3}; "c" in y"#)?);
+    assert!(engine.eval::<bool>("let y = #{a: 1, b: 2, c: 3}; 'b' in y")?);
+    assert!(!engine.eval::<bool>(r#"let y = #{a: 1, b: 2, c: 3}; "z" in y"#)?);
+
     #[cfg(not(feature = "no_stdlib"))]
     {
         assert_eq!(

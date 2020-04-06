@@ -392,8 +392,55 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 .into_iter()
                 .map(|(key, expr, pos)| (key, optimize_expr(expr, state), pos))
                 .collect(), pos),
+        // lhs in rhs
+        Expr::In(lhs, rhs, pos) => match (*lhs, *rhs) {
+            // "xxx" in "xxxxx"
+            (Expr::StringConstant(lhs, pos), Expr::StringConstant(rhs, _)) => {
+                state.set_dirty();
+                if rhs.contains(lhs.as_ref()) {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // 'x' in "xxxxx"
+            (Expr::CharConstant(lhs, pos), Expr::StringConstant(rhs, _)) => {
+                state.set_dirty();
+                if rhs.contains(&lhs.to_string()) {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // "xxx" in #{...}
+            (Expr::StringConstant(lhs, pos), Expr::Map(items, _)) => {
+                state.set_dirty();
+                if items.iter().find(|(name, _, _)| name == &lhs).is_some() {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // 'x' in #{...}
+            (Expr::CharConstant(lhs, pos), Expr::Map(items, _)) => {
+                state.set_dirty();
+                let lhs = lhs.to_string();
+
+                if items.iter().find(|(name, _, _)| name == &lhs).is_some() {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // lhs in rhs
+            (lhs, rhs) => Expr::In(
+                Box::new(optimize_expr(lhs, state)),
+                Box::new(optimize_expr(rhs, state)),
+                pos
+            ),
+        },
         // lhs && rhs
-        Expr::And(lhs, rhs) => match (*lhs, *rhs) {
+        Expr::And(lhs, rhs, pos) => match (*lhs, *rhs) {
             // true && rhs -> rhs
             (Expr::True(_), rhs) => {
                 state.set_dirty();
@@ -413,10 +460,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             (lhs, rhs) => Expr::And(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
+                pos
             ),
         },
         // lhs || rhs
-        Expr::Or(lhs, rhs) => match (*lhs, *rhs) {
+        Expr::Or(lhs, rhs, pos) => match (*lhs, *rhs) {
             // false || rhs -> rhs
             (Expr::False(_), rhs) => {
                 state.set_dirty();
@@ -436,6 +484,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             (lhs, rhs) => Expr::Or(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
+                pos
             ),
         },
 

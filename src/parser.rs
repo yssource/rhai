@@ -420,16 +420,18 @@ pub enum Expr {
     /// expr[expr]
     #[cfg(not(feature = "no_index"))]
     Index(Box<Expr>, Box<Expr>, Position),
-    #[cfg(not(feature = "no_index"))]
     /// [ expr, ... ]
+    #[cfg(not(feature = "no_index"))]
     Array(Vec<Expr>, Position),
-    #[cfg(not(feature = "no_object"))]
     /// #{ name:expr, ... }
+    #[cfg(not(feature = "no_object"))]
     Map(Vec<(String, Expr, Position)>, Position),
+    /// lhs in rhs
+    In(Box<Expr>, Box<Expr>, Position),
     /// lhs && rhs
-    And(Box<Expr>, Box<Expr>),
+    And(Box<Expr>, Box<Expr>, Position),
     /// lhs || rhs
-    Or(Box<Expr>, Box<Expr>),
+    Or(Box<Expr>, Box<Expr>, Position),
     /// true
     True(Position),
     /// false
@@ -446,29 +448,29 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
-            Expr::IntegerConstant(i, _) => i.into_dynamic(),
-            Expr::CharConstant(c, _) => c.into_dynamic(),
-            Expr::StringConstant(s, _) => s.clone().into_owned().into_dynamic(),
-            Expr::True(_) => true.into_dynamic(),
-            Expr::False(_) => false.into_dynamic(),
-            Expr::Unit(_) => ().into_dynamic(),
+            Self::IntegerConstant(i, _) => i.into_dynamic(),
+            Self::CharConstant(c, _) => c.into_dynamic(),
+            Self::StringConstant(s, _) => s.clone().into_owned().into_dynamic(),
+            Self::True(_) => true.into_dynamic(),
+            Self::False(_) => false.into_dynamic(),
+            Self::Unit(_) => ().into_dynamic(),
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(items, _) if items.iter().all(Expr::is_constant) => items
+            Self::Array(items, _) if items.iter().all(Self::is_constant) => items
                 .iter()
-                .map(Expr::get_constant_value)
+                .map(Self::get_constant_value)
                 .collect::<Vec<_>>()
                 .into_dynamic(),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => items
+            Self::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => items
                 .iter()
                 .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
                 .collect::<HashMap<_, _>>()
                 .into_dynamic(),
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(f, _) => f.into_dynamic(),
+            Self::FloatConstant(f, _) => f.into_dynamic(),
 
             _ => panic!("cannot get value of non-constant expression"),
         }
@@ -481,18 +483,18 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_str(&self) -> String {
         match self {
-            Expr::IntegerConstant(i, _) => i.to_string(),
-            Expr::CharConstant(c, _) => c.to_string(),
-            Expr::StringConstant(_, _) => "string".to_string(),
-            Expr::True(_) => "true".to_string(),
-            Expr::False(_) => "false".to_string(),
-            Expr::Unit(_) => "()".to_string(),
+            Self::IntegerConstant(i, _) => i.to_string(),
+            Self::CharConstant(c, _) => c.to_string(),
+            Self::StringConstant(_, _) => "string".to_string(),
+            Self::True(_) => "true".to_string(),
+            Self::False(_) => "false".to_string(),
+            Self::Unit(_) => "()".to_string(),
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(items, _) if items.iter().all(Expr::is_constant) => "array".to_string(),
+            Self::Array(items, _) if items.iter().all(Self::is_constant) => "array".to_string(),
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(f, _) => f.to_string(),
+            Self::FloatConstant(f, _) => f.to_string(),
 
             _ => panic!("cannot get value of non-constant expression"),
         }
@@ -501,35 +503,36 @@ impl Expr {
     /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {
-            Expr::IntegerConstant(_, pos)
-            | Expr::CharConstant(_, pos)
-            | Expr::StringConstant(_, pos)
-            | Expr::Variable(_, pos)
-            | Expr::Property(_, pos)
-            | Expr::Stmt(_, pos)
-            | Expr::FunctionCall(_, _, _, pos)
-            | Expr::True(pos)
-            | Expr::False(pos)
-            | Expr::Unit(pos) => *pos,
+            Self::IntegerConstant(_, pos)
+            | Self::CharConstant(_, pos)
+            | Self::StringConstant(_, pos)
+            | Self::Variable(_, pos)
+            | Self::Property(_, pos)
+            | Self::Stmt(_, pos)
+            | Self::FunctionCall(_, _, _, pos)
+            | Self::And(_, _, pos)
+            | Self::Or(_, _, pos)
+            | Self::In(_, _, pos)
+            | Self::True(pos)
+            | Self::False(pos)
+            | Self::Unit(pos) => *pos,
 
-            Expr::Assignment(expr, _, _) | Expr::And(expr, _) | Expr::Or(expr, _) => {
-                expr.position()
-            }
+            Self::Assignment(expr, _, _) => expr.position(),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(expr, _, _) => expr.position(),
+            Self::Dot(expr, _, _) => expr.position(),
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(_, pos) => *pos,
+            Self::FloatConstant(_, pos) => *pos,
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(_, pos) => *pos,
+            Self::Array(_, pos) => *pos,
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(_, pos) => *pos,
+            Self::Map(_, pos) => *pos,
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(expr, _, _) => expr.position(),
+            Self::Index(expr, _, _) => expr.position(),
         }
     }
 
@@ -539,35 +542,48 @@ impl Expr {
     pub fn is_pure(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_pure),
+            Self::Array(expressions, _) => expressions.iter().all(Self::is_pure),
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(x, y, _) => x.is_pure() && y.is_pure(),
+            Self::Index(x, y, _) => x.is_pure() && y.is_pure(),
 
-            Expr::And(x, y) | Expr::Or(x, y) => x.is_pure() && y.is_pure(),
+            Self::And(x, y, _) | Self::Or(x, y, _) | Self::In(x, y, _) => {
+                x.is_pure() && y.is_pure()
+            }
 
-            Expr::Stmt(stmt, _) => stmt.is_pure(),
+            Self::Stmt(stmt, _) => stmt.is_pure(),
 
-            expr => expr.is_constant() || matches!(expr, Expr::Variable(_, _)),
+            expr => expr.is_constant() || matches!(expr, Self::Variable(_, _)),
         }
     }
 
     /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
-            Expr::IntegerConstant(_, _)
-            | Expr::CharConstant(_, _)
-            | Expr::StringConstant(_, _)
-            | Expr::True(_)
-            | Expr::False(_)
-            | Expr::Unit(_) => true,
+            Self::IntegerConstant(_, _)
+            | Self::CharConstant(_, _)
+            | Self::StringConstant(_, _)
+            | Self::True(_)
+            | Self::False(_)
+            | Self::Unit(_) => true,
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(_, _) => true,
+            Self::FloatConstant(_, _) => true,
 
             // An array literal is constant if all items are constant
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(expressions, _) => expressions.iter().all(Expr::is_constant),
+            Self::Array(expressions, _) => expressions.iter().all(Self::is_constant),
+
+            // An map literal is constant if all items are constant
+            #[cfg(not(feature = "no_object"))]
+            Self::Map(items, _) => items.iter().map(|(_, expr, _)| expr).all(Self::is_constant),
+
+            // Check in expression
+            Self::In(lhs, rhs, _) => match (lhs.as_ref(), rhs.as_ref()) {
+                (Self::StringConstant(_, _), Self::StringConstant(_, _))
+                | (Self::CharConstant(_, _), Self::StringConstant(_, _)) => true,
+                _ => false,
+            },
 
             _ => false,
         }
@@ -653,7 +669,7 @@ pub enum Token {
 impl Token {
     /// Get the syntax of the token.
     pub fn syntax(&self) -> Cow<str> {
-        use self::Token::*;
+        use Token::*;
 
         match self {
             IntegerConstant(i) => i.to_string().into(),
@@ -738,7 +754,7 @@ impl Token {
     // If another operator is after these, it's probably an unary operator
     // (not sure about fn name).
     pub fn is_next_unary(&self) -> bool {
-        use self::Token::*;
+        use Token::*;
 
         match self {
             LexError(_)      |
@@ -799,40 +815,31 @@ impl Token {
 
     /// Get the precedence number of the token.
     pub fn precedence(&self) -> u8 {
+        use Token::*;
+
         match self {
-            Self::Equals
-            | Self::PlusAssign
-            | Self::MinusAssign
-            | Self::MultiplyAssign
-            | Self::DivideAssign
-            | Self::LeftShiftAssign
-            | Self::RightShiftAssign
-            | Self::AndAssign
-            | Self::OrAssign
-            | Self::XOrAssign
-            | Self::ModuloAssign
-            | Self::PowerOfAssign => 10,
+            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
+            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
+            | PowerOfAssign => 10,
 
-            Self::Or | Self::XOr | Self::Pipe => 50,
+            Or | XOr | Pipe => 40,
 
-            Self::And | Self::Ampersand => 60,
+            And | Ampersand => 50,
 
-            Self::LessThan
-            | Self::LessThanEqualsTo
-            | Self::GreaterThan
-            | Self::GreaterThanEqualsTo
-            | Self::EqualsTo
-            | Self::NotEqualsTo => 70,
+            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo | EqualsTo
+            | NotEqualsTo => 60,
 
-            Self::Plus | Self::Minus => 80,
+            In => 70,
 
-            Self::Divide | Self::Multiply | Self::PowerOf => 90,
+            Plus | Minus => 80,
 
-            Self::LeftShift | Self::RightShift => 100,
+            Divide | Multiply | PowerOf => 90,
 
-            Self::Modulo => 110,
+            LeftShift | RightShift => 100,
 
-            Self::Period => 120,
+            Modulo => 110,
+
+            Period => 120,
 
             _ => 0,
         }
@@ -840,23 +847,16 @@ impl Token {
 
     /// Does an expression bind to the right (instead of left)?
     pub fn is_bind_right(&self) -> bool {
+        use Token::*;
+
         match self {
             // Assignments bind to the right
-            Self::Equals
-            | Self::PlusAssign
-            | Self::MinusAssign
-            | Self::MultiplyAssign
-            | Self::DivideAssign
-            | Self::LeftShiftAssign
-            | Self::RightShiftAssign
-            | Self::AndAssign
-            | Self::OrAssign
-            | Self::XOrAssign
-            | Self::ModuloAssign
-            | Self::PowerOfAssign => true,
+            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
+            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
+            | PowerOfAssign => true,
 
             // Property access binds to the right
-            Self::Period => true,
+            Period => true,
 
             _ => false,
         }
@@ -1539,20 +1539,16 @@ fn parse_index_expr<'a>(
             Expr::FloatConstant(_, pos)
             | Expr::CharConstant(_, pos)
             | Expr::Assignment(_, _, pos)
-            | Expr::Unit(pos)
+            | Expr::And(_, _, pos)
+            | Expr::Or(_, _, pos)
+            | Expr::In(_, _, pos)
             | Expr::True(pos)
-            | Expr::False(pos) => {
+            | Expr::False(pos)
+            | Expr::Unit(pos) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
                 .into_err(pos))
-            }
-
-            Expr::And(lhs, _) | Expr::Or(lhs, _) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Only arrays, object maps and strings can be indexed".into(),
-                )
-                .into_err(lhs.position()))
             }
 
             _ => (),
@@ -1572,20 +1568,16 @@ fn parse_index_expr<'a>(
             Expr::FloatConstant(_, pos)
             | Expr::CharConstant(_, pos)
             | Expr::Assignment(_, _, pos)
-            | Expr::Unit(pos)
+            | Expr::And(_, _, pos)
+            | Expr::Or(_, _, pos)
+            | Expr::In(_, _, pos)
             | Expr::True(pos)
-            | Expr::False(pos) => {
+            | Expr::False(pos)
+            | Expr::Unit(pos) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
                 .into_err(pos))
-            }
-
-            Expr::And(lhs, _) | Expr::Or(lhs, _) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Only arrays, object maps and strings can be indexed".into(),
-                )
-                .into_err(lhs.position()))
             }
 
             _ => (),
@@ -1613,15 +1605,12 @@ fn parse_index_expr<'a>(
             )
             .into_err(*pos))
         }
-        // lhs[??? && ???], lhs[??? || ???]
-        Expr::And(lhs, _) | Expr::Or(lhs, _) => {
-            return Err(PERR::MalformedIndexExpr(
-                "Array access expects integer index, not a boolean".into(),
-            )
-            .into_err(lhs.position()))
-        }
-        // lhs[true], lhs[false]
-        Expr::True(pos) | Expr::False(pos) => {
+        // lhs[??? && ???], lhs[??? || ???], lhs[??? in ???], lhs[true], lhs[false]
+        Expr::And(_, _, pos)
+        | Expr::Or(_, _, pos)
+        | Expr::In(_, _, pos)
+        | Expr::True(pos)
+        | Expr::False(pos) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
@@ -1699,9 +1688,7 @@ fn parse_array_literal<'a>(
             match input.peek().ok_or_else(|| {
                 PERR::MissingToken("]".into(), "to end this array literal".into()).into_err_eof()
             })? {
-                (Token::Comma, _) => {
-                    input.next();
-                }
+                (Token::Comma, _) => input.next(),
                 (Token::RightBracket, _) => break,
                 (_, pos) => {
                     return Err(PERR::MissingToken(
@@ -1710,7 +1697,7 @@ fn parse_array_literal<'a>(
                     )
                     .into_err(*pos))
                 }
-            }
+            };
         }
     }
 
@@ -2065,6 +2052,154 @@ fn parse_op_assignment<S: Into<Cow<'static, str>>>(
     )
 }
 
+/// Parse an 'in' expression.
+fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
+    match (&lhs, &rhs) {
+        #[cfg(not(feature = "no_float"))]
+        (_, Expr::FloatConstant(_, pos)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression expects a string, array or object map".into(),
+            )
+            .into_err(*pos))
+        }
+
+        (_, Expr::IntegerConstant(_, pos))
+        | (_, Expr::And(_, _, pos))
+        | (_, Expr::Or(_, _, pos))
+        | (_, Expr::In(_, _, pos))
+        | (_, Expr::True(pos))
+        | (_, Expr::False(pos))
+        | (_, Expr::Assignment(_, _, pos))
+        | (_, Expr::Unit(pos)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression expects a string, array or object map".into(),
+            )
+            .into_err(*pos))
+        }
+
+        // "xxx" in "xxxx", 'x' in "xxxx" - OK!
+        (Expr::StringConstant(_, _), Expr::StringConstant(_, _))
+        | (Expr::CharConstant(_, _), Expr::StringConstant(_, _)) => (),
+
+        // 123.456 in "xxxx"
+        #[cfg(not(feature = "no_float"))]
+        (Expr::FloatConstant(_, pos), Expr::StringConstant(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not a float".into(),
+            )
+            .into_err(*pos))
+        }
+        // 123 in "xxxx"
+        (Expr::IntegerConstant(_, pos), Expr::StringConstant(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not a number".into(),
+            )
+            .into_err(*pos))
+        }
+        // (??? && ???) in "xxxx", (??? || ???) in "xxxx", (??? in ???) in "xxxx",
+        //  true in "xxxx", false in "xxxx"
+        (Expr::And(_, _, pos), Expr::StringConstant(_, _))
+        | (Expr::Or(_, _, pos), Expr::StringConstant(_, _))
+        | (Expr::In(_, _, pos), Expr::StringConstant(_, _))
+        | (Expr::True(pos), Expr::StringConstant(_, _))
+        | (Expr::False(pos), Expr::StringConstant(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not a boolean".into(),
+            )
+            .into_err(*pos))
+        }
+        // [???, ???, ???] in "xxxx"
+        #[cfg(not(feature = "no_index"))]
+        (Expr::Array(_, pos), Expr::StringConstant(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not an array".into(),
+            )
+            .into_err(*pos))
+        }
+        // #{...} in "xxxx"
+        #[cfg(not(feature = "no_object"))]
+        (Expr::Map(_, pos), Expr::StringConstant(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not an object map".into(),
+            )
+            .into_err(*pos))
+        }
+        // (??? = ???) in "xxxx", () in "xxxx"
+        (Expr::Assignment(_, _, pos), Expr::StringConstant(_, _))
+        | (Expr::Unit(pos), Expr::StringConstant(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not ()".into(),
+            )
+            .into_err(*pos))
+        }
+
+        // "xxx" in #{...}, 'x' in #{...} - OK!
+        #[cfg(not(feature = "no_object"))]
+        (Expr::StringConstant(_, _), Expr::Map(_, _))
+        | (Expr::CharConstant(_, _), Expr::Map(_, _)) => (),
+
+        // 123.456 in #{...}
+        #[cfg(not(feature = "no_float"))]
+        #[cfg(not(feature = "no_object"))]
+        (Expr::FloatConstant(_, pos), Expr::Map(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not a float".into(),
+            )
+            .into_err(*pos))
+        }
+        // 123 in #{...}
+        #[cfg(not(feature = "no_object"))]
+        (Expr::IntegerConstant(_, pos), Expr::Map(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not a number".into(),
+            )
+            .into_err(*pos))
+        }
+        // (??? && ???) in #{...}, (??? || ???) in #{...}, (??? in ???) in #{...},
+        // true in #{...}, false in #{...}
+        #[cfg(not(feature = "no_object"))]
+        (Expr::And(_, _, pos), Expr::Map(_, _))
+        | (Expr::Or(_, _, pos), Expr::Map(_, _))
+        | (Expr::In(_, _, pos), Expr::Map(_, _))
+        | (Expr::True(pos), Expr::Map(_, _))
+        | (Expr::False(pos), Expr::Map(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not a boolean".into(),
+            )
+            .into_err(*pos))
+        }
+        // [???, ???, ???] in #{..}
+        #[cfg(not(feature = "no_index"))]
+        #[cfg(not(feature = "no_object"))]
+        (Expr::Array(_, pos), Expr::Map(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not an array".into(),
+            )
+            .into_err(*pos))
+        }
+        // #{...} in #{..}
+        #[cfg(not(feature = "no_object"))]
+        (Expr::Map(_, pos), Expr::Map(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not an object map".into(),
+            )
+            .into_err(*pos))
+        }
+        // (??? = ???) in #{...}, () in #{...}
+        #[cfg(not(feature = "no_object"))]
+        (Expr::Assignment(_, _, pos), Expr::Map(_, _)) | (Expr::Unit(pos), Expr::Map(_, _)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not ()".into(),
+            )
+            .into_err(*pos))
+        }
+
+        _ => (),
+    }
+
+    Ok(Expr::In(Box::new(lhs), Box::new(rhs), op_pos))
+}
+
 /// Parse a binary expression.
 fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
@@ -2189,8 +2324,11 @@ fn parse_binary_op<'a>(
                     pos,
                 ),
 
-                Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs)),
-                Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs)),
+                Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs), pos),
+                Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
+
+                Token::In => parse_in_expr(current_lhs, rhs, pos)?,
+
                 Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
                 Token::OrAssign => parse_op_assignment("|", current_lhs, rhs, pos)?,
                 Token::AndAssign => parse_op_assignment("&", current_lhs, rhs, pos)?,
@@ -2561,11 +2699,9 @@ fn parse_fn<'a>(
         .peek()
         .ok_or_else(|| PERR::FnMissingParams(name.clone()).into_err_eof())?
     {
-        (Token::LeftParen, _) => {
-            input.next();
-        }
+        (Token::LeftParen, _) => input.next(),
         (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
-    }
+    };
 
     let mut params = Vec::new();
 
@@ -2580,9 +2716,7 @@ fn parse_fn<'a>(
                 .next()
                 .ok_or_else(|| PERR::MissingToken(")".into(), end_err.to_string()).into_err_eof())?
             {
-                (Token::Identifier(s), pos) => {
-                    params.push((s, pos));
-                }
+                (Token::Identifier(s), pos) => params.push((s, pos)),
                 (_, pos) => return Err(PERR::MissingToken(")".into(), end_err).into_err(pos)),
             }
 
@@ -2622,9 +2756,11 @@ fn parse_fn<'a>(
         None => return Err(PERR::FnMissingBody(name).into_err_eof()),
     };
 
+    let params = params.into_iter().map(|(p, _)| p).collect();
+
     Ok(FnDef {
         name,
-        params: params.into_iter().map(|(p, _)| p).collect(),
+        params,
         body,
         pos,
     })

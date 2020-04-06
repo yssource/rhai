@@ -290,6 +290,7 @@ impl Default for Engine<'_> {
             (type_name::<Map>(), "map"),
             (type_name::<String>(), "string"),
             (type_name::<Dynamic>(), "dynamic"),
+            (type_name::<Variant>(), "variant"),
         ]
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -416,7 +417,7 @@ impl Engine<'_> {
     ) -> Result<Option<Dynamic>, EvalAltResult> {
         let spec = FnSpec {
             name: fn_name.into(),
-            args: args.iter().map(|a| Any::type_id(&**a)).collect(),
+            args: args.iter().map(|a| Any::type_id(*a)).collect(),
         };
 
         // Search built-in's and external functions
@@ -501,7 +502,7 @@ impl Engine<'_> {
 
         let spec = FnSpec {
             name: fn_name.into(),
-            args: args.iter().map(|a| Any::type_id(&**a)).collect(),
+            args: args.iter().map(|a| Any::type_id(*a)).collect(),
         };
 
         // Argument must be a string
@@ -1179,6 +1180,85 @@ impl Engine<'_> {
         }
     }
 
+    // Evaluate an 'in' expression
+    fn eval_in_expr(
+        &mut self,
+        scope: &mut Scope,
+        lhs: &Expr,
+        rhs: &Expr,
+        level: usize,
+    ) -> Result<Dynamic, EvalAltResult> {
+        let mut lhs_value = self.eval_expr(scope, lhs, level)?;
+        let rhs_value = self.eval_expr(scope, rhs, level)?;
+
+        #[cfg(not(feature = "no_index"))]
+        {
+            if rhs_value.is::<Array>() {
+                let mut rhs_value = rhs_value.cast::<Array>();
+                let def_value = false.into_dynamic();
+                let mut result = false;
+
+                // Call the '==' operator to compare each value
+                for value in rhs_value.iter_mut() {
+                    if self
+                        .call_fn_raw(
+                            None,
+                            "==",
+                            &mut [lhs_value.as_mut(), value.as_mut()],
+                            Some(&def_value),
+                            rhs.position(),
+                            level,
+                        )?
+                        .try_cast::<bool>()
+                        .unwrap_or(false)
+                    {
+                        result = true;
+                        break;
+                    }
+                }
+
+                return Ok(result.into_dynamic());
+            }
+        }
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            if rhs_value.is::<Map>() {
+                let rhs_value = rhs_value.cast::<Map>();
+
+                // Only allows String or char
+                return if lhs_value.is::<String>() {
+                    Ok(rhs_value
+                        .contains_key(&lhs_value.cast::<String>())
+                        .into_dynamic())
+                } else if lhs_value.is::<char>() {
+                    Ok(rhs_value
+                        .contains_key(&lhs_value.cast::<char>().to_string())
+                        .into_dynamic())
+                } else {
+                    Err(EvalAltResult::ErrorInExpr(lhs.position()))
+                };
+            }
+        }
+
+        if rhs_value.is::<String>() {
+            let rhs_value = rhs_value.cast::<String>();
+
+            // Only allows String or char
+            return if lhs_value.is::<String>() {
+                Ok(rhs_value
+                    .contains(&lhs_value.cast::<String>())
+                    .into_dynamic())
+            } else if lhs_value.is::<char>() {
+                Ok(rhs_value.contains(lhs_value.cast::<char>()).into_dynamic())
+            } else {
+                Err(EvalAltResult::ErrorInExpr(lhs.position()))
+            };
+        }
+
+        return Err(EvalAltResult::ErrorInExpr(rhs.position()));
+    }
+
     /// Evaluate an expression
     fn eval_expr(
         &mut self,
@@ -1302,7 +1382,7 @@ impl Engine<'_> {
                     self.eval_expr(scope, item, level).map(|val| arr.push(val))
                 })?;
 
-                Ok(Box::new(arr))
+                Ok((arr).into_dynamic())
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1315,7 +1395,7 @@ impl Engine<'_> {
                     })
                 })?;
 
-                Ok(Box::new(map))
+                Ok((map).into_dynamic())
             }
 
             Expr::FunctionCall(fn_name, args_expr_list, def_val, pos) => {
@@ -1445,32 +1525,34 @@ impl Engine<'_> {
                 }
             }
 
-            Expr::And(lhs, rhs) => Ok(Box::new(
+            Expr::In(lhs, rhs, _) => self.eval_in_expr(scope, lhs.as_ref(), rhs.as_ref(), level),
+
+            Expr::And(lhs, rhs, _) => Ok(Box::new(
                 self
-                    .eval_expr(scope, &*lhs, level)?
+                    .eval_expr(scope, lhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
                     })?
                     && // Short-circuit using &&
                 self
-                    .eval_expr(scope, &*rhs, level)?
+                    .eval_expr(scope, rhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
                     })?,
             )),
 
-            Expr::Or(lhs, rhs) => Ok(Box::new(
+            Expr::Or(lhs, rhs, _) => Ok(Box::new(
                 self
-                    .eval_expr(scope, &*lhs, level)?
+                    .eval_expr(scope, lhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
                     })?
                     || // Short-circuit using ||
                 self
-                    .eval_expr(scope, &*rhs, level)?
+                    .eval_expr(scope, rhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
@@ -1559,7 +1641,7 @@ impl Engine<'_> {
             // For loop
             Stmt::For(name, expr, body) => {
                 let arr = self.eval_expr(scope, expr, level)?;
-                let tid = Any::type_id(&*arr);
+                let tid = Any::type_id(arr.as_ref());
 
                 if let Some(type_iterators) = &self.type_iterators {
                     if let Some(iter_fn) = type_iterators.get(&tid) {

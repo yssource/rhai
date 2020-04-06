@@ -15,6 +15,10 @@ fn test_string() -> Result<(), EvalAltResult> {
 
     assert_eq!(engine.eval::<String>(r#""foo" + "bar""#)?, "foobar");
 
+    assert!(engine.eval::<bool>(r#"let y = "hello, world!"; "world" in y"#)?);
+    assert!(engine.eval::<bool>(r#"let y = "hello, world!"; 'w' in y"#)?);
+    assert!(!engine.eval::<bool>(r#"let y = "hello, world!"; "hey" in y"#)?);
+
     #[cfg(not(feature = "no_stdlib"))]
     assert_eq!(engine.eval::<String>(r#""foo" + 123"#)?, "foo123");
 
