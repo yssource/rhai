@@ -831,79 +831,6 @@ impl<'e> Engine<'e> {
             })
     }
 
-    /// Call a script function defined in an `AST` with no argument.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// # #[cfg(not(feature = "no_stdlib"))]
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
-    /// use rhai::{Engine, Scope};
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let ast = engine.compile("fn num() { 42 + foo }")?;
-    ///
-    /// let mut scope = Scope::new();
-    /// scope.push("foo", 42_i64);
-    ///
-    /// // Call the script-defined function
-    /// let result: i64 = engine.call_fn0(&mut scope, &ast, "num")?;
-    ///
-    /// assert_eq!(result, 84);
-    /// # }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "no_function"))]
-    pub fn call_fn0<T: Any + Clone>(
-        &self,
-        scope: &mut Scope,
-        ast: &AST,
-        name: &str,
-    ) -> Result<T, EvalAltResult> {
-        self.call_fn_internal(scope, ast, name, vec![])
-    }
-
-    /// Call a script function defined in an `AST` with one argument.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// # #[cfg(not(feature = "no_stdlib"))]
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
-    /// use rhai::{Engine, Scope};
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let ast = engine.compile("fn inc(x) { x + foo }")?;
-    ///
-    /// let mut scope = Scope::new();
-    /// scope.push("foo", 42_i64);
-    ///
-    /// // Call the script-defined function
-    /// let result: i64 = engine.call_fn1(&mut scope, &ast, "inc", 123_i64)?;
-    ///
-    /// assert_eq!(result, 165);
-    /// # }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "no_function"))]
-    pub fn call_fn1<A: Any + Clone, T: Any + Clone>(
-        &self,
-        scope: &mut Scope,
-        ast: &AST,
-        name: &str,
-        arg: A,
-    ) -> Result<T, EvalAltResult> {
-        self.call_fn_internal(scope, ast, name, vec![arg.into_dynamic()])
-    }
-
     /// Call a script function defined in an `AST` with multiple arguments.
     ///
     /// # Example
@@ -917,15 +844,25 @@ impl<'e> Engine<'e> {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast = engine.compile("fn add(x, y) { len(x) + y + foo }")?;
+    /// let ast = engine.compile(r"
+    ///     fn add(x, y) { len(x) + y + foo }
+    ///     fn add1(x)   { len(x) + 1 + foo }
+    ///     fn bar()     { foo/2 }
+    /// ")?;
     ///
     /// let mut scope = Scope::new();
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result: i64 = engine.call_fn(&mut scope, &ast, "add", (String::from("abc"), 123_i64))?;
-    ///
+    /// let result: i64 = engine.call_fn(&mut scope, &ast, "add", ( String::from("abc"), 123_i64 ) )?;
     /// assert_eq!(result, 168);
+    ///
+    /// let result: i64 = engine.call_fn(&mut scope, &ast, "add1", ( String::from("abc"), ) )?;
+    /// //                                                         ^^^^^^^^^^^^^^^^^^^^^^^^ tuple of one
+    /// assert_eq!(result, 46);
+    ///
+    /// let result: i64 = engine.call_fn(&mut scope, &ast, "bar", () )?;
+    /// assert_eq!(result, 21);
     /// # }
     /// # Ok(())
     /// # }
@@ -938,17 +875,7 @@ impl<'e> Engine<'e> {
         name: &str,
         args: A,
     ) -> Result<T, EvalAltResult> {
-        self.call_fn_internal(scope, ast, name, args.into_vec())
-    }
-
-    #[cfg(not(feature = "no_function"))]
-    fn call_fn_internal<T: Any + Clone>(
-        &self,
-        scope: &mut Scope,
-        ast: &AST,
-        name: &str,
-        mut arg_values: Vec<Dynamic>,
-    ) -> Result<T, EvalAltResult> {
+        let mut arg_values = args.into_vec();
         let mut args: Vec<_> = arg_values.iter_mut().map(Dynamic::as_mut).collect();
         let fn_lib = Some(ast.1.as_ref());
         let pos = Position::none();

@@ -44,10 +44,10 @@ fn test_call_fn() -> Result<(), EvalAltResult> {
     let r: i64 = engine.call_fn(&mut scope, &ast, "hello", (42 as INT, 123 as INT))?;
     assert_eq!(r, 165);
 
-    let r: i64 = engine.call_fn1(&mut scope, &ast, "hello", 123 as INT)?;
+    let r: i64 = engine.call_fn(&mut scope, &ast, "hello", (123 as INT,))?;
     assert_eq!(r, 5166);
 
-    let r: i64 = engine.call_fn0(&mut scope, &ast, "hello")?;
+    let r: i64 = engine.call_fn(&mut scope, &ast, "hello", ())?;
     assert_eq!(r, 42);
 
     assert_eq!(

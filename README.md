@@ -213,8 +213,7 @@ Compiling a script file is also supported:
 let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
 
-Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust -
-via `call_fn` or its cousins `call_fn1` (one argument) and `call_fn0` (no argument).
+Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `call_fn`.
 
 ```rust
 // Define functions in a script.
@@ -239,20 +238,19 @@ let ast = engine.compile(true,
 // A custom scope can also contain any variables/constants available to the functions
 let mut scope = Scope::new();
 
-// Evaluate a function defined in the script, passing arguments into the script as a tuple
-// if there are more than one. Beware, arguments must be of the correct types because
-// Rhai does not have built-in type conversions. If arguments of the wrong types are passed,
-// the Engine will not find the function.
+// Evaluate a function defined in the script, passing arguments into the script as a tuple.
+// Beware, arguments must be of the correct types because Rhai does not have built-in type conversions.
+// If arguments of the wrong types are passed, the Engine will not find the function.
 
 let result: i64 = engine.call_fn(&mut scope, &ast, "hello", ( String::from("abc"), 123_i64 ) )?;
 //                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //                                                          put arguments in a tuple
 
-let result: i64 = engine.call_fn1(&mut scope, &ast, "hello", 123_i64)?
-//                       ^^^^^^^^ use 'call_fn1' for one argument
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?
+//                                                          ^^^^^^^^^^ tuple of one
 
-let result: i64 = engine.call_fn0(&mut scope, &ast, "hello")?
-//                       ^^^^^^^^ use 'call_fn0' for no arguments
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
+//                                                          ^^ unit = tuple of zero
 ```
 
 Evaluate expressions only
@@ -305,8 +303,8 @@ they even cannot be added together. This is very similar to Rust.
 The default integer type is `i64`. If other integer types are not needed, it is possible to exclude them and make a
 smaller build with the [`only_i64`] feature.
 
-If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`,
-including `i64`. This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
+If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`, including `i64`.
+This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
