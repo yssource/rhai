@@ -49,7 +49,12 @@ type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send +
 #[cfg(not(feature = "sync"))]
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
-pub const MAX_CALL_STACK_DEPTH: usize = 64;
+#[cfg(debug_assertions)]
+pub const MAX_CALL_STACK_DEPTH: usize = 42;
+
+#[cfg(not(debug_assertions))]
+pub const MAX_CALL_STACK_DEPTH: usize = 256;
+
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_DUMP_AST: &str = "dump_ast";
@@ -271,6 +276,8 @@ pub struct Engine<'e> {
     pub(crate) optimization_level: OptimizationLevel,
 
     /// Maximum levels of call-stack to prevent infinite recursion.
+    ///
+    /// Defaults to 42 for debug builds and 256 for non-debug builds.
     pub(crate) max_call_stack_depth: usize,
 }
 
@@ -436,6 +443,11 @@ impl Engine<'_> {
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
+        // Check for stack overflow
+        if level > self.max_call_stack_depth {
+            return Err(EvalAltResult::ErrorStackOverflow(pos));
+        }
+
         // First search in script-defined functions (can override built-in)
         if let Some(lib) = fn_lib {
             if let Some(fn_def) = lib.get_function(fn_name, args.len()) {
