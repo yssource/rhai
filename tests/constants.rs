@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_constant() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("const x = 123; x")?, 123);
 

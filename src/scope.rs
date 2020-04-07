@@ -49,7 +49,7 @@ pub(crate) struct EntryRef<'a> {
 /// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::{Engine, Scope};
 ///
-/// let mut engine = Engine::new();
+/// let engine = Engine::new();
 /// let mut my_scope = Scope::new();
 ///
 /// my_scope.push("z", 40_i64);

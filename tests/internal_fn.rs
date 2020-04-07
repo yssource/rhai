@@ -4,9 +4,12 @@ use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_internal_fn() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
-    assert_eq!(engine.eval::<INT>("fn addme(a, b) { a+b } addme(3, 4)")?, 7);
+    assert_eq!(
+        engine.eval::<INT>("fn add_me(a, b) { a+b } add_me(3, 4)")?,
+        7
+    );
     assert_eq!(engine.eval::<INT>("fn bob() { return 4; 5 } bob()")?, 4);
 
     Ok(())
@@ -14,15 +17,15 @@ fn test_internal_fn() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_big_internal_fn() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<INT>(
             r"
-                fn mathme(a, b, c, d, e, f) {
+                fn math_me(a, b, c, d, e, f) {
                     a - b * c + d * e - f
                 }
-                mathme(100, 5, 2, 9, 6, 32)
+                math_me(100, 5, 2, 9, 6, 32)
             ",
         )?,
         112
@@ -33,7 +36,7 @@ fn test_big_internal_fn() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_internal_fn_overloading() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<INT>(

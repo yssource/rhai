@@ -4,7 +4,7 @@ use rhai::{AnyExt, Engine, EvalAltResult, Map, INT};
 
 #[test]
 fn test_map_indexing() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -75,7 +75,7 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_map_assign() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c$": "hello"}; x"#)?;
     let a = x.get("a").cloned().expect("should have property a");
@@ -91,7 +91,7 @@ fn test_map_assign() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_map_return() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let x = engine.eval::<Map>(r#"#{a: 1, b: true, "c$": "hello"}"#)?;
     let a = x.get("a").cloned().expect("should have property a");
@@ -107,7 +107,7 @@ fn test_map_return() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_map_for() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<INT>(

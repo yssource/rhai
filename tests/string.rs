@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult};
 
 #[test]
 fn test_string() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<String>(r#""Test string: \u2764""#)?,

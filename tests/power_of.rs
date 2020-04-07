@@ -8,7 +8,7 @@ const EPSILON: FLOAT = 0.000_000_000_1;
 
 #[test]
 fn test_power_of() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("2 ~ 3")?, 8);
     assert_eq!(engine.eval::<INT>("(-2 ~ 3)")?, -8);
@@ -29,7 +29,7 @@ fn test_power_of() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_power_of_equals() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("let x = 2; x ~= 3; x")?, 8);
     assert_eq!(engine.eval::<INT>("let x = -2; x ~= 3; x")?, -8);

@@ -16,6 +16,8 @@ use crate::stdlib::path::PathBuf;
 /// Evaluation result.
 ///
 /// All wrapped `Position` values represent the location in the script where the error occurs.
+///
+/// Currently, `EvalAltResult` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug)]
 pub enum EvalAltResult {
     /// Syntax error.

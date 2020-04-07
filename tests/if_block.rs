@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_if() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("if true { 55 }")?, 55);
     assert_eq!(engine.eval::<INT>("if false { 55 } else { 44 }")?, 44);
@@ -30,7 +30,7 @@ fn test_if() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_if_expr() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<INT>(

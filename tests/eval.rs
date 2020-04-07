@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_eval() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<INT>(
@@ -19,7 +19,7 @@ fn test_eval() -> Result<(), EvalAltResult> {
 #[test]
 #[cfg(not(feature = "no_function"))]
 fn test_eval_function() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
     let mut scope = Scope::new();
 
     assert_eq!(
@@ -62,7 +62,7 @@ fn test_eval_function() -> Result<(), EvalAltResult> {
 #[test]
 #[cfg(not(feature = "no_function"))]
 fn test_eval_override() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<String>(

@@ -1,5 +1,3 @@
-#![cfg(not(feature = "no_object"))]
-
 ///! This test simulates an external command object that is driven by a script.
 use rhai::{Engine, EvalAltResult, RegisterFn, Scope, INT};
 use std::sync::{Arc, Mutex};
@@ -40,8 +38,9 @@ impl CommandWrapper {
     }
 }
 
+#[cfg(not(feature = "no_object"))]
 #[test]
-fn test_side_effects() -> Result<(), EvalAltResult> {
+fn test_side_effects_command() -> Result<(), EvalAltResult> {
     let mut engine = Engine::new();
     let mut scope = Scope::new();
 
@@ -77,5 +76,24 @@ fn test_side_effects() -> Result<(), EvalAltResult> {
     // Make sure the actions are properly performed
     assert_eq!(command.lock().unwrap().get(), 42);
 
+    Ok(())
+}
+
+#[test]
+fn test_side_effects_print() -> Result<(), EvalAltResult> {
+    use std::sync::RwLock;
+
+    let result = RwLock::new(String::from(""));
+
+    {
+        let mut engine = Engine::new();
+
+        // Override action of 'print' function
+        engine.on_print(|s| result.write().unwrap().push_str(s));
+
+        engine.consume("print(40 + 2);")?;
+    }
+
+    assert_eq!(*result.read().unwrap(), "42");
     Ok(())
 }

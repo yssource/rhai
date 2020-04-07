@@ -20,7 +20,7 @@ fn test_fn() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_call_fn() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
     let mut scope = Scope::new();
 
     scope.push("foo", 42 as INT);

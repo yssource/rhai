@@ -167,7 +167,7 @@ use rhai::{Engine, EvalAltResult};
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let result = engine.eval::<i64>("40 + 2")?;
 
@@ -446,7 +446,7 @@ fn get_an_any() -> Dynamic {
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     engine.register_fn("add", add);
 
@@ -497,7 +497,7 @@ fn show_it<T: Display>(x: &mut T) -> () {
 
 fn main()
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     engine.register_fn("print", show_it as fn(x: &mut i64)->());
     engine.register_fn("print", show_it as fn(x: &mut bool)->());
@@ -533,7 +533,7 @@ fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
 
 fn main()
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     // Fallible functions that return Result values must use register_result_fn()
     engine.register_result_fn("divide", safe_divide);
@@ -584,7 +584,7 @@ impl TestStruct {
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     engine.register_type::<TestStruct>();
 
@@ -622,7 +622,7 @@ impl TestStruct {
     }
 }
 
-let mut engine = Engine::new();
+let engine = Engine::new();
 
 engine.register_type::<TestStruct>();
 ```
@@ -712,7 +712,7 @@ impl TestStruct {
     }
 }
 
-let mut engine = Engine::new();
+let engine = Engine::new();
 
 engine.register_type::<TestStruct>();
 
@@ -748,7 +748,7 @@ use rhai::{Engine, Scope, EvalAltResult};
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     // First create the state
     let mut scope = Scope::new();
@@ -1885,7 +1885,8 @@ print("z = " + z);          // <- error: variable 'z' not found
 
 Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,
 including all variables that are visible at that position in code! It is almost as if the script segments were
-physically pasted in at the position of the `eval` call.
+physically pasted in at the position of the `eval` call. But because of this, new functions cannot be defined
+within an `eval` call, since functions can only be defined at the global level, not inside a function call!
 
 ```rust
 let script = "x += 32";

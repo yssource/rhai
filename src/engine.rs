@@ -1,7 +1,8 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::any::{Any, AnyExt, Dynamic, Variant};
-use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, AST, INT};
+use crate::error::ParseErrorType;
+use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, INT};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryRef as ScopeSource, EntryType as ScopeEntryType, Scope};
 
@@ -232,7 +233,7 @@ impl DerefMut for FunctionsLib {
 /// # fn main() -> Result<(), rhai::EvalAltResult> {
 /// use rhai::Engine;
 ///
-/// let mut engine = Engine::new();
+/// let engine = Engine::new();
 ///
 /// let result = engine.eval::<i64>("40 + 2")?;
 ///
@@ -246,13 +247,6 @@ pub struct Engine<'e> {
     /// A hashmap containing all compiled functions known to the engine.
     pub(crate) functions: Option<HashMap<FnSpec<'e>, Box<FnAny>>>,
 
-    /// A hashmap containing all script-defined functions.
-    #[cfg(feature = "sync")]
-    pub(crate) fn_lib: Option<Arc<FunctionsLib>>,
-    /// A hashmap containing all script-defined functions.
-    #[cfg(not(feature = "sync"))]
-    pub(crate) fn_lib: Option<Rc<FunctionsLib>>,
-
     /// A hashmap containing all iterators known to the engine.
     pub(crate) type_iterators: Option<HashMap<TypeId, Box<IteratorFn>>>,
     /// A hashmap mapping type names to pretty-print names.
@@ -260,17 +254,17 @@ pub struct Engine<'e> {
 
     /// Closure for implementing the `print` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_print: Option<Box<dyn FnMut(&str) + Send + Sync + 'e>>,
+    pub(crate) on_print: Option<Box<dyn Fn(&str) + Send + Sync + 'e>>,
     /// Closure for implementing the `print` command.
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_print: Option<Box<dyn FnMut(&str) + 'e>>,
+    pub(crate) on_print: Option<Box<dyn Fn(&str) + 'e>>,
 
     /// Closure for implementing the `debug` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_debug: Option<Box<dyn FnMut(&str) + Send + Sync + 'e>>,
+    pub(crate) on_debug: Option<Box<dyn Fn(&str) + Send + Sync + 'e>>,
     /// Closure for implementing the `debug` command.
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_debug: Option<Box<dyn FnMut(&str) + 'e>>,
+    pub(crate) on_debug: Option<Box<dyn Fn(&str) + 'e>>,
 
     /// Optimize the AST after compilation.
     #[cfg(not(feature = "no_optimize"))]
@@ -299,7 +293,6 @@ impl Default for Engine<'_> {
         // Create the new scripting Engine
         let mut engine = Engine {
             functions: None,
-            fn_lib: None,
             type_iterators: None,
             type_names: Some(type_names),
             on_print: Some(Box::new(default_print)), // default print/debug implementations
@@ -368,7 +361,6 @@ impl Engine<'_> {
     pub fn new_raw() -> Self {
         let mut engine = Engine {
             functions: None,
-            fn_lib: None,
             type_iterators: None,
             type_names: None,
             on_print: None,
@@ -435,8 +427,9 @@ impl Engine<'_> {
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai
     pub(crate) fn call_fn_raw(
-        &mut self,
+        &self,
         scope: Option<&mut Scope>,
+        fn_lib: Option<&FunctionsLib>,
         fn_name: &str,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
@@ -444,8 +437,8 @@ impl Engine<'_> {
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
         // First search in script-defined functions (can override built-in)
-        if let Some(fn_lib_arc) = &self.fn_lib {
-            if let Some(fn_def) = fn_lib_arc.clone().get_function(fn_name, args.len()) {
+        if let Some(lib) = fn_lib {
+            if let Some(fn_def) = lib.get_function(fn_name, args.len()) {
                 match scope {
                     // Extern scope passed in which is not empty
                     Some(scope) if scope.len() > 0 => {
@@ -462,13 +455,13 @@ impl Engine<'_> {
                         );
 
                         // Evaluate the function at one higher level of call depth
-                        let result = self.eval_stmt(scope, &fn_def.body, level + 1).or_else(
-                            |err| match err {
+                        let result = self
+                            .eval_stmt(scope, fn_lib, &fn_def.body, level + 1)
+                            .or_else(|err| match err {
                                 // Convert return statement to return value
                                 EvalAltResult::Return(x, _) => Ok(x),
                                 err => Err(err.set_position(pos)),
-                            },
-                        );
+                            });
 
                         scope.rewind(scope_len);
 
@@ -488,13 +481,13 @@ impl Engine<'_> {
                         );
 
                         // Evaluate the function at one higher level of call depth
-                        return self.eval_stmt(&mut scope, &fn_def.body, level + 1).or_else(
-                            |err| match err {
+                        return self
+                            .eval_stmt(&mut scope, fn_lib, &fn_def.body, level + 1)
+                            .or_else(|err| match err {
                                 // Convert return statement to return value
                                 EvalAltResult::Return(x, _) => Ok(x),
                                 err => Err(err.set_position(pos)),
-                            },
-                        );
+                            });
                     }
                 }
             }
@@ -521,11 +514,11 @@ impl Engine<'_> {
                 // See if the function match print/debug (which requires special processing)
                 return Ok(match fn_name {
                     KEYWORD_PRINT if self.on_print.is_some() => {
-                        self.on_print.as_deref_mut().unwrap()(cast_to_string(result.as_ref(), pos)?)
+                        self.on_print.as_ref().unwrap()(cast_to_string(result.as_ref(), pos)?)
                             .into_dynamic()
                     }
                     KEYWORD_DEBUG if self.on_debug.is_some() => {
-                        self.on_debug.as_deref_mut().unwrap()(cast_to_string(result.as_ref(), pos)?)
+                        self.on_debug.as_ref().unwrap()(cast_to_string(result.as_ref(), pos)?)
                             .into_dynamic()
                     }
                     KEYWORD_PRINT | KEYWORD_DEBUG => ().into_dynamic(),
@@ -590,8 +583,9 @@ impl Engine<'_> {
     /// Chain-evaluate a dot setter.
     #[cfg(not(feature = "no_object"))]
     fn get_dot_val_helper(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         target: Target,
         dot_rhs: &Expr,
         level: usize,
@@ -601,7 +595,7 @@ impl Engine<'_> {
             Expr::FunctionCall(fn_name, arg_expr_list, def_val, pos) => {
                 let mut values = arg_expr_list
                     .iter()
-                    .map(|arg_expr| self.eval_expr(scope, arg_expr, level))
+                    .map(|arg_expr| self.eval_expr(scope, fn_lib, arg_expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let this_ptr = target.get_mut(scope);
@@ -612,13 +606,13 @@ impl Engine<'_> {
 
                 let def_val = def_val.as_ref();
 
-                self.call_fn_raw(None, fn_name, &mut args, def_val, *pos, 0)
+                self.call_fn_raw(None, fn_lib, fn_name, &mut args, def_val, *pos, 0)
             }
 
             // xxx.id
             Expr::Property(id, pos) => {
                 let mut args = [target.get_mut(scope)];
-                self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)
+                self.call_fn_raw(None, fn_lib, &make_getter(id), &mut args, None, *pos, 0)
             }
 
             // xxx.idx_lhs[idx_expr]
@@ -628,11 +622,11 @@ impl Engine<'_> {
                     // xxx.id[idx_expr]
                     Expr::Property(id, pos) => {
                         let mut args = [target.get_mut(scope)];
-                        self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)?
+                        self.call_fn_raw(None, fn_lib, &make_getter(id), &mut args, None, *pos, 0)?
                     }
                     // xxx.???[???][idx_expr]
                     Expr::Index(_, _, _) => {
-                        self.get_dot_val_helper(scope, target, idx_lhs, level)?
+                        self.get_dot_val_helper(scope, fn_lib, target, idx_lhs, level)?
                     }
                     // Syntax error
                     _ => {
@@ -643,7 +637,7 @@ impl Engine<'_> {
                     }
                 };
 
-                self.get_indexed_value(scope, &value, idx_expr, *op_pos, level)
+                self.get_indexed_value(scope, fn_lib, &value, idx_expr, *op_pos, level)
                     .map(|(val, _, _)| val)
             }
 
@@ -652,9 +646,10 @@ impl Engine<'_> {
                 // xxx.id.rhs
                 Expr::Property(id, pos) => {
                     let mut args = [target.get_mut(scope)];
-                    self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)
+                    self.call_fn_raw(None, fn_lib, &make_getter(id), &mut args, None, *pos, 0)
                         .and_then(|mut val| {
-                            self.get_dot_val_helper(scope, Target::from(val.as_mut()), rhs, level)
+                            let target = Target::from(val.as_mut());
+                            self.get_dot_val_helper(scope, fn_lib, target, rhs, level)
                         })
                 }
                 // xxx.idx_lhs[idx_expr].rhs
@@ -663,12 +658,13 @@ impl Engine<'_> {
                     let val = match idx_lhs.as_ref() {
                         // xxx.id[idx_expr].rhs
                         Expr::Property(id, pos) => {
+                            let fn_name = make_getter(id);
                             let mut args = [target.get_mut(scope)];
-                            self.call_fn_raw(None, &make_getter(id), &mut args, None, *pos, 0)?
+                            self.call_fn_raw(None, fn_lib, &fn_name, &mut args, None, *pos, 0)?
                         }
                         // xxx.???[???][idx_expr].rhs
                         Expr::Index(_, _, _) => {
-                            self.get_dot_val_helper(scope, target, idx_lhs, level)?
+                            self.get_dot_val_helper(scope, fn_lib, target, idx_lhs, level)?
                         }
                         // Syntax error
                         _ => {
@@ -679,9 +675,10 @@ impl Engine<'_> {
                         }
                     };
 
-                    self.get_indexed_value(scope, &val, idx_expr, *op_pos, level)
+                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)
                         .and_then(|(mut val, _, _)| {
-                            self.get_dot_val_helper(scope, Target::from(val.as_mut()), rhs, level)
+                            let target = Target::from(val.as_mut());
+                            self.get_dot_val_helper(scope, fn_lib, target, rhs, level)
                         })
                 }
                 // Syntax error
@@ -702,8 +699,9 @@ impl Engine<'_> {
     /// Evaluate a dot chain getter
     #[cfg(not(feature = "no_object"))]
     fn get_dot_val(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
         level: usize,
@@ -718,16 +716,16 @@ impl Engine<'_> {
 
                 // This is a variable property access (potential function call).
                 // Use a direct index into `scope` to directly mutate the variable value.
-                self.get_dot_val_helper(scope, Target::from_src(entry), dot_rhs, level)
+                self.get_dot_val_helper(scope, fn_lib, Target::from_src(entry), dot_rhs, level)
             }
 
             // idx_lhs[idx_expr].???
             #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
                 let (idx_src_type, src, idx, mut val) =
-                    self.eval_index_expr(scope, idx_lhs, idx_expr, *op_pos, level)?;
-                let value =
-                    self.get_dot_val_helper(scope, Target::from(val.as_mut()), dot_rhs, level);
+                    self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
+                let target = Target::from(val.as_mut());
+                let value = self.get_dot_val_helper(scope, fn_lib, target, dot_rhs, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
@@ -755,8 +753,8 @@ impl Engine<'_> {
 
             // {expr}.???
             expr => {
-                let mut val = self.eval_expr(scope, expr, level)?;
-                self.get_dot_val_helper(scope, Target::from(val.as_mut()), dot_rhs, level)
+                let mut val = self.eval_expr(scope, fn_lib, expr, level)?;
+                self.get_dot_val_helper(scope, fn_lib, Target::from(val.as_mut()), dot_rhs, level)
             }
         }
     }
@@ -775,8 +773,9 @@ impl Engine<'_> {
     /// Get the value at the indexed position of a base type
     #[cfg(not(feature = "no_index"))]
     fn get_indexed_value(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         val: &Dynamic,
         idx_expr: &Expr,
         op_pos: Position,
@@ -787,7 +786,7 @@ impl Engine<'_> {
         // val_array[idx]
         if let Some(arr) = val.downcast_ref::<Array>() {
             let idx = self
-                .eval_expr(scope, idx_expr, level)?
+                .eval_expr(scope, fn_lib, idx_expr, level)?
                 .try_cast::<INT>()
                 .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
@@ -806,7 +805,7 @@ impl Engine<'_> {
             // val_map[idx]
             if let Some(map) = val.downcast_ref::<Map>() {
                 let idx = self
-                    .eval_expr(scope, idx_expr, level)?
+                    .eval_expr(scope, fn_lib, idx_expr, level)?
                     .try_cast::<String>()
                     .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_expr.position()))?;
 
@@ -821,7 +820,7 @@ impl Engine<'_> {
         // val_string[idx]
         if let Some(s) = val.downcast_ref::<String>() {
             let idx = self
-                .eval_expr(scope, idx_expr, level)?
+                .eval_expr(scope, fn_lib, idx_expr, level)?
                 .try_cast::<INT>()
                 .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
@@ -857,8 +856,9 @@ impl Engine<'_> {
     /// Evaluate an index expression
     #[cfg(not(feature = "no_index"))]
     fn eval_index_expr<'a>(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         lhs: &'a Expr,
         idx_expr: &Expr,
         op_pos: Position,
@@ -885,7 +885,7 @@ impl Engine<'_> {
                 ) = Self::search_scope(scope, &id, lhs.position())?;
 
                 let (val, idx_src_type, idx) =
-                    self.get_indexed_value(scope, &val, idx_expr, op_pos, level)?;
+                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)?;
 
                 Ok((
                     idx_src_type,
@@ -901,9 +901,9 @@ impl Engine<'_> {
 
             // (expr)[idx_expr]
             expr => {
-                let val = self.eval_expr(scope, expr, level)?;
+                let val = self.eval_expr(scope, fn_lib, expr, level)?;
 
-                self.get_indexed_value(scope, &val, idx_expr, op_pos, level)
+                self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)
                     .map(|(val, _, idx)| (IndexSourceType::Expression, None, idx, val))
             }
         }
@@ -1002,8 +1002,9 @@ impl Engine<'_> {
     /// Chain-evaluate a dot setter
     #[cfg(not(feature = "no_object"))]
     fn set_dot_val_helper(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         this_ptr: &mut Variant,
         dot_rhs: &Expr,
         new_val: (&mut Dynamic, Position),
@@ -1013,7 +1014,7 @@ impl Engine<'_> {
             // xxx.id
             Expr::Property(id, pos) => {
                 let mut args = [this_ptr, new_val.0.as_mut()];
-                self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
+                self.call_fn_raw(None, fn_lib, &make_setter(id), &mut args, None, *pos, 0)
             }
 
             // xxx.lhs[idx_expr]
@@ -1021,18 +1022,21 @@ impl Engine<'_> {
             #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, op_pos) => match lhs.as_ref() {
                 // xxx.id[idx_expr]
-                Expr::Property(id, pos) => self
-                    .call_fn_raw(None, &make_getter(id), &mut [this_ptr], None, *pos, 0)
-                    .and_then(|val| {
-                        let (_, _, idx) =
-                            self.get_indexed_value(scope, &val, idx_expr, *op_pos, level)?;
+                Expr::Property(id, pos) => {
+                    let fn_name = make_getter(id);
+                    self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
+                        .and_then(|val| {
+                            let (_, _, idx) = self
+                                .get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)?;
 
-                        Self::update_indexed_value(val, idx, new_val.0.clone(), new_val.1)
-                    })
-                    .and_then(|mut val| {
-                        let mut args = [this_ptr, val.as_mut()];
-                        self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
-                    }),
+                            Self::update_indexed_value(val, idx, new_val.0.clone(), new_val.1)
+                        })
+                        .and_then(|mut val| {
+                            let fn_name = make_setter(id);
+                            let mut args = [this_ptr, val.as_mut()];
+                            self.call_fn_raw(None, fn_lib, &fn_name, &mut args, None, *pos, 0)
+                        })
+                }
 
                 // All others - syntax error for setters chain
                 _ => Err(EvalAltResult::ErrorDotExpr(
@@ -1045,14 +1049,17 @@ impl Engine<'_> {
             Expr::Dot(lhs, rhs, _) => match lhs.as_ref() {
                 // xxx.id.rhs
                 Expr::Property(id, pos) => {
-                    self.call_fn_raw(None, &make_getter(id), &mut [this_ptr], None, *pos, 0)
+                    let fn_name = make_getter(id);
+                    self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|mut val| {
-                            self.set_dot_val_helper(scope, val.as_mut(), rhs, new_val, level)
+                            let value = val.as_mut();
+                            self.set_dot_val_helper(scope, fn_lib, value, rhs, new_val, level)
                                 .map(|_| val) // Discard Ok return value
                         })
                         .and_then(|mut val| {
+                            let fn_name = make_setter(id);
                             let mut args = [this_ptr, val.as_mut()];
-                            self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
+                            self.call_fn_raw(None, fn_lib, &fn_name, &mut args, None, *pos, 0)
                         })
                 }
 
@@ -1062,21 +1069,26 @@ impl Engine<'_> {
                 Expr::Index(lhs, idx_expr, op_pos) => match lhs.as_ref() {
                     // xxx.id[idx_expr].rhs
                     Expr::Property(id, pos) => {
-                        self.call_fn_raw(None, &make_getter(id), &mut [this_ptr], None, *pos, 0)
+                        let fn_name = make_getter(id);
+                        self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                             .and_then(|v| {
-                                let (mut value, _, idx) =
-                                    self.get_indexed_value(scope, &v, idx_expr, *op_pos, level)?;
+                                let (mut value, _, idx) = self.get_indexed_value(
+                                    scope, fn_lib, &v, idx_expr, *op_pos, level,
+                                )?;
 
                                 let val_pos = new_val.1;
                                 let this_ptr = value.as_mut();
-                                self.set_dot_val_helper(scope, this_ptr, rhs, new_val, level)?;
+                                self.set_dot_val_helper(
+                                    scope, fn_lib, this_ptr, rhs, new_val, level,
+                                )?;
 
                                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                                 Self::update_indexed_value(v, idx, value, val_pos)
                             })
                             .and_then(|mut v| {
+                                let fn_name = make_setter(id);
                                 let mut args = [this_ptr, v.as_mut()];
-                                self.call_fn_raw(None, &make_setter(id), &mut args, None, *pos, 0)
+                                self.call_fn_raw(None, fn_lib, &fn_name, &mut args, None, *pos, 0)
                             })
                     }
 
@@ -1105,8 +1117,9 @@ impl Engine<'_> {
     // Evaluate a dot chain setter
     #[cfg(not(feature = "no_object"))]
     fn set_dot_val(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
         new_val: (&mut Dynamic, Position),
@@ -1127,8 +1140,8 @@ impl Engine<'_> {
                         // Avoid referencing scope which is used below as mut
                         let entry = ScopeSource { name: id, ..entry };
                         let this_ptr = target.as_mut();
-                        let value =
-                            self.set_dot_val_helper(scope, this_ptr, dot_rhs, new_val, level);
+                        let value = self
+                            .set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
 
                         // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                         *scope.get_mut(entry) = target;
@@ -1143,10 +1156,11 @@ impl Engine<'_> {
             #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, op_pos) => {
                 let (idx_src_type, src, idx, mut target) =
-                    self.eval_index_expr(scope, lhs, idx_expr, *op_pos, level)?;
+                    self.eval_index_expr(scope, fn_lib, lhs, idx_expr, *op_pos, level)?;
                 let val_pos = new_val.1;
                 let this_ptr = target.as_mut();
-                let value = self.set_dot_val_helper(scope, this_ptr, dot_rhs, new_val, level);
+                let value =
+                    self.set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
@@ -1182,14 +1196,15 @@ impl Engine<'_> {
 
     // Evaluate an 'in' expression
     fn eval_in_expr(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
-        let mut lhs_value = self.eval_expr(scope, lhs, level)?;
-        let rhs_value = self.eval_expr(scope, rhs, level)?;
+        let mut lhs_value = self.eval_expr(scope, fn_lib, lhs, level)?;
+        let rhs_value = self.eval_expr(scope, fn_lib, rhs, level)?;
 
         #[cfg(not(feature = "no_index"))]
         {
@@ -1200,15 +1215,10 @@ impl Engine<'_> {
 
                 // Call the '==' operator to compare each value
                 for value in rhs_value.iter_mut() {
+                    let args = &mut [lhs_value.as_mut(), value.as_mut()];
+                    let def_value = Some(&def_value);
                     if self
-                        .call_fn_raw(
-                            None,
-                            "==",
-                            &mut [lhs_value.as_mut(), value.as_mut()],
-                            Some(&def_value),
-                            rhs.position(),
-                            level,
-                        )?
+                        .call_fn_raw(None, fn_lib, "==", args, def_value, rhs.position(), level)?
                         .try_cast::<bool>()
                         .unwrap_or(false)
                     {
@@ -1261,8 +1271,9 @@ impl Engine<'_> {
 
     /// Evaluate an expression
     fn eval_expr(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         expr: &Expr,
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
@@ -1279,15 +1290,15 @@ impl Engine<'_> {
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, op_pos) => self
-                .eval_index_expr(scope, lhs, idx_expr, *op_pos, level)
+                .eval_index_expr(scope, fn_lib, lhs, idx_expr, *op_pos, level)
                 .map(|(_, _, _, x)| x),
 
             // Statement block
-            Expr::Stmt(stmt, _) => self.eval_stmt(scope, stmt, level),
+            Expr::Stmt(stmt, _) => self.eval_stmt(scope, fn_lib, stmt, level),
 
             // lhs = rhs
             Expr::Assignment(lhs, rhs, op_pos) => {
-                let mut rhs_val = self.eval_expr(scope, rhs, level)?;
+                let mut rhs_val = self.eval_expr(scope, fn_lib, rhs, level)?;
 
                 match lhs.as_ref() {
                     // name = rhs
@@ -1324,7 +1335,7 @@ impl Engine<'_> {
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(idx_lhs, idx_expr, op_pos) => {
                         let (idx_src_type, src, idx, _) =
-                            self.eval_index_expr(scope, idx_lhs, idx_expr, *op_pos, level)?;
+                            self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
 
                         if let Some(src) = src {
                             match src.typ {
@@ -1351,14 +1362,10 @@ impl Engine<'_> {
 
                     // dot_lhs.dot_rhs = rhs
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(dot_lhs, dot_rhs, _) => self.set_dot_val(
-                        scope,
-                        dot_lhs,
-                        dot_rhs,
-                        (&mut rhs_val, rhs.position()),
-                        *op_pos,
-                        level,
-                    ),
+                    Expr::Dot(dot_lhs, dot_rhs, _) => {
+                        let new_val = (&mut rhs_val, rhs.position());
+                        self.set_dot_val(scope, fn_lib, dot_lhs, dot_rhs, new_val, *op_pos, level)
+                    }
 
                     // Error assignment to constant
                     expr if expr.is_constant() => Err(EvalAltResult::ErrorAssignmentToConstant(
@@ -1372,14 +1379,15 @@ impl Engine<'_> {
             }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(lhs, rhs, _) => self.get_dot_val(scope, lhs, rhs, level),
+            Expr::Dot(lhs, rhs, _) => self.get_dot_val(scope, fn_lib, lhs, rhs, level),
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(contents, _) => {
                 let mut arr = Array::new();
 
                 contents.into_iter().try_for_each(|item| {
-                    self.eval_expr(scope, item, level).map(|val| arr.push(val))
+                    self.eval_expr(scope, fn_lib, item, level)
+                        .map(|val| arr.push(val))
                 })?;
 
                 Ok((arr).into_dynamic())
@@ -1390,7 +1398,7 @@ impl Engine<'_> {
                 let mut map = Map::new();
 
                 contents.into_iter().try_for_each(|item| {
-                    self.eval_expr(scope, &item.1, level).map(|val| {
+                    self.eval_expr(scope, fn_lib, &item.1, level).map(|val| {
                         map.insert(item.0.clone(), val);
                     })
                 })?;
@@ -1400,14 +1408,17 @@ impl Engine<'_> {
 
             Expr::FunctionCall(fn_name, args_expr_list, def_val, pos) => {
                 // Has a system function an override?
-                fn has_override(engine: &Engine, name: &str) -> bool {
-                    (engine.functions.is_some() && {
-                        engine.functions.as_ref().unwrap().contains_key(&FnSpec {
+                fn has_override(
+                    engine: &Engine,
+                    fn_lib: Option<&FunctionsLib>,
+                    name: &str,
+                ) -> bool {
+                    engine.functions.as_ref().map_or(false, |lib| {
+                        lib.contains_key(&FnSpec {
                             name: name.into(),
                             args: vec![TypeId::of::<String>()],
                         })
-                    }) || (engine.fn_lib.is_some()
-                        && engine.fn_lib.as_ref().unwrap().has_function(name, 1))
+                    }) || fn_lib.map_or(false, |lib| lib.has_function(name, 1))
                 }
 
                 match fn_name.as_ref() {
@@ -1429,14 +1440,15 @@ impl Engine<'_> {
 
                         // Redirect call to `print`
                         let mut args = [result.as_mut()];
-                        self.call_fn_raw(None, KEYWORD_PRINT, &mut args, None, pos, level)
+                        self.call_fn_raw(None, fn_lib, KEYWORD_PRINT, &mut args, None, pos, level)
                     }
 
                     // type_of
                     KEYWORD_TYPE_OF
-                        if args_expr_list.len() == 1 && !has_override(self, KEYWORD_TYPE_OF) =>
+                        if args_expr_list.len() == 1
+                            && !has_override(self, fn_lib, KEYWORD_TYPE_OF) =>
                     {
-                        let r = self.eval_expr(scope, &args_expr_list[0], level)?;
+                        let r = self.eval_expr(scope, fn_lib, &args_expr_list[0], level)?;
                         Ok(self
                             .map_type_name((*r).type_name())
                             .to_string()
@@ -1445,10 +1457,11 @@ impl Engine<'_> {
 
                     // eval
                     KEYWORD_EVAL
-                        if args_expr_list.len() == 1 && !has_override(self, KEYWORD_EVAL) =>
+                        if args_expr_list.len() == 1
+                            && !has_override(self, fn_lib, KEYWORD_EVAL) =>
                     {
                         let pos = args_expr_list[0].position();
-                        let r = self.eval_expr(scope, &args_expr_list[0], level)?;
+                        let r = self.eval_expr(scope, fn_lib, &args_expr_list[0], level)?;
 
                         // Get the script text by evaluating the expression
                         let script =
@@ -1462,81 +1475,59 @@ impl Engine<'_> {
                                 })?;
 
                         // Compile the script text
-                        #[cfg(not(feature = "no_optimize"))]
-                        let ast = {
-                            let orig_optimization_level = self.optimization_level;
+                        let mut ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
 
-                            self.set_optimization_level(OptimizationLevel::None);
-                            let ast = self.compile(script);
-                            self.set_optimization_level(orig_optimization_level);
+                        // If new functions are defined within the eval string, it is an error
+                        if ast.1.len() > 0 {
+                            return Err(EvalAltResult::ErrorParsing(
+                                ParseErrorType::WrongFnDefinition.into_err(pos),
+                            ));
+                        }
 
-                            ast.map_err(EvalAltResult::ErrorParsing)?
-                        };
-
-                        #[cfg(feature = "no_optimize")]
-                        let ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
-
-                        // If new functions are defined, merge it into the current functions library
-                        let merged = AST(
-                            ast.0,
-                            if let Some(fn_lib) = &self.fn_lib {
-                                #[cfg(feature = "sync")]
-                                {
-                                    Arc::new(fn_lib.as_ref().merge(&ast.1))
-                                }
-                                #[cfg(not(feature = "sync"))]
-                                {
-                                    Rc::new(fn_lib.as_ref().merge(&ast.1))
-                                }
-                            } else {
-                                ast.1
-                            },
-                        );
+                        if let Some(lib) = fn_lib {
+                            #[cfg(feature = "sync")]
+                            {
+                                ast.1 = Arc::new(lib.clone());
+                            }
+                            #[cfg(not(feature = "sync"))]
+                            {
+                                ast.1 = Rc::new(lib.clone());
+                            }
+                        }
 
                         // Evaluate the AST
-                        let result = self
-                            .eval_ast_with_scope_raw(scope, &merged)
-                            .map_err(|err| err.set_position(pos));
-
-                        // Update the new functions library if there are new functions
-                        self.fn_lib = if !merged.1.is_empty() {
-                            Some(merged.1)
-                        } else {
-                            None
-                        };
-
-                        Ok(result?)
+                        self.eval_ast_with_scope_raw(scope, &ast)
+                            .map_err(|err| err.set_position(pos))
                     }
 
                     // Normal function call
                     _ => {
-                        let mut values = args_expr_list
+                        let mut arg_values = args_expr_list
                             .iter()
-                            .map(|expr| self.eval_expr(scope, expr, level))
+                            .map(|expr| self.eval_expr(scope, fn_lib, expr, level))
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        let mut arg_values: Vec<_> =
-                            values.iter_mut().map(Dynamic::as_mut).collect();
-
+                        let mut args: Vec<_> = arg_values.iter_mut().map(Dynamic::as_mut).collect();
                         let def_val = def_val.as_ref();
-
-                        self.call_fn_raw(None, fn_name, &mut arg_values, def_val, *pos, level)
+                        self.call_fn_raw(None, fn_lib, fn_name, &mut args, def_val, *pos, level)
                     }
                 }
             }
 
-            Expr::In(lhs, rhs, _) => self.eval_in_expr(scope, lhs.as_ref(), rhs.as_ref(), level),
+            Expr::In(lhs, rhs, _) => {
+                self.eval_in_expr(scope, fn_lib, lhs.as_ref(), rhs.as_ref(), level)
+            }
 
             Expr::And(lhs, rhs, _) => Ok(Box::new(
                 self
-                    .eval_expr(scope, lhs.as_ref(), level)?
+                    .eval_expr(scope, fn_lib,lhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
                     })?
                     && // Short-circuit using &&
                 self
-                    .eval_expr(scope, rhs.as_ref(), level)?
+                    .eval_expr(scope, fn_lib,rhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
@@ -1545,14 +1536,14 @@ impl Engine<'_> {
 
             Expr::Or(lhs, rhs, _) => Ok(Box::new(
                 self
-                    .eval_expr(scope, lhs.as_ref(), level)?
+                    .eval_expr(scope,fn_lib, lhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
                     })?
                     || // Short-circuit using ||
                 self
-                    .eval_expr(scope, rhs.as_ref(), level)?
+                    .eval_expr(scope,fn_lib, rhs.as_ref(), level)?
                     .try_cast::<bool>()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
@@ -1567,8 +1558,9 @@ impl Engine<'_> {
 
     /// Evaluate a statement
     pub(crate) fn eval_stmt(
-        &mut self,
+        &self,
         scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
         stmt: &Stmt,
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
@@ -1578,7 +1570,7 @@ impl Engine<'_> {
 
             // Expression as statement
             Stmt::Expr(expr) => {
-                let result = self.eval_expr(scope, expr, level)?;
+                let result = self.eval_expr(scope, fn_lib, expr, level)?;
 
                 Ok(if !matches!(expr.as_ref(), Expr::Assignment(_, _, _)) {
                     result
@@ -1593,7 +1585,7 @@ impl Engine<'_> {
                 let prev_len = scope.len();
 
                 let result = block.iter().try_fold(().into_dynamic(), |_, stmt| {
-                    self.eval_stmt(scope, stmt, level)
+                    self.eval_stmt(scope, fn_lib, stmt, level)
                 });
 
                 scope.rewind(prev_len);
@@ -1603,14 +1595,14 @@ impl Engine<'_> {
 
             // If-else statement
             Stmt::IfThenElse(guard, if_body, else_body) => self
-                .eval_expr(scope, guard, level)?
+                .eval_expr(scope, fn_lib, guard, level)?
                 .try_cast::<bool>()
                 .map_err(|_| EvalAltResult::ErrorLogicGuard(guard.position()))
                 .and_then(|guard_val| {
                     if guard_val {
-                        self.eval_stmt(scope, if_body, level)
+                        self.eval_stmt(scope, fn_lib, if_body, level)
                     } else if let Some(stmt) = else_body {
-                        self.eval_stmt(scope, stmt.as_ref(), level)
+                        self.eval_stmt(scope, fn_lib, stmt.as_ref(), level)
                     } else {
                         Ok(().into_dynamic())
                     }
@@ -1618,12 +1610,19 @@ impl Engine<'_> {
 
             // While loop
             Stmt::While(guard, body) => loop {
-                match self.eval_expr(scope, guard, level)?.try_cast::<bool>() {
-                    Ok(guard_val) if guard_val => match self.eval_stmt(scope, body, level) {
-                        Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
-                        Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(().into_dynamic()),
-                        Err(x) => return Err(x),
-                    },
+                match self
+                    .eval_expr(scope, fn_lib, guard, level)?
+                    .try_cast::<bool>()
+                {
+                    Ok(guard_val) if guard_val => {
+                        match self.eval_stmt(scope, fn_lib, body, level) {
+                            Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
+                            Err(EvalAltResult::ErrorLoopBreak(true, _)) => {
+                                return Ok(().into_dynamic())
+                            }
+                            Err(x) => return Err(x),
+                        }
+                    }
                     Ok(_) => return Ok(().into_dynamic()),
                     Err(_) => return Err(EvalAltResult::ErrorLogicGuard(guard.position())),
                 }
@@ -1631,7 +1630,7 @@ impl Engine<'_> {
 
             // Loop statement
             Stmt::Loop(body) => loop {
-                match self.eval_stmt(scope, body, level) {
+                match self.eval_stmt(scope, fn_lib, body, level) {
                     Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
                     Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(().into_dynamic()),
                     Err(x) => return Err(x),
@@ -1640,7 +1639,7 @@ impl Engine<'_> {
 
             // For loop
             Stmt::For(name, expr, body) => {
-                let arr = self.eval_expr(scope, expr, level)?;
+                let arr = self.eval_expr(scope, fn_lib, expr, level)?;
                 let tid = Any::type_id(arr.as_ref());
 
                 if let Some(type_iterators) = &self.type_iterators {
@@ -1658,7 +1657,7 @@ impl Engine<'_> {
                         for a in iter_fn(&arr) {
                             *scope.get_mut(entry) = a;
 
-                            match self.eval_stmt(scope, body, level) {
+                            match self.eval_stmt(scope, fn_lib, body, level) {
                                 Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
                                 Err(EvalAltResult::ErrorLoopBreak(true, _)) => break,
                                 Err(x) => return Err(x),
@@ -1688,7 +1687,7 @@ impl Engine<'_> {
 
             // Return value
             Stmt::ReturnWithVal(Some(a), ReturnType::Return, pos) => Err(EvalAltResult::Return(
-                self.eval_expr(scope, a, level)?,
+                self.eval_expr(scope, fn_lib, a, level)?,
                 *pos,
             )),
 
@@ -1699,7 +1698,7 @@ impl Engine<'_> {
 
             // Throw value
             Stmt::ReturnWithVal(Some(a), ReturnType::Exception, pos) => {
-                let val = self.eval_expr(scope, a, level)?;
+                let val = self.eval_expr(scope, fn_lib, a, level)?;
                 Err(EvalAltResult::ErrorRuntime(
                     val.try_cast::<String>().unwrap_or_else(|_| "".to_string()),
                     *pos,
@@ -1708,7 +1707,7 @@ impl Engine<'_> {
 
             // Let statement
             Stmt::Let(name, Some(expr), _) => {
-                let val = self.eval_expr(scope, expr, level)?;
+                let val = self.eval_expr(scope, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Normal, val, false);
                 Ok(().into_dynamic())
@@ -1722,7 +1721,7 @@ impl Engine<'_> {
 
             // Const statement
             Stmt::Const(name, expr, _) if expr.is_constant() => {
-                let val = self.eval_expr(scope, expr, level)?;
+                let val = self.eval_expr(scope, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Constant, val, true);
                 Ok(().into_dynamic())
@@ -1744,11 +1743,6 @@ impl Engine<'_> {
                 .map(String::as_str)
                 .unwrap_or(name)
         }
-    }
-
-    /// Clean up all script-defined functions within the `Engine`.
-    pub fn clear_functions(&mut self) {
-        self.fn_lib = None;
     }
 }
 

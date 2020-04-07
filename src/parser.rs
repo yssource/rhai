@@ -199,7 +199,7 @@ impl AST {
     /// # {
     /// use rhai::Engine;
     ///
-    /// let mut engine = Engine::new();
+    /// let engine = Engine::new();
     ///
     /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
     /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo("!")"#)?;

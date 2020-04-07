@@ -39,15 +39,18 @@ struct State<'a> {
     constants: Vec<(String, Expr)>,
     /// An `Engine` instance for eager function evaluation.
     engine: &'a Engine<'a>,
+    /// Library of script-defined functions.
+    fn_lib: &'a [(&'a str, usize)],
 }
 
 impl<'a> State<'a> {
     /// Create a new State.
-    pub fn new(engine: &'a Engine<'a>) -> Self {
+    pub fn new(engine: &'a Engine<'a>, fn_lib: &'a [(&'a str, usize)]) -> Self {
         Self {
             changed: false,
             constants: vec![],
             engine,
+            fn_lib,
         }
     }
     /// Reset the state from dirty to clean.
@@ -502,11 +505,9 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if let Some(fn_lib_arc) = &state.engine.fn_lib {
-                if fn_lib_arc.has_function(&id, args.len()) {
-                    // A script-defined function overrides the built-in function - do not make the call
-                    return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
-                }
+            if state.fn_lib.iter().find(|(name, len)| name == &id && *len == args.len()).is_some() {
+                // A script-defined function overrides the built-in function - do not make the call
+                return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
@@ -554,14 +555,19 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
     }
 }
 
-pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &Scope) -> Vec<Stmt> {
+pub(crate) fn optimize<'a>(
+    statements: Vec<Stmt>,
+    engine: &Engine<'a>,
+    scope: &Scope,
+    fn_lib: &'a [(&'a str, usize)],
+) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
     if engine.optimization_level == OptimizationLevel::None {
         return statements;
     }
 
     // Set up the state
-    let mut state = State::new(engine);
+    let mut state = State::new(engine, fn_lib);
 
     // Add constants from the scope into the state
     scope
@@ -635,7 +641,12 @@ pub fn optimize_into_ast(
     statements: Vec<Stmt>,
     functions: Vec<FnDef>,
 ) -> AST {
-    let fn_lib = FunctionsLib::from_vec(
+    let fn_lib: Vec<_> = functions
+        .iter()
+        .map(|fn_def| (fn_def.name.as_str(), fn_def.params.len()))
+        .collect();
+
+    let lib = FunctionsLib::from_vec(
         functions
             .iter()
             .cloned()
@@ -644,7 +655,7 @@ pub fn optimize_into_ast(
                     let pos = fn_def.body.position();
 
                     // Optimize the function body
-                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new());
+                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new(), &fn_lib);
 
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
@@ -667,12 +678,12 @@ pub fn optimize_into_ast(
         match engine.optimization_level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize(statements, engine, &scope)
+                optimize(statements, engine, &scope, &fn_lib)
             }
         },
         #[cfg(feature = "sync")]
-        Arc::new(fn_lib),
+        Arc::new(lib),
         #[cfg(not(feature = "sync"))]
-        Rc::new(fn_lib),
+        Rc::new(lib),
     )
 }

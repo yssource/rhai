@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_var_scope() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
     let mut scope = Scope::new();
 
     engine.eval_with_scope::<()>(&mut scope, "let x = 4 + 5")?;
@@ -21,7 +21,7 @@ fn test_var_scope() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_scope_eval() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     // First create the state
     let mut scope = Scope::new();

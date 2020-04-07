@@ -29,7 +29,7 @@
 //!
 //!     engine.register_fn("compute_something", compute_something);
 //!
-//! # #[cfg(not(feature = "no_std"))]
+//! #   #[cfg(not(feature = "no_std"))]
 //!     assert_eq!(engine.eval_file::<bool>("my_script.rhai".into())?, true);
 //!
 //!     Ok(())

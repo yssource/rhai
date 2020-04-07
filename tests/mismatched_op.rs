@@ -3,7 +3,7 @@ use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 #[test]
 #[cfg(not(feature = "no_stdlib"))]
 fn test_mismatched_op() {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert!(
         matches!(engine.eval::<INT>(r#"60 + "hello""#).expect_err("expects error"),

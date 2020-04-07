@@ -3,7 +3,7 @@ use rhai::{Array, Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
 fn test_arrays() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("let x = [1, 2, 3]; x[1]")?, 2);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[1] = 5; y[1]")?, 5);
