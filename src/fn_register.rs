@@ -262,10 +262,6 @@ macro_rules! def_register {
 
         def_register!($($p),*);
     };
-//    (imp_pop) => {};
-//    (imp_pop $head:ident => $head_mark:ty => $head_param:ty $(,$tail:ident => $tail_mark:ty => $tp:ty)*) => {
-//        def_register!(imp $($tail => $tail_mark => $tp),*);
-//    };
 }
 
 #[rustfmt::skip]

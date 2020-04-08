@@ -61,9 +61,10 @@ extern crate alloc;
 mod any;
 mod api;
 mod builtin;
-mod call;
 mod engine;
 mod error;
+mod fn_anonymous;
+mod fn_call;
 mod fn_register;
 mod optimize;
 mod parser;
@@ -72,13 +73,16 @@ mod scope;
 mod stdlib;
 
 pub use any::{Any, AnyExt, Dynamic, Variant};
-pub use call::FuncArgs;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
+pub use fn_call::FuncArgs;
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 pub use parser::{Position, AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
+
+#[cfg(not(feature = "no_function"))]
+pub use fn_anonymous::AnonymousFn;
 
 #[cfg(not(feature = "no_index"))]
 pub use engine::Array;

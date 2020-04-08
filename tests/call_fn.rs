@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
+use rhai::{AnonymousFn, Engine, EvalAltResult, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_fn() -> Result<(), EvalAltResult> {
@@ -56,6 +56,19 @@ fn test_call_fn() -> Result<(), EvalAltResult> {
             .expect("variable foo should exist"),
         1
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_anonymous_fn() -> Result<(), EvalAltResult> {
+    let calc_func = AnonymousFn::<(INT, INT, INT), INT>::create_from_script(
+        Engine::new(),
+        "fn calc(x, y, z) { (x + y) * z }",
+        "calc",
+    )?;
+
+    assert_eq!(calc_func(42, 123, 9)?, 1485);
 
     Ok(())
 }

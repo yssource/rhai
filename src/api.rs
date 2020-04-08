@@ -1,9 +1,9 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Any, AnyExt, Dynamic};
-use crate::call::FuncArgs;
 use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec};
 use crate::error::ParseError;
+use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
 use crate::parser::{lex, parse, parse_global_expr, Position, AST};
 use crate::result::EvalAltResult;

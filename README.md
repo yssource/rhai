@@ -175,6 +175,10 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
+`EvalAltResult` is a Rust `enum` containing all errors encountered during the parsing or evaluation process.
+
+### Script evaluation
+
 The type parameter is used to specify the type of the return value, which _must_ match the actual type or an error is returned.
 Rhai is very strict here. There are two ways to specify the return type - _turbofish_ notation, or type inference.
 
@@ -191,6 +195,8 @@ Evaluate a script file directly:
 ```rust
 let result = engine.eval_file::<i64>("hello_world.rhai".into())?;       // 'eval_file' takes a 'PathBuf'
 ```
+
+### Compiling scripts (to AST)
 
 To repeatedly evaluate a script, _compile_ it first into an AST (abstract syntax tree) form:
 
@@ -210,6 +216,8 @@ Compiling a script file is also supported:
 ```rust
 let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
+
+### Calling Rhai functions from Rust
 
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `call_fn`.
 
@@ -249,6 +257,37 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?
 
 let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
 //                                                          ^^ unit = tuple of zero
+```
+
+### Creating Rust anonymous functions from Rhai script
+
+[`AnonymousFn`]: #creating-rust-anonymous-functions-from-rhai-script
+
+It is possible to further encapsulate a script in Rust such that it essentially becomes a normal Rust function.
+This is accomplished via the `AnonymousFn` trait which contains `create_from_script` (as well as its associate
+method `create_from_ast`):
+
+```rust
+use rhai::{Engine, AnonymousFn};                // use 'AnonymousFn' for 'create_from_script'
+
+let engine = Engine::new();                     // create a new 'Engine' just for this
+
+let script = "fn calc(x, y) { x + y.len() < 42 }";
+
+// AnonymousFn takes two type parameters:
+//   1) a tuple made up of the types of the script function's parameters
+//   2) the return type of the script function
+//
+// 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
+let func = AnonymousFn::<(i64, String), bool>::create_from_script(
+//                       ^^^^^^^^^^^^^ function parameter types in tuple
+
+                engine,                         // the 'Engine' is consumed into the closure
+                script,                         // the script, notice number of parameters must match
+                "calc"                          // the entry-point function name
+)?;
+
+func(123, "hello".to_string())? == false;       // call the anonymous function
 ```
 
 Raw `Engine`
@@ -448,8 +487,8 @@ To call these functions, they need to be registered with the [`Engine`].
 
 ```rust
 use rhai::{Engine, EvalAltResult};
-use rhai::RegisterFn;                           // use `RegisterFn` trait for `register_fn`
-use rhai::{Any, Dynamic, RegisterDynamicFn};    // use `RegisterDynamicFn` trait for `register_dynamic_fn`
+use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
+use rhai::{Any, Dynamic, RegisterDynamicFn};    // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -536,7 +575,7 @@ and the error text gets converted into `EvalAltResult::ErrorRuntime`.
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
-use rhai::RegisterResultFn;                         // use `RegisterResultFn` trait for `register_result_fn`
+use rhai::RegisterResultFn;                         // use 'RegisterResultFn' trait for 'register_result_fn'
 
 // Function that may fail
 fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
