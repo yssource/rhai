@@ -387,8 +387,30 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     pub fn compile_with_scope(&self, scope: &Scope, input: &str) -> Result<AST, ParseError> {
+        self.compile_with_scope_and_optimization_level(
+            scope,
+            input,
+            #[cfg(not(feature = "no_optimize"))]
+            self.optimization_level,
+        )
+    }
+
+    /// Compile a string into an `AST` using own scope at a specific optimization level.
+    pub(crate) fn compile_with_scope_and_optimization_level(
+        &self,
+        scope: &Scope,
+        input: &str,
+        #[cfg(not(feature = "no_optimize"))] optimization_level: OptimizationLevel,
+    ) -> Result<AST, ParseError> {
         let tokens_stream = lex(input);
-        parse(&mut tokens_stream.peekable(), self, scope)
+
+        parse(
+            &mut tokens_stream.peekable(),
+            self,
+            scope,
+            #[cfg(not(feature = "no_optimize"))]
+            optimization_level,
+        )
     }
 
     /// Read the contents of a file into a string.
@@ -800,8 +822,14 @@ impl<'e> Engine<'e> {
     pub fn consume_with_scope(&self, scope: &mut Scope, input: &str) -> Result<(), EvalAltResult> {
         let tokens_stream = lex(input);
 
-        let ast = parse(&mut tokens_stream.peekable(), self, scope)
-            .map_err(EvalAltResult::ErrorParsing)?;
+        let ast = parse(
+            &mut tokens_stream.peekable(),
+            self,
+            scope,
+            #[cfg(not(feature = "no_optimize"))]
+            self.optimization_level,
+        )
+        .map_err(EvalAltResult::ErrorParsing)?;
 
         self.consume_ast_with_scope(scope, &ast)
     }
@@ -837,7 +865,6 @@ impl<'e> Engine<'e> {
     ///
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// # #[cfg(not(feature = "no_stdlib"))]
     /// # #[cfg(not(feature = "no_function"))]
     /// # {
     /// use rhai::{Engine, Scope};

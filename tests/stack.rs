@@ -1,3 +1,4 @@
+#![cfg(not(feature = "no_function"))]
 use rhai::{Engine, EvalAltResult};
 
 #[test]

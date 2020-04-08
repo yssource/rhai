@@ -59,26 +59,24 @@ Beware that in order to use pre-releases (e.g. alpha and beta), the exact versio
 Optional features
 -----------------
 
-| Feature       | Description                                                                                                                                              |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `no_stdlib`   | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
-| `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
-| `no_function` | Disable script-defined functions if not needed.                                                                                                          |
-| `no_index`    | Disable arrays and indexing features if not needed.                                                                                                      |
-| `no_object`   | Disable support for custom types and objects.                                                                                                            |
-| `no_float`    | Disable floating-point numbers and math if not needed.                                                                                                   |
-| `no_optimize` | Disable the script optimizer.                                                                                                                            |
-| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
-| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                         |
-| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                     |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`.                    |
+| Feature       | Description                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!           |
+| `no_function` | Disable script-defined functions if not needed.                                                                                       |
+| `no_index`    | Disable arrays and indexing features if not needed.                                                                                   |
+| `no_object`   | Disable support for custom types and objects.                                                                                         |
+| `no_float`    | Disable floating-point numbers and math if not needed.                                                                                |
+| `no_optimize` | Disable the script optimizer.                                                                                                         |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                      |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                      |
+| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                  |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`. |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
 Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
 
 [`unchecked`]: #optional-features
-[`no_stdlib`]: #optional-features
 [`no_index`]: #optional-features
 [`no_float`]: #optional-features
 [`no_function`]: #optional-features
@@ -160,7 +158,7 @@ Hello world
 
 [`Engine`]: #hello-world
 
-To get going with Rhai, create an instance of the scripting engine and then call `eval`:
+To get going with Rhai, create an instance of the scripting engine via `Engine::new` and then call the `eval` method:
 
 ```rust
 use rhai::{Engine, EvalAltResult};
@@ -171,7 +169,7 @@ fn main() -> Result<(), EvalAltResult>
 
     let result = engine.eval::<i64>("40 + 2")?;
 
-    println!("Answer: {}", result);  // prints 42
+    println!("Answer: {}", result);             // prints 42
 
     Ok(())
 }
@@ -203,7 +201,7 @@ let ast = engine.compile("40 + 2")?;
 for _ in 0..42 {
     let result: i64 = engine.eval_ast(&ast)?;
 
-    println!("Answer #{}: {}", i, result);  // prints 42
+println!("Answer #{}: {}", i, result);          // prints 42
 }
 ```
 
@@ -253,6 +251,27 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
 //                                                          ^^ unit = tuple of zero
 ```
 
+Raw `Engine`
+------------
+
+[raw `Engine`]: #raw-engine
+
+`Engine::new` creates a scripting [`Engine`] with common functionalities (e.g. printing to the console via `print`).
+In many controlled embedded environments, however, these are not needed.
+
+Use `Engine::new_raw` to create a _raw_ `Engine`, in which:
+
+* the `print` and `debug` statements do nothing instead of displaying to the console (see [`print` and `debug`](#print-and-debug) below)
+* the _standard library_ of utility functions is _not_ loaded by default (load it using the `register_stdlib` method).
+
+```rust
+let mut engine = Engine::new_raw();             // Create a 'raw' Engine
+
+engine.register_stdlib();                       // Register the standard library manually
+
+engine.
+```
+
 Evaluate expressions only
 -------------------------
 
@@ -263,8 +282,8 @@ In these cases, use the `compile_expression` and `eval_expression` methods or th
 let result = engine.eval_expression::<i64>("2 + (10 + 10) * 2")?;
 ```
 
-When evaluation _expressions_, no control-flow statement (e.g. `if`, `while`, `for`) is not supported and will be
-parse errors when encountered - not even variable assignments.
+When evaluation _expressions_, no full-blown statement (e.g. `if`, `while`, `for`) - not even variable assignments -
+is supported and will be considered parse errors when encountered.
 
 ```rust
 // The following are all syntax errors because the script is not an expression.
@@ -955,7 +974,7 @@ number = -5 - +5;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on
+The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on
 `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                       |
@@ -966,7 +985,7 @@ The following standard functions (defined in the standard library but excluded i
 Floating-point functions
 ------------------------
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on `f64` only:
+The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -996,7 +1015,7 @@ Individual characters within a Rhai string can also be replaced just as if the s
 In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
 
 Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded
-if [`no_stdlib`]). This is particularly useful when printing output.
+if using a [raw `Engine`]). This is particularly useful when printing output.
 
 [`type_of()`] a string returns `"string"`.
 
@@ -1044,7 +1063,7 @@ record == "Bob X. Davis: age 42 ❤\n";
 'C' in record == false;
 ```
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on strings:
+The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
 
 | Function   | Description                                                              |
 | ---------- | ------------------------------------------------------------------------ |
@@ -1097,7 +1116,7 @@ The Rust type of a Rhai array is `rhai::Array`. [`type_of()`] an array returns `
 
 Arrays are disabled via the [`no_index`] feature.
 
-The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on arrays:
+The following functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on arrays:
 
 | Function     | Description                                                                           |
 | ------------ | ------------------------------------------------------------------------------------- |
@@ -1193,7 +1212,7 @@ The Rust type of a Rhai object map is `rhai::Map`. [`type_of()`] an object map r
 
 Object maps are disabled via the [`no_object`] feature.
 
-The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on object maps:
+The following functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on object maps:
 
 | Function     | Description                                                                                                                              |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1271,7 +1290,7 @@ Comparison operators
 
 Comparing most values of the same data type work out-of-the-box for standard types supported by the system.
 
-However, if the [`no_stdlib`] feature is turned on, comparisons can only be made between restricted system types -
+However, if using a [raw `Engine`], comparisons can only be made between restricted system types -
 `INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), string, array, `bool`, `char`.
 
 ```rust
@@ -1753,7 +1772,7 @@ An [`Engine`]'s optimization level is set via a call to `set_optimization_level`
 engine.set_optimization_level(rhai::OptimizationLevel::Full);
 ```
 
-If it is ever needed to _re_-optimize an `AST`, use the `optimize_ast` method.
+If it is ever needed to _re_-optimize an `AST`, use the `optimize_ast` method:
 
 ```rust
 // Compile script to AST

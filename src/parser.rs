@@ -6,7 +6,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 
 #[cfg(not(feature = "no_optimize"))]
-use crate::optimize::optimize_into_ast;
+use crate::optimize::{optimize_into_ast, OptimizationLevel};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -2866,19 +2866,14 @@ pub fn parse<'a, 'e>(
     input: &mut Peekable<TokenIterator<'a>>,
     engine: &Engine<'e>,
     scope: &Scope,
+    #[cfg(not(feature = "no_optimize"))] optimization_level: OptimizationLevel,
 ) -> Result<AST, ParseError> {
     let (statements, functions) = parse_global_level(input)?;
 
     Ok(
         // Optimize AST
         #[cfg(not(feature = "no_optimize"))]
-        optimize_into_ast(
-            engine,
-            scope,
-            statements,
-            functions,
-            engine.optimization_level,
-        ),
+        optimize_into_ast(engine, scope, statements, functions, optimization_level),
         //
         // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]

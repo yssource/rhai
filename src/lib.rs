@@ -40,7 +40,6 @@
 //!
 //! | Feature       | Description                                                                                                                                              |
 //! | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-//! | `no_stdlib`   | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
 //! | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
 //! | `no_function` | Disable script-defined functions if not needed.                                                                                                          |
 //! | `no_index`    | Disable arrays and indexing features if not needed.                                                                                                      |

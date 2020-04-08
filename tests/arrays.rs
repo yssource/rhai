@@ -13,42 +13,39 @@ fn test_arrays() -> Result<(), EvalAltResult> {
     );
     assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
 
-    #[cfg(not(feature = "no_stdlib"))]
-    {
-        assert_eq!(
-            engine.eval::<INT>(
-                r"
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
                         let x = [1, 2, 3];
                         let y = [4, 5];
                         x.append(y);
                         x.len()
            "
-            )?,
-            5
-        );
-        assert_eq!(
-            engine.eval::<INT>(
-                r"
+        )?,
+        5
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
                         let x = [1, 2, 3];
                         x += [4, 5];
                         x.len()
            "
-            )?,
-            5
-        );
-        assert_eq!(
-            engine
-                .eval::<Array>(
-                    r"
+        )?,
+        5
+    );
+    assert_eq!(
+        engine
+            .eval::<Array>(
+                r"
                         let x = [1, 2, 3];
                         let y = [4, 5];
                         x + y
            "
-                )?
-                .len(),
-            5
-        );
-    }
+            )?
+            .len(),
+        5
+    );
 
     Ok(())
 }

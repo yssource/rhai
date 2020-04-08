@@ -283,28 +283,25 @@ pub struct Engine<'e> {
 
 impl Default for Engine<'_> {
     fn default() -> Self {
-        // User-friendly names for built-in types
-        let type_names = [
-            #[cfg(not(feature = "no_index"))]
-            (type_name::<Array>(), "array"),
-            #[cfg(not(feature = "no_object"))]
-            (type_name::<Map>(), "map"),
-            (type_name::<String>(), "string"),
-            (type_name::<Dynamic>(), "dynamic"),
-            (type_name::<Variant>(), "variant"),
-        ]
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
-
         // Create the new scripting Engine
         let mut engine = Engine {
             functions: None,
             type_iterators: None,
-            type_names: Some(type_names),
-            on_print: Some(Box::new(default_print)), // default print/debug implementations
+            type_names: None,
+
+            // default print/debug implementations
+            #[cfg(not(feature = "no_std"))]
+            on_print: Some(Box::new(default_print)),
+            #[cfg(not(feature = "no_std"))]
             on_debug: Some(Box::new(default_print)),
 
+            // default print/debug implementations
+            #[cfg(feature = "no_std")]
+            on_print: None,
+            #[cfg(feature = "no_std")]
+            on_debug: None,
+
+            // optimization level
             #[cfg(not(feature = "no_optimize"))]
             #[cfg(not(feature = "optimize_full"))]
             optimization_level: OptimizationLevel::Simple,
@@ -316,10 +313,11 @@ impl Default for Engine<'_> {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
         };
 
+        engine.fill_type_names();
         engine.register_core_lib();
 
         #[cfg(not(feature = "no_stdlib"))]
-        engine.register_stdlib(); // Register the standard library when no_stdlib is not set
+        engine.register_stdlib();
 
         engine
     }
@@ -354,6 +352,24 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
 }
 
 impl Engine<'_> {
+    fn fill_type_names(&mut self) {
+        // User-friendly names for built-in types
+        self.type_names = Some(
+            [
+                #[cfg(not(feature = "no_index"))]
+                (type_name::<Array>(), "array"),
+                #[cfg(not(feature = "no_object"))]
+                (type_name::<Map>(), "map"),
+                (type_name::<String>(), "string"),
+                (type_name::<Dynamic>(), "dynamic"),
+                (type_name::<Variant>(), "variant"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+        );
+    }
+
     /// Create a new `Engine`
     pub fn new() -> Self {
         // fn abc<F: Fn() + Send + Sync>(f: F) {
@@ -364,7 +380,7 @@ impl Engine<'_> {
         Default::default()
     }
 
-    /// Create a new `Engine` with minimal configurations - i.e. without pretty-print type names etc.
+    /// Create a new `Engine` with minimal configurations without the standard library etc.
     pub fn new_raw() -> Self {
         let mut engine = Engine {
             functions: None,
@@ -384,10 +400,8 @@ impl Engine<'_> {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
         };
 
+        engine.fill_type_names();
         engine.register_core_lib();
-
-        #[cfg(not(feature = "no_stdlib"))]
-        engine.register_stdlib(); // Register the standard library when no_stdlib is not set
 
         engine
     }
@@ -1487,13 +1501,24 @@ impl Engine<'_> {
                                 })?;
 
                         // Compile the script text
-                        let mut ast = self.compile(script).map_err(EvalAltResult::ErrorParsing)?;
+                        // No optimizations because we only run it once
+                        let mut ast = self
+                            .compile_with_scope_and_optimization_level(
+                                &Scope::new(),
+                                script,
+                                #[cfg(not(feature = "no_optimize"))]
+                                OptimizationLevel::None,
+                            )
+                            .map_err(EvalAltResult::ErrorParsing)?;
 
                         // If new functions are defined within the eval string, it is an error
-                        if ast.1.len() > 0 {
-                            return Err(EvalAltResult::ErrorParsing(
-                                ParseErrorType::WrongFnDefinition.into_err(pos),
-                            ));
+                        #[cfg(not(feature = "no_function"))]
+                        {
+                            if ast.1.len() > 0 {
+                                return Err(EvalAltResult::ErrorParsing(
+                                    ParseErrorType::WrongFnDefinition.into_err(pos),
+                                ));
+                            }
                         }
 
                         if let Some(lib) = fn_lib {
@@ -1760,11 +1785,6 @@ impl Engine<'_> {
 
 /// Print/debug to stdout
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(feature = "no_stdlib"))]
 fn default_print(s: &str) {
     println!("{}", s);
 }
-
-/// No-op
-#[cfg(any(feature = "no_std", feature = "no_stdlib"))]
-fn default_print(_: &str) {}

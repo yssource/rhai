@@ -20,22 +20,24 @@ categories = [ "no-std", "embedded", "parser-implementations" ]
 num-traits = "*"
 
 [features]
-#default = ["no_function", "no_index", "no_object", "no_float", "only_i32", "no_stdlib", "unchecked", "no_optimize", "sync"]
+#default = ["no_stdlib", "no_function", "no_index", "no_object", "no_float", "only_i32", "unchecked", "no_optimize", "sync"]
 default = []
 unchecked = []      # unchecked arithmetic
-no_stdlib = []      # no standard library of utility functions
 no_index = []       # no arrays and indexing
 no_float = []       # no floating-point
 no_function = []    # no script-defined functions
 no_object = []      # no custom objects
 no_optimize = []    # no script optimizer
-optimize_full = []  # set optimization level to Full (default is Simple) - this is a feature used only to simplify testing
 only_i32 = []       # set INT=i32 (useful for 32-bit systems)
 only_i64 = []       # set INT=i64 (default) and disable support for all other integer types
 sync = []           # restrict to only types that implement Send + Sync
 
 # compiling for no-std
 no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm" ]
+
+# other developer features
+no_stdlib = []      # do not register the standard library
+optimize_full = []  # set optimization level to Full (default is Simple) - this is a feature used only to simplify testing
 
 [profile.release]
 lto = "fat"

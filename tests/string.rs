@@ -22,12 +22,12 @@ fn test_string() -> Result<(), EvalAltResult> {
     #[cfg(not(feature = "no_stdlib"))]
     assert_eq!(engine.eval::<String>(r#""foo" + 123"#)?, "foo123");
 
+    #[cfg(not(feature = "no_stdlib"))]
+    assert_eq!(engine.eval::<String>("(42).to_string()")?, "42");
+
     #[cfg(not(feature = "no_float"))]
     #[cfg(not(feature = "no_stdlib"))]
     assert_eq!(engine.eval::<String>(r#""foo" + 123.4556"#)?, "foo123.4556");
-
-    #[cfg(not(feature = "no_stdlib"))]
-    assert_eq!(engine.eval::<String>("(42).to_string()")?, "42");
 
     Ok(())
 }

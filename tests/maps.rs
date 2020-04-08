@@ -33,42 +33,39 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
     assert!(engine.eval::<bool>("let y = #{a: 1, b: 2, c: 3}; 'b' in y")?);
     assert!(!engine.eval::<bool>(r#"let y = #{a: 1, b: 2, c: 3}; "z" in y"#)?);
 
-    #[cfg(not(feature = "no_stdlib"))]
-    {
-        assert_eq!(
-            engine.eval::<INT>(
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = #{a: 1, b: 2, c: 3};
+                let y = #{b: 42, d: 9};
+                x.mixin(y);
+                x.len() + x.b
+           "
+        )?,
+        46
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = #{a: 1, b: 2, c: 3};
+                x += #{b: 42, d: 9};
+                x.len() + x.b
+           "
+        )?,
+        46
+    );
+    assert_eq!(
+        engine
+            .eval::<Map>(
                 r"
                     let x = #{a: 1, b: 2, c: 3};
                     let y = #{b: 42, d: 9};
-                    x.mixin(y);
-                    x.len() + x.b
+                    x + y
            "
-            )?,
-            46
-        );
-        assert_eq!(
-            engine.eval::<INT>(
-                r"
-                    let x = #{a: 1, b: 2, c: 3};
-                    x += #{b: 42, d: 9};
-                    x.len() + x.b
-           "
-            )?,
-            46
-        );
-        assert_eq!(
-            engine
-                .eval::<Map>(
-                    r"
-                        let x = #{a: 1, b: 2, c: 3};
-                        let y = #{b: 42, d: 9};
-                        x + y
-           "
-                )?
-                .len(),
-            4
-        );
-    }
+            )?
+            .len(),
+        4
+    );
 
     Ok(())
 }

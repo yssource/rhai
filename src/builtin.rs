@@ -757,8 +757,7 @@ macro_rules! reg_fn2y {
 
 /// Register the built-in library.
 impl Engine<'_> {
-    #[cfg(not(feature = "no_stdlib"))]
-    pub(crate) fn register_stdlib(&mut self) {
+    pub fn register_stdlib(&mut self) {
         #[cfg(not(feature = "no_float"))]
         {
             // Advanced math functions

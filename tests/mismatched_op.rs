@@ -1,12 +1,11 @@
 use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
-#[cfg(not(feature = "no_stdlib"))]
 fn test_mismatched_op() {
     let engine = Engine::new();
 
     assert!(
-        matches!(engine.eval::<INT>(r#"60 + "hello""#).expect_err("expects error"),
+        matches!(engine.eval::<INT>(r#""hello, " + "world!""#).expect_err("expects error"),
         EvalAltResult::ErrorMismatchOutputType(err, _) if err == "string")
     );
 }
