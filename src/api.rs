@@ -345,8 +345,8 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile(&self, input: &str) -> Result<AST, ParseError> {
-        self.compile_with_scope(&Scope::new(), input)
+    pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
+        self.compile_with_scope(&Scope::new(), script)
     }
 
     /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
@@ -386,10 +386,10 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_with_scope(&self, scope: &Scope, input: &str) -> Result<AST, ParseError> {
+    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_with_scope_and_optimization_level(
             scope,
-            input,
+            script,
             #[cfg(not(feature = "no_optimize"))]
             self.optimization_level,
         )
@@ -399,10 +399,10 @@ impl<'e> Engine<'e> {
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
-        input: &str,
+        script: &str,
         #[cfg(not(feature = "no_optimize"))] optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let tokens_stream = lex(input);
+        let tokens_stream = lex(script);
 
         parse(
             &mut tokens_stream.peekable(),
@@ -488,10 +488,7 @@ impl<'e> Engine<'e> {
         scope: &Scope,
         path: PathBuf,
     ) -> Result<AST, EvalAltResult> {
-        Self::read_file(path).and_then(|contents| {
-            self.compile_with_scope(scope, &contents)
-                .map_err(|err| err.into())
-        })
+        Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
 
     /// Compile a string containing an expression into an `AST`,
@@ -514,8 +511,8 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_expression(&self, input: &str) -> Result<AST, ParseError> {
-        self.compile_expression_with_scope(&Scope::new(), input)
+    pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
+        self.compile_expression_with_scope(&Scope::new(), script)
     }
 
     /// Compile a string containing an expression into an `AST` using own scope,
@@ -560,9 +557,9 @@ impl<'e> Engine<'e> {
     pub fn compile_expression_with_scope(
         &self,
         scope: &Scope,
-        input: &str,
+        script: &str,
     ) -> Result<AST, ParseError> {
-        let tokens_stream = lex(input);
+        let tokens_stream = lex(script);
         parse_global_expr(&mut tokens_stream.peekable(), self, scope)
     }
 
@@ -628,8 +625,8 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval<T: Any + Clone>(&self, input: &str) -> Result<T, EvalAltResult> {
-        self.eval_with_scope(&mut Scope::new(), input)
+    pub fn eval<T: Any + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
+        self.eval_with_scope(&mut Scope::new(), script)
     }
 
     /// Evaluate a string with own scope.
@@ -657,9 +654,9 @@ impl<'e> Engine<'e> {
     pub fn eval_with_scope<T: Any + Clone>(
         &self,
         scope: &mut Scope,
-        input: &str,
+        script: &str,
     ) -> Result<T, EvalAltResult> {
-        let ast = self.compile(input).map_err(EvalAltResult::ErrorParsing)?;
+        let ast = self.compile(script)?;
         self.eval_ast_with_scope(scope, &ast)
     }
 
@@ -677,8 +674,8 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_expression<T: Any + Clone>(&self, input: &str) -> Result<T, EvalAltResult> {
-        self.eval_expression_with_scope(&mut Scope::new(), input)
+    pub fn eval_expression<T: Any + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
+        self.eval_expression_with_scope(&mut Scope::new(), script)
     }
 
     /// Evaluate a string containing an expression with own scope.
@@ -702,11 +699,9 @@ impl<'e> Engine<'e> {
     pub fn eval_expression_with_scope<T: Any + Clone>(
         &self,
         scope: &mut Scope,
-        input: &str,
+        script: &str,
     ) -> Result<T, EvalAltResult> {
-        let ast = self
-            .compile_expression(input)
-            .map_err(EvalAltResult::ErrorParsing)?;
+        let ast = self.compile_expression(script)?;
 
         self.eval_ast_with_scope(scope, &ast)
     }
@@ -813,14 +808,14 @@ impl<'e> Engine<'e> {
 
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume(&self, input: &str) -> Result<(), EvalAltResult> {
-        self.consume_with_scope(&mut Scope::new(), input)
+    pub fn consume(&self, script: &str) -> Result<(), EvalAltResult> {
+        self.consume_with_scope(&mut Scope::new(), script)
     }
 
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume_with_scope(&self, scope: &mut Scope, input: &str) -> Result<(), EvalAltResult> {
-        let tokens_stream = lex(input);
+    pub fn consume_with_scope(&self, scope: &mut Scope, script: &str) -> Result<(), EvalAltResult> {
+        let tokens_stream = lex(script);
 
         let ast = parse(
             &mut tokens_stream.peekable(),
@@ -828,8 +823,7 @@ impl<'e> Engine<'e> {
             scope,
             #[cfg(not(feature = "no_optimize"))]
             self.optimization_level,
-        )
-        .map_err(EvalAltResult::ErrorParsing)?;
+        )?;
 
         self.consume_ast_with_scope(scope, &ast)
     }
