@@ -2781,7 +2781,13 @@ pub fn parse_global_expr<'a, 'e>(
     Ok(
         // Optimize AST
         #[cfg(not(feature = "no_optimize"))]
-        optimize_into_ast(engine, scope, vec![Stmt::Expr(Box::new(expr))], vec![]),
+        optimize_into_ast(
+            engine,
+            scope,
+            vec![Stmt::Expr(Box::new(expr))],
+            vec![],
+            engine.optimization_level,
+        ),
         //
         // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]
@@ -2866,7 +2872,13 @@ pub fn parse<'a, 'e>(
     Ok(
         // Optimize AST
         #[cfg(not(feature = "no_optimize"))]
-        optimize_into_ast(engine, scope, statements, functions),
+        optimize_into_ast(
+            engine,
+            scope,
+            statements,
+            functions,
+            engine.optimization_level,
+        ),
         //
         // Do not optimize AST if `no_optimize`
         #[cfg(feature = "no_optimize")]

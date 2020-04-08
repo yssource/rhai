@@ -1753,6 +1753,19 @@ An [`Engine`]'s optimization level is set via a call to `set_optimization_level`
 engine.set_optimization_level(rhai::OptimizationLevel::Full);
 ```
 
+If it is ever needed to _re_-optimize an `AST`, use the `optimize_ast` method.
+
+```rust
+// Compile script to AST
+let ast = engine.compile("40 + 2")?;
+
+// Create a new 'Scope' - put constants in it to aid optimization if using 'OptimizationLevel::Full'
+let scope = Scope::new();
+
+// Re-optimize the AST
+let ast = engine.optimize_ast(&scope, &ast, OptimizationLevel::Full);
+```
+
 When the optimization level is [`OptimizationLevel::Full`], the [`Engine`] assumes all functions to be _pure_ and will _eagerly_
 evaluated all function calls with constant arguments, using the result to replace the call. This also applies to all operators
 (which are implemented as functions). For instance, the same example above:

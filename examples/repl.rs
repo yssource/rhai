@@ -145,9 +145,7 @@ fn main() {
 
                 #[cfg(not(feature = "no_optimize"))]
                 {
-                    engine.set_optimization_level(OptimizationLevel::Full);
-                    ast = engine.optimize_ast(&scope, r);
-                    engine.set_optimization_level(OptimizationLevel::None);
+                    ast = engine.optimize_ast(&scope, r, OptimizationLevel::Full);
                 }
 
                 #[cfg(feature = "no_optimize")]

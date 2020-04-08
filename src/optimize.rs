@@ -41,16 +41,23 @@ struct State<'a> {
     engine: &'a Engine<'a>,
     /// Library of script-defined functions.
     fn_lib: &'a [(&'a str, usize)],
+    /// Optimization level.
+    optimization_level: OptimizationLevel,
 }
 
 impl<'a> State<'a> {
     /// Create a new State.
-    pub fn new(engine: &'a Engine<'a>, fn_lib: &'a [(&'a str, usize)]) -> Self {
+    pub fn new(
+        engine: &'a Engine<'a>,
+        fn_lib: &'a [(&'a str, usize)],
+        level: OptimizationLevel,
+    ) -> Self {
         Self {
             changed: false,
             constants: vec![],
             engine,
             fn_lib,
+            optimization_level: level,
         }
     }
     /// Reset the state from dirty to clean.
@@ -501,7 +508,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
 
         // Eagerly call functions
         Expr::FunctionCall(id, args, def_value, pos)
-                if state.engine.optimization_level == OptimizationLevel::Full // full optimizations
+                if state.optimization_level == OptimizationLevel::Full // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
@@ -560,14 +567,15 @@ pub(crate) fn optimize<'a>(
     engine: &Engine<'a>,
     scope: &Scope,
     fn_lib: &'a [(&'a str, usize)],
+    level: OptimizationLevel,
 ) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
-    if engine.optimization_level == OptimizationLevel::None {
+    if level == OptimizationLevel::None {
         return statements;
     }
 
     // Set up the state
-    let mut state = State::new(engine, fn_lib);
+    let mut state = State::new(engine, fn_lib, level);
 
     // Add constants from the scope into the state
     scope
@@ -640,6 +648,7 @@ pub fn optimize_into_ast(
     scope: &Scope,
     statements: Vec<Stmt>,
     functions: Vec<FnDef>,
+    level: OptimizationLevel,
 ) -> AST {
     let fn_lib: Vec<_> = functions
         .iter()
@@ -651,11 +660,12 @@ pub fn optimize_into_ast(
             .iter()
             .cloned()
             .map(|mut fn_def| {
-                if engine.optimization_level != OptimizationLevel::None {
+                if level != OptimizationLevel::None {
                     let pos = fn_def.body.position();
 
                     // Optimize the function body
-                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new(), &fn_lib);
+                    let mut body =
+                        optimize(vec![fn_def.body], engine, &Scope::new(), &fn_lib, level);
 
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
@@ -675,10 +685,10 @@ pub fn optimize_into_ast(
     );
 
     AST(
-        match engine.optimization_level {
+        match level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize(statements, engine, &scope, &fn_lib)
+                optimize(statements, engine, &scope, &fn_lib, level)
             }
         },
         #[cfg(feature = "sync")]

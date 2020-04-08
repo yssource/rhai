@@ -10,7 +10,7 @@ use crate::result::EvalAltResult;
 use crate::scope::Scope;
 
 #[cfg(not(feature = "no_optimize"))]
-use crate::optimize::optimize_into_ast;
+use crate::optimize::{optimize_into_ast, OptimizationLevel};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -902,9 +902,14 @@ impl<'e> Engine<'e> {
     /// compiled just once. Before evaluation, constants are passed into the `Engine` via an external scope
     /// (i.e. with `scope.push_constant(...)`). Then, the `AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
-    pub fn optimize_ast(&self, scope: &Scope, ast: AST) -> AST {
+    pub fn optimize_ast(
+        &self,
+        scope: &Scope,
+        ast: AST,
+        optimization_level: OptimizationLevel,
+    ) -> AST {
         let fn_lib = ast.1.iter().map(|fn_def| fn_def.as_ref().clone()).collect();
-        optimize_into_ast(self, scope, ast.0, fn_lib)
+        optimize_into_ast(self, scope, ast.0, fn_lib, optimization_level)
     }
 
     /// Override default action of `print` (print to stdout using `println!`)
