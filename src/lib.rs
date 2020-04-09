@@ -3,15 +3,19 @@
 //! Rhai is a tiny, simple and very fast embedded scripting language for Rust
 //! that gives you a safe and easy way to add scripting to your applications.
 //! It provides a familiar syntax based on JS and Rust and a simple Rust interface.
-//! Here is a quick example. First, the contents of `my_script.rhai`:
+//! Here is a quick example.
+//!
+//! First, the contents of `my_script.rhai`:
 //!
 //! ```,ignore
+//! // Brute force factorial function
 //! fn factorial(x) {
 //!     if x == 1 { return 1; }
 //!     x * factorial(x - 1)
 //! }
 //!
-//! compute_something(factorial(10))
+//! // Calling an external function 'compute'
+//! compute(factorial(10))
 //! ```
 //!
 //! And the Rust part:
@@ -21,16 +25,22 @@
 //!
 //! fn main() -> Result<(), EvalAltResult>
 //! {
+//!     // Define external function
 //!     fn compute_something(x: i64) -> bool {
 //!         (x % 40) == 0
 //!     }
 //!
+//!     // Create scripting engine
 //!     let mut engine = Engine::new();
 //!
-//!     engine.register_fn("compute_something", compute_something);
+//!     // Register external function as 'compute'
+//!     engine.register_fn("compute", compute_something);
 //!
 //! #   #[cfg(not(feature = "no_std"))]
-//!     assert_eq!(engine.eval_file::<bool>("my_script.rhai".into())?, true);
+//!     assert_eq!(
+//!         engine.eval_file::<bool>("my_script.rhai".into())?,
+//!         true
+//!     );
 //!
 //!     Ok(())
 //! }
@@ -63,8 +73,8 @@ mod api;
 mod builtin;
 mod engine;
 mod error;
-mod fn_anonymous;
 mod fn_call;
+mod fn_func;
 mod fn_register;
 mod optimize;
 mod parser;
@@ -82,7 +92,7 @@ pub use result::EvalAltResult;
 pub use scope::Scope;
 
 #[cfg(not(feature = "no_function"))]
-pub use fn_anonymous::AnonymousFn;
+pub use fn_func::Func;
 
 #[cfg(not(feature = "no_index"))]
 pub use engine::Array;

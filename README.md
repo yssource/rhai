@@ -261,26 +261,26 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
 
 ### Creating Rust anonymous functions from Rhai script
 
-[`AnonymousFn`]: #creating-rust-anonymous-functions-from-rhai-script
+[`Func`]: #creating-rust-anonymous-functions-from-rhai-script
 
 It is possible to further encapsulate a script in Rust such that it essentially becomes a normal Rust function.
-This is accomplished via the `AnonymousFn` trait which contains `create_from_script` (as well as its associate
+This is accomplished via the `Func` trait which contains `create_from_script` (as well as its associate
 method `create_from_ast`):
 
 ```rust
-use rhai::{Engine, AnonymousFn};                // use 'AnonymousFn' for 'create_from_script'
+use rhai::{Engine, Func};                       // use 'Func' for 'create_from_script'
 
 let engine = Engine::new();                     // create a new 'Engine' just for this
 
 let script = "fn calc(x, y) { x + y.len() < 42 }";
 
-// AnonymousFn takes two type parameters:
+// Func takes two type parameters:
 //   1) a tuple made up of the types of the script function's parameters
 //   2) the return type of the script function
 //
 // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
-let func = AnonymousFn::<(i64, String), bool>::create_from_script(
-//                       ^^^^^^^^^^^^^ function parameter types in tuple
+let func = Func::<(i64, String), bool>::create_from_script(
+//                ^^^^^^^^^^^^^ function parameter types in tuple
 
                 engine,                         // the 'Engine' is consumed into the closure
                 script,                         // the script, notice number of parameters must match
@@ -336,6 +336,7 @@ Values and types
 
 [`type_of()`]: #values-and-types
 [`to_string()`]: #values-and-types
+[`()`]: #values-and-types
 
 The following primitive types are supported natively:
 
@@ -352,8 +353,6 @@ The following primitive types are supported natively:
 | **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
 | **Nothing/void/nil/null** (or whatever you want to call it)                   | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
-
-[`()`]: #values-and-types
 
 All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different -
 they even cannot be added together. This is very similar to Rust.
@@ -478,6 +477,20 @@ let z = y.to_int() + x;                         // works
 let c = 'X';                                    // character
 print("c is '" + c + "' and its code is " + c.to_int());    // prints "c is 'X' and its code is 88"
 ```
+
+Traits
+------
+
+A number of traits, under the `rhai::` module namespace, provide additional functionalities.
+
+| Trait               | Description                                                                       | Methods                                 |
+| ------------------- | --------------------------------------------------------------------------------- | --------------------------------------- |
+| `Any`               | Generic trait that represents a [`Dynamic`] type                                  | `type_id`, `type_name`, `into_dynamic`  |
+| `AnyExt`            | Extension trait to allows casting of a [`Dynamic`] value to Rust types            | `cast`, `try_cast`                      |
+| `RegisterFn`        | Trait for registering functions                                                   | `register_fn`                           |
+| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                             | `register_dynamic_fn`                   |
+| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, EvalAltResult>` | `register_result_fn`                    |
+| `Func`              | Trait for creating anonymous functions from script                                | `create_from_ast`, `create_from_script` |
 
 Working with functions
 ----------------------
@@ -1245,7 +1258,7 @@ Property values can be accessed via the dot notation (_object_ `.` _property_) o
 The dot notation allows only property names that follow the same naming rules as [variables].
 The index notation allows setting/getting properties of arbitrary names (even the empty string).
 
-**Important:** Trying to read a non-existent property returns `()` instead of causing an error.
+**Important:** Trying to read a non-existent property returns [`()`] instead of causing an error.
 
 The Rust type of a Rhai object map is `rhai::Map`. [`type_of()`] an object map returns `"map"`.
 
@@ -1619,6 +1632,10 @@ fn do_addition(x) {
     add_y(x)
 }
 ```
+
+Unlike C/C++, functions can be defined _anywhere_ within the global level. A function does not need to be defined
+prior to being used in a script; a statement in the script can freely call a function defined afterwards.
+This is similar to Rust and many other modern languages.
 
 ### Functions overloading
 

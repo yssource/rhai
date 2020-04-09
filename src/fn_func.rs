@@ -9,8 +9,10 @@ use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 
+use crate::stdlib::{boxed::Box, string::ToString};
+
 /// A trait to create a Rust anonymous function from a script.
-pub trait AnonymousFn<ARGS, RET> {
+pub trait Func<ARGS, RET> {
     type Output;
 
     /// Create a Rust anonymous function from an `AST`.
@@ -20,19 +22,19 @@ pub trait AnonymousFn<ARGS, RET> {
     ///
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// use rhai::{Engine, AnonymousFn};                // use 'AnonymousFn' for 'create_from_ast'
+    /// use rhai::{Engine, Func};                       // use 'Func' for 'create_from_ast'
     ///
     /// let engine = Engine::new();                     // create a new 'Engine' just for this
     ///
     /// let ast = engine.compile("fn calc(x, y) { x + y.len() < 42 }")?;
     ///
-    /// // AnonymousFn takes two type parameters:
+    /// // Func takes two type parameters:
     /// //   1) a tuple made up of the types of the script function's parameters
     /// //   2) the return type of the script function
     /// //
     /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
-    /// let func = AnonymousFn::<(i64, String), bool>::create_from_ast(
-    /// //                       ^^^^^^^^^^^^^ function parameter types in tuple
+    /// let func = Func::<(i64, String), bool>::create_from_ast(
+    /// //                ^^^^^^^^^^^^^ function parameter types in tuple
     ///
     ///                 engine,                         // the 'Engine' is consumed into the closure
     ///                 ast,                            // the 'AST'
@@ -51,19 +53,19 @@ pub trait AnonymousFn<ARGS, RET> {
     ///
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// use rhai::{Engine, AnonymousFn};                // use 'AnonymousFn' for 'create_from_script'
+    /// use rhai::{Engine, Func};                       // use 'Func' for 'create_from_script'
     ///
     /// let engine = Engine::new();                     // create a new 'Engine' just for this
     ///
     /// let script = "fn calc(x, y) { x + y.len() < 42 }";
     ///
-    /// // AnonymousFn takes two type parameters:
+    /// // Func takes two type parameters:
     /// //   1) a tuple made up of the types of the script function's parameters
     /// //   2) the return type of the script function
     /// //
     /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
-    /// let func = AnonymousFn::<(i64, String), bool>::create_from_script(
-    /// //                       ^^^^^^^^^^^^^ function parameter types in tuple
+    /// let func = Func::<(i64, String), bool>::create_from_script(
+    /// //                ^^^^^^^^^^^^^ function parameter types in tuple
     ///
     ///                 engine,                         // the 'Engine' is consumed into the closure
     ///                 script,                         // the script, notice number of parameters must match
@@ -86,7 +88,7 @@ macro_rules! def_anonymous_fn {
         def_anonymous_fn!(imp);
     };
     (imp $($par:ident),*) => {
-        impl<'e, $($par: Any + Clone,)* RET: Any + Clone> AnonymousFn<($($par,)*), RET> for Engine<'e>
+        impl<'e, $($par: Any + Clone,)* RET: Any + Clone> Func<($($par,)*), RET> for Engine<'e>
         {
             #[cfg(feature = "sync")]
             type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult> + Send + Sync + 'e>;
@@ -98,13 +100,13 @@ macro_rules! def_anonymous_fn {
                 let name = entry_point.to_string();
 
                 Box::new(move |$($par: $par),*| {
-                    self.call_fn::<_, RET>(&mut Scope::new(), &ast, &name, ($($par,)*))
+                    self.call_fn(&mut Scope::new(), &ast, &name, ($($par,)*))
                 })
             }
 
             fn create_from_script(self, script: &str, entry_point: &str) -> Result<Self::Output, ParseError> {
                 let ast = self.compile(script)?;
-                Ok(AnonymousFn::<($($par,)*), RET>::create_from_ast(self, ast, entry_point))
+                Ok(Func::<($($par,)*), RET>::create_from_ast(self, ast, entry_point))
             }
         }
     };
