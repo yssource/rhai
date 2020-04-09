@@ -132,9 +132,9 @@ macro_rules! def_register {
         def_register!(imp);
     };
     (imp $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
-    //     ^ function parameter generic type name
+    //     ^ function parameter generic type name (A, B, C etc.)
     //                   ^ function parameter marker type (T, Ref<T> or Mut<T>)
-    //                               ^ function parameter actual type
+    //                               ^ function parameter actual type (T, &T or &mut T)
     //                                            ^ dereferencing function
         impl<
             $($par: Any + Clone,)*
@@ -171,6 +171,7 @@ macro_rules! def_register {
                     let r = f($(($clone)($par)),*);
                     Ok(Box::new(r) as Dynamic)
                 };
+
                 self.register_fn_raw(name, vec![$(TypeId::of::<$par>()),*], Box::new(func));
             }
         }
@@ -255,9 +256,10 @@ macro_rules! def_register {
         def_register!(imp $p0 => $p0      => $p0      => Clone::clone   $(, $p => $p => $p => Clone::clone)*);
         def_register!(imp $p0 => Mut<$p0> => &mut $p0 => identity       $(, $p => $p => $p => Clone::clone)*);
         // handle the first parameter                    ^ first parameter passed through
-        //                                                    others passed by value (cloned) ^
+        //                                                                                    ^ others passed by value (cloned)
 
-        // No support for functions where the first argument is a reference
+        // Currently does not support first argument which is a reference, as there will be
+        // conflicting implementations since &T: Any and T: Any cannot be distinguished
         //def_register!(imp $p0 => Ref<$p0> => &$p0     => identity       $(, $p => $p => $p => Clone::clone)*);
 
         def_register!($($p),*);

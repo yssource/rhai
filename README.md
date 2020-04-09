@@ -27,7 +27,7 @@ Rhai's current features set:
   to do checked arithmetic operations); for [`no_std`] builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.11.0, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.12.0, so the language and API's may change before they stabilize.
 
 Installation
 ------------
@@ -36,7 +36,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.11.0"
+rhai = "0.12.0"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -207,7 +207,7 @@ let ast = engine.compile("40 + 2")?;
 for _ in 0..42 {
     let result: i64 = engine.eval_ast(&ast)?;
 
-println!("Answer #{}: {}", i, result);          // prints 42
+    println!("Answer #{}: {}", i, result);      // prints 42
 }
 ```
 
@@ -263,9 +263,10 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
 
 [`Func`]: #creating-rust-anonymous-functions-from-rhai-script
 
-It is possible to further encapsulate a script in Rust such that it essentially becomes a normal Rust function.
-This is accomplished via the `Func` trait which contains `create_from_script` (as well as its associate
-method `create_from_ast`):
+It is possible to further encapsulate a script in Rust such that it becomes a normal Rust function.
+Such an _anonymous function_ is basically a boxed closure, very useful as call-back functions.
+Creating them is accomplished via the `Func` trait which contains `create_from_script`
+(as well as its companion method `create_from_ast`):
 
 ```rust
 use rhai::{Engine, Func};                       // use 'Func' for 'create_from_script'
@@ -288,6 +289,15 @@ let func = Func::<(i64, String), bool>::create_from_script(
 )?;
 
 func(123, "hello".to_string())? == false;       // call the anonymous function
+
+schedule_callback(func);                        // pass it as a callback to another function
+
+// Although there is nothing you can't do by manually writing out the closure yourself...
+let engine = Engine::new();
+let ast = engine.compile(script)?;
+schedule_callback(Box::new(move |x: i64, y: String| -> Result<bool, EvalAltResult> {
+    engine.call_fn(&mut Scope::new(), &ast, "calc", (x, y))
+}));
 ```
 
 Raw `Engine`

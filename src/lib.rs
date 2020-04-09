@@ -38,6 +38,7 @@
 //!
 //! #   #[cfg(not(feature = "no_std"))]
 //!     assert_eq!(
+//!         // Evaluate the script, expects a 'bool' return
 //!         engine.eval_file::<bool>("my_script.rhai".into())?,
 //!         true
 //!     );

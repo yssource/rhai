@@ -9,10 +9,10 @@ fn test_stack_overflow() -> Result<(), EvalAltResult> {
         engine.eval::<i64>(
             r"
                 fn foo(n) { if n == 0 { 0 } else { n + foo(n-1) } }
-                foo(38)
+                foo(30)
     ",
         )?,
-        741
+        465
     );
 
     match engine.eval::<()>(

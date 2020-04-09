@@ -2,14 +2,16 @@
 
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, FunctionsLib, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    Engine, FnAny, FnCallArgs, FnSpec, FunctionsLib, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL,
+    KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Position, ReturnType, Stmt, AST};
+use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
     boxed::Box,
+    collections::HashMap,
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
@@ -94,6 +96,25 @@ impl<'a> State<'a> {
 
         None
     }
+}
+
+/// Call a registered function
+fn call_fn(
+    functions: Option<&HashMap<FnSpec, Box<FnAny>>>,
+    fn_name: &str,
+    args: &mut FnCallArgs,
+    pos: Position,
+) -> Result<Option<Dynamic>, EvalAltResult> {
+    let spec = FnSpec {
+        name: fn_name.into(),
+        args: args.iter().map(|a| Any::type_id(*a)).collect(),
+    };
+
+    // Search built-in's and external functions
+    functions
+        .and_then(|f| f.get(&spec))
+        .map(|func| func(args, pos))
+        .transpose()
 }
 
 /// Optimize a statement.
@@ -528,21 +549,25 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            state.engine.call_ext_fn_raw(&id, &mut call_args, pos).ok().map(|result|
-                result.or_else(|| {
-                    if !arg_for_type_of.is_empty() {
-                        // Handle `type_of()`
-                        Some(arg_for_type_of.to_string().into_dynamic())
-                    } else {
-                        // Otherwise use the default value, if any
-                        def_value.clone()
-                    }
-                }).and_then(|result| map_dynamic_to_expr(result, pos))
+            call_fn(state.engine.functions.as_ref(), &id, &mut call_args, pos).ok()
+                .and_then(|result|
+                    result.or_else(|| {
+                        if !arg_for_type_of.is_empty() {
+                            // Handle `type_of()`
+                            Some(arg_for_type_of.to_string().into_dynamic())
+                        } else {
+                            // Otherwise use the default value, if any
+                            def_value.clone()
+                        }
+                    }).and_then(|result| map_dynamic_to_expr(result, pos))
                     .map(|expr| {
                         state.set_dirty();
                         expr
                     })
-            ).flatten().unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
+                ).unwrap_or_else(||
+                    // Optimize function call arguments
+                    Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos)
+                )
         }
 
         // id(args ..) -> optimize function call arguments

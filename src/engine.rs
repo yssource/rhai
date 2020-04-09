@@ -50,7 +50,7 @@ type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send +
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 #[cfg(debug_assertions)]
-pub const MAX_CALL_STACK_DEPTH: usize = 42;
+pub const MAX_CALL_STACK_DEPTH: usize = 32;
 
 #[cfg(not(debug_assertions))]
 pub const MAX_CALL_STACK_DEPTH: usize = 256;
@@ -277,7 +277,7 @@ pub struct Engine<'e> {
 
     /// Maximum levels of call-stack to prevent infinite recursion.
     ///
-    /// Defaults to 42 for debug builds and 256 for non-debug builds.
+    /// Defaults to 32 for debug builds and 256 for non-debug builds.
     pub(crate) max_call_stack_depth: usize,
 }
 
@@ -372,11 +372,6 @@ impl Engine<'_> {
 
     /// Create a new `Engine`
     pub fn new() -> Self {
-        // fn abc<F: Fn() + Send + Sync>(f: F) {
-        //     f();
-        // }
-        // abc(|| ());
-
         Default::default()
     }
 
@@ -418,32 +413,6 @@ impl Engine<'_> {
     /// infinite recursion and stack overflows.
     pub fn set_max_call_levels(&mut self, levels: usize) {
         self.max_call_stack_depth = levels
-    }
-
-    /// Call a registered function
-    #[cfg(not(feature = "no_optimize"))]
-    pub(crate) fn call_ext_fn_raw(
-        &self,
-        fn_name: &str,
-        args: &mut FnCallArgs,
-        pos: Position,
-    ) -> Result<Option<Dynamic>, EvalAltResult> {
-        let spec = FnSpec {
-            name: fn_name.into(),
-            args: args.iter().map(|a| Any::type_id(*a)).collect(),
-        };
-
-        // Search built-in's and external functions
-        if let Some(functions) = &self.functions {
-            if let Some(func) = functions.get(&spec) {
-                // Run external function
-                Ok(Some(func(args, pos)?))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
-        }
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai

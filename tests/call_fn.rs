@@ -62,9 +62,6 @@ fn test_call_fn() -> Result<(), EvalAltResult> {
 
 #[test]
 fn test_anonymous_fn() -> Result<(), EvalAltResult> {
-    let calc_func: Box<dyn Fn(INT, INT, INT) -> Result<INT, EvalAltResult>> =
-        Engine::new().create_from_script("fn calc() { 42 }", "calc")?;
-
     let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
         Engine::new(),
         "fn calc(x, y, z) { (x + y) * z }",
