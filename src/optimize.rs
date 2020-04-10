@@ -385,25 +385,51 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             // id = expr
             expr => Expr::Assignment(id, Box::new(optimize_expr(expr, state)), pos),
         },
+
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(lhs, rhs, pos) => Expr::Dot(
-            Box::new(optimize_expr(*lhs, state)),
-            Box::new(optimize_expr(*rhs, state)),
-            pos,
-        ),
+        Expr::Dot(lhs, rhs, pos) => match (*lhs, *rhs) {
+            // map.string
+            (Expr::Map(items, pos), Expr::Property(s, _))
+                if items.iter().all(|(_, x, _)| x.is_pure()) =>
+            {
+                // Map literal where everything is pure - promote the indexed item.
+                // All other items can be thrown away.
+                state.set_dirty();
+                items.into_iter().find(|(name, _, _)| name == s.as_ref())
+                    .map(|(_, expr, _)| expr.set_position(pos))
+                    .unwrap_or_else(|| Expr::Unit(pos))
+            }
+            // lhs.rhs
+            (lhs, rhs) => Expr::Dot(
+                Box::new(optimize_expr(lhs, state)),
+                Box::new(optimize_expr(rhs, state)),
+                pos,
+            )
+        }
 
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
         Expr::Index(lhs, rhs, pos) => match (*lhs, *rhs) {
             // array[int]
-            (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
-                if i >= 0 && (i as usize) < items.len() && items.iter().all(|x| x.is_pure()) =>
+            (Expr::Array(mut items, pos), Expr::IntegerConstant(i, _))
+                if i >= 0 && (i as usize) < items.len() && items.iter().all(Expr::is_pure) =>
             {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                items.remove(i as usize)
+                items.remove(i as usize).set_position(pos)
+            }
+            // map[string]
+            (Expr::Map(items, pos), Expr::StringConstant(s, _))
+                if items.iter().all(|(_, x, _)| x.is_pure()) =>
+            {
+                // Map literal where everything is pure - promote the indexed item.
+                // All other items can be thrown away.
+                state.set_dirty();
+                items.into_iter().find(|(name, _, _)| name == s.as_ref())
+                    .map(|(_, expr, _)| expr.set_position(pos))
+                    .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _))
@@ -580,11 +606,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // constant-name
-        Expr::Variable(name, _) if state.contains_constant(&name) => {
+        Expr::Variable(name, pos) if state.contains_constant(&name) => {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(&name).expect("should find constant in scope!").clone()
+            state.find_constant(&name).expect("should find constant in scope!").clone().set_position(pos)
         }
 
         // All other expressions - skip

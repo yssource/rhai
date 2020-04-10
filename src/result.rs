@@ -107,15 +107,15 @@ impl EvalAltResult {
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
-            Self::ErrorArrayBounds(0, _, _) => "Access of empty array",
+            Self::ErrorArrayBounds(0, _, _) => "Empty array has nothing to access",
             Self::ErrorArrayBounds(_, _, _) => "Array index out of bounds",
             Self::ErrorStringBounds(_, index, _) if *index < 0 => {
                 "Indexing a string expects a non-negative index"
             }
-            Self::ErrorStringBounds(0, _, _) => "Indexing of empty string",
+            Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
-            Self::ErrorLogicGuard(_) => "Boolean expression expected",
-            Self::ErrorFor(_) => "For loop expects array or range",
+            Self::ErrorLogicGuard(_) => "Boolean value expected",
+            Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"

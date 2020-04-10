@@ -511,6 +511,33 @@ impl Expr {
         }
     }
 
+    /// Get the `Position` of the expression.
+    pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
+        match &mut self {
+            Self::IntegerConstant(_, pos)
+            | Self::FloatConstant(_, pos)
+            | Self::CharConstant(_, pos)
+            | Self::StringConstant(_, pos)
+            | Self::Array(_, pos)
+            | Self::Map(_, pos)
+            | Self::Variable(_, pos)
+            | Self::Property(_, pos)
+            | Self::Stmt(_, pos)
+            | Self::FunctionCall(_, _, _, pos)
+            | Self::And(_, _, pos)
+            | Self::Or(_, _, pos)
+            | Self::In(_, _, pos)
+            | Self::True(pos)
+            | Self::False(pos)
+            | Self::Unit(pos)
+            | Self::Assignment(_, _, pos)
+            | Self::Dot(_, _, pos)
+            | Self::Index(_, _, pos) => *pos = new_pos,
+        }
+
+        self
+    }
+
     /// Is the expression pure?
     ///
     /// A pure expression has no side effects.
