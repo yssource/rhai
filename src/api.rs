@@ -689,7 +689,9 @@ impl<'e> Engine<'e> {
         scope: &mut Scope,
         script: &str,
     ) -> Result<T, EvalAltResult> {
-        let ast = self.compile(script)?;
+        // Since the AST will be thrown away afterwards, don't bother to optimize it
+        let ast =
+            self.compile_with_scope_and_optimization_level(scope, script, OptimizationLevel::None)?;
         self.eval_ast_with_scope(scope, &ast)
     }
 
@@ -734,8 +736,10 @@ impl<'e> Engine<'e> {
         scope: &mut Scope,
         script: &str,
     ) -> Result<T, EvalAltResult> {
-        let ast = self.compile_expression(script)?;
-
+        let scripts = [script];
+        let stream = lex(&scripts);
+        // Since the AST will be thrown away afterwards, don't bother to optimize it
+        let ast = parse_global_expr(&mut stream.peekable(), self, scope, OptimizationLevel::None)?;
         self.eval_ast_with_scope(scope, &ast)
     }
 
@@ -850,7 +854,9 @@ impl<'e> Engine<'e> {
     pub fn consume_with_scope(&self, scope: &mut Scope, script: &str) -> Result<(), EvalAltResult> {
         let scripts = [script];
         let stream = lex(&scripts);
-        let ast = parse(&mut stream.peekable(), self, scope, self.optimization_level)?;
+
+        // Since the AST will be thrown away afterwards, don't bother to optimize it
+        let ast = parse(&mut stream.peekable(), self, scope, OptimizationLevel::None)?;
         self.consume_ast_with_scope(scope, &ast)
     }
 
