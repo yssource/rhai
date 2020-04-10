@@ -25,7 +25,7 @@ pub enum EvalAltResult {
 
     /// Error reading from a script file. Wrapped value is the path of the script file.
     ///
-    /// Not available under the `no_std` feature.
+    /// Never appears under the `no_std` feature.
     #[cfg(not(feature = "no_std"))]
     ErrorReadingScriptFile(PathBuf, std::io::Error),
 

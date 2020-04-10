@@ -1,9 +1,7 @@
-#![cfg(not(feature = "no_optimize"))]
-
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, FnAny, FnCallArgs, FnSpec, FunctionsLib, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL,
-    KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, FnAny, FnCallArgs, FnSpec, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Position, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
@@ -31,6 +29,17 @@ pub enum OptimizationLevel {
     /// Full optimizations performed, including evaluating functions.
     /// Take care that this may cause side effects as it essentially assumes that all functions are pure.
     Full,
+}
+
+impl OptimizationLevel {
+    /// Is the `OptimizationLevel` None.
+    pub fn is_none(self) -> bool {
+        self == Self::None
+    }
+    /// Is the `OptimizationLevel` Full.
+    pub fn is_full(self) -> bool {
+        self == Self::Full
+    }
 }
 
 /// Mutable state throughout an optimization pass.
@@ -519,10 +528,6 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             ),
         },
 
-        // Do not optimize anything within dump_ast
-        Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST =>
-            Expr::FunctionCall(id, args, def_value, pos),
-
         // Do not call some special keywords
         Expr::FunctionCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref())=>
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
@@ -587,7 +592,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
     }
 }
 
-pub(crate) fn optimize<'a>(
+fn optimize<'a>(
     statements: Vec<Stmt>,
     engine: &Engine<'a>,
     scope: &Scope,
@@ -675,6 +680,9 @@ pub fn optimize_into_ast(
     functions: Vec<FnDef>,
     level: OptimizationLevel,
 ) -> AST {
+    #[cfg(feature = "no_optimize")]
+    const level: OptimizationLevel = OptimizationLevel::None;
+
     let fn_lib: Vec<_> = functions
         .iter()
         .map(|fn_def| (fn_def.name.as_str(), fn_def.params.len()))
@@ -685,7 +693,7 @@ pub fn optimize_into_ast(
             .iter()
             .cloned()
             .map(|mut fn_def| {
-                if level != OptimizationLevel::None {
+                if !level.is_none() {
                     let pos = fn_def.body.position();
 
                     // Optimize the function body

@@ -5,12 +5,10 @@ use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
+use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::{lex, parse, parse_global_expr, Position, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-
-#[cfg(not(feature = "no_optimize"))]
-use crate::optimize::{optimize_into_ast, OptimizationLevel};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -387,12 +385,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
-        self.compile_with_scope_and_optimization_level(
-            scope,
-            script,
-            #[cfg(not(feature = "no_optimize"))]
-            self.optimization_level,
-        )
+        self.compile_with_scope_and_optimization_level(scope, script, self.optimization_level)
     }
 
     /// Compile a string into an `AST` using own scope at a specific optimization level.
@@ -400,7 +393,7 @@ impl<'e> Engine<'e> {
         &self,
         scope: &Scope,
         script: &str,
-        #[cfg(not(feature = "no_optimize"))] optimization_level: OptimizationLevel,
+        optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let tokens_stream = lex(script);
 
@@ -408,7 +401,6 @@ impl<'e> Engine<'e> {
             &mut tokens_stream.peekable(),
             self,
             scope,
-            #[cfg(not(feature = "no_optimize"))]
             optimization_level,
         )
     }
@@ -821,7 +813,6 @@ impl<'e> Engine<'e> {
             &mut tokens_stream.peekable(),
             self,
             scope,
-            #[cfg(not(feature = "no_optimize"))]
             self.optimization_level,
         )?;
 

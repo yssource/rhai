@@ -314,9 +314,9 @@ Use `Engine::new_raw` to create a _raw_ `Engine`, in which:
 * the _standard library_ of utility functions is _not_ loaded by default (load it using the `register_stdlib` method).
 
 ```rust
-let mut engine = Engine::new_raw();             // Create a 'raw' Engine
+let mut engine = Engine::new_raw();             // create a 'raw' Engine
 
-engine.register_stdlib();                       // Register the standard library manually
+engine.register_stdlib();                       // register the standard library manually
 
 engine.
 ```
@@ -439,7 +439,7 @@ The `cast` method (from the `rhai::AnyExt` trait) then converts the value into a
 Alternatively, use the `try_cast` method which does not panic but returns an error when the cast fails.
 
 ```rust
-use rhai::AnyExt;                               // Pull in the trait.
+use rhai::AnyExt;                               // pull in the trait.
 
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
@@ -455,14 +455,14 @@ let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic whe
 The `type_name` method gets the name of the actual type as a static string slice, which you may match against.
 
 ```rust
-use rhai::Any;                                  // Pull in the trait.
+use rhai::Any;                                  // pull in the trait.
 
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
 
 match item.type_name() {                        // 'type_name' returns the name of the actual Rust type
     "i64" => ...
-    "std::string::String" => ...
+    "alloc::string::String" => ...
     "bool" => ...
     "path::to::module::TestStruct" => ...
 }
@@ -548,7 +548,7 @@ To return a [`Dynamic`] value from a Rust function, use the `into_dynamic()` met
 (under the `rhai::Any` trait) to convert it.
 
 ```rust
-use rhai::Any;                                  // Pull in the trait
+use rhai::Any;                                  // pull in the trait
 
 fn decide(yes_no: bool) -> Dynamic {
     if yes_no {
@@ -598,13 +598,13 @@ and the error text gets converted into `EvalAltResult::ErrorRuntime`.
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
-use rhai::RegisterResultFn;                         // use 'RegisterResultFn' trait for 'register_result_fn'
+use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
 // Function that may fail
 fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero detected!".into())    // short-cut to create EvalAltResult
+        Err("Division by zero!".into())         // short-cut to create EvalAltResult
     } else {
         Ok(x / y)
     }
@@ -618,7 +618,7 @@ fn main()
     engine.register_result_fn("divide", safe_divide);
 
     if let Err(error) = engine.eval::<i64>("divide(40, 0)") {
-       println!("Error: {:?}", error);              // prints ErrorRuntime("Division by zero detected!", (1, 1)")
+       println!("Error: {:?}", error);          // prints ErrorRuntime("Division by zero detected!", (1, 1)")
     }
 }
 ```
@@ -672,7 +672,7 @@ fn main() -> Result<(), EvalAltResult>
 
     let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 
-    println!("result: {}", result.field);           // prints 42
+    println!("result: {}", result.field);       // prints 42
 
     Ok(())
 }
@@ -1329,7 +1329,7 @@ foo == 42;
 y.has("a") == true;
 y.has("xyz") == false;
 
-y.xyz == ();            // A non-existing property returns '()'
+y.xyz == ();            // a non-existing property returns '()'
 y["xyz"] == ();
 
 print(y.len());         // prints 3
@@ -1449,10 +1449,11 @@ if (decision) print("I've decided!");
 Like Rust, `if` statements can also be used as _expressions_, replacing the `? :` conditional operators in other C-like languages.
 
 ```rust
-let x = 1 + if true { 42 } else { 123 } / 2;
+// The following is equivalent to C: int x = 1 + (decision ? 42 : 123) / 2;
+let x = 1 + if decision { 42 } else { 123 } / 2;
 x == 22;
 
-let x = if false { 42 };    // No else branch defaults to '()'
+let x = if decision { 42 }; // no else branch defaults to '()'
 x == ();
 ```
 
@@ -1506,7 +1507,6 @@ for x in range(0, 50) {
     if x == 42 { break; }   // break out of for loop
 }
 
-
 // The 'range' function also takes a step
 for x in range(0, 50, 3) {  // step by 3
     if x > 10 { continue; } // skip to the next iteration
@@ -1514,14 +1514,19 @@ for x in range(0, 50, 3) {  // step by 3
     if x == 42 { break; }   // break out of for loop
 }
 
-// Iterate through the values of an object map
+// Iterate through object map
 let map = #{a:1, b:3, c:5, d:7, e:9};
 
-// Remember that keys are returned in random order
+// Property names are returned in random order
 for x in keys(map) {
     if x > 10 { continue; } // skip to the next iteration
     print(x);
     if x == 42 { break; }   // break out of for loop
+}
+
+// Property values are returned in random order
+for val in values(map) {
+    print(val);
 }
 ```
 

@@ -1,12 +1,10 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Any, AnyExt, Dynamic};
-use crate::engine::{Engine, FunctionsLib};
+use crate::engine::{Array, Engine, FunctionsLib, Map};
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::scope::{EntryType as ScopeEntryType, Scope};
-
-#[cfg(not(feature = "no_optimize"))]
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
+use crate::scope::{EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -42,7 +40,6 @@ pub type INT = i32;
 /// The system floating-point type.
 ///
 /// Not available under the `no_float` feature.
-#[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
 
 type LERR = LexError;
@@ -398,7 +395,6 @@ pub enum Expr {
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
-    #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT, Position),
     /// Character constant.
     CharConstant(char, Position),
@@ -415,16 +411,12 @@ pub enum Expr {
     /// expr = expr
     Assignment(Box<Expr>, Box<Expr>, Position),
     /// lhs.rhs
-    #[cfg(not(feature = "no_object"))]
     Dot(Box<Expr>, Box<Expr>, Position),
     /// expr[expr]
-    #[cfg(not(feature = "no_index"))]
     Index(Box<Expr>, Box<Expr>, Position),
     /// [ expr, ... ]
-    #[cfg(not(feature = "no_index"))]
     Array(Vec<Expr>, Position),
     /// #{ name:expr, ... }
-    #[cfg(not(feature = "no_object"))]
     Map(Vec<(String, Expr, Position)>, Position),
     /// lhs in rhs
     In(Box<Expr>, Box<Expr>, Position),
@@ -449,28 +441,24 @@ impl Expr {
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
             Self::IntegerConstant(i, _) => i.into_dynamic(),
+            Self::FloatConstant(f, _) => f.into_dynamic(),
             Self::CharConstant(c, _) => c.into_dynamic(),
             Self::StringConstant(s, _) => s.clone().into_owned().into_dynamic(),
             Self::True(_) => true.into_dynamic(),
             Self::False(_) => false.into_dynamic(),
             Self::Unit(_) => ().into_dynamic(),
 
-            #[cfg(not(feature = "no_index"))]
             Self::Array(items, _) if items.iter().all(Self::is_constant) => items
                 .iter()
                 .map(Self::get_constant_value)
                 .collect::<Vec<_>>()
                 .into_dynamic(),
 
-            #[cfg(not(feature = "no_object"))]
             Self::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => items
                 .iter()
                 .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
                 .collect::<HashMap<_, _>>()
                 .into_dynamic(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(f, _) => f.into_dynamic(),
 
             _ => panic!("cannot get value of non-constant expression"),
         }
@@ -484,17 +472,14 @@ impl Expr {
     pub fn get_constant_str(&self) -> String {
         match self {
             Self::IntegerConstant(i, _) => i.to_string(),
+            Self::FloatConstant(f, _) => f.to_string(),
             Self::CharConstant(c, _) => c.to_string(),
             Self::StringConstant(_, _) => "string".to_string(),
             Self::True(_) => "true".to_string(),
             Self::False(_) => "false".to_string(),
             Self::Unit(_) => "()".to_string(),
 
-            #[cfg(not(feature = "no_index"))]
             Self::Array(items, _) if items.iter().all(Self::is_constant) => "array".to_string(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(f, _) => f.to_string(),
 
             _ => panic!("cannot get value of non-constant expression"),
         }
@@ -504,8 +489,11 @@ impl Expr {
     pub fn position(&self) -> Position {
         match self {
             Self::IntegerConstant(_, pos)
+            | Self::FloatConstant(_, pos)
             | Self::CharConstant(_, pos)
             | Self::StringConstant(_, pos)
+            | Self::Array(_, pos)
+            | Self::Map(_, pos)
             | Self::Variable(_, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
@@ -517,22 +505,9 @@ impl Expr {
             | Self::False(pos)
             | Self::Unit(pos) => *pos,
 
-            Self::Assignment(expr, _, _) => expr.position(),
-
-            #[cfg(not(feature = "no_object"))]
-            Self::Dot(expr, _, _) => expr.position(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, pos) => *pos,
-
-            #[cfg(not(feature = "no_index"))]
-            Self::Array(_, pos) => *pos,
-
-            #[cfg(not(feature = "no_object"))]
-            Self::Map(_, pos) => *pos,
-
-            #[cfg(not(feature = "no_index"))]
-            Self::Index(expr, _, _) => expr.position(),
+            Self::Assignment(expr, _, _) | Self::Dot(expr, _, _) | Self::Index(expr, _, _) => {
+                expr.position()
+            }
         }
     }
 
@@ -541,13 +516,9 @@ impl Expr {
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
-            #[cfg(not(feature = "no_index"))]
             Self::Array(expressions, _) => expressions.iter().all(Self::is_pure),
 
-            #[cfg(not(feature = "no_index"))]
-            Self::Index(x, y, _) => x.is_pure() && y.is_pure(),
-
-            Self::And(x, y, _) | Self::Or(x, y, _) | Self::In(x, y, _) => {
+            Self::Index(x, y, _) | Self::And(x, y, _) | Self::Or(x, y, _) | Self::In(x, y, _) => {
                 x.is_pure() && y.is_pure()
             }
 
@@ -561,21 +532,17 @@ impl Expr {
     pub fn is_constant(&self) -> bool {
         match self {
             Self::IntegerConstant(_, _)
+            | Self::FloatConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => true,
 
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, _) => true,
-
             // An array literal is constant if all items are constant
-            #[cfg(not(feature = "no_index"))]
             Self::Array(expressions, _) => expressions.iter().all(Self::is_constant),
 
             // An map literal is constant if all items are constant
-            #[cfg(not(feature = "no_object"))]
             Self::Map(items, _) => items.iter().map(|(_, expr, _)| expr).all(Self::is_constant),
 
             // Check in expression
@@ -594,7 +561,6 @@ impl Expr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     IntegerConstant(INT),
-    #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT),
     Identifier(String),
     CharConstant(char),
@@ -603,9 +569,7 @@ pub enum Token {
     RightBrace,
     LeftParen,
     RightParen,
-    #[cfg(not(feature = "no_index"))]
     LeftBracket,
-    #[cfg(not(feature = "no_index"))]
     RightBracket,
     Plus,
     UnaryPlus,
@@ -673,7 +637,6 @@ impl Token {
 
         match self {
             IntegerConstant(i) => i.to_string().into(),
-            #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
             Identifier(s) => s.into(),
             CharConstant(c) => c.to_string().into(),
@@ -685,9 +648,7 @@ impl Token {
                 RightBrace => "}",
                 LeftParen => "(",
                 RightParen => ")",
-                #[cfg(not(feature = "no_index"))]
                 LeftBracket => "[",
-                #[cfg(not(feature = "no_index"))]
                 RightBracket => "]",
                 Plus => "+",
                 UnaryPlus => "+",
@@ -762,6 +723,8 @@ impl Token {
             // RightBrace    | {expr} - expr not unary & is closing
             LeftParen        | // {-expr} - is unary
             // RightParen    | (expr) - expr not unary & is closing
+            LeftBracket      | // [-expr] - is unary
+            // RightBracket  | [expr] - expr not unary & is closing
             Plus             |
             UnaryPlus        |
             Minus            |
@@ -804,10 +767,6 @@ impl Token {
             PowerOf          |
             In               |
             PowerOfAssign => true,
-
-            #[cfg(not(feature = "no_index"))]
-            LeftBracket => true, // [-expr] - is unary
-            // RightBracket  | [expr] - expr not unary & is closing
 
             _ => false,
         }
@@ -1211,9 +1170,7 @@ impl<'a> TokenIterator<'a> {
                 (')', _) => return Some((Token::RightParen, pos)),
 
                 // Indexing
-                #[cfg(not(feature = "no_index"))]
                 ('[', _) => return Some((Token::LeftBracket, pos)),
-                #[cfg(not(feature = "no_index"))]
                 (']', _) => return Some((Token::RightBracket, pos)),
 
                 // Map literal
@@ -1506,7 +1463,6 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
 }
 
 /// Parse an indexing expression.
-#[cfg(not(feature = "no_index"))]
 fn parse_index_expr<'a>(
     lhs: Box<Expr>,
     input: &mut Peekable<TokenIterator<'a>>,
@@ -1528,7 +1484,6 @@ fn parse_index_expr<'a>(
         Expr::IntegerConstant(_, pos) => match *lhs {
             Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
 
-            #[cfg(not(feature = "no_object"))]
             Expr::Map(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Object map access expects string index, not a number".into(),
@@ -1556,7 +1511,6 @@ fn parse_index_expr<'a>(
 
         // lhs[string]
         Expr::StringConstant(_, pos) => match *lhs {
-            #[cfg(not(feature = "no_object"))]
             Expr::Map(_, _) => (),
 
             Expr::Array(_, _) | Expr::StringConstant(_, _) => {
@@ -1584,7 +1538,6 @@ fn parse_index_expr<'a>(
         },
 
         // lhs[float]
-        #[cfg(not(feature = "no_float"))]
         Expr::FloatConstant(_, pos) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a float".into(),
@@ -1673,7 +1626,6 @@ fn parse_ident_expr<'a, S: Into<Cow<'static, str>> + Display>(
 }
 
 /// Parse an array literal.
-#[cfg(not(feature = "no_index"))]
 fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
@@ -1715,7 +1667,6 @@ fn parse_array_literal<'a>(
 }
 
 /// Parse a map literal.
-#[cfg(not(feature = "no_object"))]
 fn parse_map_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
@@ -1840,10 +1791,8 @@ fn parse_primary<'a>(
     let mut can_be_indexed = false;
 
     let mut root_expr = match token {
-        #[cfg(not(feature = "no_float"))]
-        (Token::FloatConstant(x), pos) => Ok(Expr::FloatConstant(x, pos)),
-
         (Token::IntegerConstant(x), pos) => Ok(Expr::IntegerConstant(x, pos)),
+        (Token::FloatConstant(x), pos) => Ok(Expr::FloatConstant(x, pos)),
         (Token::CharConstant(c), pos) => Ok(Expr::CharConstant(c, pos)),
         (Token::StringConst(s), pos) => {
             can_be_indexed = true;
@@ -1875,9 +1824,11 @@ fn parse_primary<'a>(
         }
     }?;
 
+    #[cfg(feature = "no_index")]
+    let can_be_indexed = false;
+
     if can_be_indexed {
         // Tail processing all possible indexing
-        #[cfg(not(feature = "no_index"))]
         while let Some((Token::LeftBracket, pos)) = input.peek() {
             let pos = *pos;
             input.next();
@@ -1918,10 +1869,13 @@ fn parse_unary<'a>(
                     .map(|x| Expr::IntegerConstant(x, pos))
                     .or_else(|| {
                         #[cfg(not(feature = "no_float"))]
-                        return Some(Expr::FloatConstant(-(i as FLOAT), pos));
-
+                        {
+                            Some(Expr::FloatConstant(-(i as FLOAT), pos))
+                        }
                         #[cfg(feature = "no_float")]
-                        return None;
+                        {
+                            None
+                        }
                     })
                     .ok_or_else(|| {
                         PERR::BadInput(LERR::MalformedNumber(format!("-{}", i)).to_string())
@@ -1976,48 +1930,41 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseEr
             }
 
             // var[...]
-            #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, _, _) if matches!(idx_lhs.as_ref(), &Expr::Variable(_, _)) => {
                 assert!(is_top, "property expected but gets variable");
                 None
             }
             // property[...]
-            #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, _, _) if matches!(idx_lhs.as_ref(), &Expr::Property(_, _)) => {
                 assert!(!is_top, "variable expected but gets property");
                 None
             }
 
             // idx_lhs[...]
-            #[cfg(not(feature = "no_index"))]
             Expr::Index(idx_lhs, _, pos) => match idx_lhs.as_ref() {
                 Expr::Index(_, _, _) => Some(ParseErrorType::AssignmentToCopy.into_err(*pos)),
                 _ => Some(ParseErrorType::AssignmentToInvalidLHS.into_err(*pos)),
             },
 
             // dot_lhs.dot_rhs
-            #[cfg(not(feature = "no_object"))]
             Expr::Dot(dot_lhs, dot_rhs, _) => match dot_lhs.as_ref() {
                 // var.dot_rhs
                 Expr::Variable(_, _) if is_top => valid_assignment_chain(dot_rhs, false),
                 // property.dot_rhs
                 Expr::Property(_, _) if !is_top => valid_assignment_chain(dot_rhs, false),
                 // var[...]
-                #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _)
                     if matches!(idx_lhs.as_ref(), &Expr::Variable(_, _)) && is_top =>
                 {
                     valid_assignment_chain(dot_rhs, false)
                 }
                 // property[...]
-                #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _)
                     if matches!(idx_lhs.as_ref(), &Expr::Property(_, _)) && !is_top =>
                 {
                     valid_assignment_chain(dot_rhs, false)
                 }
                 // idx_lhs[...]
-                #[cfg(not(feature = "no_index"))]
                 Expr::Index(idx_lhs, _, _) => {
                     Some(ParseErrorType::AssignmentToCopy.into_err(idx_lhs.position()))
                 }
@@ -2055,15 +2002,8 @@ fn parse_op_assignment<S: Into<Cow<'static, str>>>(
 /// Parse an 'in' expression.
 fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     match (&lhs, &rhs) {
-        #[cfg(not(feature = "no_float"))]
-        (_, Expr::FloatConstant(_, pos)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression expects a string, array or object map".into(),
-            )
-            .into_err(*pos))
-        }
-
         (_, Expr::IntegerConstant(_, pos))
+        | (_, Expr::FloatConstant(_, pos))
         | (_, Expr::And(_, _, pos))
         | (_, Expr::Or(_, _, pos))
         | (_, Expr::In(_, _, pos))
@@ -2082,7 +2022,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         | (Expr::CharConstant(_, _), Expr::StringConstant(_, _)) => (),
 
         // 123.456 in "xxxx"
-        #[cfg(not(feature = "no_float"))]
         (Expr::FloatConstant(_, pos), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a float".into(),
@@ -2109,7 +2048,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err(*pos))
         }
         // [???, ???, ???] in "xxxx"
-        #[cfg(not(feature = "no_index"))]
         (Expr::Array(_, pos), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an array".into(),
@@ -2117,7 +2055,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err(*pos))
         }
         // #{...} in "xxxx"
-        #[cfg(not(feature = "no_object"))]
         (Expr::Map(_, pos), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an object map".into(),
@@ -2134,13 +2071,10 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
 
         // "xxx" in #{...}, 'x' in #{...} - OK!
-        #[cfg(not(feature = "no_object"))]
         (Expr::StringConstant(_, _), Expr::Map(_, _))
         | (Expr::CharConstant(_, _), Expr::Map(_, _)) => (),
 
         // 123.456 in #{...}
-        #[cfg(not(feature = "no_float"))]
-        #[cfg(not(feature = "no_object"))]
         (Expr::FloatConstant(_, pos), Expr::Map(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a float".into(),
@@ -2148,7 +2082,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err(*pos))
         }
         // 123 in #{...}
-        #[cfg(not(feature = "no_object"))]
         (Expr::IntegerConstant(_, pos), Expr::Map(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a number".into(),
@@ -2157,7 +2090,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // (??? && ???) in #{...}, (??? || ???) in #{...}, (??? in ???) in #{...},
         // true in #{...}, false in #{...}
-        #[cfg(not(feature = "no_object"))]
         (Expr::And(_, _, pos), Expr::Map(_, _))
         | (Expr::Or(_, _, pos), Expr::Map(_, _))
         | (Expr::In(_, _, pos), Expr::Map(_, _))
@@ -2169,8 +2101,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err(*pos))
         }
         // [???, ???, ???] in #{..}
-        #[cfg(not(feature = "no_index"))]
-        #[cfg(not(feature = "no_object"))]
         (Expr::Array(_, pos), Expr::Map(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not an array".into(),
@@ -2178,7 +2108,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err(*pos))
         }
         // #{...} in #{..}
-        #[cfg(not(feature = "no_object"))]
         (Expr::Map(_, pos), Expr::Map(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not an object map".into(),
@@ -2186,7 +2115,6 @@ fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err(*pos))
         }
         // (??? = ???) in #{...}, () in #{...}
-        #[cfg(not(feature = "no_object"))]
         (Expr::Assignment(_, _, pos), Expr::Map(_, _)) | (Expr::Unit(pos), Expr::Map(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not ()".into(),
@@ -2269,7 +2197,6 @@ fn parse_binary_op<'a>(
                                 pos,
                             )),
                             // xxx.lhs[idx]
-                            #[cfg(not(feature = "no_index"))]
                             Expr::Index(lhs, idx, pos) => {
                                 Ok(Expr::Index(Box::new(check_property(*lhs)?), idx, pos))
                             }
@@ -2290,37 +2217,37 @@ fn parse_binary_op<'a>(
                 Token::EqualsTo => Expr::FunctionCall(
                     "==".into(),
                     vec![current_lhs, rhs],
-                    Some(Box::new(false)),
+                    Some((false).into_dynamic()),
                     pos,
                 ),
                 Token::NotEqualsTo => Expr::FunctionCall(
                     "!=".into(),
                     vec![current_lhs, rhs],
-                    Some(Box::new(false)),
+                    Some((false).into_dynamic()),
                     pos,
                 ),
                 Token::LessThan => Expr::FunctionCall(
                     "<".into(),
                     vec![current_lhs, rhs],
-                    Some(Box::new(false)),
+                    Some((false).into_dynamic()),
                     pos,
                 ),
                 Token::LessThanEqualsTo => Expr::FunctionCall(
                     "<=".into(),
                     vec![current_lhs, rhs],
-                    Some(Box::new(false)),
+                    Some((false).into_dynamic()),
                     pos,
                 ),
                 Token::GreaterThan => Expr::FunctionCall(
                     ">".into(),
                     vec![current_lhs, rhs],
-                    Some(Box::new(false)),
+                    Some((false).into_dynamic()),
                     pos,
                 ),
                 Token::GreaterThanEqualsTo => Expr::FunctionCall(
                     ">=".into(),
                     vec![current_lhs, rhs],
-                    Some(Box::new(false)),
+                    Some((false).into_dynamic()),
                     pos,
                 ),
 
@@ -2680,7 +2607,6 @@ fn parse_stmt<'a>(
 }
 
 /// Parse a function definition.
-#[cfg(not(feature = "no_function"))]
 fn parse_fn<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
@@ -2780,27 +2706,12 @@ pub fn parse_global_expr<'a, 'e>(
 
     Ok(
         // Optimize AST
-        #[cfg(not(feature = "no_optimize"))]
         optimize_into_ast(
             engine,
             scope,
             vec![Stmt::Expr(Box::new(expr))],
             vec![],
             engine.optimization_level,
-        ),
-        //
-        // Do not optimize AST if `no_optimize`
-        #[cfg(feature = "no_optimize")]
-        AST(
-            vec![Stmt::Expr(Box::new(expr))],
-            #[cfg(feature = "sync")]
-            {
-                Arc::new(FunctionsLib::new())
-            },
-            #[cfg(not(feature = "sync"))]
-            {
-                Rc::new(FunctionsLib::new())
-            },
         ),
     )
 }
@@ -2813,9 +2724,9 @@ fn parse_global_level<'a>(
     let mut functions = Vec::<FnDef>::new();
 
     while input.peek().is_some() {
+        // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
-            // Collect all the function definitions
             if matches!(input.peek().expect("should not be None"), (Token::Fn, _)) {
                 let f = parse_fn(input, true)?;
 
@@ -2866,18 +2777,13 @@ pub fn parse<'a, 'e>(
     input: &mut Peekable<TokenIterator<'a>>,
     engine: &Engine<'e>,
     scope: &Scope,
-    #[cfg(not(feature = "no_optimize"))] optimization_level: OptimizationLevel,
+    optimization_level: OptimizationLevel,
 ) -> Result<AST, ParseError> {
     let (statements, functions) = parse_global_level(input)?;
 
     Ok(
         // Optimize AST
-        #[cfg(not(feature = "no_optimize"))]
         optimize_into_ast(engine, scope, statements, functions, optimization_level),
-        //
-        // Do not optimize AST if `no_optimize`
-        #[cfg(feature = "no_optimize")]
-        AST(statements, Arc::new(FunctionsLib::from_vec(functions))),
     )
 }
 
@@ -2898,6 +2804,47 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
             Expr::False(pos)
         })
     } else {
+        #[cfg(not(feature = "no_index"))]
+        {
+            if value.is::<Array>() {
+                let array = value.cast::<Array>();
+                let items: Vec<_> = array
+                    .into_iter()
+                    .map(|x| map_dynamic_to_expr(x, pos))
+                    .collect();
+                if items.iter().all(Option::is_some) {
+                    return Some(Expr::Array(
+                        items.into_iter().map(Option::unwrap).collect(),
+                        pos,
+                    ));
+                } else {
+                    return None;
+                }
+            }
+        }
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            if value.is::<Map>() {
+                let map = value.cast::<Map>();
+                let items: Vec<_> = map
+                    .into_iter()
+                    .map(|(k, v)| (k, map_dynamic_to_expr(v, pos), pos))
+                    .collect();
+                if items.iter().all(|(_, expr, _)| expr.is_some()) {
+                    return Some(Expr::Map(
+                        items
+                            .into_iter()
+                            .map(|(k, expr, pos)| (k, expr.unwrap(), pos))
+                            .collect(),
+                        pos,
+                    ));
+                } else {
+                    return None;
+                }
+            }
+        }
+
         #[cfg(not(feature = "no_float"))]
         {
             if value.is::<FLOAT>() {
