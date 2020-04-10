@@ -63,7 +63,7 @@ Optional features
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!           |
 | `no_function` | Disable script-defined functions if not needed.                                                                                       |
-| `no_index`    | Disable arrays and indexing features if not needed.                                                                                   |
+| `no_index`    | Disable [arrays] and indexing features if not needed.                                                                                 |
 | `no_object`   | Disable support for custom types and objects.                                                                                         |
 | `no_float`    | Disable floating-point numbers and math if not needed.                                                                                |
 | `no_optimize` | Disable the script optimizer.                                                                                                         |
@@ -102,7 +102,7 @@ A number of examples can be found in the `examples` folder:
 
 | Example                                                            | Description                                                                 |
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| [`arrays_and_structs`](examples/arrays_and_structs.rs)             | demonstrates registering a new type to Rhai and the usage of arrays on it   |
+| [`arrays_and_structs`](examples/arrays_and_structs.rs)             | demonstrates registering a new type to Rhai and the usage of [arrays] on it |
 | [`custom_types_and_methods`](examples/custom_types_and_methods.rs) | shows how to register a type and methods for it                             |
 | [`hello`](examples/hello.rs)                                       | simple example that evaluates an expression and prints the result           |
 | [`no_std`](examples/no_std.rs)                                     | example to test out `no-std` builds                                         |
@@ -127,7 +127,7 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 
 | Language feature scripts                             | Description                                                   |
 | ---------------------------------------------------- | ------------------------------------------------------------- |
-| [`array.rhai`](scripts/array.rhai)                   | arrays in Rhai                                                |
+| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                              |
 | [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                         |
 | [`comments.rhai`](scripts/comments.rhai)             | just comments                                                 |
 | [`for1.rhai`](scripts/for1.rhai)                     | for loops                                                     |
@@ -139,7 +139,7 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 | [`op1.rhai`](scripts/op1.rhai)                       | just a simple addition                                        |
 | [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                            |
 | [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                      |
-| [`string.rhai`](scripts/string.rhai)                 | string operations                                             |
+| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                           |
 | [`while.rhai`](scripts/while.rhai)                   | while loop                                                    |
 
 | Example scripts                              | Description                                                                        |
@@ -324,6 +324,9 @@ engine.
 Evaluate expressions only
 -------------------------
 
+[`eval_expression`]: #evaluate-expressions-only
+[`eval_expression_with_scope`]: #evaluate-expressions-only
+
 Sometimes a use case does not require a full-blown scripting _language_, but only needs to evaluate _expressions_.
 In these cases, use the `compile_expression` and `eval_expression` methods or their `_with_scope` variants.
 
@@ -375,7 +378,7 @@ This is useful on some 32-bit systems where using 64-bit integers incurs a perfo
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
-The `to_string` function converts a standard type into a string for display purposes.
+The `to_string` function converts a standard type into a [string] for display purposes.
 
 The `type_of` function detects the actual type of a value. This is useful because all variables are [`Dynamic`] in nature.
 
@@ -429,8 +432,8 @@ if type_of(mystery) == "i64" {
 }
 ```
 
-In Rust, sometimes a `Dynamic` forms part of a returned value - a good example is an array with `Dynamic` elements,
-or an object map with `Dynamic` property values.  To get the _real_ values, the actual value types _must_ be known in advance.
+In Rust, sometimes a `Dynamic` forms part of a returned value - a good example is an [array] with `Dynamic` elements,
+or an [object map] with `Dynamic` property values.  To get the _real_ values, the actual value types _must_ be known in advance.
 There is no easy way for Rust to decide, at run-time, what type the `Dynamic` value is (short of using the `type_name`
 function and match against the name).
 
@@ -1063,6 +1066,10 @@ The following standard functions (defined in the standard library but excluded i
 Strings and Chars
 -----------------
 
+[string]: #strings-and-chars
+[strings]: #strings-and-chars
+[char]: #strings-and-chars
+
 String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and
 hex ('`\x`_xx_') escape sequences.
 
@@ -1125,6 +1132,8 @@ record == "Bob X. Davis: age 42 ❤\n";
 'C' in record == false;
 ```
 
+### Built-in functions
+
 The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
 
 | Function   | Description                                                              |
@@ -1138,7 +1147,7 @@ The following standard functions (defined in the standard library but excluded i
 | `replace`  | replaces a substring with another                                        |
 | `trim`     | trims the string                                                         |
 
-Examples:
+### Examples
 
 ```rust
 let full_name == " Bob C. Davis ";
@@ -1170,6 +1179,10 @@ full_name.len() == 0;
 Arrays
 ------
 
+[array]: #arrays
+[arrays]: #arrays
+[`Array`]: #arrays
+
 Arrays are first-class citizens in Rhai. Like C, arrays are accessed with zero-based, non-negative integer indices.
 Array literals are built within square brackets '`[`' ... '`]`' and separated by commas '`,`'.
 All elements stored in an array are [`Dynamic`], and the array can freely grow or shrink with elements added or removed.
@@ -1177,6 +1190,8 @@ All elements stored in an array are [`Dynamic`], and the array can freely grow o
 The Rust type of a Rhai array is `rhai::Array`. [`type_of()`] an array returns `"array"`.
 
 Arrays are disabled via the [`no_index`] feature.
+
+### Built-in functions
 
 The following functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on arrays:
 
@@ -1192,7 +1207,7 @@ The following functions (defined in the standard library but excluded if using a
 | `clear`      | empties the array                                                                     |
 | `truncate`   | cuts off the array at exactly a specified length (discarding all subsequent elements) |
 
-Examples:
+### Examples
 
 ```rust
 let y = [1, 2, 3];      // array literal with 3 elements
@@ -1259,20 +1274,25 @@ engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(i
 Object maps
 -----------
 
+[object map]: #object-maps
+[object maps]: #object-maps
+
 Object maps are dictionaries. Properties are all [`Dynamic`] and can be freely added and retrieved.
 Object map literals are built within braces '`#{`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
 and separated by commas '`,`'.  The property _name_ can be a simple variable name following the same
-naming rules as [variables], or an arbitrary string literal.
+naming rules as [variables], or an arbitrary [string] literal.
 
 Property values can be accessed via the dot notation (_object_ `.` _property_) or index notation (_object_ `[` _property_ `]`).
 The dot notation allows only property names that follow the same naming rules as [variables].
-The index notation allows setting/getting properties of arbitrary names (even the empty string).
+The index notation allows setting/getting properties of arbitrary names (even the empty [string]).
 
 **Important:** Trying to read a non-existent property returns [`()`] instead of causing an error.
 
 The Rust type of a Rhai object map is `rhai::Map`. [`type_of()`] an object map returns `"map"`.
 
 Object maps are disabled via the [`no_object`] feature.
+
+### Built-in functions
 
 The following functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on object maps:
 
@@ -1283,10 +1303,10 @@ The following functions (defined in the standard library but excluded if using a
 | `clear`      | empties the object map                                                                                                                   |
 | `mixin`      | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
 | `+` operator | merges the first object map with the second                                                                                              |
-| `keys`       | returns an array of all the property names (in random order)                                                                             |
-| `values`     | returns an array of all the property values (in random order)                                                                            |
+| `keys`       | returns an [array] of all the property names (in random order)                                                                           |
+| `values`     | returns an [array] of all the property values (in random order)                                                                          |
 
-Examples:
+### Examples
 
 ```rust
 let y = #{              // object map literal with 3 properties
@@ -1347,13 +1367,60 @@ y.clear();              // empty the object map
 print(y.len());         // prints 0
 ```
 
+### Parsing from JSON
+
+The syntax for an object map is extremely similar to JSON, with the exception of `null` values which can
+technically be mapped to [`()`].  A valid JSON string does not start with a hash character `#` while a
+Rhai object map does - that's the major difference!
+
+JSON numbers are all floating-point while Rhai supports integers (`INT`) and floating-point (`FLOAT`) if
+the [`no_float`] feature is not turned on.  Most common generators of JSON data distinguish between
+integer and floating-point values by always serializing a floating-point number with a decimal point
+(i.e. `123.0` instead of `123` which is assumed to be an integer).  This style can be used successfully
+with Rhai object maps.
+
+Use the [`eval_expression`]`::<Map>` method (or [`eval_expression_with_scope`]`::<Map>` in order to
+handle `null` values) to parse a piece of JSON (with the hash character `#` attached) into an object map:
+
+```rust
+// JSON string - notice that JSON property names are always quoted
+//               notice also that comments are acceptable within the JSON string
+let json = r#"{
+                "a": 1,                 // <- this is an integer number
+                "b": true,
+                "c": 123.0,             // <- this is a floating-point number
+                "$d e f!": "hello",     // <- any text can be a property name
+                "^^^!!!": [1,42,"999"], // <- value can be array or another hash
+                "z": null               // <- JSON 'null' value
+              }
+"#;
+
+// Create a new scope
+let mut scope = Scope::new();
+scope.push_constant("null", ());        // map 'null' to '()'
+
+// Parse the JSON expression as an object map by attaching '#' in front
+let expr = format!("#{}", json);
+let map = engine.eval_expression_with_scope::<Map>(&mut scope, expr)?;
+
+map.len() == 6;                         // 'map' contains all properties int the JSON string
+
+// Push the map back into the scope
+scope.clear();
+scope.push("map", map);
+
+let result = engine.eval_with_scope::<INT>(r#"map["^^^!!!"].len()"#)?;
+
+result == 3;                            // the object map is used in a script
+```
+
 Comparison operators
 --------------------
 
 Comparing most values of the same data type work out-of-the-box for standard types supported by the system.
 
 However, if using a [raw `Engine`], comparisons can only be made between restricted system types -
-`INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), string, array, `bool`, `char`.
+`INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), [string], [array], `bool`, `char`.
 
 ```rust
 42 == 42;               // true
@@ -1411,7 +1478,7 @@ number <<= 2;           // number = number << 2
 number >>= 1;           // number = number >> 1
 ```
 
-The `+=` operator can also be used to build strings:
+The `+=` operator can also be used to build [strings]:
 
 ```rust
 let my_str = "abc";
@@ -1488,7 +1555,7 @@ loop {
 `for` loops
 -----------
 
-Iterating through a range or an array is provided by the `for` ... `in` loop.
+Iterating through a range or an [array] is provided by the `for` ... `in` loop.
 
 ```rust
 let array = [1, 3, 5, 7, 9, 42];

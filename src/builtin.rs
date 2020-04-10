@@ -631,12 +631,14 @@ impl Engine<'_> {
                 });
 
                 // Register map access functions
+                #[cfg(not(feature = "no_index"))]
                 self.register_fn("keys", |map: Map| {
                     map.into_iter()
                         .map(|(k, _)| k.into_dynamic())
                         .collect::<Vec<_>>()
                 });
 
+                #[cfg(not(feature = "no_index"))]
                 self.register_fn("values", |map: Map| {
                     map.into_iter().map(|(_, v)| v).collect::<Vec<_>>()
                 });
