@@ -1,7 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Any, AnyExt, Dynamic};
-use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec};
+use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec, Map};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
@@ -395,14 +395,9 @@ impl<'e> Engine<'e> {
         script: &str,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let tokens_stream = lex(script);
-
-        parse(
-            &mut tokens_stream.peekable(),
-            self,
-            scope,
-            optimization_level,
-        )
+        let scripts = [script];
+        let stream = lex(&scripts);
+        parse(&mut stream.peekable(), self, scope, optimization_level)
     }
 
     /// Read the contents of a file into a string.
@@ -483,6 +478,51 @@ impl<'e> Engine<'e> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
 
+    /// Parse a JSON string into a map.
+    ///
+    /// Set `has_null` to `true` in order to map `null` values to `()`.
+    /// Setting it to `false` will cause a _variable not found_ error during parsing.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// use rhai::{Engine, AnyExt};
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let map = engine.parse_json(r#"{"a":123, "b":42, "c":false, "d":null}"#, true)?;
+    ///
+    /// assert_eq!(map.len(), 4);
+    /// assert_eq!(map.get("a").cloned().unwrap().cast::<i64>(), 123);
+    /// assert_eq!(map.get("b").cloned().unwrap().cast::<i64>(), 42);
+    /// assert_eq!(map.get("c").cloned().unwrap().cast::<bool>(), false);
+    /// assert_eq!(map.get("d").cloned().unwrap().cast::<()>(), ());
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, EvalAltResult> {
+        let mut scope = Scope::new();
+
+        // Trims the JSON string and add a '#' in front
+        let scripts = ["#", json.trim()];
+        let stream = lex(&scripts);
+        let ast = parse_global_expr(
+            &mut stream.peekable(),
+            self,
+            &scope,
+            OptimizationLevel::None,
+        )?;
+
+        // Handle null - map to ()
+        if has_null {
+            scope.push_constant("null", ());
+        }
+
+        self.eval_ast_with_scope(&mut scope, &ast)
+    }
+
     /// Compile a string containing an expression into an `AST`,
     /// which can be used later for evaluation.
     ///
@@ -551,8 +591,9 @@ impl<'e> Engine<'e> {
         scope: &Scope,
         script: &str,
     ) -> Result<AST, ParseError> {
-        let tokens_stream = lex(script);
-        parse_global_expr(&mut tokens_stream.peekable(), self, scope)
+        let scripts = [script];
+        let stream = lex(&scripts);
+        parse_global_expr(&mut stream.peekable(), self, scope, self.optimization_level)
     }
 
     /// Evaluate a script file.
@@ -807,15 +848,9 @@ impl<'e> Engine<'e> {
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume_with_scope(&self, scope: &mut Scope, script: &str) -> Result<(), EvalAltResult> {
-        let tokens_stream = lex(script);
-
-        let ast = parse(
-            &mut tokens_stream.peekable(),
-            self,
-            scope,
-            self.optimization_level,
-        )?;
-
+        let scripts = [script];
+        let stream = lex(&scripts);
+        let ast = parse(&mut stream.peekable(), self, scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
 

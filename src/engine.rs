@@ -1503,7 +1503,7 @@ impl Engine<'_> {
             Expr::False(_) => Ok(false.into_dynamic()),
             Expr::Unit(_) => Ok(().into_dynamic()),
 
-            expr => panic!("should not appear: {:?}", expr),
+            _ => panic!("should not appear: {:?}", expr),
         }
     }
 

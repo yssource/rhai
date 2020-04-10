@@ -163,13 +163,9 @@ fn test_map_for() -> Result<(), EvalAltResult> {
 fn test_map_json() -> Result<(), EvalAltResult> {
     let engine = Engine::new();
 
-    let mut scope = Scope::new();
-    scope.push_constant("null", ());
-    scope.push_constant("undefined", ());
-
     let json = r#"{"a":1, "b":true, "c":42, "$d e f!":"hello", "z":null}"#;
 
-    let map = engine.eval_expression_with_scope::<Map>(&mut scope, &("#".to_string() + json))?;
+    let map = engine.parse_json(json, true)?;
 
     assert!(!map.contains_key("x"));
 
@@ -211,7 +207,7 @@ fn test_map_json() -> Result<(), EvalAltResult> {
 
     #[cfg(not(feature = "no_index"))]
     {
-        scope.clear();
+        let mut scope = Scope::new();
         scope.push_constant("map", map);
 
         assert_eq!(

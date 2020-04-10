@@ -828,15 +828,39 @@ pub struct TokenIterator<'a> {
     can_be_unary: bool,
     /// Current position.
     pos: Position,
-    /// The input characters stream.
-    stream: Peekable<Chars<'a>>,
+    /// The input character streams.
+    streams: Vec<Peekable<Chars<'a>>>,
 }
 
 impl<'a> TokenIterator<'a> {
     /// Consume the next character.
     fn eat_next(&mut self) {
-        self.stream.next();
+        self.get_next();
         self.advance();
+    }
+    /// Get the next character
+    fn get_next(&mut self) -> Option<char> {
+        loop {
+            if self.streams.is_empty() {
+                return None;
+            } else if let Some(ch) = self.streams[0].next() {
+                return Some(ch);
+            } else {
+                let _ = self.streams.remove(0);
+            }
+        }
+    }
+    /// Peek the next character
+    fn peek_next(&mut self) -> Option<char> {
+        loop {
+            if self.streams.is_empty() {
+                return None;
+            } else if let Some(ch) = self.streams[0].peek() {
+                return Some(*ch);
+            } else {
+                let _ = self.streams.remove(0);
+            }
+        }
     }
     /// Move the current position one character ahead.
     fn advance(&mut self) {
@@ -864,7 +888,7 @@ impl<'a> TokenIterator<'a> {
         let mut escape = String::with_capacity(12);
 
         loop {
-            let next_char = self.stream.next();
+            let next_char = self.get_next();
             self.advance();
 
             match next_char.ok_or((LERR::UnterminatedString, Position::eof()))? {
@@ -907,7 +931,7 @@ impl<'a> TokenIterator<'a> {
                     };
 
                     for _ in 0..len {
-                        let c = self.stream.next().ok_or_else(|| {
+                        let c = self.get_next().ok_or_else(|| {
                             (LERR::MalformedEscapeSequence(seq.to_string()), self.pos)
                         })?;
 
@@ -958,12 +982,12 @@ impl<'a> TokenIterator<'a> {
     fn inner_next(&mut self) -> Option<(Token, Position)> {
         let mut negated = false;
 
-        while let Some(c) = self.stream.next() {
+        while let Some(c) = self.get_next() {
             self.advance();
 
             let pos = self.pos;
 
-            match (c, self.stream.peek().copied().unwrap_or('\0')) {
+            match (c, self.peek_next().unwrap_or('\0')) {
                 // \n
                 ('\n', _) => self.new_line(),
 
@@ -973,7 +997,7 @@ impl<'a> TokenIterator<'a> {
                     let mut radix_base: Option<u32> = None;
                     result.push(c);
 
-                    while let Some(&next_char) = self.stream.peek() {
+                    while let Some(next_char) = self.peek_next() {
                         match next_char {
                             '0'..='9' | '_' => {
                                 result.push(next_char);
@@ -983,7 +1007,7 @@ impl<'a> TokenIterator<'a> {
                             '.' => {
                                 result.push(next_char);
                                 self.eat_next();
-                                while let Some(&next_char_in_float) = self.stream.peek() {
+                                while let Some(next_char_in_float) = self.peek_next() {
                                     match next_char_in_float {
                                         '0'..='9' | '_' => {
                                             result.push(next_char_in_float);
@@ -1023,7 +1047,7 @@ impl<'a> TokenIterator<'a> {
                                     _ => panic!("unexpected character {}", ch),
                                 });
 
-                                while let Some(&next_char_in_hex) = self.stream.peek() {
+                                while let Some(next_char_in_hex) = self.peek_next() {
                                     if !valid.contains(&next_char_in_hex) {
                                         break;
                                     }
@@ -1079,7 +1103,7 @@ impl<'a> TokenIterator<'a> {
                     let mut result = Vec::new();
                     result.push(c);
 
-                    while let Some(&next_char) = self.stream.peek() {
+                    while let Some(next_char) = self.peek_next() {
                         match next_char {
                             x if x.is_ascii_alphanumeric() || x == '_' => {
                                 result.push(x);
@@ -1207,7 +1231,7 @@ impl<'a> TokenIterator<'a> {
                 ('/', '/') => {
                     self.eat_next();
 
-                    while let Some(c) = self.stream.next() {
+                    while let Some(c) = self.get_next() {
                         if c == '\n' {
                             self.new_line();
                             break;
@@ -1221,18 +1245,18 @@ impl<'a> TokenIterator<'a> {
 
                     self.eat_next();
 
-                    while let Some(c) = self.stream.next() {
+                    while let Some(c) = self.get_next() {
                         self.advance();
 
                         match c {
                             '/' => {
-                                if self.stream.next() == Some('*') {
+                                if self.get_next() == Some('*') {
                                     level += 1;
                                 }
                                 self.advance();
                             }
                             '*' => {
-                                if self.stream.next() == Some('/') {
+                                if self.get_next() == Some('/') {
                                     level -= 1;
                                 }
                                 self.advance();
@@ -1272,7 +1296,7 @@ impl<'a> TokenIterator<'a> {
                     self.eat_next();
 
                     return Some((
-                        if self.stream.peek() == Some(&'=') {
+                        if self.peek_next() == Some('=') {
                             self.eat_next();
                             Token::LeftShiftAssign
                         } else {
@@ -1291,7 +1315,7 @@ impl<'a> TokenIterator<'a> {
                     self.eat_next();
 
                     return Some((
-                        if self.stream.peek() == Some(&'=') {
+                        if self.peek_next() == Some('=') {
                             self.eat_next();
                             Token::RightShiftAssign
                         } else {
@@ -1368,11 +1392,11 @@ impl<'a> Iterator for TokenIterator<'a> {
 }
 
 /// Tokenize an input text stream.
-pub fn lex(input: &str) -> TokenIterator<'_> {
+pub fn lex<'a>(input: &'a [&'a str]) -> TokenIterator<'a> {
     TokenIterator {
         can_be_unary: true,
         pos: Position::new(1, 0),
-        stream: input.chars().peekable(),
+        streams: input.iter().map(|s| s.chars().peekable()).collect(),
     }
 }
 
@@ -2696,6 +2720,7 @@ pub fn parse_global_expr<'a, 'e>(
     input: &mut Peekable<TokenIterator<'a>>,
     engine: &Engine<'e>,
     scope: &Scope,
+    optimization_level: OptimizationLevel,
 ) -> Result<AST, ParseError> {
     let expr = parse_expr(input, false)?;
 
@@ -2711,7 +2736,7 @@ pub fn parse_global_expr<'a, 'e>(
             scope,
             vec![Stmt::Expr(Box::new(expr))],
             vec![],
-            engine.optimization_level,
+            optimization_level,
         ),
     )
 }

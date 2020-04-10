@@ -1379,8 +1379,7 @@ integer and floating-point values by always serializing a floating-point number 
 (i.e. `123.0` instead of `123` which is assumed to be an integer).  This style can be used successfully
 with Rhai object maps.
 
-Use the [`eval_expression`]`::<Map>` method (or [`eval_expression_with_scope`]`::<Map>` in order to
-handle `null` values) to parse a piece of JSON (with the hash character `#` attached) into an object map:
+Use the `parse_json` method to parse a piece of JSON into an object map:
 
 ```rust
 // JSON string - notice that JSON property names are always quoted
@@ -1395,23 +1394,19 @@ let json = r#"{
               }
 "#;
 
-// Create a new scope
-let mut scope = Scope::new();
-scope.push_constant("null", ());        // map 'null' to '()'
-
-// Parse the JSON expression as an object map by attaching '#' in front
-let expr = format!("#{}", json);
-let map = engine.eval_expression_with_scope::<Map>(&mut scope, expr)?;
+// Parse the JSON expression as an object map
+// Set the second boolean parameter to true in order to map 'null' to '()'
+let map = engine.parse_json(json, true)?;
 
 map.len() == 6;                         // 'map' contains all properties int the JSON string
 
-// Push the map back into the scope
-scope.clear();
+// Put the object map into a 'Scope'
+let mut scope = Scope::new();
 scope.push("map", map);
 
 let result = engine.eval_with_scope::<INT>(r#"map["^^^!!!"].len()"#)?;
 
-result == 3;                            // the object map is used in a script
+result == 3;                            // the object map is successfully used in the script
 ```
 
 Comparison operators
