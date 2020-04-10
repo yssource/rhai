@@ -35,6 +35,16 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
 
     assert_eq!(
         engine.eval::<INT>(
+            r#"
+                let x = #{a: 1, b: 2, c: 3};
+                let c = x.remove("c");
+                x.len() + c
+           "#
+        )?,
+        5
+    );
+    assert_eq!(
+        engine.eval::<INT>(
             r"
                 let x = #{a: 1, b: 2, c: 3};
                 let y = #{b: 42, d: 9};

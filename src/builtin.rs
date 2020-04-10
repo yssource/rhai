@@ -620,15 +620,9 @@ impl Engine<'_> {
 
             #[cfg(not(feature = "no_object"))]
             {
-                self.register_fn(KEYWORD_PRINT, |x: &mut Map| -> String {
-                    format!("#{:?}", x)
-                });
-                self.register_fn(FUNC_TO_STRING, |x: &mut Map| -> String {
-                    format!("#{:?}", x)
-                });
-                self.register_fn(KEYWORD_DEBUG, |x: &mut Map| -> String {
-                    format!("#{:?}", x)
-                });
+                self.register_fn(KEYWORD_PRINT, |x: &mut Map| format!("#{:?}", x));
+                self.register_fn(FUNC_TO_STRING, |x: &mut Map| format!("#{:?}", x));
+                self.register_fn(KEYWORD_DEBUG, |x: &mut Map| format!("#{:?}", x));
 
                 // Register map access functions
                 #[cfg(not(feature = "no_index"))]
@@ -874,6 +868,15 @@ impl Engine<'_> {
             fn push<T: Any>(list: &mut Array, item: T) {
                 list.push(Box::new(item));
             }
+            fn ins<T: Any>(list: &mut Array, position: INT, item: T) {
+                if position <= 0 {
+                    list.insert(0, Box::new(item));
+                } else if (position as usize) >= list.len() - 1 {
+                    push(list, item);
+                } else {
+                    list.insert(position as usize, Box::new(item));
+                }
+            }
             fn pad<T: Any + Clone>(list: &mut Array, len: INT, item: T) {
                 if len >= 0 {
                     while list.len() < len as usize {
@@ -886,6 +889,7 @@ impl Engine<'_> {
             reg_fn2x!(self, "push", push, &mut Array, (), String, Array, ());
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), INT, bool, char);
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), String, Array, ());
+            reg_fn3!(self, "insert", ins, &mut Array, INT, (), String, Array, ());
 
             self.register_fn("append", |list: &mut Array, array: Array| {
                 list.extend(array)
@@ -902,12 +906,15 @@ impl Engine<'_> {
                 reg_fn2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i8, u8, i16, u16);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i32, u32, i64, u64);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), i8, u8, i16, u16);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), i32, i64, u32, u64);
             }
 
             #[cfg(not(feature = "no_float"))]
             {
                 reg_fn2x!(self, "push", push, &mut Array, (), f32, f64);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), f32, f64);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), f32, f64);
             }
 
             self.register_dynamic_fn("pop", |list: &mut Array| {
@@ -918,6 +925,13 @@ impl Engine<'_> {
                     ().into_dynamic()
                 } else {
                     list.remove(0)
+                }
+            });
+            self.register_dynamic_fn("remove", |list: &mut Array, len: INT| {
+                if len < 0 || (len as usize) >= list.len() {
+                    ().into_dynamic()
+                } else {
+                    list.remove(len as usize)
                 }
             });
             self.register_fn("len", |list: &mut Array| list.len() as INT);
@@ -935,6 +949,9 @@ impl Engine<'_> {
             self.register_fn("has", |map: &mut Map, prop: String| map.contains_key(&prop));
             self.register_fn("len", |map: &mut Map| map.len() as INT);
             self.register_fn("clear", |map: &mut Map| map.clear());
+            self.register_dynamic_fn("remove", |x: &mut Map, name: String| {
+                x.remove(&name).unwrap_or(().into_dynamic())
+            });
             self.register_fn("mixin", |map1: &mut Map, map2: Map| {
                 map2.into_iter().for_each(|(key, value)| {
                     map1.insert(key, value);

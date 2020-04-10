@@ -1134,18 +1134,18 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 ### Built-in functions
 
-The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
+The following standard methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
 
-| Function   | Description                                                              |
-| ---------- | ------------------------------------------------------------------------ |
-| `len`      | returns the number of characters (not number of bytes) in the string     |
-| `pad`      | pads the string with an character until a specified number of characters |
-| `append`   | Adds a character or a string to the end of another string                |
-| `clear`    | empties the string                                                       |
-| `truncate` | cuts off the string at exactly a specified number of characters          |
-| `contains` | checks if a certain character or sub-string occurs in the string         |
-| `replace`  | replaces a substring with another                                        |
-| `trim`     | trims the string                                                         |
+| Function   | Parameter(s)                          | Description                                                          |
+| ---------- | ------------------------------------- | -------------------------------------------------------------------- |
+| `len`      | _none_                                | returns the number of characters (not number of bytes) in the string |
+| `pad`      | character to pad, target length       | pads the string with an character to a specified length              |
+| `append`   | character/string to append            | Adds a character or a string to the end of another string            |
+| `clear`    | _none_                                | empties the string                                                   |
+| `truncate` | target length                         | cuts off the string at exactly a specified number of characters      |
+| `contains` | character/sub-string to search for    | checks if a certain character or sub-string occurs in the string     |
+| `replace`  | target sub-string, replacement string | replaces a substring with another                                    |
+| `trim`     | _none_                                | trims the string of whitespace at the beginning and end              |
 
 ### Examples
 
@@ -1193,30 +1193,49 @@ Arrays are disabled via the [`no_index`] feature.
 
 ### Built-in functions
 
-The following functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on arrays:
+The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on arrays:
 
-| Function     | Description                                                                           |
-| ------------ | ------------------------------------------------------------------------------------- |
-| `push`       | inserts an element at the end                                                         |
-| `append`     | concatenates the second array to the end of the first                                 |
-| `+` operator | concatenates the first array with the second                                          |
-| `pop`        | removes the last element and returns it ([`()`] if empty)                             |
-| `shift`      | removes the first element and returns it ([`()`] if empty)                            |
-| `len`        | returns the number of elements                                                        |
-| `pad`        | pads the array with an element until a specified length                               |
-| `clear`      | empties the array                                                                     |
-| `truncate`   | cuts off the array at exactly a specified length (discarding all subsequent elements) |
+| Function     | Parameter(s)                                                          | Description                                                                                          |
+| ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `push`       | element to insert                                                     | inserts an element at the end                                                                        |
+| `append`     | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+` operator | first array, second array                                             | concatenates the first array with the second                                                         |
+| `insert`     | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
+| `pop`        | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
+| `shift`      | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
+| `remove`     | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `len`        | _none_                                                                | returns the number of elements                                                                       |
+| `pad`        | element to pad, target length                                         | pads the array with an element until a specified length                                              |
+| `clear`      | _none_                                                                | empties the array                                                                                    |
+| `truncate`   | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
 ### Examples
 
 ```rust
-let y = [1, 2, 3];      // array literal with 3 elements
-y[1] = 42;
+let y = [2, 3];         // array literal with 2 elements
 
-print(1 in y);          // use 'in' to test if an item exists in the array, prints true
-print(9 in y);          // ... prints false
+y.insert(0, 1);         // insert element at the beginning
+y.insert(999, 4);       // insert element at the end
 
-print(y[1]);            // prints 42
+y.len() == 4;
+
+y[0] == 1;
+y[1] == 2;
+y[2] == 3;
+y[3] == 4;
+
+(1 in y) == true;       // use 'in' to test if an item exists in the array
+(42 in y) == false;
+
+y[1] = 42;              // array elements can be reassigned
+
+(42 in y) == true;
+
+y.remove(2) == 3;       // remove element
+
+y.len() == 3;
+
+y[2] == 4;              // elements after the removed element are shifted
 
 ts.list = y;            // arrays can be assigned completely (by value copy)
 let foo = ts.list[1];
@@ -1238,7 +1257,7 @@ foo == 1;
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
 
-print(y.len());         // prints 5
+y.len() == 5;
 
 let first = y.shift();  // remove the first element, 4 elements remaining
 first == 1;
@@ -1246,7 +1265,7 @@ first == 1;
 let last = y.pop();     // remove the last element, 3 elements remaining
 last == 5;
 
-print(y.len());         // prints 3
+y.len() == 3;
 
 for item in y {         // arrays can be iterated with a 'for' statement
     print(item);
@@ -1254,15 +1273,15 @@ for item in y {         // arrays can be iterated with a 'for' statement
 
 y.pad(10, "hello");     // pad the array up to 10 elements
 
-print(y.len());         // prints 10
+y.len() == 10;
 
 y.truncate(5);          // truncate the array to 5 elements
 
-print(y.len());         // prints 5
+y.len() == 5;
 
 y.clear();              // empty the array
 
-print(y.len());         // prints 0
+y.len() == 0;
 ```
 
 `push` and `pad` are only defined for standard built-in types. For custom types, type-specific versions must be registered:
@@ -1294,17 +1313,18 @@ Object maps are disabled via the [`no_object`] feature.
 
 ### Built-in functions
 
-The following functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on object maps:
+The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on object maps:
 
-| Function     | Description                                                                                                                              |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `has`        | does the object map contain a property of a particular name?                                                                             |
-| `len`        | returns the number of properties                                                                                                         |
-| `clear`      | empties the object map                                                                                                                   |
-| `mixin`      | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
-| `+` operator | merges the first object map with the second                                                                                              |
-| `keys`       | returns an [array] of all the property names (in random order)                                                                           |
-| `values`     | returns an [array] of all the property values (in random order)                                                                          |
+| Function     | Parameter(s)                        | Description                                                                                                                              |
+| ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `has`        | property name                       | does the object map contain a property of a particular name?                                                                             |
+| `len`        | _none_                              | returns the number of properties                                                                                                         |
+| `clear`      | _none_                              | empties the object map                                                                                                                   |
+| `remove`     | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
+| `mixin`      | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
+| `+` operator | first object map, second object map | merges the first object map with the second                                                                                              |
+| `keys`       | _none_                              | returns an [array] of all the property names (in random order)                                                                           |
+| `values`     | _none_                              | returns an [array] of all the property values (in random order)                                                                          |
 
 ### Examples
 
@@ -1322,12 +1342,12 @@ y.a = 42;               // access via dot notation
 y.baz!$@ = 42;          // <- syntax error: only proper variable names allowed in dot notation
 y."baz!$@" = 42;        // <- syntax error: strings not allowed in dot notation
 
-print(y.a);             // prints 42
+y.a == 42;
 
-print(y["baz!$@"]);     // prints 123.456 - access via index notation
+y["baz!$@"] == 123.456; // access via index notation
 
-print("baz!$@" in y);   // use 'in' to test if a property exists in the object map, prints true
-print("z" in y);        // ... prints false
+"baz!$@" in y == true;  // use 'in' to test if a property exists in the object map, prints true
+("z" in y) == false;
 
 ts.obj = y;             // object maps can be assigned completely (by value copy)
 let foo = ts.list.a;
@@ -1352,7 +1372,12 @@ y.has("xyz") == false;
 y.xyz == ();            // a non-existing property returns '()'
 y["xyz"] == ();
 
-print(y.len());         // prints 3
+y.len() == 3;
+
+y.remove("a") == 1;     // remove property
+
+y.len() == 2;
+y.has("a") == false;
 
 for name in keys(y) {   // get an array of all the property names via the 'keys' function
     print(name);
@@ -1364,7 +1389,7 @@ for val in values(y) {  // get an array of all the property values via the 'valu
 
 y.clear();              // empty the object map
 
-print(y.len());         // prints 0
+y.len() == 0;
 ```
 
 ### Parsing from JSON

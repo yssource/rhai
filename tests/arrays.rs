@@ -16,20 +16,26 @@ fn test_arrays() -> Result<(), EvalAltResult> {
     assert_eq!(
         engine.eval::<INT>(
             r"
-                        let x = [1, 2, 3];
-                        let y = [4, 5];
-                        x.append(y);
-                        x.len()
+                let x = [2, 9];
+                x.insert(-1, 1);
+                x.insert(999, 3);
+
+                let r = x.remove(2);
+
+                let y = [4, 5];
+                x.append(y);
+
+                x.len() + r
            "
         )?,
-        5
+        14
     );
     assert_eq!(
         engine.eval::<INT>(
             r"
-                        let x = [1, 2, 3];
-                        x += [4, 5];
-                        x.len()
+                let x = [1, 2, 3];
+                x += [4, 5];
+                x.len()
            "
         )?,
         5
@@ -38,9 +44,9 @@ fn test_arrays() -> Result<(), EvalAltResult> {
         engine
             .eval::<Array>(
                 r"
-                        let x = [1, 2, 3];
-                        let y = [4, 5];
-                        x + y
+                    let x = [1, 2, 3];
+                    let y = [4, 5];
+                    x + y
            "
             )?
             .len(),
