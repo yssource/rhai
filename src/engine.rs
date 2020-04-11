@@ -172,11 +172,10 @@ impl FunctionsLib {
     }
     /// Get a function definition from the `FunctionsLib`.
     pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
-        if let Ok(n) = self.0.binary_search_by(|f| f.compare(name, params)) {
-            Some(&self.0[n])
-        } else {
-            None
-        }
+        self.0
+            .binary_search_by(|f| f.compare(name, params))
+            .ok()
+            .map(|n| self.0[n].as_ref())
     }
     /// Merge another `FunctionsLib` into this `FunctionsLib`.
     pub fn merge(&self, other: &Self) -> Self {
@@ -441,58 +440,56 @@ impl Engine<'_> {
         const fn_lib: Option<&FunctionsLib> = None;
 
         // First search in script-defined functions (can override built-in)
-        if let Some(lib) = fn_lib {
-            if let Some(fn_def) = lib.get_function(fn_name, args.len()) {
-                match scope {
-                    // Extern scope passed in which is not empty
-                    Some(scope) if scope.len() > 0 => {
-                        let scope_len = scope.len();
+        if let Some(fn_def) = fn_lib.and_then(|lib| lib.get_function(fn_name, args.len())) {
+            match scope {
+                // Extern scope passed in which is not empty
+                Some(scope) if scope.len() > 0 => {
+                    let scope_len = scope.len();
 
-                        scope.extend(
-                            // Put arguments into scope as variables - variable name is copied
-                            // TODO - avoid copying variable name
-                            fn_def
-                                .params
-                                .iter()
-                                .zip(args.into_iter().map(|x| (*x).into_dynamic()))
-                                .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
-                        );
+                    scope.extend(
+                        // Put arguments into scope as variables - variable name is copied
+                        // TODO - avoid copying variable name
+                        fn_def
+                            .params
+                            .iter()
+                            .zip(args.into_iter().map(|x| (*x).into_dynamic()))
+                            .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
+                    );
 
-                        // Evaluate the function at one higher level of call depth
-                        let result = self
-                            .eval_stmt(scope, fn_lib, &fn_def.body, level + 1)
-                            .or_else(|err| match err {
-                                // Convert return statement to return value
-                                EvalAltResult::Return(x, _) => Ok(x),
-                                err => Err(err.set_position(pos)),
-                            });
+                    // Evaluate the function at one higher level of call depth
+                    let result = self
+                        .eval_stmt(scope, fn_lib, &fn_def.body, level + 1)
+                        .or_else(|err| match err {
+                            // Convert return statement to return value
+                            EvalAltResult::Return(x, _) => Ok(x),
+                            err => Err(err.set_position(pos)),
+                        });
 
-                        scope.rewind(scope_len);
+                    scope.rewind(scope_len);
 
-                        return result;
-                    }
-                    // No new scope - create internal scope
-                    _ => {
-                        let mut scope = Scope::new();
+                    return result;
+                }
+                // No new scope - create internal scope
+                _ => {
+                    let mut scope = Scope::new();
 
-                        scope.extend(
-                            // Put arguments into scope as variables
-                            fn_def
-                                .params
-                                .iter()
-                                .zip(args.into_iter().map(|x| (*x).into_dynamic()))
-                                .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
-                        );
+                    scope.extend(
+                        // Put arguments into scope as variables
+                        fn_def
+                            .params
+                            .iter()
+                            .zip(args.into_iter().map(|x| (*x).into_dynamic()))
+                            .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
+                    );
 
-                        // Evaluate the function at one higher level of call depth
-                        return self
-                            .eval_stmt(&mut scope, fn_lib, &fn_def.body, level + 1)
-                            .or_else(|err| match err {
-                                // Convert return statement to return value
-                                EvalAltResult::Return(x, _) => Ok(x),
-                                err => Err(err.set_position(pos)),
-                            });
-                    }
+                    // Evaluate the function at one higher level of call depth
+                    return self
+                        .eval_stmt(&mut scope, fn_lib, &fn_def.body, level + 1)
+                        .or_else(|err| match err {
+                            // Convert return statement to return value
+                            EvalAltResult::Return(x, _) => Ok(x),
+                            err => Err(err.set_position(pos)),
+                        });
                 }
             }
         }
@@ -510,25 +507,23 @@ impl Engine<'_> {
         }
 
         // Search built-in's and external functions
-        if let Some(functions) = &self.functions {
-            if let Some(func) = functions.get(&spec) {
-                // Run external function
-                let result = func(args, pos)?;
+        if let Some(func) = self.functions.as_ref().and_then(|f| f.get(&spec)) {
+            // Run external function
+            let result = func(args, pos)?;
 
-                // See if the function match print/debug (which requires special processing)
-                return Ok(match fn_name {
-                    KEYWORD_PRINT if self.on_print.is_some() => {
-                        self.on_print.as_ref().unwrap()(cast_to_string(result.as_ref(), pos)?)
-                            .into_dynamic()
-                    }
-                    KEYWORD_DEBUG if self.on_debug.is_some() => {
-                        self.on_debug.as_ref().unwrap()(cast_to_string(result.as_ref(), pos)?)
-                            .into_dynamic()
-                    }
-                    KEYWORD_PRINT | KEYWORD_DEBUG => ().into_dynamic(),
-                    _ => result,
-                });
-            }
+            // See if the function match print/debug (which requires special processing)
+            return match fn_name {
+                KEYWORD_PRINT if self.on_print.is_some() => Ok(self.on_print.as_ref().unwrap()(
+                    cast_to_string(result.as_ref(), pos)?,
+                )
+                .into_dynamic()),
+                KEYWORD_DEBUG if self.on_debug.is_some() => Ok(self.on_debug.as_ref().unwrap()(
+                    cast_to_string(result.as_ref(), pos)?,
+                )
+                .into_dynamic()),
+                KEYWORD_PRINT | KEYWORD_DEBUG => Ok(().into_dynamic()),
+                _ => Ok(result),
+            };
         }
 
         if let Some(prop) = extract_prop_from_getter(fn_name) {
@@ -1603,33 +1598,29 @@ impl Engine<'_> {
                 let arr = self.eval_expr(scope, fn_lib, expr, level)?;
                 let tid = Any::type_id(arr.as_ref());
 
-                if let Some(type_iterators) = &self.type_iterators {
-                    if let Some(iter_fn) = type_iterators.get(&tid) {
-                        // Add the loop variable - variable name is copied
-                        // TODO - avoid copying variable name
-                        scope.push(name.clone(), ());
+                if let Some(iter_fn) = self.type_iterators.as_ref().and_then(|t| t.get(&tid)) {
+                    // Add the loop variable - variable name is copied
+                    // TODO - avoid copying variable name
+                    scope.push(name.clone(), ());
 
-                        let entry = ScopeSource {
-                            name,
-                            index: scope.len() - 1,
-                            typ: ScopeEntryType::Normal,
-                        };
+                    let entry = ScopeSource {
+                        name,
+                        index: scope.len() - 1,
+                        typ: ScopeEntryType::Normal,
+                    };
 
-                        for a in iter_fn(&arr) {
-                            *scope.get_mut(entry) = a;
+                    for a in iter_fn(&arr) {
+                        *scope.get_mut(entry) = a;
 
-                            match self.eval_stmt(scope, fn_lib, body, level) {
-                                Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
-                                Err(EvalAltResult::ErrorLoopBreak(true, _)) => break,
-                                Err(x) => return Err(x),
-                            }
+                        match self.eval_stmt(scope, fn_lib, body, level) {
+                            Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
+                            Err(EvalAltResult::ErrorLoopBreak(true, _)) => break,
+                            Err(x) => return Err(x),
                         }
-
-                        scope.rewind(scope.len() - 1);
-                        Ok(().into_dynamic())
-                    } else {
-                        Err(EvalAltResult::ErrorFor(expr.position()))
                     }
+
+                    scope.rewind(scope.len() - 1);
+                    Ok(().into_dynamic())
                 } else {
                     Err(EvalAltResult::ErrorFor(expr.position()))
                 }
@@ -1694,16 +1685,10 @@ impl Engine<'_> {
 
     /// Map a type_name into a pretty-print name
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
-        if self.type_names.is_none() {
-            name
-        } else {
-            self.type_names
-                .as_ref()
-                .unwrap()
-                .get(name)
-                .map(String::as_str)
-                .unwrap_or(name)
-        }
+        self.type_names
+            .as_ref()
+            .and_then(|list| list.get(name).map(String::as_str))
+            .unwrap_or(name)
     }
 }
 

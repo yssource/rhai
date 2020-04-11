@@ -663,16 +663,18 @@ fn optimize<'a>(
             .into_iter()
             .enumerate()
             .map(|(i, stmt)| {
-                if let Stmt::Const(name, value, _) = &stmt {
-                    // Load constants
-                    state.push_constant(name, value.as_ref().clone());
-                    stmt // Keep it in the global scope
-                } else {
-                    // Keep all variable declarations at this level
-                    // and always keep the last return value
-                    let keep = matches!(stmt, Stmt::Let(_, _, _)) || i == num_statements - 1;
-
-                    optimize_stmt(stmt, &mut state, keep)
+                match stmt {
+                    Stmt::Const(ref name, ref value, _) => {
+                        // Load constants
+                        state.push_constant(name.as_ref(), value.as_ref().clone());
+                        stmt // Keep it in the global scope
+                    }
+                    _ => {
+                        // Keep all variable declarations at this level
+                        // and always keep the last return value
+                        let keep = matches!(stmt, Stmt::Let(_, _, _)) || i == num_statements - 1;
+                        optimize_stmt(stmt, &mut state, keep)
+                    }
                 }
             })
             .collect();
