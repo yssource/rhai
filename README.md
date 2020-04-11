@@ -1076,7 +1076,21 @@ hex ('`\x`_xx_') escape sequences.
 Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full,
 32-bit extended Unicode code points.
 
-Internally Rhai strings are stored as UTF-8 just like Rust (they _are_ Rust `String`s!), but there are major differences.
+Standard escape sequences:
+
+| Escape sequence | Meaning                        |
+| --------------- | ------------------------------ |
+| `\\`            | back-slash `\`                 |
+| `\t`            | tab                            |
+| `\r`            | carriage-return `CR`           |
+| `\n`            | line-feed `LF`                 |
+| `\"`            | double-quote `"` in strings    |
+| `\'`            | single-quote `'` in characters |
+| `\x`_xx_        | Unicode in 2-digit hex         |
+| `\u`_xxxx_      | Unicode in 4-digit hex         |
+| `\U`_xxxxxxxx_  | Unicode in 8-digit hex         |
+
+Internally Rhai strings are stored as UTF-8 just like Rust (they _are_ Rust `String`'s!), but there are major differences.
 In Rhai a string is the same as an array of Unicode characters and can be directly indexed (unlike Rust).
 This is similar to most other languages where strings are internally represented not as UTF-8 but as arrays of multi-byte
 Unicode characters.

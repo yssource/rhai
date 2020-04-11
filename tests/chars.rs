@@ -5,6 +5,8 @@ fn test_chars() -> Result<(), EvalAltResult> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<char>("'y'")?, 'y');
+    assert_eq!(engine.eval::<char>(r"'\''")?, '\'');
+    assert_eq!(engine.eval::<char>(r#"'"'"#)?, '"');
     assert_eq!(engine.eval::<char>("'\\u2764'")?, '❤');
 
     #[cfg(not(feature = "no_index"))]

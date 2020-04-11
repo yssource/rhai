@@ -12,6 +12,7 @@ fn test_string() -> Result<(), EvalAltResult> {
         engine.eval::<String>(r#""Test string: \x58""#)?,
         "Test string: X"
     );
+    assert_eq!(engine.eval::<String>(r#""\"hello\"""#)?, r#""hello""#);
 
     assert_eq!(engine.eval::<String>(r#""foo" + "bar""#)?, "foobar");
 

@@ -978,7 +978,10 @@ impl<'a> TokenIterator<'a> {
                 }
 
                 // \{enclosing_char} - escaped
-                ch if enclosing_char == ch && !escape.is_empty() => result.push(ch),
+                ch if enclosing_char == ch && !escape.is_empty() => {
+                    escape.clear();
+                    result.push(ch)
+                }
 
                 // Close wrapper
                 ch if enclosing_char == ch && escape.is_empty() => break,
