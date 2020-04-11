@@ -27,6 +27,7 @@ use crate::stdlib::{
     format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub},
     string::{String, ToString},
+    time::Instant,
     vec::Vec,
     {i32, i64, u32},
 };
@@ -55,6 +56,34 @@ macro_rules! reg_op_result1 {
             $self.register_result_fn($x, $op as fn(x: $y, y: $v)->Result<$y,EvalAltResult>);
         )*
     )
+}
+
+macro_rules! reg_cmp {
+    ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+        $(
+            $self.register_fn($x, $op as fn(x: $y, y: $y)->bool);
+        )*
+    )
+}
+
+// Comparison operators
+fn lt<T: PartialOrd>(x: T, y: T) -> bool {
+    x < y
+}
+fn lte<T: PartialOrd>(x: T, y: T) -> bool {
+    x <= y
+}
+fn gt<T: PartialOrd>(x: T, y: T) -> bool {
+    x > y
+}
+fn gte<T: PartialOrd>(x: T, y: T) -> bool {
+    x >= y
+}
+fn eq<T: PartialEq>(x: T, y: T) -> bool {
+    x == y
+}
+fn ne<T: PartialEq>(x: T, y: T) -> bool {
+    x != y
 }
 
 impl Engine<'_> {
@@ -174,26 +203,6 @@ impl Engine<'_> {
             } else {
                 x.into()
             }
-        }
-
-        // Comparison operators
-        fn lt<T: PartialOrd>(x: T, y: T) -> bool {
-            x < y
-        }
-        fn lte<T: PartialOrd>(x: T, y: T) -> bool {
-            x <= y
-        }
-        fn gt<T: PartialOrd>(x: T, y: T) -> bool {
-            x > y
-        }
-        fn gte<T: PartialOrd>(x: T, y: T) -> bool {
-            x >= y
-        }
-        fn eq<T: PartialEq>(x: T, y: T) -> bool {
-            x == y
-        }
-        fn ne<T: PartialEq>(x: T, y: T) -> bool {
-            x != y
         }
 
         // Logic operators
@@ -395,14 +404,6 @@ impl Engine<'_> {
         }
 
         {
-            macro_rules! reg_cmp {
-                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-                    $(
-                        $self.register_fn($x, $op as fn(x: $y, y: $y)->bool);
-                    )*
-                )
-            }
-
             reg_cmp!(self, "<", lt, INT, String, char);
             reg_cmp!(self, "<=", lte, INT, String, char);
             reg_cmp!(self, ">", gt, INT, String, char);
@@ -433,7 +434,7 @@ impl Engine<'_> {
         }
 
         // `&&` and `||` are treated specially as they short-circuit.
-        // They are implemented as special `Expr` instances, not function calls.
+        // They are implemented as special `Expr` Instants, not function calls.
         //reg_op!(self, "||", or, bool);
         //reg_op!(self, "&&", and, bool);
 
@@ -1030,6 +1031,40 @@ impl Engine<'_> {
             if trimmed.len() < s.len() {
                 *s = trimmed.to_string();
             }
+        });
+
+        // Register date/time functions
+        self.register_fn("timestamp", || Instant::now());
+
+        self.register_fn("-", |ts1: Instant, ts2: Instant| {
+            if ts2 > ts1 {
+                #[cfg(not(feature = "no_float"))]
+                return -(ts2 - ts1).as_secs_f64();
+
+                #[cfg(feature = "no_float")]
+                return -((ts2 - ts1).as_secs() as INT);
+            } else {
+                #[cfg(not(feature = "no_float"))]
+                return (ts1 - ts2).as_secs_f64();
+
+                #[cfg(feature = "no_float")]
+                return (ts1 - ts2).as_secs() as INT;
+            }
+        });
+
+        reg_cmp!(self, "<", lt, Instant);
+        reg_cmp!(self, "<=", lte, Instant);
+        reg_cmp!(self, ">", gt, Instant);
+        reg_cmp!(self, ">=", gte, Instant);
+        reg_cmp!(self, "==", eq, Instant);
+        reg_cmp!(self, "!=", ne, Instant);
+
+        self.register_fn("elapsed", |timestamp: Instant| {
+            #[cfg(not(feature = "no_float"))]
+            return timestamp.elapsed().as_secs_f64();
+
+            #[cfg(feature = "no_float")]
+            return timestamp.elapsed().as_secs() as INT;
         });
     }
 }

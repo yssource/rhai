@@ -19,6 +19,7 @@ use crate::stdlib::{
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
+    time::Instant,
     vec,
     vec::Vec,
 };
@@ -362,6 +363,7 @@ impl Engine<'_> {
                 #[cfg(not(feature = "no_object"))]
                 (type_name::<Map>(), "map"),
                 (type_name::<String>(), "string"),
+                (type_name::<Instant>(), "timestamp"),
                 (type_name::<Dynamic>(), "dynamic"),
                 (type_name::<Variant>(), "variant"),
             ]
@@ -719,23 +721,24 @@ impl Engine<'_> {
                 let value = self.get_dot_val_helper(scope, fn_lib, target, dot_rhs, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                if let Some(src) = src {
-                    match src.typ {
-                        ScopeEntryType::Constant => {
-                            return Err(EvalAltResult::ErrorAssignmentToConstant(
-                                src.name.to_string(),
-                                idx_lhs.position(),
-                            ));
-                        }
-                        ScopeEntryType::Normal => {
-                            Self::update_indexed_var_in_scope(
-                                idx_src_type,
-                                scope,
-                                src,
-                                index,
-                                (val, dot_rhs.position()),
-                            )?;
-                        }
+                match src.map(|s| s.typ) {
+                    None => (),
+
+                    Some(ScopeEntryType::Constant) => {
+                        return Err(EvalAltResult::ErrorAssignmentToConstant(
+                            src.unwrap().name.to_string(),
+                            idx_lhs.position(),
+                        ));
+                    }
+
+                    Some(ScopeEntryType::Normal) => {
+                        Self::update_indexed_var_in_scope(
+                            idx_src_type,
+                            scope,
+                            src.unwrap(),
+                            index,
+                            (val, dot_rhs.position()),
+                        )?;
                     }
                 }
 
@@ -1106,16 +1109,16 @@ impl Engine<'_> {
         match dot_lhs {
             // id.???
             Expr::Variable(id, pos) => {
-                let (entry, mut target) = Self::search_scope(scope, id, *pos)?;
+                let (src, mut target) = Self::search_scope(scope, id, *pos)?;
 
-                match entry.typ {
+                match src.typ {
                     ScopeEntryType::Constant => Err(EvalAltResult::ErrorAssignmentToConstant(
                         id.to_string(),
                         op_pos,
                     )),
                     _ => {
                         // Avoid referencing scope which is used below as mut
-                        let entry = ScopeSource { name: id, ..entry };
+                        let entry = ScopeSource { name: id, ..src };
                         let this_ptr = target.as_mut();
                         let value = self
                             .set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
@@ -1139,23 +1142,24 @@ impl Engine<'_> {
                     self.set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                if let Some(src) = src {
-                    match src.typ {
-                        ScopeEntryType::Constant => {
-                            return Err(EvalAltResult::ErrorAssignmentToConstant(
-                                src.name.to_string(),
-                                lhs.position(),
-                            ));
-                        }
-                        ScopeEntryType::Normal => {
-                            Self::update_indexed_var_in_scope(
-                                idx_src_type,
-                                scope,
-                                src,
-                                index,
-                                (target, val_pos),
-                            )?;
-                        }
+                match src.map(|x| x.typ) {
+                    None => (),
+
+                    Some(ScopeEntryType::Constant) => {
+                        return Err(EvalAltResult::ErrorAssignmentToConstant(
+                            src.unwrap().name.to_string(),
+                            lhs.position(),
+                        ));
+                    }
+
+                    Some(ScopeEntryType::Normal) => {
+                        Self::update_indexed_var_in_scope(
+                            idx_src_type,
+                            scope,
+                            src.unwrap(),
+                            index,
+                            (target, val_pos),
+                        )?;
                     }
                 }
 
@@ -1260,29 +1264,36 @@ impl Engine<'_> {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(name, pos) => match scope
-                        .get(name)
-                        .ok_or_else(|| {
-                            EvalAltResult::ErrorVariableNotFound(name.clone().into_owned(), *pos)
-                        })?
-                        .0
-                    {
-                        entry
-                        @
-                        ScopeSource {
-                            typ: ScopeEntryType::Normal,
-                            ..
-                        } => {
+                    Expr::Variable(name, pos) => match scope.get(name) {
+                        None => {
+                            return Err(EvalAltResult::ErrorVariableNotFound(
+                                name.clone().into_owned(),
+                                *pos,
+                            ))
+                        }
+
+                        Some((
+                            entry
+                            @
+                            ScopeSource {
+                                typ: ScopeEntryType::Normal,
+                                ..
+                            },
+                            _,
+                        )) => {
                             // Avoid referencing scope which is used below as mut
                             let entry = ScopeSource { name, ..entry };
                             *scope.get_mut(entry) = rhs_val.clone();
                             Ok(rhs_val)
                         }
 
-                        ScopeSource {
-                            typ: ScopeEntryType::Constant,
-                            ..
-                        } => Err(EvalAltResult::ErrorAssignmentToConstant(
+                        Some((
+                            ScopeSource {
+                                typ: ScopeEntryType::Constant,
+                                ..
+                            },
+                            _,
+                        )) => Err(EvalAltResult::ErrorAssignmentToConstant(
                             name.to_string(),
                             *op_pos,
                         )),
@@ -1294,26 +1305,25 @@ impl Engine<'_> {
                         let (idx_src_type, src, index, _) =
                             self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
 
-                        if let Some(src) = src {
-                            match src.typ {
-                                ScopeEntryType::Constant => {
-                                    Err(EvalAltResult::ErrorAssignmentToConstant(
-                                        src.name.to_string(),
-                                        idx_lhs.position(),
-                                    ))
-                                }
-                                ScopeEntryType::Normal => Ok(Self::update_indexed_var_in_scope(
-                                    idx_src_type,
-                                    scope,
-                                    src,
-                                    index,
-                                    (rhs_val, rhs.position()),
-                                )?),
-                            }
-                        } else {
-                            Err(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                        match src.map(|x| x.typ) {
+                            None => Err(EvalAltResult::ErrorAssignmentToUnknownLHS(
                                 idx_lhs.position(),
-                            ))
+                            )),
+
+                            Some(ScopeEntryType::Constant) => {
+                                Err(EvalAltResult::ErrorAssignmentToConstant(
+                                    src.unwrap().name.to_string(),
+                                    idx_lhs.position(),
+                                ))
+                            }
+
+                            Some(ScopeEntryType::Normal) => Ok(Self::update_indexed_var_in_scope(
+                                idx_src_type,
+                                scope,
+                                src.unwrap(),
+                                index,
+                                (rhs_val, rhs.position()),
+                            )?),
                         }
                     }
 

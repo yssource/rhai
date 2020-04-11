@@ -24,6 +24,7 @@ fn test_string() -> Result<(), EvalAltResult> {
     assert_eq!(engine.eval::<String>(r#""foo" + 123"#)?, "foo123");
 
     #[cfg(not(feature = "no_stdlib"))]
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(engine.eval::<String>("(42).to_string()")?, "42");
 
     #[cfg(not(feature = "no_float"))]

@@ -362,6 +362,7 @@ The following primitive types are supported natively:
 | **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
 | **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
+| **Timestamp** (implemented in standard library)                               | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
 | **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
@@ -1446,6 +1447,36 @@ scope.push("map", map);
 let result = engine.eval_with_scope::<INT>(r#"map["^^^!!!"].len()"#)?;
 
 result == 3;                            // the object map is successfully used in the script
+```
+
+`timestamp`'s
+-------------
+[`timestamp`]: #timestamp-s
+
+Timestamps are provided by the standard library (excluded if using a [raw `Engine`]) via the `timestamp`
+function.
+
+The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp returns `"timestamp"`.
+
+### Built-in functions
+
+The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on timestamps:
+
+| Function     | Parameter(s)                       | Description                                              |
+| ------------ | ---------------------------------- | -------------------------------------------------------- |
+| `elapsed`    | _none_                             | returns the number of seconds since the timestamp        |
+| `-` operator | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
+
+### Examples
+
+```rust
+let now = timestamp();
+
+// Do some lengthy operation...
+
+if now.elapsed() > 30.0 {
+    print("takes too long (over 30 seconds)!")
+}
 ```
 
 Comparison operators
