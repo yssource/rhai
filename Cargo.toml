@@ -17,7 +17,7 @@ keywords = [ "scripting" ]
 categories = [ "no-std", "embedded", "parser-implementations" ]
 
 [dependencies]
-num-traits = "*"
+num-traits = { version = "0.2.11", default-features = false }
 
 [features]
 #default = ["no_stdlib", "no_function", "no_index", "no_object", "no_float", "only_i32", "unchecked", "no_optimize", "sync"]
@@ -46,21 +46,21 @@ codegen-units = 1
 #panic = 'abort'     # remove stack backtrace for no-std
 
 [dependencies.libm]
-version = "*"
+version = "0.2.1"
 optional = true
 
 [dependencies.core-error]
-version = "*"
+version = "0.0.0"
 features = ["alloc"]
 optional = true
 
 [dependencies.hashbrown]
-version = "*"
+version = "0.7.1"
 default-features = false
 features = ["ahash", "nightly", "inline-more"]
 optional = true
 
 [dependencies.ahash]
-version = "*"
+version = "0.3.2"
 default-features = false
 optional = true
