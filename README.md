@@ -439,12 +439,10 @@ There is no easy way for Rust to decide, at run-time, what type the `Dynamic` va
 function and match against the name).
 
 A `Dynamic` value's actual type can be checked via the `is` method.
-The `cast` method (from the `rhai::AnyExt` trait) then converts the value into a specific, known type.
+The `cast` method then converts the value into a specific, known type.
 Alternatively, use the `try_cast` method which does not panic but returns an error when the cast fails.
 
 ```rust
-use rhai::AnyExt;                               // pull in the trait.
-
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
 
@@ -459,8 +457,6 @@ let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic whe
 The `type_name` method gets the name of the actual type as a static string slice, which you may match against.
 
 ```rust
-use rhai::Any;                                  // pull in the trait.
-
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
 
@@ -499,8 +495,6 @@ A number of traits, under the `rhai::` module namespace, provide additional func
 
 | Trait               | Description                                                                       | Methods                                 |
 | ------------------- | --------------------------------------------------------------------------------- | --------------------------------------- |
-| `Any`               | Generic trait that represents a [`Dynamic`] type                                  | `type_id`, `type_name`, `into_dynamic`  |
-| `AnyExt`            | Extension trait to allows casting of a [`Dynamic`] value to Rust types            | `cast`, `try_cast`                      |
 | `RegisterFn`        | Trait for registering functions                                                   | `register_fn`                           |
 | `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                             | `register_dynamic_fn`                   |
 | `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, EvalAltResult>` | `register_result_fn`                    |
@@ -513,9 +507,9 @@ Rhai's scripting engine is very lightweight.  It gets most of its abilities from
 To call these functions, they need to be registered with the [`Engine`].
 
 ```rust
-use rhai::{Engine, EvalAltResult};
+use rhai::{Dynamic, Engine, EvalAltResult};
 use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
-use rhai::{Any, Dynamic, RegisterDynamicFn};    // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
+use rhai::{Dynamic, RegisterDynamicFn};         // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -524,7 +518,7 @@ fn add(x: i64, y: i64) -> i64 {
 
 // Function that returns a Dynamic value
 fn get_an_any() -> Dynamic {
-    (42_i64).into_dynamic()                     // 'into_dynamic' is defined by the 'rhai::Any' trait
+    Dynamic::from(42_i64)
 }
 
 fn main() -> Result<(), EvalAltResult>
@@ -548,17 +542,16 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
-To return a [`Dynamic`] value from a Rust function, use the `into_dynamic()` method
-(under the `rhai::Any` trait) to convert it.
+To return a [`Dynamic`] value from a Rust function, use the `Dynamic::from` method.
 
 ```rust
-use rhai::Any;                                  // pull in the trait
+use rhai::Dynamic;
 
 fn decide(yes_no: bool) -> Dynamic {
     if yes_no {
-        (42_i64).into_dynamic()
+        Dynamic::from(42_i64)
     } else {
-        String::from("hello!").into_dynamic()   // remember &str is not supported by Rhai
+        Dynamic::from(String::from("hello!"))   // remember &str is not supported by Rhai
     }
 }
 ```

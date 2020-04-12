@@ -1,7 +1,7 @@
 //! Main module defining the lexer and parser.
 
-use crate::any::{Any, AnyExt, Dynamic};
-use crate::engine::{Array, Engine, FunctionsLib, Map};
+use crate::any::{Dynamic, Union};
+use crate::engine::{Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -440,25 +440,30 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
-            Self::IntegerConstant(i, _) => i.into_dynamic(),
-            Self::FloatConstant(f, _) => f.into_dynamic(),
-            Self::CharConstant(c, _) => c.into_dynamic(),
-            Self::StringConstant(s, _) => s.clone().into_owned().into_dynamic(),
-            Self::True(_) => true.into_dynamic(),
-            Self::False(_) => false.into_dynamic(),
-            Self::Unit(_) => ().into_dynamic(),
+            Self::IntegerConstant(i, _) => Dynamic::from_int(*i),
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(f, _) => Dynamic::from_float(*f),
+            Self::CharConstant(c, _) => Dynamic::from_char(*c),
+            Self::StringConstant(s, _) => Dynamic::from_string(s.to_string()),
+            Self::True(_) => Dynamic::from_bool(true),
+            Self::False(_) => Dynamic::from_bool(false),
+            Self::Unit(_) => Dynamic::from_unit(),
 
-            Self::Array(items, _) if items.iter().all(Self::is_constant) => items
-                .iter()
-                .map(Self::get_constant_value)
-                .collect::<Vec<_>>()
-                .into_dynamic(),
+            Self::Array(items, _) if items.iter().all(Self::is_constant) => Dynamic(Union::Array(
+                items
+                    .iter()
+                    .map(Self::get_constant_value)
+                    .collect::<Vec<_>>(),
+            )),
 
-            Self::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => items
-                .iter()
-                .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
-                .collect::<HashMap<_, _>>()
-                .into_dynamic(),
+            Self::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => {
+                Dynamic(Union::Map(Box::new(
+                    items
+                        .iter()
+                        .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
+                        .collect::<HashMap<_, _>>(),
+                )))
+            }
 
             _ => panic!("cannot get value of non-constant expression"),
         }
@@ -1958,7 +1963,7 @@ fn parse_unary<'a>(
             Ok(Expr::FunctionCall(
                 "!".into(),
                 vec![parse_primary(input, allow_stmt_expr)?],
-                Some(Box::new(false)), // NOT operator, when operating on invalid operand, defaults to false
+                Some(Dynamic::from_bool(false)), // NOT operator, when operating on invalid operand, defaults to false
                 pos,
             ))
         }
@@ -2270,37 +2275,37 @@ fn parse_binary_op<'a>(
                 Token::EqualsTo => Expr::FunctionCall(
                     "==".into(),
                     vec![current_lhs, rhs],
-                    Some((false).into_dynamic()),
+                    Some(Dynamic::from_bool(false)),
                     pos,
                 ),
                 Token::NotEqualsTo => Expr::FunctionCall(
                     "!=".into(),
                     vec![current_lhs, rhs],
-                    Some((false).into_dynamic()),
+                    Some(Dynamic::from_bool(false)),
                     pos,
                 ),
                 Token::LessThan => Expr::FunctionCall(
                     "<".into(),
                     vec![current_lhs, rhs],
-                    Some((false).into_dynamic()),
+                    Some(Dynamic::from_bool(false)),
                     pos,
                 ),
                 Token::LessThanEqualsTo => Expr::FunctionCall(
                     "<=".into(),
                     vec![current_lhs, rhs],
-                    Some((false).into_dynamic()),
+                    Some(Dynamic::from_bool(false)),
                     pos,
                 ),
                 Token::GreaterThan => Expr::FunctionCall(
                     ">".into(),
                     vec![current_lhs, rhs],
-                    Some((false).into_dynamic()),
+                    Some(Dynamic::from_bool(false)),
                     pos,
                 ),
                 Token::GreaterThanEqualsTo => Expr::FunctionCall(
                     ">=".into(),
                     vec![current_lhs, rhs],
-                    Some((false).into_dynamic()),
+                    Some(Dynamic::from_bool(false)),
                     pos,
                 ),
 
@@ -2845,67 +2850,50 @@ pub fn parse<'a, 'e>(
 ///
 /// Returns Some(expression) if conversion is successful.  Otherwise None.
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
-    if value.is::<INT>() {
-        Some(Expr::IntegerConstant(value.cast(), pos))
-    } else if value.is::<char>() {
-        Some(Expr::CharConstant(value.cast(), pos))
-    } else if value.is::<String>() {
-        Some(Expr::StringConstant(value.cast::<String>().into(), pos))
-    } else if value.is::<bool>() {
-        Some(if value.cast::<bool>() {
-            Expr::True(pos)
-        } else {
-            Expr::False(pos)
-        })
-    } else {
+    match value.0 {
+        Union::Unit(_) => Some(Expr::Unit(pos)),
+        Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
+        Union::Char(value) => Some(Expr::CharConstant(value, pos)),
+        Union::Str(value) => Some(Expr::StringConstant(value.into(), pos)),
+        Union::Bool(true) => Some(Expr::True(pos)),
+        Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]
-        {
-            if value.is::<Array>() {
-                let array = value.cast::<Array>();
-                let items: Vec<_> = array
-                    .into_iter()
-                    .map(|x| map_dynamic_to_expr(x, pos))
-                    .collect();
-                if items.iter().all(Option::is_some) {
-                    return Some(Expr::Array(
-                        items.into_iter().map(Option::unwrap).collect(),
-                        pos,
-                    ));
-                } else {
-                    return None;
-                }
+        Union::Array(array) => {
+            let items: Vec<_> = array
+                .into_iter()
+                .map(|x| map_dynamic_to_expr(x, pos))
+                .collect();
+
+            if items.iter().all(Option::is_some) {
+                Some(Expr::Array(
+                    items.into_iter().map(Option::unwrap).collect(),
+                    pos,
+                ))
+            } else {
+                None
             }
         }
-
         #[cfg(not(feature = "no_object"))]
-        {
-            if value.is::<Map>() {
-                let map = value.cast::<Map>();
-                let items: Vec<_> = map
-                    .into_iter()
-                    .map(|(k, v)| (k, map_dynamic_to_expr(v, pos), pos))
-                    .collect();
-                if items.iter().all(|(_, expr, _)| expr.is_some()) {
-                    return Some(Expr::Map(
-                        items
-                            .into_iter()
-                            .map(|(k, expr, pos)| (k, expr.unwrap(), pos))
-                            .collect(),
-                        pos,
-                    ));
-                } else {
-                    return None;
-                }
+        Union::Map(map) => {
+            let items: Vec<_> = map
+                .into_iter()
+                .map(|(k, v)| (k, map_dynamic_to_expr(v, pos), pos))
+                .collect();
+            if items.iter().all(|(_, expr, _)| expr.is_some()) {
+                Some(Expr::Map(
+                    items
+                        .into_iter()
+                        .map(|(k, expr, pos)| (k, expr.unwrap(), pos))
+                        .collect(),
+                    pos,
+                ))
+            } else {
+                None
             }
         }
-
         #[cfg(not(feature = "no_float"))]
-        {
-            if value.is::<FLOAT>() {
-                return Some(Expr::FloatConstant(value.cast(), pos));
-            }
-        }
+        Union::Float(value) => Some(Expr::FloatConstant(value, pos)),
 
-        None
+        _ => None,
     }
 }

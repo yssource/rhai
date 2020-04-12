@@ -83,7 +83,7 @@ mod result;
 mod scope;
 mod stdlib;
 
-pub use any::{Any, AnyExt, Dynamic, Variant};
+pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
 pub use fn_call::FuncArgs;

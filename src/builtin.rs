@@ -1,7 +1,7 @@
 //! Helper module that allows registration of the _core library_ and
 //! _standard library_ of utility functions.
 
-use crate::any::{Any, Dynamic};
+use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 use crate::parser::{Position, INT};
@@ -628,8 +628,8 @@ impl Engine<'_> {
                 // Register map access functions
                 #[cfg(not(feature = "no_index"))]
                 self.register_fn("keys", |map: Map| {
-                    map.into_iter()
-                        .map(|(k, _)| k.into_dynamic())
+                    map.iter()
+                        .map(|(k, _)| Dynamic::from(k.clone()))
                         .collect::<Vec<_>>()
                 });
 
@@ -641,15 +641,16 @@ impl Engine<'_> {
         }
 
         // Register range function
-        fn reg_range<T: Any + Clone>(engine: &mut Engine)
+        fn reg_range<T: Variant + Clone>(engine: &mut Engine)
         where
             Range<T>: Iterator<Item = T>,
         {
-            engine.register_iterator::<Range<T>, _>(|a: &Dynamic| {
+            engine.register_iterator::<Range<T>, _>(|source: &Dynamic| {
                 Box::new(
-                    a.downcast_ref::<Range<T>>()
+                    source
+                        .downcast_ref::<Range<T>>()
+                        .cloned()
                         .unwrap()
-                        .clone()
                         .map(|x| x.into_dynamic()),
                 ) as Box<dyn Iterator<Item = Dynamic>>
             });
@@ -678,12 +679,12 @@ impl Engine<'_> {
         struct StepRange<T>(T, T, T)
         where
             for<'a> &'a T: Add<&'a T, Output = T>,
-            T: Any + Clone + PartialOrd;
+            T: Variant + Clone + PartialOrd;
 
         impl<T> Iterator for StepRange<T>
         where
             for<'a> &'a T: Add<&'a T, Output = T>,
-            T: Any + Clone + PartialOrd,
+            T: Variant + Clone + PartialOrd,
         {
             type Item = T;
 
@@ -701,14 +702,15 @@ impl Engine<'_> {
         fn reg_step<T>(engine: &mut Engine)
         where
             for<'a> &'a T: Add<&'a T, Output = T>,
-            T: Any + Clone + PartialOrd,
+            T: Variant + Clone + PartialOrd,
             StepRange<T>: Iterator<Item = T>,
         {
-            engine.register_iterator::<StepRange<T>, _>(|a: &Dynamic| {
+            engine.register_iterator::<StepRange<T>, _>(|source: &Dynamic| {
                 Box::new(
-                    a.downcast_ref::<StepRange<T>>()
+                    source
+                        .downcast_ref::<StepRange<T>>()
+                        .cloned()
                         .unwrap()
-                        .clone()
                         .map(|x| x.into_dynamic()),
                 ) as Box<dyn Iterator<Item = Dynamic>>
             });
@@ -866,19 +868,19 @@ impl Engine<'_> {
             }
 
             // Register array utility functions
-            fn push<T: Any>(list: &mut Array, item: T) {
-                list.push(Box::new(item));
+            fn push<T: Variant + Clone>(list: &mut Array, item: T) {
+                list.push(Dynamic::from(item));
             }
-            fn ins<T: Any>(list: &mut Array, position: INT, item: T) {
+            fn ins<T: Variant + Clone>(list: &mut Array, position: INT, item: T) {
                 if position <= 0 {
-                    list.insert(0, Box::new(item));
+                    list.insert(0, Dynamic::from(item));
                 } else if (position as usize) >= list.len() - 1 {
                     push(list, item);
                 } else {
-                    list.insert(position as usize, Box::new(item));
+                    list.insert(position as usize, Dynamic::from(item));
                 }
             }
-            fn pad<T: Any + Clone>(list: &mut Array, len: INT, item: T) {
+            fn pad<T: Variant + Clone>(list: &mut Array, len: INT, item: T) {
                 if len >= 0 {
                     while list.len() < len as usize {
                         push(list, item.clone());
@@ -919,18 +921,18 @@ impl Engine<'_> {
             }
 
             self.register_dynamic_fn("pop", |list: &mut Array| {
-                list.pop().unwrap_or_else(|| ().into_dynamic())
+                list.pop().unwrap_or_else(|| Dynamic::from_unit())
             });
             self.register_dynamic_fn("shift", |list: &mut Array| {
                 if !list.is_empty() {
-                    ().into_dynamic()
+                    Dynamic::from_unit()
                 } else {
                     list.remove(0)
                 }
             });
             self.register_dynamic_fn("remove", |list: &mut Array, len: INT| {
                 if len < 0 || (len as usize) >= list.len() {
-                    ().into_dynamic()
+                    Dynamic::from_unit()
                 } else {
                     list.remove(len as usize)
                 }
@@ -951,7 +953,7 @@ impl Engine<'_> {
             self.register_fn("len", |map: &mut Map| map.len() as INT);
             self.register_fn("clear", |map: &mut Map| map.clear());
             self.register_dynamic_fn("remove", |x: &mut Map, name: String| {
-                x.remove(&name).unwrap_or(().into_dynamic())
+                x.remove(&name).unwrap_or_else(|| Dynamic::from_unit())
             });
             self.register_fn("mixin", |map1: &mut Map, map2: Map| {
                 map2.into_iter().for_each(|(key, value)| {

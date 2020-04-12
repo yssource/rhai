@@ -1,6 +1,6 @@
 //! Module that defines the extern API of `Engine`.
 
-use crate::any::{Any, AnyExt, Dynamic};
+use crate::any::{Dynamic, Variant};
 use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec, Map};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
@@ -109,7 +109,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_type<T: Any + Clone>(&mut self) {
+    pub fn register_type<T: Variant + Clone>(&mut self) {
         self.register_type_with_name::<T>(type_name::<T>());
     }
 
@@ -157,7 +157,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_type_with_name<T: Any + Clone>(&mut self, name: &str) {
+    pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) {
         if self.type_names.is_none() {
             self.type_names = Some(HashMap::new());
         }
@@ -171,7 +171,7 @@ impl<'e> Engine<'e> {
 
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
-    pub fn register_iterator<T: Any, F: IteratorCallback>(&mut self, f: F) {
+    pub fn register_iterator<T: Variant + Clone, F: IteratorCallback>(&mut self, f: F) {
         if self.type_iterators.is_none() {
             self.type_iterators = Some(HashMap::new());
         }
@@ -221,8 +221,8 @@ impl<'e> Engine<'e> {
     #[cfg(not(feature = "no_object"))]
     pub fn register_get<T, U, F>(&mut self, name: &str, callback: F)
     where
-        T: Any + Clone,
-        U: Any + Clone,
+        T: Variant + Clone,
+        U: Variant + Clone,
         F: ObjectGetCallback<T, U>,
     {
         self.register_fn(&make_getter(name), callback);
@@ -267,8 +267,8 @@ impl<'e> Engine<'e> {
     #[cfg(not(feature = "no_object"))]
     pub fn register_set<T, U, F>(&mut self, name: &str, callback: F)
     where
-        T: Any + Clone,
-        U: Any + Clone,
+        T: Variant + Clone,
+        U: Variant + Clone,
         F: ObjectSetCallback<T, U>,
     {
         self.register_fn(&make_setter(name), callback);
@@ -315,8 +315,8 @@ impl<'e> Engine<'e> {
     #[cfg(not(feature = "no_object"))]
     pub fn register_get_set<T, U, G, S>(&mut self, name: &str, get_fn: G, set_fn: S)
     where
-        T: Any + Clone,
-        U: Any + Clone,
+        T: Variant + Clone,
+        U: Variant + Clone,
         G: ObjectGetCallback<T, U>,
         S: ObjectSetCallback<T, U>,
     {
@@ -487,7 +487,7 @@ impl<'e> Engine<'e> {
     ///
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
-    /// use rhai::{Engine, AnyExt};
+    /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
     ///
@@ -612,7 +612,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    pub fn eval_file<T: Any + Clone>(&self, path: PathBuf) -> Result<T, EvalAltResult> {
+    pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, EvalAltResult> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
 
@@ -636,7 +636,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    pub fn eval_file_with_scope<T: Any + Clone>(
+    pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         path: PathBuf,
@@ -658,7 +658,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval<T: Any + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
+    pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
         self.eval_with_scope(&mut Scope::new(), script)
     }
 
@@ -684,7 +684,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_with_scope<T: Any + Clone>(
+    pub fn eval_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         script: &str,
@@ -709,7 +709,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_expression<T: Any + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
+    pub fn eval_expression<T: Variant + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
         self.eval_expression_with_scope(&mut Scope::new(), script)
     }
 
@@ -731,7 +731,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_expression_with_scope<T: Any + Clone>(
+    pub fn eval_expression_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         script: &str,
@@ -761,7 +761,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_ast<T: Any + Clone>(&self, ast: &AST) -> Result<T, EvalAltResult> {
+    pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, EvalAltResult> {
         self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
 
@@ -794,7 +794,7 @@ impl<'e> Engine<'e> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_ast_with_scope<T: Any + Clone>(
+    pub fn eval_ast_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         ast: &AST,
@@ -803,7 +803,7 @@ impl<'e> Engine<'e> {
             .try_cast::<T>()
             .map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name((*a).type_name()).to_string(),
+                    self.map_type_name(a.type_name()).to_string(),
                     Position::none(),
                 )
             })
@@ -816,7 +816,7 @@ impl<'e> Engine<'e> {
     ) -> Result<Dynamic, EvalAltResult> {
         ast.0
             .iter()
-            .try_fold(().into_dynamic(), |_, stmt| {
+            .try_fold(Dynamic::from_unit(), |_, stmt| {
                 self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
             })
             .or_else(|err| match err {
@@ -875,7 +875,7 @@ impl<'e> Engine<'e> {
     ) -> Result<(), EvalAltResult> {
         ast.0
             .iter()
-            .try_fold(().into_dynamic(), |_, stmt| {
+            .try_fold(Dynamic::from_unit(), |_, stmt| {
                 self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
             })
             .map(|_| ())
@@ -921,7 +921,7 @@ impl<'e> Engine<'e> {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
-    pub fn call_fn<A: FuncArgs, T: Any + Clone>(
+    pub fn call_fn<A: FuncArgs, T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         ast: &AST,
@@ -929,7 +929,7 @@ impl<'e> Engine<'e> {
         args: A,
     ) -> Result<T, EvalAltResult> {
         let mut arg_values = args.into_vec();
-        let mut args: Vec<_> = arg_values.iter_mut().map(Dynamic::as_mut).collect();
+        let mut args: Vec<_> = arg_values.iter_mut().collect();
         let fn_lib = Some(ast.1.as_ref());
         let pos = Position::none();
 
@@ -937,7 +937,7 @@ impl<'e> Engine<'e> {
             .try_cast()
             .map_err(|a| {
                 EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name((*a).type_name()).into(),
+                    self.map_type_name(a.type_name()).into(),
                     pos,
                 )
             })

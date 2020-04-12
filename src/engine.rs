@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{Any, AnyExt, Dynamic, Variant};
+use crate::any::{Dynamic, Union};
 use crate::error::ParseErrorType;
 use crate::optimize::OptimizationLevel;
 use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, INT};
@@ -8,7 +8,7 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryRef as ScopeSource, EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
-    any::{type_name, TypeId},
+    any::TypeId,
     borrow::Cow,
     boxed::Box,
     cmp::Ordering,
@@ -19,7 +19,6 @@ use crate::stdlib::{
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
-    time::Instant,
     vec,
     vec::Vec,
 };
@@ -34,7 +33,7 @@ pub type Array = Vec<Dynamic>;
 /// Not available under the `no_object` feature.
 pub type Map = HashMap<String, Dynamic>;
 
-pub type FnCallArgs<'a> = [&'a mut Variant];
+pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 #[cfg(feature = "sync")]
 pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltResult> + Send + Sync;
@@ -98,20 +97,20 @@ impl IndexValue {
 #[derive(Debug)]
 enum Target<'a> {
     Scope(ScopeSource<'a>),
-    Value(&'a mut Variant),
+    Value(&'a mut Dynamic),
 }
 
 impl<'a> Target<'a> {
-    fn from(value: &'a mut Variant) -> Self {
+    fn from(value: &'a mut Dynamic) -> Self {
         Self::Value(value)
     }
     fn from_src(src: ScopeSource<'a>) -> Self {
         Self::Scope(src)
     }
-    fn get_mut(self, scope: &'a mut Scope) -> &'a mut Variant {
+    fn get_mut(self, scope: &'a mut Scope) -> &'a mut Dynamic {
         match self {
             Self::Value(t) => t,
-            Self::Scope(src) => scope.get_mut(src).as_mut(),
+            Self::Scope(src) => scope.get_mut(src),
         }
     }
 }
@@ -300,7 +299,6 @@ impl Default for Engine<'_> {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
         };
 
-        engine.fill_type_names();
         engine.register_core_lib();
 
         #[cfg(not(feature = "no_stdlib"))]
@@ -353,25 +351,6 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
 }
 
 impl Engine<'_> {
-    fn fill_type_names(&mut self) {
-        // User-friendly names for built-in types
-        self.type_names = Some(
-            [
-                #[cfg(not(feature = "no_index"))]
-                (type_name::<Array>(), "array"),
-                #[cfg(not(feature = "no_object"))]
-                (type_name::<Map>(), "map"),
-                (type_name::<String>(), "string"),
-                (type_name::<Instant>(), "timestamp"),
-                (type_name::<Dynamic>(), "dynamic"),
-                (type_name::<Variant>(), "variant"),
-            ]
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect(),
-        );
-    }
-
     /// Create a new `Engine`
     pub fn new() -> Self {
         Default::default()
@@ -400,7 +379,6 @@ impl Engine<'_> {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
         };
 
-        engine.fill_type_names();
         engine.register_core_lib();
 
         engine
@@ -452,7 +430,7 @@ impl Engine<'_> {
                         fn_def
                             .params
                             .iter()
-                            .zip(args.into_iter().map(|x| (*x).into_dynamic()))
+                            .zip(args.into_iter().map(|v| v.clone()))
                             .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
                     );
 
@@ -478,7 +456,7 @@ impl Engine<'_> {
                         fn_def
                             .params
                             .iter()
-                            .zip(args.into_iter().map(|x| (*x).into_dynamic()))
+                            .zip(args.into_iter().map(|v| v.clone()))
                             .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
                     );
 
@@ -496,14 +474,13 @@ impl Engine<'_> {
 
         let spec = FnSpec {
             name: fn_name.into(),
-            args: args.iter().map(|a| Any::type_id(*a)).collect(),
+            args: args.iter().map(|a| a.type_id()).collect(),
         };
 
         // Argument must be a string
-        fn cast_to_string(r: &Variant, pos: Position) -> Result<&str, EvalAltResult> {
-            r.downcast_ref::<String>()
-                .map(String::as_str)
-                .ok_or_else(|| EvalAltResult::ErrorMismatchOutputType(r.type_name().into(), pos))
+        fn cast_to_string(r: &Dynamic, pos: Position) -> Result<&str, EvalAltResult> {
+            r.as_str()
+                .map_err(|type_name| EvalAltResult::ErrorMismatchOutputType(type_name.into(), pos))
         }
 
         // Search built-in's and external functions
@@ -513,23 +490,26 @@ impl Engine<'_> {
 
             // See if the function match print/debug (which requires special processing)
             return match fn_name {
-                KEYWORD_PRINT if self.on_print.is_some() => Ok(self.on_print.as_ref().unwrap()(
-                    cast_to_string(result.as_ref(), pos)?,
-                )
-                .into_dynamic()),
-                KEYWORD_DEBUG if self.on_debug.is_some() => Ok(self.on_debug.as_ref().unwrap()(
-                    cast_to_string(result.as_ref(), pos)?,
-                )
-                .into_dynamic()),
-                KEYWORD_PRINT | KEYWORD_DEBUG => Ok(().into_dynamic()),
+                KEYWORD_PRINT if self.on_print.is_some() => {
+                    self.on_print.as_ref().unwrap()(cast_to_string(&result, pos)?);
+                    Ok(Dynamic::from_unit())
+                }
+                KEYWORD_DEBUG if self.on_debug.is_some() => {
+                    self.on_debug.as_ref().unwrap()(cast_to_string(&result, pos)?);
+                    Ok(Dynamic::from_unit())
+                }
+                KEYWORD_PRINT | KEYWORD_DEBUG => Ok(Dynamic::from_unit()),
                 _ => Ok(result),
             };
         }
 
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             // Map property access
-            if let Some(map) = args[0].downcast_ref::<Map>() {
-                return Ok(map.get(prop).cloned().unwrap_or_else(|| ().into_dynamic()));
+            if let Ok(map) = args[0].as_map() {
+                return Ok(map
+                    .get(prop)
+                    .cloned()
+                    .unwrap_or_else(|| Dynamic::from_unit()));
             }
 
             // Getter function not found
@@ -540,12 +520,12 @@ impl Engine<'_> {
         }
 
         if let Some(prop) = extract_prop_from_setter(fn_name) {
-            let value = args[1].into_dynamic();
+            let value = args[1].clone();
 
             // Map property update
-            if let Some(map) = args[0].downcast_mut::<Map>() {
+            if let Dynamic(Union::Map(map)) = args[0] {
                 map.insert(prop.to_string(), value);
-                return Ok(().into_dynamic());
+                return Ok(Dynamic::from_unit());
             }
 
             // Setter function not found
@@ -592,9 +572,7 @@ impl Engine<'_> {
 
                 let this_ptr = target.get_mut(scope);
 
-                let mut args: Vec<_> = once(this_ptr)
-                    .chain(values.iter_mut().map(Dynamic::as_mut))
-                    .collect();
+                let mut args: Vec<_> = once(this_ptr).chain(values.iter_mut()).collect();
 
                 let def_val = def_val.as_ref();
 
@@ -639,7 +617,7 @@ impl Engine<'_> {
                     let mut args = [target.get_mut(scope)];
                     self.call_fn_raw(None, fn_lib, &make_getter(id), &mut args, None, *pos, 0)
                         .and_then(|mut val| {
-                            let target = Target::from(val.as_mut());
+                            let target = Target::from(&mut val);
                             self.get_dot_val_helper(scope, fn_lib, target, rhs, level)
                         })
                 }
@@ -667,7 +645,7 @@ impl Engine<'_> {
 
                     self.get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)
                         .and_then(|(mut val, _, _)| {
-                            let target = Target::from(val.as_mut());
+                            let target = Target::from(&mut val);
                             self.get_dot_val_helper(scope, fn_lib, target, rhs, level)
                         })
                 }
@@ -712,7 +690,7 @@ impl Engine<'_> {
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
                 let (idx_src_type, src, index, mut val) =
                     self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
-                let target = Target::from(val.as_mut());
+                let target = Target::from(&mut val);
                 let value = self.get_dot_val_helper(scope, fn_lib, target, dot_rhs, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
@@ -743,7 +721,7 @@ impl Engine<'_> {
             // {expr}.???
             expr => {
                 let mut val = self.eval_expr(scope, fn_lib, expr, level)?;
-                self.get_dot_val_helper(scope, fn_lib, Target::from(val.as_mut()), dot_rhs, level)
+                self.get_dot_val_helper(scope, fn_lib, Target::from(&mut val), dot_rhs, level)
             }
         }
     }
@@ -772,16 +750,21 @@ impl Engine<'_> {
         let idx_pos = idx_expr.position();
 
         // val_array[idx]
-        if let Some(arr) = val.downcast_ref::<Array>() {
+        if let Ok(arr) = val.as_array() {
             let index = self
                 .eval_expr(scope, fn_lib, idx_expr, level)?
-                .try_cast::<INT>()
+                .as_int()
                 .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
             return if index >= 0 {
                 arr.get(index as usize)
-                    .cloned()
-                    .map(|v| (v, IndexSourceType::Array, IndexValue::from_num(index)))
+                    .map(|v| {
+                        (
+                            v.clone(),
+                            IndexSourceType::Array,
+                            IndexValue::from_num(index),
+                        )
+                    })
                     .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
             } else {
                 Err(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
@@ -789,26 +772,26 @@ impl Engine<'_> {
         }
 
         // val_map[idx]
-        if let Some(map) = val.downcast_ref::<Map>() {
+        if let Ok(map) = val.as_map() {
             let index = self
                 .eval_expr(scope, fn_lib, idx_expr, level)?
-                .try_cast::<String>()
+                .take_string()
                 .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_expr.position()))?;
 
             return Ok((
                 map.get(&index)
                     .cloned()
-                    .unwrap_or_else(|| ().into_dynamic()),
+                    .unwrap_or_else(|| Dynamic::from_unit()),
                 IndexSourceType::Map,
                 IndexValue::from_str(index),
             ));
         }
 
         // val_string[idx]
-        if let Some(s) = val.downcast_ref::<String>() {
+        if let Ok(s) = val.as_str() {
             let index = self
                 .eval_expr(scope, fn_lib, idx_expr, level)?
-                .try_cast::<INT>()
+                .as_int()
                 .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
             return if index >= 0 {
@@ -816,7 +799,7 @@ impl Engine<'_> {
                     .nth(index as usize)
                     .map(|ch| {
                         (
-                            ch.into_dynamic(),
+                            Dynamic::from_char(ch),
                             IndexSourceType::String,
                             IndexValue::from_num(index),
                         )
@@ -921,14 +904,14 @@ impl Engine<'_> {
             IndexSourceType::Array => {
                 let arr = scope.get_mut_by_type::<Array>(src);
                 arr[idx.as_num()] = new_val.0;
-                Ok(().into_dynamic())
+                Ok(Dynamic::from_unit())
             }
 
             // map_id[idx] = val
             IndexSourceType::Map => {
                 let arr = scope.get_mut_by_type::<Map>(src);
                 arr.insert(idx.as_str(), new_val.0);
-                Ok(().into_dynamic())
+                Ok(Dynamic::from_unit())
             }
 
             // string_id[idx] = val
@@ -938,10 +921,10 @@ impl Engine<'_> {
                 // Value must be a character
                 let ch = new_val
                     .0
-                    .try_cast::<char>()
+                    .as_char()
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
                 Self::str_replace_char(s, idx.as_num(), ch);
-                Ok(().into_dynamic())
+                Ok(Dynamic::from_unit())
             }
 
             IndexSourceType::Expression => panic!("expression cannot be indexed for update"),
@@ -955,27 +938,26 @@ impl Engine<'_> {
         new_val: Dynamic,
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
-        if let Some(arr) = target.downcast_mut::<Array>() {
-            arr[idx.as_num()] = new_val;
-            return Ok(target);
+        match target {
+            Dynamic(Union::Array(ref mut arr)) => {
+                arr[idx.as_num()] = new_val;
+            }
+            Dynamic(Union::Map(ref mut map)) => {
+                map.insert(idx.as_str(), new_val);
+            }
+            Dynamic(Union::Str(ref mut s)) => {
+                // Value must be a character
+                let ch = new_val
+                    .as_char()
+                    .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
+
+                Self::str_replace_char(s, idx.as_num(), ch);
+            }
+            // All other variable types should be an error
+            _ => panic!("array, map or string source type expected for indexing"),
         }
 
-        if let Some(map) = target.downcast_mut::<Map>() {
-            map.insert(idx.as_str(), new_val);
-            return Ok(target);
-        }
-
-        if let Some(s) = target.downcast_mut::<String>() {
-            // Value must be a character
-            let ch = new_val
-                .try_cast::<char>()
-                .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
-            Self::str_replace_char(s, idx.as_num(), ch);
-            return Ok(target);
-        }
-
-        // All other variable types should be an error
-        panic!("array, map or string source type expected for indexing")
+        Ok(target)
     }
 
     /// Chain-evaluate a dot setter
@@ -983,7 +965,7 @@ impl Engine<'_> {
         &self,
         scope: &mut Scope,
         fn_lib: Option<&FunctionsLib>,
-        this_ptr: &mut Variant,
+        this_ptr: &mut Dynamic,
         dot_rhs: &Expr,
         new_val: (&mut Dynamic, Position),
         level: usize,
@@ -991,7 +973,7 @@ impl Engine<'_> {
         match dot_rhs {
             // xxx.id
             Expr::Property(id, pos) => {
-                let mut args = [this_ptr, new_val.0.as_mut()];
+                let mut args = [this_ptr, new_val.0];
                 self.call_fn_raw(None, fn_lib, &make_setter(id), &mut args, None, *pos, 0)
             }
 
@@ -1010,7 +992,7 @@ impl Engine<'_> {
                         })
                         .and_then(|mut val| {
                             let fn_name = make_setter(id);
-                            let mut args = [this_ptr, val.as_mut()];
+                            let mut args = [this_ptr, &mut val];
                             self.call_fn_raw(None, fn_lib, &fn_name, &mut args, None, *pos, 0)
                         })
                 }
@@ -1029,13 +1011,12 @@ impl Engine<'_> {
                     let fn_name = make_getter(id);
                     self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|mut val| {
-                            let value = val.as_mut();
-                            self.set_dot_val_helper(scope, fn_lib, value, rhs, new_val, level)
+                            self.set_dot_val_helper(scope, fn_lib, &mut val, rhs, new_val, level)
                                 .map(|_| val) // Discard Ok return value
                         })
                         .and_then(|mut val| {
                             let fn_name = make_setter(id);
-                            let mut args = [this_ptr, val.as_mut()];
+                            let mut args = [this_ptr, &mut val];
                             self.call_fn_raw(None, fn_lib, &fn_name, &mut args, None, *pos, 0)
                         })
                 }
@@ -1053,7 +1034,7 @@ impl Engine<'_> {
                                 )?;
 
                                 let val_pos = new_val.1;
-                                let this_ptr = value.as_mut();
+                                let this_ptr = &mut value;
                                 self.set_dot_val_helper(
                                     scope, fn_lib, this_ptr, rhs, new_val, level,
                                 )?;
@@ -1063,7 +1044,7 @@ impl Engine<'_> {
                             })
                             .and_then(|mut v| {
                                 let fn_name = make_setter(id);
-                                let mut args = [this_ptr, v.as_mut()];
+                                let mut args = [this_ptr, &mut v];
                                 self.call_fn_raw(None, fn_lib, &fn_name, &mut args, None, *pos, 0)
                             })
                     }
@@ -1114,7 +1095,7 @@ impl Engine<'_> {
                     _ => {
                         // Avoid referencing scope which is used below as mut
                         let entry = ScopeSource { name: id, ..src };
-                        let this_ptr = target.as_mut();
+                        let this_ptr = &mut target;
                         let value = self
                             .set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
 
@@ -1132,7 +1113,7 @@ impl Engine<'_> {
                 let (idx_src_type, src, index, mut target) =
                     self.eval_index_expr(scope, fn_lib, lhs, idx_expr, *op_pos, level)?;
                 let val_pos = new_val.1;
-                let this_ptr = target.as_mut();
+                let this_ptr = &mut target;
                 let value =
                     self.set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
 
@@ -1181,56 +1162,46 @@ impl Engine<'_> {
         let mut lhs_value = self.eval_expr(scope, fn_lib, lhs, level)?;
         let rhs_value = self.eval_expr(scope, fn_lib, rhs, level)?;
 
-        if rhs_value.is::<Array>() {
-            let mut rhs_value = rhs_value.cast::<Array>();
-            let def_value = false.into_dynamic();
-            let mut result = false;
+        match rhs_value {
+            Dynamic(Union::Array(mut rhs_value)) => {
+                let def_value = Dynamic::from_bool(false);
+                let mut result = false;
 
-            // Call the '==' operator to compare each value
-            for value in rhs_value.iter_mut() {
-                let args = &mut [lhs_value.as_mut(), value.as_mut()];
-                let def_value = Some(&def_value);
-                if self
-                    .call_fn_raw(None, fn_lib, "==", args, def_value, rhs.position(), level)?
-                    .try_cast::<bool>()
-                    .unwrap_or(false)
-                {
-                    result = true;
-                    break;
+                // Call the '==' operator to compare each value
+                for value in rhs_value.iter_mut() {
+                    let args = &mut [&mut lhs_value, value];
+                    let def_value = Some(&def_value);
+                    if self
+                        .call_fn_raw(None, fn_lib, "==", args, def_value, rhs.position(), level)?
+                        .as_bool()
+                        .unwrap_or(false)
+                    {
+                        result = true;
+                        break;
+                    }
+                }
+
+                Ok(Dynamic::from_bool(result))
+            }
+            Dynamic(Union::Map(rhs_value)) => {
+                // Only allows String or char
+                match lhs_value {
+                    Dynamic(Union::Str(s)) => Ok(Dynamic::from_bool(rhs_value.contains_key(&s))),
+                    Dynamic(Union::Char(c)) => {
+                        Ok(Dynamic::from_bool(rhs_value.contains_key(&c.to_string())))
+                    }
+                    _ => Err(EvalAltResult::ErrorInExpr(lhs.position())),
                 }
             }
-
-            Ok(result.into_dynamic())
-        } else if rhs_value.is::<Map>() {
-            let rhs_value = rhs_value.cast::<Map>();
-
-            // Only allows String or char
-            if lhs_value.is::<String>() {
-                Ok(rhs_value
-                    .contains_key(&lhs_value.cast::<String>())
-                    .into_dynamic())
-            } else if lhs_value.is::<char>() {
-                Ok(rhs_value
-                    .contains_key(&lhs_value.cast::<char>().to_string())
-                    .into_dynamic())
-            } else {
-                Err(EvalAltResult::ErrorInExpr(lhs.position()))
+            Dynamic(Union::Str(rhs_value)) => {
+                // Only allows String or char
+                match lhs_value {
+                    Dynamic(Union::Str(s)) => Ok(Dynamic::from_bool(rhs_value.contains(&s))),
+                    Dynamic(Union::Char(c)) => Ok(Dynamic::from_bool(rhs_value.contains(c))),
+                    _ => Err(EvalAltResult::ErrorInExpr(lhs.position())),
+                }
             }
-        } else if rhs_value.is::<String>() {
-            let rhs_value = rhs_value.cast::<String>();
-
-            // Only allows String or char
-            if lhs_value.is::<String>() {
-                Ok(rhs_value
-                    .contains(&lhs_value.cast::<String>())
-                    .into_dynamic())
-            } else if lhs_value.is::<char>() {
-                Ok(rhs_value.contains(lhs_value.cast::<char>()).into_dynamic())
-            } else {
-                Err(EvalAltResult::ErrorInExpr(lhs.position()))
-            }
-        } else {
-            Err(EvalAltResult::ErrorInExpr(rhs.position()))
+            _ => Err(EvalAltResult::ErrorInExpr(rhs.position())),
         }
     }
 
@@ -1243,10 +1214,11 @@ impl Engine<'_> {
         level: usize,
     ) -> Result<Dynamic, EvalAltResult> {
         match expr {
-            Expr::IntegerConstant(i, _) => Ok(i.into_dynamic()),
-            Expr::FloatConstant(f, _) => Ok(f.into_dynamic()),
-            Expr::StringConstant(s, _) => Ok(s.clone().into_owned().into_dynamic()),
-            Expr::CharConstant(c, _) => Ok(c.into_dynamic()),
+            Expr::IntegerConstant(i, _) => Ok(Dynamic::from_int(*i)),
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(f, _) => Ok(Dynamic::from_float(*f)),
+            Expr::StringConstant(s, _) => Ok(Dynamic::from_string(s.to_string())),
+            Expr::CharConstant(c, _) => Ok(Dynamic::from_char(*c)),
             Expr::Variable(id, pos) => Self::search_scope(scope, id, *pos).map(|(_, val)| val),
             Expr::Property(_, _) => panic!("unexpected property."),
 
@@ -1262,7 +1234,7 @@ impl Engine<'_> {
                     Expr::Variable(name, pos) => match scope.get(name) {
                         None => {
                             return Err(EvalAltResult::ErrorVariableNotFound(
-                                name.clone().into_owned(),
+                                name.to_string(),
                                 *pos,
                             ))
                         }
@@ -1358,7 +1330,7 @@ impl Engine<'_> {
                         .map(|val| arr.push(val))
                 })?;
 
-                Ok((arr).into_dynamic())
+                Ok(Dynamic(Union::Array(arr)))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1371,7 +1343,7 @@ impl Engine<'_> {
                     })
                 })?;
 
-                Ok((map).into_dynamic())
+                Ok(Dynamic(Union::Map(Box::new(map))))
             }
 
             Expr::FunctionCall(fn_name, args_expr_list, def_val, pos) => {
@@ -1396,10 +1368,9 @@ impl Engine<'_> {
                             && !has_override(self, fn_lib, KEYWORD_TYPE_OF) =>
                     {
                         let result = self.eval_expr(scope, fn_lib, &args_expr_list[0], level)?;
-                        Ok(self
-                            .map_type_name((*result).type_name())
-                            .to_string()
-                            .into_dynamic())
+                        Ok(Dynamic::from_string(
+                            self.map_type_name(result.type_name()).to_string(),
+                        ))
                     }
 
                     // eval
@@ -1411,15 +1382,9 @@ impl Engine<'_> {
                         let result = self.eval_expr(scope, fn_lib, &args_expr_list[0], level)?;
 
                         // Get the script text by evaluating the expression
-                        let script = result
-                            .downcast_ref::<String>()
-                            .map(String::as_str)
-                            .ok_or_else(|| {
-                                EvalAltResult::ErrorMismatchOutputType(
-                                    result.type_name().into(),
-                                    pos,
-                                )
-                            })?;
+                        let script = result.as_str().map_err(|type_name| {
+                            EvalAltResult::ErrorMismatchOutputType(type_name.into(), pos)
+                        })?;
 
                         // Compile the script text
                         // No optimizations because we only run it once
@@ -1461,7 +1426,7 @@ impl Engine<'_> {
                             .map(|expr| self.eval_expr(scope, fn_lib, expr, level))
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        let mut args: Vec<_> = arg_values.iter_mut().map(Dynamic::as_mut).collect();
+                        let mut args: Vec<_> = arg_values.iter_mut().collect();
                         let def_val = def_val.as_ref();
                         self.call_fn_raw(None, fn_lib, fn_name, &mut args, def_val, *pos, level)
                     }
@@ -1472,41 +1437,41 @@ impl Engine<'_> {
                 self.eval_in_expr(scope, fn_lib, lhs.as_ref(), rhs.as_ref(), level)
             }
 
-            Expr::And(lhs, rhs, _) => Ok(Box::new(
+            Expr::And(lhs, rhs, _) => Ok(Dynamic::from_bool(
                 self
                     .eval_expr(scope, fn_lib,lhs.as_ref(), level)?
-                    .try_cast::<bool>()
+                    .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
                     })?
                     && // Short-circuit using &&
                 self
                     .eval_expr(scope, fn_lib,rhs.as_ref(), level)?
-                    .try_cast::<bool>()
+                    .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
                     })?,
             )),
 
-            Expr::Or(lhs, rhs, _) => Ok(Box::new(
+            Expr::Or(lhs, rhs, _) => Ok(Dynamic::from_bool(
                 self
                     .eval_expr(scope,fn_lib, lhs.as_ref(), level)?
-                    .try_cast::<bool>()
+                    .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
                     })?
                     || // Short-circuit using ||
                 self
                     .eval_expr(scope,fn_lib, rhs.as_ref(), level)?
-                    .try_cast::<bool>()
+                    .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
                     })?,
             )),
 
-            Expr::True(_) => Ok(true.into_dynamic()),
-            Expr::False(_) => Ok(false.into_dynamic()),
-            Expr::Unit(_) => Ok(().into_dynamic()),
+            Expr::True(_) => Ok(Dynamic::from_bool(true)),
+            Expr::False(_) => Ok(Dynamic::from_bool(false)),
+            Expr::Unit(_) => Ok(Dynamic::from_unit()),
 
             _ => panic!("should not appear: {:?}", expr),
         }
@@ -1522,7 +1487,7 @@ impl Engine<'_> {
     ) -> Result<Dynamic, EvalAltResult> {
         match stmt {
             // No-op
-            Stmt::Noop(_) => Ok(().into_dynamic()),
+            Stmt::Noop(_) => Ok(Dynamic::from_unit()),
 
             // Expression as statement
             Stmt::Expr(expr) => {
@@ -1532,7 +1497,7 @@ impl Engine<'_> {
                     result
                 } else {
                     // If it is an assignment, erase the result at the root
-                    ().into_dynamic()
+                    Dynamic::from_unit()
                 })
             }
 
@@ -1540,7 +1505,7 @@ impl Engine<'_> {
             Stmt::Block(block, _) => {
                 let prev_len = scope.len();
 
-                let result = block.iter().try_fold(().into_dynamic(), |_, stmt| {
+                let result = block.iter().try_fold(Dynamic::from_unit(), |_, stmt| {
                     self.eval_stmt(scope, fn_lib, stmt, level)
                 });
 
@@ -1552,7 +1517,7 @@ impl Engine<'_> {
             // If-else statement
             Stmt::IfThenElse(guard, if_body, else_body) => self
                 .eval_expr(scope, fn_lib, guard, level)?
-                .try_cast::<bool>()
+                .as_bool()
                 .map_err(|_| EvalAltResult::ErrorLogicGuard(guard.position()))
                 .and_then(|guard_val| {
                     if guard_val {
@@ -1560,26 +1525,23 @@ impl Engine<'_> {
                     } else if let Some(stmt) = else_body {
                         self.eval_stmt(scope, fn_lib, stmt.as_ref(), level)
                     } else {
-                        Ok(().into_dynamic())
+                        Ok(Dynamic::from_unit())
                     }
                 }),
 
             // While loop
             Stmt::While(guard, body) => loop {
-                match self
-                    .eval_expr(scope, fn_lib, guard, level)?
-                    .try_cast::<bool>()
-                {
+                match self.eval_expr(scope, fn_lib, guard, level)?.as_bool() {
                     Ok(guard_val) if guard_val => {
                         match self.eval_stmt(scope, fn_lib, body, level) {
                             Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
                             Err(EvalAltResult::ErrorLoopBreak(true, _)) => {
-                                return Ok(().into_dynamic())
+                                return Ok(Dynamic::from_unit())
                             }
                             Err(x) => return Err(x),
                         }
                     }
-                    Ok(_) => return Ok(().into_dynamic()),
+                    Ok(_) => return Ok(Dynamic::from_unit()),
                     Err(_) => return Err(EvalAltResult::ErrorLogicGuard(guard.position())),
                 }
             },
@@ -1588,7 +1550,7 @@ impl Engine<'_> {
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, fn_lib, body, level) {
                     Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
-                    Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(().into_dynamic()),
+                    Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(Dynamic::from_unit()),
                     Err(x) => return Err(x),
                 }
             },
@@ -1596,7 +1558,7 @@ impl Engine<'_> {
             // For loop
             Stmt::For(name, expr, body) => {
                 let arr = self.eval_expr(scope, fn_lib, expr, level)?;
-                let tid = Any::type_id(arr.as_ref());
+                let tid = arr.type_id();
 
                 if let Some(iter_fn) = self.type_iterators.as_ref().and_then(|t| t.get(&tid)) {
                     // Add the loop variable - variable name is copied
@@ -1620,7 +1582,7 @@ impl Engine<'_> {
                     }
 
                     scope.rewind(scope.len() - 1);
-                    Ok(().into_dynamic())
+                    Ok(Dynamic::from_unit())
                 } else {
                     Err(EvalAltResult::ErrorFor(expr.position()))
                 }
@@ -1634,7 +1596,7 @@ impl Engine<'_> {
 
             // Empty return
             Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
-                Err(EvalAltResult::Return(().into_dynamic(), *pos))
+                Err(EvalAltResult::Return(Dynamic::from_unit(), *pos))
             }
 
             // Return value
@@ -1652,7 +1614,7 @@ impl Engine<'_> {
             Stmt::ReturnWithVal(Some(a), ReturnType::Exception, pos) => {
                 let val = self.eval_expr(scope, fn_lib, a, level)?;
                 Err(EvalAltResult::ErrorRuntime(
-                    val.try_cast::<String>().unwrap_or_else(|_| "".to_string()),
+                    val.take_string().unwrap_or_else(|_| "".to_string()),
                     *pos,
                 ))
             }
@@ -1662,13 +1624,13 @@ impl Engine<'_> {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Normal, val, false);
-                Ok(().into_dynamic())
+                Ok(Dynamic::from_unit())
             }
 
             Stmt::Let(name, None, _) => {
                 // TODO - avoid copying variable name in inner block?
                 scope.push(name.clone(), ());
-                Ok(().into_dynamic())
+                Ok(Dynamic::from_unit())
             }
 
             // Const statement
@@ -1676,7 +1638,7 @@ impl Engine<'_> {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Constant, val, true);
-                Ok(().into_dynamic())
+                Ok(Dynamic::from_unit())
             }
 
             Stmt::Const(_, _, _) => panic!("constant expression not constant!"),

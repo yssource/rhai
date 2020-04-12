@@ -2,7 +2,7 @@
 #![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 
-use crate::any::Any;
+use crate::any::Variant;
 use crate::engine::Engine;
 use crate::error::ParseError;
 use crate::parser::AST;
@@ -88,7 +88,7 @@ macro_rules! def_anonymous_fn {
         def_anonymous_fn!(imp);
     };
     (imp $($par:ident),*) => {
-        impl<'e, $($par: Any + Clone,)* RET: Any + Clone> Func<($($par,)*), RET> for Engine<'e>
+        impl<'e, $($par: Variant + Clone,)* RET: Variant + Clone> Func<($($par,)*), RET> for Engine<'e>
         {
             #[cfg(feature = "sync")]
             type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult> + Send + Sync + 'e>;
