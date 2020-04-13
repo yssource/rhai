@@ -32,6 +32,11 @@ use crate::stdlib::{
     {i32, i64, u32},
 };
 
+#[cfg(feature = "only_i32")]
+const MAX_INT: INT = i32::MAX;
+#[cfg(not(feature = "only_i32"))]
+const MAX_INT: INT = i64::MAX;
+
 macro_rules! reg_op {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
         $(
@@ -371,10 +376,10 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op_result!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op_result!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op_result!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op_result!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op_result!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -388,10 +393,10 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op!(self, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op!(self, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -414,12 +419,12 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -448,9 +453,9 @@ impl Engine<'_> {
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_op!(self, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_op!(self, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_op!(self, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op!(self, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(self, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(self, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
         }
 
         #[cfg(not(feature = "unchecked"))]
@@ -462,9 +467,13 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op_result1!(self, "<<", shl, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result1!(self, ">>", shr, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op_result1!(
+                    self, "<<", shl, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128
+                );
+                reg_op_result1!(
+                    self, ">>", shr, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128
+                );
+                reg_op_result!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -477,9 +486,9 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op!(self, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, ">>", shr_u, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op!(self, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, ">>", shr_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -595,8 +604,11 @@ impl Engine<'_> {
                 reg_fn1!(self, FUNC_TO_STRING, to_string, String, i8, u8, i16, u16);
                 reg_fn1!(self, KEYWORD_PRINT, to_string, String, i32, i64, u32, u64);
                 reg_fn1!(self, FUNC_TO_STRING, to_string, String, i32, i64, u32, u64);
+                reg_fn1!(self, KEYWORD_PRINT, to_string, String, i128, u128);
+                reg_fn1!(self, FUNC_TO_STRING, to_string, String, i128, u128);
                 reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i8, u8, i16, u16);
                 reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i32, i64, u32, u64);
+                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i128, u128);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -671,7 +683,7 @@ impl Engine<'_> {
                 )
             }
 
-            reg_range!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_range!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
         }
 
         // Register range function with step
@@ -733,7 +745,7 @@ impl Engine<'_> {
                 )
             }
 
-            reg_step!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_step!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
         }
     }
 }
@@ -801,6 +813,8 @@ impl Engine<'_> {
                 self.register_fn("to_float", |x: u32| x as FLOAT);
                 self.register_fn("to_float", |x: i64| x as FLOAT);
                 self.register_fn("to_float", |x: u64| x as FLOAT);
+                self.register_fn("to_float", |x: i128| x as FLOAT);
+                self.register_fn("to_float", |x: u128| x as FLOAT);
             }
         }
 
@@ -829,7 +843,7 @@ impl Engine<'_> {
             #[cfg(not(feature = "unchecked"))]
             {
                 self.register_result_fn("to_int", |x: f32| {
-                    if x > (i64::MAX as f32) {
+                    if x > (MAX_INT as f32) {
                         return Err(EvalAltResult::ErrorArithmetic(
                             format!("Integer overflow: to_int({})", x),
                             Position::none(),
@@ -839,7 +853,7 @@ impl Engine<'_> {
                     Ok(x.trunc() as INT)
                 });
                 self.register_result_fn("to_int", |x: FLOAT| {
-                    if x > (i64::MAX as FLOAT) {
+                    if x > (MAX_INT as FLOAT) {
                         return Err(EvalAltResult::ErrorArithmetic(
                             format!("Integer overflow: to_int({})", x),
                             Position::none(),
@@ -907,10 +921,13 @@ impl Engine<'_> {
             {
                 reg_fn2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
                 reg_fn2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
+                reg_fn2x!(self, "push", push, &mut Array, (), i128, u128);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i8, u8, i16, u16);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i32, u32, i64, u64);
+                reg_fn3!(self, "pad", pad, &mut Array, INT, (), i128, u128);
                 reg_fn3!(self, "insert", ins, &mut Array, INT, (), i8, u8, i16, u16);
                 reg_fn3!(self, "insert", ins, &mut Array, INT, (), i32, i64, u32, u64);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), i128, u128);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -985,8 +1002,13 @@ impl Engine<'_> {
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_fn2x!(self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_fn2y!(self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_fn2x!(
+                self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128
+            );
+            reg_fn2y!(
+                self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64, i128,
+                u128
+            );
         }
 
         #[cfg(not(feature = "no_float"))]
@@ -1038,19 +1060,48 @@ impl Engine<'_> {
         // Register date/time functions
         self.register_fn("timestamp", || Instant::now());
 
-        self.register_fn("-", |ts1: Instant, ts2: Instant| {
+        self.register_result_fn("-", |ts1: Instant, ts2: Instant| {
             if ts2 > ts1 {
                 #[cfg(not(feature = "no_float"))]
-                return -(ts2 - ts1).as_secs_f64();
+                return Ok(-(ts2 - ts1).as_secs_f64());
 
                 #[cfg(feature = "no_float")]
-                return -((ts2 - ts1).as_secs() as INT);
+                {
+                    let seconds = (ts2 - ts1).as_secs();
+
+                    #[cfg(not(feature = "unchecked"))]
+                    {
+                        if seconds > (MAX_INT as u64) {
+                            return Err(EvalAltResult::ErrorArithmetic(
+                                format!(
+                                    "Integer overflow for timestamp duration: {}",
+                                    -(seconds as i64)
+                                ),
+                                Position::none(),
+                            ));
+                        }
+                    }
+                    return Ok(-(seconds as INT));
+                }
             } else {
                 #[cfg(not(feature = "no_float"))]
-                return (ts1 - ts2).as_secs_f64();
+                return Ok((ts1 - ts2).as_secs_f64());
 
                 #[cfg(feature = "no_float")]
-                return (ts1 - ts2).as_secs() as INT;
+                {
+                    let seconds = (ts1 - ts2).as_secs();
+
+                    #[cfg(not(feature = "unchecked"))]
+                    {
+                        if seconds > (MAX_INT as u64) {
+                            return Err(EvalAltResult::ErrorArithmetic(
+                                format!("Integer overflow for timestamp duration: {}", seconds),
+                                Position::none(),
+                            ));
+                        }
+                    }
+                    return Ok(seconds as INT);
+                }
             }
         });
 
@@ -1061,12 +1112,25 @@ impl Engine<'_> {
         reg_cmp!(self, "==", eq, Instant);
         reg_cmp!(self, "!=", ne, Instant);
 
-        self.register_fn("elapsed", |timestamp: Instant| {
+        self.register_result_fn("elapsed", |timestamp: Instant| {
             #[cfg(not(feature = "no_float"))]
-            return timestamp.elapsed().as_secs_f64();
+            return Ok(timestamp.elapsed().as_secs_f64());
 
             #[cfg(feature = "no_float")]
-            return timestamp.elapsed().as_secs() as INT;
+            {
+                let seconds = timestamp.elapsed().as_secs();
+
+                #[cfg(not(feature = "unchecked"))]
+                {
+                    if seconds > (MAX_INT as u64) {
+                        return Err(EvalAltResult::ErrorArithmetic(
+                            format!("Integer overflow for timestamp.elapsed(): {}", seconds),
+                            Position::none(),
+                        ));
+                    }
+                }
+                return Ok(seconds as INT);
+            }
         });
     }
 }
