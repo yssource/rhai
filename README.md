@@ -146,6 +146,8 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 | -------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [`speed_test.rhai`](scripts/speed_test.rhai) | a simple program to measure the speed of Rhai's interpreter (1 million iterations) |
 | [`primes.rhai`](scripts/primes.rhai)         | use Sieve of Eratosthenes to find all primes smaller than a limit                  |
+| [`fibonacci.rhai`](scripts/fibonacci.rhai)   | calculate the n-th Fibonacci number using a really dumb algorithm                  |
+| [`mat_mul.rhai`](scripts/mat_mul.rhai)       | matrix multiplication test to measure the speed of Rhai's interpreter              |
 
 To run the scripts, either make a tiny program or use of the `rhai_runner` example:
 
