@@ -1,0 +1,25 @@
+#![feature(test)]
+
+///! Test 1,000 iterations
+extern crate test;
+
+use rhai::{Engine, OptimizationLevel};
+use test::Bencher;
+
+#[bench]
+fn bench_iterations_1000(bench: &mut Bencher) {
+    let script = r#"
+            let x = 1_000;
+            
+            while x > 0 {
+                x = x - 1;
+            }
+        "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.consume_ast(&ast).unwrap());
+}
