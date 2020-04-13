@@ -27,7 +27,7 @@ Rhai's current features set:
   to do checked arithmetic operations); for [`no_std`] builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.11.0, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.12.0, so the language and API's may change before they stabilize.
 
 Installation
 ------------
@@ -36,7 +36,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.11.0"
+rhai = "0.12.0"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -59,26 +59,24 @@ Beware that in order to use pre-releases (e.g. alpha and beta), the exact versio
 Optional features
 -----------------
 
-| Feature       | Description                                                                                                                                              |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `no_stdlib`   | Exclude the standard library of utility functions in the build, and only include the minimum necessary functionalities. Standard types are not affected. |
-| `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!                              |
-| `no_function` | Disable script-defined functions if not needed.                                                                                                          |
-| `no_index`    | Disable arrays and indexing features if not needed.                                                                                                      |
-| `no_object`   | Disable support for custom types and objects.                                                                                                            |
-| `no_float`    | Disable floating-point numbers and math if not needed.                                                                                                   |
-| `no_optimize` | Disable the script optimizer.                                                                                                                            |
-| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                         |
-| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                         |
-| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                     |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`.                    |
+| Feature       | Description                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!           |
+| `no_function` | Disable script-defined functions if not needed.                                                                                       |
+| `no_index`    | Disable [arrays] and indexing features if not needed.                                                                                 |
+| `no_object`   | Disable support for custom types and objects.                                                                                         |
+| `no_float`    | Disable floating-point numbers and math if not needed.                                                                                |
+| `no_optimize` | Disable the script optimizer.                                                                                                         |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                      |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                      |
+| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                  |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`. |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
 Most features are here to opt-**out** of certain functionalities that are not needed.
 Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
 
 [`unchecked`]: #optional-features
-[`no_stdlib`]: #optional-features
 [`no_index`]: #optional-features
 [`no_float`]: #optional-features
 [`no_function`]: #optional-features
@@ -104,7 +102,7 @@ A number of examples can be found in the `examples` folder:
 
 | Example                                                            | Description                                                                 |
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| [`arrays_and_structs`](examples/arrays_and_structs.rs)             | demonstrates registering a new type to Rhai and the usage of arrays on it   |
+| [`arrays_and_structs`](examples/arrays_and_structs.rs)             | demonstrates registering a new type to Rhai and the usage of [arrays] on it |
 | [`custom_types_and_methods`](examples/custom_types_and_methods.rs) | shows how to register a type and methods for it                             |
 | [`hello`](examples/hello.rs)                                       | simple example that evaluates an expression and prints the result           |
 | [`no_std`](examples/no_std.rs)                                     | example to test out `no-std` builds                                         |
@@ -129,7 +127,7 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 
 | Language feature scripts                             | Description                                                   |
 | ---------------------------------------------------- | ------------------------------------------------------------- |
-| [`array.rhai`](scripts/array.rhai)                   | arrays in Rhai                                                |
+| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                              |
 | [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                         |
 | [`comments.rhai`](scripts/comments.rhai)             | just comments                                                 |
 | [`for1.rhai`](scripts/for1.rhai)                     | for loops                                                     |
@@ -141,7 +139,7 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 | [`op1.rhai`](scripts/op1.rhai)                       | just a simple addition                                        |
 | [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                            |
 | [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                      |
-| [`string.rhai`](scripts/string.rhai)                 | string operations                                             |
+| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                           |
 | [`while.rhai`](scripts/while.rhai)                   | while loop                                                    |
 
 | Example scripts                              | Description                                                                        |
@@ -160,22 +158,26 @@ Hello world
 
 [`Engine`]: #hello-world
 
-To get going with Rhai, create an instance of the scripting engine and then call `eval`:
+To get going with Rhai, create an instance of the scripting engine via `Engine::new` and then call the `eval` method:
 
 ```rust
 use rhai::{Engine, EvalAltResult};
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let result = engine.eval::<i64>("40 + 2")?;
 
-    println!("Answer: {}", result);  // prints 42
+    println!("Answer: {}", result);             // prints 42
 
     Ok(())
 }
 ```
+
+`EvalAltResult` is a Rust `enum` containing all errors encountered during the parsing or evaluation process.
+
+### Script evaluation
 
 The type parameter is used to specify the type of the return value, which _must_ match the actual type or an error is returned.
 Rhai is very strict here. There are two ways to specify the return type - _turbofish_ notation, or type inference.
@@ -194,6 +196,8 @@ Evaluate a script file directly:
 let result = engine.eval_file::<i64>("hello_world.rhai".into())?;       // 'eval_file' takes a 'PathBuf'
 ```
 
+### Compiling scripts (to AST)
+
 To repeatedly evaluate a script, _compile_ it first into an AST (abstract syntax tree) form:
 
 ```rust
@@ -203,7 +207,7 @@ let ast = engine.compile("40 + 2")?;
 for _ in 0..42 {
     let result: i64 = engine.eval_ast(&ast)?;
 
-    println!("Answer #{}: {}", i, result);  // prints 42
+    println!("Answer #{}: {}", i, result);      // prints 42
 }
 ```
 
@@ -213,8 +217,9 @@ Compiling a script file is also supported:
 let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
 
-Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust -
-via `call_fn` or its cousins `call_fn1` (one argument) and `call_fn0` (no argument).
+### Calling Rhai functions from Rust
+
+Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `call_fn`.
 
 ```rust
 // Define functions in a script.
@@ -239,24 +244,88 @@ let ast = engine.compile(true,
 // A custom scope can also contain any variables/constants available to the functions
 let mut scope = Scope::new();
 
-// Evaluate a function defined in the script, passing arguments into the script as a tuple
-// if there are more than one. Beware, arguments must be of the correct types because
-// Rhai does not have built-in type conversions. If arguments of the wrong types are passed,
-// the Engine will not find the function.
+// Evaluate a function defined in the script, passing arguments into the script as a tuple.
+// Beware, arguments must be of the correct types because Rhai does not have built-in type conversions.
+// If arguments of the wrong types are passed, the Engine will not find the function.
 
 let result: i64 = engine.call_fn(&mut scope, &ast, "hello", ( String::from("abc"), 123_i64 ) )?;
 //                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //                                                          put arguments in a tuple
 
-let result: i64 = engine.call_fn1(&mut scope, &ast, "hello", 123_i64)?
-//                       ^^^^^^^^ use 'call_fn1' for one argument
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?
+//                                                          ^^^^^^^^^^ tuple of one
 
-let result: i64 = engine.call_fn0(&mut scope, &ast, "hello")?
-//                       ^^^^^^^^ use 'call_fn0' for no arguments
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
+//                                                          ^^ unit = tuple of zero
+```
+
+### Creating Rust anonymous functions from Rhai script
+
+[`Func`]: #creating-rust-anonymous-functions-from-rhai-script
+
+It is possible to further encapsulate a script in Rust such that it becomes a normal Rust function.
+Such an _anonymous function_ is basically a boxed closure, very useful as call-back functions.
+Creating them is accomplished via the `Func` trait which contains `create_from_script`
+(as well as its companion method `create_from_ast`):
+
+```rust
+use rhai::{Engine, Func};                       // use 'Func' for 'create_from_script'
+
+let engine = Engine::new();                     // create a new 'Engine' just for this
+
+let script = "fn calc(x, y) { x + y.len() < 42 }";
+
+// Func takes two type parameters:
+//   1) a tuple made up of the types of the script function's parameters
+//   2) the return type of the script function
+//
+// 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
+let func = Func::<(i64, String), bool>::create_from_script(
+//                ^^^^^^^^^^^^^ function parameter types in tuple
+
+                engine,                         // the 'Engine' is consumed into the closure
+                script,                         // the script, notice number of parameters must match
+                "calc"                          // the entry-point function name
+)?;
+
+func(123, "hello".to_string())? == false;       // call the anonymous function
+
+schedule_callback(func);                        // pass it as a callback to another function
+
+// Although there is nothing you can't do by manually writing out the closure yourself...
+let engine = Engine::new();
+let ast = engine.compile(script)?;
+schedule_callback(Box::new(move |x: i64, y: String| -> Result<bool, EvalAltResult> {
+    engine.call_fn(&mut Scope::new(), &ast, "calc", (x, y))
+}));
+```
+
+Raw `Engine`
+------------
+
+[raw `Engine`]: #raw-engine
+
+`Engine::new` creates a scripting [`Engine`] with common functionalities (e.g. printing to the console via `print`).
+In many controlled embedded environments, however, these are not needed.
+
+Use `Engine::new_raw` to create a _raw_ `Engine`, in which:
+
+* the `print` and `debug` statements do nothing instead of displaying to the console (see [`print` and `debug`](#print-and-debug) below)
+* the _standard library_ of utility functions is _not_ loaded by default (load it using the `register_stdlib` method).
+
+```rust
+let mut engine = Engine::new_raw();             // create a 'raw' Engine
+
+engine.register_stdlib();                       // register the standard library manually
+
+engine.
 ```
 
 Evaluate expressions only
 -------------------------
+
+[`eval_expression`]: #evaluate-expressions-only
+[`eval_expression_with_scope`]: #evaluate-expressions-only
 
 Sometimes a use case does not require a full-blown scripting _language_, but only needs to evaluate _expressions_.
 In these cases, use the `compile_expression` and `eval_expression` methods or their `_with_scope` variants.
@@ -265,8 +334,8 @@ In these cases, use the `compile_expression` and `eval_expression` methods or th
 let result = engine.eval_expression::<i64>("2 + (10 + 10) * 2")?;
 ```
 
-When evaluation _expressions_, no control-flow statement (e.g. `if`, `while`, `for`) is not supported and will be
-parse errors when encountered - not even variable assignments.
+When evaluation _expressions_, no full-blown statement (e.g. `if`, `while`, `for`) - not even variable assignments -
+is supported and will be considered parse errors when encountered.
 
 ```rust
 // The following are all syntax errors because the script is not an expression.
@@ -280,6 +349,7 @@ Values and types
 
 [`type_of()`]: #values-and-types
 [`to_string()`]: #values-and-types
+[`()`]: #values-and-types
 
 The following primitive types are supported natively:
 
@@ -292,12 +362,11 @@ The following primitive types are supported natively:
 | **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
 | **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
+| **Timestamp** (implemented in standard library)                               | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
 | **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
 | **Nothing/void/nil/null** (or whatever you want to call it)                   | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
-
-[`()`]: #values-and-types
 
 All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different -
 they even cannot be added together. This is very similar to Rust.
@@ -305,12 +374,12 @@ they even cannot be added together. This is very similar to Rust.
 The default integer type is `i64`. If other integer types are not needed, it is possible to exclude them and make a
 smaller build with the [`only_i64`] feature.
 
-If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`,
-including `i64`. This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
+If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`, including `i64`.
+This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
-The `to_string` function converts a standard type into a string for display purposes.
+The `to_string` function converts a standard type into a [string] for display purposes.
 
 The `type_of` function detects the actual type of a value. This is useful because all variables are [`Dynamic`] in nature.
 
@@ -364,8 +433,8 @@ if type_of(mystery) == "i64" {
 }
 ```
 
-In Rust, sometimes a `Dynamic` forms part of a returned value - a good example is an array with `Dynamic` elements,
-or an object map with `Dynamic` property values.  To get the _real_ values, the actual value types _must_ be known in advance.
+In Rust, sometimes a `Dynamic` forms part of a returned value - a good example is an [array] with `Dynamic` elements,
+or an [object map] with `Dynamic` property values.  To get the _real_ values, the actual value types _must_ be known in advance.
 There is no easy way for Rust to decide, at run-time, what type the `Dynamic` value is (short of using the `type_name`
 function and match against the name).
 
@@ -374,7 +443,7 @@ The `cast` method (from the `rhai::AnyExt` trait) then converts the value into a
 Alternatively, use the `try_cast` method which does not panic but returns an error when the cast fails.
 
 ```rust
-use rhai::AnyExt;                               // Pull in the trait.
+use rhai::AnyExt;                               // pull in the trait.
 
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
@@ -390,14 +459,14 @@ let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic whe
 The `type_name` method gets the name of the actual type as a static string slice, which you may match against.
 
 ```rust
-use rhai::Any;                                  // Pull in the trait.
+use rhai::Any;                                  // pull in the trait.
 
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
 
 match item.type_name() {                        // 'type_name' returns the name of the actual Rust type
     "i64" => ...
-    "std::string::String" => ...
+    "alloc::string::String" => ...
     "bool" => ...
     "path::to::module::TestStruct" => ...
 }
@@ -423,6 +492,20 @@ let c = 'X';                                    // character
 print("c is '" + c + "' and its code is " + c.to_int());    // prints "c is 'X' and its code is 88"
 ```
 
+Traits
+------
+
+A number of traits, under the `rhai::` module namespace, provide additional functionalities.
+
+| Trait               | Description                                                                       | Methods                                 |
+| ------------------- | --------------------------------------------------------------------------------- | --------------------------------------- |
+| `Any`               | Generic trait that represents a [`Dynamic`] type                                  | `type_id`, `type_name`, `into_dynamic`  |
+| `AnyExt`            | Extension trait to allows casting of a [`Dynamic`] value to Rust types            | `cast`, `try_cast`                      |
+| `RegisterFn`        | Trait for registering functions                                                   | `register_fn`                           |
+| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                             | `register_dynamic_fn`                   |
+| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, EvalAltResult>` | `register_result_fn`                    |
+| `Func`              | Trait for creating anonymous functions from script                                | `create_from_ast`, `create_from_script` |
+
 Working with functions
 ----------------------
 
@@ -431,8 +514,8 @@ To call these functions, they need to be registered with the [`Engine`].
 
 ```rust
 use rhai::{Engine, EvalAltResult};
-use rhai::RegisterFn;                           // use `RegisterFn` trait for `register_fn`
-use rhai::{Any, Dynamic, RegisterDynamicFn};    // use `RegisterDynamicFn` trait for `register_dynamic_fn`
+use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
+use rhai::{Any, Dynamic, RegisterDynamicFn};    // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -446,7 +529,7 @@ fn get_an_any() -> Dynamic {
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     engine.register_fn("add", add);
 
@@ -469,7 +552,7 @@ To return a [`Dynamic`] value from a Rust function, use the `into_dynamic()` met
 (under the `rhai::Any` trait) to convert it.
 
 ```rust
-use rhai::Any;                                  // Pull in the trait
+use rhai::Any;                                  // pull in the trait
 
 fn decide(yes_no: bool) -> Dynamic {
     if yes_no {
@@ -497,7 +580,7 @@ fn show_it<T: Display>(x: &mut T) -> () {
 
 fn main()
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     engine.register_fn("print", show_it as fn(x: &mut i64)->());
     engine.register_fn("print", show_it as fn(x: &mut bool)->());
@@ -519,13 +602,13 @@ and the error text gets converted into `EvalAltResult::ErrorRuntime`.
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
-use rhai::RegisterResultFn;                         // use `RegisterResultFn` trait for `register_result_fn`
+use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
 // Function that may fail
 fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero detected!".into())    // short-cut to create EvalAltResult
+        Err("Division by zero!".into())         // short-cut to create EvalAltResult
     } else {
         Ok(x / y)
     }
@@ -533,13 +616,13 @@ fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
 
 fn main()
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     // Fallible functions that return Result values must use register_result_fn()
     engine.register_result_fn("divide", safe_divide);
 
     if let Err(error) = engine.eval::<i64>("divide(40, 0)") {
-       println!("Error: {:?}", error);              // prints ErrorRuntime("Division by zero detected!", (1, 1)")
+       println!("Error: {:?}", error);          // prints ErrorRuntime("Division by zero detected!", (1, 1)")
     }
 }
 ```
@@ -584,7 +667,7 @@ impl TestStruct {
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     engine.register_type::<TestStruct>();
 
@@ -593,7 +676,7 @@ fn main() -> Result<(), EvalAltResult>
 
     let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 
-    println!("result: {}", result.field);           // prints 42
+    println!("result: {}", result.field);       // prints 42
 
     Ok(())
 }
@@ -622,7 +705,7 @@ impl TestStruct {
     }
 }
 
-let mut engine = Engine::new();
+let engine = Engine::new();
 
 engine.register_type::<TestStruct>();
 ```
@@ -712,7 +795,7 @@ impl TestStruct {
     }
 }
 
-let mut engine = Engine::new();
+let engine = Engine::new();
 
 engine.register_type::<TestStruct>();
 
@@ -748,7 +831,7 @@ use rhai::{Engine, Scope, EvalAltResult};
 
 fn main() -> Result<(), EvalAltResult>
 {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     // First create the state
     let mut scope = Scope::new();
@@ -957,7 +1040,7 @@ number = -5 - +5;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on
+The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on
 `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                       |
@@ -968,7 +1051,7 @@ The following standard functions (defined in the standard library but excluded i
 Floating-point functions
 ------------------------
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on `f64` only:
+The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -984,13 +1067,31 @@ The following standard functions (defined in the standard library but excluded i
 Strings and Chars
 -----------------
 
+[string]: #strings-and-chars
+[strings]: #strings-and-chars
+[char]: #strings-and-chars
+
 String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and
 hex ('`\x`_xx_') escape sequences.
 
 Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full,
 32-bit extended Unicode code points.
 
-Internally Rhai strings are stored as UTF-8 just like Rust (they _are_ Rust `String`s!), but there are major differences.
+Standard escape sequences:
+
+| Escape sequence | Meaning                        |
+| --------------- | ------------------------------ |
+| `\\`            | back-slash `\`                 |
+| `\t`            | tab                            |
+| `\r`            | carriage-return `CR`           |
+| `\n`            | line-feed `LF`                 |
+| `\"`            | double-quote `"` in strings    |
+| `\'`            | single-quote `'` in characters |
+| `\x`_xx_        | Unicode in 2-digit hex         |
+| `\u`_xxxx_      | Unicode in 4-digit hex         |
+| `\U`_xxxxxxxx_  | Unicode in 8-digit hex         |
+
+Internally Rhai strings are stored as UTF-8 just like Rust (they _are_ Rust `String`'s!), but there are major differences.
 In Rhai a string is the same as an array of Unicode characters and can be directly indexed (unlike Rust).
 This is similar to most other languages where strings are internally represented not as UTF-8 but as arrays of multi-byte
 Unicode characters.
@@ -998,7 +1099,7 @@ Individual characters within a Rhai string can also be replaced just as if the s
 In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
 
 Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded
-if [`no_stdlib`]). This is particularly useful when printing output.
+if using a [raw `Engine`]). This is particularly useful when printing output.
 
 [`type_of()`] a string returns `"string"`.
 
@@ -1039,22 +1140,29 @@ record == "Bob C. Davis: age 42 ❤\n";   // '\n' = new-line
 // (disabled with 'no_index')
 record[4] = '\x58'; // 0x58 = 'X'
 record == "Bob X. Davis: age 42 ❤\n";
+
+// Use 'in' to test if a substring (or character) exists in a string
+"Davis" in record == true;
+'X' in record == true;
+'C' in record == false;
 ```
 
-The following standard functions (defined in the standard library but excluded if [`no_stdlib`]) operate on strings:
+### Built-in functions
 
-| Function   | Description                                                              |
-| ---------- | ------------------------------------------------------------------------ |
-| `len`      | returns the number of characters (not number of bytes) in the string     |
-| `pad`      | pads the string with an character until a specified number of characters |
-| `append`   | Adds a character or a string to the end of another string                |
-| `clear`    | empties the string                                                       |
-| `truncate` | cuts off the string at exactly a specified number of characters          |
-| `contains` | checks if a certain character or sub-string occurs in the string         |
-| `replace`  | replaces a substring with another                                        |
-| `trim`     | trims the string                                                         |
+The following standard methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
 
-Examples:
+| Function   | Parameter(s)                          | Description                                                          |
+| ---------- | ------------------------------------- | -------------------------------------------------------------------- |
+| `len`      | _none_                                | returns the number of characters (not number of bytes) in the string |
+| `pad`      | character to pad, target length       | pads the string with an character to a specified length              |
+| `append`   | character/string to append            | Adds a character or a string to the end of another string            |
+| `clear`    | _none_                                | empties the string                                                   |
+| `truncate` | target length                         | cuts off the string at exactly a specified number of characters      |
+| `contains` | character/sub-string to search for    | checks if a certain character or sub-string occurs in the string     |
+| `replace`  | target sub-string, replacement string | replaces a substring with another                                    |
+| `trim`     | _none_                                | trims the string of whitespace at the beginning and end              |
+
+### Examples
 
 ```rust
 let full_name == " Bob C. Davis ";
@@ -1086,6 +1194,10 @@ full_name.len() == 0;
 Arrays
 ------
 
+[array]: #arrays
+[arrays]: #arrays
+[`Array`]: #arrays
+
 Arrays are first-class citizens in Rhai. Like C, arrays are accessed with zero-based, non-negative integer indices.
 Array literals are built within square brackets '`[`' ... '`]`' and separated by commas '`,`'.
 All elements stored in an array are [`Dynamic`], and the array can freely grow or shrink with elements added or removed.
@@ -1094,27 +1206,51 @@ The Rust type of a Rhai array is `rhai::Array`. [`type_of()`] an array returns `
 
 Arrays are disabled via the [`no_index`] feature.
 
-The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on arrays:
+### Built-in functions
 
-| Function     | Description                                                                           |
-| ------------ | ------------------------------------------------------------------------------------- |
-| `push`       | inserts an element at the end                                                         |
-| `append`     | concatenates the second array to the end of the first                                 |
-| `+` operator | concatenates the first array with the second                                          |
-| `pop`        | removes the last element and returns it ([`()`] if empty)                             |
-| `shift`      | removes the first element and returns it ([`()`] if empty)                            |
-| `len`        | returns the number of elements                                                        |
-| `pad`        | pads the array with an element until a specified length                               |
-| `clear`      | empties the array                                                                     |
-| `truncate`   | cuts off the array at exactly a specified length (discarding all subsequent elements) |
+The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on arrays:
 
-Examples:
+| Function     | Parameter(s)                                                          | Description                                                                                          |
+| ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `push`       | element to insert                                                     | inserts an element at the end                                                                        |
+| `append`     | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+` operator | first array, second array                                             | concatenates the first array with the second                                                         |
+| `insert`     | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
+| `pop`        | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
+| `shift`      | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
+| `remove`     | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `len`        | _none_                                                                | returns the number of elements                                                                       |
+| `pad`        | element to pad, target length                                         | pads the array with an element until a specified length                                              |
+| `clear`      | _none_                                                                | empties the array                                                                                    |
+| `truncate`   | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
+
+### Examples
 
 ```rust
-let y = [1, 2, 3];      // array literal with 3 elements
-y[1] = 42;
+let y = [2, 3];         // array literal with 2 elements
 
-print(y[1]);            // prints 42
+y.insert(0, 1);         // insert element at the beginning
+y.insert(999, 4);       // insert element at the end
+
+y.len() == 4;
+
+y[0] == 1;
+y[1] == 2;
+y[2] == 3;
+y[3] == 4;
+
+(1 in y) == true;       // use 'in' to test if an item exists in the array
+(42 in y) == false;
+
+y[1] = 42;              // array elements can be reassigned
+
+(42 in y) == true;
+
+y.remove(2) == 3;       // remove element
+
+y.len() == 3;
+
+y[2] == 4;              // elements after the removed element are shifted
 
 ts.list = y;            // arrays can be assigned completely (by value copy)
 let foo = ts.list[1];
@@ -1136,7 +1272,7 @@ foo == 1;
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
 
-print(y.len());         // prints 5
+y.len() == 5;
 
 let first = y.shift();  // remove the first element, 4 elements remaining
 first == 1;
@@ -1144,7 +1280,7 @@ first == 1;
 let last = y.pop();     // remove the last element, 3 elements remaining
 last == 5;
 
-print(y.len());         // prints 3
+y.len() == 3;
 
 for item in y {         // arrays can be iterated with a 'for' statement
     print(item);
@@ -1152,15 +1288,15 @@ for item in y {         // arrays can be iterated with a 'for' statement
 
 y.pad(10, "hello");     // pad the array up to 10 elements
 
-print(y.len());         // prints 10
+y.len() == 10;
 
 y.truncate(5);          // truncate the array to 5 elements
 
-print(y.len());         // prints 5
+y.len() == 5;
 
 y.clear();              // empty the array
 
-print(y.len());         // prints 0
+y.len() == 0;
 ```
 
 `push` and `pad` are only defined for standard built-in types. For custom types, type-specific versions must be registered:
@@ -1172,34 +1308,40 @@ engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(i
 Object maps
 -----------
 
+[object map]: #object-maps
+[object maps]: #object-maps
+
 Object maps are dictionaries. Properties are all [`Dynamic`] and can be freely added and retrieved.
 Object map literals are built within braces '`#{`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
 and separated by commas '`,`'.  The property _name_ can be a simple variable name following the same
-naming rules as [variables], or an arbitrary string literal.
+naming rules as [variables], or an arbitrary [string] literal.
 
 Property values can be accessed via the dot notation (_object_ `.` _property_) or index notation (_object_ `[` _property_ `]`).
 The dot notation allows only property names that follow the same naming rules as [variables].
-The index notation allows setting/getting properties of arbitrary names (even the empty string).
+The index notation allows setting/getting properties of arbitrary names (even the empty [string]).
 
-**Important:** Trying to read a non-existent property returns `()` instead of causing an error.
+**Important:** Trying to read a non-existent property returns [`()`] instead of causing an error.
 
 The Rust type of a Rhai object map is `rhai::Map`. [`type_of()`] an object map returns `"map"`.
 
 Object maps are disabled via the [`no_object`] feature.
 
-The following functions (defined in the standard library but excluded if [`no_stdlib`]) operate on object maps:
+### Built-in functions
 
-| Function     | Description                                                                                                                              |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `has`        | does the object map contain a property of a particular name?                                                                             |
-| `len`        | returns the number of properties                                                                                                         |
-| `clear`      | empties the object map                                                                                                                   |
-| `mixin`      | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
-| `+` operator | merges the first object map with the second                                                                                              |
-| `keys`       | returns an array of all the property names (in random order)                                                                             |
-| `values`     | returns an array of all the property values (in random order)                                                                            |
+The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on object maps:
 
-Examples:
+| Function     | Parameter(s)                        | Description                                                                                                                              |
+| ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `has`        | property name                       | does the object map contain a property of a particular name?                                                                             |
+| `len`        | _none_                              | returns the number of properties                                                                                                         |
+| `clear`      | _none_                              | empties the object map                                                                                                                   |
+| `remove`     | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
+| `mixin`      | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
+| `+` operator | first object map, second object map | merges the first object map with the second                                                                                              |
+| `keys`       | _none_                              | returns an [array] of all the property names (in random order)                                                                           |
+| `values`     | _none_                              | returns an [array] of all the property values (in random order)                                                                          |
+
+### Examples
 
 ```rust
 let y = #{              // object map literal with 3 properties
@@ -1215,9 +1357,12 @@ y.a = 42;               // access via dot notation
 y.baz!$@ = 42;          // <- syntax error: only proper variable names allowed in dot notation
 y."baz!$@" = 42;        // <- syntax error: strings not allowed in dot notation
 
-print(y.a);             // prints 42
+y.a == 42;
 
-print(y["baz!$@"]);     // prints 123.456 - access via index notation
+y["baz!$@"] == 123.456; // access via index notation
+
+"baz!$@" in y == true;  // use 'in' to test if a property exists in the object map, prints true
+("z" in y) == false;
 
 ts.obj = y;             // object maps can be assigned completely (by value copy)
 let foo = ts.list.a;
@@ -1239,10 +1384,15 @@ foo == 42;
 y.has("a") == true;
 y.has("xyz") == false;
 
-y.xyz == ();            // A non-existing property returns '()'
+y.xyz == ();            // a non-existing property returns '()'
 y["xyz"] == ();
 
-print(y.len());         // prints 3
+y.len() == 3;
+
+y.remove("a") == 1;     // remove property
+
+y.len() == 2;
+y.has("a") == false;
 
 for name in keys(y) {   // get an array of all the property names via the 'keys' function
     print(name);
@@ -1254,7 +1404,79 @@ for val in values(y) {  // get an array of all the property values via the 'valu
 
 y.clear();              // empty the object map
 
-print(y.len());         // prints 0
+y.len() == 0;
+```
+
+### Parsing from JSON
+
+The syntax for an object map is extremely similar to JSON, with the exception of `null` values which can
+technically be mapped to [`()`].  A valid JSON string does not start with a hash character `#` while a
+Rhai object map does - that's the major difference!
+
+JSON numbers are all floating-point while Rhai supports integers (`INT`) and floating-point (`FLOAT`) if
+the [`no_float`] feature is not turned on.  Most common generators of JSON data distinguish between
+integer and floating-point values by always serializing a floating-point number with a decimal point
+(i.e. `123.0` instead of `123` which is assumed to be an integer).  This style can be used successfully
+with Rhai object maps.
+
+Use the `parse_json` method to parse a piece of JSON into an object map:
+
+```rust
+// JSON string - notice that JSON property names are always quoted
+//               notice also that comments are acceptable within the JSON string
+let json = r#"{
+                "a": 1,                 // <- this is an integer number
+                "b": true,
+                "c": 123.0,             // <- this is a floating-point number
+                "$d e f!": "hello",     // <- any text can be a property name
+                "^^^!!!": [1,42,"999"], // <- value can be array or another hash
+                "z": null               // <- JSON 'null' value
+              }
+"#;
+
+// Parse the JSON expression as an object map
+// Set the second boolean parameter to true in order to map 'null' to '()'
+let map = engine.parse_json(json, true)?;
+
+map.len() == 6;                         // 'map' contains all properties int the JSON string
+
+// Put the object map into a 'Scope'
+let mut scope = Scope::new();
+scope.push("map", map);
+
+let result = engine.eval_with_scope::<INT>(r#"map["^^^!!!"].len()"#)?;
+
+result == 3;                            // the object map is successfully used in the script
+```
+
+`timestamp`'s
+-------------
+[`timestamp`]: #timestamp-s
+
+Timestamps are provided by the standard library (excluded if using a [raw `Engine`]) via the `timestamp`
+function.
+
+The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp returns `"timestamp"`.
+
+### Built-in functions
+
+The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on timestamps:
+
+| Function     | Parameter(s)                       | Description                                              |
+| ------------ | ---------------------------------- | -------------------------------------------------------- |
+| `elapsed`    | _none_                             | returns the number of seconds since the timestamp        |
+| `-` operator | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
+
+### Examples
+
+```rust
+let now = timestamp();
+
+// Do some lengthy operation...
+
+if now.elapsed() > 30.0 {
+    print("takes too long (over 30 seconds)!")
+}
 ```
 
 Comparison operators
@@ -1262,8 +1484,8 @@ Comparison operators
 
 Comparing most values of the same data type work out-of-the-box for standard types supported by the system.
 
-However, if the [`no_stdlib`] feature is turned on, comparisons can only be made between restricted system types -
-`INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), string, array, `bool`, `char`.
+However, if using a [raw `Engine`], comparisons can only be made between restricted system types -
+`INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), [string], [array], `bool`, `char`.
 
 ```rust
 42 == 42;               // true
@@ -1321,7 +1543,7 @@ number <<= 2;           // number = number << 2
 number >>= 1;           // number = number >> 1
 ```
 
-The `+=` operator can also be used to build strings:
+The `+=` operator can also be used to build [strings]:
 
 ```rust
 let my_str = "abc";
@@ -1359,10 +1581,11 @@ if (decision) print("I've decided!");
 Like Rust, `if` statements can also be used as _expressions_, replacing the `? :` conditional operators in other C-like languages.
 
 ```rust
-let x = 1 + if true { 42 } else { 123 } / 2;
+// The following is equivalent to C: int x = 1 + (decision ? 42 : 123) / 2;
+let x = 1 + if decision { 42 } else { 123 } / 2;
 x == 22;
 
-let x = if false { 42 };    // No else branch defaults to '()'
+let x = if decision { 42 }; // no else branch defaults to '()'
 x == ();
 ```
 
@@ -1397,7 +1620,7 @@ loop {
 `for` loops
 -----------
 
-Iterating through a range or an array is provided by the `for` ... `in` loop.
+Iterating through a range or an [array] is provided by the `for` ... `in` loop.
 
 ```rust
 let array = [1, 3, 5, 7, 9, 42];
@@ -1416,7 +1639,6 @@ for x in range(0, 50) {
     if x == 42 { break; }   // break out of for loop
 }
 
-
 // The 'range' function also takes a step
 for x in range(0, 50, 3) {  // step by 3
     if x > 10 { continue; } // skip to the next iteration
@@ -1424,14 +1646,19 @@ for x in range(0, 50, 3) {  // step by 3
     if x == 42 { break; }   // break out of for loop
 }
 
-// Iterate through the values of an object map
+// Iterate through object map
 let map = #{a:1, b:3, c:5, d:7, e:9};
 
-// Remember that keys are returned in random order
+// Property names are returned in random order
 for x in keys(map) {
     if x > 10 { continue; } // skip to the next iteration
     print(x);
     if x == 42 { break; }   // break out of for loop
+}
+
+// Property values are returned in random order
+for val in values(map) {
+    print(val);
 }
 ```
 
@@ -1552,6 +1779,10 @@ fn do_addition(x) {
     add_y(x)
 }
 ```
+
+Unlike C/C++, functions can be defined _anywhere_ within the global level. A function does not need to be defined
+prior to being used in a script; a statement in the script can freely call a function defined afterwards.
+This is similar to Rust and many other modern languages.
 
 ### Functions overloading
 
@@ -1744,6 +1975,19 @@ An [`Engine`]'s optimization level is set via a call to `set_optimization_level`
 engine.set_optimization_level(rhai::OptimizationLevel::Full);
 ```
 
+If it is ever needed to _re_-optimize an `AST`, use the `optimize_ast` method:
+
+```rust
+// Compile script to AST
+let ast = engine.compile("40 + 2")?;
+
+// Create a new 'Scope' - put constants in it to aid optimization if using 'OptimizationLevel::Full'
+let scope = Scope::new();
+
+// Re-optimize the AST
+let ast = engine.optimize_ast(&scope, &ast, OptimizationLevel::Full);
+```
+
 When the optimization level is [`OptimizationLevel::Full`], the [`Engine`] assumes all functions to be _pure_ and will _eagerly_
 evaluated all function calls with constant arguments, using the result to replace the call. This also applies to all operators
 (which are implemented as functions). For instance, the same example above:
@@ -1874,7 +2118,8 @@ print("z = " + z);          // <- error: variable 'z' not found
 
 Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,
 including all variables that are visible at that position in code! It is almost as if the script segments were
-physically pasted in at the position of the `eval` call.
+physically pasted in at the position of the `eval` call. But because of this, new functions cannot be defined
+within an `eval` call, since functions can only be defined at the global level, not inside a function call!
 
 ```rust
 let script = "x += 32";

@@ -4,7 +4,7 @@ use rhai::{Engine, EvalAltResult, INT};
 // TODO also add test case for unary after compound
 // Hah, turns out unary + has a good use after all!
 fn test_unary_after_binary() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("10 % +4")?, 2);
     assert_eq!(engine.eval::<INT>("10 << +4")?, 160);

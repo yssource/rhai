@@ -1,15 +1,15 @@
-#![cfg(not(feature = "no_optimize"))]
-
 use crate::any::{Any, Dynamic};
 use crate::engine::{
-    Engine, FunctionsLib, KEYWORD_DEBUG, KEYWORD_DUMP_AST, KEYWORD_EVAL, KEYWORD_PRINT,
+    Engine, FnAny, FnCallArgs, FnSpec, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
     KEYWORD_TYPE_OF,
 };
-use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Position, ReturnType, Stmt, AST};
+use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 
 use crate::stdlib::{
     boxed::Box,
+    collections::HashMap,
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
@@ -31,6 +31,17 @@ pub enum OptimizationLevel {
     Full,
 }
 
+impl OptimizationLevel {
+    /// Is the `OptimizationLevel` None.
+    pub fn is_none(self) -> bool {
+        self == Self::None
+    }
+    /// Is the `OptimizationLevel` Full.
+    pub fn is_full(self) -> bool {
+        self == Self::Full
+    }
+}
+
 /// Mutable state throughout an optimization pass.
 struct State<'a> {
     /// Has the AST been changed during this pass?
@@ -39,15 +50,25 @@ struct State<'a> {
     constants: Vec<(String, Expr)>,
     /// An `Engine` instance for eager function evaluation.
     engine: &'a Engine<'a>,
+    /// Library of script-defined functions.
+    fn_lib: &'a [(&'a str, usize)],
+    /// Optimization level.
+    optimization_level: OptimizationLevel,
 }
 
 impl<'a> State<'a> {
     /// Create a new State.
-    pub fn new(engine: &'a Engine<'a>) -> Self {
+    pub fn new(
+        engine: &'a Engine<'a>,
+        fn_lib: &'a [(&'a str, usize)],
+        level: OptimizationLevel,
+    ) -> Self {
         Self {
             changed: false,
             constants: vec![],
             engine,
+            fn_lib,
+            optimization_level: level,
         }
     }
     /// Reset the state from dirty to clean.
@@ -84,6 +105,25 @@ impl<'a> State<'a> {
 
         None
     }
+}
+
+/// Call a registered function
+fn call_fn(
+    functions: Option<&HashMap<FnSpec, Box<FnAny>>>,
+    fn_name: &str,
+    args: &mut FnCallArgs,
+    pos: Position,
+) -> Result<Option<Dynamic>, EvalAltResult> {
+    let spec = FnSpec {
+        name: fn_name.into(),
+        args: args.iter().map(|a| Any::type_id(*a)).collect(),
+    };
+
+    // Search built-in's and external functions
+    functions
+        .and_then(|f| f.get(&spec))
+        .map(|func| func(args, pos))
+        .transpose()
 }
 
 /// Optimize a statement.
@@ -345,25 +385,51 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             // id = expr
             expr => Expr::Assignment(id, Box::new(optimize_expr(expr, state)), pos),
         },
+
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(lhs, rhs, pos) => Expr::Dot(
-            Box::new(optimize_expr(*lhs, state)),
-            Box::new(optimize_expr(*rhs, state)),
-            pos,
-        ),
+        Expr::Dot(lhs, rhs, pos) => match (*lhs, *rhs) {
+            // map.string
+            (Expr::Map(items, pos), Expr::Property(s, _))
+                if items.iter().all(|(_, x, _)| x.is_pure()) =>
+            {
+                // Map literal where everything is pure - promote the indexed item.
+                // All other items can be thrown away.
+                state.set_dirty();
+                items.into_iter().find(|(name, _, _)| name == s.as_ref())
+                    .map(|(_, expr, _)| expr.set_position(pos))
+                    .unwrap_or_else(|| Expr::Unit(pos))
+            }
+            // lhs.rhs
+            (lhs, rhs) => Expr::Dot(
+                Box::new(optimize_expr(lhs, state)),
+                Box::new(optimize_expr(rhs, state)),
+                pos,
+            )
+        }
 
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
         Expr::Index(lhs, rhs, pos) => match (*lhs, *rhs) {
             // array[int]
-            (Expr::Array(mut items, _), Expr::IntegerConstant(i, _))
-                if i >= 0 && (i as usize) < items.len() && items.iter().all(|x| x.is_pure()) =>
+            (Expr::Array(mut items, pos), Expr::IntegerConstant(i, _))
+                if i >= 0 && (i as usize) < items.len() && items.iter().all(Expr::is_pure) =>
             {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                items.remove(i as usize)
+                items.remove(i as usize).set_position(pos)
+            }
+            // map[string]
+            (Expr::Map(items, pos), Expr::StringConstant(s, _))
+                if items.iter().all(|(_, x, _)| x.is_pure()) =>
+            {
+                // Map literal where everything is pure - promote the indexed item.
+                // All other items can be thrown away.
+                state.set_dirty();
+                items.into_iter().find(|(name, _, _)| name == s.as_ref())
+                    .map(|(_, expr, _)| expr.set_position(pos))
+                    .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _))
@@ -392,8 +458,55 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 .into_iter()
                 .map(|(key, expr, pos)| (key, optimize_expr(expr, state), pos))
                 .collect(), pos),
+        // lhs in rhs
+        Expr::In(lhs, rhs, pos) => match (*lhs, *rhs) {
+            // "xxx" in "xxxxx"
+            (Expr::StringConstant(lhs, pos), Expr::StringConstant(rhs, _)) => {
+                state.set_dirty();
+                if rhs.contains(lhs.as_ref()) {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // 'x' in "xxxxx"
+            (Expr::CharConstant(lhs, pos), Expr::StringConstant(rhs, _)) => {
+                state.set_dirty();
+                if rhs.contains(&lhs.to_string()) {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // "xxx" in #{...}
+            (Expr::StringConstant(lhs, pos), Expr::Map(items, _)) => {
+                state.set_dirty();
+                if items.iter().find(|(name, _, _)| name == &lhs).is_some() {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // 'x' in #{...}
+            (Expr::CharConstant(lhs, pos), Expr::Map(items, _)) => {
+                state.set_dirty();
+                let lhs = lhs.to_string();
+
+                if items.iter().find(|(name, _, _)| name == &lhs).is_some() {
+                    Expr::True(pos)
+                } else {
+                    Expr::False(pos)
+                }
+            }
+            // lhs in rhs
+            (lhs, rhs) => Expr::In(
+                Box::new(optimize_expr(lhs, state)),
+                Box::new(optimize_expr(rhs, state)),
+                pos
+            ),
+        },
         // lhs && rhs
-        Expr::And(lhs, rhs) => match (*lhs, *rhs) {
+        Expr::And(lhs, rhs, pos) => match (*lhs, *rhs) {
             // true && rhs -> rhs
             (Expr::True(_), rhs) => {
                 state.set_dirty();
@@ -413,10 +526,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             (lhs, rhs) => Expr::And(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
+                pos
             ),
         },
         // lhs || rhs
-        Expr::Or(lhs, rhs) => match (*lhs, *rhs) {
+        Expr::Or(lhs, rhs, pos) => match (*lhs, *rhs) {
             // false || rhs -> rhs
             (Expr::False(_), rhs) => {
                 state.set_dirty();
@@ -436,28 +550,23 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             (lhs, rhs) => Expr::Or(
                 Box::new(optimize_expr(lhs, state)),
                 Box::new(optimize_expr(rhs, state)),
+                pos
             ),
         },
 
-        // Do not optimize anything within dump_ast
-        Expr::FunctionCall(id, args, def_value, pos) if id == KEYWORD_DUMP_AST =>
-            Expr::FunctionCall(id, args, def_value, pos),
-
         // Do not call some special keywords
-        Expr::FunctionCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_str())=>
+        Expr::FunctionCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref())=>
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // Eagerly call functions
         Expr::FunctionCall(id, args, def_value, pos)
-                if state.engine.optimization_level == OptimizationLevel::Full // full optimizations
+                if state.optimization_level == OptimizationLevel::Full // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if let Some(fn_lib_arc) = &state.engine.fn_lib {
-                if fn_lib_arc.has_function(&id, args.len()) {
-                    // A script-defined function overrides the built-in function - do not make the call
-                    return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
-                }
+            if state.fn_lib.iter().find(|(name, len)| name == &id && *len == args.len()).is_some() {
+                // A script-defined function overrides the built-in function - do not make the call
+                return Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos);
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
@@ -471,21 +580,25 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            state.engine.call_ext_fn_raw(&id, &mut call_args, pos).ok().map(|result|
-                result.or_else(|| {
-                    if !arg_for_type_of.is_empty() {
-                        // Handle `type_of()`
-                        Some(arg_for_type_of.to_string().into_dynamic())
-                    } else {
-                        // Otherwise use the default value, if any
-                        def_value.clone()
-                    }
-                }).and_then(|result| map_dynamic_to_expr(result, pos))
+            call_fn(state.engine.functions.as_ref(), &id, &mut call_args, pos).ok()
+                .and_then(|result|
+                    result.or_else(|| {
+                        if !arg_for_type_of.is_empty() {
+                            // Handle `type_of()`
+                            Some(arg_for_type_of.to_string().into_dynamic())
+                        } else {
+                            // Otherwise use the default value, if any
+                            def_value.clone()
+                        }
+                    }).and_then(|result| map_dynamic_to_expr(result, pos))
                     .map(|expr| {
                         state.set_dirty();
                         expr
                     })
-            ).flatten().unwrap_or_else(|| Expr::FunctionCall(id, args, def_value, pos))
+                ).unwrap_or_else(||
+                    // Optimize function call arguments
+                    Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos)
+                )
         }
 
         // id(args ..) -> optimize function call arguments
@@ -493,11 +606,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // constant-name
-        Expr::Variable(name, _) if state.contains_constant(&name) => {
+        Expr::Variable(name, pos) if state.contains_constant(&name) => {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(&name).expect("should find constant in scope!").clone()
+            state.find_constant(&name).expect("should find constant in scope!").clone().set_position(pos)
         }
 
         // All other expressions - skip
@@ -505,14 +618,20 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
     }
 }
 
-pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &Scope) -> Vec<Stmt> {
+fn optimize<'a>(
+    statements: Vec<Stmt>,
+    engine: &Engine<'a>,
+    scope: &Scope,
+    fn_lib: &'a [(&'a str, usize)],
+    level: OptimizationLevel,
+) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
-    if engine.optimization_level == OptimizationLevel::None {
+    if level == OptimizationLevel::None {
         return statements;
     }
 
     // Set up the state
-    let mut state = State::new(engine);
+    let mut state = State::new(engine, fn_lib, level);
 
     // Add constants from the scope into the state
     scope
@@ -544,16 +663,18 @@ pub(crate) fn optimize<'a>(statements: Vec<Stmt>, engine: &Engine<'a>, scope: &S
             .into_iter()
             .enumerate()
             .map(|(i, stmt)| {
-                if let Stmt::Const(name, value, _) = &stmt {
-                    // Load constants
-                    state.push_constant(name, value.as_ref().clone());
-                    stmt // Keep it in the global scope
-                } else {
-                    // Keep all variable declarations at this level
-                    // and always keep the last return value
-                    let keep = matches!(stmt, Stmt::Let(_, _, _)) || i == num_statements - 1;
-
-                    optimize_stmt(stmt, &mut state, keep)
+                match stmt {
+                    Stmt::Const(ref name, ref value, _) => {
+                        // Load constants
+                        state.push_constant(name.as_ref(), value.as_ref().clone());
+                        stmt // Keep it in the global scope
+                    }
+                    _ => {
+                        // Keep all variable declarations at this level
+                        // and always keep the last return value
+                        let keep = matches!(stmt, Stmt::Let(_, _, _)) || i == num_statements - 1;
+                        optimize_stmt(stmt, &mut state, keep)
+                    }
                 }
             })
             .collect();
@@ -585,17 +706,27 @@ pub fn optimize_into_ast(
     scope: &Scope,
     statements: Vec<Stmt>,
     functions: Vec<FnDef>,
+    level: OptimizationLevel,
 ) -> AST {
-    let fn_lib = FunctionsLib::from_vec(
+    #[cfg(feature = "no_optimize")]
+    const level: OptimizationLevel = OptimizationLevel::None;
+
+    let fn_lib: Vec<_> = functions
+        .iter()
+        .map(|fn_def| (fn_def.name.as_str(), fn_def.params.len()))
+        .collect();
+
+    let lib = FunctionsLib::from_vec(
         functions
             .iter()
             .cloned()
             .map(|mut fn_def| {
-                if engine.optimization_level != OptimizationLevel::None {
+                if !level.is_none() {
                     let pos = fn_def.body.position();
 
                     // Optimize the function body
-                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new());
+                    let mut body =
+                        optimize(vec![fn_def.body], engine, &Scope::new(), &fn_lib, level);
 
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
@@ -615,15 +746,15 @@ pub fn optimize_into_ast(
     );
 
     AST(
-        match engine.optimization_level {
+        match level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize(statements, engine, &scope)
+                optimize(statements, engine, &scope, &fn_lib, level)
             }
         },
         #[cfg(feature = "sync")]
-        Arc::new(fn_lib),
+        Arc::new(lib),
         #[cfg(not(feature = "sync"))]
-        Rc::new(fn_lib),
+        Rc::new(lib),
     )
 }

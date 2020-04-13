@@ -2,9 +2,11 @@ use rhai::{Engine, EvalAltResult};
 
 #[test]
 fn test_chars() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<char>("'y'")?, 'y');
+    assert_eq!(engine.eval::<char>(r"'\''")?, '\'');
+    assert_eq!(engine.eval::<char>(r#"'"'"#)?, '"');
     assert_eq!(engine.eval::<char>("'\\u2764'")?, '❤');
 
     #[cfg(not(feature = "no_index"))]

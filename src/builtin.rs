@@ -27,6 +27,7 @@ use crate::stdlib::{
     format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub},
     string::{String, ToString},
+    time::Instant,
     vec::Vec,
     {i32, i64, u32},
 };
@@ -55,6 +56,34 @@ macro_rules! reg_op_result1 {
             $self.register_result_fn($x, $op as fn(x: $y, y: $v)->Result<$y,EvalAltResult>);
         )*
     )
+}
+
+macro_rules! reg_cmp {
+    ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+        $(
+            $self.register_fn($x, $op as fn(x: $y, y: $y)->bool);
+        )*
+    )
+}
+
+// Comparison operators
+fn lt<T: PartialOrd>(x: T, y: T) -> bool {
+    x < y
+}
+fn lte<T: PartialOrd>(x: T, y: T) -> bool {
+    x <= y
+}
+fn gt<T: PartialOrd>(x: T, y: T) -> bool {
+    x > y
+}
+fn gte<T: PartialOrd>(x: T, y: T) -> bool {
+    x >= y
+}
+fn eq<T: PartialEq>(x: T, y: T) -> bool {
+    x == y
+}
+fn ne<T: PartialEq>(x: T, y: T) -> bool {
+    x != y
 }
 
 impl Engine<'_> {
@@ -174,26 +203,6 @@ impl Engine<'_> {
             } else {
                 x.into()
             }
-        }
-
-        // Comparison operators
-        fn lt<T: PartialOrd>(x: T, y: T) -> bool {
-            x < y
-        }
-        fn lte<T: PartialOrd>(x: T, y: T) -> bool {
-            x <= y
-        }
-        fn gt<T: PartialOrd>(x: T, y: T) -> bool {
-            x > y
-        }
-        fn gte<T: PartialOrd>(x: T, y: T) -> bool {
-            x >= y
-        }
-        fn eq<T: PartialEq>(x: T, y: T) -> bool {
-            x == y
-        }
-        fn ne<T: PartialEq>(x: T, y: T) -> bool {
-            x != y
         }
 
         // Logic operators
@@ -395,14 +404,6 @@ impl Engine<'_> {
         }
 
         {
-            macro_rules! reg_cmp {
-                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-                    $(
-                        $self.register_fn($x, $op as fn(x: $y, y: $y)->bool);
-                    )*
-                )
-            }
-
             reg_cmp!(self, "<", lt, INT, String, char);
             reg_cmp!(self, "<=", lte, INT, String, char);
             reg_cmp!(self, ">", gt, INT, String, char);
@@ -433,7 +434,7 @@ impl Engine<'_> {
         }
 
         // `&&` and `||` are treated specially as they short-circuit.
-        // They are implemented as special `Expr` instances, not function calls.
+        // They are implemented as special `Expr` Instants, not function calls.
         //reg_op!(self, "||", or, bool);
         //reg_op!(self, "&&", and, bool);
 
@@ -620,23 +621,19 @@ impl Engine<'_> {
 
             #[cfg(not(feature = "no_object"))]
             {
-                self.register_fn(KEYWORD_PRINT, |x: &mut Map| -> String {
-                    format!("#{:?}", x)
-                });
-                self.register_fn(FUNC_TO_STRING, |x: &mut Map| -> String {
-                    format!("#{:?}", x)
-                });
-                self.register_fn(KEYWORD_DEBUG, |x: &mut Map| -> String {
-                    format!("#{:?}", x)
-                });
+                self.register_fn(KEYWORD_PRINT, |x: &mut Map| format!("#{:?}", x));
+                self.register_fn(FUNC_TO_STRING, |x: &mut Map| format!("#{:?}", x));
+                self.register_fn(KEYWORD_DEBUG, |x: &mut Map| format!("#{:?}", x));
 
                 // Register map access functions
+                #[cfg(not(feature = "no_index"))]
                 self.register_fn("keys", |map: Map| {
                     map.into_iter()
                         .map(|(k, _)| k.into_dynamic())
                         .collect::<Vec<_>>()
                 });
 
+                #[cfg(not(feature = "no_index"))]
                 self.register_fn("values", |map: Map| {
                     map.into_iter().map(|(_, v)| v).collect::<Vec<_>>()
                 });
@@ -757,8 +754,7 @@ macro_rules! reg_fn2y {
 
 /// Register the built-in library.
 impl Engine<'_> {
-    #[cfg(not(feature = "no_stdlib"))]
-    pub(crate) fn register_stdlib(&mut self) {
+    pub fn register_stdlib(&mut self) {
         #[cfg(not(feature = "no_float"))]
         {
             // Advanced math functions
@@ -873,6 +869,15 @@ impl Engine<'_> {
             fn push<T: Any>(list: &mut Array, item: T) {
                 list.push(Box::new(item));
             }
+            fn ins<T: Any>(list: &mut Array, position: INT, item: T) {
+                if position <= 0 {
+                    list.insert(0, Box::new(item));
+                } else if (position as usize) >= list.len() - 1 {
+                    push(list, item);
+                } else {
+                    list.insert(position as usize, Box::new(item));
+                }
+            }
             fn pad<T: Any + Clone>(list: &mut Array, len: INT, item: T) {
                 if len >= 0 {
                     while list.len() < len as usize {
@@ -885,6 +890,7 @@ impl Engine<'_> {
             reg_fn2x!(self, "push", push, &mut Array, (), String, Array, ());
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), INT, bool, char);
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), String, Array, ());
+            reg_fn3!(self, "insert", ins, &mut Array, INT, (), String, Array, ());
 
             self.register_fn("append", |list: &mut Array, array: Array| {
                 list.extend(array)
@@ -901,12 +907,15 @@ impl Engine<'_> {
                 reg_fn2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i8, u8, i16, u16);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i32, u32, i64, u64);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), i8, u8, i16, u16);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), i32, i64, u32, u64);
             }
 
             #[cfg(not(feature = "no_float"))]
             {
                 reg_fn2x!(self, "push", push, &mut Array, (), f32, f64);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), f32, f64);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), f32, f64);
             }
 
             self.register_dynamic_fn("pop", |list: &mut Array| {
@@ -917,6 +926,13 @@ impl Engine<'_> {
                     ().into_dynamic()
                 } else {
                     list.remove(0)
+                }
+            });
+            self.register_dynamic_fn("remove", |list: &mut Array, len: INT| {
+                if len < 0 || (len as usize) >= list.len() {
+                    ().into_dynamic()
+                } else {
+                    list.remove(len as usize)
                 }
             });
             self.register_fn("len", |list: &mut Array| list.len() as INT);
@@ -934,6 +950,9 @@ impl Engine<'_> {
             self.register_fn("has", |map: &mut Map, prop: String| map.contains_key(&prop));
             self.register_fn("len", |map: &mut Map| map.len() as INT);
             self.register_fn("clear", |map: &mut Map| map.clear());
+            self.register_dynamic_fn("remove", |x: &mut Map, name: String| {
+                x.remove(&name).unwrap_or(().into_dynamic())
+            });
             self.register_fn("mixin", |map1: &mut Map, map2: Map| {
                 map2.into_iter().for_each(|(key, value)| {
                     map1.insert(key, value);
@@ -1012,6 +1031,40 @@ impl Engine<'_> {
             if trimmed.len() < s.len() {
                 *s = trimmed.to_string();
             }
+        });
+
+        // Register date/time functions
+        self.register_fn("timestamp", || Instant::now());
+
+        self.register_fn("-", |ts1: Instant, ts2: Instant| {
+            if ts2 > ts1 {
+                #[cfg(not(feature = "no_float"))]
+                return -(ts2 - ts1).as_secs_f64();
+
+                #[cfg(feature = "no_float")]
+                return -((ts2 - ts1).as_secs() as INT);
+            } else {
+                #[cfg(not(feature = "no_float"))]
+                return (ts1 - ts2).as_secs_f64();
+
+                #[cfg(feature = "no_float")]
+                return (ts1 - ts2).as_secs() as INT;
+            }
+        });
+
+        reg_cmp!(self, "<", lt, Instant);
+        reg_cmp!(self, "<=", lte, Instant);
+        reg_cmp!(self, ">", gt, Instant);
+        reg_cmp!(self, ">=", gte, Instant);
+        reg_cmp!(self, "==", eq, Instant);
+        reg_cmp!(self, "!=", ne, Instant);
+
+        self.register_fn("elapsed", |timestamp: Instant| {
+            #[cfg(not(feature = "no_float"))]
+            return timestamp.elapsed().as_secs_f64();
+
+            #[cfg(feature = "no_float")]
+            return timestamp.elapsed().as_secs() as INT;
         });
     }
 }

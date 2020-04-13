@@ -1,10 +1,10 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{AnyExt, Engine, EvalAltResult, Map, INT};
+use rhai::{AnyExt, Engine, EvalAltResult, Map, Scope, INT};
 
 #[test]
 fn test_map_indexing() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -29,97 +29,215 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
     );
     engine.eval::<()>("let y = #{a: 1, b: 2, c: 3}; y.z")?;
 
-    #[cfg(not(feature = "no_stdlib"))]
-    {
-        assert_eq!(
-            engine.eval::<INT>(
+    assert!(engine.eval::<bool>(r#"let y = #{a: 1, b: 2, c: 3}; "c" in y"#)?);
+    assert!(engine.eval::<bool>("let y = #{a: 1, b: 2, c: 3}; 'b' in y")?);
+    assert!(!engine.eval::<bool>(r#"let y = #{a: 1, b: 2, c: 3}; "z" in y"#)?);
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = #{a: 1, b: 2, c: 3};
+                let c = x.remove("c");
+                x.len() + c
+           "#
+        )?,
+        5
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = #{a: 1, b: 2, c: 3};
+                let y = #{b: 42, d: 9};
+                x.mixin(y);
+                x.len() + x.b
+           "
+        )?,
+        46
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = #{a: 1, b: 2, c: 3};
+                x += #{b: 42, d: 9};
+                x.len() + x.b
+           "
+        )?,
+        46
+    );
+    assert_eq!(
+        engine
+            .eval::<Map>(
                 r"
                     let x = #{a: 1, b: 2, c: 3};
                     let y = #{b: 42, d: 9};
-                    x.mixin(y);
-                    x.len() + x.b
+                    x + y
            "
-            )?,
-            46
-        );
-        assert_eq!(
-            engine.eval::<INT>(
-                r"
-                    let x = #{a: 1, b: 2, c: 3};
-                    x += #{b: 42, d: 9};
-                    x.len() + x.b
-           "
-            )?,
-            46
-        );
-        assert_eq!(
-            engine
-                .eval::<Map>(
-                    r"
-                        let x = #{a: 1, b: 2, c: 3};
-                        let y = #{b: 42, d: 9};
-                        x + y
-           "
-                )?
-                .len(),
-            4
-        );
-    }
+            )?
+            .len(),
+        4
+    );
 
     Ok(())
 }
 
 #[test]
 fn test_map_assign() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c$": "hello"}; x"#)?;
-    let a = x.get("a").cloned().expect("should have property a");
-    let b = x.get("b").cloned().expect("should have property b");
-    let c = x.get("c$").cloned().expect("should have property c$");
 
-    assert_eq!(a.cast::<INT>(), 1);
-    assert_eq!(b.cast::<bool>(), true);
-    assert_eq!(c.cast::<String>(), "hello");
+    assert_eq!(
+        x.get("a")
+            .cloned()
+            .expect("should have property a")
+            .cast::<INT>(),
+        1
+    );
+    assert_eq!(
+        x.get("b")
+            .cloned()
+            .expect("should have property b")
+            .cast::<bool>(),
+        true
+    );
+    assert_eq!(
+        x.get("c$")
+            .cloned()
+            .expect("should have property c$")
+            .cast::<String>(),
+        "hello"
+    );
 
     Ok(())
 }
 
 #[test]
 fn test_map_return() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let x = engine.eval::<Map>(r#"#{a: 1, b: true, "c$": "hello"}"#)?;
-    let a = x.get("a").cloned().expect("should have property a");
-    let b = x.get("b").cloned().expect("should have property b");
-    let c = x.get("c$").cloned().expect("should have property c$");
 
-    assert_eq!(a.cast::<INT>(), 1);
-    assert_eq!(b.cast::<bool>(), true);
-    assert_eq!(c.cast::<String>(), "hello");
+    assert_eq!(
+        x.get("a")
+            .cloned()
+            .expect("should have property a")
+            .cast::<INT>(),
+        1
+    );
+    assert_eq!(
+        x.get("b")
+            .cloned()
+            .expect("should have property b")
+            .cast::<bool>(),
+        true
+    );
+    assert_eq!(
+        x.get("c$")
+            .cloned()
+            .expect("should have property c$")
+            .cast::<String>(),
+        "hello"
+    );
 
     Ok(())
 }
 
 #[test]
 fn test_map_for() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
-        engine.eval::<INT>(
-            r#"
-                let map = #{a: 1, b: true, c: 123.456};
-                let s = "";
+        engine
+            .eval::<String>(
+                r#"
+                    let map = #{a: 1, b_x: true, "$c d e!": "hello"};
+                    let s = "";
 
-                for key in keys(map) {
-                    s += key;
-                }
+                    for key in keys(map) {
+                        s += key;
+                    }
 
-                s.len()
+                    s
         "#
-        )?,
-        3
+            )?
+            .len(),
+        11
     );
+
+    Ok(())
+}
+
+#[test]
+/// Because a Rhai object map literal is almost the same as JSON,
+/// it is possible to convert from JSON into a Rhai object map.
+fn test_map_json() -> Result<(), EvalAltResult> {
+    let engine = Engine::new();
+
+    let json = r#"{"a":1, "b":true, "c":42, "$d e f!":"hello", "z":null}"#;
+
+    let map = engine.parse_json(json, true)?;
+
+    assert!(!map.contains_key("x"));
+
+    assert_eq!(
+        map.get("a")
+            .cloned()
+            .expect("should have property a")
+            .cast::<INT>(),
+        1
+    );
+    assert_eq!(
+        map.get("b")
+            .cloned()
+            .expect("should have property b")
+            .cast::<bool>(),
+        true
+    );
+    assert_eq!(
+        map.get("c")
+            .cloned()
+            .expect("should have property a")
+            .cast::<INT>(),
+        42
+    );
+    assert_eq!(
+        map.get("$d e f!")
+            .cloned()
+            .expect("should have property $d e f!")
+            .cast::<String>(),
+        "hello"
+    );
+    assert_eq!(
+        map.get("z")
+            .cloned()
+            .expect("should have property z")
+            .cast::<()>(),
+        ()
+    );
+
+    #[cfg(not(feature = "no_index"))]
+    {
+        let mut scope = Scope::new();
+        scope.push_constant("map", map);
+
+        assert_eq!(
+            engine
+                .eval_with_scope::<String>(
+                    &mut scope,
+                    r#"
+                        let s = "";
+
+                        for key in keys(map) {
+                            s += key;
+                        }
+
+                        s
+        "#
+                )?
+                .len(),
+            11
+        );
+    }
 
     Ok(())
 }

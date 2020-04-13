@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_expressions() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
     let mut scope = Scope::new();
 
     scope.push("x", 10 as INT);

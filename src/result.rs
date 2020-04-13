@@ -16,6 +16,8 @@ use crate::stdlib::path::PathBuf;
 /// Evaluation result.
 ///
 /// All wrapped `Position` values represent the location in the script where the error occurs.
+///
+/// Currently, `EvalAltResult` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug)]
 pub enum EvalAltResult {
     /// Syntax error.
@@ -23,7 +25,7 @@ pub enum EvalAltResult {
 
     /// Error reading from a script file. Wrapped value is the path of the script file.
     ///
-    /// Not available under the `no_std` feature.
+    /// Never appears under the `no_std` feature.
     #[cfg(not(feature = "no_std"))]
     ErrorReadingScriptFile(PathBuf, std::io::Error),
 
@@ -49,6 +51,8 @@ pub enum EvalAltResult {
     ErrorNumericIndexExpr(Position),
     /// Trying to index into a map with an index that is not `String`.
     ErrorStringIndexExpr(Position),
+    /// Invalid arguments for `in` operator.
+    ErrorInExpr(Position),
     /// The guard expression in an `if` or `while` statement does not return a boolean value.
     ErrorLogicGuard(Position),
     /// The `for` statement encounters a type that is not an iterator.
@@ -103,21 +107,22 @@ impl EvalAltResult {
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
-            Self::ErrorArrayBounds(0, _, _) => "Access of empty array",
+            Self::ErrorArrayBounds(0, _, _) => "Empty array has nothing to access",
             Self::ErrorArrayBounds(_, _, _) => "Array index out of bounds",
             Self::ErrorStringBounds(_, index, _) if *index < 0 => {
                 "Indexing a string expects a non-negative index"
             }
-            Self::ErrorStringBounds(0, _, _) => "Indexing of empty string",
+            Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
-            Self::ErrorLogicGuard(_) => "Boolean expression expected",
-            Self::ErrorFor(_) => "For loop expects array or range",
+            Self::ErrorLogicGuard(_) => "Boolean value expected",
+            Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"
             }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
+            Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorStackOverflow(_) => "Stack overflow",
@@ -154,6 +159,7 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
+            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
 
@@ -256,6 +262,7 @@ impl EvalAltResult {
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorStackOverflow(pos)
@@ -288,6 +295,7 @@ impl EvalAltResult {
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorStackOverflow(pos)

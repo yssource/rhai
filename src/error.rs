@@ -37,6 +37,10 @@ impl fmt::Display for LexError {
 }
 
 /// Type of error encountered when parsing a script.
+///
+/// Some errors never appear when certain features are turned on.
+/// They still exist so that the application can turn features on and off without going through
+/// massive code changes to remove/add back enum variants in match statements.
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParseErrorType {
     /// Error in the script text. Wrapped value is the error message.
@@ -51,17 +55,21 @@ pub enum ParseErrorType {
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error. Wrapped value is the error description (if any).
     ///
-    /// Not available under the `no_index` feature.
-    #[cfg(not(feature = "no_index"))]
+    /// Never appears under the `no_index` feature.
     MalformedIndexExpr(String),
+    /// An expression in an `in` expression has syntax error. Wrapped value is the error description (if any).
+    ///
+    /// Never appears under the `no_object` and `no_index` features combination.
+    MalformedInExpr(String),
     /// A map definition has duplicated property names. Wrapped value is the property name.
     ///
-    /// Not available under the `no_object` feature.
-    #[cfg(not(feature = "no_object"))]
+    /// Never appears under the `no_object` feature.
     DuplicatedProperty(String),
     /// Invalid expression assigned to constant. Wrapped value is the name of the constant.
     ForbiddenConstantExpr(String),
     /// Missing a property name for custom types and maps.
+    ///
+    /// Never appears under the `no_object` feature.
     PropertyExpected,
     /// Missing a variable name after the `let`, `const` or `for` keywords.
     VariableExpected,
@@ -69,28 +77,23 @@ pub enum ParseErrorType {
     ExprExpected(String),
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
     ///
-    /// Not available under the `no_function` feature.
-    #[cfg(not(feature = "no_function"))]
+    /// Never appears under the `no_function` feature.
     WrongFnDefinition,
     /// Missing a function name after the `fn` keyword.
     ///
-    /// Not available under the `no_function` feature.
-    #[cfg(not(feature = "no_function"))]
+    /// Never appears under the `no_function` feature.
     FnMissingName,
     /// A function definition is missing the parameters list. Wrapped value is the function name.
     ///
-    /// Not available under the `no_function` feature.
-    #[cfg(not(feature = "no_function"))]
+    /// Never appears under the `no_function` feature.
     FnMissingParams(String),
     /// A function definition has duplicated parameters. Wrapped values are the function name and parameter name.
     ///
-    /// Not available under the `no_function` feature.
-    #[cfg(not(feature = "no_function"))]
+    /// Never appears under the `no_function` feature.
     FnDuplicatedParam(String, String),
     /// A function definition is missing the body. Wrapped value is the function name.
     ///
-    /// Not available under the `no_function` feature.
-    #[cfg(not(feature = "no_function"))]
+    /// Never appears under the `no_function` feature.
     FnMissingBody(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     AssignmentToInvalidLHS,
@@ -136,23 +139,17 @@ impl ParseError {
             ParseErrorType::UnknownOperator(_) => "Unknown operator",
             ParseErrorType::MissingToken(_, _) => "Expecting a certain token that is missing",
             ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
-            #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
-            #[cfg(not(feature = "no_object"))]
+            ParseErrorType::MalformedInExpr(_) => "Invalid 'in' expression",
             ParseErrorType::DuplicatedProperty(_) => "Duplicated property in object map literal",
             ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
             ParseErrorType::PropertyExpected => "Expecting name of a property",
             ParseErrorType::VariableExpected => "Expecting name of a variable",
             ParseErrorType::ExprExpected(_) => "Expecting an expression",
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingName => "Expecting name in function declaration",
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
             ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
@@ -175,29 +172,28 @@ impl fmt::Display for ParseError {
             }
             ParseErrorType::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s)?,
 
-            #[cfg(not(feature = "no_index"))]
             ParseErrorType::MalformedIndexExpr(s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
             }
 
-            #[cfg(not(feature = "no_object"))]
+            ParseErrorType::MalformedInExpr(s) => {
+                write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
+            }
+
             ParseErrorType::DuplicatedProperty(s) => {
                 write!(f, "Duplicated property '{}' for object map literal", s)?
             }
 
             ParseErrorType::ExprExpected(s) => write!(f, "Expecting {} expression", s)?,
 
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingParams(s) => {
                 write!(f, "Expecting parameters for function '{}'", s)?
             }
 
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnMissingBody(s) => {
                 write!(f, "Expecting body statement block for function '{}'", s)?
             }
 
-            #[cfg(not(feature = "no_function"))]
             ParseErrorType::FnDuplicatedParam(s, arg) => {
                 write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
             }

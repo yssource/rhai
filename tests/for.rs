@@ -3,7 +3,7 @@ use rhai::{Engine, EvalAltResult, INT};
 #[cfg(not(feature = "no_index"))]
 #[test]
 fn test_for_array() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let script = r"
         let sum1 = 0;
@@ -33,7 +33,7 @@ fn test_for_array() -> Result<(), EvalAltResult> {
 #[cfg(not(feature = "no_object"))]
 #[test]
 fn test_for_object() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let script = r#"
         let sum = 0;

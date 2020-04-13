@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_while() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<INT>(

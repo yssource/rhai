@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult};
 
 #[test]
 fn test_throw() {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert!(matches!(
         engine.eval::<()>(r#"if true { throw "hello" }"#).expect_err("expects error"),

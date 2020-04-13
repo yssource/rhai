@@ -5,7 +5,7 @@ const EPSILON: FLOAT = 0.000_000_000_1;
 
 #[test]
 fn test_float() -> Result<(), EvalAltResult> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(
         engine.eval::<bool>("let x = 0.0; let y = 1.0; x < y")?,

@@ -36,6 +36,7 @@ macro_rules! impl_args {
     (@pop) => {
     };
     (@pop $head:ident) => {
+        impl_args!();
     };
     (@pop $head:ident $(, $tail:ident)+) => {
         impl_args!($($tail),*);
