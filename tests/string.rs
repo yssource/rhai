@@ -35,6 +35,7 @@ fn test_string() -> Result<(), EvalAltResult> {
 }
 
 #[cfg(not(feature = "no_stdlib"))]
+#[cfg(not(feature = "no_object"))]
 #[test]
 fn test_string_substring() -> Result<(), EvalAltResult> {
     let engine = Engine::new();

@@ -317,8 +317,6 @@ Use `Engine::new_raw` to create a _raw_ `Engine`, in which:
 let mut engine = Engine::new_raw();             // create a 'raw' Engine
 
 engine.register_stdlib();                       // register the standard library manually
-
-engine.
 ```
 
 Evaluate expressions only
