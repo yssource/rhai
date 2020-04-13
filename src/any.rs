@@ -279,39 +279,21 @@ impl Dynamic {
     /// assert_eq!(new_result.to_string(), "hello");
     /// ```
     pub fn from<T: Variant + Clone>(value: T) -> Self {
-        if let Some(result) = (&value as &dyn Variant)
-            .downcast_ref::<()>()
-            .cloned()
-            .map(Union::Unit)
-            .or_else(|| {
-                (&value as &dyn Variant)
-                    .downcast_ref::<bool>()
-                    .cloned()
-                    .map(Union::Bool)
-                    .or_else(|| {
-                        (&value as &dyn Variant)
-                            .downcast_ref::<INT>()
-                            .cloned()
-                            .map(Union::Int)
-                            .or_else(|| {
-                                (&value as &dyn Variant)
-                                    .downcast_ref::<char>()
-                                    .cloned()
-                                    .map(Union::Char)
-                            })
-                    })
-            })
-        {
+        let dyn_value = &value as &dyn Variant;
+
+        if let Some(result) = dyn_value.downcast_ref::<()>().cloned().map(Union::Unit) {
+            return Self(result);
+        } else if let Some(result) = dyn_value.downcast_ref::<bool>().cloned().map(Union::Bool) {
+            return Self(result);
+        } else if let Some(result) = dyn_value.downcast_ref::<INT>().cloned().map(Union::Int) {
+            return Self(result);
+        } else if let Some(result) = dyn_value.downcast_ref::<char>().cloned().map(Union::Char) {
             return Self(result);
         }
 
         #[cfg(not(feature = "no_float"))]
         {
-            if let Some(result) = (&value as &dyn Variant)
-                .downcast_ref::<char>()
-                .cloned()
-                .map(Union::Char)
-            {
+            if let Some(result) = dyn_value.downcast_ref::<FLOAT>().cloned().map(Union::Float) {
                 return Self(result);
             }
         }
@@ -372,6 +354,7 @@ impl Dynamic {
     }
 
     /// Get a copy of the `Dynamic` value as a specific type.
+    /// Casting to a `Dynamic` just returns as is.
     ///
     /// # Panics
     ///
@@ -391,8 +374,13 @@ impl Dynamic {
     }
 
     /// Get a reference of a specific type to the `Dynamic`.
+    /// Casting to `Dynamic` just returns a reference to it.
     /// Returns `None` if the cast fails.
     pub fn downcast_ref<T: Variant + Clone>(&self) -> Option<&T> {
+        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+            return (self as &dyn Variant).downcast_ref::<T>();
+        }
+
         match &self.0 {
             Union::Unit(value) => (value as &dyn Variant).downcast_ref::<T>(),
             Union::Bool(value) => (value as &dyn Variant).downcast_ref::<T>(),
@@ -408,8 +396,13 @@ impl Dynamic {
     }
 
     /// Get a mutable reference of a specific type to the `Dynamic`.
+    /// Casting to `Dynamic` just returns a mutable reference to it.
     /// Returns `None` if the cast fails.
     pub fn downcast_mut<T: Variant + Clone>(&mut self) -> Option<&mut T> {
+        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+            return (self as &mut dyn Variant).downcast_mut::<T>();
+        }
+
         match &mut self.0 {
             Union::Unit(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
             Union::Bool(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
