@@ -543,7 +543,7 @@ impl Engine<'_> {
         // Raise error
         let types_list: Vec<_> = args
             .iter()
-            .map(|x| (*x).type_name())
+            .map(|x| x.type_name())
             .map(|name| self.map_type_name(name))
             .collect();
 

@@ -180,12 +180,17 @@ fn main() -> Result<(), EvalAltResult>
 ### Script evaluation
 
 The type parameter is used to specify the type of the return value, which _must_ match the actual type or an error is returned.
-Rhai is very strict here. There are two ways to specify the return type - _turbofish_ notation, or type inference.
+Rhai is very strict here.  Use [`Dynamic`] for uncertain return types.
+There are two ways to specify the return type - _turbofish_ notation, or type inference.
 
 ```rust
 let result = engine.eval::<i64>("40 + 2")?;     // return type is i64, specified using 'turbofish' notation
 
 let result: i64 = engine.eval("40 + 2")?;       // return type is inferred to be i64
+
+result.is::<i64>() == true;
+
+let result: Dynamic = engine.eval("boo()")?;    // use 'Dynamic' if you're not sure what type it'll be!
 
 let result = engine.eval::<String>("40 + 2")?;  // returns an error because the actual return type is i64, not String
 ```
@@ -440,7 +445,7 @@ function and match against the name).
 
 A `Dynamic` value's actual type can be checked via the `is` method.
 The `cast` method then converts the value into a specific, known type.
-Alternatively, use the `try_cast` method which does not panic but returns an error when the cast fails.
+Alternatively, use the `try_cast` method which does not panic but returns `None` when the cast fails.
 
 ```rust
 let list: Array = engine.eval("...")?;          // return type is 'Array'
@@ -451,7 +456,7 @@ item.is::<i64>() == true;                       // 'is' returns whether a 'Dynam
 let value = item.cast::<i64>();                 // if the element is 'i64', this succeeds; otherwise it panics
 let value: i64 = item.cast();                   // type can also be inferred
 
-let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic when the cast fails, but returns an error
+let value = item.try_cast::<i64>().unwrap();    // 'try_cast' does not panic when the cast fails, but returns 'None'
 ```
 
 The `type_name` method gets the name of the actual type as a static string slice, which you may match against.

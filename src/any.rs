@@ -143,6 +143,15 @@ pub enum Union {
 }
 
 impl Dynamic {
+    /// Does this `Dynamic` hold a variant data type
+    /// instead of one of the support system primitive types?
+    pub fn is_variant(&self) -> bool {
+        match self.0 {
+            Union::Variant(_) => true,
+            _ => false,
+        }
+    }
+
     /// Is the value held by this `Dynamic` a particular type?
     pub fn is<T: Variant + Clone>(&self) -> bool {
         self.type_id() == TypeId::of::<T>()
@@ -212,7 +221,7 @@ impl fmt::Debug for Dynamic {
             Union::Float(value) => write!(f, "{:?}", value),
             Union::Array(value) => write!(f, "{:?}", value),
             Union::Map(value) => write!(f, "{:?}", value),
-            Union::Variant(_) => write!(f, "?"),
+            Union::Variant(_) => write!(f, "<dynamic>"),
         }
     }
 }
@@ -234,8 +243,23 @@ impl Clone for Dynamic {
     }
 }
 
+/// Cast a Boxed type into another type.
+fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<T, Box<X>> {
+    // Only allow casting to the exact same type
+    if TypeId::of::<X>() == TypeId::of::<T>() {
+        // SAFETY: just checked whether we are pointing to the correct type
+        unsafe {
+            let raw: *mut dyn Any = Box::into_raw(item as Box<dyn Any>);
+            Ok(*Box::from_raw(raw as *mut T))
+        }
+    } else {
+        // Return the consumed item for chaining.
+        Err(item)
+    }
+}
+
 impl Dynamic {
-    /// Create a `Dynamic` from any type.
+    /// Create a `Dynamic` from any type.  A `Dynamic` value is simply returned as is.
     ///
     /// # Examples
     ///
@@ -249,6 +273,10 @@ impl Dynamic {
     /// let result = Dynamic::from("hello".to_string());
     /// assert_eq!(result.type_name(), "string");
     /// assert_eq!(result.to_string(), "hello");
+    ///
+    /// let new_result = Dynamic::from(result);
+    /// assert_eq!(new_result.type_name(), "string");
+    /// assert_eq!(new_result.to_string(), "hello");
     /// ```
     pub fn from<T: Variant + Clone>(value: T) -> Self {
         if let Some(result) = (&value as &dyn Variant)
@@ -288,29 +316,20 @@ impl Dynamic {
             }
         }
 
-        fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<T, Box<X>> {
-            if TypeId::of::<X>() == TypeId::of::<T>() {
-                unsafe {
-                    let raw: *mut dyn Any = Box::into_raw(item as Box<dyn Any>);
-                    Ok(*Box::from_raw(raw as *mut T))
-                }
-            } else {
-                Err(item)
-            }
-        }
-
         let var = Box::new(value);
 
         Self(
-            cast_box::<_, String>(var)
-                .map(Union::Str)
+            cast_box::<_, Dynamic>(var)
+                .map(|x| x.0)
                 .or_else(|var| {
-                    cast_box::<_, Array>(var).map(Union::Array).or_else(|var| {
-                        cast_box::<_, Map>(var)
-                            .map(|v| Union::Map(Box::new(v)))
-                            .or_else(|var| -> Result<Union, ()> {
-                                Ok(Union::Variant(var as Box<dyn Variant>))
-                            })
+                    cast_box::<_, String>(var).map(Union::Str).or_else(|var| {
+                        cast_box::<_, Array>(var).map(Union::Array).or_else(|var| {
+                            cast_box::<_, Map>(var)
+                                .map(|v| Union::Map(Box::new(v)))
+                                .or_else(|var| -> Result<Union, ()> {
+                                    Ok(Union::Variant(var as Box<dyn Variant>))
+                                })
+                        })
                     })
                 })
                 .unwrap(),
@@ -318,6 +337,7 @@ impl Dynamic {
     }
 
     /// Get a copy of the `Dynamic` value as a specific type.
+    /// Casting to a `Dynamic` just returns as is.
     ///
     /// Returns an error with the name of the value's actual type when the cast fails.
     ///
@@ -330,7 +350,11 @@ impl Dynamic {
     ///
     /// assert_eq!(x.try_cast::<u32>().unwrap(), 42);
     /// ```
-    pub fn try_cast<T: Variant + Clone>(self) -> Result<T, Self> {
+    pub fn try_cast<T: Variant + Clone>(self) -> Option<T> {
+        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+            return cast_box::<_, T>(Box::new(self)).ok();
+        }
+
         match &self.0 {
             Union::Unit(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
             Union::Bool(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
@@ -345,7 +369,6 @@ impl Dynamic {
                 .cloned(),
             Union::Variant(value) => value.as_ref().downcast_ref::<T>().cloned(),
         }
-        .ok_or(self)
     }
 
     /// Get a copy of the `Dynamic` value as a specific type.
@@ -406,16 +429,6 @@ impl Dynamic {
     pub(crate) fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
-            _ => Err(self.type_name()),
-        }
-    }
-
-    /// Cast the `Dynamic` as the system integer type `INT` and return it.
-    /// Returns the name of the actual type if the cast fails.
-    #[cfg(not(feature = "no_float"))]
-    pub(crate) fn as_float(&self) -> Result<FLOAT, &'static str> {
-        match self.0 {
-            Union::Float(n) => Ok(n),
             _ => Err(self.type_name()),
         }
     }

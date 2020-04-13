@@ -799,14 +799,12 @@ impl<'e> Engine<'e> {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
-        self.eval_ast_with_scope_raw(scope, ast)?
-            .try_cast::<T>()
-            .map_err(|a| {
-                EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name(a.type_name()).to_string(),
-                    Position::none(),
-                )
-            })
+        let result = self.eval_ast_with_scope_raw(scope, ast)?;
+        let return_type = self.map_type_name(result.type_name());
+
+        return result.try_cast::<T>().ok_or_else(|| {
+            EvalAltResult::ErrorMismatchOutputType(return_type.to_string(), Position::none())
+        });
     }
 
     pub(crate) fn eval_ast_with_scope_raw(
@@ -933,14 +931,12 @@ impl<'e> Engine<'e> {
         let fn_lib = Some(ast.1.as_ref());
         let pos = Position::none();
 
-        self.call_fn_raw(Some(scope), fn_lib, name, &mut args, None, pos, 0)?
+        let result = self.call_fn_raw(Some(scope), fn_lib, name, &mut args, None, pos, 0)?;
+        let return_type = self.map_type_name(result.type_name());
+
+        return result
             .try_cast()
-            .map_err(|a| {
-                EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name(a.type_name()).into(),
-                    pos,
-                )
-            })
+            .ok_or_else(|| EvalAltResult::ErrorMismatchOutputType(return_type.into(), pos));
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
