@@ -1000,17 +1000,113 @@ impl Engine<'_> {
         }
 
         // Register string utility functions
+        fn sub_string(s: &mut String, start: INT, len: INT) -> String {
+            let offset = if s.is_empty() || len <= 0 {
+                return "".to_string();
+            } else if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                return "".to_string();
+            } else {
+                start as usize
+            };
+
+            let chars: Vec<_> = s.chars().collect();
+
+            let len = if offset + (len as usize) > chars.len() {
+                chars.len() - offset
+            } else {
+                len as usize
+            };
+
+            chars[offset..][..len].into_iter().collect::<String>()
+        }
+
+        fn crop_string(s: &mut String, start: INT, len: INT) {
+            let offset = if s.is_empty() || len <= 0 {
+                s.clear();
+                return;
+            } else if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                s.clear();
+                return;
+            } else {
+                start as usize
+            };
+
+            let chars: Vec<_> = s.chars().collect();
+
+            let len = if offset + (len as usize) > chars.len() {
+                chars.len() - offset
+            } else {
+                len as usize
+            };
+
+            s.clear();
+
+            chars[offset..][..len]
+                .into_iter()
+                .for_each(|&ch| s.push(ch));
+        }
+
         self.register_fn("len", |s: &mut String| s.chars().count() as INT);
         self.register_fn("contains", |s: &mut String, ch: char| s.contains(ch));
         self.register_fn("contains", |s: &mut String, find: String| s.contains(&find));
+        self.register_fn("index_of", |s: &mut String, ch: char, start: INT| {
+            let start = if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                return -1 as INT;
+            } else {
+                s.chars().take(start as usize).collect::<String>().len()
+            };
+
+            s[start..]
+                .find(ch)
+                .map(|index| s[0..start + index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
+        self.register_fn("index_of", |s: &mut String, ch: char| {
+            s.find(ch)
+                .map(|index| s[0..index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
+        self.register_fn("index_of", |s: &mut String, find: String, start: INT| {
+            let start = if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                return -1 as INT;
+            } else {
+                s.chars().take(start as usize).collect::<String>().len()
+            };
+
+            s[start..]
+                .find(&find)
+                .map(|index| s[0..start + index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
+        self.register_fn("index_of", |s: &mut String, find: String| {
+            s.find(&find)
+                .map(|index| s[0..index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
         self.register_fn("clear", |s: &mut String| s.clear());
         self.register_fn("append", |s: &mut String, ch: char| s.push(ch));
         self.register_fn("append", |s: &mut String, add: String| s.push_str(&add));
+        self.register_fn("sub_string", sub_string);
+        self.register_fn("sub_string", |s: &mut String, start: INT| {
+            sub_string(s, start, s.len() as INT)
+        });
+        self.register_fn("crop", crop_string);
+        self.register_fn("crop", |s: &mut String, start: INT| {
+            crop_string(s, start, s.len() as INT)
+        });
         self.register_fn("truncate", |s: &mut String, len: INT| {
             if len >= 0 {
                 let chars: Vec<_> = s.chars().take(len as usize).collect();
                 s.clear();
-                chars.iter().for_each(|&ch| s.push(ch));
+                chars.into_iter().for_each(|ch| s.push(ch));
             } else {
                 s.clear();
             }
