@@ -60,14 +60,6 @@ pub const FUNC_TO_STRING: &str = "to_string";
 pub const FUNC_GETTER: &str = "get$";
 pub const FUNC_SETTER: &str = "set$";
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-enum IndexSourceType {
-    Expression,
-    String,
-    Array,
-    Map,
-}
-
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 enum IndexValue {
     Num(usize),
@@ -608,7 +600,7 @@ impl Engine<'_> {
                 };
 
                 self.get_indexed_value(scope, fn_lib, &value, idx_expr, *op_pos, level)
-                    .map(|(val, _, _)| val)
+                    .map(|(val, _)| val)
             }
 
             // xxx.dot_lhs.rhs
@@ -645,7 +637,7 @@ impl Engine<'_> {
                     };
 
                     self.get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)
-                        .and_then(|(mut val, _, _)| {
+                        .and_then(|(mut val, _)| {
                             let target = Target::from(&mut val);
                             self.get_dot_val_helper(scope, fn_lib, target, rhs, level)
                         })
@@ -689,7 +681,7 @@ impl Engine<'_> {
 
             // idx_lhs[idx_expr].???
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
-                let (idx_src_type, src, index, mut val) =
+                let (src, index, mut val) =
                     self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
                 let target = Target::from(&mut val);
                 let value = self.get_dot_val_helper(scope, fn_lib, target, dot_rhs, level);
@@ -707,7 +699,6 @@ impl Engine<'_> {
 
                     Some(ScopeEntryType::Normal) => {
                         Self::update_indexed_var_in_scope(
-                            idx_src_type,
                             scope,
                             src.unwrap(),
                             index,
@@ -747,7 +738,7 @@ impl Engine<'_> {
         idx_expr: &Expr,
         op_pos: Position,
         level: usize,
-    ) -> Result<(Dynamic, IndexSourceType, IndexValue), EvalAltResult> {
+    ) -> Result<(Dynamic, IndexValue), EvalAltResult> {
         let idx_pos = idx_expr.position();
 
         // val_array[idx]
@@ -759,13 +750,7 @@ impl Engine<'_> {
 
             return if index >= 0 {
                 arr.get(index as usize)
-                    .map(|v| {
-                        (
-                            v.clone(),
-                            IndexSourceType::Array,
-                            IndexValue::from_num(index),
-                        )
-                    })
+                    .map(|v| (v.clone(), IndexValue::from_num(index)))
                     .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
             } else {
                 Err(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
@@ -783,7 +768,6 @@ impl Engine<'_> {
                 map.get(&index)
                     .cloned()
                     .unwrap_or_else(|| Dynamic::from_unit()),
-                IndexSourceType::Map,
                 IndexValue::from_str(index),
             ));
         }
@@ -798,13 +782,7 @@ impl Engine<'_> {
             return if index >= 0 {
                 s.chars()
                     .nth(index as usize)
-                    .map(|ch| {
-                        (
-                            Dynamic::from_char(ch),
-                            IndexSourceType::String,
-                            IndexValue::from_num(index),
-                        )
-                    })
+                    .map(|ch| (Dynamic::from_char(ch), IndexValue::from_num(index)))
                     .ok_or_else(|| {
                         EvalAltResult::ErrorStringBounds(s.chars().count(), index, idx_pos)
                     })
@@ -833,15 +811,7 @@ impl Engine<'_> {
         idx_expr: &Expr,
         op_pos: Position,
         level: usize,
-    ) -> Result<
-        (
-            IndexSourceType,
-            Option<ScopeSource<'a>>,
-            IndexValue,
-            Dynamic,
-        ),
-        EvalAltResult,
-    > {
+    ) -> Result<(Option<ScopeSource<'a>>, IndexValue, Dynamic), EvalAltResult> {
         match lhs {
             // id[idx_expr]
             Expr::Variable(id, _) => {
@@ -854,11 +824,10 @@ impl Engine<'_> {
                     val,
                 ) = Self::search_scope(scope, &id, lhs.position())?;
 
-                let (val, idx_src_type, index) =
+                let (val, index) =
                     self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)?;
 
                 Ok((
-                    idx_src_type,
                     Some(ScopeSource {
                         name: &id,
                         typ: src_type,
@@ -874,7 +843,7 @@ impl Engine<'_> {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
 
                 self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)
-                    .map(|(val, _, index)| (IndexSourceType::Expression, None, index, val))
+                    .map(|(val, index)| (None, index, val))
             }
         }
     }
@@ -894,30 +863,24 @@ impl Engine<'_> {
 
     /// Update the value at an index position in a variable inside the scope
     fn update_indexed_var_in_scope(
-        idx_src_type: IndexSourceType,
         scope: &mut Scope,
         src: ScopeSource,
         idx: IndexValue,
         new_val: (Dynamic, Position),
     ) -> Result<Dynamic, EvalAltResult> {
-        match idx_src_type {
+        let target = scope.get_mut(src);
+
+        match &mut target.0 {
             // array_id[idx] = val
-            IndexSourceType::Array => {
-                let arr = scope.get_mut_by_type::<Array>(src);
+            Union::Array(arr) => {
                 arr[idx.as_num()] = new_val.0;
-                Ok(Dynamic::from_unit())
             }
-
             // map_id[idx] = val
-            IndexSourceType::Map => {
-                let arr = scope.get_mut_by_type::<Map>(src);
-                arr.insert(idx.as_str(), new_val.0);
-                Ok(Dynamic::from_unit())
+            Union::Map(map) => {
+                map.insert(idx.as_str(), new_val.0);
             }
-
             // string_id[idx] = val
-            IndexSourceType::String => {
-                let s = scope.get_mut_by_type::<String>(src);
+            Union::Str(s) => {
                 let pos = new_val.1;
                 // Value must be a character
                 let ch = new_val
@@ -925,11 +888,12 @@ impl Engine<'_> {
                     .as_char()
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
                 Self::str_replace_char(s, idx.as_num(), ch);
-                Ok(Dynamic::from_unit())
             }
-
-            IndexSourceType::Expression => panic!("expression cannot be indexed for update"),
+            // All other variable types should be an error
+            _ => panic!("invalid type for indexing: {}", target.type_name()),
         }
+
+        Ok(Dynamic::from_unit())
     }
 
     /// Update the value at an index position
@@ -939,14 +903,14 @@ impl Engine<'_> {
         new_val: Dynamic,
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
-        match target {
-            Dynamic(Union::Array(ref mut arr)) => {
+        match &mut target.0 {
+            Union::Array(arr) => {
                 arr[idx.as_num()] = new_val;
             }
-            Dynamic(Union::Map(ref mut map)) => {
+            Union::Map(map) => {
                 map.insert(idx.as_str(), new_val);
             }
-            Dynamic(Union::Str(ref mut s)) => {
+            Union::Str(s) => {
                 // Value must be a character
                 let ch = new_val
                     .as_char()
@@ -955,7 +919,7 @@ impl Engine<'_> {
                 Self::str_replace_char(s, idx.as_num(), ch);
             }
             // All other variable types should be an error
-            _ => panic!("array, map or string source type expected for indexing"),
+            _ => panic!("invalid type for indexing: {}", target.type_name()),
         }
 
         Ok(target)
@@ -986,7 +950,7 @@ impl Engine<'_> {
                     let fn_name = make_getter(id);
                     self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|val| {
-                            let (_, _, index) = self
+                            let (_, index) = self
                                 .get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)?;
 
                             Self::update_indexed_value(val, index, new_val.0.clone(), new_val.1)
@@ -1030,7 +994,7 @@ impl Engine<'_> {
                         let fn_name = make_getter(id);
                         self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                             .and_then(|v| {
-                                let (mut value, _, index) = self.get_indexed_value(
+                                let (mut value, index) = self.get_indexed_value(
                                     scope, fn_lib, &v, idx_expr, *op_pos, level,
                                 )?;
 
@@ -1111,7 +1075,7 @@ impl Engine<'_> {
             // lhs[idx_expr].???
             // TODO - Allow chaining of indexing!
             Expr::Index(lhs, idx_expr, op_pos) => {
-                let (idx_src_type, src, index, mut target) =
+                let (src, index, mut target) =
                     self.eval_index_expr(scope, fn_lib, lhs, idx_expr, *op_pos, level)?;
                 let val_pos = new_val.1;
                 let this_ptr = &mut target;
@@ -1131,7 +1095,6 @@ impl Engine<'_> {
 
                     Some(ScopeEntryType::Normal) => {
                         Self::update_indexed_var_in_scope(
-                            idx_src_type,
                             scope,
                             src.unwrap(),
                             index,
@@ -1270,7 +1233,7 @@ impl Engine<'_> {
                     // idx_lhs[idx_expr] = rhs
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(idx_lhs, idx_expr, op_pos) => {
-                        let (idx_src_type, src, index, _) =
+                        let (src, index, _) =
                             self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
 
                         match src.map(|x| x.typ) {
@@ -1286,7 +1249,6 @@ impl Engine<'_> {
                             }
 
                             Some(ScopeEntryType::Normal) => Ok(Self::update_indexed_var_in_scope(
-                                idx_src_type,
                                 scope,
                                 src.unwrap(),
                                 index,
@@ -1317,7 +1279,7 @@ impl Engine<'_> {
             #[cfg(not(feature = "no_index"))]
             Expr::Index(lhs, idx_expr, op_pos) => self
                 .eval_index_expr(scope, fn_lib, lhs, idx_expr, *op_pos, level)
-                .map(|(_, _, _, x)| x),
+                .map(|(_, _, x)| x),
 
             #[cfg(not(feature = "no_object"))]
             Expr::Dot(lhs, rhs, _) => self.get_dot_val(scope, fn_lib, lhs, rhs, level),
