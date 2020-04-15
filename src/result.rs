@@ -2,7 +2,8 @@
 
 use crate::any::Dynamic;
 use crate::error::ParseError;
-use crate::parser::{Position, INT};
+use crate::parser::INT;
+use crate::token::Position;
 
 use crate::stdlib::{
     error::Error,

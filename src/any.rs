@@ -10,8 +10,11 @@ use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
     fmt,
-    time::Instant,
+    string::String,
 };
+
+#[cfg(not(feature = "no_std"))]
+use crate::stdlib::time::Instant;
 
 /// A trait to represent any type.
 ///
@@ -186,6 +189,7 @@ impl Dynamic {
             Union::Array(_) => "array",
             Union::Map(_) => "map",
 
+            #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
             Union::Variant(value) => (**value).type_name(),
         }

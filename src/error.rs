@@ -1,6 +1,6 @@
 //! Module containing error definitions for the parsing process.
 
-use crate::parser::Position;
+use crate::token::Position;
 
 use crate::stdlib::{char, error::Error, fmt, string::String};
 

@@ -8,7 +8,7 @@ mod inner {
         panic, pin, prelude, ptr, result, slice, str, task, time, u128, u16, u32, u64, u8, usize,
     };
 
-    pub use alloc::{borrow, boxed, format, string, sync, vec};
+    pub use alloc::{borrow, boxed, format, rc, string, sync, vec};
 
     pub use core_error as error;
 

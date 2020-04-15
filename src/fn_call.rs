@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::any::{Dynamic, Variant};
-use crate::stdlib::{string::String, vec, vec::Vec};
+use crate::stdlib::vec::Vec;
 
 /// Trait that represent arguments to a function call.
 /// Any data type that can be converted into a `Vec` of `Dynamic` values can be used

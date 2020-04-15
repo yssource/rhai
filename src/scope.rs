@@ -1,14 +1,10 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::any::{Dynamic, Variant};
-use crate::parser::{map_dynamic_to_expr, Expr, Position};
+use crate::parser::{map_dynamic_to_expr, Expr};
+use crate::token::Position;
 
-use crate::stdlib::{
-    borrow::Cow,
-    iter,
-    string::{String, ToString},
-    vec::Vec,
-};
+use crate::stdlib::{borrow::Cow, iter, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]

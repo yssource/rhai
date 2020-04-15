@@ -3,9 +3,10 @@ use crate::engine::{
     Engine, FnAny, FnCallArgs, FnSpec, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
     KEYWORD_TYPE_OF,
 };
-use crate::parser::{map_dynamic_to_expr, Expr, FnDef, Position, ReturnType, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
+use crate::token::Position;
 
 use crate::stdlib::{
     boxed::Box,

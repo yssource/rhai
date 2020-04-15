@@ -6,9 +6,10 @@ use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
-use crate::parser::{lex, parse, parse_global_expr, Position, AST};
+use crate::parser::{parse, parse_global_expr, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
+use crate::token::{lex, Position};
 
 use crate::stdlib::{
     any::{type_name, TypeId},

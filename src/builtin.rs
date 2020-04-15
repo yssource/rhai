@@ -4,8 +4,9 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
-use crate::parser::{Position, INT};
+use crate::parser::INT;
 use crate::result::EvalAltResult;
+use crate::token::Position;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
@@ -27,10 +28,12 @@ use crate::stdlib::{
     format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub},
     string::{String, ToString},
-    time::Instant,
     vec::Vec,
     {i32, i64, u32},
 };
+
+#[cfg(not(feature = "no_std"))]
+use crate::stdlib::time::Instant;
 
 #[cfg(feature = "only_i32")]
 const MAX_INT: INT = i32::MAX;
@@ -1153,80 +1156,83 @@ impl Engine<'_> {
             }
         });
 
-        // Register date/time functions
-        self.register_fn("timestamp", || Instant::now());
+        #[cfg(not(feature = "no_std"))]
+        {
+            // Register date/time functions
+            self.register_fn("timestamp", || Instant::now());
 
-        self.register_result_fn("-", |ts1: Instant, ts2: Instant| {
-            if ts2 > ts1 {
-                #[cfg(not(feature = "no_float"))]
-                return Ok(-(ts2 - ts1).as_secs_f64());
+            self.register_result_fn("-", |ts1: Instant, ts2: Instant| {
+                if ts2 > ts1 {
+                    #[cfg(not(feature = "no_float"))]
+                    return Ok(-(ts2 - ts1).as_secs_f64());
 
-                #[cfg(feature = "no_float")]
-                {
-                    let seconds = (ts2 - ts1).as_secs();
-
-                    #[cfg(not(feature = "unchecked"))]
+                    #[cfg(feature = "no_float")]
                     {
-                        if seconds > (MAX_INT as u64) {
-                            return Err(EvalAltResult::ErrorArithmetic(
-                                format!(
-                                    "Integer overflow for timestamp duration: {}",
-                                    -(seconds as i64)
-                                ),
-                                Position::none(),
-                            ));
+                        let seconds = (ts2 - ts1).as_secs();
+
+                        #[cfg(not(feature = "unchecked"))]
+                        {
+                            if seconds > (MAX_INT as u64) {
+                                return Err(EvalAltResult::ErrorArithmetic(
+                                    format!(
+                                        "Integer overflow for timestamp duration: {}",
+                                        -(seconds as i64)
+                                    ),
+                                    Position::none(),
+                                ));
+                            }
                         }
+                        return Ok(-(seconds as INT));
                     }
-                    return Ok(-(seconds as INT));
+                } else {
+                    #[cfg(not(feature = "no_float"))]
+                    return Ok((ts1 - ts2).as_secs_f64());
+
+                    #[cfg(feature = "no_float")]
+                    {
+                        let seconds = (ts1 - ts2).as_secs();
+
+                        #[cfg(not(feature = "unchecked"))]
+                        {
+                            if seconds > (MAX_INT as u64) {
+                                return Err(EvalAltResult::ErrorArithmetic(
+                                    format!("Integer overflow for timestamp duration: {}", seconds),
+                                    Position::none(),
+                                ));
+                            }
+                        }
+                        return Ok(seconds as INT);
+                    }
                 }
-            } else {
+            });
+
+            reg_cmp!(self, "<", lt, Instant);
+            reg_cmp!(self, "<=", lte, Instant);
+            reg_cmp!(self, ">", gt, Instant);
+            reg_cmp!(self, ">=", gte, Instant);
+            reg_cmp!(self, "==", eq, Instant);
+            reg_cmp!(self, "!=", ne, Instant);
+
+            self.register_result_fn("elapsed", |timestamp: Instant| {
                 #[cfg(not(feature = "no_float"))]
-                return Ok((ts1 - ts2).as_secs_f64());
+                return Ok(timestamp.elapsed().as_secs_f64());
 
                 #[cfg(feature = "no_float")]
                 {
-                    let seconds = (ts1 - ts2).as_secs();
+                    let seconds = timestamp.elapsed().as_secs();
 
                     #[cfg(not(feature = "unchecked"))]
                     {
                         if seconds > (MAX_INT as u64) {
                             return Err(EvalAltResult::ErrorArithmetic(
-                                format!("Integer overflow for timestamp duration: {}", seconds),
+                                format!("Integer overflow for timestamp.elapsed(): {}", seconds),
                                 Position::none(),
                             ));
                         }
                     }
                     return Ok(seconds as INT);
                 }
-            }
-        });
-
-        reg_cmp!(self, "<", lt, Instant);
-        reg_cmp!(self, "<=", lte, Instant);
-        reg_cmp!(self, ">", gt, Instant);
-        reg_cmp!(self, ">=", gte, Instant);
-        reg_cmp!(self, "==", eq, Instant);
-        reg_cmp!(self, "!=", ne, Instant);
-
-        self.register_result_fn("elapsed", |timestamp: Instant| {
-            #[cfg(not(feature = "no_float"))]
-            return Ok(timestamp.elapsed().as_secs_f64());
-
-            #[cfg(feature = "no_float")]
-            {
-                let seconds = timestamp.elapsed().as_secs();
-
-                #[cfg(not(feature = "unchecked"))]
-                {
-                    if seconds > (MAX_INT as u64) {
-                        return Err(EvalAltResult::ErrorArithmetic(
-                            format!("Integer overflow for timestamp.elapsed(): {}", seconds),
-                            Position::none(),
-                        ));
-                    }
-                }
-                return Ok(seconds as INT);
-            }
-        });
+            });
+        }
     }
 }

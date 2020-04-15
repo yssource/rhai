@@ -3,9 +3,10 @@
 use crate::any::{Dynamic, Union};
 use crate::error::ParseErrorType;
 use crate::optimize::OptimizationLevel;
-use crate::parser::{Expr, FnDef, Position, ReturnType, Stmt, INT};
+use crate::parser::{Expr, FnDef, ReturnType, Stmt, INT};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryRef as ScopeSource, EntryType as ScopeEntryType, Scope};
+use crate::token::Position;
 
 use crate::stdlib::{
     any::TypeId,

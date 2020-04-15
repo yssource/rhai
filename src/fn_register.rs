@@ -4,8 +4,8 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, FnCallArgs};
-use crate::parser::Position;
 use crate::result::EvalAltResult;
+use crate::token::Position;
 
 use crate::stdlib::{any::TypeId, boxed::Box, string::ToString, vec};
 
