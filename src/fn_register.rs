@@ -146,7 +146,7 @@ macro_rules! def_register {
             FN: Fn($($param),*) -> RET + 'static,
 
             RET: Variant + Clone
-        > RegisterFn<FN, ($($mark,)*), RET> for Engine<'_>
+        > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
@@ -184,7 +184,7 @@ macro_rules! def_register {
 
             #[cfg(not(feature = "sync"))]
             FN: Fn($($param),*) -> Dynamic + 'static,
-        > RegisterDynamicFn<FN, ($($mark,)*)> for Engine<'_>
+        > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
         {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
@@ -221,7 +221,7 @@ macro_rules! def_register {
             FN: Fn($($param),*) -> Result<RET, EvalAltResult> + 'static,
 
             RET: Variant + Clone
-        > RegisterResultFn<FN, ($($mark,)*), RET> for Engine<'_>
+        > RegisterResultFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();

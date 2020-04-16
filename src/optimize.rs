@@ -1,7 +1,7 @@
 use crate::any::Dynamic;
 use crate::engine::{
-    Engine, FnAny, FnCallArgs, FnSpec, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    calc_fn_spec, Engine, FnAny, FnCallArgs, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL,
+    KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
@@ -50,7 +50,7 @@ struct State<'a> {
     /// Collection of constants to use for eager function evaluations.
     constants: Vec<(String, Expr)>,
     /// An `Engine` instance for eager function evaluation.
-    engine: &'a Engine<'a>,
+    engine: &'a Engine,
     /// Library of script-defined functions.
     fn_lib: &'a [(&'a str, usize)],
     /// Optimization level.
@@ -60,7 +60,7 @@ struct State<'a> {
 impl<'a> State<'a> {
     /// Create a new State.
     pub fn new(
-        engine: &'a Engine<'a>,
+        engine: &'a Engine,
         fn_lib: &'a [(&'a str, usize)],
         level: OptimizationLevel,
     ) -> Self {
@@ -110,19 +110,14 @@ impl<'a> State<'a> {
 
 /// Call a registered function
 fn call_fn(
-    functions: Option<&HashMap<FnSpec, Box<FnAny>>>,
+    functions: Option<&HashMap<u64, Box<FnAny>>>,
     fn_name: &str,
     args: &mut FnCallArgs,
     pos: Position,
 ) -> Result<Option<Dynamic>, EvalAltResult> {
-    let spec = FnSpec {
-        name: fn_name.into(),
-        args: args.iter().map(|a| a.type_id()).collect(),
-    };
-
     // Search built-in's and external functions
     functions
-        .and_then(|f| f.get(&spec))
+        .and_then(|f| f.get(&calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()))))
         .map(|func| func(args, pos))
         .transpose()
 }
@@ -621,7 +616,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
 
 fn optimize<'a>(
     statements: Vec<Stmt>,
-    engine: &Engine<'a>,
+    engine: &Engine,
     scope: &Scope,
     fn_lib: &'a [(&'a str, usize)],
     level: OptimizationLevel,

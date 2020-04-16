@@ -88,13 +88,13 @@ macro_rules! def_anonymous_fn {
         def_anonymous_fn!(imp);
     };
     (imp $($par:ident),*) => {
-        impl<'e, $($par: Variant + Clone,)* RET: Variant + Clone> Func<($($par,)*), RET> for Engine<'e>
+        impl<$($par: Variant + Clone,)* RET: Variant + Clone> Func<($($par,)*), RET> for Engine
         {
             #[cfg(feature = "sync")]
-            type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult> + Send + Sync + 'e>;
+            type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult> + Send + Sync>;
 
             #[cfg(not(feature = "sync"))]
-            type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult> + 'e>;
+            type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult>>;
 
             fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output {
                 let name = entry_point.to_string();

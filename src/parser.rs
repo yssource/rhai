@@ -1759,9 +1759,9 @@ fn parse_fn<'a>(
     })
 }
 
-pub fn parse_global_expr<'a, 'e>(
+pub fn parse_global_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    engine: &Engine<'e>,
+    engine: &Engine,
     scope: &Scope,
     optimization_level: OptimizationLevel,
 ) -> Result<AST, ParseError> {
@@ -1841,9 +1841,9 @@ fn parse_global_level<'a>(
 }
 
 /// Run the parser on an input stream, returning an AST.
-pub fn parse<'a, 'e>(
+pub fn parse<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    engine: &Engine<'e>,
+    engine: &Engine,
     scope: &Scope,
     optimization_level: OptimizationLevel,
 ) -> Result<AST, ParseError> {

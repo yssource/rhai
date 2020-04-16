@@ -10,17 +10,16 @@ use crate::token::Position;
 
 use crate::stdlib::{
     any::TypeId,
-    borrow::Cow,
     boxed::Box,
     cmp::Ordering,
-    collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashMap},
     format,
+    hash::{Hash, Hasher},
     iter::once,
     ops::{Deref, DerefMut},
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
-    vec,
     vec::Vec,
 };
 
@@ -112,12 +111,6 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
         Self::Value(value)
     }
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct FnSpec<'a> {
-    pub name: Cow<'a, str>,
-    pub args: Vec<TypeId>,
 }
 
 /// A type that holds a library of script-defined functions.
@@ -239,9 +232,9 @@ impl DerefMut for FunctionsLib {
 /// ```
 ///
 /// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-pub struct Engine<'e> {
+pub struct Engine {
     /// A hashmap containing all compiled functions known to the engine.
-    pub(crate) functions: Option<HashMap<FnSpec<'e>, Box<FnAny>>>,
+    pub(crate) functions: Option<HashMap<u64, Box<FnAny>>>,
 
     /// A hashmap containing all iterators known to the engine.
     pub(crate) type_iterators: Option<HashMap<TypeId, Box<IteratorFn>>>,
@@ -250,17 +243,17 @@ pub struct Engine<'e> {
 
     /// Closure for implementing the `print` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_print: Option<Box<dyn Fn(&str) + Send + Sync + 'e>>,
+    pub(crate) on_print: Option<Box<dyn Fn(&str) + Send + Sync + 'static>>,
     /// Closure for implementing the `print` command.
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_print: Option<Box<dyn Fn(&str) + 'e>>,
+    pub(crate) on_print: Option<Box<dyn Fn(&str) + 'static>>,
 
     /// Closure for implementing the `debug` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_debug: Option<Box<dyn Fn(&str) + Send + Sync + 'e>>,
+    pub(crate) on_debug: Option<Box<dyn Fn(&str) + Send + Sync + 'static>>,
     /// Closure for implementing the `debug` command.
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_debug: Option<Box<dyn Fn(&str) + 'e>>,
+    pub(crate) on_debug: Option<Box<dyn Fn(&str) + 'static>>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -271,7 +264,7 @@ pub struct Engine<'e> {
     pub(crate) max_call_stack_depth: usize,
 }
 
-impl Default for Engine<'_> {
+impl Default for Engine {
     fn default() -> Self {
         // Create the new scripting Engine
         let mut engine = Engine {
@@ -349,7 +342,14 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     }
 }
 
-impl Engine<'_> {
+pub(crate) fn calc_fn_spec(fn_name: &str, params: impl Iterator<Item = TypeId>) -> u64 {
+    let mut s = DefaultHasher::new();
+    fn_name.hash(&mut s);
+    params.for_each(|t| t.hash(&mut s));
+    s.finish()
+}
+
+impl Engine {
     /// Create a new `Engine`
     pub fn new() -> Self {
         Default::default()
@@ -471,11 +471,6 @@ impl Engine<'_> {
             }
         }
 
-        let spec = FnSpec {
-            name: fn_name.into(),
-            args: args.iter().map(|a| a.type_id()).collect(),
-        };
-
         // Argument must be a string
         fn cast_to_string(r: &Dynamic, pos: Position) -> Result<&str, EvalAltResult> {
             r.as_str()
@@ -483,7 +478,9 @@ impl Engine<'_> {
         }
 
         // Search built-in's and external functions
-        if let Some(func) = self.functions.as_ref().and_then(|f| f.get(&spec)) {
+        let fn_spec = calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()));
+
+        if let Some(func) = self.functions.as_ref().and_then(|f| f.get(&fn_spec)) {
             // Run external function
             let result = func(args, pos)?;
 
@@ -519,7 +516,7 @@ impl Engine<'_> {
         }
 
         if let Some(prop) = extract_prop_from_setter(fn_name) {
-            let (arg, value) = args.split_at_mut(0);
+            let (arg, value) = args.split_at_mut(1);
 
             return match arg[0] {
                 // Map property update
@@ -1336,10 +1333,8 @@ impl Engine<'_> {
                     name: &str,
                 ) -> bool {
                     engine.functions.as_ref().map_or(false, |lib| {
-                        lib.contains_key(&FnSpec {
-                            name: name.into(),
-                            args: vec![TypeId::of::<String>()],
-                        })
+                        let fn_spec = calc_fn_spec(name, [TypeId::of::<String>()].iter().cloned());
+                        lib.contains_key(&fn_spec)
                     }) || fn_lib.map_or(false, |lib| lib.has_function(name, 1))
                 }
 

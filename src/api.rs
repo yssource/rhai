@@ -1,7 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, FnAny, FnSpec, Map};
+use crate::engine::{calc_fn_spec, make_getter, make_setter, Engine, FnAny, Map};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
@@ -59,18 +59,16 @@ pub trait IteratorCallback: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 
 impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
 
 /// Engine public API
-impl<'e> Engine<'e> {
+impl Engine {
     /// Register a custom function.
     pub(crate) fn register_fn_raw(&mut self, fn_name: &str, args: Vec<TypeId>, f: Box<FnAny>) {
-        let spec = FnSpec {
-            name: fn_name.to_string().into(),
-            args,
-        };
-
         if self.functions.is_none() {
             self.functions = Some(HashMap::new());
         }
-        self.functions.as_mut().unwrap().insert(spec, f);
+        self.functions
+            .as_mut()
+            .unwrap()
+            .insert(calc_fn_spec(fn_name, args.into_iter()), f);
     }
 
     /// Register a custom type for use with the `Engine`.
@@ -969,23 +967,25 @@ impl<'e> Engine<'e> {
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// # use std::sync::RwLock;
+    /// # use std::sync::Arc;
     /// use rhai::Engine;
     ///
-    /// let result = RwLock::new(String::from(""));
-    /// {
-    ///     let mut engine = Engine::new();
+    /// let result = Arc::new(RwLock::new(String::from("")));
     ///
-    ///     // Override action of 'print' function
-    ///     engine.on_print(|s| result.write().unwrap().push_str(s));
+    /// let mut engine = Engine::new();
     ///
-    ///     engine.consume("print(40 + 2);")?;
-    /// }
+    /// // Override action of 'print' function
+    /// let logger = result.clone();
+    /// engine.on_print(move |s| logger.write().unwrap().push_str(s));
+    ///
+    /// engine.consume("print(40 + 2);")?;
+    ///
     /// assert_eq!(*result.read().unwrap(), "42");
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(feature = "sync")]
-    pub fn on_print(&mut self, callback: impl Fn(&str) + Send + Sync + 'e) {
+    pub fn on_print(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
         self.on_print = Some(Box::new(callback));
     }
     /// Override default action of `print` (print to stdout using `println!`)
@@ -995,23 +995,25 @@ impl<'e> Engine<'e> {
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// # use std::sync::RwLock;
+    /// # use std::sync::Arc;
     /// use rhai::Engine;
     ///
-    /// let result = RwLock::new(String::from(""));
-    /// {
-    ///     let mut engine = Engine::new();
+    /// let result = Arc::new(RwLock::new(String::from("")));
     ///
-    ///     // Override action of 'print' function
-    ///     engine.on_print(|s| result.write().unwrap().push_str(s));
+    /// let mut engine = Engine::new();
     ///
-    ///     engine.consume("print(40 + 2);")?;
-    /// }
+    /// // Override action of 'print' function
+    /// let logger = result.clone();
+    /// engine.on_print(move |s| logger.write().unwrap().push_str(s));
+    ///
+    /// engine.consume("print(40 + 2);")?;
+    ///
     /// assert_eq!(*result.read().unwrap(), "42");
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "sync"))]
-    pub fn on_print(&mut self, callback: impl Fn(&str) + 'e) {
+    pub fn on_print(&mut self, callback: impl Fn(&str) + 'static) {
         self.on_print = Some(Box::new(callback));
     }
 
@@ -1022,23 +1024,25 @@ impl<'e> Engine<'e> {
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// # use std::sync::RwLock;
+    /// # use std::sync::Arc;
     /// use rhai::Engine;
     ///
-    /// let result = RwLock::new(String::from(""));
-    /// {
-    ///     let mut engine = Engine::new();
+    /// let result = Arc::new(RwLock::new(String::from("")));
     ///
-    ///     // Override action of 'print' function
-    ///     engine.on_debug(|s| result.write().unwrap().push_str(s));
+    /// let mut engine = Engine::new();
     ///
-    ///     engine.consume(r#"debug("hello");"#)?;
-    /// }
+    /// // Override action of 'print' function
+    /// let logger = result.clone();
+    /// engine.on_debug(move |s| logger.write().unwrap().push_str(s));
+    ///
+    /// engine.consume(r#"debug("hello");"#)?;
+    ///
     /// assert_eq!(*result.read().unwrap(), r#""hello""#);
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(feature = "sync")]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + Send + Sync + 'e) {
+    pub fn on_debug(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
         self.on_debug = Some(Box::new(callback));
     }
     /// Override default action of `debug` (print to stdout using `println!`)
@@ -1048,23 +1052,25 @@ impl<'e> Engine<'e> {
     /// ```
     /// # fn main() -> Result<(), rhai::EvalAltResult> {
     /// # use std::sync::RwLock;
+    /// # use std::sync::Arc;
     /// use rhai::Engine;
     ///
-    /// let result = RwLock::new(String::from(""));
-    /// {
-    ///     let mut engine = Engine::new();
+    /// let result = Arc::new(RwLock::new(String::from("")));
     ///
-    ///     // Override action of 'print' function
-    ///     engine.on_debug(|s| result.write().unwrap().push_str(s));
+    /// let mut engine = Engine::new();
     ///
-    ///     engine.consume(r#"debug("hello");"#)?;
-    /// }
+    /// // Override action of 'print' function
+    /// let logger = result.clone();
+    /// engine.on_debug(move |s| logger.write().unwrap().push_str(s));
+    ///
+    /// engine.consume(r#"debug("hello");"#)?;
+    ///
     /// assert_eq!(*result.read().unwrap(), r#""hello""#);
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "sync"))]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + 'e) {
+    pub fn on_debug(&mut self, callback: impl Fn(&str) + 'static) {
         self.on_debug = Some(Box::new(callback));
     }
 }

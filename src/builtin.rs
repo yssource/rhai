@@ -94,7 +94,7 @@ fn ne<T: PartialEq>(x: T, y: T) -> bool {
     x != y
 }
 
-impl Engine<'_> {
+impl Engine {
     /// Register the core built-in library.
     pub(crate) fn register_core_lib(&mut self) {
         // Checked add
@@ -770,7 +770,7 @@ macro_rules! reg_fn2y {
 }
 
 /// Register the built-in library.
-impl Engine<'_> {
+impl Engine {
     pub fn register_stdlib(&mut self) {
         #[cfg(not(feature = "no_float"))]
         {
