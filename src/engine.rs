@@ -519,12 +519,12 @@ impl Engine<'_> {
         }
 
         if let Some(prop) = extract_prop_from_setter(fn_name) {
-            let value = args[1].clone();
+            let (arg, value) = args.split_at_mut(0);
 
-            return match args[0] {
+            return match arg[0] {
                 // Map property update
                 Dynamic(Union::Map(map)) => {
-                    map.insert(prop.to_string(), value);
+                    map.insert(prop.to_string(), value[0].clone());
                     Ok(Dynamic::from_unit())
                 }
 
@@ -588,7 +588,7 @@ impl Engine<'_> {
 
             // xxx.idx_lhs[idx_expr]
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
-                let value = match idx_lhs.as_ref() {
+                let lhs_value = match idx_lhs.as_ref() {
                     // xxx.id[idx_expr]
                     Expr::Property(id, pos) => {
                         let mut args = [target.get_mut(scope)];
@@ -596,6 +596,7 @@ impl Engine<'_> {
                     }
                     // xxx.???[???][idx_expr]
                     Expr::Index(_, _, _) => {
+                        // Chain the indexing
                         self.get_dot_val_helper(scope, fn_lib, target, idx_lhs, level)?
                     }
                     // Syntax error
@@ -607,7 +608,7 @@ impl Engine<'_> {
                     }
                 };
 
-                self.get_indexed_value(scope, fn_lib, &value, idx_expr, *op_pos, level)
+                self.get_indexed_value(scope, fn_lib, &lhs_value, idx_expr, *op_pos, level, false)
                     .map(|(val, _)| val)
             }
 
@@ -643,7 +644,7 @@ impl Engine<'_> {
                         }
                     };
 
-                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)
+                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level, false)
                         .and_then(|(mut val, _)| {
                             self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), rhs, level)
                         })
@@ -744,6 +745,7 @@ impl Engine<'_> {
         idx_expr: &Expr,
         op_pos: Position,
         level: usize,
+        only_index: bool,
     ) -> Result<(Dynamic, IndexValue), EvalAltResult> {
         let idx_pos = idx_expr.position();
         let type_name = self.map_type_name(val.type_name());
@@ -756,13 +758,22 @@ impl Engine<'_> {
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
-                return if index >= 0 {
+                if index >= 0 {
                     arr.get(index as usize)
-                        .map(|v| (v.clone(), IndexValue::from_num(index)))
+                        .map(|v| {
+                            (
+                                if only_index {
+                                    Dynamic::from_unit()
+                                } else {
+                                    v.clone()
+                                },
+                                IndexValue::from_num(index),
+                            )
+                        })
                         .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
                 } else {
                     Err(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
-                };
+                }
             }
 
             Union::Map(map) => {
@@ -772,12 +783,18 @@ impl Engine<'_> {
                     .take_string()
                     .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_expr.position()))?;
 
-                return Ok((
+                Ok((
                     map.get(&index)
-                        .cloned()
+                        .map(|v| {
+                            if only_index {
+                                Dynamic::from_unit()
+                            } else {
+                                v.clone()
+                            }
+                        })
                         .unwrap_or_else(|| Dynamic::from_unit()),
                     IndexValue::from_str(index),
-                ));
+                ))
             }
 
             Union::Str(s) => {
@@ -787,7 +804,7 @@ impl Engine<'_> {
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
-                return if index >= 0 {
+                if index >= 0 {
                     s.chars()
                         .nth(index as usize)
                         .map(|ch| (Dynamic::from_char(ch), IndexValue::from_num(index)))
@@ -800,7 +817,7 @@ impl Engine<'_> {
                         index,
                         idx_pos,
                     ))
-                };
+                }
             }
 
             // Error - cannot be indexed
@@ -827,7 +844,7 @@ impl Engine<'_> {
                 let (ScopeSource { typ, index, .. }, val) =
                     Self::search_scope(scope, &id, lhs.position())?;
                 let (val, idx) =
-                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)?;
+                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level, false)?;
 
                 Ok((
                     Some(ScopeSource {
@@ -843,7 +860,7 @@ impl Engine<'_> {
             // (expr)[idx_expr]
             expr => {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
-                self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)
+                self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level, false)
                     .map(|(val, index)| (None, index, val))
             }
         }
@@ -951,8 +968,9 @@ impl Engine<'_> {
                     let fn_name = make_getter(id);
                     self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|val| {
-                            let (_, index) = self
-                                .get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)?;
+                            let (_, index) = self.get_indexed_value(
+                                scope, fn_lib, &val, idx_expr, *op_pos, level, true,
+                            )?;
 
                             Self::update_indexed_value(val, index, new_val.0.clone(), new_val.1)
                         })
@@ -996,7 +1014,7 @@ impl Engine<'_> {
                         self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                             .and_then(|v| {
                                 let (mut value, index) = self.get_indexed_value(
-                                    scope, fn_lib, &v, idx_expr, *op_pos, level,
+                                    scope, fn_lib, &v, idx_expr, *op_pos, level, false,
                                 )?;
 
                                 let val_pos = new_val.1;
