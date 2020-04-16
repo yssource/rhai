@@ -94,17 +94,23 @@ enum Target<'a> {
 }
 
 impl<'a> Target<'a> {
-    fn from(value: &'a mut Dynamic) -> Self {
-        Self::Value(value)
-    }
-    fn from_src(src: ScopeSource<'a>) -> Self {
-        Self::Scope(src)
-    }
     fn get_mut(self, scope: &'a mut Scope) -> &'a mut Dynamic {
         match self {
             Self::Value(t) => t,
             Self::Scope(src) => scope.get_mut(src),
         }
+    }
+}
+
+impl<'a> From<ScopeSource<'a>> for Target<'a> {
+    fn from(src: ScopeSource<'a>) -> Self {
+        Self::Scope(src)
+    }
+}
+
+impl<'a> From<&'a mut Dynamic> for Target<'a> {
+    fn from(value: &'a mut Dynamic) -> Self {
+        Self::Value(value)
     }
 }
 
@@ -497,35 +503,37 @@ impl Engine<'_> {
         }
 
         if let Some(prop) = extract_prop_from_getter(fn_name) {
-            // Map property access
-            if let Ok(map) = args[0].as_map() {
-                return Ok(map
+            return match args[0] {
+                // Map property access
+                Dynamic(Union::Map(map)) => Ok(map
                     .get(prop)
                     .cloned()
-                    .unwrap_or_else(|| Dynamic::from_unit()));
-            }
+                    .unwrap_or_else(|| Dynamic::from_unit())),
 
-            // Getter function not found
-            return Err(EvalAltResult::ErrorDotExpr(
-                format!("- property '{}' unknown or write-only", prop),
-                pos,
-            ));
+                // Getter function not found
+                _ => Err(EvalAltResult::ErrorDotExpr(
+                    format!("- property '{}' unknown or write-only", prop),
+                    pos,
+                )),
+            };
         }
 
         if let Some(prop) = extract_prop_from_setter(fn_name) {
             let value = args[1].clone();
 
-            // Map property update
-            if let Dynamic(Union::Map(map)) = args[0] {
-                map.insert(prop.to_string(), value);
-                return Ok(Dynamic::from_unit());
-            }
+            return match args[0] {
+                // Map property update
+                Dynamic(Union::Map(map)) => {
+                    map.insert(prop.to_string(), value);
+                    Ok(Dynamic::from_unit())
+                }
 
-            // Setter function not found
-            return Err(EvalAltResult::ErrorDotExpr(
-                format!("- property '{}' unknown or read-only", prop),
-                pos,
-            ));
+                // Setter function not found
+                _ => Err(EvalAltResult::ErrorDotExpr(
+                    format!("- property '{}' unknown or read-only", prop),
+                    pos,
+                )),
+            };
         }
 
         if let Some(val) = def_val {
@@ -610,8 +618,7 @@ impl Engine<'_> {
                     let mut args = [target.get_mut(scope)];
                     self.call_fn_raw(None, fn_lib, &make_getter(id), &mut args, None, *pos, 0)
                         .and_then(|mut val| {
-                            let target = Target::from(&mut val);
-                            self.get_dot_val_helper(scope, fn_lib, target, rhs, level)
+                            self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), rhs, level)
                         })
                 }
                 // xxx.idx_lhs[idx_expr].rhs
@@ -638,8 +645,7 @@ impl Engine<'_> {
 
                     self.get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level)
                         .and_then(|(mut val, _)| {
-                            let target = Target::from(&mut val);
-                            self.get_dot_val_helper(scope, fn_lib, target, rhs, level)
+                            self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), rhs, level)
                         })
                 }
                 // Syntax error
@@ -676,34 +682,34 @@ impl Engine<'_> {
 
                 // This is a variable property access (potential function call).
                 // Use a direct index into `scope` to directly mutate the variable value.
-                self.get_dot_val_helper(scope, fn_lib, Target::from_src(entry), dot_rhs, level)
+                self.get_dot_val_helper(scope, fn_lib, entry.into(), dot_rhs, level)
             }
 
             // idx_lhs[idx_expr].???
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
                 let (src, index, mut val) =
                     self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
-                let target = Target::from(&mut val);
-                let value = self.get_dot_val_helper(scope, fn_lib, target, dot_rhs, level);
+                let value =
+                    self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), dot_rhs, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                match src.map(|s| s.typ) {
-                    None => (),
+                if let Some(src) = src {
+                    match src.typ {
+                        ScopeEntryType::Constant => {
+                            return Err(EvalAltResult::ErrorAssignmentToConstant(
+                                src.name.to_string(),
+                                idx_lhs.position(),
+                            ));
+                        }
 
-                    Some(ScopeEntryType::Constant) => {
-                        return Err(EvalAltResult::ErrorAssignmentToConstant(
-                            src.unwrap().name.to_string(),
-                            idx_lhs.position(),
-                        ));
-                    }
-
-                    Some(ScopeEntryType::Normal) => {
-                        Self::update_indexed_var_in_scope(
-                            scope,
-                            src.unwrap(),
-                            index,
-                            (val, dot_rhs.position()),
-                        )?;
+                        ScopeEntryType::Normal => {
+                            Self::update_indexed_var_in_scope(
+                                scope,
+                                src,
+                                index,
+                                (val, dot_rhs.position()),
+                            )?;
+                        }
                     }
                 }
 
@@ -713,7 +719,7 @@ impl Engine<'_> {
             // {expr}.???
             expr => {
                 let mut val = self.eval_expr(scope, fn_lib, expr, level)?;
-                self.get_dot_val_helper(scope, fn_lib, Target::from(&mut val), dot_rhs, level)
+                self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), dot_rhs, level)
             }
         }
     }
@@ -740,66 +746,69 @@ impl Engine<'_> {
         level: usize,
     ) -> Result<(Dynamic, IndexValue), EvalAltResult> {
         let idx_pos = idx_expr.position();
+        let type_name = self.map_type_name(val.type_name());
 
-        // val_array[idx]
-        if let Ok(arr) = val.as_array() {
-            let index = self
-                .eval_expr(scope, fn_lib, idx_expr, level)?
-                .as_int()
-                .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
+        match val.get_ref() {
+            Union::Array(arr) => {
+                // val_array[idx]
+                let index = self
+                    .eval_expr(scope, fn_lib, idx_expr, level)?
+                    .as_int()
+                    .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
-            return if index >= 0 {
-                arr.get(index as usize)
-                    .map(|v| (v.clone(), IndexValue::from_num(index)))
-                    .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
-            } else {
-                Err(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
-            };
+                return if index >= 0 {
+                    arr.get(index as usize)
+                        .map(|v| (v.clone(), IndexValue::from_num(index)))
+                        .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
+                } else {
+                    Err(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
+                };
+            }
+
+            Union::Map(map) => {
+                // val_map[idx]
+                let index = self
+                    .eval_expr(scope, fn_lib, idx_expr, level)?
+                    .take_string()
+                    .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_expr.position()))?;
+
+                return Ok((
+                    map.get(&index)
+                        .cloned()
+                        .unwrap_or_else(|| Dynamic::from_unit()),
+                    IndexValue::from_str(index),
+                ));
+            }
+
+            Union::Str(s) => {
+                // val_string[idx]
+                let index = self
+                    .eval_expr(scope, fn_lib, idx_expr, level)?
+                    .as_int()
+                    .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
+
+                return if index >= 0 {
+                    s.chars()
+                        .nth(index as usize)
+                        .map(|ch| (Dynamic::from_char(ch), IndexValue::from_num(index)))
+                        .ok_or_else(|| {
+                            EvalAltResult::ErrorStringBounds(s.chars().count(), index, idx_pos)
+                        })
+                } else {
+                    Err(EvalAltResult::ErrorStringBounds(
+                        s.chars().count(),
+                        index,
+                        idx_pos,
+                    ))
+                };
+            }
+
+            // Error - cannot be indexed
+            _ => Err(EvalAltResult::ErrorIndexingType(
+                type_name.to_string(),
+                op_pos,
+            )),
         }
-
-        // val_map[idx]
-        if let Ok(map) = val.as_map() {
-            let index = self
-                .eval_expr(scope, fn_lib, idx_expr, level)?
-                .take_string()
-                .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_expr.position()))?;
-
-            return Ok((
-                map.get(&index)
-                    .cloned()
-                    .unwrap_or_else(|| Dynamic::from_unit()),
-                IndexValue::from_str(index),
-            ));
-        }
-
-        // val_string[idx]
-        if let Ok(s) = val.as_str() {
-            let index = self
-                .eval_expr(scope, fn_lib, idx_expr, level)?
-                .as_int()
-                .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
-
-            return if index >= 0 {
-                s.chars()
-                    .nth(index as usize)
-                    .map(|ch| (Dynamic::from_char(ch), IndexValue::from_num(index)))
-                    .ok_or_else(|| {
-                        EvalAltResult::ErrorStringBounds(s.chars().count(), index, idx_pos)
-                    })
-            } else {
-                Err(EvalAltResult::ErrorStringBounds(
-                    s.chars().count(),
-                    index,
-                    idx_pos,
-                ))
-            };
-        }
-
-        // Error - cannot be indexed
-        Err(EvalAltResult::ErrorIndexingType(
-            self.map_type_name(val.type_name()).to_string(),
-            op_pos,
-        ))
     }
 
     /// Evaluate an index expression
@@ -815,25 +824,18 @@ impl Engine<'_> {
         match lhs {
             // id[idx_expr]
             Expr::Variable(id, _) => {
-                let (
-                    ScopeSource {
-                        typ: src_type,
-                        index: src_idx,
-                        ..
-                    },
-                    val,
-                ) = Self::search_scope(scope, &id, lhs.position())?;
-
-                let (val, index) =
+                let (ScopeSource { typ, index, .. }, val) =
+                    Self::search_scope(scope, &id, lhs.position())?;
+                let (val, idx) =
                     self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)?;
 
                 Ok((
                     Some(ScopeSource {
                         name: &id,
-                        typ: src_type,
-                        index: src_idx,
+                        typ,
+                        index,
                     }),
-                    index,
+                    idx,
                     val,
                 ))
             }
@@ -841,7 +843,6 @@ impl Engine<'_> {
             // (expr)[idx_expr]
             expr => {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
-
                 self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level)
                     .map(|(val, index)| (None, index, val))
             }
@@ -870,7 +871,7 @@ impl Engine<'_> {
     ) -> Result<Dynamic, EvalAltResult> {
         let target = scope.get_mut(src);
 
-        match &mut target.0 {
+        match target.get_mut() {
             // array_id[idx] = val
             Union::Array(arr) => {
                 arr[idx.as_num()] = new_val.0;
@@ -903,7 +904,7 @@ impl Engine<'_> {
         new_val: Dynamic,
         pos: Position,
     ) -> Result<Dynamic, EvalAltResult> {
-        match &mut target.0 {
+        match target.get_mut() {
             Union::Array(arr) => {
                 arr[idx.as_num()] = new_val;
             }
@@ -1083,23 +1084,23 @@ impl Engine<'_> {
                     self.set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                match src.map(|x| x.typ) {
-                    None => (),
+                if let Some(src) = src {
+                    match src.typ {
+                        ScopeEntryType::Constant => {
+                            return Err(EvalAltResult::ErrorAssignmentToConstant(
+                                src.name.to_string(),
+                                lhs.position(),
+                            ));
+                        }
 
-                    Some(ScopeEntryType::Constant) => {
-                        return Err(EvalAltResult::ErrorAssignmentToConstant(
-                            src.unwrap().name.to_string(),
-                            lhs.position(),
-                        ));
-                    }
-
-                    Some(ScopeEntryType::Normal) => {
-                        Self::update_indexed_var_in_scope(
-                            scope,
-                            src.unwrap(),
-                            index,
-                            (target, val_pos),
-                        )?;
+                        ScopeEntryType::Normal => {
+                            Self::update_indexed_var_in_scope(
+                                scope,
+                                src,
+                                index,
+                                (target, val_pos),
+                            )?;
+                        }
                     }
                 }
 

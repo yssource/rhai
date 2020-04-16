@@ -263,7 +263,23 @@ fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<T, Box<X>> {
 }
 
 impl Dynamic {
+    /// Get a reference to the inner `Union`.
+    pub(crate) fn get_ref(&self) -> &Union {
+        &self.0
+    }
+
+    /// Get a mutable reference to the inner `Union`.
+    pub(crate) fn get_mut(&mut self) -> &mut Union {
+        &mut self.0
+    }
+
     /// Create a `Dynamic` from any type.  A `Dynamic` value is simply returned as is.
+    ///
+    /// Beware that you need to pass in an `Array` type for it to be recognized as an `Array`.
+    /// A `Vec<T>` does not get automatically converted to an `Array`, but will be a generic
+    /// restricted trait object instead, because `Vec<T>` is not a supported standard type.
+    ///
+    /// Similarly, passing in a `HashMap<String, T>` will not get a `Map` but a trait object.
     ///
     /// # Examples
     ///
@@ -462,24 +478,6 @@ impl Dynamic {
     pub(crate) fn take_string(self) -> Result<String, &'static str> {
         match self.0 {
             Union::Str(s) => Ok(s),
-            _ => Err(self.type_name()),
-        }
-    }
-
-    /// Cast the `Dynamic` as an `Array` and return a reference to it.
-    /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_array(&self) -> Result<&Array, &'static str> {
-        match &self.0 {
-            Union::Array(array) => Ok(array),
-            _ => Err(self.type_name()),
-        }
-    }
-
-    /// Cast the `Dynamic` as a `Map` and return a reference to it.
-    /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_map(&self) -> Result<&Map, &'static str> {
-        match &self.0 {
-            Union::Map(map) => Ok(map),
             _ => Err(self.type_name()),
         }
     }
