@@ -397,13 +397,6 @@ impl<'a> Scope<'a> {
         &mut entry.value
     }
 
-    /// Get a mutable reference to an entry in the Scope and downcast it to a specific type
-    pub(crate) fn get_mut_by_type<T: Variant + Clone>(&mut self, key: EntryRef) -> &mut T {
-        self.get_mut(key)
-            .downcast_mut::<T>()
-            .expect("wrong type cast")
-    }
-
     /// Get an iterator to entries in the Scope.
     pub fn iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev() // Always search a Scope in reverse order

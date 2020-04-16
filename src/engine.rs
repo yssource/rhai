@@ -11,7 +11,6 @@ use crate::token::Position;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    cmp::Ordering,
     collections::{hash_map::DefaultHasher, HashMap},
     format,
     hash::{Hash, Hasher},
@@ -125,48 +124,41 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
 /// So instead this is implemented as a sorted list and binary searched.
 #[derive(Debug, Clone)]
 pub struct FunctionsLib(
-    #[cfg(feature = "sync")] Vec<Arc<FnDef>>,
-    #[cfg(not(feature = "sync"))] Vec<Rc<FnDef>>,
+    #[cfg(feature = "sync")] HashMap<u64, Arc<FnDef>>,
+    #[cfg(not(feature = "sync"))] HashMap<u64, Rc<FnDef>>,
 );
-
-impl FnDef {
-    /// Function to order two FnDef records, for binary search.
-    pub fn compare(&self, name: &str, params_len: usize) -> Ordering {
-        // First order by name
-        match self.name.as_str().cmp(name) {
-            // Then by number of parameters
-            Ordering::Equal => self.params.len().cmp(&params_len),
-            order => order,
-        }
-    }
-}
 
 impl FunctionsLib {
     /// Create a new `FunctionsLib`.
     pub fn new() -> Self {
-        FunctionsLib(Vec::new())
+        FunctionsLib(HashMap::new())
     }
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
     pub fn from_vec(vec: Vec<FnDef>) -> Self {
-        #[cfg(feature = "sync")]
-        {
-            FunctionsLib(vec.into_iter().map(Arc::new).collect())
-        }
-        #[cfg(not(feature = "sync"))]
-        {
-            FunctionsLib(vec.into_iter().map(Rc::new).collect())
-        }
+        FunctionsLib(
+            vec.into_iter()
+                .map(|f| {
+                    let hash = calc_fn_def(&f.name, f.params.len());
+
+                    #[cfg(feature = "sync")]
+                    {
+                        (hash, Arc::new(f))
+                    }
+                    #[cfg(not(feature = "sync"))]
+                    {
+                        (hash, Rc::new(f))
+                    }
+                })
+                .collect(),
+        )
     }
     /// Does a certain function exist in the `FunctionsLib`?
     pub fn has_function(&self, name: &str, params: usize) -> bool {
-        self.0.binary_search_by(|f| f.compare(name, params)).is_ok()
+        self.contains_key(&calc_fn_def(name, params))
     }
     /// Get a function definition from the `FunctionsLib`.
     pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
-        self.0
-            .binary_search_by(|f| f.compare(name, params))
-            .ok()
-            .map(|n| self.0[n].as_ref())
+        self.get(&calc_fn_def(name, params)).map(|f| f.as_ref())
     }
     /// Merge another `FunctionsLib` into this `FunctionsLib`.
     pub fn merge(&self, other: &Self) -> Self {
@@ -177,16 +169,8 @@ impl FunctionsLib {
         } else {
             let mut functions = self.clone();
 
-            other.iter().cloned().for_each(|fn_def| {
-                if let Some((n, _)) = functions
-                    .iter()
-                    .enumerate()
-                    .find(|(_, f)| f.name == fn_def.name && f.params.len() == fn_def.params.len())
-                {
-                    functions[n] = fn_def;
-                } else {
-                    functions.push(fn_def);
-                }
+            other.iter().for_each(|(hash, fn_def)| {
+                functions.insert(*hash, fn_def.clone());
             });
 
             functions
@@ -196,9 +180,9 @@ impl FunctionsLib {
 
 impl Deref for FunctionsLib {
     #[cfg(feature = "sync")]
-    type Target = Vec<Arc<FnDef>>;
+    type Target = HashMap<u64, Arc<FnDef>>;
     #[cfg(not(feature = "sync"))]
-    type Target = Vec<Rc<FnDef>>;
+    type Target = HashMap<u64, Rc<FnDef>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -207,11 +191,11 @@ impl Deref for FunctionsLib {
 
 impl DerefMut for FunctionsLib {
     #[cfg(feature = "sync")]
-    fn deref_mut(&mut self) -> &mut Vec<Arc<FnDef>> {
+    fn deref_mut(&mut self) -> &mut HashMap<u64, Arc<FnDef>> {
         &mut self.0
     }
     #[cfg(not(feature = "sync"))]
-    fn deref_mut(&mut self) -> &mut Vec<Rc<FnDef>> {
+    fn deref_mut(&mut self) -> &mut HashMap<u64, Rc<FnDef>> {
         &mut self.0
     }
 }
@@ -346,6 +330,13 @@ pub(crate) fn calc_fn_spec(fn_name: &str, params: impl Iterator<Item = TypeId>) 
     let mut s = DefaultHasher::new();
     fn_name.hash(&mut s);
     params.for_each(|t| t.hash(&mut s));
+    s.finish()
+}
+
+pub(crate) fn calc_fn_def(fn_name: &str, params: usize) -> u64 {
+    let mut s = DefaultHasher::new();
+    fn_name.hash(&mut s);
+    params.hash(&mut s);
     s.finish()
 }
 

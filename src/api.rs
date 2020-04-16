@@ -956,7 +956,11 @@ impl Engine {
         ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
-        let fn_lib = ast.1.iter().map(|fn_def| fn_def.as_ref().clone()).collect();
+        let fn_lib = ast
+            .1
+            .iter()
+            .map(|(_, fn_def)| fn_def.as_ref().clone())
+            .collect();
         optimize_into_ast(self, scope, ast.0, fn_lib, optimization_level)
     }
 

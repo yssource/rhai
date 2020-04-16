@@ -1,7 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
-use crate::engine::{Engine, FunctionsLib};
+use crate::engine::{calc_fn_def, Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -1787,9 +1787,9 @@ pub fn parse_global_expr<'a>(
 /// Parse the global level statements.
 fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
+) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
-    let mut functions = Vec::<FnDef>::new();
+    let mut functions = HashMap::<u64, FnDef>::new();
 
     while input.peek().is_some() {
         // Collect all the function definitions
@@ -1797,13 +1797,7 @@ fn parse_global_level<'a>(
         {
             if matches!(input.peek().expect("should not be None"), (Token::Fn, _)) {
                 let f = parse_fn(input, true)?;
-
-                // Ensure list is sorted
-                match functions.binary_search_by(|fn_def| fn_def.compare(&f.name, f.params.len())) {
-                    Ok(n) => functions[n] = f,        // Override previous definition
-                    Err(n) => functions.insert(n, f), // New function definition
-                }
-
+                functions.insert(calc_fn_def(&f.name, f.params.len()), f);
                 continue;
             }
         }
@@ -1849,9 +1843,10 @@ pub fn parse<'a>(
 ) -> Result<AST, ParseError> {
     let (statements, functions) = parse_global_level(input)?;
 
+    let fn_lib = functions.into_iter().map(|(_, v)| v).collect();
     Ok(
         // Optimize AST
-        optimize_into_ast(engine, scope, statements, functions, optimization_level),
+        optimize_into_ast(engine, scope, statements, fn_lib, optimization_level),
     )
 }
 
