@@ -159,10 +159,11 @@ fn main() {
                 // Evaluate
                 engine.eval_ast_with_scope::<Dynamic>(&mut scope, &main_ast)
             }) {
-            Ok(result) => {
+            Ok(result) if !result.is::<()>() => {
                 println!("=> {:?}", result);
                 println!();
             }
+            Ok(_) => (),
             Err(err) => {
                 println!();
                 print_error(&input, err);
