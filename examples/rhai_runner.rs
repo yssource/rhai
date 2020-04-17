@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Position};
+use rhai::{Engine, EvalAltResult};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
