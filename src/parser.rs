@@ -871,6 +871,7 @@ fn parse_primary<'a>(
 
     let mut root_expr = match token {
         Token::IntegerConstant(x) => Expr::IntegerConstant(x, pos),
+        #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(x, pos),
         Token::CharConstant(c) => Expr::CharConstant(c, pos),
         Token::StringConst(s) => Expr::StringConstant(s.into(), pos),

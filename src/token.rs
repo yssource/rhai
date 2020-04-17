@@ -120,6 +120,7 @@ impl fmt::Debug for Position {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     IntegerConstant(INT),
+    #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT),
     Identifier(String),
     CharConstant(char),
@@ -197,6 +198,7 @@ impl Token {
 
         match self {
             IntegerConstant(i) => i.to_string().into(),
+            #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
             Identifier(s) => s.into(),
             CharConstant(c) => c.to_string().into(),
