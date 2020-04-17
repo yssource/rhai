@@ -22,9 +22,9 @@ type LERR = LexError;
 /// A location (line number + character position) in the input script.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
-    /// Line number - 0 = none, MAX = EOF
+    /// Line number - 0 = none
     line: usize,
-    /// Character position - 0 = BOL, MAX = EOF
+    /// Character position - 0 = BOL
     pos: usize,
 }
 
@@ -43,9 +43,9 @@ impl Position {
         }
     }
 
-    /// Get the line number (1-based), or `None` if no position or EOF.
+    /// Get the line number (1-based), or `None` if no position.
     pub fn line(&self) -> Option<usize> {
-        if self.is_none() || self.is_eof() {
+        if self.is_none() {
             None
         } else {
             Some(self.line)
@@ -54,7 +54,7 @@ impl Position {
 
     /// Get the character position (1-based), or `None` if at beginning of a line.
     pub fn position(&self) -> Option<usize> {
-        if self.is_none() || self.is_eof() || self.pos == 0 {
+        if self.is_none() || self.pos == 0 {
             None
         } else {
             Some(self.pos)
@@ -88,22 +88,9 @@ impl Position {
         Self { line: 0, pos: 0 }
     }
 
-    /// Create a `Position` at EOF.
-    pub(crate) fn eof() -> Self {
-        Self {
-            line: usize::MAX,
-            pos: usize::MAX,
-        }
-    }
-
     /// Is there no `Position`?
     pub fn is_none(&self) -> bool {
         self.line == 0 && self.pos == 0
-    }
-
-    /// Is the `Position` at EOF?
-    pub fn is_eof(&self) -> bool {
-        self.line == usize::MAX && self.pos == usize::MAX
     }
 }
 
@@ -115,9 +102,7 @@ impl Default for Position {
 
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_eof() {
-            write!(f, "EOF")
-        } else if self.is_none() {
+        if self.is_none() {
             write!(f, "none")
         } else {
             write!(f, "line {}, position {}", self.line, self.pos)
@@ -127,11 +112,7 @@ impl fmt::Display for Position {
 
 impl fmt::Debug for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_eof() {
-            write!(f, "(EOF)")
-        } else {
-            write!(f, "({}:{})", self.line, self.pos)
-        }
+        write!(f, "({}:{})", self.line, self.pos)
     }
 }
 
@@ -206,6 +187,7 @@ pub enum Token {
     ModuloAssign,
     PowerOfAssign,
     LexError(Box<LexError>),
+    EOF,
 }
 
 impl Token {
@@ -284,9 +266,20 @@ impl Token {
                 PowerOfAssign => "~=",
                 For => "for",
                 In => "in",
+                EOF => "{EOF}",
                 _ => panic!("operator should be match in outer scope"),
             })
             .into(),
+        }
+    }
+
+    // Is this token EOF?
+    pub fn is_eof(&self) -> bool {
+        use Token::*;
+
+        match self {
+            EOF => true,
+            _ => false,
         }
     }
 
@@ -420,10 +413,13 @@ impl<'a> TokenIterator<'a> {
     fn get_next(&mut self) -> Option<char> {
         loop {
             if self.streams.is_empty() {
+                // No more streams
                 return None;
             } else if let Some(ch) = self.streams[0].next() {
+                // Next character in current stream
                 return Some(ch);
             } else {
+                // Jump to the next stream
                 let _ = self.streams.remove(0);
             }
         }
@@ -432,10 +428,13 @@ impl<'a> TokenIterator<'a> {
     fn peek_next(&mut self) -> Option<char> {
         loop {
             if self.streams.is_empty() {
+                // No more streams
                 return None;
             } else if let Some(ch) = self.streams[0].peek() {
+                // Next character in current stream
                 return Some(*ch);
             } else {
+                // Jump to the next stream
                 let _ = self.streams.remove(0);
             }
         }
@@ -466,10 +465,13 @@ impl<'a> TokenIterator<'a> {
         let mut escape = String::with_capacity(12);
 
         loop {
-            let next_char = self.get_next();
+            let next_char = self
+                .get_next()
+                .ok_or((LERR::UnterminatedString, self.pos))?;
+
             self.advance();
 
-            match next_char.ok_or((LERR::UnterminatedString, Position::eof()))? {
+            match next_char {
                 // \...
                 '\\' if escape.is_empty() => {
                     escape.push('\\');
@@ -956,7 +958,8 @@ impl<'a> TokenIterator<'a> {
             }
         }
 
-        None
+        self.advance();
+        Some((Token::EOF, self.pos))
     }
 }
 

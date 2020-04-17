@@ -523,15 +523,12 @@ fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
 
 /// Match a particular token, consuming it if matched.
 fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, ParseError> {
-    if let Some((t, _)) = input.peek() {
-        if *t == token {
-            eat_token(input, token);
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+    let (t, _) = input.peek().unwrap();
+    if *t == token {
+        eat_token(input, token);
+        Ok(true)
     } else {
-        Err(PERR::UnexpectedEOF.into_err_eof())
+        Ok(false)
     }
 }
 
@@ -541,21 +538,21 @@ fn parse_paren_expr<'a>(
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
-    const MISSING_RPAREN: &str = "for a matching ( in this expression";
-
     if match_token(input, Token::RightParen)? {
         return Ok(Expr::Unit(begin));
     }
 
     let expr = parse_expr(input, allow_stmt_expr)?;
 
-    match input.next() {
+    match input.next().unwrap() {
         // ( xxx )
-        Some((Token::RightParen, _)) => Ok(expr),
+        (Token::RightParen, _) => Ok(expr),
         // ( xxx ???
-        Some((_, pos)) => Err(PERR::MissingToken(")".into(), MISSING_RPAREN.into()).into_err(pos)),
-        // ( xxx
-        None => Err(PERR::MissingToken(")".into(), MISSING_RPAREN.into()).into_err_eof()),
+        (_, pos) => Err(PERR::MissingToken(
+            ")".into(),
+            "for a matching ( in this expression".into(),
+        )
+        .into_err(pos)),
     }
 }
 
@@ -568,17 +565,17 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
 ) -> Result<Expr, ParseError> {
     let mut args_expr_list = Vec::new();
 
-    match input.peek() {
+    match input.peek().unwrap() {
         //id {EOF}
-        None => {
+        (Token::EOF, pos) => {
             return Err(PERR::MissingToken(
                 ")".into(),
                 format!("to close the arguments list of this function call '{}'", id),
             )
-            .into_err_eof())
+            .into_err(*pos))
         }
         // id()
-        Some((Token::RightParen, _)) => {
+        (Token::RightParen, _) => {
             eat_token(input, Token::RightParen);
             return Ok(Expr::FunctionCall(id.into(), args_expr_list, None, begin));
         }
@@ -589,22 +586,22 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
     loop {
         args_expr_list.push(parse_expr(input, allow_stmt_expr)?);
 
-        match input.peek() {
-            None => {
+        match input.peek().unwrap() {
+            (Token::EOF, pos) => {
                 return Err(PERR::MissingToken(
                     ")".into(),
                     format!("to close the arguments list of this function call '{}'", id),
                 )
-                .into_err_eof())
+                .into_err(*pos))
             }
-            Some((Token::RightParen, _)) => {
+            (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
                 return Ok(Expr::FunctionCall(id.into(), args_expr_list, None, begin));
             }
-            Some((Token::Comma, _)) => {
+            (Token::Comma, _) => {
                 eat_token(input, Token::Comma);
             }
-            Some((_, pos)) => {
+            (_, pos) => {
                 return Err(PERR::MissingToken(
                     ",".into(),
                     format!("to separate the arguments to function call '{}'", id),
@@ -727,17 +724,16 @@ fn parse_index_expr<'a>(
     }
 
     // Check if there is a closing bracket
-    const MISSING_RBRACKET: &str = "for a matching [ in this index expression";
-
-    match input.peek() {
-        Some((Token::RightBracket, _)) => {
+    match input.peek().unwrap() {
+        (Token::RightBracket, _) => {
             eat_token(input, Token::RightBracket);
             Ok(Expr::Index(lhs, Box::new(idx_expr), pos))
         }
-        Some((_, pos)) => {
-            Err(PERR::MissingToken("]".into(), MISSING_RBRACKET.into()).into_err(*pos))
-        }
-        None => Err(PERR::MissingToken("]".into(), MISSING_RBRACKET.into()).into_err_eof()),
+        (_, pos) => Err(PERR::MissingToken(
+            "]".into(),
+            "for a matching [ in this index expression".into(),
+        )
+        .into_err(*pos)),
     }
 }
 
@@ -750,27 +746,27 @@ fn parse_array_literal<'a>(
     let mut arr = Vec::new();
 
     if !match_token(input, Token::RightBracket)? {
-        while input.peek().is_some() {
+        while !input.peek().unwrap().0.is_eof() {
             arr.push(parse_expr(input, allow_stmt_expr)?);
 
-            match input.peek() {
-                Some((Token::Comma, _)) => eat_token(input, Token::Comma),
-                Some((Token::RightBracket, _)) => {
+            match input.peek().unwrap() {
+                (Token::EOF, pos) => {
+                    return Err(
+                        PERR::MissingToken("]".into(), "to end this array literal".into())
+                            .into_err(*pos),
+                    )
+                }
+                (Token::Comma, _) => eat_token(input, Token::Comma),
+                (Token::RightBracket, _) => {
                     eat_token(input, Token::RightBracket);
                     break;
                 }
-                Some((_, pos)) => {
+                (_, pos) => {
                     return Err(PERR::MissingToken(
                         ",".into(),
                         "to separate the items of this array literal".into(),
                     )
                     .into_err(*pos))
-                }
-                None => {
-                    return Err(
-                        PERR::MissingToken("]".into(), "to end this array literal".into())
-                            .into_err_eof(),
-                    )
                 }
             };
         }
@@ -788,24 +784,24 @@ fn parse_map_literal<'a>(
     let mut map = Vec::new();
 
     if !match_token(input, Token::RightBrace)? {
-        while input.peek().is_some() {
+        while !input.peek().unwrap().0.is_eof() {
             const MISSING_RBRACE: &str = "to end this object map literal";
 
-            let (name, pos) = match input.next() {
-                Some((Token::Identifier(s), pos)) => (s, pos),
-                Some((Token::StringConst(s), pos)) => (s, pos),
-                Some((_, pos)) if map.is_empty() => {
+            let (name, pos) = match input.next().unwrap() {
+                (Token::Identifier(s), pos) => (s, pos),
+                (Token::StringConst(s), pos) => (s, pos),
+                (_, pos) if map.is_empty() => {
                     return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err(pos))
                 }
-                Some((_, pos)) => return Err(PERR::PropertyExpected.into_err(pos)),
-                None => {
-                    return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err_eof())
+                (Token::EOF, pos) => {
+                    return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err(pos))
                 }
+                (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
             };
 
-            match input.next() {
-                Some((Token::Colon, _)) => (),
-                Some((_, pos)) => {
+            match input.next().unwrap() {
+                (Token::Colon, _) => (),
+                (_, pos) => {
                     return Err(PERR::MissingToken(
                         ":".into(),
                         format!(
@@ -815,42 +811,29 @@ fn parse_map_literal<'a>(
                     )
                     .into_err(pos))
                 }
-                None => {
-                    return Err(PERR::MissingToken(
-                        ":".into(),
-                        format!(
-                            "to follow the property '{}' in this object map literal",
-                            name
-                        ),
-                    )
-                    .into_err_eof())
-                }
             };
 
             let expr = parse_expr(input, allow_stmt_expr)?;
 
             map.push((name, expr, pos));
 
-            match input.peek() {
-                Some((Token::Comma, _)) => {
+            match input.peek().unwrap() {
+                (Token::Comma, _) => {
                     eat_token(input, Token::Comma);
                 }
-                Some((Token::RightBrace, _)) => {
+                (Token::RightBrace, _) => {
                     eat_token(input, Token::RightBrace);
                     break;
                 }
-                Some((Token::Identifier(_), pos)) => {
+                (Token::Identifier(_), pos) => {
                     return Err(PERR::MissingToken(
                         ",".into(),
                         "to separate the items of this object map literal".into(),
                     )
                     .into_err(*pos))
                 }
-                Some((_, pos)) => {
+                (_, pos) => {
                     return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err(*pos))
-                }
-                None => {
-                    return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err_eof())
                 }
             }
         }
@@ -875,38 +858,40 @@ fn parse_primary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
-    let token = match input.peek() {
+    let (token, pos) = match input.peek().unwrap() {
         // { - block statement as expression
-        Some((Token::LeftBrace, pos)) if allow_stmt_expr => {
+        (Token::LeftBrace, pos) if allow_stmt_expr => {
             let pos = *pos;
             return parse_block(input, false, allow_stmt_expr)
                 .map(|block| Expr::Stmt(Box::new(block), pos));
         }
-        Some(_) => input.next().expect("should be a token"),
-        None => return Err(PERR::UnexpectedEOF.into_err_eof()),
+        (Token::EOF, pos) => return Err(PERR::UnexpectedEOF.into_err(*pos)),
+        _ => input.next().unwrap(),
     };
 
     let mut root_expr = match token {
-        (Token::IntegerConstant(x), pos) => Expr::IntegerConstant(x, pos),
-        (Token::FloatConstant(x), pos) => Expr::FloatConstant(x, pos),
-        (Token::CharConstant(c), pos) => Expr::CharConstant(c, pos),
-        (Token::StringConst(s), pos) => Expr::StringConstant(s.into(), pos),
-        (Token::Identifier(s), pos) => Expr::Variable(s.into(), pos),
-        (Token::LeftParen, pos) => parse_paren_expr(input, pos, allow_stmt_expr)?,
+        Token::IntegerConstant(x) => Expr::IntegerConstant(x, pos),
+        Token::FloatConstant(x) => Expr::FloatConstant(x, pos),
+        Token::CharConstant(c) => Expr::CharConstant(c, pos),
+        Token::StringConst(s) => Expr::StringConstant(s.into(), pos),
+        Token::Identifier(s) => Expr::Variable(s.into(), pos),
+        Token::LeftParen => parse_paren_expr(input, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
-        (Token::LeftBracket, pos) => parse_array_literal(input, pos, allow_stmt_expr)?,
+        Token::LeftBracket => parse_array_literal(input, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_object"))]
-        (Token::MapStart, pos) => parse_map_literal(input, pos, allow_stmt_expr)?,
-        (Token::True, pos) => Expr::True(pos),
-        (Token::False, pos) => Expr::False(pos),
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
-        (token, pos) => {
+        Token::MapStart => parse_map_literal(input, pos, allow_stmt_expr)?,
+        Token::True => Expr::True(pos),
+        Token::False => Expr::False(pos),
+        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        token => {
             return Err(PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(pos))
         }
     };
 
     // Tail processing all possible postfix operators
-    while let Some((token, _)) = input.peek() {
+    loop {
+        let (token, _) = input.peek().unwrap();
+
         if !root_expr.is_valid_postfix(token) {
             break;
         }
@@ -936,9 +921,9 @@ fn parse_unary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
 ) -> Result<Expr, ParseError> {
-    match input.peek() {
+    match input.peek().unwrap() {
         // If statement is allowed to act as expressions
-        Some((Token::If, pos)) => {
+        (Token::If, pos) => {
             let pos = *pos;
             Ok(Expr::Stmt(
                 Box::new(parse_if(input, false, allow_stmt_expr)?),
@@ -946,7 +931,7 @@ fn parse_unary<'a>(
             ))
         }
         // -expr
-        Some((Token::UnaryMinus, _)) => {
+        (Token::UnaryMinus, _) => {
             let pos = eat_token(input, Token::UnaryMinus);
 
             match parse_unary(input, allow_stmt_expr)? {
@@ -978,12 +963,12 @@ fn parse_unary<'a>(
             }
         }
         // +expr
-        Some((Token::UnaryPlus, _)) => {
+        (Token::UnaryPlus, _) => {
             eat_token(input, Token::UnaryPlus);
             parse_unary(input, allow_stmt_expr)
         }
         // !expr
-        Some((Token::Bang, _)) => {
+        (Token::Bang, _) => {
             let pos = eat_token(input, Token::Bang);
             Ok(Expr::FunctionCall(
                 "!".into(),
@@ -992,10 +977,10 @@ fn parse_unary<'a>(
                 pos,
             ))
         }
-        // All other tokens
-        Some(_) => parse_primary(input, allow_stmt_expr),
         // {EOF}
-        None => Err(PERR::UnexpectedEOF.into_err_eof()),
+        (Token::EOF, pos) => Err(PERR::UnexpectedEOF.into_err(*pos)),
+        // All other tokens
+        _ => parse_primary(input, allow_stmt_expr),
     }
 }
 
@@ -1378,12 +1363,11 @@ fn ensure_not_statement_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     type_name: &str,
 ) -> Result<(), ParseError> {
-    match input
-        .peek()
-        .ok_or_else(|| PERR::ExprExpected(type_name.to_string()).into_err_eof())?
-    {
+    match input.peek().unwrap() {
         // Disallow statement expressions
-        (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
+        (Token::LeftBrace, pos) | (Token::EOF, pos) => {
+            Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos))
+        }
         // No need to check for others at this time - leave it for the expr parser
         _ => Ok(()),
     }
@@ -1462,27 +1446,26 @@ fn parse_for<'a>(
     eat_token(input, Token::For);
 
     // for name ...
-    let name = match input
-        .next()
-        .ok_or_else(|| PERR::VariableExpected.into_err_eof())?
-    {
+    let name = match input.next().unwrap() {
         // Variable name
         (Token::Identifier(s), _) => s,
         // Bad identifier
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        // EOF
+        (Token::EOF, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         // Not a variable name
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
     // for name in ...
-    const ERROR_MSG: &str = "after the iteration variable";
-
-    match input.next() {
-        Some((Token::In, _)) => (),
-        Some((_, pos)) => {
-            return Err(PERR::MissingToken("in".into(), ERROR_MSG.into()).into_err(pos))
+    match input.next().unwrap() {
+        (Token::In, _) => (),
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken("in".into(), "after the iteration variable".into())
+                    .into_err(pos),
+            )
         }
-        None => return Err(PERR::MissingToken("in".into(), ERROR_MSG.into()).into_err_eof()),
     }
 
     // for name in expr { body }
@@ -1503,10 +1486,7 @@ fn parse_let<'a>(
     input.next();
 
     // let name ...
-    let (name, pos) = match input
-        .next()
-        .ok_or_else(|| PERR::VariableExpected.into_err_eof())?
-    {
+    let (name, pos) = match input.next().unwrap() {
         (Token::Identifier(s), pos) => (s, pos),
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
@@ -1542,10 +1522,7 @@ fn parse_block<'a>(
     allow_stmt_expr: bool,
 ) -> Result<Stmt, ParseError> {
     // Must start with {
-    let pos = match input
-        .next()
-        .ok_or_else(|| PERR::UnexpectedEOF.into_err_eof())?
-    {
+    let pos = match input.next().unwrap() {
         (Token::LeftBrace, pos) => pos,
         (_, pos) => {
             return Err(
@@ -1565,34 +1542,27 @@ fn parse_block<'a>(
 
         statements.push(stmt);
 
-        match input.peek() {
+        match input.peek().unwrap() {
             // { ... stmt }
-            Some((Token::RightBrace, _)) => {
+            (Token::RightBrace, _) => {
                 eat_token(input, Token::RightBrace);
                 break;
             }
             // { ... stmt;
-            Some((Token::SemiColon, _)) if need_semicolon => {
+            (Token::SemiColon, _) if need_semicolon => {
                 eat_token(input, Token::SemiColon);
             }
             // { ... { stmt } ;
-            Some((Token::SemiColon, _)) if !need_semicolon => (),
+            (Token::SemiColon, _) if !need_semicolon => (),
             // { ... { stmt } ???
-            Some((_, _)) if !need_semicolon => (),
+            (_, _) if !need_semicolon => (),
             // { ... stmt ??? - error
-            Some((_, pos)) => {
+            (_, pos) => {
                 // Semicolons are not optional between statements
                 return Err(
                     PERR::MissingToken(";".into(), "to terminate this statement".into())
                         .into_err(*pos),
                 );
-            }
-            // {EOF}
-            None => {
-                return Err(
-                    PERR::MissingToken("}".into(), "to end this statement block".into())
-                        .into_err_eof(),
-                )
             }
         }
     }
@@ -1614,37 +1584,37 @@ fn parse_stmt<'a>(
     breakable: bool,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, ParseError> {
-    let token = match input.peek() {
-        Some(token) => token,
-        None => return Ok(Stmt::Noop(Position::eof())),
+    let (token, pos) = match input.peek().unwrap() {
+        (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
+        x => x,
     };
 
     match token {
         // Semicolon - empty statement
-        (Token::SemiColon, pos) => Ok(Stmt::Noop(*pos)),
+        Token::SemiColon => Ok(Stmt::Noop(*pos)),
 
-        (Token::LeftBrace, _) => parse_block(input, breakable, allow_stmt_expr),
+        Token::LeftBrace => parse_block(input, breakable, allow_stmt_expr),
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
-        (Token::Fn, pos) => Err(PERR::WrongFnDefinition.into_err(*pos)),
+        Token::Fn => Err(PERR::WrongFnDefinition.into_err(*pos)),
 
-        (Token::If, _) => parse_if(input, breakable, allow_stmt_expr),
-        (Token::While, _) => parse_while(input, allow_stmt_expr),
-        (Token::Loop, _) => parse_loop(input, allow_stmt_expr),
-        (Token::For, _) => parse_for(input, allow_stmt_expr),
+        Token::If => parse_if(input, breakable, allow_stmt_expr),
+        Token::While => parse_while(input, allow_stmt_expr),
+        Token::Loop => parse_loop(input, allow_stmt_expr),
+        Token::For => parse_for(input, allow_stmt_expr),
 
-        (Token::Continue, _) if breakable => {
+        Token::Continue if breakable => {
             let pos = eat_token(input, Token::Continue);
             Ok(Stmt::Continue(pos))
         }
-        (Token::Break, _) if breakable => {
+        Token::Break if breakable => {
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::Break(pos))
         }
-        (Token::Continue, pos) | (Token::Break, pos) => Err(PERR::LoopBreak.into_err(*pos)),
+        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(*pos)),
 
-        (Token::Return, pos) | (Token::Throw, pos) => {
+        Token::Return | Token::Throw => {
             let pos = *pos;
 
             let return_type = match input.next() {
@@ -1653,13 +1623,13 @@ fn parse_stmt<'a>(
                 _ => panic!("token should be return or throw"),
             };
 
-            match input.peek() {
+            match input.peek().unwrap() {
                 // `return`/`throw` at {EOF}
-                None => Ok(Stmt::ReturnWithVal(None, return_type, Position::eof())),
+                (Token::EOF, pos) => Ok(Stmt::ReturnWithVal(None, return_type, *pos)),
                 // `return;` or `throw;`
-                Some((Token::SemiColon, _)) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
+                (Token::SemiColon, _) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
                 // `return` or `throw` with expression
-                Some((_, _)) => {
+                (_, _) => {
                     let expr = parse_expr(input, allow_stmt_expr)?;
                     let pos = expr.position();
                     Ok(Stmt::ReturnWithVal(Some(Box::new(expr)), return_type, pos))
@@ -1667,8 +1637,8 @@ fn parse_stmt<'a>(
             }
         }
 
-        (Token::Let, _) => parse_let(input, ScopeEntryType::Normal, allow_stmt_expr),
-        (Token::Const, _) => parse_let(input, ScopeEntryType::Constant, allow_stmt_expr),
+        Token::Let => parse_let(input, ScopeEntryType::Normal, allow_stmt_expr),
+        Token::Const => parse_let(input, ScopeEntryType::Constant, allow_stmt_expr),
 
         _ => parse_expr_stmt(input, allow_stmt_expr),
     }
@@ -1681,16 +1651,14 @@ fn parse_fn<'a>(
 ) -> Result<FnDef, ParseError> {
     let pos = input.next().expect("should be fn").1;
 
-    let name = match input.next() {
-        Some((Token::Identifier(s), _)) => s,
-        Some((_, pos)) => return Err(PERR::FnMissingName.into_err(pos)),
-        None => return Err(PERR::FnMissingName.into_err_eof()),
+    let name = match input.next().unwrap() {
+        (Token::Identifier(s), _) => s,
+        (_, pos) => return Err(PERR::FnMissingName.into_err(pos)),
     };
 
-    match input.peek() {
-        Some((Token::LeftParen, _)) => eat_token(input, Token::LeftParen),
-        Some((_, pos)) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
-        None => return Err(PERR::FnMissingParams(name.clone()).into_err_eof()),
+    match input.peek().unwrap() {
+        (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
+        (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
     };
 
     let mut params = Vec::new();
@@ -1700,24 +1668,18 @@ fn parse_fn<'a>(
         let sep_err = format!("to separate the parameters of function '{}'", name);
 
         loop {
-            match input.next() {
-                Some((Token::Identifier(s), pos)) => params.push((s, pos)),
-                Some((_, pos)) => return Err(PERR::MissingToken(")".into(), end_err).into_err(pos)),
-                None => {
-                    return Err(PERR::MissingToken(")".into(), end_err.to_string()).into_err_eof())
-                }
+            match input.next().unwrap() {
+                (Token::Identifier(s), pos) => params.push((s, pos)),
+                (_, pos) => return Err(PERR::MissingToken(")".into(), end_err).into_err(pos)),
             }
 
-            match input.next() {
-                Some((Token::RightParen, _)) => break,
-                Some((Token::Comma, _)) => (),
-                Some((Token::Identifier(_), pos)) => {
+            match input.next().unwrap() {
+                (Token::RightParen, _) => break,
+                (Token::Comma, _) => (),
+                (Token::Identifier(_), pos) => {
                     return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos))
                 }
-                Some((_, pos)) => return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos)),
-                None => {
-                    return Err(PERR::MissingToken(")".into(), end_err.to_string()).into_err_eof())
-                }
+                (_, pos) => return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos)),
             }
         }
     }
@@ -1738,10 +1700,9 @@ fn parse_fn<'a>(
         })?;
 
     // Parse function body
-    let body = match input.peek() {
-        Some((Token::LeftBrace, _)) => parse_block(input, false, allow_stmt_expr)?,
-        Some((_, pos)) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
-        None => return Err(PERR::FnMissingBody(name).into_err_eof()),
+    let body = match input.peek().unwrap() {
+        (Token::LeftBrace, _) => parse_block(input, false, allow_stmt_expr)?,
+        (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
     };
 
     let params = params.into_iter().map(|(p, _)| p).collect();
@@ -1762,9 +1723,12 @@ pub fn parse_global_expr<'a>(
 ) -> Result<AST, ParseError> {
     let expr = parse_expr(input, false)?;
 
-    if let Some((token, pos)) = input.peek() {
+    match input.peek().unwrap() {
+        (Token::EOF, _) => (),
         // Return error if the expression doesn't end
-        return Err(PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(*pos));
+        (token, pos) => {
+            return Err(PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(*pos))
+        }
     }
 
     Ok(
@@ -1786,7 +1750,7 @@ fn parse_global_level<'a>(
     let mut statements = Vec::<Stmt>::new();
     let mut functions = HashMap::<u64, FnDef>::new();
 
-    while input.peek().is_some() {
+    while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
@@ -1804,19 +1768,19 @@ fn parse_global_level<'a>(
 
         statements.push(stmt);
 
-        match input.peek() {
+        match input.peek().unwrap() {
             // EOF
-            None => break,
+            (Token::EOF, _) => break,
             // stmt ;
-            Some((Token::SemiColon, _)) if need_semicolon => {
+            (Token::SemiColon, _) if need_semicolon => {
                 eat_token(input, Token::SemiColon);
             }
             // stmt ;
-            Some((Token::SemiColon, _)) if !need_semicolon => (),
+            (Token::SemiColon, _) if !need_semicolon => (),
             // { stmt } ???
-            Some((_, _)) if !need_semicolon => (),
+            (_, _) if !need_semicolon => (),
             // stmt ??? - error
-            Some((_, pos)) => {
+            (_, pos) => {
                 // Semicolons are not optional between statements
                 return Err(
                     PERR::MissingToken(";".into(), "to terminate this statement".into())

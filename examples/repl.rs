@@ -14,7 +14,6 @@ fn print_error(input: &str, err: EvalAltResult) {
     let line_no = if lines.len() > 1 {
         match err.position() {
             p if p.is_none() => "".to_string(),
-            p if p.is_eof() => format!("{}: ", lines.len()),
             p => format!("{}: ", p.line().unwrap()),
         }
     } else {
@@ -25,15 +24,7 @@ fn print_error(input: &str, err: EvalAltResult) {
     let pos = err.position();
     let pos_text = format!(" ({})", pos);
 
-    let pos = if pos.is_eof() {
-        let last = lines[lines.len() - 1];
-        Position::new(lines.len(), last.len() + 1)
-    } else {
-        pos
-    };
-
     match pos {
-        p if p.is_eof() => panic!("should not be EOF"),
         p if p.is_none() => {
             // No position
             println!("{}", err);

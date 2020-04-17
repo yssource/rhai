@@ -110,11 +110,6 @@ impl ParseErrorType {
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
         ParseError(self, pos)
     }
-
-    /// Make a `ParseError` using the current type and EOF position.
-    pub(crate) fn into_err_eof(self) -> ParseError {
-        ParseError(self, Position::eof())
-    }
 }
 
 /// Error when parsing a script.
@@ -209,13 +204,11 @@ impl fmt::Display for ParseError {
             _ => write!(f, "{}", self.desc())?,
         }
 
-        if !self.1.is_eof() {
-            write!(f, " ({})", self.1)
-        } else if !self.1.is_none() {
+        if !self.1.is_none() {
             // Do not write any position if None
             Ok(())
         } else {
-            write!(f, " at the end of the script but there is no more input")
+            write!(f, " ({})", self.1)
         }
     }
 }
