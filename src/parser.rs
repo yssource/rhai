@@ -470,10 +470,42 @@ impl Expr {
             _ => false,
         }
     }
+
+    /// Is a particular token allowed as a postfix operator to this expression?
+    pub fn is_valid_postfix(&self, token: &Token) -> bool {
+        match self {
+            Expr::IntegerConstant(_, _)
+            | Expr::FloatConstant(_, _)
+            | Expr::CharConstant(_, _)
+            | Expr::In(_, _, _)
+            | Expr::And(_, _, _)
+            | Expr::Or(_, _, _)
+            | Expr::True(_)
+            | Expr::False(_)
+            | Expr::Unit(_) => false,
+
+            Expr::StringConstant(_, _)
+            | Expr::Stmt(_, _)
+            | Expr::FunctionCall(_, _, _, _)
+            | Expr::Assignment(_, _, _)
+            | Expr::Dot(_, _, _)
+            | Expr::Index(_, _, _)
+            | Expr::Array(_, _)
+            | Expr::Map(_, _) => match token {
+                Token::LeftBracket => true,
+                _ => false,
+            },
+
+            Expr::Variable(_, _) | Expr::Property(_, _) => match token {
+                Token::LeftBracket | Token::LeftParen => true,
+                _ => false,
+            },
+        }
+    }
 }
 
 /// Consume a particular token, checking that it is the expected one.
-fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) {
+fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
     if let Some((t, pos)) = input.next() {
         if t != token {
             panic!(
@@ -483,6 +515,7 @@ fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) {
                 pos
             );
         }
+        pos
     } else {
         panic!("expecting {} but already EOF", token.syntax());
     }
@@ -568,7 +601,9 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
                 eat_token(input, Token::RightParen);
                 return Ok(Expr::FunctionCall(id.into(), args_expr_list, None, begin));
             }
-            Some((Token::Comma, _)) => eat_token(input, Token::Comma),
+            Some((Token::Comma, _)) => {
+                eat_token(input, Token::Comma);
+            }
             Some((_, pos)) => {
                 return Err(PERR::MissingToken(
                     ",".into(),
@@ -706,38 +741,6 @@ fn parse_index_expr<'a>(
     }
 }
 
-/// Parse an expression that begins with an identifier.
-fn parse_ident_expr<'a, S: Into<Cow<'static, str>> + Display>(
-    id: S,
-    input: &mut Peekable<TokenIterator<'a>>,
-    begin: Position,
-    allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
-    match input.peek() {
-        // id(...) - function call
-        Some((Token::LeftParen, _)) => {
-            eat_token(input, Token::LeftParen);
-            parse_call_expr(id, input, begin, allow_stmt_expr)
-        }
-        // id[...] - indexing
-        #[cfg(not(feature = "no_index"))]
-        Some((Token::LeftBracket, pos)) => {
-            let pos = *pos;
-            eat_token(input, Token::LeftBracket);
-            parse_index_expr(
-                Box::new(Expr::Variable(id.into(), begin)),
-                input,
-                pos,
-                allow_stmt_expr,
-            )
-        }
-        // id - variable
-        Some(_) => Ok(Expr::Variable(id.into(), begin)),
-        // {EOF}
-        None => Ok(Expr::Variable(id.into(), begin)),
-    }
-}
-
 /// Parse an array literal.
 fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
@@ -829,7 +832,9 @@ fn parse_map_literal<'a>(
             map.push((name, expr, pos));
 
             match input.peek() {
-                Some((Token::Comma, _)) => eat_token(input, Token::Comma),
+                Some((Token::Comma, _)) => {
+                    eat_token(input, Token::Comma);
+                }
                 Some((Token::RightBrace, _)) => {
                     eat_token(input, Token::RightBrace);
                     break;
@@ -881,51 +886,45 @@ fn parse_primary<'a>(
         None => return Err(PERR::UnexpectedEOF.into_err_eof()),
     };
 
-    let mut can_be_indexed = false;
-
     let mut root_expr = match token {
-        (Token::IntegerConstant(x), pos) => Ok(Expr::IntegerConstant(x, pos)),
-        (Token::FloatConstant(x), pos) => Ok(Expr::FloatConstant(x, pos)),
-        (Token::CharConstant(c), pos) => Ok(Expr::CharConstant(c, pos)),
-        (Token::StringConst(s), pos) => {
-            can_be_indexed = true;
-            Ok(Expr::StringConstant(s.into(), pos))
-        }
-        (Token::Identifier(s), pos) => {
-            can_be_indexed = true;
-            parse_ident_expr(s, input, pos, allow_stmt_expr)
-        }
-        (Token::LeftParen, pos) => {
-            can_be_indexed = true;
-            parse_paren_expr(input, pos, allow_stmt_expr)
-        }
+        (Token::IntegerConstant(x), pos) => Expr::IntegerConstant(x, pos),
+        (Token::FloatConstant(x), pos) => Expr::FloatConstant(x, pos),
+        (Token::CharConstant(c), pos) => Expr::CharConstant(c, pos),
+        (Token::StringConst(s), pos) => Expr::StringConstant(s.into(), pos),
+        (Token::Identifier(s), pos) => Expr::Variable(s.into(), pos),
+        (Token::LeftParen, pos) => parse_paren_expr(input, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
-        (Token::LeftBracket, pos) => {
-            can_be_indexed = true;
-            parse_array_literal(input, pos, allow_stmt_expr)
-        }
+        (Token::LeftBracket, pos) => parse_array_literal(input, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_object"))]
-        (Token::MapStart, pos) => {
-            can_be_indexed = true;
-            parse_map_literal(input, pos, allow_stmt_expr)
-        }
-        (Token::True, pos) => Ok(Expr::True(pos)),
-        (Token::False, pos) => Ok(Expr::False(pos)),
-        (Token::LexError(err), pos) => Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::MapStart, pos) => parse_map_literal(input, pos, allow_stmt_expr)?,
+        (Token::True, pos) => Expr::True(pos),
+        (Token::False, pos) => Expr::False(pos),
+        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
         (token, pos) => {
-            Err(PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(pos))
+            return Err(PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(pos))
         }
-    }?;
+    };
 
-    #[cfg(feature = "no_index")]
-    let can_be_indexed = false;
+    // Tail processing all possible postfix operators
+    while let Some((token, _)) = input.peek() {
+        if !root_expr.is_valid_postfix(token) {
+            break;
+        }
 
-    if can_be_indexed {
-        // Tail processing all possible indexing
-        while let Some((Token::LeftBracket, pos)) = input.peek() {
-            let pos = *pos;
-            eat_token(input, Token::LeftBracket);
-            root_expr = parse_index_expr(Box::new(root_expr), input, pos, allow_stmt_expr)?;
+        let (token, pos) = input.next().unwrap();
+
+        root_expr = match (root_expr, token) {
+            // Function call
+            (Expr::Variable(id, pos), Token::LeftParen)
+            | (Expr::Property(id, pos), Token::LeftParen) => {
+                parse_call_expr(id, input, pos, allow_stmt_expr)?
+            }
+            // Indexing
+            (expr, Token::LeftBracket) => {
+                parse_index_expr(Box::new(expr), input, pos, allow_stmt_expr)?
+            }
+            // Unknown postfix operator
+            (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
         }
     }
 
@@ -947,9 +946,8 @@ fn parse_unary<'a>(
             ))
         }
         // -expr
-        Some((Token::UnaryMinus, pos)) => {
-            let pos = *pos;
-            eat_token(input, Token::UnaryMinus);
+        Some((Token::UnaryMinus, _)) => {
+            let pos = eat_token(input, Token::UnaryMinus);
 
             match parse_unary(input, allow_stmt_expr)? {
                 // Negative integer
@@ -985,9 +983,8 @@ fn parse_unary<'a>(
             parse_unary(input, allow_stmt_expr)
         }
         // !expr
-        Some((Token::Bang, pos)) => {
-            let pos = *pos;
-            eat_token(input, Token::Bang);
+        Some((Token::Bang, _)) => {
+            let pos = eat_token(input, Token::Bang);
             Ok(Expr::FunctionCall(
                 "!".into(),
                 vec![parse_primary(input, allow_stmt_expr)?],
@@ -1637,14 +1634,12 @@ fn parse_stmt<'a>(
         (Token::Loop, _) => parse_loop(input, allow_stmt_expr),
         (Token::For, _) => parse_for(input, allow_stmt_expr),
 
-        (Token::Continue, pos) if breakable => {
-            let pos = *pos;
-            eat_token(input, Token::Continue);
+        (Token::Continue, _) if breakable => {
+            let pos = eat_token(input, Token::Continue);
             Ok(Stmt::Continue(pos))
         }
-        (Token::Break, pos) if breakable => {
-            let pos = *pos;
-            eat_token(input, Token::Break);
+        (Token::Break, _) if breakable => {
+            let pos = eat_token(input, Token::Break);
             Ok(Stmt::Break(pos))
         }
         (Token::Continue, pos) | (Token::Break, pos) => Err(PERR::LoopBreak.into_err(*pos)),

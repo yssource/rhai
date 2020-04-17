@@ -45,7 +45,7 @@ type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send +
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 #[cfg(debug_assertions)]
-pub const MAX_CALL_STACK_DEPTH: usize = 32;
+pub const MAX_CALL_STACK_DEPTH: usize = 28;
 
 #[cfg(not(debug_assertions))]
 pub const MAX_CALL_STACK_DEPTH: usize = 256;
