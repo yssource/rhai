@@ -130,7 +130,7 @@ fn main() {
 
         match engine
             .compile_with_scope(&scope, &script)
-            .map_err(EvalAltResult::ErrorParsing)
+            .map_err(|err| err.into())
             .and_then(|r| {
                 ast_u = r.clone();
 

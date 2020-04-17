@@ -396,7 +396,7 @@ impl Engine {
     ) -> Result<AST, ParseError> {
         let scripts = [script];
         let stream = lex(&scripts);
-        parse(&mut stream.peekable(), self, scope, optimization_level)
+        parse(&mut stream.peekable(), self, scope, optimization_level).map_err(|err| *err)
     }
 
     /// Read the contents of a file into a string.
@@ -592,7 +592,9 @@ impl Engine {
     ) -> Result<AST, ParseError> {
         let scripts = [script];
         let stream = lex(&scripts);
+
         parse_global_expr(&mut stream.peekable(), self, scope, self.optimization_level)
+            .map_err(|err| *err)
     }
 
     /// Evaluate a script file.
@@ -798,7 +800,10 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, EvalAltResult> {
-        let result = self.eval_ast_with_scope_raw(scope, ast)?;
+        let result = self
+            .eval_ast_with_scope_raw(scope, ast)
+            .map_err(|err| *err)?;
+
         let return_type = self.map_type_name(result.type_name());
 
         return result.try_cast::<T>().ok_or_else(|| {
@@ -810,13 +815,13 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         ast.0
             .iter()
             .try_fold(Dynamic::from_unit(), |_, stmt| {
                 self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
             })
-            .or_else(|err| match err {
+            .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
                 _ => Err(err),
             })
@@ -875,11 +880,13 @@ impl Engine {
             .try_fold(Dynamic::from_unit(), |_, stmt| {
                 self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
             })
-            .map(|_| ())
-            .or_else(|err| match err {
-                EvalAltResult::Return(_, _) => Ok(()),
-                _ => Err(err),
-            })
+            .map_or_else(
+                |err| match *err {
+                    EvalAltResult::Return(_, _) => Ok(()),
+                    err => Err(err),
+                },
+                |_| Ok(()),
+            )
     }
 
     /// Call a script function defined in an `AST` with multiple arguments.
@@ -930,7 +937,10 @@ impl Engine {
         let fn_lib = Some(ast.1.as_ref());
         let pos = Position::none();
 
-        let result = self.call_fn_raw(Some(scope), fn_lib, name, &mut args, None, pos, 0)?;
+        let result = self
+            .call_fn_raw(Some(scope), fn_lib, name, &mut args, None, pos, 0)
+            .map_err(|err| *err)?;
+
         let return_type = self.map_type_name(result.type_name());
 
         return result

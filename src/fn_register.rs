@@ -156,7 +156,7 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos));
+                        return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos)));
                     }
 
                     #[allow(unused_variables, unused_mut)]
@@ -194,7 +194,7 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos));
+                        return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos)));
                     }
 
                     #[allow(unused_variables, unused_mut)]
@@ -231,7 +231,7 @@ macro_rules! def_register {
                     const NUM_ARGS: usize = count_args!($($par)*);
 
                     if args.len() != NUM_ARGS {
-                        return Err(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos));
+                        return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos)));
                     }
 
                     #[allow(unused_variables, unused_mut)]
@@ -244,7 +244,7 @@ macro_rules! def_register {
                     // Call the user-supplied function using ($clone) to
                     // potentially clone the value, otherwise pass the reference.
                     f($(($clone)($par)),*).map(|r| r.into_dynamic())
-                                          .map_err(|err| err.set_position(pos))
+                                          .map_err(|err| Box::new(err.set_position(pos)))
                 };
                 self.register_fn_raw(name, vec![$(TypeId::of::<$par>()),*], Box::new(func));
             }

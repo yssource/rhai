@@ -107,8 +107,8 @@ pub enum ParseErrorType {
 
 impl ParseErrorType {
     /// Make a `ParseError` using the current type and position.
-    pub(crate) fn into_err(self, pos: Position) -> ParseError {
-        ParseError(self, pos)
+    pub(crate) fn into_err(self, pos: Position) -> Box<ParseError> {
+        Box::new(ParseError(self, pos))
     }
 }
 

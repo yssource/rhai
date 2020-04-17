@@ -22,7 +22,7 @@ use crate::stdlib::path::PathBuf;
 #[derive(Debug)]
 pub enum EvalAltResult {
     /// Syntax error.
-    ErrorParsing(ParseError),
+    ErrorParsing(Box<ParseError>),
 
     /// Error reading from a script file. Wrapped value is the path of the script file.
     ///
@@ -230,6 +230,11 @@ impl fmt::Display for EvalAltResult {
 
 impl From<ParseError> for EvalAltResult {
     fn from(err: ParseError) -> Self {
+        Self::ErrorParsing(Box::new(err))
+    }
+}
+impl From<Box<ParseError>> for EvalAltResult {
+    fn from(err: Box<ParseError>) -> Self {
         Self::ErrorParsing(err)
     }
 }
@@ -280,8 +285,9 @@ impl EvalAltResult {
             #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => (),
 
-            Self::ErrorParsing(ParseError(_, pos))
-            | Self::ErrorFunctionNotFound(_, pos)
+            Self::ErrorParsing(err) => err.1 = new_position,
+
+            Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)

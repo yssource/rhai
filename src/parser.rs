@@ -522,7 +522,7 @@ fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
 }
 
 /// Match a particular token, consuming it if matched.
-fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, ParseError> {
+fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, Box<ParseError>> {
     let (t, _) = input.peek().unwrap();
     if *t == token {
         eat_token(input, token);
@@ -537,7 +537,7 @@ fn parse_paren_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     if match_token(input, Token::RightParen)? {
         return Ok(Expr::Unit(begin));
     }
@@ -562,7 +562,7 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     let mut args_expr_list = Vec::new();
 
     match input.peek().unwrap() {
@@ -618,7 +618,7 @@ fn parse_index_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     pos: Position,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     let idx_expr = parse_expr(input, allow_stmt_expr)?;
 
     // Check type of indexing - must be integer or string
@@ -742,7 +742,7 @@ fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     let mut arr = Vec::new();
 
     if !match_token(input, Token::RightBracket)? {
@@ -780,7 +780,7 @@ fn parse_map_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     let mut map = Vec::new();
 
     if !match_token(input, Token::RightBrace)? {
@@ -857,7 +857,7 @@ fn parse_map_literal<'a>(
 fn parse_primary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     let (token, pos) = match input.peek().unwrap() {
         // { - block statement as expression
         (Token::LeftBrace, pos) if allow_stmt_expr => {
@@ -921,7 +921,7 @@ fn parse_primary<'a>(
 fn parse_unary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     match input.peek().unwrap() {
         // If statement is allowed to act as expressions
         (Token::If, pos) => {
@@ -986,9 +986,9 @@ fn parse_unary<'a>(
 }
 
 /// Parse an assignment.
-fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, ParseError> {
+fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, Box<ParseError>> {
     // Is the LHS in a valid format for an assignment target?
-    fn valid_assignment_chain(expr: &Expr, is_top: bool) -> Option<ParseError> {
+    fn valid_assignment_chain(expr: &Expr, is_top: bool) -> Option<Box<ParseError>> {
         match expr {
             // var
             Expr::Variable(_, _) => {
@@ -1056,7 +1056,7 @@ fn parse_op_assignment<S: Into<Cow<'static, str>>>(
     lhs: Expr,
     rhs: Expr,
     pos: Position,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     let lhs_copy = lhs.clone();
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
@@ -1068,7 +1068,7 @@ fn parse_op_assignment<S: Into<Cow<'static, str>>>(
 }
 
 /// Parse an 'in' expression.
-fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
+fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<ParseError>> {
     match (&lhs, &rhs) {
         (_, Expr::IntegerConstant(_, pos))
         | (_, Expr::FloatConstant(_, pos))
@@ -1202,7 +1202,7 @@ fn parse_binary_op<'a>(
     parent_precedence: u8,
     lhs: Expr,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     let mut current_lhs = lhs;
 
     loop {
@@ -1253,7 +1253,7 @@ fn parse_binary_op<'a>(
 
                 #[cfg(not(feature = "no_object"))]
                 Token::Period => {
-                    fn check_property(expr: Expr) -> Result<Expr, ParseError> {
+                    fn check_property(expr: Expr) -> Result<Expr, Box<ParseError>> {
                         match expr {
                             // xxx.lhs.rhs
                             Expr::Dot(lhs, rhs, pos) => Ok(Expr::Dot(
@@ -1353,7 +1353,7 @@ fn parse_binary_op<'a>(
 fn parse_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<Expr, ParseError> {
+) -> Result<Expr, Box<ParseError>> {
     // Parse a real expression
     let lhs = parse_unary(input, allow_stmt_expr)?;
     parse_binary_op(input, 1, lhs, allow_stmt_expr)
@@ -1363,7 +1363,7 @@ fn parse_expr<'a>(
 fn ensure_not_statement_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     type_name: &str,
-) -> Result<(), ParseError> {
+) -> Result<(), Box<ParseError>> {
     match input.peek().unwrap() {
         // Disallow statement expressions
         (Token::LeftBrace, pos) | (Token::EOF, pos) => {
@@ -1379,7 +1379,7 @@ fn parse_if<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     // if ...
     eat_token(input, Token::If);
 
@@ -1412,7 +1412,7 @@ fn parse_if<'a>(
 fn parse_while<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     // while ...
     eat_token(input, Token::While);
 
@@ -1428,7 +1428,7 @@ fn parse_while<'a>(
 fn parse_loop<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     // loop ...
     eat_token(input, Token::Loop);
 
@@ -1442,7 +1442,7 @@ fn parse_loop<'a>(
 fn parse_for<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     // for ...
     eat_token(input, Token::For);
 
@@ -1482,7 +1482,7 @@ fn parse_let<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     var_type: ScopeEntryType,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     // let/const... (specified in `var_type`)
     input.next();
 
@@ -1521,7 +1521,7 @@ fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     // Must start with {
     let pos = match input.next().unwrap() {
         (Token::LeftBrace, pos) => pos,
@@ -1575,7 +1575,7 @@ fn parse_block<'a>(
 fn parse_expr_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     Ok(Stmt::Expr(Box::new(parse_expr(input, allow_stmt_expr)?)))
 }
 
@@ -1584,7 +1584,7 @@ fn parse_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     breakable: bool,
     allow_stmt_expr: bool,
-) -> Result<Stmt, ParseError> {
+) -> Result<Stmt, Box<ParseError>> {
     let (token, pos) = match input.peek().unwrap() {
         (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
         x => x,
@@ -1649,7 +1649,7 @@ fn parse_stmt<'a>(
 fn parse_fn<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
-) -> Result<FnDef, ParseError> {
+) -> Result<FnDef, Box<ParseError>> {
     let pos = input.next().expect("should be fn").1;
 
     let name = match input.next().unwrap() {
@@ -1721,7 +1721,7 @@ pub fn parse_global_expr<'a>(
     engine: &Engine,
     scope: &Scope,
     optimization_level: OptimizationLevel,
-) -> Result<AST, ParseError> {
+) -> Result<AST, Box<ParseError>> {
     let expr = parse_expr(input, false)?;
 
     match input.peek().unwrap() {
@@ -1747,7 +1747,7 @@ pub fn parse_global_expr<'a>(
 /// Parse the global level statements.
 fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), ParseError> {
+) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), Box<ParseError>> {
     let mut statements = Vec::<Stmt>::new();
     let mut functions = HashMap::<u64, FnDef>::new();
 
@@ -1800,7 +1800,7 @@ pub fn parse<'a>(
     engine: &Engine,
     scope: &Scope,
     optimization_level: OptimizationLevel,
-) -> Result<AST, ParseError> {
+) -> Result<AST, Box<ParseError>> {
     let (statements, functions) = parse_global_level(input)?;
 
     let fn_lib = functions.into_iter().map(|(_, v)| v).collect();

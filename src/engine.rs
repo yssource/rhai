@@ -35,9 +35,10 @@ pub type Map = HashMap<String, Dynamic>;
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 #[cfg(feature = "sync")]
-pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltResult> + Send + Sync;
+pub type FnAny =
+    dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, EvalAltResult>;
+pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>>;
 
 #[cfg(feature = "sync")]
 type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
@@ -244,7 +245,7 @@ pub struct Engine {
 
     /// Maximum levels of call-stack to prevent infinite recursion.
     ///
-    /// Defaults to 32 for debug builds and 256 for non-debug builds.
+    /// Defaults to 28 for debug builds and 256 for non-debug builds.
     pub(crate) max_call_stack_depth: usize,
 }
 
@@ -398,10 +399,10 @@ impl Engine {
         def_val: Option<&Dynamic>,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         // Check for stack overflow
         if level > self.max_call_stack_depth {
-            return Err(EvalAltResult::ErrorStackOverflow(pos));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
         }
 
         #[cfg(feature = "no_function")]
@@ -427,10 +428,10 @@ impl Engine {
                     // Evaluate the function at one higher level of call depth
                     let result = self
                         .eval_stmt(scope, fn_lib, &fn_def.body, level + 1)
-                        .or_else(|err| match err {
+                        .or_else(|err| match *err {
                             // Convert return statement to return value
                             EvalAltResult::Return(x, _) => Ok(x),
-                            err => Err(err.set_position(pos)),
+                            err => Err(Box::new(err.set_position(pos))),
                         });
 
                     scope.rewind(scope_len);
@@ -453,19 +454,23 @@ impl Engine {
                     // Evaluate the function at one higher level of call depth
                     return self
                         .eval_stmt(&mut scope, fn_lib, &fn_def.body, level + 1)
-                        .or_else(|err| match err {
+                        .or_else(|err| match *err {
                             // Convert return statement to return value
                             EvalAltResult::Return(x, _) => Ok(x),
-                            err => Err(err.set_position(pos)),
+                            err => Err(Box::new(err.set_position(pos))),
                         });
                 }
             }
         }
 
         // Argument must be a string
-        fn cast_to_string(r: &Dynamic, pos: Position) -> Result<&str, EvalAltResult> {
-            r.as_str()
-                .map_err(|type_name| EvalAltResult::ErrorMismatchOutputType(type_name.into(), pos))
+        fn cast_to_string(r: &Dynamic, pos: Position) -> Result<&str, Box<EvalAltResult>> {
+            r.as_str().map_err(|type_name| {
+                Box::new(EvalAltResult::ErrorMismatchOutputType(
+                    type_name.into(),
+                    pos,
+                ))
+            })
         }
 
         // Search built-in's and external functions
@@ -499,10 +504,10 @@ impl Engine {
                     .unwrap_or_else(|| Dynamic::from_unit())),
 
                 // Getter function not found
-                _ => Err(EvalAltResult::ErrorDotExpr(
+                _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                     format!("- property '{}' unknown or write-only", prop),
                     pos,
-                )),
+                ))),
             };
         }
 
@@ -517,10 +522,10 @@ impl Engine {
                 }
 
                 // Setter function not found
-                _ => Err(EvalAltResult::ErrorDotExpr(
+                _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                     format!("- property '{}' unknown or read-only", prop),
                     pos,
-                )),
+                ))),
             };
         }
 
@@ -536,10 +541,10 @@ impl Engine {
             .map(|name| self.map_type_name(name))
             .collect();
 
-        Err(EvalAltResult::ErrorFunctionNotFound(
+        Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
             format!("{} ({})", fn_name, types_list.join(", ")),
             pos,
-        ))
+        )))
     }
 
     /// Chain-evaluate a dot setter.
@@ -550,7 +555,7 @@ impl Engine {
         target: Target,
         dot_rhs: &Expr,
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         match dot_rhs {
             // xxx.fn_name(arg_expr_list)
             Expr::FunctionCall(fn_name, arg_expr_list, def_val, pos) => {
@@ -589,10 +594,10 @@ impl Engine {
                     }
                     // Syntax error
                     _ => {
-                        return Err(EvalAltResult::ErrorDotExpr(
+                        return Err(Box::new(EvalAltResult::ErrorDotExpr(
                             "".to_string(),
                             dot_rhs.position(),
-                        ))
+                        )))
                     }
                 };
 
@@ -625,10 +630,10 @@ impl Engine {
                         }
                         // Syntax error
                         _ => {
-                            return Err(EvalAltResult::ErrorDotExpr(
+                            return Err(Box::new(EvalAltResult::ErrorDotExpr(
                                 "".to_string(),
                                 dot_rhs.position(),
-                            ))
+                            )))
                         }
                     };
 
@@ -638,17 +643,17 @@ impl Engine {
                         })
                 }
                 // Syntax error
-                _ => Err(EvalAltResult::ErrorDotExpr(
+                _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                     "".to_string(),
                     dot_lhs.position(),
-                )),
+                ))),
             },
 
             // Syntax error
-            _ => Err(EvalAltResult::ErrorDotExpr(
+            _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                 "".to_string(),
                 dot_rhs.position(),
-            )),
+            ))),
         }
     }
 
@@ -660,7 +665,7 @@ impl Engine {
         dot_lhs: &Expr,
         dot_rhs: &Expr,
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         match dot_lhs {
             // id.???
             Expr::Variable(id, pos) => {
@@ -685,10 +690,10 @@ impl Engine {
                 if let Some(src) = src {
                     match src.typ {
                         ScopeEntryType::Constant => {
-                            return Err(EvalAltResult::ErrorAssignmentToConstant(
+                            return Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                                 src.name.to_string(),
                                 idx_lhs.position(),
-                            ));
+                            )));
                         }
 
                         ScopeEntryType::Normal => {
@@ -718,10 +723,10 @@ impl Engine {
         scope: &'a Scope,
         id: &str,
         begin: Position,
-    ) -> Result<(ScopeSource<'a>, Dynamic), EvalAltResult> {
+    ) -> Result<(ScopeSource<'a>, Dynamic), Box<EvalAltResult>> {
         scope
             .get(id)
-            .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(id.into(), begin))
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(id.into(), begin)))
     }
 
     /// Get the value at the indexed position of a base type
@@ -734,7 +739,7 @@ impl Engine {
         op_pos: Position,
         level: usize,
         only_index: bool,
-    ) -> Result<(Dynamic, IndexValue), EvalAltResult> {
+    ) -> Result<(Dynamic, IndexValue), Box<EvalAltResult>> {
         let idx_pos = idx_expr.position();
         let type_name = self.map_type_name(val.type_name());
 
@@ -758,9 +763,15 @@ impl Engine {
                                 IndexValue::from_num(index),
                             )
                         })
-                        .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
+                        .ok_or_else(|| {
+                            Box::new(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
+                        })
                 } else {
-                    Err(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
+                    Err(Box::new(EvalAltResult::ErrorArrayBounds(
+                        arr.len(),
+                        index,
+                        idx_pos,
+                    )))
                 }
             }
 
@@ -792,27 +803,27 @@ impl Engine {
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
+                let num_chars = s.chars().count();
+
                 if index >= 0 {
                     s.chars()
                         .nth(index as usize)
                         .map(|ch| (Dynamic::from_char(ch), IndexValue::from_num(index)))
                         .ok_or_else(|| {
-                            EvalAltResult::ErrorStringBounds(s.chars().count(), index, idx_pos)
+                            Box::new(EvalAltResult::ErrorStringBounds(num_chars, index, idx_pos))
                         })
                 } else {
-                    Err(EvalAltResult::ErrorStringBounds(
-                        s.chars().count(),
-                        index,
-                        idx_pos,
-                    ))
+                    Err(Box::new(EvalAltResult::ErrorStringBounds(
+                        num_chars, index, idx_pos,
+                    )))
                 }
             }
 
             // Error - cannot be indexed
-            _ => Err(EvalAltResult::ErrorIndexingType(
+            _ => Err(Box::new(EvalAltResult::ErrorIndexingType(
                 type_name.to_string(),
                 op_pos,
-            )),
+            ))),
         }
     }
 
@@ -825,7 +836,7 @@ impl Engine {
         idx_expr: &Expr,
         op_pos: Position,
         level: usize,
-    ) -> Result<(Option<ScopeSource<'a>>, IndexValue, Dynamic), EvalAltResult> {
+    ) -> Result<(Option<ScopeSource<'a>>, IndexValue, Dynamic), Box<EvalAltResult>> {
         match lhs {
             // id[idx_expr]
             Expr::Variable(id, _) => {
@@ -873,7 +884,7 @@ impl Engine {
         src: ScopeSource,
         idx: IndexValue,
         new_val: (Dynamic, Position),
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         let target = scope.get_mut(src);
 
         match target.get_mut() {
@@ -908,7 +919,7 @@ impl Engine {
         idx: IndexValue,
         new_val: Dynamic,
         pos: Position,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         match target.get_mut() {
             Union::Array(arr) => {
                 arr[idx.as_num()] = new_val;
@@ -940,7 +951,7 @@ impl Engine {
         dot_rhs: &Expr,
         new_val: (&mut Dynamic, Position),
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         match dot_rhs {
             // xxx.id
             Expr::Property(id, pos) => {
@@ -970,10 +981,10 @@ impl Engine {
                 }
 
                 // All others - syntax error for setters chain
-                _ => Err(EvalAltResult::ErrorDotExpr(
+                _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                     "for assignment".to_string(),
                     *op_pos,
-                )),
+                ))),
             },
 
             // xxx.lhs.{...}
@@ -1022,24 +1033,24 @@ impl Engine {
                     }
 
                     // All others - syntax error for setters chain
-                    _ => Err(EvalAltResult::ErrorDotExpr(
+                    _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                         "for assignment".to_string(),
                         *op_pos,
-                    )),
+                    ))),
                 },
 
                 // All others - syntax error for setters chain
-                _ => Err(EvalAltResult::ErrorDotExpr(
+                _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                     "for assignment".to_string(),
                     lhs.position(),
-                )),
+                ))),
             },
 
             // Syntax error
-            _ => Err(EvalAltResult::ErrorDotExpr(
+            _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                 "for assignment".to_string(),
                 dot_rhs.position(),
-            )),
+            ))),
         }
     }
 
@@ -1053,16 +1064,15 @@ impl Engine {
         new_val: (&mut Dynamic, Position),
         op_pos: Position,
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         match dot_lhs {
             // id.???
             Expr::Variable(id, pos) => {
                 let (src, mut target) = Self::search_scope(scope, id, *pos)?;
 
                 match src.typ {
-                    ScopeEntryType::Constant => Err(EvalAltResult::ErrorAssignmentToConstant(
-                        id.to_string(),
-                        op_pos,
+                    ScopeEntryType::Constant => Err(Box::new(
+                        EvalAltResult::ErrorAssignmentToConstant(id.to_string(), op_pos),
                     )),
                     _ => {
                         // Avoid referencing scope which is used below as mut
@@ -1093,10 +1103,10 @@ impl Engine {
                 if let Some(src) = src {
                     match src.typ {
                         ScopeEntryType::Constant => {
-                            return Err(EvalAltResult::ErrorAssignmentToConstant(
+                            return Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                                 src.name.to_string(),
                                 lhs.position(),
-                            ));
+                            )));
                         }
 
                         ScopeEntryType::Normal => {
@@ -1114,10 +1124,10 @@ impl Engine {
             }
 
             // Syntax error
-            _ => Err(EvalAltResult::ErrorDotExpr(
+            _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
                 "for assignment".to_string(),
                 dot_lhs.position(),
-            )),
+            ))),
         }
     }
 
@@ -1129,7 +1139,7 @@ impl Engine {
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut lhs_value = self.eval_expr(scope, fn_lib, lhs, level)?;
         let rhs_value = self.eval_expr(scope, fn_lib, rhs, level)?;
 
@@ -1161,7 +1171,7 @@ impl Engine {
                     Dynamic(Union::Char(c)) => {
                         Ok(Dynamic::from_bool(rhs_value.contains_key(&c.to_string())))
                     }
-                    _ => Err(EvalAltResult::ErrorInExpr(lhs.position())),
+                    _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
                 }
             }
             Dynamic(Union::Str(rhs_value)) => {
@@ -1169,10 +1179,10 @@ impl Engine {
                 match lhs_value {
                     Dynamic(Union::Str(s)) => Ok(Dynamic::from_bool(rhs_value.contains(&s))),
                     Dynamic(Union::Char(c)) => Ok(Dynamic::from_bool(rhs_value.contains(c))),
-                    _ => Err(EvalAltResult::ErrorInExpr(lhs.position())),
+                    _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
                 }
             }
-            _ => Err(EvalAltResult::ErrorInExpr(rhs.position())),
+            _ => Err(Box::new(EvalAltResult::ErrorInExpr(rhs.position()))),
         }
     }
 
@@ -1183,7 +1193,7 @@ impl Engine {
         fn_lib: Option<&FunctionsLib>,
         expr: &Expr,
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         match expr {
             Expr::IntegerConstant(i, _) => Ok(Dynamic::from_int(*i)),
             #[cfg(not(feature = "no_float"))]
@@ -1204,10 +1214,10 @@ impl Engine {
                     // name = rhs
                     Expr::Variable(name, pos) => match scope.get(name) {
                         None => {
-                            return Err(EvalAltResult::ErrorVariableNotFound(
+                            return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
                                 name.to_string(),
                                 *pos,
-                            ))
+                            )))
                         }
 
                         Some((
@@ -1231,10 +1241,10 @@ impl Engine {
                                 ..
                             },
                             _,
-                        )) => Err(EvalAltResult::ErrorAssignmentToConstant(
+                        )) => Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                             name.to_string(),
                             *op_pos,
-                        )),
+                        ))),
                     },
 
                     // idx_lhs[idx_expr] = rhs
@@ -1244,15 +1254,15 @@ impl Engine {
                             self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
 
                         match src.map(|x| x.typ) {
-                            None => Err(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                            None => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
                                 idx_lhs.position(),
-                            )),
+                            ))),
 
                             Some(ScopeEntryType::Constant) => {
-                                Err(EvalAltResult::ErrorAssignmentToConstant(
+                                Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                                     src.unwrap().name.to_string(),
                                     idx_lhs.position(),
-                                ))
+                                )))
                             }
 
                             Some(ScopeEntryType::Normal) => Ok(Self::update_indexed_var_in_scope(
@@ -1272,13 +1282,17 @@ impl Engine {
                     }
 
                     // Error assignment to constant
-                    expr if expr.is_constant() => Err(EvalAltResult::ErrorAssignmentToConstant(
-                        expr.get_constant_str(),
-                        lhs.position(),
-                    )),
+                    expr if expr.is_constant() => {
+                        Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
+                            expr.get_constant_str(),
+                            lhs.position(),
+                        )))
+                    }
 
                     // Syntax error
-                    _ => Err(EvalAltResult::ErrorAssignmentToUnknownLHS(lhs.position())),
+                    _ => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                        lhs.position(),
+                    ))),
                 }
             }
 
@@ -1362,13 +1376,13 @@ impl Engine {
                                 script,
                                 OptimizationLevel::None,
                             )
-                            .map_err(EvalAltResult::ErrorParsing)?;
+                            .map_err(|err| EvalAltResult::ErrorParsing(Box::new(err)))?;
 
                         // If new functions are defined within the eval string, it is an error
                         if ast.1.len() > 0 {
-                            return Err(EvalAltResult::ErrorParsing(
+                            return Err(Box::new(EvalAltResult::ErrorParsing(
                                 ParseErrorType::WrongFnDefinition.into_err(pos),
-                            ));
+                            )));
                         }
 
                         if let Some(lib) = fn_lib {
@@ -1384,7 +1398,7 @@ impl Engine {
 
                         // Evaluate the AST
                         self.eval_ast_with_scope_raw(scope, &ast)
-                            .map_err(|err| err.set_position(pos))
+                            .map_err(|err| Box::new(err.set_position(pos)))
                     }
 
                     // Normal function call
@@ -1452,7 +1466,7 @@ impl Engine {
         fn_lib: Option<&FunctionsLib>,
         stmt: &Stmt,
         level: usize,
-    ) -> Result<Dynamic, EvalAltResult> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         match stmt {
             // No-op
             Stmt::Noop(_) => Ok(Dynamic::from_unit()),
@@ -1486,7 +1500,7 @@ impl Engine {
             Stmt::IfThenElse(guard, if_body, else_body) => self
                 .eval_expr(scope, fn_lib, guard, level)?
                 .as_bool()
-                .map_err(|_| EvalAltResult::ErrorLogicGuard(guard.position()))
+                .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(guard.position())))
                 .and_then(|guard_val| {
                     if guard_val {
                         self.eval_stmt(scope, fn_lib, if_body, level)
@@ -1500,26 +1514,32 @@ impl Engine {
             // While loop
             Stmt::While(guard, body) => loop {
                 match self.eval_expr(scope, fn_lib, guard, level)?.as_bool() {
-                    Ok(guard_val) if guard_val => {
-                        match self.eval_stmt(scope, fn_lib, body, level) {
-                            Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
-                            Err(EvalAltResult::ErrorLoopBreak(true, _)) => {
+                    Ok(true) => match self.eval_stmt(scope, fn_lib, body, level) {
+                        Ok(_) => (),
+                        Err(err) => match *err {
+                            EvalAltResult::ErrorLoopBreak(false, _) => (),
+                            EvalAltResult::ErrorLoopBreak(true, _) => {
                                 return Ok(Dynamic::from_unit())
                             }
-                            Err(x) => return Err(x),
-                        }
+                            _ => return Err(err),
+                        },
+                    },
+                    Ok(false) => return Ok(Dynamic::from_unit()),
+                    Err(_) => {
+                        return Err(Box::new(EvalAltResult::ErrorLogicGuard(guard.position())))
                     }
-                    Ok(_) => return Ok(Dynamic::from_unit()),
-                    Err(_) => return Err(EvalAltResult::ErrorLogicGuard(guard.position())),
                 }
             },
 
             // Loop statement
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, fn_lib, body, level) {
-                    Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
-                    Err(EvalAltResult::ErrorLoopBreak(true, _)) => return Ok(Dynamic::from_unit()),
-                    Err(x) => return Err(x),
+                    Ok(_) => (),
+                    Err(err) => match *err {
+                        EvalAltResult::ErrorLoopBreak(false, _) => (),
+                        EvalAltResult::ErrorLoopBreak(true, _) => return Ok(Dynamic::from_unit()),
+                        _ => return Err(err),
+                    },
                 }
             },
 
@@ -1543,48 +1563,50 @@ impl Engine {
                         *scope.get_mut(entry) = a;
 
                         match self.eval_stmt(scope, fn_lib, body, level) {
-                            Ok(_) | Err(EvalAltResult::ErrorLoopBreak(false, _)) => (),
-                            Err(EvalAltResult::ErrorLoopBreak(true, _)) => break,
-                            Err(x) => return Err(x),
+                            Ok(_) => (),
+                            Err(err) => match *err {
+                                EvalAltResult::ErrorLoopBreak(false, _) => (),
+                                EvalAltResult::ErrorLoopBreak(true, _) => break,
+                                _ => return Err(err),
+                            },
                         }
                     }
 
                     scope.rewind(scope.len() - 1);
                     Ok(Dynamic::from_unit())
                 } else {
-                    Err(EvalAltResult::ErrorFor(expr.position()))
+                    Err(Box::new(EvalAltResult::ErrorFor(expr.position())))
                 }
             }
 
             // Continue statement
-            Stmt::Continue(pos) => Err(EvalAltResult::ErrorLoopBreak(false, *pos)),
+            Stmt::Continue(pos) => Err(Box::new(EvalAltResult::ErrorLoopBreak(false, *pos))),
 
             // Break statement
-            Stmt::Break(pos) => Err(EvalAltResult::ErrorLoopBreak(true, *pos)),
+            Stmt::Break(pos) => Err(Box::new(EvalAltResult::ErrorLoopBreak(true, *pos))),
 
             // Empty return
             Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
-                Err(EvalAltResult::Return(Dynamic::from_unit(), *pos))
+                Err(Box::new(EvalAltResult::Return(Dynamic::from_unit(), *pos)))
             }
 
             // Return value
-            Stmt::ReturnWithVal(Some(a), ReturnType::Return, pos) => Err(EvalAltResult::Return(
-                self.eval_expr(scope, fn_lib, a, level)?,
-                *pos,
+            Stmt::ReturnWithVal(Some(a), ReturnType::Return, pos) => Err(Box::new(
+                EvalAltResult::Return(self.eval_expr(scope, fn_lib, a, level)?, *pos),
             )),
 
             // Empty throw
             Stmt::ReturnWithVal(None, ReturnType::Exception, pos) => {
-                Err(EvalAltResult::ErrorRuntime("".into(), *pos))
+                Err(Box::new(EvalAltResult::ErrorRuntime("".into(), *pos)))
             }
 
             // Throw value
             Stmt::ReturnWithVal(Some(a), ReturnType::Exception, pos) => {
                 let val = self.eval_expr(scope, fn_lib, a, level)?;
-                Err(EvalAltResult::ErrorRuntime(
+                Err(Box::new(EvalAltResult::ErrorRuntime(
                     val.take_string().unwrap_or_else(|_| "".to_string()),
                     *pos,
-                ))
+                )))
             }
 
             // Let statement

@@ -114,7 +114,7 @@ fn call_fn(
     fn_name: &str,
     args: &mut FnCallArgs,
     pos: Position,
-) -> Result<Option<Dynamic>, EvalAltResult> {
+) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     // Search built-in's and external functions
     functions
         .and_then(|f| f.get(&calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()))))
