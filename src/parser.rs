@@ -330,12 +330,14 @@ impl Expr {
             Self::False(_) => Dynamic::from_bool(false),
             Self::Unit(_) => Dynamic::from_unit(),
 
-            Self::Array(items, _) if items.iter().all(Self::is_constant) => Dynamic(Union::Array(
-                items
-                    .iter()
-                    .map(Self::get_constant_value)
-                    .collect::<Vec<_>>(),
-            )),
+            Self::Array(items, _) if items.iter().all(Self::is_constant) => {
+                Dynamic(Union::Array(Box::new(
+                    items
+                        .iter()
+                        .map(Self::get_constant_value)
+                        .collect::<Vec<_>>(),
+                )))
+            }
 
             Self::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
@@ -1818,7 +1820,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
         Union::Char(value) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value) => Some(Expr::StringConstant(value.into(), pos)),
+        Union::Str(value) => Some(Expr::StringConstant((*value).into(), pos)),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]

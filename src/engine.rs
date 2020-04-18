@@ -1167,7 +1167,9 @@ impl Engine {
             Dynamic(Union::Map(rhs_value)) => {
                 // Only allows String or char
                 match lhs_value {
-                    Dynamic(Union::Str(s)) => Ok(Dynamic::from_bool(rhs_value.contains_key(&s))),
+                    Dynamic(Union::Str(s)) => {
+                        Ok(Dynamic::from_bool(rhs_value.contains_key(s.as_ref())))
+                    }
                     Dynamic(Union::Char(c)) => {
                         Ok(Dynamic::from_bool(rhs_value.contains_key(&c.to_string())))
                     }
@@ -1177,7 +1179,9 @@ impl Engine {
             Dynamic(Union::Str(rhs_value)) => {
                 // Only allows String or char
                 match lhs_value {
-                    Dynamic(Union::Str(s)) => Ok(Dynamic::from_bool(rhs_value.contains(&s))),
+                    Dynamic(Union::Str(s)) => {
+                        Ok(Dynamic::from_bool(rhs_value.contains(s.as_ref())))
+                    }
                     Dynamic(Union::Char(c)) => Ok(Dynamic::from_bool(rhs_value.contains(c))),
                     _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
                 }
@@ -1314,7 +1318,7 @@ impl Engine {
                         .map(|val| arr.push(val))
                 })?;
 
-                Ok(Dynamic(Union::Array(arr)))
+                Ok(Dynamic(Union::Array(Box::new(arr))))
             }
 
             #[cfg(not(feature = "no_object"))]

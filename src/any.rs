@@ -135,13 +135,13 @@ pub struct Dynamic(pub(crate) Union);
 pub enum Union {
     Unit(()),
     Bool(bool),
-    Str(String),
+    Str(Box<String>),
     Char(char),
     Int(INT),
     #[cfg(not(feature = "no_float"))]
     Float(FLOAT),
-    Array(Array),
-    Map(Box<Map>), // Box it to reduce size
+    Array(Box<Array>),
+    Map(Box<Map>),
     Variant(Box<dyn Variant>),
 }
 
@@ -324,15 +324,22 @@ impl Dynamic {
             cast_box::<_, Dynamic>(var)
                 .map(|x| x.0)
                 .or_else(|var| {
-                    cast_box::<_, String>(var).map(Union::Str).or_else(|var| {
-                        cast_box::<_, Array>(var).map(Union::Array).or_else(|var| {
-                            cast_box::<_, Map>(var)
-                                .map(|v| Union::Map(Box::new(v)))
-                                .or_else(|var| -> Result<Union, ()> {
-                                    Ok(Union::Variant(var as Box<dyn Variant>))
+                    cast_box::<_, String>(var)
+                        .map(Box::new)
+                        .map(Union::Str)
+                        .or_else(|var| {
+                            cast_box::<_, Array>(var)
+                                .map(Box::new)
+                                .map(Union::Array)
+                                .or_else(|var| {
+                                    cast_box::<_, Map>(var)
+                                        .map(Box::new)
+                                        .map(Union::Map)
+                                        .or_else(|var| -> Result<Union, ()> {
+                                            Ok(Union::Variant(var as Box<dyn Variant>))
+                                        })
                                 })
                         })
-                    })
                 })
                 .unwrap(),
         )
@@ -360,12 +367,16 @@ impl Dynamic {
         match &self.0 {
             Union::Unit(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
             Union::Bool(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
-            Union::Str(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
+            Union::Str(value) => (value.as_ref() as &dyn Variant)
+                .downcast_ref::<T>()
+                .cloned(),
             Union::Char(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
             Union::Int(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
-            Union::Array(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
+            Union::Array(value) => (value.as_ref() as &dyn Variant)
+                .downcast_ref::<T>()
+                .cloned(),
             Union::Map(value) => (value.as_ref() as &dyn Variant)
                 .downcast_ref::<T>()
                 .cloned(),
@@ -404,12 +415,12 @@ impl Dynamic {
         match &self.0 {
             Union::Unit(value) => (value as &dyn Variant).downcast_ref::<T>(),
             Union::Bool(value) => (value as &dyn Variant).downcast_ref::<T>(),
-            Union::Str(value) => (value as &dyn Variant).downcast_ref::<T>(),
+            Union::Str(value) => (value.as_ref() as &dyn Variant).downcast_ref::<T>(),
             Union::Char(value) => (value as &dyn Variant).downcast_ref::<T>(),
             Union::Int(value) => (value as &dyn Variant).downcast_ref::<T>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => (value as &dyn Variant).downcast_ref::<T>(),
-            Union::Array(value) => (value as &dyn Variant).downcast_ref::<T>(),
+            Union::Array(value) => (value.as_ref() as &dyn Variant).downcast_ref::<T>(),
             Union::Map(value) => (value.as_ref() as &dyn Variant).downcast_ref::<T>(),
             Union::Variant(value) => value.as_ref().downcast_ref::<T>(),
         }
@@ -426,12 +437,12 @@ impl Dynamic {
         match &mut self.0 {
             Union::Unit(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
             Union::Bool(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
-            Union::Str(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
+            Union::Str(value) => (value.as_mut() as &mut dyn Variant).downcast_mut::<T>(),
             Union::Char(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
             Union::Int(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
-            Union::Array(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
+            Union::Array(value) => (value.as_mut() as &mut dyn Variant).downcast_mut::<T>(),
             Union::Map(value) => (value.as_mut() as &mut dyn Variant).downcast_mut::<T>(),
             Union::Variant(value) => value.as_mut().downcast_mut::<T>(),
         }
@@ -477,7 +488,7 @@ impl Dynamic {
     /// Returns the name of the actual type if the cast fails.
     pub(crate) fn take_string(self) -> Result<String, &'static str> {
         match self.0 {
-            Union::Str(s) => Ok(s),
+            Union::Str(s) => Ok(*s),
             _ => Err(self.type_name()),
         }
     }
@@ -499,7 +510,7 @@ impl Dynamic {
         Self(Union::Char(value))
     }
     pub(crate) fn from_string(value: String) -> Self {
-        Self(Union::Str(value))
+        Self(Union::Str(Box::new(value)))
     }
 }
 
