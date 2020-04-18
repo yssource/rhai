@@ -142,7 +142,7 @@ pub enum Union {
     Float(FLOAT),
     Array(Box<Array>),
     Map(Box<Map>),
-    Variant(Box<dyn Variant>),
+    Variant(Box<Box<dyn Variant>>),
 }
 
 impl Dynamic {
@@ -172,7 +172,7 @@ impl Dynamic {
             Union::Float(_) => TypeId::of::<FLOAT>(),
             Union::Array(_) => TypeId::of::<Array>(),
             Union::Map(_) => TypeId::of::<Map>(),
-            Union::Variant(value) => (**value).type_id(),
+            Union::Variant(value) => (***value).type_id(),
         }
     }
 
@@ -191,7 +191,7 @@ impl Dynamic {
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
-            Union::Variant(value) => (**value).type_name(),
+            Union::Variant(value) => (***value).type_name(),
         }
     }
 }
@@ -242,7 +242,7 @@ impl Clone for Dynamic {
             Union::Float(value) => Self(Union::Float(value.clone())),
             Union::Array(value) => Self(Union::Array(value.clone())),
             Union::Map(value) => Self(Union::Map(value.clone())),
-            Union::Variant(value) => (**value).clone_into_dynamic(),
+            Union::Variant(value) => (***value).clone_into_dynamic(),
         }
     }
 }
@@ -336,7 +336,7 @@ impl Dynamic {
                                         .map(Box::new)
                                         .map(Union::Map)
                                         .or_else(|var| -> Result<Union, ()> {
-                                            Ok(Union::Variant(var as Box<dyn Variant>))
+                                            Ok(Union::Variant(Box::new(var as Box<dyn Variant>)))
                                         })
                                 })
                         })
@@ -380,7 +380,7 @@ impl Dynamic {
             Union::Map(value) => (value.as_ref() as &dyn Variant)
                 .downcast_ref::<T>()
                 .cloned(),
-            Union::Variant(value) => value.as_ref().downcast_ref::<T>().cloned(),
+            Union::Variant(value) => value.as_ref().as_ref().downcast_ref::<T>().cloned(),
         }
     }
 
@@ -422,7 +422,7 @@ impl Dynamic {
             Union::Float(value) => (value as &dyn Variant).downcast_ref::<T>(),
             Union::Array(value) => (value.as_ref() as &dyn Variant).downcast_ref::<T>(),
             Union::Map(value) => (value.as_ref() as &dyn Variant).downcast_ref::<T>(),
-            Union::Variant(value) => value.as_ref().downcast_ref::<T>(),
+            Union::Variant(value) => value.as_ref().as_ref().downcast_ref::<T>(),
         }
     }
 
@@ -444,7 +444,7 @@ impl Dynamic {
             Union::Float(value) => (value as &mut dyn Variant).downcast_mut::<T>(),
             Union::Array(value) => (value.as_mut() as &mut dyn Variant).downcast_mut::<T>(),
             Union::Map(value) => (value.as_mut() as &mut dyn Variant).downcast_mut::<T>(),
-            Union::Variant(value) => value.as_mut().downcast_mut::<T>(),
+            Union::Variant(value) => value.as_mut().as_mut().downcast_mut::<T>(),
         }
     }
 
