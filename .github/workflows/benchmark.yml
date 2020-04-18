@@ -1,4 +1,4 @@
-ame: Benchmark
+name: Benchmark
 on:
   push:
     branches:
