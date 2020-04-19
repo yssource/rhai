@@ -127,6 +127,60 @@ macro_rules! count_args {
     ( $head:ident $($tail:ident)* ) => { 1_usize + count_args!($($tail)*) };
 }
 
+/// This macro creates a closure wrapping a registered function.
+macro_rules! make_func {
+	($fn_name:ident : $fn:ident : $map:expr ; $($par:ident => $clone:expr),*) => {
+//   ^ function name
+//                    ^ function pointer
+//                                ^ result mapping function
+//                                              ^ function parameter generic type name (A, B, C etc.)
+//                                                            ^ dereferencing function
+
+		move |args: &mut FnCallArgs, pos: Position| {
+			// Check for length at the beginning to avoid per-element bound checks.
+			const NUM_ARGS: usize = count_args!($($par)*);
+
+			if args.len() != NUM_ARGS {
+				return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch($fn_name.clone(), NUM_ARGS, args.len(), pos)));
+			}
+
+			#[allow(unused_variables, unused_mut)]
+			let mut drain = args.iter_mut();
+			$(
+			// Downcast every element, return in case of a type mismatch
+			let $par: &mut $par = drain.next().unwrap().downcast_mut().unwrap();
+			)*
+
+			// Call the user-supplied function using ($clone) to
+			// potentially clone the value, otherwise pass the reference.
+			let r = $fn($(($clone)($par)),*);
+			$map(r, pos)
+		};
+	};
+}
+
+/// To Dynamic mapping function.
+#[inline]
+fn map_dynamic<T: Variant + Clone>(data: T, _pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
+    Ok(data.into_dynamic())
+}
+
+/// To Dynamic mapping function.
+#[inline]
+fn map_identity(data: Dynamic, _pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
+    Ok(data)
+}
+
+/// To Result<Dynamic, EvalAltResult> mapping function.
+#[inline]
+fn map_result<T: Variant + Clone>(
+    data: Result<T, EvalAltResult>,
+    pos: Position,
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    data.map(|v| v.into_dynamic())
+        .map_err(|err| Box::new(err.set_position(pos)))
+}
+
 macro_rules! def_register {
     () => {
         def_register!(imp);
@@ -150,28 +204,7 @@ macro_rules! def_register {
         {
             fn register_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
-
-                let func = move |args: &mut FnCallArgs, pos: Position| {
-                    // Check for length at the beginning to avoid per-element bound checks.
-                    const NUM_ARGS: usize = count_args!($($par)*);
-
-                    if args.len() != NUM_ARGS {
-                        return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos)));
-                    }
-
-                    #[allow(unused_variables, unused_mut)]
-                    let mut drain = args.iter_mut();
-                    $(
-                    // Downcast every element, return in case of a type mismatch
-                    let $par: &mut $par = drain.next().unwrap().downcast_mut().unwrap();
-                    )*
-
-                    // Call the user-supplied function using ($clone) to
-                    // potentially clone the value, otherwise pass the reference.
-                    let r = f($(($clone)($par)),*);
-                    Ok(r.into_dynamic())
-                };
-
+                let func = make_func!(fn_name : f : map_dynamic ; $($par => $clone),*);
                 self.register_fn_raw(name, vec![$(TypeId::of::<$par>()),*], Box::new(func));
             }
         }
@@ -188,26 +221,7 @@ macro_rules! def_register {
         {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
-
-                let func = move |args: &mut FnCallArgs, pos: Position| {
-                    // Check for length at the beginning to avoid per-element bound checks.
-                    const NUM_ARGS: usize = count_args!($($par)*);
-
-                    if args.len() != NUM_ARGS {
-                        return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos)));
-                    }
-
-                    #[allow(unused_variables, unused_mut)]
-                    let mut drain = args.iter_mut();
-                    $(
-                    // Downcast every element, return in case of a type mismatch
-                    let $par: &mut $par = drain.next().unwrap().downcast_mut().unwrap();
-                    )*
-
-                    // Call the user-supplied function using ($clone) to
-                    // potentially clone the value, otherwise pass the reference.
-                    Ok(f($(($clone)($par)),*))
-                };
+                let func = make_func!(fn_name : f : map_identity ; $($par => $clone),*);
                 self.register_fn_raw(name, vec![$(TypeId::of::<$par>()),*], Box::new(func));
             }
         }
@@ -225,27 +239,7 @@ macro_rules! def_register {
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
-
-                let func = move |args: &mut FnCallArgs, pos: Position| {
-                    // Check for length at the beginning to avoid per-element bound checks.
-                    const NUM_ARGS: usize = count_args!($($par)*);
-
-                    if args.len() != NUM_ARGS {
-                        return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch(fn_name.clone(), NUM_ARGS, args.len(), pos)));
-                    }
-
-                    #[allow(unused_variables, unused_mut)]
-                    let mut drain = args.iter_mut();
-                    $(
-                    // Downcast every element, return in case of a type mismatch
-                    let $par: &mut $par = drain.next().unwrap().downcast_mut().unwrap();
-                    )*
-
-                    // Call the user-supplied function using ($clone) to
-                    // potentially clone the value, otherwise pass the reference.
-                    f($(($clone)($par)),*).map(|r| r.into_dynamic())
-                                          .map_err(|err| Box::new(err.set_position(pos)))
-                };
+                let func = make_func!(fn_name : f : map_result ; $($par => $clone),*);
                 self.register_fn_raw(name, vec![$(TypeId::of::<$par>()),*], Box::new(func));
             }
         }
