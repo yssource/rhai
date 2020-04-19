@@ -87,6 +87,39 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`no_std`]: #optional-features
 [`sync`]: #optional-features
 
+### Performance builds
+
+Some features are for performance.  For example, using `only_i32` or `only_i64` disables all other integer types (such as `u16`).
+If only a single integer type is needed in scripts - most of the time this is the case - it is best to avoid registering
+lots of functions related to other integer types that will never be used.  As a result, performance will improve.
+
+If only 32-bit integers are needed - again, most of the time this is the case - using `only_i32` disables also `i64`.
+On 64-bit targets this may not gain much, but on some 32-bit targets this improves performance due to 64-bit arithmetic
+requiring more CPU cycles to complete.
+
+Also, turning on `no_float`, and `only_i32` makes the key [`Dynamic`] data type only 8 bytes small on 32-bit targets
+while normally it can be up to 16 bytes (e.g. on x86/x64 CPU's) in order to hold an `i64` or `f64`.
+Making [`Dynamic`] small helps performance due to more caching efficiency.
+
+### Minimal builds
+
+In order to compile a _minimal_build - i.e. a build optimized for size - perhaps for embedded targets, it is essential that
+the correct linker flags are used in `cargo.toml`:
+
+```toml
+[profile.release]
+opt-level = "z"     # optimize for size
+```
+
+Opt out of as many features as possible, if they are not needed, to reduce code size because, remember, by default
+all code is compiled in as what a script requires cannot be predicted. If a language feature is not needed,
+omitting them via special features is a prudent strategy to optimize the build for size.
+
+Start by using [`Engine::new_raw`](#raw-engine) to create a _raw_ engine which does not register the standard library of utility
+functions.  Secondly, omitting arrays (`no_index`) yields the most code-size savings, followed by floating-point support
+(`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).  Disable script-defined
+functions (`no_function`) only when the feature is not needed because code size savings is minimal.
+
 Related
 -------
 
@@ -380,7 +413,7 @@ The default integer type is `i64`. If other integer types are not needed, it is 
 smaller build with the [`only_i64`] feature.
 
 If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`, including `i64`.
-This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
+This is useful on some 32-bit targets where using 64-bit integers incur a performance penalty.
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
