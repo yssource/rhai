@@ -43,6 +43,26 @@ fn bench_parse_full(bench: &mut Bencher) {
 }
 
 #[bench]
+fn bench_parse_array(bench: &mut Bencher) {
+    let script = r#"[1, 234.789, "hello", false, [ 9, 8, 7] ]"#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    bench.iter(|| engine.compile_expression(script).unwrap());
+}
+
+#[bench]
+fn bench_parse_map(bench: &mut Bencher) {
+    let script = r#"#{a: 1, b: 42, c: "hi", "dc%$& ": "strange", x: true, y: 123.456 }"#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    bench.iter(|| engine.compile_expression(script).unwrap());
+}
+
+#[bench]
 fn bench_parse_primes(bench: &mut Bencher) {
     let script = r#"
             // This script uses the Sieve of Eratosthenes to calculate prime numbers.
