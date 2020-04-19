@@ -62,12 +62,7 @@ impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCal
 impl Engine {
     /// Register a custom function.
     pub(crate) fn register_fn_raw(&mut self, fn_name: &str, args: Vec<TypeId>, f: Box<FnAny>) {
-        if self.functions.is_none() {
-            self.functions = Some(HashMap::new());
-        }
         self.functions
-            .as_mut()
-            .unwrap()
             .insert(calc_fn_spec(fn_name, args.into_iter()), f);
     }
 
@@ -171,14 +166,7 @@ impl Engine {
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
     pub fn register_iterator<T: Variant + Clone, F: IteratorCallback>(&mut self, f: F) {
-        if self.type_iterators.is_none() {
-            self.type_iterators = Some(HashMap::new());
-        }
-
-        self.type_iterators
-            .as_mut()
-            .unwrap()
-            .insert(TypeId::of::<T>(), Box::new(f));
+        self.type_iterators.insert(TypeId::of::<T>(), Box::new(f));
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.

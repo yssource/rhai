@@ -59,6 +59,13 @@ pub const FUNC_TO_STRING: &str = "to_string";
 pub const FUNC_GETTER: &str = "get$";
 pub const FUNC_SETTER: &str = "set$";
 
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+const FUNCTIONS_COUNT: usize = 512;
+
+#[cfg(any(feature = "only_i32", feature = "only_i64"))]
+const FUNCTIONS_COUNT: usize = 256;
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 enum IndexValue {
     Num(usize),
@@ -169,11 +176,7 @@ impl FunctionsLib {
             self.clone()
         } else {
             let mut functions = self.clone();
-
-            other.iter().for_each(|(hash, fn_def)| {
-                functions.insert(*hash, fn_def.clone());
-            });
-
+            functions.extend(other.iter().map(|(hash, fn_def)| (*hash, fn_def.clone())));
             functions
         }
     }
@@ -219,10 +222,10 @@ impl DerefMut for FunctionsLib {
 /// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
     /// A hashmap containing all compiled functions known to the engine.
-    pub(crate) functions: Option<HashMap<u64, Box<FnAny>>>,
+    pub(crate) functions: HashMap<u64, Box<FnAny>>,
 
     /// A hashmap containing all iterators known to the engine.
-    pub(crate) type_iterators: Option<HashMap<TypeId, Box<IteratorFn>>>,
+    pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: Option<HashMap<String, String>>,
 
@@ -253,8 +256,8 @@ impl Default for Engine {
     fn default() -> Self {
         // Create the new scripting Engine
         let mut engine = Engine {
-            functions: None,
-            type_iterators: None,
+            functions: HashMap::with_capacity(FUNCTIONS_COUNT),
+            type_iterators: HashMap::new(),
             type_names: None,
 
             // default print/debug implementations
@@ -350,8 +353,8 @@ impl Engine {
     /// Create a new `Engine` with minimal configurations without the standard library etc.
     pub fn new_raw() -> Self {
         let mut engine = Engine {
-            functions: None,
-            type_iterators: None,
+            functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
+            type_iterators: HashMap::new(),
             type_names: None,
             on_print: None,
             on_debug: None,
@@ -476,7 +479,7 @@ impl Engine {
         // Search built-in's and external functions
         let fn_spec = calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()));
 
-        if let Some(func) = self.functions.as_ref().and_then(|f| f.get(&fn_spec)) {
+        if let Some(func) = self.functions.get(&fn_spec) {
             // Run external function
             let result = func(args, pos)?;
 
@@ -548,7 +551,7 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot setter.
-    fn get_dot_val_helper(
+    fn dot_get_helper(
         &self,
         scope: &mut Scope,
         fn_lib: Option<&FunctionsLib>,
@@ -563,13 +566,10 @@ impl Engine {
                     .iter()
                     .map(|arg_expr| self.eval_expr(scope, fn_lib, arg_expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
-
-                let this_ptr = target.get_mut(scope);
-
-                let mut args: Vec<_> = once(this_ptr).chain(values.iter_mut()).collect();
-
+                let mut args: Vec<_> = once(target.get_mut(scope))
+                    .chain(values.iter_mut())
+                    .collect();
                 let def_val = def_val.as_ref();
-
                 self.call_fn_raw(None, fn_lib, fn_name, &mut args, def_val, *pos, 0)
             }
 
@@ -590,7 +590,7 @@ impl Engine {
                     // xxx.???[???][idx_expr]
                     Expr::Index(_, _, _) => {
                         // Chain the indexing
-                        self.get_dot_val_helper(scope, fn_lib, target, idx_lhs, level)?
+                        self.dot_get_helper(scope, fn_lib, target, idx_lhs, level)?
                     }
                     // Syntax error
                     _ => {
@@ -601,7 +601,7 @@ impl Engine {
                     }
                 };
 
-                self.get_indexed_value(scope, fn_lib, &lhs_value, idx_expr, *op_pos, level, false)
+                self.get_indexed_val(scope, fn_lib, &lhs_value, idx_expr, *op_pos, level, false)
                     .map(|(val, _)| val)
             }
 
@@ -612,7 +612,7 @@ impl Engine {
                     let mut args = [target.get_mut(scope)];
                     self.call_fn_raw(None, fn_lib, &make_getter(id), &mut args, None, *pos, 0)
                         .and_then(|mut val| {
-                            self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), rhs, level)
+                            self.dot_get_helper(scope, fn_lib, (&mut val).into(), rhs, level)
                         })
                 }
                 // xxx.idx_lhs[idx_expr].rhs
@@ -626,7 +626,7 @@ impl Engine {
                         }
                         // xxx.???[???][idx_expr].rhs
                         Expr::Index(_, _, _) => {
-                            self.get_dot_val_helper(scope, fn_lib, target, idx_lhs, level)?
+                            self.dot_get_helper(scope, fn_lib, target, idx_lhs, level)?
                         }
                         // Syntax error
                         _ => {
@@ -637,9 +637,9 @@ impl Engine {
                         }
                     };
 
-                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, *op_pos, level, false)
+                    self.get_indexed_val(scope, fn_lib, &val, idx_expr, *op_pos, level, false)
                         .and_then(|(mut val, _)| {
-                            self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), rhs, level)
+                            self.dot_get_helper(scope, fn_lib, (&mut val).into(), rhs, level)
                         })
                 }
                 // Syntax error
@@ -658,7 +658,7 @@ impl Engine {
     }
 
     /// Evaluate a dot chain getter
-    fn get_dot_val(
+    fn dot_get(
         &self,
         scope: &mut Scope,
         fn_lib: Option<&FunctionsLib>,
@@ -676,15 +676,14 @@ impl Engine {
 
                 // This is a variable property access (potential function call).
                 // Use a direct index into `scope` to directly mutate the variable value.
-                self.get_dot_val_helper(scope, fn_lib, entry.into(), dot_rhs, level)
+                self.dot_get_helper(scope, fn_lib, entry.into(), dot_rhs, level)
             }
 
             // idx_lhs[idx_expr].???
             Expr::Index(idx_lhs, idx_expr, op_pos) => {
                 let (src, index, mut val) =
                     self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
-                let value =
-                    self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), dot_rhs, level);
+                let value = self.dot_get_helper(scope, fn_lib, (&mut val).into(), dot_rhs, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
@@ -697,12 +696,8 @@ impl Engine {
                         }
 
                         ScopeEntryType::Normal => {
-                            Self::update_indexed_var_in_scope(
-                                scope,
-                                src,
-                                index,
-                                (val, dot_rhs.position()),
-                            )?;
+                            let pos = dot_rhs.position();
+                            Self::update_indexed_scope_var(scope, src, index, val, pos)?;
                         }
                     }
                 }
@@ -713,7 +708,7 @@ impl Engine {
             // {expr}.???
             expr => {
                 let mut val = self.eval_expr(scope, fn_lib, expr, level)?;
-                self.get_dot_val_helper(scope, fn_lib, (&mut val).into(), dot_rhs, level)
+                self.dot_get_helper(scope, fn_lib, (&mut val).into(), dot_rhs, level)
             }
         }
     }
@@ -730,7 +725,7 @@ impl Engine {
     }
 
     /// Get the value at the indexed position of a base type
-    fn get_indexed_value(
+    fn get_indexed_val(
         &self,
         scope: &mut Scope,
         fn_lib: Option<&FunctionsLib>,
@@ -843,7 +838,7 @@ impl Engine {
                 let (ScopeSource { typ, index, .. }, val) =
                     Self::search_scope(scope, &id, lhs.position())?;
                 let (val, idx) =
-                    self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level, false)?;
+                    self.get_indexed_val(scope, fn_lib, &val, idx_expr, op_pos, level, false)?;
 
                 Ok((
                     Some(ScopeSource {
@@ -859,7 +854,7 @@ impl Engine {
             // (expr)[idx_expr]
             expr => {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
-                self.get_indexed_value(scope, fn_lib, &val, idx_expr, op_pos, level, false)
+                self.get_indexed_val(scope, fn_lib, &val, idx_expr, op_pos, level, false)
                     .map(|(val, index)| (None, index, val))
             }
         }
@@ -879,29 +874,28 @@ impl Engine {
     }
 
     /// Update the value at an index position in a variable inside the scope
-    fn update_indexed_var_in_scope(
+    fn update_indexed_scope_var(
         scope: &mut Scope,
         src: ScopeSource,
         idx: IndexValue,
-        new_val: (Dynamic, Position),
+        new_val: Dynamic,
+        pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let target = scope.get_mut(src);
 
         match target.get_mut() {
             // array_id[idx] = val
             Union::Array(arr) => {
-                arr[idx.as_num()] = new_val.0;
+                arr[idx.as_num()] = new_val;
             }
             // map_id[idx] = val
             Union::Map(map) => {
-                map.insert(idx.as_str(), new_val.0);
+                map.insert(idx.as_str(), new_val);
             }
             // string_id[idx] = val
             Union::Str(s) => {
-                let pos = new_val.1;
                 // Value must be a character
                 let ch = new_val
-                    .0
                     .as_char()
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
                 Self::str_replace_char(s, idx.as_num(), ch);
@@ -914,7 +908,7 @@ impl Engine {
     }
 
     /// Update the value at an index position
-    fn update_indexed_value(
+    fn update_indexed_val(
         mut target: Dynamic,
         idx: IndexValue,
         new_val: Dynamic,
@@ -932,7 +926,6 @@ impl Engine {
                 let ch = new_val
                     .as_char()
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
-
                 Self::str_replace_char(s, idx.as_num(), ch);
             }
             // All other variable types should be an error
@@ -943,19 +936,20 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot setter
-    fn set_dot_val_helper(
+    fn dot_set_helper(
         &self,
         scope: &mut Scope,
         fn_lib: Option<&FunctionsLib>,
         this_ptr: &mut Dynamic,
         dot_rhs: &Expr,
-        new_val: (&mut Dynamic, Position),
+        new_val: &mut Dynamic,
+        val_pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         match dot_rhs {
             // xxx.id
             Expr::Property(id, pos) => {
-                let mut args = [this_ptr, new_val.0];
+                let mut args = [this_ptr, new_val];
                 self.call_fn_raw(None, fn_lib, &make_setter(id), &mut args, None, *pos, 0)
             }
 
@@ -967,11 +961,11 @@ impl Engine {
                     let fn_name = make_getter(id);
                     self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|val| {
-                            let (_, index) = self.get_indexed_value(
+                            let (_, index) = self.get_indexed_val(
                                 scope, fn_lib, &val, idx_expr, *op_pos, level, true,
                             )?;
 
-                            Self::update_indexed_value(val, index, new_val.0.clone(), new_val.1)
+                            Self::update_indexed_val(val, index, new_val.clone(), val_pos)
                         })
                         .and_then(|mut val| {
                             let fn_name = make_setter(id);
@@ -994,8 +988,10 @@ impl Engine {
                     let fn_name = make_getter(id);
                     self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                         .and_then(|mut val| {
-                            self.set_dot_val_helper(scope, fn_lib, &mut val, rhs, new_val, level)
-                                .map(|_| val) // Discard Ok return value
+                            self.dot_set_helper(
+                                scope, fn_lib, &mut val, rhs, new_val, val_pos, level,
+                            )
+                            .map(|_| val) // Discard Ok return value
                         })
                         .and_then(|mut val| {
                             let fn_name = make_setter(id);
@@ -1012,18 +1008,16 @@ impl Engine {
                         let fn_name = make_getter(id);
                         self.call_fn_raw(None, fn_lib, &fn_name, &mut [this_ptr], None, *pos, 0)
                             .and_then(|v| {
-                                let (mut value, index) = self.get_indexed_value(
+                                let (mut value, index) = self.get_indexed_val(
                                     scope, fn_lib, &v, idx_expr, *op_pos, level, false,
                                 )?;
 
-                                let val_pos = new_val.1;
-                                let this_ptr = &mut value;
-                                self.set_dot_val_helper(
-                                    scope, fn_lib, this_ptr, rhs, new_val, level,
+                                self.dot_set_helper(
+                                    scope, fn_lib, &mut value, rhs, new_val, val_pos, level,
                                 )?;
 
                                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                                Self::update_indexed_value(v, index, value, val_pos)
+                                Self::update_indexed_val(v, index, value, val_pos)
                             })
                             .and_then(|mut v| {
                                 let fn_name = make_setter(id);
@@ -1055,13 +1049,14 @@ impl Engine {
     }
 
     // Evaluate a dot chain setter
-    fn set_dot_val(
+    fn dot_set(
         &self,
         scope: &mut Scope,
         fn_lib: Option<&FunctionsLib>,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
-        new_val: (&mut Dynamic, Position),
+        new_val: &mut Dynamic,
+        val_pos: Position,
         op_pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1077,9 +1072,15 @@ impl Engine {
                     _ => {
                         // Avoid referencing scope which is used below as mut
                         let entry = ScopeSource { name: id, ..src };
-                        let this_ptr = &mut target;
-                        let value = self
-                            .set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
+                        let value = self.dot_set_helper(
+                            scope,
+                            fn_lib,
+                            &mut target,
+                            dot_rhs,
+                            new_val,
+                            val_pos,
+                            level,
+                        );
 
                         // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                         *scope.get_mut(entry) = target;
@@ -1094,10 +1095,9 @@ impl Engine {
             Expr::Index(lhs, idx_expr, op_pos) => {
                 let (src, index, mut target) =
                     self.eval_index_expr(scope, fn_lib, lhs, idx_expr, *op_pos, level)?;
-                let val_pos = new_val.1;
                 let this_ptr = &mut target;
                 let value =
-                    self.set_dot_val_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, level);
+                    self.dot_set_helper(scope, fn_lib, this_ptr, dot_rhs, new_val, val_pos, level);
 
                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
                 if let Some(src) = src {
@@ -1108,14 +1108,8 @@ impl Engine {
                                 lhs.position(),
                             )));
                         }
-
                         ScopeEntryType::Normal => {
-                            Self::update_indexed_var_in_scope(
-                                scope,
-                                src,
-                                index,
-                                (target, val_pos),
-                            )?;
+                            Self::update_indexed_scope_var(scope, src, index, target, val_pos)?;
                         }
                     }
                 }
@@ -1257,32 +1251,36 @@ impl Engine {
                         let (src, index, _) =
                             self.eval_index_expr(scope, fn_lib, idx_lhs, idx_expr, *op_pos, level)?;
 
-                        match src.map(|x| x.typ) {
-                            None => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
-                                idx_lhs.position(),
-                            ))),
-
-                            Some(ScopeEntryType::Constant) => {
-                                Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                                    src.unwrap().name.to_string(),
-                                    idx_lhs.position(),
-                                )))
+                        if let Some(src) = src {
+                            match src.typ {
+                                ScopeEntryType::Constant => {
+                                    Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
+                                        src.name.to_string(),
+                                        idx_lhs.position(),
+                                    )))
+                                }
+                                ScopeEntryType::Normal => {
+                                    let pos = rhs.position();
+                                    Ok(Self::update_indexed_scope_var(
+                                        scope, src, index, rhs_val, pos,
+                                    )?)
+                                }
                             }
-
-                            Some(ScopeEntryType::Normal) => Ok(Self::update_indexed_var_in_scope(
-                                scope,
-                                src.unwrap(),
-                                index,
-                                (rhs_val, rhs.position()),
-                            )?),
+                        } else {
+                            Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                                idx_lhs.position(),
+                            )))
                         }
                     }
 
                     // dot_lhs.dot_rhs = rhs
                     #[cfg(not(feature = "no_object"))]
                     Expr::Dot(dot_lhs, dot_rhs, _) => {
-                        let new_val = (&mut rhs_val, rhs.position());
-                        self.set_dot_val(scope, fn_lib, dot_lhs, dot_rhs, new_val, *op_pos, level)
+                        let new_val = &mut rhs_val;
+                        let val_pos = rhs.position();
+                        self.dot_set(
+                            scope, fn_lib, dot_lhs, dot_rhs, new_val, val_pos, *op_pos, level,
+                        )
                     }
 
                     // Error assignment to constant
@@ -1307,7 +1305,7 @@ impl Engine {
                 .map(|(_, _, x)| x),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(lhs, rhs, _) => self.get_dot_val(scope, fn_lib, lhs, rhs, level),
+            Expr::Dot(lhs, rhs, _) => self.dot_get(scope, fn_lib, lhs, rhs, level),
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(contents, _) => {
@@ -1325,9 +1323,9 @@ impl Engine {
             Expr::Map(contents, _) => {
                 let mut map = Map::new();
 
-                contents.into_iter().try_for_each(|item| {
-                    self.eval_expr(scope, fn_lib, &item.1, level).map(|val| {
-                        map.insert(item.0.clone(), val);
+                contents.into_iter().try_for_each(|(key, expr, _)| {
+                    self.eval_expr(scope, fn_lib, &expr, level).map(|val| {
+                        map.insert(key.clone(), val);
                     })
                 })?;
 
@@ -1341,10 +1339,10 @@ impl Engine {
                     fn_lib: Option<&FunctionsLib>,
                     name: &str,
                 ) -> bool {
-                    engine.functions.as_ref().map_or(false, |lib| {
-                        let fn_spec = calc_fn_spec(name, [TypeId::of::<String>()].iter().cloned());
-                        lib.contains_key(&fn_spec)
-                    }) || fn_lib.map_or(false, |lib| lib.has_function(name, 1))
+                    engine
+                        .functions
+                        .contains_key(&calc_fn_spec(name, once(TypeId::of::<String>())))
+                        || fn_lib.map_or(false, |lib| lib.has_function(name, 1))
                 }
 
                 match fn_name.as_ref() {
@@ -1552,7 +1550,7 @@ impl Engine {
                 let arr = self.eval_expr(scope, fn_lib, expr, level)?;
                 let tid = arr.type_id();
 
-                if let Some(iter_fn) = self.type_iterators.as_ref().and_then(|t| t.get(&tid)) {
+                if let Some(iter_fn) = self.type_iterators.get(&tid) {
                     // Add the loop variable - variable name is copied
                     // TODO - avoid copying variable name
                     scope.push(name.clone(), ());

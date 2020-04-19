@@ -110,14 +110,14 @@ impl<'a> State<'a> {
 
 /// Call a registered function
 fn call_fn(
-    functions: Option<&HashMap<u64, Box<FnAny>>>,
+    functions: &HashMap<u64, Box<FnAny>>,
     fn_name: &str,
     args: &mut FnCallArgs,
     pos: Position,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     // Search built-in's and external functions
     functions
-        .and_then(|f| f.get(&calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()))))
+        .get(&calc_fn_spec(fn_name, args.iter().map(|a| a.type_id())))
         .map(|func| func(args, pos))
         .transpose()
 }
@@ -576,7 +576,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            call_fn(state.engine.functions.as_ref(), &id, &mut call_args, pos).ok()
+            call_fn(&state.engine.functions, &id, &mut call_args, pos).ok()
                 .and_then(|result|
                     result.or_else(|| {
                         if !arg_for_type_of.is_empty() {
