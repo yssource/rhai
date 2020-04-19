@@ -1,11 +1,12 @@
 //! Helper module that allows registration of the _core library_ and
 //! _standard library_ of utility functions.
 
-use crate::any::{Any, Dynamic};
+use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
-use crate::parser::{Position, INT};
+use crate::parser::INT;
 use crate::result::EvalAltResult;
+use crate::token::Position;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
@@ -27,10 +28,17 @@ use crate::stdlib::{
     format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Shl, Shr, Sub},
     string::{String, ToString},
-    time::Instant,
     vec::Vec,
     {i32, i64, u32},
 };
+
+#[cfg(not(feature = "no_std"))]
+use crate::stdlib::time::Instant;
+
+#[cfg(feature = "only_i32")]
+const MAX_INT: INT = i32::MAX;
+#[cfg(not(feature = "only_i32"))]
+const MAX_INT: INT = i64::MAX;
 
 macro_rules! reg_op {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
@@ -86,7 +94,7 @@ fn ne<T: PartialEq>(x: T, y: T) -> bool {
     x != y
 }
 
-impl Engine<'_> {
+impl Engine {
     /// Register the core built-in library.
     pub(crate) fn register_core_lib(&mut self) {
         // Checked add
@@ -371,10 +379,10 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op_result!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op_result!(self, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op_result!(self, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op_result!(self, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op_result!(self, "/", div, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -388,10 +396,10 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op!(self, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op!(self, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -414,12 +422,12 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -448,9 +456,9 @@ impl Engine<'_> {
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_op!(self, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_op!(self, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_op!(self, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_op!(self, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(self, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(self, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
         }
 
         #[cfg(not(feature = "unchecked"))]
@@ -462,9 +470,13 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op_result1!(self, "<<", shl, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result1!(self, ">>", shr, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op_result!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op_result1!(
+                    self, "<<", shl, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128
+                );
+                reg_op_result1!(
+                    self, ">>", shr, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128
+                );
+                reg_op_result!(self, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -477,9 +489,9 @@ impl Engine<'_> {
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
             {
-                reg_op!(self, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, ">>", shr_u, i64, i8, u8, i16, u16, i32, i64, u32, u64);
-                reg_op!(self, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64);
+                reg_op!(self, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, ">>", shr_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+                reg_op!(self, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
             }
         }
 
@@ -595,8 +607,11 @@ impl Engine<'_> {
                 reg_fn1!(self, FUNC_TO_STRING, to_string, String, i8, u8, i16, u16);
                 reg_fn1!(self, KEYWORD_PRINT, to_string, String, i32, i64, u32, u64);
                 reg_fn1!(self, FUNC_TO_STRING, to_string, String, i32, i64, u32, u64);
+                reg_fn1!(self, KEYWORD_PRINT, to_string, String, i128, u128);
+                reg_fn1!(self, FUNC_TO_STRING, to_string, String, i128, u128);
                 reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i8, u8, i16, u16);
                 reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i32, i64, u32, u64);
+                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i128, u128);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -628,8 +643,8 @@ impl Engine<'_> {
                 // Register map access functions
                 #[cfg(not(feature = "no_index"))]
                 self.register_fn("keys", |map: Map| {
-                    map.into_iter()
-                        .map(|(k, _)| k.into_dynamic())
+                    map.iter()
+                        .map(|(k, _)| Dynamic::from(k.clone()))
                         .collect::<Vec<_>>()
                 });
 
@@ -641,15 +656,16 @@ impl Engine<'_> {
         }
 
         // Register range function
-        fn reg_range<T: Any + Clone>(engine: &mut Engine)
+        fn reg_range<T: Variant + Clone>(engine: &mut Engine)
         where
             Range<T>: Iterator<Item = T>,
         {
-            engine.register_iterator::<Range<T>, _>(|a: &Dynamic| {
+            engine.register_iterator::<Range<T>, _>(|source: &Dynamic| {
                 Box::new(
-                    a.downcast_ref::<Range<T>>()
+                    source
+                        .downcast_ref::<Range<T>>()
+                        .cloned()
                         .unwrap()
-                        .clone()
                         .map(|x| x.into_dynamic()),
                 ) as Box<dyn Iterator<Item = Dynamic>>
             });
@@ -670,7 +686,7 @@ impl Engine<'_> {
                 )
             }
 
-            reg_range!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_range!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
         }
 
         // Register range function with step
@@ -678,12 +694,12 @@ impl Engine<'_> {
         struct StepRange<T>(T, T, T)
         where
             for<'a> &'a T: Add<&'a T, Output = T>,
-            T: Any + Clone + PartialOrd;
+            T: Variant + Clone + PartialOrd;
 
         impl<T> Iterator for StepRange<T>
         where
             for<'a> &'a T: Add<&'a T, Output = T>,
-            T: Any + Clone + PartialOrd,
+            T: Variant + Clone + PartialOrd,
         {
             type Item = T;
 
@@ -701,14 +717,15 @@ impl Engine<'_> {
         fn reg_step<T>(engine: &mut Engine)
         where
             for<'a> &'a T: Add<&'a T, Output = T>,
-            T: Any + Clone + PartialOrd,
+            T: Variant + Clone + PartialOrd,
             StepRange<T>: Iterator<Item = T>,
         {
-            engine.register_iterator::<StepRange<T>, _>(|a: &Dynamic| {
+            engine.register_iterator::<StepRange<T>, _>(|source: &Dynamic| {
                 Box::new(
-                    a.downcast_ref::<StepRange<T>>()
+                    source
+                        .downcast_ref::<StepRange<T>>()
+                        .cloned()
                         .unwrap()
-                        .clone()
                         .map(|x| x.into_dynamic()),
                 ) as Box<dyn Iterator<Item = Dynamic>>
             });
@@ -731,7 +748,7 @@ impl Engine<'_> {
                 )
             }
 
-            reg_step!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_step!(self, "range", i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
         }
     }
 }
@@ -753,7 +770,7 @@ macro_rules! reg_fn2y {
 }
 
 /// Register the built-in library.
-impl Engine<'_> {
+impl Engine {
     pub fn register_stdlib(&mut self) {
         #[cfg(not(feature = "no_float"))]
         {
@@ -799,6 +816,8 @@ impl Engine<'_> {
                 self.register_fn("to_float", |x: u32| x as FLOAT);
                 self.register_fn("to_float", |x: i64| x as FLOAT);
                 self.register_fn("to_float", |x: u64| x as FLOAT);
+                self.register_fn("to_float", |x: i128| x as FLOAT);
+                self.register_fn("to_float", |x: u128| x as FLOAT);
             }
         }
 
@@ -827,7 +846,7 @@ impl Engine<'_> {
             #[cfg(not(feature = "unchecked"))]
             {
                 self.register_result_fn("to_int", |x: f32| {
-                    if x > (i64::MAX as f32) {
+                    if x > (MAX_INT as f32) {
                         return Err(EvalAltResult::ErrorArithmetic(
                             format!("Integer overflow: to_int({})", x),
                             Position::none(),
@@ -837,7 +856,7 @@ impl Engine<'_> {
                     Ok(x.trunc() as INT)
                 });
                 self.register_result_fn("to_int", |x: FLOAT| {
-                    if x > (i64::MAX as FLOAT) {
+                    if x > (MAX_INT as FLOAT) {
                         return Err(EvalAltResult::ErrorArithmetic(
                             format!("Integer overflow: to_int({})", x),
                             Position::none(),
@@ -866,19 +885,19 @@ impl Engine<'_> {
             }
 
             // Register array utility functions
-            fn push<T: Any>(list: &mut Array, item: T) {
-                list.push(Box::new(item));
+            fn push<T: Variant + Clone>(list: &mut Array, item: T) {
+                list.push(Dynamic::from(item));
             }
-            fn ins<T: Any>(list: &mut Array, position: INT, item: T) {
+            fn ins<T: Variant + Clone>(list: &mut Array, position: INT, item: T) {
                 if position <= 0 {
-                    list.insert(0, Box::new(item));
+                    list.insert(0, Dynamic::from(item));
                 } else if (position as usize) >= list.len() - 1 {
                     push(list, item);
                 } else {
-                    list.insert(position as usize, Box::new(item));
+                    list.insert(position as usize, Dynamic::from(item));
                 }
             }
-            fn pad<T: Any + Clone>(list: &mut Array, len: INT, item: T) {
+            fn pad<T: Variant + Clone>(list: &mut Array, len: INT, item: T) {
                 if len >= 0 {
                     while list.len() < len as usize {
                         push(list, item.clone());
@@ -905,10 +924,13 @@ impl Engine<'_> {
             {
                 reg_fn2x!(self, "push", push, &mut Array, (), i8, u8, i16, u16);
                 reg_fn2x!(self, "push", push, &mut Array, (), i32, i64, u32, u64);
+                reg_fn2x!(self, "push", push, &mut Array, (), i128, u128);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i8, u8, i16, u16);
                 reg_fn3!(self, "pad", pad, &mut Array, INT, (), i32, u32, i64, u64);
+                reg_fn3!(self, "pad", pad, &mut Array, INT, (), i128, u128);
                 reg_fn3!(self, "insert", ins, &mut Array, INT, (), i8, u8, i16, u16);
                 reg_fn3!(self, "insert", ins, &mut Array, INT, (), i32, i64, u32, u64);
+                reg_fn3!(self, "insert", ins, &mut Array, INT, (), i128, u128);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -919,18 +941,18 @@ impl Engine<'_> {
             }
 
             self.register_dynamic_fn("pop", |list: &mut Array| {
-                list.pop().unwrap_or_else(|| ().into_dynamic())
+                list.pop().unwrap_or_else(|| Dynamic::from_unit())
             });
             self.register_dynamic_fn("shift", |list: &mut Array| {
                 if !list.is_empty() {
-                    ().into_dynamic()
+                    Dynamic::from_unit()
                 } else {
                     list.remove(0)
                 }
             });
             self.register_dynamic_fn("remove", |list: &mut Array, len: INT| {
                 if len < 0 || (len as usize) >= list.len() {
-                    ().into_dynamic()
+                    Dynamic::from_unit()
                 } else {
                     list.remove(len as usize)
                 }
@@ -951,7 +973,7 @@ impl Engine<'_> {
             self.register_fn("len", |map: &mut Map| map.len() as INT);
             self.register_fn("clear", |map: &mut Map| map.clear());
             self.register_dynamic_fn("remove", |x: &mut Map, name: String| {
-                x.remove(&name).unwrap_or(().into_dynamic())
+                x.remove(&name).unwrap_or_else(|| Dynamic::from_unit())
             });
             self.register_fn("mixin", |map1: &mut Map, map2: Map| {
                 map2.into_iter().for_each(|(key, value)| {
@@ -983,8 +1005,13 @@ impl Engine<'_> {
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_fn2x!(self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
-            reg_fn2y!(self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64);
+            reg_fn2x!(
+                self, "+", append, String, String, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128
+            );
+            reg_fn2y!(
+                self, "+", prepend, String, String, i8, u8, i16, u16, i32, i64, u32, u64, i128,
+                u128
+            );
         }
 
         #[cfg(not(feature = "no_float"))]
@@ -1000,17 +1027,113 @@ impl Engine<'_> {
         }
 
         // Register string utility functions
+        fn sub_string(s: &mut String, start: INT, len: INT) -> String {
+            let offset = if s.is_empty() || len <= 0 {
+                return "".to_string();
+            } else if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                return "".to_string();
+            } else {
+                start as usize
+            };
+
+            let chars: Vec<_> = s.chars().collect();
+
+            let len = if offset + (len as usize) > chars.len() {
+                chars.len() - offset
+            } else {
+                len as usize
+            };
+
+            chars[offset..][..len].into_iter().collect::<String>()
+        }
+
+        fn crop_string(s: &mut String, start: INT, len: INT) {
+            let offset = if s.is_empty() || len <= 0 {
+                s.clear();
+                return;
+            } else if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                s.clear();
+                return;
+            } else {
+                start as usize
+            };
+
+            let chars: Vec<_> = s.chars().collect();
+
+            let len = if offset + (len as usize) > chars.len() {
+                chars.len() - offset
+            } else {
+                len as usize
+            };
+
+            s.clear();
+
+            chars[offset..][..len]
+                .into_iter()
+                .for_each(|&ch| s.push(ch));
+        }
+
         self.register_fn("len", |s: &mut String| s.chars().count() as INT);
         self.register_fn("contains", |s: &mut String, ch: char| s.contains(ch));
         self.register_fn("contains", |s: &mut String, find: String| s.contains(&find));
+        self.register_fn("index_of", |s: &mut String, ch: char, start: INT| {
+            let start = if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                return -1 as INT;
+            } else {
+                s.chars().take(start as usize).collect::<String>().len()
+            };
+
+            s[start..]
+                .find(ch)
+                .map(|index| s[0..start + index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
+        self.register_fn("index_of", |s: &mut String, ch: char| {
+            s.find(ch)
+                .map(|index| s[0..index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
+        self.register_fn("index_of", |s: &mut String, find: String, start: INT| {
+            let start = if start < 0 {
+                0
+            } else if (start as usize) >= s.chars().count() {
+                return -1 as INT;
+            } else {
+                s.chars().take(start as usize).collect::<String>().len()
+            };
+
+            s[start..]
+                .find(&find)
+                .map(|index| s[0..start + index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
+        self.register_fn("index_of", |s: &mut String, find: String| {
+            s.find(&find)
+                .map(|index| s[0..index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        });
         self.register_fn("clear", |s: &mut String| s.clear());
         self.register_fn("append", |s: &mut String, ch: char| s.push(ch));
         self.register_fn("append", |s: &mut String, add: String| s.push_str(&add));
+        self.register_fn("sub_string", sub_string);
+        self.register_fn("sub_string", |s: &mut String, start: INT| {
+            sub_string(s, start, s.len() as INT)
+        });
+        self.register_fn("crop", crop_string);
+        self.register_fn("crop", |s: &mut String, start: INT| {
+            crop_string(s, start, s.len() as INT)
+        });
         self.register_fn("truncate", |s: &mut String, len: INT| {
             if len >= 0 {
                 let chars: Vec<_> = s.chars().take(len as usize).collect();
                 s.clear();
-                chars.iter().for_each(|&ch| s.push(ch));
+                chars.into_iter().for_each(|ch| s.push(ch));
             } else {
                 s.clear();
             }
@@ -1033,38 +1156,83 @@ impl Engine<'_> {
             }
         });
 
-        // Register date/time functions
-        self.register_fn("timestamp", || Instant::now());
+        #[cfg(not(feature = "no_std"))]
+        {
+            // Register date/time functions
+            self.register_fn("timestamp", || Instant::now());
 
-        self.register_fn("-", |ts1: Instant, ts2: Instant| {
-            if ts2 > ts1 {
+            self.register_result_fn("-", |ts1: Instant, ts2: Instant| {
+                if ts2 > ts1 {
+                    #[cfg(not(feature = "no_float"))]
+                    return Ok(-(ts2 - ts1).as_secs_f64());
+
+                    #[cfg(feature = "no_float")]
+                    {
+                        let seconds = (ts2 - ts1).as_secs();
+
+                        #[cfg(not(feature = "unchecked"))]
+                        {
+                            if seconds > (MAX_INT as u64) {
+                                return Err(EvalAltResult::ErrorArithmetic(
+                                    format!(
+                                        "Integer overflow for timestamp duration: {}",
+                                        -(seconds as i64)
+                                    ),
+                                    Position::none(),
+                                ));
+                            }
+                        }
+                        return Ok(-(seconds as INT));
+                    }
+                } else {
+                    #[cfg(not(feature = "no_float"))]
+                    return Ok((ts1 - ts2).as_secs_f64());
+
+                    #[cfg(feature = "no_float")]
+                    {
+                        let seconds = (ts1 - ts2).as_secs();
+
+                        #[cfg(not(feature = "unchecked"))]
+                        {
+                            if seconds > (MAX_INT as u64) {
+                                return Err(EvalAltResult::ErrorArithmetic(
+                                    format!("Integer overflow for timestamp duration: {}", seconds),
+                                    Position::none(),
+                                ));
+                            }
+                        }
+                        return Ok(seconds as INT);
+                    }
+                }
+            });
+
+            reg_cmp!(self, "<", lt, Instant);
+            reg_cmp!(self, "<=", lte, Instant);
+            reg_cmp!(self, ">", gt, Instant);
+            reg_cmp!(self, ">=", gte, Instant);
+            reg_cmp!(self, "==", eq, Instant);
+            reg_cmp!(self, "!=", ne, Instant);
+
+            self.register_result_fn("elapsed", |timestamp: Instant| {
                 #[cfg(not(feature = "no_float"))]
-                return -(ts2 - ts1).as_secs_f64();
+                return Ok(timestamp.elapsed().as_secs_f64());
 
                 #[cfg(feature = "no_float")]
-                return -((ts2 - ts1).as_secs() as INT);
-            } else {
-                #[cfg(not(feature = "no_float"))]
-                return (ts1 - ts2).as_secs_f64();
+                {
+                    let seconds = timestamp.elapsed().as_secs();
 
-                #[cfg(feature = "no_float")]
-                return (ts1 - ts2).as_secs() as INT;
-            }
-        });
-
-        reg_cmp!(self, "<", lt, Instant);
-        reg_cmp!(self, "<=", lte, Instant);
-        reg_cmp!(self, ">", gt, Instant);
-        reg_cmp!(self, ">=", gte, Instant);
-        reg_cmp!(self, "==", eq, Instant);
-        reg_cmp!(self, "!=", ne, Instant);
-
-        self.register_fn("elapsed", |timestamp: Instant| {
-            #[cfg(not(feature = "no_float"))]
-            return timestamp.elapsed().as_secs_f64();
-
-            #[cfg(feature = "no_float")]
-            return timestamp.elapsed().as_secs() as INT;
-        });
+                    #[cfg(not(feature = "unchecked"))]
+                    {
+                        if seconds > (MAX_INT as u64) {
+                            return Err(EvalAltResult::ErrorArithmetic(
+                                format!("Integer overflow for timestamp.elapsed(): {}", seconds),
+                                Position::none(),
+                            ));
+                        }
+                    }
+                    return Ok(seconds as INT);
+                }
+            });
+        }
     }
 }

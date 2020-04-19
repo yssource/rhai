@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{AnyExt, Engine, EvalAltResult, Map, Scope, INT};
+use rhai::{Engine, EvalAltResult, Map, Scope, INT};
 
 #[test]
 fn test_map_indexing() -> Result<(), EvalAltResult> {

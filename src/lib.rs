@@ -82,15 +82,17 @@ mod parser;
 mod result;
 mod scope;
 mod stdlib;
+mod token;
 
-pub use any::{Any, AnyExt, Dynamic, Variant};
+pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
 pub use fn_call::FuncArgs;
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
-pub use parser::{Position, AST, INT};
+pub use parser::{AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
+pub use token::Position;
 
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;

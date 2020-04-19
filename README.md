@@ -14,20 +14,21 @@ to add scripting to any application.
 Rhai's current features set:
 
 * `no-std` support
-* Easy integration with Rust native functions and data types, including getter/setter methods
+* Easy integration with Rust native functions and types, including getter/setter/methods
 * Easily call a script-defined function from Rust
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * Easy-to-use language similar to JS+Rust
-* Support for overloaded functions
+* Support for function overloading
+* Support for operator overloading
 * Compiled script is optimized for repeat evaluations
 * Support for minimal builds by excluding unneeded language features
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no_std`] builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.12.0, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.13.0, so the language and API's may change before they stabilize.
 
 Installation
 ------------
@@ -36,7 +37,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.12.0"
+rhai = "0.13.0"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -86,6 +87,39 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`only_i64`]: #optional-features
 [`no_std`]: #optional-features
 [`sync`]: #optional-features
+
+### Performance builds
+
+Some features are for performance.  For example, using `only_i32` or `only_i64` disables all other integer types (such as `u16`).
+If only a single integer type is needed in scripts - most of the time this is the case - it is best to avoid registering
+lots of functions related to other integer types that will never be used.  As a result, performance will improve.
+
+If only 32-bit integers are needed - again, most of the time this is the case - using `only_i32` disables also `i64`.
+On 64-bit targets this may not gain much, but on some 32-bit targets this improves performance due to 64-bit arithmetic
+requiring more CPU cycles to complete.
+
+Also, turning on `no_float`, and `only_i32` makes the key [`Dynamic`] data type only 8 bytes small on 32-bit targets
+while normally it can be up to 16 bytes (e.g. on x86/x64 CPU's) in order to hold an `i64` or `f64`.
+Making [`Dynamic`] small helps performance due to more caching efficiency.
+
+### Minimal builds
+
+In order to compile a _minimal_build - i.e. a build optimized for size - perhaps for embedded targets, it is essential that
+the correct linker flags are used in `cargo.toml`:
+
+```toml
+[profile.release]
+opt-level = "z"     # optimize for size
+```
+
+Opt out of as many features as possible, if they are not needed, to reduce code size because, remember, by default
+all code is compiled in as what a script requires cannot be predicted. If a language feature is not needed,
+omitting them via special features is a prudent strategy to optimize the build for size.
+
+Start by using [`Engine::new_raw`](#raw-engine) to create a _raw_ engine which does not register the standard library of utility
+functions.  Secondly, omitting arrays (`no_index`) yields the most code-size savings, followed by floating-point support
+(`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).  Disable script-defined
+functions (`no_function`) only when the feature is not needed because code size savings is minimal.
 
 Related
 -------
@@ -146,6 +180,8 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 | -------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [`speed_test.rhai`](scripts/speed_test.rhai) | a simple program to measure the speed of Rhai's interpreter (1 million iterations) |
 | [`primes.rhai`](scripts/primes.rhai)         | use Sieve of Eratosthenes to find all primes smaller than a limit                  |
+| [`fibonacci.rhai`](scripts/fibonacci.rhai)   | calculate the n-th Fibonacci number using a really dumb algorithm                  |
+| [`mat_mul.rhai`](scripts/mat_mul.rhai)       | matrix multiplication test to measure the speed of Rhai's interpreter              |
 
 To run the scripts, either make a tiny program or use of the `rhai_runner` example:
 
@@ -180,12 +216,17 @@ fn main() -> Result<(), EvalAltResult>
 ### Script evaluation
 
 The type parameter is used to specify the type of the return value, which _must_ match the actual type or an error is returned.
-Rhai is very strict here. There are two ways to specify the return type - _turbofish_ notation, or type inference.
+Rhai is very strict here.  Use [`Dynamic`] for uncertain return types.
+There are two ways to specify the return type - _turbofish_ notation, or type inference.
 
 ```rust
 let result = engine.eval::<i64>("40 + 2")?;     // return type is i64, specified using 'turbofish' notation
 
 let result: i64 = engine.eval("40 + 2")?;       // return type is inferred to be i64
+
+result.is::<i64>() == true;
+
+let result: Dynamic = engine.eval("boo()")?;    // use 'Dynamic' if you're not sure what type it'll be!
 
 let result = engine.eval::<String>("40 + 2")?;  // returns an error because the actual return type is i64, not String
 ```
@@ -317,8 +358,6 @@ Use `Engine::new_raw` to create a _raw_ `Engine`, in which:
 let mut engine = Engine::new_raw();             // create a 'raw' Engine
 
 engine.register_stdlib();                       // register the standard library manually
-
-engine.
 ```
 
 Evaluate expressions only
@@ -375,7 +414,7 @@ The default integer type is `i64`. If other integer types are not needed, it is 
 smaller build with the [`only_i64`] feature.
 
 If only 32-bit integers are needed, enabling the [`only_i32`] feature will remove support for all integer types other than `i32`, including `i64`.
-This is useful on some 32-bit systems where using 64-bit integers incurs a performance penalty.
+This is useful on some 32-bit targets where using 64-bit integers incur a performance penalty.
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
@@ -439,12 +478,10 @@ There is no easy way for Rust to decide, at run-time, what type the `Dynamic` va
 function and match against the name).
 
 A `Dynamic` value's actual type can be checked via the `is` method.
-The `cast` method (from the `rhai::AnyExt` trait) then converts the value into a specific, known type.
-Alternatively, use the `try_cast` method which does not panic but returns an error when the cast fails.
+The `cast` method then converts the value into a specific, known type.
+Alternatively, use the `try_cast` method which does not panic but returns `None` when the cast fails.
 
 ```rust
-use rhai::AnyExt;                               // pull in the trait.
-
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
 
@@ -453,14 +490,12 @@ item.is::<i64>() == true;                       // 'is' returns whether a 'Dynam
 let value = item.cast::<i64>();                 // if the element is 'i64', this succeeds; otherwise it panics
 let value: i64 = item.cast();                   // type can also be inferred
 
-let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic when the cast fails, but returns an error
+let value = item.try_cast::<i64>().unwrap();    // 'try_cast' does not panic when the cast fails, but returns 'None'
 ```
 
 The `type_name` method gets the name of the actual type as a static string slice, which you may match against.
 
 ```rust
-use rhai::Any;                                  // pull in the trait.
-
 let list: Array = engine.eval("...")?;          // return type is 'Array'
 let item = list[0];                             // an element in an 'Array' is 'Dynamic'
 
@@ -499,8 +534,6 @@ A number of traits, under the `rhai::` module namespace, provide additional func
 
 | Trait               | Description                                                                       | Methods                                 |
 | ------------------- | --------------------------------------------------------------------------------- | --------------------------------------- |
-| `Any`               | Generic trait that represents a [`Dynamic`] type                                  | `type_id`, `type_name`, `into_dynamic`  |
-| `AnyExt`            | Extension trait to allows casting of a [`Dynamic`] value to Rust types            | `cast`, `try_cast`                      |
 | `RegisterFn`        | Trait for registering functions                                                   | `register_fn`                           |
 | `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                             | `register_dynamic_fn`                   |
 | `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, EvalAltResult>` | `register_result_fn`                    |
@@ -513,9 +546,9 @@ Rhai's scripting engine is very lightweight.  It gets most of its abilities from
 To call these functions, they need to be registered with the [`Engine`].
 
 ```rust
-use rhai::{Engine, EvalAltResult};
+use rhai::{Dynamic, Engine, EvalAltResult};
 use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
-use rhai::{Any, Dynamic, RegisterDynamicFn};    // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
+use rhai::{Dynamic, RegisterDynamicFn};         // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
 
 // Normal function
 fn add(x: i64, y: i64) -> i64 {
@@ -524,7 +557,7 @@ fn add(x: i64, y: i64) -> i64 {
 
 // Function that returns a Dynamic value
 fn get_an_any() -> Dynamic {
-    (42_i64).into_dynamic()                     // 'into_dynamic' is defined by the 'rhai::Any' trait
+    Dynamic::from(42_i64)
 }
 
 fn main() -> Result<(), EvalAltResult>
@@ -548,17 +581,16 @@ fn main() -> Result<(), EvalAltResult>
 }
 ```
 
-To return a [`Dynamic`] value from a Rust function, use the `into_dynamic()` method
-(under the `rhai::Any` trait) to convert it.
+To return a [`Dynamic`] value from a Rust function, use the `Dynamic::from` method.
 
 ```rust
-use rhai::Any;                                  // pull in the trait
+use rhai::Dynamic;
 
 fn decide(yes_no: bool) -> Dynamic {
     if yes_no {
-        (42_i64).into_dynamic()
+        Dynamic::from(42_i64)
     } else {
-        String::from("hello!").into_dynamic()   // remember &str is not supported by Rhai
+        Dynamic::from(String::from("hello!"))   // remember &str is not supported by Rhai
     }
 }
 ```
@@ -567,7 +599,7 @@ Generic functions
 -----------------
 
 Rust generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately.
-Essentially this is a form of function overloading as Rhai does not support generics.
+This is essentially function overloading (Rhai does not natively support generics).
 
 ```rust
 use std::fmt::Display;
@@ -641,6 +673,50 @@ fn to_int(num) {
 print(to_int(123));     // what happens?
 ```
 
+Operator overloading
+--------------------
+
+In Rhai, a lot of functionalities are actually implemented as functions, including basic operations such as arithmetic calculations.
+For example, in the expression "`a + b`", the `+` operator is _not_ built-in, but calls a function named "`+`" instead!
+
+```rust
+let x = a + b;
+let x = +(a, b);        // <- the above is equivalent to this function call
+```
+
+Similarly, comparison operators including `==`, `!=` etc. are all implemented as functions, with the stark exception of `&&` and `||`.
+Because they [_short-circuit_](#boolean-operators), `&&` and `||` are handled specially and _not_ via a function; as a result,
+overriding them has no effect at all.
+
+Operator functions cannot be defined as a script function (because operators syntax are not valid function names).
+However, operator functions _can_ be registered to the [`Engine`] via `register_fn`, `register_result_fn` etc.
+When a custom operator function is registered with the same name as an operator, it _overloads_ (or overrides) the built-in version.
+
+```rust
+use rhai::{Engine, EvalAltResult, RegisterFn};
+
+let mut engine = Engine::new();
+
+fn strange_add(a: i64, b: i64) -> i64 { (a + b) * 42 }
+
+engine.register_fn("+", strange_add);               // overload '+' operator for two integers!
+
+let result: i64 = engine.eval("1 + 0");             // the overloading version is used
+
+println!("result: {}", result);                     // prints 42
+
+let result: f64 = engine.eval("1.0 + 0.0");         // '+' operator for two floats not overloaded
+
+println!("result: {}", result);                     // prints 1.0
+```
+
+Use operator overloading for custom types (described below) only.  Be very careful when overloading built-in operators because
+script writers expect standard operators to behave in a consistent and predictable manner, and will be annoyed if a calculation
+for '+' turns into a subtraction, for example.
+
+Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
+See the [relevant section](#script-optimization) for more details.
+
 Custom types and methods
 -----------------------
 
@@ -676,7 +752,7 @@ fn main() -> Result<(), EvalAltResult>
 
     let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 
-    println!("result: {}", result.field);       // prints 42
+    println!("result: {}", result.field);           // prints 42
 
     Ok(())
 }
@@ -1151,16 +1227,19 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 The following standard methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
 
-| Function   | Parameter(s)                          | Description                                                          |
-| ---------- | ------------------------------------- | -------------------------------------------------------------------- |
-| `len`      | _none_                                | returns the number of characters (not number of bytes) in the string |
-| `pad`      | character to pad, target length       | pads the string with an character to a specified length              |
-| `append`   | character/string to append            | Adds a character or a string to the end of another string            |
-| `clear`    | _none_                                | empties the string                                                   |
-| `truncate` | target length                         | cuts off the string at exactly a specified number of characters      |
-| `contains` | character/sub-string to search for    | checks if a certain character or sub-string occurs in the string     |
-| `replace`  | target sub-string, replacement string | replaces a substring with another                                    |
-| `trim`     | _none_                                | trims the string of whitespace at the beginning and end              |
+| Function     | Parameter(s)                                                 | Description                                                                                       |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `len`        | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
+| `pad`        | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
+| `append`     | character/string to append                                   | Adds a character or a string to the end of another string                                         |
+| `clear`      | _none_                                                       | empties the string                                                                                |
+| `truncate`   | target length                                                | cuts off the string at exactly a specified number of characters                                   |
+| `contains`   | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
+| `index_of`   | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
+| `sub_string` | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
+| `crop`       | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
+| `replace`    | target sub-string, replacement string                        | replaces a sub-string with another                                                                |
+| `trim`       | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples
 
@@ -1176,16 +1255,29 @@ full_name.pad(15, '$');
 full_name.len() == 15;
 full_name == "Bob C. Davis$$$";
 
+let n = full_name.index_of('$');
+n == 12;
+
+full_name.index_of("$$", n + 1) == 13;
+
+full_name.sub_string(n, 3) == "$$$";
+
 full_name.truncate(6);
 full_name.len() == 6;
 full_name == "Bob C.";
 
 full_name.replace("Bob", "John");
 full_name.len() == 7;
-full_name = "John C.";
+full_name == "John C.";
 
 full_name.contains('C') == true;
 full_name.contains("John") == true;
+
+full_name.crop(5);
+full_name == "C.";
+
+full_name.crop(0, 1);
+full_name == "C";
 
 full_name.clear();
 full_name.len() == 0;
@@ -1220,7 +1312,7 @@ The following methods (defined in the standard library but excluded if using a [
 | `shift`      | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
 | `remove`     | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
 | `len`        | _none_                                                                | returns the number of elements                                                                       |
-| `pad`        | element to pad, target length                                         | pads the array with an element until a specified length                                              |
+| `pad`        | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
 | `clear`      | _none_                                                                | empties the array                                                                                    |
 | `truncate`   | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 

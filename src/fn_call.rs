@@ -2,9 +2,8 @@
 
 #![allow(non_snake_case)]
 
-use crate::any::{Any, Dynamic};
-
-use crate::stdlib::{string::String, vec, vec::Vec};
+use crate::any::{Dynamic, Variant};
+use crate::stdlib::vec::Vec;
 
 /// Trait that represent arguments to a function call.
 /// Any data type that can be converted into a `Vec` of `Dynamic` values can be used
@@ -18,7 +17,7 @@ pub trait FuncArgs {
 /// converted into `Dynamic`).
 macro_rules! impl_args {
     ($($p:ident),*) => {
-        impl<$($p: Any + Clone),*> FuncArgs for ($($p,)*)
+        impl<$($p: Variant + Clone),*> FuncArgs for ($($p,)*)
         {
             fn into_vec(self) -> Vec<Dynamic> {
                 let ($($p,)*) = self;

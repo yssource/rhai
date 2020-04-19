@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Position, Scope, AST};
+use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -14,7 +14,6 @@ fn print_error(input: &str, err: EvalAltResult) {
     let line_no = if lines.len() > 1 {
         match err.position() {
             p if p.is_none() => "".to_string(),
-            p if p.is_eof() => format!("{}: ", lines.len()),
             p => format!("{}: ", p.line().unwrap()),
         }
     } else {
@@ -25,15 +24,7 @@ fn print_error(input: &str, err: EvalAltResult) {
     let pos = err.position();
     let pos_text = format!(" ({})", pos);
 
-    let pos = if pos.is_eof() {
-        let last = lines[lines.len() - 1];
-        Position::new(lines.len(), last.len() + 1)
-    } else {
-        pos
-    };
-
     match pos {
-        p if p.is_eof() => panic!("should not be EOF"),
         p if p.is_none() => {
             // No position
             println!("{}", err);
@@ -137,9 +128,9 @@ fn main() {
             _ => (),
         }
 
-        if let Err(err) = engine
+        match engine
             .compile_with_scope(&scope, &script)
-            .map_err(EvalAltResult::ErrorParsing)
+            .map_err(|err| err.into())
             .and_then(|r| {
                 ast_u = r.clone();
 
@@ -157,22 +148,21 @@ fn main() {
                 main_ast = main_ast.merge(&ast);
 
                 // Evaluate
-                let result = engine
-                    .consume_ast_with_scope(&mut scope, &main_ast)
-                    .or_else(|err| match err {
-                        EvalAltResult::Return(_, _) => Ok(()),
-                        err => Err(err),
-                    });
-
-                // Throw away all the statements, leaving only the functions
-                main_ast.retain_functions();
-
-                result
-            })
-        {
-            println!();
-            print_error(&input, err);
-            println!();
+                engine.eval_ast_with_scope::<Dynamic>(&mut scope, &main_ast)
+            }) {
+            Ok(result) if !result.is::<()>() => {
+                println!("=> {:?}", result);
+                println!();
+            }
+            Ok(_) => (),
+            Err(err) => {
+                println!();
+                print_error(&input, err);
+                println!();
+            }
         }
+
+        // Throw away all the statements, leaving only the functions
+        main_ast.retain_functions();
     }
 }

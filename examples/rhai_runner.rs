@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Position};
+use rhai::{Engine, EvalAltResult};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -23,15 +23,9 @@ fn eprint_error(input: &str, err: EvalAltResult) {
     let lines: Vec<_> = input.split('\n').collect();
 
     // Print error
-    let pos = if err.position().is_eof() {
-        let last = lines[lines.len() - 1];
-        Position::new(lines.len(), last.len() + 1)
-    } else {
-        err.position()
-    };
+    let pos = err.position();
 
     match pos {
-        p if p.is_eof() => panic!("should not be EOF"),
         p if p.is_none() => {
             // No position
             eprintln!("{}", err);
