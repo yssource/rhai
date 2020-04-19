@@ -344,6 +344,98 @@ pub(crate) fn calc_fn_def(fn_name: &str, params: usize) -> u64 {
     s.finish()
 }
 
+/// Print/debug to stdout
+fn default_print(s: &str) {
+    #[cfg(not(feature = "no_std"))]
+    println!("{}", s);
+}
+
+/// Search for a variable within the scope, returning its value and index inside the Scope
+fn search_scope<'a>(
+    scope: &'a Scope,
+    id: &str,
+    begin: Position,
+) -> Result<(ScopeSource<'a>, Dynamic), Box<EvalAltResult>> {
+    scope
+        .get(id)
+        .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(id.into(), begin)))
+}
+
+/// Replace a character at an index position in a mutable string
+fn str_replace_char(s: &mut String, idx: usize, new_ch: char) {
+    let mut chars: Vec<char> = s.chars().collect();
+    let ch = *chars.get(idx).expect("string index out of bounds");
+
+    // See if changed - if so, update the String
+    if ch != new_ch {
+        chars[idx] = new_ch;
+        s.clear();
+        chars.iter().for_each(|&ch| s.push(ch));
+    }
+}
+
+/// Update the value at an index position
+fn update_indexed_val(
+    mut target: Dynamic,
+    idx: IndexValue,
+    new_val: Dynamic,
+    pos: Position,
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    match target.get_mut() {
+        Union::Array(arr) => {
+            arr[idx.as_num()] = new_val;
+        }
+        Union::Map(map) => {
+            map.insert(idx.as_str(), new_val);
+        }
+        Union::Str(s) => {
+            // Value must be a character
+            let ch = new_val
+                .as_char()
+                .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
+            str_replace_char(s, idx.as_num(), ch);
+        }
+        // All other variable types should be an error
+        _ => panic!("invalid type for indexing: {}", target.type_name()),
+    }
+
+    Ok(target)
+}
+
+/// Update the value at an index position in a variable inside the scope
+fn update_indexed_scope_var(
+    scope: &mut Scope,
+    src: ScopeSource,
+    idx: IndexValue,
+    new_val: Dynamic,
+    pos: Position,
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    let target = scope.get_mut(src);
+
+    match target.get_mut() {
+        // array_id[idx] = val
+        Union::Array(arr) => {
+            arr[idx.as_num()] = new_val;
+        }
+        // map_id[idx] = val
+        Union::Map(map) => {
+            map.insert(idx.as_str(), new_val);
+        }
+        // string_id[idx] = val
+        Union::Str(s) => {
+            // Value must be a character
+            let ch = new_val
+                .as_char()
+                .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
+            str_replace_char(s, idx.as_num(), ch);
+        }
+        // All other variable types should be an error
+        _ => panic!("invalid type for indexing: {}", target.type_name()),
+    }
+
+    Ok(Dynamic::from_unit())
+}
+
 impl Engine {
     /// Create a new `Engine`
     pub fn new() -> Self {
@@ -669,7 +761,7 @@ impl Engine {
         match dot_lhs {
             // id.???
             Expr::Variable(id, pos) => {
-                let (entry, _) = Self::search_scope(scope, id, *pos)?;
+                let (entry, _) = search_scope(scope, id, *pos)?;
 
                 // Avoid referencing scope which is used below as mut
                 let entry = ScopeSource { name: id, ..entry };
@@ -696,8 +788,7 @@ impl Engine {
                         }
 
                         ScopeEntryType::Normal => {
-                            let pos = dot_rhs.position();
-                            Self::update_indexed_scope_var(scope, src, index, val, pos)?;
+                            update_indexed_scope_var(scope, src, index, val, dot_rhs.position())?;
                         }
                     }
                 }
@@ -711,17 +802,6 @@ impl Engine {
                 self.dot_get_helper(scope, fn_lib, (&mut val).into(), dot_rhs, level)
             }
         }
-    }
-
-    /// Search for a variable within the scope, returning its value and index inside the Scope
-    fn search_scope<'a>(
-        scope: &'a Scope,
-        id: &str,
-        begin: Position,
-    ) -> Result<(ScopeSource<'a>, Dynamic), Box<EvalAltResult>> {
-        scope
-            .get(id)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(id.into(), begin)))
     }
 
     /// Get the value at the indexed position of a base type
@@ -746,6 +826,8 @@ impl Engine {
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_expr.position()))?;
 
+                let arr_len = arr.len();
+
                 if index >= 0 {
                     arr.get(index as usize)
                         .map(|v| {
@@ -759,13 +841,11 @@ impl Engine {
                             )
                         })
                         .ok_or_else(|| {
-                            Box::new(EvalAltResult::ErrorArrayBounds(arr.len(), index, idx_pos))
+                            Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
                         })
                 } else {
                     Err(Box::new(EvalAltResult::ErrorArrayBounds(
-                        arr.len(),
-                        index,
-                        idx_pos,
+                        arr_len, index, idx_pos,
                     )))
                 }
             }
@@ -834,21 +914,13 @@ impl Engine {
     ) -> Result<(Option<ScopeSource<'a>>, IndexValue, Dynamic), Box<EvalAltResult>> {
         match lhs {
             // id[idx_expr]
-            Expr::Variable(id, _) => {
+            Expr::Variable(name, _) => {
                 let (ScopeSource { typ, index, .. }, val) =
-                    Self::search_scope(scope, &id, lhs.position())?;
+                    search_scope(scope, &name, lhs.position())?;
                 let (val, idx) =
                     self.get_indexed_val(scope, fn_lib, &val, idx_expr, op_pos, level, false)?;
 
-                Ok((
-                    Some(ScopeSource {
-                        name: &id,
-                        typ,
-                        index,
-                    }),
-                    idx,
-                    val,
-                ))
+                Ok((Some(ScopeSource { name, typ, index }), idx, val))
             }
 
             // (expr)[idx_expr]
@@ -858,81 +930,6 @@ impl Engine {
                     .map(|(val, index)| (None, index, val))
             }
         }
-    }
-
-    /// Replace a character at an index position in a mutable string
-    fn str_replace_char(s: &mut String, idx: usize, new_ch: char) {
-        let mut chars: Vec<char> = s.chars().collect();
-        let ch = *chars.get(idx).expect("string index out of bounds");
-
-        // See if changed - if so, update the String
-        if ch != new_ch {
-            chars[idx] = new_ch;
-            s.clear();
-            chars.iter().for_each(|&ch| s.push(ch));
-        }
-    }
-
-    /// Update the value at an index position in a variable inside the scope
-    fn update_indexed_scope_var(
-        scope: &mut Scope,
-        src: ScopeSource,
-        idx: IndexValue,
-        new_val: Dynamic,
-        pos: Position,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let target = scope.get_mut(src);
-
-        match target.get_mut() {
-            // array_id[idx] = val
-            Union::Array(arr) => {
-                arr[idx.as_num()] = new_val;
-            }
-            // map_id[idx] = val
-            Union::Map(map) => {
-                map.insert(idx.as_str(), new_val);
-            }
-            // string_id[idx] = val
-            Union::Str(s) => {
-                // Value must be a character
-                let ch = new_val
-                    .as_char()
-                    .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
-                Self::str_replace_char(s, idx.as_num(), ch);
-            }
-            // All other variable types should be an error
-            _ => panic!("invalid type for indexing: {}", target.type_name()),
-        }
-
-        Ok(Dynamic::from_unit())
-    }
-
-    /// Update the value at an index position
-    fn update_indexed_val(
-        mut target: Dynamic,
-        idx: IndexValue,
-        new_val: Dynamic,
-        pos: Position,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        match target.get_mut() {
-            Union::Array(arr) => {
-                arr[idx.as_num()] = new_val;
-            }
-            Union::Map(map) => {
-                map.insert(idx.as_str(), new_val);
-            }
-            Union::Str(s) => {
-                // Value must be a character
-                let ch = new_val
-                    .as_char()
-                    .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
-                Self::str_replace_char(s, idx.as_num(), ch);
-            }
-            // All other variable types should be an error
-            _ => panic!("invalid type for indexing: {}", target.type_name()),
-        }
-
-        Ok(target)
     }
 
     /// Chain-evaluate a dot setter
@@ -965,7 +962,7 @@ impl Engine {
                                 scope, fn_lib, &val, idx_expr, *op_pos, level, true,
                             )?;
 
-                            Self::update_indexed_val(val, index, new_val.clone(), val_pos)
+                            update_indexed_val(val, index, new_val.clone(), val_pos)
                         })
                         .and_then(|mut val| {
                             let fn_name = make_setter(id);
@@ -990,8 +987,8 @@ impl Engine {
                         .and_then(|mut val| {
                             self.dot_set_helper(
                                 scope, fn_lib, &mut val, rhs, new_val, val_pos, level,
-                            )
-                            .map(|_| val) // Discard Ok return value
+                            )?;
+                            Ok(val)
                         })
                         .and_then(|mut val| {
                             let fn_name = make_setter(id);
@@ -1017,7 +1014,7 @@ impl Engine {
                                 )?;
 
                                 // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
-                                Self::update_indexed_val(v, index, value, val_pos)
+                                update_indexed_val(v, index, value, val_pos)
                             })
                             .and_then(|mut v| {
                                 let fn_name = make_setter(id);
@@ -1063,7 +1060,7 @@ impl Engine {
         match dot_lhs {
             // id.???
             Expr::Variable(id, pos) => {
-                let (src, mut target) = Self::search_scope(scope, id, *pos)?;
+                let (src, mut target) = search_scope(scope, id, *pos)?;
 
                 match src.typ {
                     ScopeEntryType::Constant => Err(Box::new(
@@ -1072,14 +1069,9 @@ impl Engine {
                     _ => {
                         // Avoid referencing scope which is used below as mut
                         let entry = ScopeSource { name: id, ..src };
+                        let this_ptr = &mut target;
                         let value = self.dot_set_helper(
-                            scope,
-                            fn_lib,
-                            &mut target,
-                            dot_rhs,
-                            new_val,
-                            val_pos,
-                            level,
+                            scope, fn_lib, this_ptr, dot_rhs, new_val, val_pos, level,
                         );
 
                         // In case the expression mutated `target`, we need to update it back into the scope because it is cloned.
@@ -1109,7 +1101,7 @@ impl Engine {
                             )));
                         }
                         ScopeEntryType::Normal => {
-                            Self::update_indexed_scope_var(scope, src, index, target, val_pos)?;
+                            update_indexed_scope_var(scope, src, index, target, val_pos)?;
                         }
                     }
                 }
@@ -1198,7 +1190,7 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok(Dynamic::from_float(*f)),
             Expr::StringConstant(s, _) => Ok(Dynamic::from_string(s.to_string())),
             Expr::CharConstant(c, _) => Ok(Dynamic::from_char(*c)),
-            Expr::Variable(id, pos) => Self::search_scope(scope, id, *pos).map(|(_, val)| val),
+            Expr::Variable(id, pos) => search_scope(scope, id, *pos).map(|(_, val)| val),
             Expr::Property(_, _) => panic!("unexpected property."),
 
             // Statement block
@@ -1261,9 +1253,7 @@ impl Engine {
                                 }
                                 ScopeEntryType::Normal => {
                                     let pos = rhs.position();
-                                    Ok(Self::update_indexed_scope_var(
-                                        scope, src, index, rhs_val, pos,
-                                    )?)
+                                    Ok(update_indexed_scope_var(scope, src, index, rhs_val, pos)?)
                                 }
                             }
                         } else {
@@ -1644,10 +1634,4 @@ impl Engine {
             .and_then(|list| list.get(name).map(String::as_str))
             .unwrap_or(name)
     }
-}
-
-/// Print/debug to stdout
-fn default_print(s: &str) {
-    #[cfg(not(feature = "no_std"))]
-    println!("{}", s);
 }
