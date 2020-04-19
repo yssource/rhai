@@ -14,13 +14,14 @@ to add scripting to any application.
 Rhai's current features set:
 
 * `no-std` support
-* Easy integration with Rust native functions and data types, including getter/setter methods
+* Easy integration with Rust native functions and types, including getter/setter/methods
 * Easily call a script-defined function from Rust
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * Easy-to-use language similar to JS+Rust
-* Support for overloaded functions
+* Support for function overloading
+* Support for operator overloading
 * Compiled script is optimized for repeat evaluations
 * Support for minimal builds by excluding unneeded language features
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
@@ -598,7 +599,7 @@ Generic functions
 -----------------
 
 Rust generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately.
-Essentially this is a form of function overloading as Rhai does not support generics.
+This is essentially function overloading (Rhai does not natively support generics).
 
 ```rust
 use std::fmt::Display;
@@ -672,6 +673,50 @@ fn to_int(num) {
 print(to_int(123));     // what happens?
 ```
 
+Operator overloading
+--------------------
+
+In Rhai, a lot of functionalities are actually implemented as functions, including basic operations such as arithmetic calculations.
+For example, in the expression "`a + b`", the `+` operator is _not_ built-in, but calls a function named "`+`" instead!
+
+```rust
+let x = a + b;
+let x = +(a, b);        // <- the above is equivalent to this function call
+```
+
+Similarly, comparison operators including `==`, `!=` etc. are all implemented as functions, with the stark exception of `&&` and `||`.
+Because they [_short-circuit_](#boolean-operators), `&&` and `||` are handled specially and _not_ via a function; as a result,
+overriding them has no effect at all.
+
+Operator functions cannot be defined as a script function (because operators syntax are not valid function names).
+However, operator functions _can_ be registered to the [`Engine`] via `register_fn`, `register_result_fn` etc.
+When a custom operator function is registered with the same name as an operator, it _overloads_ (or overrides) the built-in version.
+
+```rust
+use rhai::{Engine, EvalAltResult, RegisterFn};
+
+let mut engine = Engine::new();
+
+fn strange_add(a: i64, b: i64) -> i64 { (a + b) * 42 }
+
+engine.register_fn("+", strange_add);               // overload '+' operator for two integers!
+
+let result: i64 = engine.eval("1 + 0");             // the overloading version is used
+
+println!("result: {}", result);                     // prints 42
+
+let result: f64 = engine.eval("1.0 + 0.0");         // '+' operator for two floats not overloaded
+
+println!("result: {}", result);                     // prints 1.0
+```
+
+Use operator overloading for custom types (described below) only.  Be very careful when overloading built-in operators because
+script writers expect standard operators to behave in a consistent and predictable manner, and will be annoyed if a calculation
+for '+' turns into a subtraction, for example.
+
+Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
+See the [relevant section](#script-optimization) for more details.
+
 Custom types and methods
 -----------------------
 
@@ -707,7 +752,7 @@ fn main() -> Result<(), EvalAltResult>
 
     let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 
-    println!("result: {}", result.field);       // prints 42
+    println!("result: {}", result.field);           // prints 42
 
     Ok(())
 }
