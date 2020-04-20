@@ -60,12 +60,6 @@ impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCal
 
 /// Engine public API
 impl Engine {
-    /// Register a custom function.
-    pub(crate) fn register_fn_raw(&mut self, fn_name: &str, args: Vec<TypeId>, f: Box<FnAny>) {
-        self.functions
-            .insert(calc_fn_spec(fn_name, args.into_iter()), f);
-    }
-
     /// Register a custom type for use with the `Engine`.
     /// The type must implement `Clone`.
     ///
