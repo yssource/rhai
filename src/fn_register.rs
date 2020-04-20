@@ -117,8 +117,14 @@ pub struct Mut<T>(T);
 
 /// Identity dereferencing function.
 #[inline]
-fn identity<T>(data: T) -> T {
+pub fn identity<T>(data: &mut T) -> &mut T {
     data
+}
+
+/// Clone dereferencing function.
+#[inline]
+pub fn cloned<T: Clone>(data: &mut T) -> T {
+    data.clone()
 }
 
 /// This macro counts the number of arguments via recursion.
@@ -128,7 +134,6 @@ macro_rules! count_args {
 }
 
 /// This macro creates a closure wrapping a registered function.
-#[macro_export]
 macro_rules! make_func {
 	($fn_name:ident : $fn:ident : $map:expr ; $($par:ident => $clone:expr),*) => {
 //   ^ function name
@@ -254,8 +259,8 @@ macro_rules! def_register {
         //def_register!(imp_pop $($par => $mark => $param),*);
     };
     ($p0:ident $(, $p:ident)*) => {
-        def_register!(imp $p0 => $p0      => $p0      => Clone::clone   $(, $p => $p => $p => Clone::clone)*);
-        def_register!(imp $p0 => Mut<$p0> => &mut $p0 => identity       $(, $p => $p => $p => Clone::clone)*);
+        def_register!(imp $p0 => $p0      => $p0      => cloned         $(, $p => $p => $p => cloned)*);
+        def_register!(imp $p0 => Mut<$p0> => &mut $p0 => identity       $(, $p => $p => $p => cloned)*);
         // handle the first parameter                    ^ first parameter passed through
         //                                                                                    ^ others passed by value (cloned)
 

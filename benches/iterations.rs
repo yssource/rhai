@@ -3,7 +3,7 @@
 ///! Test 1,000 iterations
 extern crate test;
 
-use rhai::{Engine, OptimizationLevel, Scope, INT};
+use rhai::{Engine, OptimizationLevel, INT};
 use test::Bencher;
 
 #[bench]
@@ -34,6 +34,8 @@ fn bench_iterations_fibonacci(bench: &mut Bencher) {
                 fibonacci(n-1) + fibonacci(n-2)
             }
         }
+
+        fibonacci(20)
     "#;
 
     let mut engine = Engine::new();
@@ -41,9 +43,5 @@ fn bench_iterations_fibonacci(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| {
-        engine
-            .call_fn::<_, INT>(&mut Scope::new(), &ast, "fibonacci", (20 as INT,))
-            .unwrap()
-    });
+    bench.iter(|| engine.eval_ast::<INT>(&ast).unwrap());
 }

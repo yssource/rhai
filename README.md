@@ -13,19 +13,20 @@ to add scripting to any application.
 
 Rhai's current features set:
 
-* `no-std` support
-* Easy integration with Rust native functions and types, including getter/setter/methods
-* Easily call a script-defined function from Rust
+* Easy-to-use language similar to JS+Rust
+* Easy integration with Rust [native functions](#working-with-functions) and [types](#custom-types-and-methods),
+  including [getter/setter](#getters-and-setters)/[methods](#members-and-methods)
+* Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
-* Easy-to-use language similar to JS+Rust
-* Support for function overloading
-* Support for operator overloading
-* Compiled script is optimized for repeat evaluations
-* Support for minimal builds by excluding unneeded language features
+* [`no-std`](#optional-features) support
+* Support for [function overloading](#function-overloading)
+* Support for [operator overloading](#operator-overloading)
+* Compiled script is [optimized](#script-optimization) for repeat evaluations
+* Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
-  to do checked arithmetic operations); for [`no_std`] builds, a number of additional dependencies are
+  to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
 **Note:** Currently, the version is 0.13.0, so the language and API's may change before they stabilize.
@@ -116,10 +117,13 @@ Opt out of as many features as possible, if they are not needed, to reduce code 
 all code is compiled in as what a script requires cannot be predicted. If a language feature is not needed,
 omitting them via special features is a prudent strategy to optimize the build for size.
 
-Start by using [`Engine::new_raw`](#raw-engine) to create a _raw_ engine which does not register the standard library of utility
-functions.  Secondly, omitting arrays (`no_index`) yields the most code-size savings, followed by floating-point support
-(`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).  Disable script-defined
-functions (`no_function`) only when the feature is not needed because code size savings is minimal.
+Omitting arrays (`no_index`) yields the most code-size savings, followed by floating-point support
+(`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).
+Disable script-defined functions (`no_function`) only when the feature is not needed because code size savings is minimal.
+
+[`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
+This makes the scripting language quite useless as even basic arithmetic operators are not supported.
+Selectively include the necessary operators by loading specific [packages](#packages) while minimizing the code footprint.
 
 Related
 -------
@@ -349,16 +353,40 @@ Raw `Engine`
 `Engine::new` creates a scripting [`Engine`] with common functionalities (e.g. printing to the console via `print`).
 In many controlled embedded environments, however, these are not needed.
 
-Use `Engine::new_raw` to create a _raw_ `Engine`, in which:
+Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, not even basic arithmetic and logic operators!
 
-* the `print` and `debug` statements do nothing instead of displaying to the console (see [`print` and `debug`](#print-and-debug) below)
-* the _standard library_ of utility functions is _not_ loaded by default (load it using the `register_stdlib` method).
+### Packages
+
+Rhai functional features are provided in different _packages_ that can be loaded via a call to `load_package`.
+Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be imported in order for
+packages to be used.
 
 ```rust
-let mut engine = Engine::new_raw();             // create a 'raw' Engine
+use rhai::Engine;
+use rhai::packages::Package                     // load the 'Package' trait to use packages
+use rhai::packages::CorePackage;                // the 'core' package contains basic functionalities (e.g. arithmetic)
 
-engine.register_stdlib();                       // register the standard library manually
+let mut engine = Engine::new_raw();             // create a 'raw' Engine
+let package = CorePackage::new();               // create a package
+
+engine.load_package(package.get());             // load the package manually
 ```
+
+The follow packages are available:
+
+| Package                  | Description                                     | In `CorePackage` | In `StandardPackage` |
+| ------------------------ | ----------------------------------------------- | :--------------: | :------------------: |
+| `BasicArithmeticPackage` | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
+| `BasicIteratorPackage`   | Numeric ranges                                  |       Yes        |         Yes          |
+| `LogicPackage`           | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
+| `BasicStringPackage`     | Basic string functions                          |       Yes        |         Yes          |
+| `BasicTimePackage`       | Basic time functions (e.g. `Instant`)           |       Yes        |         Yes          |
+| `MoreStringPackage`      | Additional string functions                     |        No        |         Yes          |
+| `BasicMathPackage`       | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
+| `BasicArrayPackage`      | Basic [array] functions                         |        No        |         Yes          |
+| `BasicMapPackage`        | Basic [object map] functions                    |        No        |         Yes          |
+| `CorePackage`            | Basic essentials                                |                  |                      |
+| `StandardPackage`        | Standard library                                |                  |                      |
 
 Evaluate expressions only
 -------------------------
@@ -401,7 +429,7 @@ The following primitive types are supported natively:
 | **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
 | **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
-| **Timestamp** (implemented in standard library)                               | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
+| **Timestamp** (implemented in the [`BasicTimePackage`](#packages))            | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
 | **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
@@ -1116,7 +1144,7 @@ number = -5 - +5;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on
+The following standard functions (defined in the [`BasicMathPackage`] but excluded if using a [raw `Engine`]) operate on
 `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                       |
@@ -1127,7 +1155,7 @@ The following standard functions (defined in the standard library but excluded i
 Floating-point functions
 ------------------------
 
-The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on `f64` only:
+The following standard functions (defined in the [`BasicMathPackage`](#packages) but excluded if using a [raw `Engine`]) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -1174,8 +1202,8 @@ Unicode characters.
 Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
 In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
 
-Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded
-if using a [raw `Engine`]). This is particularly useful when printing output.
+Strings can be built up from other strings and types via the `+` operator (provided by the [`MoreStringPackage`](#packages)
+but excluded if using a [raw `Engine`]). This is particularly useful when printing output.
 
 [`type_of()`] a string returns `"string"`.
 
@@ -1225,7 +1253,7 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 ### Built-in functions
 
-The following standard methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
+The following standard methods (defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
 
 | Function     | Parameter(s)                                                 | Description                                                                                       |
 | ------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
@@ -1300,7 +1328,7 @@ Arrays are disabled via the [`no_index`] feature.
 
 ### Built-in functions
 
-The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on arrays:
+The following methods (defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
 
 | Function     | Parameter(s)                                                          | Description                                                                                          |
 | ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -1420,7 +1448,7 @@ Object maps are disabled via the [`no_object`] feature.
 
 ### Built-in functions
 
-The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on object maps:
+The following methods (defined in the [`BasicMapPackage`](#packages) but excluded if using a [raw `Engine`]) operate on object maps:
 
 | Function     | Parameter(s)                        | Description                                                                                                                              |
 | ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1545,14 +1573,14 @@ result == 3;                            // the object map is successfully used i
 -------------
 [`timestamp`]: #timestamp-s
 
-Timestamps are provided by the standard library (excluded if using a [raw `Engine`]) via the `timestamp`
+Timestamps are provided by the [`BasicTimePackage`](#packages) (excluded if using a [raw `Engine`]) via the `timestamp`
 function.
 
 The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp returns `"timestamp"`.
 
 ### Built-in functions
 
-The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on timestamps:
+The following methods (defined in the [`BasicTimePackage`](#packages) but excluded if using a [raw `Engine`]) operate on timestamps:
 
 | Function     | Parameter(s)                       | Description                                              |
 | ------------ | ---------------------------------- | -------------------------------------------------------- |
@@ -1876,7 +1904,7 @@ Unlike C/C++, functions can be defined _anywhere_ within the global level. A fun
 prior to being used in a script; a statement in the script can freely call a function defined afterwards.
 This is similar to Rust and many other modern languages.
 
-### Functions overloading
+### Function overloading
 
 Functions can be _overloaded_ and are resolved purely upon the function's _name_ and the _number_ of parameters
 (but not parameter _types_, since all parameters are the same type - [`Dynamic`]).

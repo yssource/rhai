@@ -78,6 +78,7 @@ mod fn_call;
 mod fn_func;
 mod fn_register;
 mod optimize;
+pub mod packages;
 mod parser;
 mod result;
 mod scope;

@@ -3,7 +3,7 @@
 ///! Test evaluating expressions
 extern crate test;
 
-use rhai::{Array, Engine, Map, RegisterFn, INT};
+use rhai::{Array, CorePackage, Engine, Map, Package, RegisterFn, INT};
 use test::Bencher;
 
 #[bench]
@@ -14,6 +14,16 @@ fn bench_engine_new(bench: &mut Bencher) {
 #[bench]
 fn bench_engine_new_raw(bench: &mut Bencher) {
     bench.iter(|| Engine::new_raw());
+}
+
+#[bench]
+fn bench_engine_new_raw_core(bench: &mut Bencher) {
+    let package = CorePackage::new();
+
+    bench.iter(|| {
+        let mut engine = Engine::new_raw();
+        engine.load_package(package.get());
+    });
 }
 
 #[bench]

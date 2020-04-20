@@ -3,6 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::error::ParseErrorType;
 use crate::optimize::OptimizationLevel;
+use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
 use crate::parser::{Expr, FnDef, ReturnType, Stmt, INT};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryRef as ScopeSource, EntryType as ScopeEntryType, Scope};
@@ -41,9 +42,9 @@ pub type FnAny =
 pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>>;
 
 #[cfg(feature = "sync")]
-type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
+pub type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
 #[cfg(not(feature = "sync"))]
-type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
+pub type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 #[cfg(debug_assertions)]
 pub const MAX_CALL_STACK_DEPTH: usize = 28;
@@ -221,6 +222,8 @@ impl DerefMut for FunctionsLib {
 ///
 /// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
+    /// A collection of all library packages loaded into the engine.
+    pub(crate) packages: Vec<PackageLibrary>,
     /// A hashmap containing all compiled functions known to the engine.
     pub(crate) functions: HashMap<u64, Box<FnAny>>,
 
@@ -255,7 +258,8 @@ pub struct Engine {
 impl Default for Engine {
     fn default() -> Self {
         // Create the new scripting Engine
-        let mut engine = Engine {
+        let mut engine = Self {
+            packages: Vec::new(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT),
             type_iterators: HashMap::new(),
             type_names: None,
@@ -279,10 +283,11 @@ impl Default for Engine {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
         };
 
-        engine.register_core_lib();
+        #[cfg(feature = "no_stdlib")]
+        engine.load_package(CorePackage::new().get());
 
         #[cfg(not(feature = "no_stdlib"))]
-        engine.register_stdlib();
+        engine.load_package(StandardPackage::new().get());
 
         engine
     }
@@ -442,9 +447,11 @@ impl Engine {
         Default::default()
     }
 
-    /// Create a new `Engine` with minimal configurations without the standard library etc.
+    /// Create a new `Engine` with _no_ built-in functions.
+    /// Use the `load_package` method to load packages of functions.
     pub fn new_raw() -> Self {
-        let mut engine = Engine {
+        Self {
+            packages: Vec::new(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
             type_iterators: HashMap::new(),
             type_names: None,
@@ -463,11 +470,11 @@ impl Engine {
             optimization_level: OptimizationLevel::Full,
 
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-        };
+        }
+    }
 
-        engine.register_core_lib();
-
-        engine
+    pub fn load_package(&mut self, package: PackageLibrary) {
+        self.packages.insert(0, package);
     }
 
     /// Control whether and how the `Engine` will optimize an AST after compilation
@@ -571,7 +578,12 @@ impl Engine {
         // Search built-in's and external functions
         let fn_spec = calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()));
 
-        if let Some(func) = self.functions.get(&fn_spec) {
+        if let Some(func) = self.functions.get(&fn_spec).or_else(|| {
+            self.packages
+                .iter()
+                .find(|p| p.0.contains_key(&fn_spec))
+                .and_then(|p| p.0.get(&fn_spec))
+        }) {
             // Run external function
             let result = func(args, pos)?;
 
@@ -1540,7 +1552,12 @@ impl Engine {
                 let arr = self.eval_expr(scope, fn_lib, expr, level)?;
                 let tid = arr.type_id();
 
-                if let Some(iter_fn) = self.type_iterators.get(&tid) {
+                if let Some(iter_fn) = self.type_iterators.get(&tid).or_else(|| {
+                    self.packages
+                        .iter()
+                        .find(|p| p.1.contains_key(&tid))
+                        .and_then(|p| p.1.get(&tid))
+                }) {
                     // Add the loop variable - variable name is copied
                     // TODO - avoid copying variable name
                     scope.push(name.clone(), ());

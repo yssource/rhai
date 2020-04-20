@@ -48,7 +48,6 @@ macro_rules! reg_op {
     )
 }
 
-#[cfg(not(feature = "unchecked"))]
 macro_rules! reg_op_result {
     ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
         $(
@@ -57,7 +56,6 @@ macro_rules! reg_op_result {
     )
 }
 
-#[cfg(not(feature = "unchecked"))]
 macro_rules! reg_op_result1 {
     ($self:expr, $x:expr, $op:expr, $v:ty, $( $y:ty ),*) => (
         $(
@@ -98,7 +96,6 @@ impl Engine {
     /// Register the core built-in library.
     pub(crate) fn register_core_lib(&mut self) {
         // Checked add
-        #[cfg(not(feature = "unchecked"))]
         fn add<T: Display + CheckedAdd>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_add(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -108,7 +105,6 @@ impl Engine {
             })
         }
         // Checked subtract
-        #[cfg(not(feature = "unchecked"))]
         fn sub<T: Display + CheckedSub>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_sub(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -118,7 +114,6 @@ impl Engine {
             })
         }
         // Checked multiply
-        #[cfg(not(feature = "unchecked"))]
         fn mul<T: Display + CheckedMul>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_mul(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -128,7 +123,6 @@ impl Engine {
             })
         }
         // Checked divide
-        #[cfg(not(feature = "unchecked"))]
         fn div<T>(x: T, y: T) -> Result<T, EvalAltResult>
         where
             T: Display + CheckedDiv + PartialEq + Zero,
@@ -149,7 +143,6 @@ impl Engine {
             })
         }
         // Checked negative - e.g. -(i32::MIN) will overflow i32::MAX
-        #[cfg(not(feature = "unchecked"))]
         fn neg<T: Display + CheckedNeg>(x: T) -> Result<T, EvalAltResult> {
             x.checked_neg().ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -159,7 +152,6 @@ impl Engine {
             })
         }
         // Checked absolute
-        #[cfg(not(feature = "unchecked"))]
         fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> Result<T, EvalAltResult> {
             // FIX - We don't use Signed::abs() here because, contrary to documentation, it panics
             //       when the number is ::MIN instead of returning ::MIN itself.
@@ -175,32 +167,26 @@ impl Engine {
             }
         }
         // Unchecked add - may panic on overflow
-        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn add_u<T: Add>(x: T, y: T) -> <T as Add>::Output {
             x + y
         }
         // Unchecked subtract - may panic on underflow
-        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn sub_u<T: Sub>(x: T, y: T) -> <T as Sub>::Output {
             x - y
         }
         // Unchecked multiply - may panic on overflow
-        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn mul_u<T: Mul>(x: T, y: T) -> <T as Mul>::Output {
             x * y
         }
         // Unchecked divide - may panic when dividing by zero
-        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn div_u<T: Div>(x: T, y: T) -> <T as Div>::Output {
             x / y
         }
         // Unchecked negative - may panic on overflow
-        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn neg_u<T: Neg>(x: T) -> <T as Neg>::Output {
             -x
         }
         // Unchecked absolute - may panic on overflow
-        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn abs_u<T>(x: T) -> <T as Neg>::Output
         where
             T: Neg + PartialOrd + Default + Into<<T as Neg>::Output>,
@@ -236,7 +222,6 @@ impl Engine {
         }
 
         // Checked left-shift
-        #[cfg(not(feature = "unchecked"))]
         fn shl<T: Display + CheckedShl>(x: T, y: INT) -> Result<T, EvalAltResult> {
             // Cannot shift by a negative number of bits
             if y < 0 {
@@ -254,7 +239,6 @@ impl Engine {
             })
         }
         // Checked right-shift
-        #[cfg(not(feature = "unchecked"))]
         fn shr<T: Display + CheckedShr>(x: T, y: INT) -> Result<T, EvalAltResult> {
             // Cannot shift by a negative number of bits
             if y < 0 {
@@ -272,17 +256,14 @@ impl Engine {
             })
         }
         // Unchecked left-shift - may panic if shifting by a negative number of bits
-        #[cfg(feature = "unchecked")]
         fn shl_u<T: Shl<T>>(x: T, y: T) -> <T as Shl<T>>::Output {
             x.shl(y)
         }
         // Unchecked right-shift - may panic if shifting by a negative number of bits
-        #[cfg(feature = "unchecked")]
         fn shr_u<T: Shr<T>>(x: T, y: T) -> <T as Shr<T>>::Output {
             x.shr(y)
         }
         // Checked modulo
-        #[cfg(not(feature = "unchecked"))]
         fn modulo<T: Display + CheckedRem>(x: T, y: T) -> Result<T, EvalAltResult> {
             x.checked_rem(&y).ok_or_else(|| {
                 EvalAltResult::ErrorArithmetic(
@@ -292,12 +273,10 @@ impl Engine {
             })
         }
         // Unchecked modulo - may panic if dividing by zero
-        #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
         fn modulo_u<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
             x % y
         }
         // Checked power
-        #[cfg(not(feature = "unchecked"))]
         fn pow_i_i(x: INT, y: INT) -> Result<INT, EvalAltResult> {
             #[cfg(not(feature = "only_i32"))]
             {
@@ -339,7 +318,6 @@ impl Engine {
             }
         }
         // Unchecked integer power - may panic on overflow or if the power index is too high (> u32::MAX)
-        #[cfg(feature = "unchecked")]
         fn pow_i_i_u(x: INT, y: INT) -> INT {
             x.pow(y as u32)
         }
@@ -349,7 +327,6 @@ impl Engine {
             x.powf(y)
         }
         // Checked power
-        #[cfg(not(feature = "unchecked"))]
         #[cfg(not(feature = "no_float"))]
         fn pow_f_i(x: FLOAT, y: INT) -> Result<FLOAT, EvalAltResult> {
             // Raise to power that is larger than an i32
@@ -411,34 +388,32 @@ impl Engine {
             reg_op!(self, "/", div_u, f32, f64);
         }
 
+        reg_cmp!(self, "<", lt, INT, String, char);
+        reg_cmp!(self, "<=", lte, INT, String, char);
+        reg_cmp!(self, ">", gt, INT, String, char);
+        reg_cmp!(self, ">=", gte, INT, String, char);
+        reg_cmp!(self, "==", eq, INT, String, char, bool);
+        reg_cmp!(self, "!=", ne, INT, String, char, bool);
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
         {
-            reg_cmp!(self, "<", lt, INT, String, char);
-            reg_cmp!(self, "<=", lte, INT, String, char);
-            reg_cmp!(self, ">", gt, INT, String, char);
-            reg_cmp!(self, ">=", gte, INT, String, char);
-            reg_cmp!(self, "==", eq, INT, String, char, bool);
-            reg_cmp!(self, "!=", ne, INT, String, char, bool);
+            reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        }
 
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_cmp!(self, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_cmp!(self, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_cmp!(self, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_cmp!(self, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_cmp!(self, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_cmp!(self, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            }
-
-            #[cfg(not(feature = "no_float"))]
-            {
-                reg_cmp!(self, "<", lt, f32, f64);
-                reg_cmp!(self, "<=", lte, f32, f64);
-                reg_cmp!(self, ">", gt, f32, f64);
-                reg_cmp!(self, ">=", gte, f32, f64);
-                reg_cmp!(self, "==", eq, f32, f64);
-                reg_cmp!(self, "!=", ne, f32, f64);
-            }
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_cmp!(self, "<", lt, f32, f64);
+            reg_cmp!(self, "<=", lte, f32, f64);
+            reg_cmp!(self, ">", gt, f32, f64);
+            reg_cmp!(self, ">=", gte, f32, f64);
+            reg_cmp!(self, "==", eq, f32, f64);
+            reg_cmp!(self, "!=", ne, f32, f64);
         }
 
         // `&&` and `||` are treated specially as they short-circuit.
@@ -517,58 +492,56 @@ impl Engine {
             self.register_fn("~", pow_f_i_u);
         }
 
-        {
-            macro_rules! reg_un {
-                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-                    $(
-                        $self.register_fn($x, $op as fn(x: $y)->$y);
-                    )*
-                )
-            }
-
-            #[cfg(not(feature = "unchecked"))]
-            macro_rules! reg_un_result {
-                ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
-                    $(
-                        $self.register_result_fn($x, $op as fn(x: $y)->Result<$y,EvalAltResult>);
-                    )*
-                )
-            }
-
-            #[cfg(not(feature = "unchecked"))]
-            {
-                reg_un_result!(self, "-", neg, INT);
-                reg_un_result!(self, "abs", abs, INT);
-
-                #[cfg(not(feature = "only_i32"))]
-                #[cfg(not(feature = "only_i64"))]
-                {
-                    reg_un_result!(self, "-", neg, i8, i16, i32, i64);
-                    reg_un_result!(self, "abs", abs, i8, i16, i32, i64);
-                }
-            }
-
-            #[cfg(feature = "unchecked")]
-            {
-                reg_un!(self, "-", neg_u, INT);
-                reg_un!(self, "abs", abs_u, INT);
-
-                #[cfg(not(feature = "only_i32"))]
-                #[cfg(not(feature = "only_i64"))]
-                {
-                    reg_un!(self, "-", neg_u, i8, i16, i32, i64);
-                    reg_un!(self, "abs", abs_u, i8, i16, i32, i64);
-                }
-            }
-
-            #[cfg(not(feature = "no_float"))]
-            {
-                reg_un!(self, "-", neg_u, f32, f64);
-                reg_un!(self, "abs", abs_u, f32, f64);
-            }
-
-            reg_un!(self, "!", not, bool);
+        macro_rules! reg_un {
+            ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+                $(
+                    $self.register_fn($x, $op as fn(x: $y)->$y);
+                )*
+            )
         }
+
+        #[cfg(not(feature = "unchecked"))]
+        macro_rules! reg_un_result {
+            ($self:expr, $x:expr, $op:expr, $( $y:ty ),*) => (
+                $(
+                    $self.register_result_fn($x, $op as fn(x: $y)->Result<$y,EvalAltResult>);
+                )*
+            )
+        }
+
+        #[cfg(not(feature = "unchecked"))]
+        {
+            reg_un_result!(self, "-", neg, INT);
+            reg_un_result!(self, "abs", abs, INT);
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            {
+                reg_un_result!(self, "-", neg, i8, i16, i32, i64, i128);
+                reg_un_result!(self, "abs", abs, i8, i16, i32, i64, i128);
+            }
+        }
+
+        #[cfg(feature = "unchecked")]
+        {
+            reg_un!(self, "-", neg_u, INT);
+            reg_un!(self, "abs", abs_u, INT);
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            {
+                reg_un!(self, "-", neg_u, i8, i16, i32, i64, i128);
+                reg_un!(self, "abs", abs_u, i8, i16, i32, i64, i128);
+            }
+        }
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_un!(self, "-", neg_u, f32, f64);
+            reg_un!(self, "abs", abs_u, f32, f64);
+        }
+
+        reg_un!(self, "!", not, bool);
 
         self.register_fn("+", |x: String, y: String| x + &y); // String + String
         self.register_fn("==", |_: (), _: ()| true); // () == ()
@@ -581,78 +554,76 @@ impl Engine {
             format!("{}", x)
         }
 
+        macro_rules! reg_fn1 {
+            ($self:expr, $x:expr, $op:expr, $r:ty, $( $y:ty ),*) => (
+                $(
+                    $self.register_fn($x, $op as fn(x: $y)->$r);
+                )*
+            )
+        }
+
+        reg_fn1!(self, KEYWORD_PRINT, to_string, String, INT, bool);
+        reg_fn1!(self, FUNC_TO_STRING, to_string, String, INT, bool);
+        reg_fn1!(self, KEYWORD_PRINT, to_string, String, char, String);
+        reg_fn1!(self, FUNC_TO_STRING, to_string, String, char, String);
+        self.register_fn(KEYWORD_PRINT, || "".to_string());
+        self.register_fn(KEYWORD_PRINT, |_: ()| "".to_string());
+        self.register_fn(FUNC_TO_STRING, |_: ()| "".to_string());
+        reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, INT, bool, ());
+        reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, char, String);
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
         {
-            macro_rules! reg_fn1 {
-                ($self:expr, $x:expr, $op:expr, $r:ty, $( $y:ty ),*) => (
-                    $(
-                        $self.register_fn($x, $op as fn(x: $y)->$r);
-                    )*
-                )
-            }
+            reg_fn1!(self, KEYWORD_PRINT, to_string, String, i8, u8, i16, u16);
+            reg_fn1!(self, FUNC_TO_STRING, to_string, String, i8, u8, i16, u16);
+            reg_fn1!(self, KEYWORD_PRINT, to_string, String, i32, u32, i64, u64);
+            reg_fn1!(self, FUNC_TO_STRING, to_string, String, i32, u32, i64, u64);
+            reg_fn1!(self, KEYWORD_PRINT, to_string, String, i128, u128);
+            reg_fn1!(self, FUNC_TO_STRING, to_string, String, i128, u128);
+            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i8, u8, i16, u16);
+            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i32, u32, i64, u64);
+            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i128, u128);
+        }
 
-            reg_fn1!(self, KEYWORD_PRINT, to_string, String, INT, bool);
-            reg_fn1!(self, FUNC_TO_STRING, to_string, String, INT, bool);
-            reg_fn1!(self, KEYWORD_PRINT, to_string, String, char, String);
-            reg_fn1!(self, FUNC_TO_STRING, to_string, String, char, String);
-            self.register_fn(KEYWORD_PRINT, || "".to_string());
-            self.register_fn(KEYWORD_PRINT, |_: ()| "".to_string());
-            self.register_fn(FUNC_TO_STRING, |_: ()| "".to_string());
-            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, INT, bool, ());
-            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, char, String);
+        #[cfg(not(feature = "no_float"))]
+        {
+            reg_fn1!(self, KEYWORD_PRINT, to_string, String, f32, f64);
+            reg_fn1!(self, FUNC_TO_STRING, to_string, String, f32, f64);
+            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, f32, f64);
+        }
 
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_fn1!(self, KEYWORD_PRINT, to_string, String, i8, u8, i16, u16);
-                reg_fn1!(self, FUNC_TO_STRING, to_string, String, i8, u8, i16, u16);
-                reg_fn1!(self, KEYWORD_PRINT, to_string, String, i32, i64, u32, u64);
-                reg_fn1!(self, FUNC_TO_STRING, to_string, String, i32, i64, u32, u64);
-                reg_fn1!(self, KEYWORD_PRINT, to_string, String, i128, u128);
-                reg_fn1!(self, FUNC_TO_STRING, to_string, String, i128, u128);
-                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i8, u8, i16, u16);
-                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i32, i64, u32, u64);
-                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, i128, u128);
-            }
+        #[cfg(not(feature = "no_index"))]
+        {
+            reg_fn1!(self, KEYWORD_PRINT, to_debug, String, Array);
+            reg_fn1!(self, FUNC_TO_STRING, to_debug, String, Array);
+            reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, Array);
 
-            #[cfg(not(feature = "no_float"))]
-            {
-                reg_fn1!(self, KEYWORD_PRINT, to_string, String, f32, f64);
-                reg_fn1!(self, FUNC_TO_STRING, to_string, String, f32, f64);
-                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, f32, f64);
-            }
+            // Register array iterator
+            self.register_iterator::<Array, _>(|a: &Dynamic| {
+                Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
+                    as Box<dyn Iterator<Item = Dynamic>>
+            });
+        }
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            self.register_fn(KEYWORD_PRINT, |x: &mut Map| format!("#{:?}", x));
+            self.register_fn(FUNC_TO_STRING, |x: &mut Map| format!("#{:?}", x));
+            self.register_fn(KEYWORD_DEBUG, |x: &mut Map| format!("#{:?}", x));
+
+            // Register map access functions
+            #[cfg(not(feature = "no_index"))]
+            self.register_fn("keys", |map: Map| {
+                map.iter()
+                    .map(|(k, _)| Dynamic::from(k.clone()))
+                    .collect::<Vec<_>>()
+            });
 
             #[cfg(not(feature = "no_index"))]
-            {
-                reg_fn1!(self, KEYWORD_PRINT, to_debug, String, Array);
-                reg_fn1!(self, FUNC_TO_STRING, to_debug, String, Array);
-                reg_fn1!(self, KEYWORD_DEBUG, to_debug, String, Array);
-
-                // Register array iterator
-                self.register_iterator::<Array, _>(|a: &Dynamic| {
-                    Box::new(a.downcast_ref::<Array>().unwrap().clone().into_iter())
-                        as Box<dyn Iterator<Item = Dynamic>>
-                });
-            }
-
-            #[cfg(not(feature = "no_object"))]
-            {
-                self.register_fn(KEYWORD_PRINT, |x: &mut Map| format!("#{:?}", x));
-                self.register_fn(FUNC_TO_STRING, |x: &mut Map| format!("#{:?}", x));
-                self.register_fn(KEYWORD_DEBUG, |x: &mut Map| format!("#{:?}", x));
-
-                // Register map access functions
-                #[cfg(not(feature = "no_index"))]
-                self.register_fn("keys", |map: Map| {
-                    map.iter()
-                        .map(|(k, _)| Dynamic::from(k.clone()))
-                        .collect::<Vec<_>>()
-                });
-
-                #[cfg(not(feature = "no_index"))]
-                self.register_fn("values", |map: Map| {
-                    map.into_iter().map(|(_, v)| v).collect::<Vec<_>>()
-                });
-            }
+            self.register_fn("values", |map: Map| {
+                map.into_iter().map(|(_, v)| v).collect::<Vec<_>>()
+            });
         }
 
         // Register range function
@@ -909,6 +880,7 @@ impl Engine {
             reg_fn2x!(self, "push", push, &mut Array, (), String, Array, ());
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), INT, bool, char);
             reg_fn3!(self, "pad", pad, &mut Array, INT, (), String, Array, ());
+            reg_fn3!(self, "insert", ins, &mut Array, INT, (), INT, bool, char);
             reg_fn3!(self, "insert", ins, &mut Array, INT, (), String, Array, ());
 
             self.register_fn("append", |list: &mut Array, array: Array| {
