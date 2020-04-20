@@ -13,9 +13,9 @@ use crate::parser::FLOAT;
 use crate::stdlib::{i32, i64, ops::Deref};
 
 #[cfg(feature = "only_i32")]
-const MAX_INT: INT = i32::MAX;
+pub const MAX_INT: INT = i32::MAX;
 #[cfg(not(feature = "only_i32"))]
-const MAX_INT: INT = i64::MAX;
+pub const MAX_INT: INT = i64::MAX;
 
 pub struct BasicMathPackage(PackageLibrary);
 

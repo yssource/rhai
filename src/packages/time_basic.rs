@@ -1,4 +1,5 @@
 use super::logic::{eq, gt, gte, lt, lte, ne};
+use super::math_basic::MAX_INT;
 use super::{
     create_new_package, reg_binary, reg_none, reg_unary, Package, PackageLibrary,
     PackageLibraryStore,
@@ -6,6 +7,8 @@ use super::{
 
 use crate::fn_register::{map_dynamic as map, map_result as result};
 use crate::parser::INT;
+use crate::result::EvalAltResult;
+use crate::token::Position;
 
 use crate::stdlib::{ops::Deref, time::Instant};
 
