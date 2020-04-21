@@ -1,7 +1,8 @@
 use crate::any::Dynamic;
+use crate::calc_fn_hash;
 use crate::engine::{
-    calc_fn_spec, Engine, FnAny, FnCallArgs, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL,
-    KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, FnAny, FnCallArgs, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::packages::PackageLibrary;
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
@@ -118,15 +119,15 @@ fn call_fn(
     pos: Position,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     // Search built-in's and external functions
-    let hash = calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()));
+    let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
 
     functions
         .get(&hash)
         .or_else(|| {
             packages
                 .iter()
-                .find(|p| p.0.contains_key(&hash))
-                .and_then(|p| p.0.get(&hash))
+                .find(|p| p.functions.contains_key(&hash))
+                .and_then(|p| p.functions.get(&hash))
         })
         .map(|func| func(args, pos))
         .transpose()

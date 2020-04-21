@@ -1,7 +1,6 @@
-use super::{
-    create_new_package, reg_binary, reg_unary, Package, PackageLibrary, PackageLibraryStore,
-};
+use super::{reg_binary, reg_unary};
 
+use crate::def_package;
 use crate::fn_register::{map_dynamic as map, map_result as result};
 use crate::parser::INT;
 use crate::result::EvalAltResult;
@@ -18,7 +17,7 @@ use num_traits::{
 use crate::stdlib::{
     fmt::Display,
     format,
-    ops::{Add, BitAnd, BitOr, BitXor, Deref, Div, Mul, Neg, Rem, Shl, Shr, Sub},
+    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub},
     {i32, i64, u32},
 };
 
@@ -254,16 +253,6 @@ fn pow_f_i_u(x: FLOAT, y: INT) -> FLOAT {
     x.powi(y as i32)
 }
 
-pub struct ArithmeticPackage(PackageLibrary);
-
-impl Deref for ArithmeticPackage {
-    type Target = PackageLibrary;
-
-    fn deref(&self) -> &PackageLibrary {
-        &self.0
-    }
-}
-
 macro_rules! reg_unary_x { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
     $(reg_unary($lib, $op, $func::<$par>, result);)* };
 }
@@ -277,166 +266,154 @@ macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
     $(reg_binary($lib, $op, $func::<$par>, map);)* };
 }
 
-impl Package for ArithmeticPackage {
-    fn new() -> Self {
-        let mut pkg = create_new_package();
-        Self::init(&mut pkg);
-        Self(pkg.into())
-    }
-
-    fn get(&self) -> PackageLibrary {
-        self.0.clone()
-    }
-
-    fn init(lib: &mut PackageLibraryStore) {
-        // Checked basic arithmetic
-        #[cfg(not(feature = "unchecked"))]
-        {
-            reg_op_x!(lib, "+", add, INT);
-            reg_op_x!(lib, "-", sub, INT);
-            reg_op_x!(lib, "*", mul, INT);
-            reg_op_x!(lib, "/", div, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_op_x!(lib, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op_x!(lib, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op_x!(lib, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op_x!(lib, "/", div, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            }
-        }
-
-        // Unchecked basic arithmetic
-        #[cfg(feature = "unchecked")]
-        {
-            reg_op!(lib, "+", add_u, INT);
-            reg_op!(lib, "-", sub_u, INT);
-            reg_op!(lib, "*", mul_u, INT);
-            reg_op!(lib, "/", div_u, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_op!(lib, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op!(lib, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op!(lib, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op!(lib, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            }
-        }
-
-        // Basic arithmetic for floating-point - no need to check
-        #[cfg(not(feature = "no_float"))]
-        {
-            reg_op!(lib, "+", add_u, f32, f64);
-            reg_op!(lib, "-", sub_u, f32, f64);
-            reg_op!(lib, "*", mul_u, f32, f64);
-            reg_op!(lib, "/", div_u, f32, f64);
-        }
-
-        // Bit operations
-        reg_op!(lib, "|", binary_or, INT);
-        reg_op!(lib, "&", binary_and, INT);
-        reg_op!(lib, "^", binary_xor, INT);
+def_package!(ArithmeticPackage:"Basic arithmetic", lib, {
+    // Checked basic arithmetic
+    #[cfg(not(feature = "unchecked"))]
+    {
+        reg_op_x!(lib, "+", add, INT);
+        reg_op_x!(lib, "-", sub, INT);
+        reg_op_x!(lib, "*", mul, INT);
+        reg_op_x!(lib, "/", div, INT);
 
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_op!(lib, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        }
-
-        // Checked bit shifts
-        #[cfg(not(feature = "unchecked"))]
-        {
-            reg_op_x!(lib, "<<", shl, INT);
-            reg_op_x!(lib, ">>", shr, INT);
-            reg_op_x!(lib, "%", modulo, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_op_x!(lib, "<<", shl, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op_x!(lib, ">>", shr, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op_x!(lib, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            }
-        }
-
-        // Unchecked bit shifts
-        #[cfg(feature = "unchecked")]
-        {
-            reg_op!(lib, "<<", shl_u, INT, INT);
-            reg_op!(lib, ">>", shr_u, INT, INT);
-            reg_op!(lib, "%", modulo_u, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_op!(lib, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op!(lib, ">>", shr_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-                reg_op!(lib, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            }
-        }
-
-        // Checked power
-        #[cfg(not(feature = "unchecked"))]
-        {
-            reg_binary(lib, "~", pow_i_i, result);
-
-            #[cfg(not(feature = "no_float"))]
-            reg_binary(lib, "~", pow_f_i, result);
-        }
-
-        // Unchecked power
-        #[cfg(feature = "unchecked")]
-        {
-            reg_binary(lib, "~", pow_i_i_u, map);
-
-            #[cfg(not(feature = "no_float"))]
-            reg_binary(lib, "~", pow_f_i_u, map);
-        }
-
-        // Floating-point modulo and power
-        #[cfg(not(feature = "no_float"))]
-        {
-            reg_op!(lib, "%", modulo_u, f32, f64);
-            reg_binary(lib, "~", pow_f_f, map);
-        }
-
-        // Checked unary
-        #[cfg(not(feature = "unchecked"))]
-        {
-            reg_unary_x!(lib, "-", neg, INT);
-            reg_unary_x!(lib, "abs", abs, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_unary_x!(lib, "-", neg, i8, i16, i32, i64, i128);
-                reg_unary_x!(lib, "abs", abs, i8, i16, i32, i64, i128);
-            }
-        }
-
-        // Unchecked unary
-        #[cfg(feature = "unchecked")]
-        {
-            reg_unary!(lib, "-", neg_u, INT);
-            reg_unary!(lib, "abs", abs_u, INT);
-
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            {
-                reg_unary!(lib, "-", neg_u, i8, i16, i32, i64, i128);
-                reg_unary!(lib, "abs", abs_u, i8, i16, i32, i64, i128);
-            }
-        }
-
-        // Floating-point unary
-        #[cfg(not(feature = "no_float"))]
-        {
-            reg_unary!(lib, "-", neg_u, f32, f64);
-            reg_unary!(lib, "abs", abs_u, f32, f64);
+            reg_op_x!(lib, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op_x!(lib, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op_x!(lib, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op_x!(lib, "/", div, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
         }
     }
-}
+
+    // Unchecked basic arithmetic
+    #[cfg(feature = "unchecked")]
+    {
+        reg_op!(lib, "+", add_u, INT);
+        reg_op!(lib, "-", sub_u, INT);
+        reg_op!(lib, "*", mul_u, INT);
+        reg_op!(lib, "/", div_u, INT);
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_op!(lib, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(lib, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(lib, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(lib, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        }
+    }
+
+    // Basic arithmetic for floating-point - no need to check
+    #[cfg(not(feature = "no_float"))]
+    {
+        reg_op!(lib, "+", add_u, f32, f64);
+        reg_op!(lib, "-", sub_u, f32, f64);
+        reg_op!(lib, "*", mul_u, f32, f64);
+        reg_op!(lib, "/", div_u, f32, f64);
+    }
+
+    // Bit operations
+    reg_op!(lib, "|", binary_or, INT);
+    reg_op!(lib, "&", binary_and, INT);
+    reg_op!(lib, "^", binary_xor, INT);
+
+    #[cfg(not(feature = "only_i32"))]
+    #[cfg(not(feature = "only_i64"))]
+    {
+        reg_op!(lib, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_op!(lib, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_op!(lib, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+    }
+
+    // Checked bit shifts
+    #[cfg(not(feature = "unchecked"))]
+    {
+        reg_op_x!(lib, "<<", shl, INT);
+        reg_op_x!(lib, ">>", shr, INT);
+        reg_op_x!(lib, "%", modulo, INT);
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_op_x!(lib, "<<", shl, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op_x!(lib, ">>", shr, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op_x!(lib, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        }
+    }
+
+    // Unchecked bit shifts
+    #[cfg(feature = "unchecked")]
+    {
+        reg_op!(lib, "<<", shl_u, INT, INT);
+        reg_op!(lib, ">>", shr_u, INT, INT);
+        reg_op!(lib, "%", modulo_u, INT);
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_op!(lib, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(lib, ">>", shr_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            reg_op!(lib, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        }
+    }
+
+    // Checked power
+    #[cfg(not(feature = "unchecked"))]
+    {
+        reg_binary(lib, "~", pow_i_i, result);
+
+        #[cfg(not(feature = "no_float"))]
+        reg_binary(lib, "~", pow_f_i, result);
+    }
+
+    // Unchecked power
+    #[cfg(feature = "unchecked")]
+    {
+        reg_binary(lib, "~", pow_i_i_u, map);
+
+        #[cfg(not(feature = "no_float"))]
+        reg_binary(lib, "~", pow_f_i_u, map);
+    }
+
+    // Floating-point modulo and power
+    #[cfg(not(feature = "no_float"))]
+    {
+        reg_op!(lib, "%", modulo_u, f32, f64);
+        reg_binary(lib, "~", pow_f_f, map);
+    }
+
+    // Checked unary
+    #[cfg(not(feature = "unchecked"))]
+    {
+        reg_unary_x!(lib, "-", neg, INT);
+        reg_unary_x!(lib, "abs", abs, INT);
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_unary_x!(lib, "-", neg, i8, i16, i32, i64, i128);
+            reg_unary_x!(lib, "abs", abs, i8, i16, i32, i64, i128);
+        }
+    }
+
+    // Unchecked unary
+    #[cfg(feature = "unchecked")]
+    {
+        reg_unary!(lib, "-", neg_u, INT);
+        reg_unary!(lib, "abs", abs_u, INT);
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_unary!(lib, "-", neg_u, i8, i16, i32, i64, i128);
+            reg_unary!(lib, "abs", abs_u, i8, i16, i32, i64, i128);
+        }
+    }
+
+    // Floating-point unary
+    #[cfg(not(feature = "no_float"))]
+    {
+        reg_unary!(lib, "-", neg_u, f32, f64);
+        reg_unary!(lib, "abs", abs_u, f32, f64);
+    }
+});

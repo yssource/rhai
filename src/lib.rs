@@ -86,7 +86,7 @@ mod stdlib;
 mod token;
 
 pub use any::Dynamic;
-pub use engine::Engine;
+pub use engine::{calc_fn_spec as calc_fn_hash, Engine};
 pub use error::{ParseError, ParseErrorType};
 pub use fn_call::FuncArgs;
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};

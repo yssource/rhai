@@ -1,6 +1,7 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::any::{Dynamic, Union};
+use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
@@ -121,16 +122,12 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
     }
 }
 
-/// A type that holds a library of script-defined functions.
+/// A type that holds a library (`HashMap`) of script-defined functions.
 ///
 /// Since script-defined functions have `Dynamic` parameters, functions with the same name
 /// and number of parameters are considered equivalent.
 ///
-/// Since the key is a combination of the function name (a String) plus the number of parameters,
-/// we cannot use a `HashMap` because we don't want to clone the function name string just
-/// to search for it.
-///
-/// So instead this is implemented as a sorted list and binary searched.
+/// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_def`.
 #[derive(Debug, Clone)]
 pub struct FunctionsLib(
     #[cfg(feature = "sync")] HashMap<u64, Arc<FnDef>>,
@@ -224,7 +221,9 @@ impl DerefMut for FunctionsLib {
 pub struct Engine {
     /// A collection of all library packages loaded into the engine.
     pub(crate) packages: Vec<PackageLibrary>,
-    /// A hashmap containing all compiled functions known to the engine.
+    /// A `HashMap` containing all compiled functions known to the engine.
+    ///
+    /// The key of the `HashMap` is a `u64` hash calculated by the function `crate::calc_fn_hash`.
     pub(crate) functions: HashMap<u64, Box<FnAny>>,
 
     /// A hashmap containing all iterators known to the engine.
@@ -335,13 +334,18 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     }
 }
 
-pub(crate) fn calc_fn_spec(fn_name: &str, params: impl Iterator<Item = TypeId>) -> u64 {
+/// Calculate a `u64` hash key from a function name and parameter types.
+///
+/// Parameter types are passed in via `TypeId` values from an iterator
+/// which can come from any source.
+pub fn calc_fn_spec(fn_name: &str, params: impl Iterator<Item = TypeId>) -> u64 {
     let mut s = DefaultHasher::new();
     fn_name.hash(&mut s);
     params.for_each(|t| t.hash(&mut s));
     s.finish()
 }
 
+/// Calculate a `u64` hash key from a function name and number of parameters (without regard to types).
 pub(crate) fn calc_fn_def(fn_name: &str, params: usize) -> u64 {
     let mut s = DefaultHasher::new();
     fn_name.hash(&mut s);
@@ -473,7 +477,12 @@ impl Engine {
         }
     }
 
+    /// Load a new package into the `Engine`.
+    ///
+    /// When searching for functions, packages loaded later are preferred.
+    /// In other words, loaded packages are searched in reverse order.
     pub fn load_package(&mut self, package: PackageLibrary) {
+        // Push the package to the top - packages are searched in reverse order
         self.packages.insert(0, package);
     }
 
@@ -576,13 +585,13 @@ impl Engine {
         }
 
         // Search built-in's and external functions
-        let fn_spec = calc_fn_spec(fn_name, args.iter().map(|a| a.type_id()));
+        let fn_spec = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
 
         if let Some(func) = self.functions.get(&fn_spec).or_else(|| {
             self.packages
                 .iter()
-                .find(|p| p.0.contains_key(&fn_spec))
-                .and_then(|p| p.0.get(&fn_spec))
+                .find(|pkg| pkg.functions.contains_key(&fn_spec))
+                .and_then(|pkg| pkg.functions.get(&fn_spec))
         }) {
             // Run external function
             let result = func(args, pos)?;
@@ -1343,7 +1352,7 @@ impl Engine {
                 ) -> bool {
                     engine
                         .functions
-                        .contains_key(&calc_fn_spec(name, once(TypeId::of::<String>())))
+                        .contains_key(&calc_fn_hash(name, once(TypeId::of::<String>())))
                         || fn_lib.map_or(false, |lib| lib.has_function(name, 1))
                 }
 
@@ -1555,8 +1564,8 @@ impl Engine {
                 if let Some(iter_fn) = self.type_iterators.get(&tid).or_else(|| {
                     self.packages
                         .iter()
-                        .find(|p| p.1.contains_key(&tid))
-                        .and_then(|p| p.1.get(&tid))
+                        .find(|pkg| pkg.type_iterators.contains_key(&tid))
+                        .and_then(|pkg| pkg.type_iterators.get(&tid))
                 }) {
                     // Add the loop variable - variable name is copied
                     // TODO - avoid copying variable name
