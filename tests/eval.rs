@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
-fn test_eval() -> Result<(), EvalAltResult> {
+fn test_eval() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -18,7 +18,7 @@ fn test_eval() -> Result<(), EvalAltResult> {
 
 #[test]
 #[cfg(not(feature = "no_function"))]
-fn test_eval_function() -> Result<(), EvalAltResult> {
+fn test_eval_function() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let mut scope = Scope::new();
 
@@ -61,7 +61,7 @@ fn test_eval_function() -> Result<(), EvalAltResult> {
 
 #[test]
 #[cfg(not(feature = "no_function"))]
-fn test_eval_override() -> Result<(), EvalAltResult> {
+fn test_eval_override() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(

@@ -1,7 +1,7 @@
 use super::{reg_binary, reg_binary_mut, reg_unary_mut};
 
-use crate::def_package;
 use crate::any::Dynamic;
+use crate::def_package;
 use crate::engine::Map;
 use crate::fn_register::map_dynamic as map;
 use crate::parser::INT;

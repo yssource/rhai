@@ -16,7 +16,7 @@ pub trait RegisterFn<FN, ARGS, RET> {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, RegisterFn};
     ///
     /// // Normal function
@@ -48,7 +48,7 @@ pub trait RegisterDynamicFn<FN, ARGS> {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, Dynamic, RegisterDynamicFn};
     ///
     /// // Function that returns a Dynamic value
@@ -68,7 +68,7 @@ pub trait RegisterDynamicFn<FN, ARGS> {
     fn register_dynamic_fn(&mut self, name: &str, f: FN);
 }
 
-/// A trait to register fallible custom functions returning Result<_, EvalAltResult> with the `Engine`.
+/// A trait to register fallible custom functions returning `Result<_, Box<EvalAltResult>>` with the `Engine`.
 pub trait RegisterResultFn<FN, ARGS, RET> {
     /// Register a custom fallible function with the `Engine`.
     ///
@@ -78,9 +78,9 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
     /// use rhai::{Engine, RegisterResultFn, EvalAltResult};
     ///
     /// // Normal function
-    /// fn div(x: i64, y: i64) -> Result<i64, EvalAltResult> {
+    /// fn div(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
     ///     if y == 0 {
-    ///         // '.into()' automatically converts to 'EvalAltResult::ErrorRuntime'
+    ///         // '.into()' automatically converts to 'Box<EvalAltResult::ErrorRuntime>'
     ///         Err("division by zero!".into())
     ///     } else {
     ///         Ok(x / y)
@@ -180,10 +180,10 @@ pub fn map_identity(data: Dynamic, _pos: Position) -> Result<Dynamic, Box<EvalAl
     Ok(data)
 }
 
-/// To Result<Dynamic, EvalAltResult> mapping function.
+/// To `Result<Dynamic, Box<EvalAltResult>>` mapping function.
 #[inline]
 pub fn map_result<T: Variant + Clone>(
-    data: Result<T, EvalAltResult>,
+    data: Result<T, Box<EvalAltResult>>,
     pos: Position,
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     data.map(|v| v.into_dynamic())
@@ -241,9 +241,9 @@ macro_rules! def_register {
             $($par: Variant + Clone,)*
 
             #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> Result<RET, EvalAltResult> + Send + Sync + 'static,
+            FN: Fn($($param),*) -> Result<RET, Box<EvalAltResult>> + Send + Sync + 'static,
             #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> Result<RET, EvalAltResult> + 'static,
+            FN: Fn($($param),*) -> Result<RET, Box<EvalAltResult>> + 'static,
 
             RET: Variant + Clone
         > RegisterResultFn<FN, ($($mark,)*), RET> for Engine

@@ -42,7 +42,7 @@ pub(crate) struct EntryRef<'a> {
 /// # Example
 ///
 /// ```
-/// # fn main() -> Result<(), rhai::EvalAltResult> {
+/// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
 /// use rhai::{Engine, Scope};
 ///
 /// let engine = Engine::new();

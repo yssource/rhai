@@ -72,7 +72,7 @@ fn main() {
             eprintln!("{:=<1$}", "", filename.len());
             eprintln!("");
 
-            eprint_error(&contents, err);
+            eprint_error(&contents, *err);
         }
     }
 }

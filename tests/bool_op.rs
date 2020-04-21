@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_bool_op1() -> Result<(), EvalAltResult> {
+fn test_bool_op1() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<bool>("true && (false || true)")?, true);
@@ -11,7 +11,7 @@ fn test_bool_op1() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_bool_op2() -> Result<(), EvalAltResult> {
+fn test_bool_op2() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<bool>("false && (false || true)")?, false);
@@ -21,7 +21,7 @@ fn test_bool_op2() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_bool_op3() -> Result<(), EvalAltResult> {
+fn test_bool_op3() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert!(engine.eval::<bool>("true && (false || 123)").is_err());
@@ -33,7 +33,7 @@ fn test_bool_op3() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_bool_op_short_circuit() -> Result<(), EvalAltResult> {
+fn test_bool_op_short_circuit() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(

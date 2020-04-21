@@ -23,7 +23,7 @@
 //! ```,no_run
 //! use rhai::{Engine, EvalAltResult, RegisterFn};
 //!
-//! fn main() -> Result<(), EvalAltResult>
+//! fn main() -> Result<(), Box<EvalAltResult>>
 //! {
 //!     // Define external function
 //!     fn compute_something(x: i64) -> bool {
@@ -71,7 +71,7 @@ extern crate alloc;
 
 mod any;
 mod api;
-mod builtin;
+//mod builtin;
 mod engine;
 mod error;
 mod fn_call;

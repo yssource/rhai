@@ -2,7 +2,7 @@
 
 use rhai::{Engine, EvalAltResult, INT};
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let result = engine.eval::<INT>("40 + 2")?;

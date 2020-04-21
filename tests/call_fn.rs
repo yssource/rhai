@@ -2,7 +2,7 @@
 use rhai::{Engine, EvalAltResult, Func, ParseErrorType, Scope, INT};
 
 #[test]
-fn test_fn() -> Result<(), EvalAltResult> {
+fn test_fn() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     // Expect duplicated parameters error
@@ -19,7 +19,7 @@ fn test_fn() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_call_fn() -> Result<(), EvalAltResult> {
+fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let mut scope = Scope::new();
 
@@ -61,7 +61,7 @@ fn test_call_fn() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_anonymous_fn() -> Result<(), EvalAltResult> {
+fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
     let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
         Engine::new(),
         "fn calc(x, y, z) { (x + y) * z }",

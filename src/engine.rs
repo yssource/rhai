@@ -205,7 +205,7 @@ impl DerefMut for FunctionsLib {
 /// Rhai main scripting engine.
 ///
 /// ```
-/// # fn main() -> Result<(), rhai::EvalAltResult> {
+/// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
 /// use rhai::Engine;
 ///
 /// let engine = Engine::new();
@@ -1383,13 +1383,11 @@ impl Engine {
 
                         // Compile the script text
                         // No optimizations because we only run it once
-                        let mut ast = self
-                            .compile_with_scope_and_optimization_level(
-                                &Scope::new(),
-                                script,
-                                OptimizationLevel::None,
-                            )
-                            .map_err(|err| EvalAltResult::ErrorParsing(Box::new(err)))?;
+                        let mut ast = self.compile_with_scope_and_optimization_level(
+                            &Scope::new(),
+                            script,
+                            OptimizationLevel::None,
+                        )?;
 
                         // If new functions are defined within the eval string, it is an error
                         if ast.1.len() > 0 {

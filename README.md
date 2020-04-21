@@ -203,7 +203,7 @@ To get going with Rhai, create an instance of the scripting engine via `Engine::
 ```rust
 use rhai::{Engine, EvalAltResult};
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -324,7 +324,7 @@ let script = "fn calc(x, y) { x + y.len() < 42 }";
 //   1) a tuple made up of the types of the script function's parameters
 //   2) the return type of the script function
 //
-// 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
+// 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
 let func = Func::<(i64, String), bool>::create_from_script(
 //                ^^^^^^^^^^^^^ function parameter types in tuple
 
@@ -340,7 +340,7 @@ schedule_callback(func);                        // pass it as a callback to anot
 // Although there is nothing you can't do by manually writing out the closure yourself...
 let engine = Engine::new();
 let ast = engine.compile(script)?;
-schedule_callback(Box::new(move |x: i64, y: String| -> Result<bool, EvalAltResult> {
+schedule_callback(Box::new(move |x: i64, y: String| -> Result<bool, Box<EvalAltResult>> {
     engine.call_fn(&mut Scope::new(), &ast, "calc", (x, y))
 }));
 ```
@@ -560,12 +560,12 @@ Traits
 
 A number of traits, under the `rhai::` module namespace, provide additional functionalities.
 
-| Trait               | Description                                                                       | Methods                                 |
-| ------------------- | --------------------------------------------------------------------------------- | --------------------------------------- |
-| `RegisterFn`        | Trait for registering functions                                                   | `register_fn`                           |
-| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                             | `register_dynamic_fn`                   |
-| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, EvalAltResult>` | `register_result_fn`                    |
-| `Func`              | Trait for creating anonymous functions from script                                | `create_from_ast`, `create_from_script` |
+| Trait               | Description                                                                            | Methods                                 |
+| ------------------- | -------------------------------------------------------------------------------------- | --------------------------------------- |
+| `RegisterFn`        | Trait for registering functions                                                        | `register_fn`                           |
+| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                                  | `register_dynamic_fn`                   |
+| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
+| `Func`              | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
 
 Working with functions
 ----------------------
@@ -588,7 +588,7 @@ fn get_an_any() -> Dynamic {
     Dynamic::from(42_i64)
 }
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -657,18 +657,20 @@ Fallible functions
 If a function is _fallible_ (i.e. it returns a `Result<_, Error>`), it can be registered with `register_result_fn`
 (using the `RegisterResultFn` trait).
 
-The function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements `From<&str>` and `From<String>` etc.
-and the error text gets converted into `EvalAltResult::ErrorRuntime`.
+The function must return `Result<_, Box<EvalAltResult>>`. `Box<EvalAltResult>` implements `From<&str>` and `From<String>` etc.
+and the error text gets converted into `Box<EvalAltResult::ErrorRuntime>`.
+
+The error values are `Box`-ed in order to reduce memory footprint of the error path, which should be hit rarely.
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
 use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
 // Function that may fail
-fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
+fn safe_divide(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero!".into())         // short-cut to create EvalAltResult
+        Err("Division by zero!".into())         // short-cut to create Box<EvalAltResult::ErrorRuntime>
     } else {
         Ok(x / y)
     }
@@ -682,7 +684,7 @@ fn main()
     engine.register_result_fn("divide", safe_divide);
 
     if let Err(error) = engine.eval::<i64>("divide(40, 0)") {
-       println!("Error: {:?}", error);          // prints ErrorRuntime("Division by zero detected!", (1, 1)")
+       println!("Error: {:?}", *error);          // prints ErrorRuntime("Division by zero detected!", (1, 1)")
     }
 }
 ```
@@ -769,7 +771,7 @@ impl TestStruct {
     }
 }
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -933,7 +935,7 @@ threaded through multiple invocations:
 ```rust
 use rhai::{Engine, Scope, EvalAltResult};
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -1794,7 +1796,7 @@ return 123 + 456;           // returns 579
 Errors and `throw`-ing exceptions
 --------------------------------
 
-All of [`Engine`]'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult`
+All of [`Engine`]'s evaluation/consuming methods return `Result<T, Box<rhai::EvalAltResult>>` with `EvalAltResult`
 holding error information. To deliberately return an error during an evaluation, use the `throw` keyword.
 
 ```rust

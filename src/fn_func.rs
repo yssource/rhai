@@ -21,18 +21,18 @@ pub trait Func<ARGS, RET> {
     /// # Examples
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, Func};                       // use 'Func' for 'create_from_ast'
     ///
     /// let engine = Engine::new();                     // create a new 'Engine' just for this
     ///
-    /// let ast = engine.compile("fn calc(x, y) { x + y.len() < 42 }")?;
+    /// let ast = engine.compile("fn calc(x, y) { x + len(y) < 42 }")?;
     ///
     /// // Func takes two type parameters:
     /// //   1) a tuple made up of the types of the script function's parameters
     /// //   2) the return type of the script function
     /// //
-    /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
+    /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
     /// let func = Func::<(i64, String), bool>::create_from_ast(
     /// //                ^^^^^^^^^^^^^ function parameter types in tuple
     ///
@@ -52,18 +52,18 @@ pub trait Func<ARGS, RET> {
     /// # Examples
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, Func};                       // use 'Func' for 'create_from_script'
     ///
     /// let engine = Engine::new();                     // create a new 'Engine' just for this
     ///
-    /// let script = "fn calc(x, y) { x + y.len() < 42 }";
+    /// let script = "fn calc(x, y) { x + len(y) < 42 }";
     ///
     /// // Func takes two type parameters:
     /// //   1) a tuple made up of the types of the script function's parameters
     /// //   2) the return type of the script function
     /// //
-    /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
+    /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
     /// let func = Func::<(i64, String), bool>::create_from_script(
     /// //                ^^^^^^^^^^^^^ function parameter types in tuple
     ///
@@ -80,7 +80,7 @@ pub trait Func<ARGS, RET> {
         self,
         script: &str,
         entry_point: &str,
-    ) -> Result<Self::Output, ParseError>;
+    ) -> Result<Self::Output, Box<ParseError>>;
 }
 
 macro_rules! def_anonymous_fn {
@@ -91,10 +91,10 @@ macro_rules! def_anonymous_fn {
         impl<$($par: Variant + Clone,)* RET: Variant + Clone> Func<($($par,)*), RET> for Engine
         {
             #[cfg(feature = "sync")]
-            type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult> + Send + Sync>;
+            type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>> + Send + Sync>;
 
             #[cfg(not(feature = "sync"))]
-            type Output = Box<dyn Fn($($par),*) -> Result<RET, EvalAltResult>>;
+            type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>>>;
 
             fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output {
                 let name = entry_point.to_string();
@@ -104,7 +104,7 @@ macro_rules! def_anonymous_fn {
                 })
             }
 
-            fn create_from_script(self, script: &str, entry_point: &str) -> Result<Self::Output, ParseError> {
+            fn create_from_script(self, script: &str, entry_point: &str) -> Result<Self::Output, Box<ParseError>> {
                 let ast = self.compile(script)?;
                 Ok(Func::<($($par,)*), RET>::create_from_ast(self, ast, entry_point))
             }

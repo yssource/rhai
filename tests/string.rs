@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
-fn test_string() -> Result<(), EvalAltResult> {
+fn test_string() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -37,7 +37,7 @@ fn test_string() -> Result<(), EvalAltResult> {
 #[cfg(not(feature = "no_stdlib"))]
 #[cfg(not(feature = "no_object"))]
 #[test]
-fn test_string_substring() -> Result<(), EvalAltResult> {
+fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(

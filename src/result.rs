@@ -228,20 +228,23 @@ impl fmt::Display for EvalAltResult {
     }
 }
 
-impl From<ParseError> for EvalAltResult {
+impl From<ParseError> for Box<EvalAltResult> {
     fn from(err: ParseError) -> Self {
-        Self::ErrorParsing(Box::new(err))
+        Box::new(EvalAltResult::ErrorParsing(Box::new(err)))
     }
 }
-impl From<Box<ParseError>> for EvalAltResult {
+impl From<Box<ParseError>> for Box<EvalAltResult> {
     fn from(err: Box<ParseError>) -> Self {
-        Self::ErrorParsing(err)
+        Box::new(EvalAltResult::ErrorParsing(err))
     }
 }
 
-impl<T: AsRef<str>> From<T> for EvalAltResult {
+impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     fn from(err: T) -> Self {
-        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
+        Box::new(EvalAltResult::ErrorRuntime(
+            err.as_ref().to_string(),
+            Position::none(),
+        ))
     }
 }
 

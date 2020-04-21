@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_chars() -> Result<(), EvalAltResult> {
+fn test_chars() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<char>("'y'")?, 'y');

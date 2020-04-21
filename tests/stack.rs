@@ -2,7 +2,7 @@
 use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_stack_overflow() -> Result<(), EvalAltResult> {
+fn test_stack_overflow() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -22,8 +22,10 @@ fn test_stack_overflow() -> Result<(), EvalAltResult> {
     ",
     ) {
         Ok(_) => panic!("should be stack overflow"),
-        Err(EvalAltResult::ErrorStackOverflow(_)) => (),
-        Err(_) => panic!("should be stack overflow"),
+        Err(err) => match *err {
+            EvalAltResult::ErrorStackOverflow(_) => (),
+            _ => panic!("should be stack overflow"),
+        },
     }
 
     Ok(())

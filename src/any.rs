@@ -450,7 +450,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as the system integer type `INT` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_int(&self) -> Result<INT, &'static str> {
+    pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
             _ => Err(self.type_name()),
@@ -459,7 +459,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a `bool` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_bool(&self) -> Result<bool, &'static str> {
+    pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b) => Ok(b),
             _ => Err(self.type_name()),
@@ -468,7 +468,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a `char` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_char(&self) -> Result<char, &'static str> {
+    pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n) => Ok(n),
             _ => Err(self.type_name()),
@@ -477,7 +477,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a string and return the string slice.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_str(&self) -> Result<&str, &'static str> {
+    pub fn as_str(&self) -> Result<&str, &'static str> {
         match &self.0 {
             Union::Str(s) => Ok(s),
             _ => Err(self.type_name()),
@@ -486,30 +486,36 @@ impl Dynamic {
 
     /// Convert the `Dynamic` into `String` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn take_string(self) -> Result<String, &'static str> {
+    pub fn take_string(self) -> Result<String, &'static str> {
         match self.0 {
             Union::Str(s) => Ok(*s),
             _ => Err(self.type_name()),
         }
     }
 
-    pub(crate) fn from_unit() -> Self {
+    /// Create a `Dynamic` from `()`.
+    pub fn from_unit() -> Self {
         Self(Union::Unit(()))
     }
-    pub(crate) fn from_bool(value: bool) -> Self {
+    /// Create a `Dynamic` from a `bool`.
+    pub fn from_bool(value: bool) -> Self {
         Self(Union::Bool(value))
     }
-    pub(crate) fn from_int(value: INT) -> Self {
+    /// Create a `Dynamic` from an `INT`.
+    pub fn from_int(value: INT) -> Self {
         Self(Union::Int(value))
     }
+    /// Create a `Dynamic` from a `FLOAT`. Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub(crate) fn from_float(value: FLOAT) -> Self {
         Self(Union::Float(value))
     }
-    pub(crate) fn from_char(value: char) -> Self {
+    /// Create a `Dynamic` from a `char`.
+    pub fn from_char(value: char) -> Self {
         Self(Union::Char(value))
     }
-    pub(crate) fn from_string(value: String) -> Self {
+    /// Create a `Dynamic` from a `String`.
+    pub fn from_string(value: String) -> Self {
         Self(Union::Str(Box::new(value)))
     }
 }

@@ -1,7 +1,7 @@
 use rhai::{packages::*, Engine, EvalAltResult, INT};
 use std::rc::Rc;
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new_raw();
     engine.load_package(ArithmeticPackage::new().get());
 

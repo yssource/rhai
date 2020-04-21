@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
-fn test_ops() -> Result<(), EvalAltResult> {
+fn test_ops() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("60 + 5")?, 65);
@@ -11,7 +11,7 @@ fn test_ops() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_op_precedence() -> Result<(), EvalAltResult> {
+fn test_op_precedence() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(

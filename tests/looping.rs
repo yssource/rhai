@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
-fn test_loop() -> Result<(), EvalAltResult> {
+fn test_loop() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(

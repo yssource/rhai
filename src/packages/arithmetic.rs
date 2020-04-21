@@ -22,67 +22,73 @@ use crate::stdlib::{
 };
 
 // Checked add
-fn add<T: Display + CheckedAdd>(x: T, y: T) -> Result<T, EvalAltResult> {
+fn add<T: Display + CheckedAdd>(x: T, y: T) -> Result<T, Box<EvalAltResult>> {
     x.checked_add(&y).ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(
+        Box::new(EvalAltResult::ErrorArithmetic(
             format!("Addition overflow: {} + {}", x, y),
             Position::none(),
-        )
+        ))
     })
 }
 // Checked subtract
-fn sub<T: Display + CheckedSub>(x: T, y: T) -> Result<T, EvalAltResult> {
+fn sub<T: Display + CheckedSub>(x: T, y: T) -> Result<T, Box<EvalAltResult>> {
     x.checked_sub(&y).ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(
+        Box::new(EvalAltResult::ErrorArithmetic(
             format!("Subtraction underflow: {} - {}", x, y),
             Position::none(),
-        )
+        ))
     })
 }
 // Checked multiply
-fn mul<T: Display + CheckedMul>(x: T, y: T) -> Result<T, EvalAltResult> {
+fn mul<T: Display + CheckedMul>(x: T, y: T) -> Result<T, Box<EvalAltResult>> {
     x.checked_mul(&y).ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(
+        Box::new(EvalAltResult::ErrorArithmetic(
             format!("Multiplication overflow: {} * {}", x, y),
             Position::none(),
-        )
+        ))
     })
 }
 // Checked divide
-fn div<T>(x: T, y: T) -> Result<T, EvalAltResult>
+fn div<T>(x: T, y: T) -> Result<T, Box<EvalAltResult>>
 where
     T: Display + CheckedDiv + PartialEq + Zero,
 {
     // Detect division by zero
     if y == T::zero() {
-        return Err(EvalAltResult::ErrorArithmetic(
+        return Err(Box::new(EvalAltResult::ErrorArithmetic(
             format!("Division by zero: {} / {}", x, y),
             Position::none(),
-        ));
+        )));
     }
 
     x.checked_div(&y).ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(
+        Box::new(EvalAltResult::ErrorArithmetic(
             format!("Division overflow: {} / {}", x, y),
             Position::none(),
-        )
+        ))
     })
 }
 // Checked negative - e.g. -(i32::MIN) will overflow i32::MAX
-fn neg<T: Display + CheckedNeg>(x: T) -> Result<T, EvalAltResult> {
+fn neg<T: Display + CheckedNeg>(x: T) -> Result<T, Box<EvalAltResult>> {
     x.checked_neg().ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
+        Box::new(EvalAltResult::ErrorArithmetic(
+            format!("Negation overflow: -{}", x),
+            Position::none(),
+        ))
     })
 }
 // Checked absolute
-fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> Result<T, EvalAltResult> {
+fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> Result<T, Box<EvalAltResult>> {
     // FIX - We don't use Signed::abs() here because, contrary to documentation, it panics
     //       when the number is ::MIN instead of returning ::MIN itself.
     if x >= <T as Zero>::zero() {
         Ok(x)
     } else {
         x.checked_neg().ok_or_else(|| {
-            EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
+            Box::new(EvalAltResult::ErrorArithmetic(
+                format!("Negation overflow: -{}", x),
+                Position::none(),
+            ))
         })
     }
 }
@@ -129,37 +135,37 @@ fn binary_xor<T: BitXor>(x: T, y: T) -> <T as BitXor>::Output {
     x ^ y
 }
 // Checked left-shift
-fn shl<T: Display + CheckedShl>(x: T, y: INT) -> Result<T, EvalAltResult> {
+fn shl<T: Display + CheckedShl>(x: T, y: INT) -> Result<T, Box<EvalAltResult>> {
     // Cannot shift by a negative number of bits
     if y < 0 {
-        return Err(EvalAltResult::ErrorArithmetic(
+        return Err(Box::new(EvalAltResult::ErrorArithmetic(
             format!("Left-shift by a negative number: {} << {}", x, y),
             Position::none(),
-        ));
+        )));
     }
 
     CheckedShl::checked_shl(&x, y as u32).ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(
+        Box::new(EvalAltResult::ErrorArithmetic(
             format!("Left-shift by too many bits: {} << {}", x, y),
             Position::none(),
-        )
+        ))
     })
 }
 // Checked right-shift
-fn shr<T: Display + CheckedShr>(x: T, y: INT) -> Result<T, EvalAltResult> {
+fn shr<T: Display + CheckedShr>(x: T, y: INT) -> Result<T, Box<EvalAltResult>> {
     // Cannot shift by a negative number of bits
     if y < 0 {
-        return Err(EvalAltResult::ErrorArithmetic(
+        return Err(Box::new(EvalAltResult::ErrorArithmetic(
             format!("Right-shift by a negative number: {} >> {}", x, y),
             Position::none(),
-        ));
+        )));
     }
 
     CheckedShr::checked_shr(&x, y as u32).ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(
+        Box::new(EvalAltResult::ErrorArithmetic(
             format!("Right-shift by too many bits: {} % {}", x, y),
             Position::none(),
-        )
+        ))
     })
 }
 // Unchecked left-shift - may panic if shifting by a negative number of bits
@@ -171,12 +177,12 @@ fn shr_u<T: Shr<T>>(x: T, y: T) -> <T as Shr<T>>::Output {
     x.shr(y)
 }
 // Checked modulo
-fn modulo<T: Display + CheckedRem>(x: T, y: T) -> Result<T, EvalAltResult> {
+fn modulo<T: Display + CheckedRem>(x: T, y: T) -> Result<T, Box<EvalAltResult>> {
     x.checked_rem(&y).ok_or_else(|| {
-        EvalAltResult::ErrorArithmetic(
+        Box::new(EvalAltResult::ErrorArithmetic(
             format!("Modulo division by zero or overflow: {} % {}", x, y),
             Position::none(),
-        )
+        ))
     })
 }
 // Unchecked modulo - may panic if dividing by zero
@@ -184,25 +190,25 @@ fn modulo_u<T: Rem>(x: T, y: T) -> <T as Rem>::Output {
     x % y
 }
 // Checked power
-fn pow_i_i(x: INT, y: INT) -> Result<INT, EvalAltResult> {
+fn pow_i_i(x: INT, y: INT) -> Result<INT, Box<EvalAltResult>> {
     #[cfg(not(feature = "only_i32"))]
     {
         if y > (u32::MAX as INT) {
-            Err(EvalAltResult::ErrorArithmetic(
+            Err(Box::new(EvalAltResult::ErrorArithmetic(
                 format!("Integer raised to too large an index: {} ~ {}", x, y),
                 Position::none(),
-            ))
+            )))
         } else if y < 0 {
-            Err(EvalAltResult::ErrorArithmetic(
+            Err(Box::new(EvalAltResult::ErrorArithmetic(
                 format!("Integer raised to a negative index: {} ~ {}", x, y),
                 Position::none(),
-            ))
+            )))
         } else {
             x.checked_pow(y as u32).ok_or_else(|| {
-                EvalAltResult::ErrorArithmetic(
+                Box::new(EvalAltResult::ErrorArithmetic(
                     format!("Power overflow: {} ~ {}", x, y),
                     Position::none(),
-                )
+                ))
             })
         }
     }
@@ -210,16 +216,16 @@ fn pow_i_i(x: INT, y: INT) -> Result<INT, EvalAltResult> {
     #[cfg(feature = "only_i32")]
     {
         if y < 0 {
-            Err(EvalAltResult::ErrorArithmetic(
+            Err(Box::new(EvalAltResult::ErrorArithmetic(
                 format!("Integer raised to a negative index: {} ~ {}", x, y),
                 Position::none(),
-            ))
+            )))
         } else {
             x.checked_pow(y as u32).ok_or_else(|| {
-                EvalAltResult::ErrorArithmetic(
+                Box::new(EvalAltResult::ErrorArithmetic(
                     format!("Power overflow: {} ~ {}", x, y),
                     Position::none(),
-                )
+                ))
             })
         }
     }
@@ -235,13 +241,13 @@ fn pow_f_f(x: FLOAT, y: FLOAT) -> FLOAT {
 }
 // Checked power
 #[cfg(not(feature = "no_float"))]
-fn pow_f_i(x: FLOAT, y: INT) -> Result<FLOAT, EvalAltResult> {
+fn pow_f_i(x: FLOAT, y: INT) -> Result<FLOAT, Box<EvalAltResult>> {
     // Raise to power that is larger than an i32
     if y > (i32::MAX as INT) {
-        return Err(EvalAltResult::ErrorArithmetic(
+        return Err(Box::new(EvalAltResult::ErrorArithmetic(
             format!("Number raised to too large an index: {} ~ {}", x, y),
             Position::none(),
-        ));
+        )));
     }
 
     Ok(x.powi(y as i32))

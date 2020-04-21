@@ -1,4 +1,6 @@
+#[cfg(not(feature = "no_index"))]
 use super::array_basic::BasicArrayPackage;
+#[cfg(not(feature = "no_object"))]
 use super::map_basic::BasicMapPackage;
 use super::math_basic::BasicMathPackage;
 use super::pkg_core::CorePackage;

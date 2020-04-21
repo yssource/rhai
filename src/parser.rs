@@ -72,7 +72,7 @@ impl AST {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_function"))]
     /// # {
     /// use rhai::Engine;

@@ -18,9 +18,11 @@ mod time_basic;
 mod utils;
 
 pub use arithmetic::ArithmeticPackage;
+#[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
 pub use iter_basic::BasicIteratorPackage;
 pub use logic::LogicPackage;
+#[cfg(not(feature = "no_object"))]
 pub use map_basic::BasicMapPackage;
 pub use math_basic::BasicMathPackage;
 pub use pkg_core::CorePackage;

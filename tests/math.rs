@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
-fn test_math() -> Result<(), EvalAltResult> {
+fn test_math() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("1 + 2")?, 3);
@@ -25,37 +25,37 @@ fn test_math() -> Result<(), EvalAltResult> {
         #[cfg(not(feature = "only_i32"))]
         {
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("abs(-9223372036854775808)")
                     .expect_err("expects negation overflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("9223372036854775807 + 1")
                     .expect_err("expects overflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("-9223372036854775808 - 1")
                     .expect_err("expects underflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("9223372036854775807 * 9223372036854775807")
                     .expect_err("expects overflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("9223372036854775807 / 0")
                     .expect_err("expects division by zero"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("9223372036854775807 % 0")
                     .expect_err("expects division by zero"),
                 EvalAltResult::ErrorArithmetic(_, _)
@@ -65,31 +65,31 @@ fn test_math() -> Result<(), EvalAltResult> {
         #[cfg(feature = "only_i32")]
         {
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("2147483647 + 1")
                     .expect_err("expects overflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("-2147483648 - 1")
                     .expect_err("expects underflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("2147483647 * 2147483647")
                     .expect_err("expects overflow"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("2147483647 / 0")
                     .expect_err("expects division by zero"),
                 EvalAltResult::ErrorArithmetic(_, _)
             ));
             assert!(matches!(
-                engine
+                *engine
                     .eval::<INT>("2147483647 % 0")
                     .expect_err("expects division by zero"),
                 EvalAltResult::ErrorArithmetic(_, _)

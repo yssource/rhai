@@ -31,13 +31,13 @@ def_package!(BasicTimePackage:"Basic timing utilities.", lib, {
                         #[cfg(not(feature = "unchecked"))]
                         {
                             if seconds > (MAX_INT as u64) {
-                                return Err(EvalAltResult::ErrorArithmetic(
+                                return Err(Box::new(EvalAltResult::ErrorArithmetic(
                                     format!(
                                         "Integer overflow for timestamp duration: {}",
                                         -(seconds as i64)
                                     ),
                                     Position::none(),
-                                ));
+                                )));
                             }
                         }
                         return Ok(-(seconds as INT));
@@ -53,10 +53,10 @@ def_package!(BasicTimePackage:"Basic timing utilities.", lib, {
                         #[cfg(not(feature = "unchecked"))]
                         {
                             if seconds > (MAX_INT as u64) {
-                                return Err(EvalAltResult::ErrorArithmetic(
+                                return Err(Box::new(EvalAltResult::ErrorArithmetic(
                                     format!("Integer overflow for timestamp duration: {}", seconds),
                                     Position::none(),
-                                ));
+                                )));
                             }
                         }
                         return Ok(seconds as INT);
