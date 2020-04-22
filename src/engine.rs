@@ -442,7 +442,7 @@ fn update_indexed_scope_var(
         _ => panic!("invalid type for indexing: {}", target.type_name()),
     }
 
-    Ok(Dynamic::from_unit())
+    Ok(().into())
 }
 
 impl Engine {
@@ -600,13 +600,13 @@ impl Engine {
             return match fn_name {
                 KEYWORD_PRINT if self.on_print.is_some() => {
                     self.on_print.as_ref().unwrap()(cast_to_string(&result, pos)?);
-                    Ok(Dynamic::from_unit())
+                    Ok(().into())
                 }
                 KEYWORD_DEBUG if self.on_debug.is_some() => {
                     self.on_debug.as_ref().unwrap()(cast_to_string(&result, pos)?);
-                    Ok(Dynamic::from_unit())
+                    Ok(().into())
                 }
-                KEYWORD_PRINT | KEYWORD_DEBUG => Ok(Dynamic::from_unit()),
+                KEYWORD_PRINT | KEYWORD_DEBUG => Ok(().into()),
                 _ => Ok(result),
             };
         }
@@ -614,10 +614,7 @@ impl Engine {
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             return match args[0] {
                 // Map property access
-                Dynamic(Union::Map(map)) => Ok(map
-                    .get(prop)
-                    .cloned()
-                    .unwrap_or_else(|| Dynamic::from_unit())),
+                Dynamic(Union::Map(map)) => Ok(map.get(prop).cloned().unwrap_or_else(|| ().into())),
 
                 // Getter function not found
                 _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -634,7 +631,7 @@ impl Engine {
                 // Map property update
                 Dynamic(Union::Map(map)) => {
                     map.insert(prop.to_string(), value[0].clone());
-                    Ok(Dynamic::from_unit())
+                    Ok(().into())
                 }
 
                 // Setter function not found
@@ -853,11 +850,7 @@ impl Engine {
                     arr.get(index as usize)
                         .map(|v| {
                             (
-                                if only_index {
-                                    Dynamic::from_unit()
-                                } else {
-                                    v.clone()
-                                },
+                                if only_index { ().into() } else { v.clone() },
                                 IndexValue::from_num(index),
                             )
                         })
@@ -880,14 +873,8 @@ impl Engine {
 
                 Ok((
                     map.get(&index)
-                        .map(|v| {
-                            if only_index {
-                                Dynamic::from_unit()
-                            } else {
-                                v.clone()
-                            }
-                        })
-                        .unwrap_or_else(|| Dynamic::from_unit()),
+                        .map(|v| if only_index { ().into() } else { v.clone() })
+                        .unwrap_or_else(|| ().into()),
                     IndexValue::from_str(index),
                 ))
             }
@@ -904,7 +891,7 @@ impl Engine {
                 if index >= 0 {
                     s.chars()
                         .nth(index as usize)
-                        .map(|ch| (Dynamic::from_char(ch), IndexValue::from_num(index)))
+                        .map(|ch| (ch.into(), IndexValue::from_num(index)))
                         .ok_or_else(|| {
                             Box::new(EvalAltResult::ErrorStringBounds(num_chars, index, idx_pos))
                         })
@@ -1152,7 +1139,7 @@ impl Engine {
 
         match rhs_value {
             Dynamic(Union::Array(mut rhs_value)) => {
-                let def_value = Dynamic::from_bool(false);
+                let def_value = false.into();
                 let mut result = false;
 
                 // Call the '==' operator to compare each value
@@ -1169,27 +1156,21 @@ impl Engine {
                     }
                 }
 
-                Ok(Dynamic::from_bool(result))
+                Ok(result.into())
             }
             Dynamic(Union::Map(rhs_value)) => {
                 // Only allows String or char
                 match lhs_value {
-                    Dynamic(Union::Str(s)) => {
-                        Ok(Dynamic::from_bool(rhs_value.contains_key(s.as_ref())))
-                    }
-                    Dynamic(Union::Char(c)) => {
-                        Ok(Dynamic::from_bool(rhs_value.contains_key(&c.to_string())))
-                    }
+                    Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(s.as_ref()).into()),
+                    Dynamic(Union::Char(c)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
                     _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
                 }
             }
             Dynamic(Union::Str(rhs_value)) => {
                 // Only allows String or char
                 match lhs_value {
-                    Dynamic(Union::Str(s)) => {
-                        Ok(Dynamic::from_bool(rhs_value.contains(s.as_ref())))
-                    }
-                    Dynamic(Union::Char(c)) => Ok(Dynamic::from_bool(rhs_value.contains(c))),
+                    Dynamic(Union::Str(s)) => Ok(rhs_value.contains(s.as_ref()).into()),
+                    Dynamic(Union::Char(c)) => Ok(rhs_value.contains(c).into()),
                     _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
                 }
             }
@@ -1206,11 +1187,11 @@ impl Engine {
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         match expr {
-            Expr::IntegerConstant(i, _) => Ok(Dynamic::from_int(*i)),
+            Expr::IntegerConstant(i, _) => Ok((*i).into()),
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(f, _) => Ok(Dynamic::from_float(*f)),
-            Expr::StringConstant(s, _) => Ok(Dynamic::from_string(s.to_string())),
-            Expr::CharConstant(c, _) => Ok(Dynamic::from_char(*c)),
+            Expr::FloatConstant(f, _) => Ok((*f).into()),
+            Expr::StringConstant(s, _) => Ok(s.to_string().into()),
+            Expr::CharConstant(c, _) => Ok((*c).into()),
             Expr::Variable(id, pos) => search_scope(scope, id, *pos).map(|(_, val)| val),
             Expr::Property(_, _) => panic!("unexpected property."),
 
@@ -1363,9 +1344,7 @@ impl Engine {
                             && !has_override(self, fn_lib, KEYWORD_TYPE_OF) =>
                     {
                         let result = self.eval_expr(scope, fn_lib, &args_expr_list[0], level)?;
-                        Ok(Dynamic::from_string(
-                            self.map_type_name(result.type_name()).to_string(),
-                        ))
+                        Ok(self.map_type_name(result.type_name()).to_string().into())
                     }
 
                     // eval
@@ -1430,8 +1409,7 @@ impl Engine {
                 self.eval_in_expr(scope, fn_lib, lhs.as_ref(), rhs.as_ref(), level)
             }
 
-            Expr::And(lhs, rhs, _) => Ok(Dynamic::from_bool(
-                self
+            Expr::And(lhs, rhs, _) => Ok((self
                     .eval_expr(scope, fn_lib,lhs.as_ref(), level)?
                     .as_bool()
                     .map_err(|_| {
@@ -1443,11 +1421,10 @@ impl Engine {
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
-                    })?,
-            )),
+                    })?)
+            .into()),
 
-            Expr::Or(lhs, rhs, _) => Ok(Dynamic::from_bool(
-                self
+            Expr::Or(lhs, rhs, _) => Ok((self
                     .eval_expr(scope,fn_lib, lhs.as_ref(), level)?
                     .as_bool()
                     .map_err(|_| {
@@ -1459,12 +1436,12 @@ impl Engine {
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
-                    })?,
-            )),
+                    })?)
+            .into()),
 
-            Expr::True(_) => Ok(Dynamic::from_bool(true)),
-            Expr::False(_) => Ok(Dynamic::from_bool(false)),
-            Expr::Unit(_) => Ok(Dynamic::from_unit()),
+            Expr::True(_) => Ok(true.into()),
+            Expr::False(_) => Ok(false.into()),
+            Expr::Unit(_) => Ok(().into()),
 
             _ => panic!("should not appear: {:?}", expr),
         }
@@ -1480,7 +1457,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         match stmt {
             // No-op
-            Stmt::Noop(_) => Ok(Dynamic::from_unit()),
+            Stmt::Noop(_) => Ok(().into()),
 
             // Expression as statement
             Stmt::Expr(expr) => {
@@ -1490,7 +1467,7 @@ impl Engine {
                     result
                 } else {
                     // If it is an assignment, erase the result at the root
-                    Dynamic::from_unit()
+                    ().into()
                 })
             }
 
@@ -1498,7 +1475,7 @@ impl Engine {
             Stmt::Block(block, _) => {
                 let prev_len = scope.len();
 
-                let result = block.iter().try_fold(Dynamic::from_unit(), |_, stmt| {
+                let result = block.iter().try_fold(().into(), |_, stmt| {
                     self.eval_stmt(scope, fn_lib, stmt, level)
                 });
 
@@ -1518,7 +1495,7 @@ impl Engine {
                     } else if let Some(stmt) = else_body {
                         self.eval_stmt(scope, fn_lib, stmt.as_ref(), level)
                     } else {
-                        Ok(Dynamic::from_unit())
+                        Ok(().into())
                     }
                 }),
 
@@ -1529,13 +1506,11 @@ impl Engine {
                         Ok(_) => (),
                         Err(err) => match *err {
                             EvalAltResult::ErrorLoopBreak(false, _) => (),
-                            EvalAltResult::ErrorLoopBreak(true, _) => {
-                                return Ok(Dynamic::from_unit())
-                            }
+                            EvalAltResult::ErrorLoopBreak(true, _) => return Ok(().into()),
                             _ => return Err(err),
                         },
                     },
-                    Ok(false) => return Ok(Dynamic::from_unit()),
+                    Ok(false) => return Ok(().into()),
                     Err(_) => {
                         return Err(Box::new(EvalAltResult::ErrorLogicGuard(guard.position())))
                     }
@@ -1548,7 +1523,7 @@ impl Engine {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
-                        EvalAltResult::ErrorLoopBreak(true, _) => return Ok(Dynamic::from_unit()),
+                        EvalAltResult::ErrorLoopBreak(true, _) => return Ok(().into()),
                         _ => return Err(err),
                     },
                 }
@@ -1589,7 +1564,7 @@ impl Engine {
                     }
 
                     scope.rewind(scope.len() - 1);
-                    Ok(Dynamic::from_unit())
+                    Ok(().into())
                 } else {
                     Err(Box::new(EvalAltResult::ErrorFor(expr.position())))
                 }
@@ -1603,7 +1578,7 @@ impl Engine {
 
             // Empty return
             Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
-                Err(Box::new(EvalAltResult::Return(Dynamic::from_unit(), *pos)))
+                Err(Box::new(EvalAltResult::Return(().into(), *pos)))
             }
 
             // Return value
@@ -1630,13 +1605,13 @@ impl Engine {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Normal, val, false);
-                Ok(Dynamic::from_unit())
+                Ok(().into())
             }
 
             Stmt::Let(name, None, _) => {
                 // TODO - avoid copying variable name in inner block?
                 scope.push(name.clone(), ());
-                Ok(Dynamic::from_unit())
+                Ok(().into())
             }
 
             // Const statement
@@ -1644,7 +1619,7 @@ impl Engine {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Constant, val, true);
-                Ok(Dynamic::from_unit())
+                Ok(().into())
             }
 
             Stmt::Const(_, _, _) => panic!("constant expression not constant!"),

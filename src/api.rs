@@ -803,7 +803,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         ast.0
             .iter()
-            .try_fold(Dynamic::from_unit(), |_, stmt| {
+            .try_fold(().into(), |_, stmt| {
                 self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
             })
             .or_else(|err| match *err {
@@ -866,7 +866,7 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         ast.0
             .iter()
-            .try_fold(Dynamic::from_unit(), |_, stmt| {
+            .try_fold(().into(), |_, stmt| {
                 self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
             })
             .map_or_else(

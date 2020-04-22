@@ -592,7 +592,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     result.or_else(|| {
                         if !arg_for_type_of.is_empty() {
                             // Handle `type_of()`
-                            Some(Dynamic::from_string(arg_for_type_of.to_string()))
+                            Some(arg_for_type_of.to_string().into())
                         } else {
                             // Otherwise use the default value, if any
                             def_value.clone()

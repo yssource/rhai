@@ -492,30 +492,36 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
+}
 
-    /// Create a `Dynamic` from `()`.
-    pub fn from_unit() -> Self {
-        Self(Union::Unit(()))
+impl From<()> for Dynamic {
+    fn from(value: ()) -> Self {
+        Self(Union::Unit(value))
     }
-    /// Create a `Dynamic` from a `bool`.
-    pub fn from_bool(value: bool) -> Self {
+}
+impl From<bool> for Dynamic {
+    fn from(value: bool) -> Self {
         Self(Union::Bool(value))
     }
-    /// Create a `Dynamic` from an `INT`.
-    pub fn from_int(value: INT) -> Self {
+}
+impl From<INT> for Dynamic {
+    fn from(value: INT) -> Self {
         Self(Union::Int(value))
     }
-    /// Create a `Dynamic` from a `FLOAT`. Not available under `no_float`.
-    #[cfg(not(feature = "no_float"))]
-    pub(crate) fn from_float(value: FLOAT) -> Self {
+}
+#[cfg(not(feature = "no_float"))]
+impl From<FLOAT> for Dynamic {
+    fn from(value: FLOAT) -> Self {
         Self(Union::Float(value))
     }
-    /// Create a `Dynamic` from a `char`.
-    pub fn from_char(value: char) -> Self {
+}
+impl From<char> for Dynamic {
+    fn from(value: char) -> Self {
         Self(Union::Char(value))
     }
-    /// Create a `Dynamic` from a `String`.
-    pub fn from_string(value: String) -> Self {
+}
+impl From<String> for Dynamic {
+    fn from(value: String) -> Self {
         Self(Union::Str(Box::new(value)))
     }
 }

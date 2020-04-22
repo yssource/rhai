@@ -321,14 +321,14 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
-            Self::IntegerConstant(i, _) => Dynamic::from_int(*i),
+            Self::IntegerConstant(i, _) => (*i).into(),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(f, _) => Dynamic::from_float(*f),
-            Self::CharConstant(c, _) => Dynamic::from_char(*c),
-            Self::StringConstant(s, _) => Dynamic::from_string(s.to_string()),
-            Self::True(_) => Dynamic::from_bool(true),
-            Self::False(_) => Dynamic::from_bool(false),
-            Self::Unit(_) => Dynamic::from_unit(),
+            Self::FloatConstant(f, _) => (*f).into(),
+            Self::CharConstant(c, _) => (*c).into(),
+            Self::StringConstant(s, _) => s.to_string().into(),
+            Self::True(_) => true.into(),
+            Self::False(_) => false.into(),
+            Self::Unit(_) => ().into(),
 
             Self::Array(items, _) if items.iter().all(Self::is_constant) => {
                 Dynamic(Union::Array(Box::new(
@@ -996,7 +996,7 @@ fn parse_unary<'a>(
             Ok(Expr::FunctionCall(
                 "!".into(),
                 vec![parse_primary(input, allow_stmt_expr)?],
-                Some(Dynamic::from_bool(false)), // NOT operator, when operating on invalid operand, defaults to false
+                Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
                 pos,
             ))
         }
@@ -1304,37 +1304,37 @@ fn parse_binary_op<'a>(
                 Token::EqualsTo => Expr::FunctionCall(
                     "==".into(),
                     vec![current_lhs, rhs],
-                    Some(Dynamic::from_bool(false)),
+                    Some(false.into()),
                     pos,
                 ),
                 Token::NotEqualsTo => Expr::FunctionCall(
                     "!=".into(),
                     vec![current_lhs, rhs],
-                    Some(Dynamic::from_bool(false)),
+                    Some(false.into()),
                     pos,
                 ),
                 Token::LessThan => Expr::FunctionCall(
                     "<".into(),
                     vec![current_lhs, rhs],
-                    Some(Dynamic::from_bool(false)),
+                    Some(false.into()),
                     pos,
                 ),
                 Token::LessThanEqualsTo => Expr::FunctionCall(
                     "<=".into(),
                     vec![current_lhs, rhs],
-                    Some(Dynamic::from_bool(false)),
+                    Some(false.into()),
                     pos,
                 ),
                 Token::GreaterThan => Expr::FunctionCall(
                     ">".into(),
                     vec![current_lhs, rhs],
-                    Some(Dynamic::from_bool(false)),
+                    Some(false.into()),
                     pos,
                 ),
                 Token::GreaterThanEqualsTo => Expr::FunctionCall(
                     ">=".into(),
                     vec![current_lhs, rhs],
-                    Some(Dynamic::from_bool(false)),
+                    Some(false.into()),
                     pos,
                 ),
 
