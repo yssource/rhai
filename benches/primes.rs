@@ -16,7 +16,8 @@ const MAX_NUMBER_TO_CHECK = 1_000;     // 168 primes <= 1000
 let prime_mask = [];
 prime_mask.pad(MAX_NUMBER_TO_CHECK, true);
 
-prime_mask[0] = prime_mask[1] = false;
+prime_mask[0] = false;
+prime_mask[1] = false;
 
 let total_primes_found = 0;
 
