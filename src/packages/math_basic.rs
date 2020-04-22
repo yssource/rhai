@@ -16,7 +16,7 @@ pub const MAX_INT: INT = i32::MAX;
 #[cfg(not(feature = "only_i32"))]
 pub const MAX_INT: INT = i64::MAX;
 
-def_package!(BasicMathPackage:"Basic mathematic functions.", lib, {
+def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     #[cfg(not(feature = "no_float"))]
     {
         // Advanced math functions

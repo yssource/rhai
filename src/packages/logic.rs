@@ -40,7 +40,7 @@ macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
     $(reg_binary($lib, $op, $func::<$par>, map);)* };
 }
 
-def_package!(LogicPackage:"Logical operators.", lib, {
+def_package!(crate:LogicPackage:"Logical operators.", lib, {
     reg_op!(lib, "<", lt, INT, char);
     reg_op!(lib, "<=", lte, INT, char);
     reg_op!(lib, ">", gt, INT, char);

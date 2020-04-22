@@ -25,7 +25,7 @@ macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
     $(reg_unary_mut($lib, $op, $func::<$par>, map);)* };
 }
 
-def_package!(BasicStringPackage:"Basic string utilities, including printing.", lib, {
+def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
     reg_op!(lib, KEYWORD_PRINT, to_string, INT, bool, char);
     reg_op!(lib, FUNC_TO_STRING, to_string, INT, bool, char);
 

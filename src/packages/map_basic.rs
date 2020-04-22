@@ -8,7 +8,7 @@ use crate::parser::INT;
 
 fn map_get_keys(map: &mut Map) -> Vec<Dynamic> {
     map.iter()
-        .map(|(k, _)| Dynamic::from_string(k.to_string()))
+        .map(|(k, _)| k.to_string().into())
         .collect::<Vec<_>>()
 }
 fn map_get_values(map: &mut Map) -> Vec<Dynamic> {
@@ -16,7 +16,7 @@ fn map_get_values(map: &mut Map) -> Vec<Dynamic> {
 }
 
 #[cfg(not(feature = "no_object"))]
-def_package!(BasicMapPackage:"Basic object map utilities.", lib, {
+def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     reg_binary_mut(
         lib,
         "has",
@@ -28,7 +28,7 @@ def_package!(BasicMapPackage:"Basic object map utilities.", lib, {
     reg_binary_mut(
         lib,
         "remove",
-        |x: &mut Map, name: String| x.remove(&name).unwrap_or_else(|| Dynamic::from_unit()),
+        |x: &mut Map, name: String| x.remove(&name).unwrap_or_else(|| ().into()),
         map,
     );
     reg_binary_mut(

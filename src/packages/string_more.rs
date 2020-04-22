@@ -66,7 +66,7 @@ macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
     $(reg_binary($lib, $op, $func::<$par>, map);)* };
 }
 
-def_package!(MoreStringPackage:"Additional string utilities, including string building.", lib, {
+def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
     reg_op!(lib, "+", append, INT, bool, char);
     reg_binary_mut(lib, "+", |x: &mut String, _: ()| x.clone(), map);
 

@@ -272,7 +272,7 @@ macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
     $(reg_binary($lib, $op, $func::<$par>, map);)* };
 }
 
-def_package!(ArithmeticPackage:"Basic arithmetic", lib, {
+def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
     // Checked basic arithmetic
     #[cfg(not(feature = "unchecked"))]
     {

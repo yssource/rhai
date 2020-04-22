@@ -9,7 +9,7 @@ use super::time_basic::BasicTimePackage;
 
 use crate::def_package;
 
-def_package!(StandardPackage:"_Standard_ package containing all built-in features.", lib, {
+def_package!(crate:StandardPackage:"_Standard_ package containing all built-in features.", lib, {
     CorePackage::init(lib);
     BasicMathPackage::init(lib);
     #[cfg(not(feature = "no_index"))]

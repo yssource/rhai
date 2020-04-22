@@ -597,18 +597,16 @@ impl Engine {
             let result = func(args, pos)?;
 
             // See if the function match print/debug (which requires special processing)
-            return match fn_name {
+            return Ok(match fn_name {
                 KEYWORD_PRINT if self.on_print.is_some() => {
-                    self.on_print.as_ref().unwrap()(cast_to_string(&result, pos)?);
-                    Ok(().into())
+                    self.on_print.as_ref().unwrap()(cast_to_string(&result, pos)?).into()
                 }
                 KEYWORD_DEBUG if self.on_debug.is_some() => {
-                    self.on_debug.as_ref().unwrap()(cast_to_string(&result, pos)?);
-                    Ok(().into())
+                    self.on_debug.as_ref().unwrap()(cast_to_string(&result, pos)?).into()
                 }
-                KEYWORD_PRINT | KEYWORD_DEBUG => Ok(().into()),
-                _ => Ok(result),
-            };
+                KEYWORD_PRINT | KEYWORD_DEBUG => ().into(),
+                _ => result,
+            });
         }
 
         if let Some(prop) = extract_prop_from_getter(fn_name) {

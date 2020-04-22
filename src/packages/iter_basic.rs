@@ -75,7 +75,7 @@ where
     );
 }
 
-def_package!(BasicIteratorPackage:"Basic range iterators.", lib, {
+def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     fn get_range<T>(from: T, to: T) -> Range<T> {
         from..to
     }

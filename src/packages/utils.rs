@@ -13,45 +13,49 @@ use crate::stdlib::{any::TypeId, boxed::Box};
 /// Functions can be added to the package using a number of helper functions under the `packages` module,
 /// such as `reg_unary`, `reg_binary_mut`, `reg_trinary_mut` etc.
 ///
-/// ```,ignore
+/// # Examples
+///
+/// ```
+/// use rhai::Dynamic;
 /// use rhai::def_package;
 /// use rhai::packages::reg_binary;
 ///
-/// fn add(x: i64, y: i64) { x + y }
+/// fn add(x: i64, y: i64) -> i64 { x + y }
 ///
-/// def_package!(MyPackage:"My super-duper package", lib,
+/// def_package!(rhai:MyPackage:"My super-duper package", lib,
 /// {
-///     reg_binary(lib, "my_add", add, |v| Ok(v.into_dynamic()));
-///     //                                 ^^^^^^^^^^^^^^^^^^^^
-///     //                                 map into Result<Dynamic, EvalAltResult>
+///     reg_binary(lib, "my_add", add, |v, _| Ok(v.into()));
+///     //                             ^^^^^^^^^^^^^^^^^^^
+///     //                             map into Result<Dynamic, Box<EvalAltResult>>
 /// });
 /// ```
 ///
 /// The above defines a package named 'MyPackage' with a single function named 'my_add'.
 #[macro_export]
 macro_rules! def_package {
-    ($package:ident : $comment:expr , $lib:ident , $block:stmt) => {
+    ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
         #[doc=$comment]
-        pub struct $package(super::PackageLibrary);
+        pub struct $package($root::packages::PackageLibrary);
 
-        impl crate::packages::Package for $package {
+        impl $root::packages::Package for $package {
             fn new() -> Self {
-                let mut pkg = crate::packages::PackageStore::new();
+                let mut pkg = $root::packages::PackageStore::new();
                 Self::init(&mut pkg);
                 Self(pkg.into())
             }
 
-            fn get(&self) -> crate::packages::PackageLibrary {
+            fn get(&self) -> $root::packages::PackageLibrary {
                 self.0.clone()
             }
 
-            fn init($lib: &mut crate::packages::PackageStore) {
+            fn init($lib: &mut $root::packages::PackageStore) {
                 $block
             }
         }
     };
 }
 
+/// Check whether the correct number of arguments is passed to the function.
 fn check_num_args(
     name: &str,
     num_args: usize,
@@ -73,6 +77,25 @@ fn check_num_args(
 /// Add a function with no parameters to the package.
 ///
 /// `map_result` is a function that maps the return type of the function to `Result<Dynamic, EvalAltResult>`.
+///
+/// # Examples
+///
+/// ```
+/// use rhai::Dynamic;
+/// use rhai::def_package;
+/// use rhai::packages::reg_none;
+///
+/// fn get_answer() -> i64 { 42 }
+///
+/// def_package!(rhai:MyPackage:"My super-duper package", lib,
+/// {
+///     reg_none(lib, "my_answer", get_answer, |v, _| Ok(v.into()));
+///     //                                     ^^^^^^^^^^^^^^^^^^^
+///     //                                     map into Result<Dynamic, Box<EvalAltResult>>
+/// });
+/// ```
+///
+/// The above defines a package named 'MyPackage' with a single function named 'my_add_1'.
 pub fn reg_none<R>(
     lib: &mut PackageStore,
     fn_name: &'static str,
@@ -102,6 +125,25 @@ pub fn reg_none<R>(
 /// Add a function with one parameter to the package.
 ///
 /// `map_result` is a function that maps the return type of the function to `Result<Dynamic, EvalAltResult>`.
+///
+/// # Examples
+///
+/// ```
+/// use rhai::Dynamic;
+/// use rhai::def_package;
+/// use rhai::packages::reg_unary;
+///
+/// fn add_1(x: i64) -> i64 { x + 1 }
+///
+/// def_package!(rhai:MyPackage:"My super-duper package", lib,
+/// {
+///     reg_unary(lib, "my_add_1", add_1, |v, _| Ok(v.into()));
+///     //                                ^^^^^^^^^^^^^^^^^^^
+///     //                                map into Result<Dynamic, Box<EvalAltResult>>
+/// });
+/// ```
+///
+/// The above defines a package named 'MyPackage' with a single function named 'my_add_1'.
 pub fn reg_unary<T: Variant + Clone, R>(
     lib: &mut PackageStore,
     fn_name: &'static str,
@@ -136,6 +178,32 @@ pub fn reg_unary<T: Variant + Clone, R>(
 /// Add a function with one mutable reference parameter to the package.
 ///
 /// `map_result` is a function that maps the return type of the function to `Result<Dynamic, EvalAltResult>`.
+///
+/// # Examples
+///
+/// ```
+/// use rhai::{Dynamic, EvalAltResult};
+/// use rhai::def_package;
+/// use rhai::packages::reg_unary_mut;
+///
+/// fn inc(x: &mut i64) -> Result<Dynamic, Box<EvalAltResult>> {
+///     if *x == 0 {
+///         return Err("boo! zero cannot be incremented!".into())
+///     }
+///     *x += 1;
+///     Ok(().into())
+/// }
+///
+/// def_package!(rhai:MyPackage:"My super-duper package", lib,
+/// {
+///     reg_unary_mut(lib, "try_inc", inc, |r, _| r);
+///     //                                 ^^^^^^^^
+///     //                                 map into Result<Dynamic, Box<EvalAltResult>>
+/// });
+/// ```
+///
+/// The above defines a package named 'MyPackage' with a single fallible function named 'try_inc'
+/// which takes a first argument of `&mut`, return a `Result<Dynamic, Box<EvalAltResult>>`.
 pub fn reg_unary_mut<T: Variant + Clone, R>(
     lib: &mut PackageStore,
     fn_name: &'static str,
@@ -207,6 +275,25 @@ pub(crate) fn reg_test<'a, A: Variant + Clone, B: Variant + Clone, X, R>(
 /// Add a function with two parameters to the package.
 ///
 /// `map_result` is a function that maps the return type of the function to `Result<Dynamic, EvalAltResult>`.
+///
+/// # Examples
+///
+/// ```
+/// use rhai::Dynamic;
+/// use rhai::def_package;
+/// use rhai::packages::reg_binary;
+///
+/// fn add(x: i64, y: i64) -> i64 { x + y }
+///
+/// def_package!(rhai:MyPackage:"My super-duper package", lib,
+/// {
+///     reg_binary(lib, "my_add", add, |v, _| Ok(v.into()));
+///     //                             ^^^^^^^^^^^^^^^^^^^
+///     //                             map into Result<Dynamic, Box<EvalAltResult>>
+/// });
+/// ```
+///
+/// The above defines a package named 'MyPackage' with a single function named 'my_add'.
 pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
     lib: &mut PackageStore,
     fn_name: &'static str,
@@ -245,6 +332,32 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
 /// Add a function with two parameters (the first one being a mutable reference) to the package.
 ///
 /// `map_result` is a function that maps the return type of the function to `Result<Dynamic, EvalAltResult>`.
+///
+/// # Examples
+///
+/// ```
+/// use rhai::{Dynamic, EvalAltResult};
+/// use rhai::def_package;
+/// use rhai::packages::reg_binary_mut;
+///
+/// fn add(x: &mut i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+///     if y == 0 {
+///         return Err("boo! cannot add zero!".into())
+///     }
+///     *x += y;
+///     Ok(().into())
+/// }
+///
+/// def_package!(rhai:MyPackage:"My super-duper package", lib,
+/// {
+///     reg_binary_mut(lib, "try_add", add, |r, _| r);
+///     //                                  ^^^^^^^^
+///     //                                  map into Result<Dynamic, Box<EvalAltResult>>
+/// });
+/// ```
+///
+/// The above defines a package named 'MyPackage' with a single fallible function named 'try_add'
+/// which takes a first argument of `&mut`, return a `Result<Dynamic, Box<EvalAltResult>>`.
 pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
     lib: &mut PackageStore,
     fn_name: &'static str,

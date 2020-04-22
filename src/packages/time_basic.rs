@@ -10,7 +10,7 @@ use crate::token::Position;
 
 use crate::stdlib::time::Instant;
 
-def_package!(BasicTimePackage:"Basic timing utilities.", lib, {
+def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     #[cfg(not(feature = "no_std"))]
     {
         // Register date/time functions
