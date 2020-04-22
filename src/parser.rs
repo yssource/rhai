@@ -1072,14 +1072,42 @@ fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, Box<Par
     }
 }
 
-/// Parse an operator-assignment expression.
-fn parse_op_assignment<S: Into<Cow<'static, str>>>(
-    op: S,
+fn parse_assignment_stmt<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
     lhs: Expr,
-    rhs: Expr,
-    pos: Position,
+    allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
+    let pos = eat_token(input, Token::Equals);
+    let rhs = parse_expr(input, allow_stmt_expr)?;
+    parse_assignment(lhs, rhs, pos)
+}
+
+/// Parse an operator-assignment expression.
+fn parse_op_assignment_stmt<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    lhs: Expr,
+    allow_stmt_expr: bool,
+) -> Result<Expr, Box<ParseError>> {
+    let (op, pos) = match *input.peek().unwrap() {
+        (Token::Equals, _) => return parse_assignment_stmt(input, lhs, allow_stmt_expr),
+        (Token::PlusAssign, pos) => ("+", pos),
+        (Token::MinusAssign, pos) => ("-", pos),
+        (Token::MultiplyAssign, pos) => ("*", pos),
+        (Token::DivideAssign, pos) => ("/", pos),
+        (Token::LeftShiftAssign, pos) => ("<<", pos),
+        (Token::RightShiftAssign, pos) => (">>", pos),
+        (Token::ModuloAssign, pos) => ("%", pos),
+        (Token::PowerOfAssign, pos) => ("~", pos),
+        (Token::AndAssign, pos) => ("&", pos),
+        (Token::OrAssign, pos) => ("|", pos),
+        (Token::XOrAssign, pos) => ("^", pos),
+        (_, _) => return Ok(lhs),
+    };
+
+    input.next();
+
     let lhs_copy = lhs.clone();
+    let rhs = parse_expr(input, allow_stmt_expr)?;
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
     parse_assignment(
@@ -1269,9 +1297,44 @@ fn parse_binary_op<'a>(
                 }
                 Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
 
-                Token::Equals => parse_assignment(current_lhs, rhs, pos)?,
-                Token::PlusAssign => parse_op_assignment("+", current_lhs, rhs, pos)?,
-                Token::MinusAssign => parse_op_assignment("-", current_lhs, rhs, pos)?,
+                Token::LeftShift => {
+                    Expr::FunctionCall("<<".into(), vec![current_lhs, rhs], None, pos)
+                }
+                Token::RightShift => {
+                    Expr::FunctionCall(">>".into(), vec![current_lhs, rhs], None, pos)
+                }
+                Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
+                Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
+
+                // Comparison operators default to false when passed invalid operands
+                Token::EqualsTo => {
+                    Expr::FunctionCall("==".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+                }
+                Token::NotEqualsTo => {
+                    Expr::FunctionCall("!=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+                }
+                Token::LessThan => {
+                    Expr::FunctionCall("<".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+                }
+                Token::LessThanEqualsTo => {
+                    Expr::FunctionCall("<=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+                }
+                Token::GreaterThan => {
+                    Expr::FunctionCall(">".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+                }
+                Token::GreaterThanEqualsTo => {
+                    Expr::FunctionCall(">=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+                }
+
+                Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs), pos),
+                Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
+                Token::Ampersand => {
+                    Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos)
+                }
+                Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
+                Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
+
+                Token::In => parse_in_expr(current_lhs, rhs, pos)?,
 
                 #[cfg(not(feature = "no_object"))]
                 Token::Period => {
@@ -1300,71 +1363,6 @@ fn parse_binary_op<'a>(
                     Expr::Dot(Box::new(current_lhs), Box::new(check_property(rhs)?), pos)
                 }
 
-                // Comparison operators default to false when passed invalid operands
-                Token::EqualsTo => Expr::FunctionCall(
-                    "==".into(),
-                    vec![current_lhs, rhs],
-                    Some(false.into()),
-                    pos,
-                ),
-                Token::NotEqualsTo => Expr::FunctionCall(
-                    "!=".into(),
-                    vec![current_lhs, rhs],
-                    Some(false.into()),
-                    pos,
-                ),
-                Token::LessThan => Expr::FunctionCall(
-                    "<".into(),
-                    vec![current_lhs, rhs],
-                    Some(false.into()),
-                    pos,
-                ),
-                Token::LessThanEqualsTo => Expr::FunctionCall(
-                    "<=".into(),
-                    vec![current_lhs, rhs],
-                    Some(false.into()),
-                    pos,
-                ),
-                Token::GreaterThan => Expr::FunctionCall(
-                    ">".into(),
-                    vec![current_lhs, rhs],
-                    Some(false.into()),
-                    pos,
-                ),
-                Token::GreaterThanEqualsTo => Expr::FunctionCall(
-                    ">=".into(),
-                    vec![current_lhs, rhs],
-                    Some(false.into()),
-                    pos,
-                ),
-
-                Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs), pos),
-                Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
-
-                Token::In => parse_in_expr(current_lhs, rhs, pos)?,
-
-                Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
-                Token::OrAssign => parse_op_assignment("|", current_lhs, rhs, pos)?,
-                Token::AndAssign => parse_op_assignment("&", current_lhs, rhs, pos)?,
-                Token::XOrAssign => parse_op_assignment("^", current_lhs, rhs, pos)?,
-                Token::MultiplyAssign => parse_op_assignment("*", current_lhs, rhs, pos)?,
-                Token::DivideAssign => parse_op_assignment("/", current_lhs, rhs, pos)?,
-                Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
-                Token::LeftShift => {
-                    Expr::FunctionCall("<<".into(), vec![current_lhs, rhs], None, pos)
-                }
-                Token::RightShift => {
-                    Expr::FunctionCall(">>".into(), vec![current_lhs, rhs], None, pos)
-                }
-                Token::LeftShiftAssign => parse_op_assignment("<<", current_lhs, rhs, pos)?,
-                Token::RightShiftAssign => parse_op_assignment(">>", current_lhs, rhs, pos)?,
-                Token::Ampersand => {
-                    Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos)
-                }
-                Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
-                Token::ModuloAssign => parse_op_assignment("%", current_lhs, rhs, pos)?,
-                Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
-                Token::PowerOfAssign => parse_op_assignment("~", current_lhs, rhs, pos)?,
                 token => return Err(PERR::UnknownOperator(token.syntax().into()).into_err(pos)),
             };
         }
@@ -1376,12 +1374,11 @@ fn parse_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
-    // Parse a real expression
     let lhs = parse_unary(input, allow_stmt_expr)?;
     parse_binary_op(input, 1, lhs, allow_stmt_expr)
 }
 
-/// Make sure that the expression is not a statement expression (i.e. wrapped in {})
+/// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
 fn ensure_not_statement_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     type_name: &str,
@@ -1392,6 +1389,35 @@ fn ensure_not_statement_expr<'a>(
             Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos))
         }
         // No need to check for others at this time - leave it for the expr parser
+        _ => Ok(()),
+    }
+}
+
+/// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
+fn ensure_not_assignment<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+) -> Result<(), Box<ParseError>> {
+    match input.peek().unwrap() {
+        (Token::Equals, pos) => {
+            return Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
+        }
+        (Token::PlusAssign, pos)
+        | (Token::MinusAssign, pos)
+        | (Token::MultiplyAssign, pos)
+        | (Token::DivideAssign, pos)
+        | (Token::LeftShiftAssign, pos)
+        | (Token::RightShiftAssign, pos)
+        | (Token::ModuloAssign, pos)
+        | (Token::PowerOfAssign, pos)
+        | (Token::AndAssign, pos)
+        | (Token::OrAssign, pos)
+        | (Token::XOrAssign, pos) => {
+            return Err(PERR::BadInput(
+                "Expecting a boolean expression, not an assignment".to_string(),
+            )
+            .into_err(*pos))
+        }
+
         _ => Ok(()),
     }
 }
@@ -1408,6 +1434,7 @@ fn parse_if<'a>(
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
     let guard = parse_expr(input, allow_stmt_expr)?;
+    ensure_not_assignment(input)?;
     let if_body = parse_block(input, breakable, allow_stmt_expr)?;
 
     // if guard { if_body } else ...
@@ -1441,6 +1468,7 @@ fn parse_while<'a>(
     // while guard { body }
     ensure_not_statement_expr(input, "a boolean")?;
     let guard = parse_expr(input, allow_stmt_expr)?;
+    ensure_not_assignment(input)?;
     let body = parse_block(input, true, allow_stmt_expr)?;
 
     Ok(Stmt::While(Box::new(guard), Box::new(body)))
@@ -1604,7 +1632,9 @@ fn parse_expr_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
-    Ok(Stmt::Expr(Box::new(parse_expr(input, allow_stmt_expr)?)))
+    let expr = parse_expr(input, allow_stmt_expr)?;
+    let expr = parse_op_assignment_stmt(input, expr, allow_stmt_expr)?;
+    Ok(Stmt::Expr(Box::new(expr)))
 }
 
 /// Parse a single statement.
