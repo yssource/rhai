@@ -9,6 +9,7 @@ use crate::parser::FLOAT;
 use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
+    collections::HashMap,
     fmt,
     string::String,
 };
@@ -65,6 +66,9 @@ impl<T: Any + Clone> Variant for T {
 }
 
 /// A trait to represent any type.
+///
+/// `From<_>` is implemented for `i64` (`i32` if `only_i32`), `f64` (if not `no_float`),
+/// `bool`, `String`, `char`, `Vec<T>` (into `Array`) and `HashMap<String, T>` (into `Map`).
 #[cfg(feature = "sync")]
 pub trait Variant: Any + Send + Sync {
     /// Convert this `Variant` trait object to `&dyn Any`.
@@ -523,6 +527,23 @@ impl From<char> for Dynamic {
 impl From<String> for Dynamic {
     fn from(value: String) -> Self {
         Self(Union::Str(Box::new(value)))
+    }
+}
+impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
+    fn from(value: Vec<T>) -> Self {
+        Self(Union::Array(Box::new(
+            value.into_iter().map(Dynamic::from).collect(),
+        )))
+    }
+}
+impl<T: Variant + Clone> From<HashMap<String, T>> for Dynamic {
+    fn from(value: HashMap<String, T>) -> Self {
+        Self(Union::Map(Box::new(
+            value
+                .into_iter()
+                .map(|(k, v)| (k, Dynamic::from(v)))
+                .collect(),
+        )))
     }
 }
 

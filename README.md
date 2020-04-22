@@ -535,6 +535,16 @@ match item.type_name() {                        // 'type_name' returns the name 
 }
 ```
 
+The following conversion traits are implemented for `Dynamic`:
+
+* `From<i64>` (`i32` if [`only_i32`])
+* `From<f64>` (if not [`no_float`])
+* `From<bool>`
+* `From<String>`
+* `From<char>`
+* `From<Vec<T>>` (into an [array])
+* `From<HashMap<String, T>>` (into an [object map]).
+
 Value conversions
 -----------------
 
@@ -684,7 +694,7 @@ fn main()
     engine.register_result_fn("divide", safe_divide);
 
     if let Err(error) = engine.eval::<i64>("divide(40, 0)") {
-       println!("Error: {:?}", *error);          // prints ErrorRuntime("Division by zero detected!", (1, 1)")
+       println!("Error: {:?}", *error);         // prints ErrorRuntime("Division by zero detected!", (1, 1)")
     }
 }
 ```
@@ -1430,6 +1440,7 @@ engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(i
 Object maps
 -----------
 
+[`Map`]: #object-maps
 [object map]: #object-maps
 [object maps]: #object-maps
 
@@ -1630,13 +1641,13 @@ ts == 42;               // false - types are not the same
 Boolean operators
 -----------------
 
-| Operator | Description                     |
-| -------- | ------------------------------- |
-| `!`      | Boolean _Not_                   |
-| `&&`     | Boolean _And_ (short-circuits)  |
-| `\|\|`   | Boolean _Or_ (short-circuits)   |
-| `&`      | Boolean _And_ (full evaluation) |
-| `\|`     | Boolean _Or_ (full evaluation)  |
+| Operator | Description                           |
+| -------- | ------------------------------------- |
+| `!`      | Boolean _Not_                         |
+| `&&`     | Boolean _And_ (short-circuits)        |
+| `\|\|`   | Boolean _Or_ (short-circuits)         |
+| `&`      | Boolean _And_ (doesn't short-circuit) |
+| `\|`     | Boolean _Or_ (doesn't short-circuit)  |
 
 Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated
 if the first one already proves the condition wrong.
