@@ -361,10 +361,9 @@ impl Token {
         use Token::*;
 
         match self {
-            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
-            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
-            | PowerOfAssign => 10,
-
+            // Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
+            // | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
+            // | PowerOfAssign => 10,
             Or | XOr | Pipe => 40,
 
             And | Ampersand => 50,
@@ -670,7 +669,7 @@ impl<'a> TokenIterator<'a> {
                                 .map(Token::IntegerConstant)
                                 .unwrap_or_else(|_| {
                                     Token::LexError(Box::new(LERR::MalformedNumber(
-                                        result.iter().collect(),
+                                        result.into_iter().collect(),
                                     )))
                                 }),
                             pos,
@@ -686,7 +685,7 @@ impl<'a> TokenIterator<'a> {
                         return Some((
                             num.unwrap_or_else(|_| {
                                 Token::LexError(Box::new(LERR::MalformedNumber(
-                                    result.iter().collect(),
+                                    result.into_iter().collect(),
                                 )))
                             }),
                             pos,
@@ -880,6 +879,18 @@ impl<'a> TokenIterator<'a> {
 
                 ('=', '=') => {
                     self.eat_next();
+
+                    // Warn against `===`
+                    if self.peek_next() == Some('=') {
+                        return Some((
+                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                    "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
+                                        .to_string(),
+                                ))),
+                                pos,
+                            ));
+                    }
+
                     return Some((Token::EqualsTo, pos));
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
@@ -924,6 +935,18 @@ impl<'a> TokenIterator<'a> {
 
                 ('!', '=') => {
                     self.eat_next();
+
+                    // Warn against `!==`
+                    if self.peek_next() == Some('=') {
+                        return Some((
+                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                    "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
+                                        .to_string(),
+                                ))),
+                                pos,
+                            ));
+                    }
+
                     return Some((Token::NotEqualsTo, pos));
                 }
                 ('!', _) => return Some((Token::Bang, pos)),

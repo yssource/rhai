@@ -19,6 +19,8 @@ pub enum LexError {
     MalformedChar(String),
     /// An identifier is in an invalid format.
     MalformedIdentifier(String),
+    /// Bad keyword encountered when tokenizing the script text.
+    ImproperKeyword(String),
 }
 
 impl Error for LexError {}
@@ -32,6 +34,7 @@ impl fmt::Display for LexError {
             Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
             Self::MalformedIdentifier(s) => write!(f, "Variable name is not proper: '{}'", s),
             Self::UnterminatedString => write!(f, "Open string is not terminated"),
+            Self::ImproperKeyword(s) => write!(f, "{}", s),
         }
     }
 }
