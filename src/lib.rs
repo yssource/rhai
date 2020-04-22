@@ -71,7 +71,6 @@ extern crate alloc;
 
 mod any;
 mod api;
-//mod builtin;
 mod engine;
 mod error;
 mod fn_call;
