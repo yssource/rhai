@@ -1026,7 +1026,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
     /// use rhai::Engine;
