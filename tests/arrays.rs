@@ -13,6 +13,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
     );
     assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
 
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(
         engine.eval::<INT>(
             r"
@@ -35,7 +36,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
             r"
                 let x = [1, 2, 3];
                 x += [4, 5];
-                x.len()
+                len(x)
            "
         )?,
         5

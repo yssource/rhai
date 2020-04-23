@@ -31,6 +31,7 @@ fn test_for_array() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_index"))]
 #[test]
 fn test_for_object() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();

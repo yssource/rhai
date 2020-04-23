@@ -1471,8 +1471,8 @@ The following methods (defined in the [`BasicMapPackage`](#packages) but exclude
 | `remove`     | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
 | `mixin`      | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
 | `+` operator | first object map, second object map | merges the first object map with the second                                                                                              |
-| `keys`       | _none_                              | returns an [array] of all the property names (in random order)                                                                           |
-| `values`     | _none_                              | returns an [array] of all the property values (in random order)                                                                          |
+| `keys`       | _none_                              | returns an [array] of all the property names (in random order), not available under [`no_index`]                                         |
+| `values`     | _none_                              | returns an [array] of all the property values (in random order), not available under [`no_index`]                                        |
 
 ### Examples
 
