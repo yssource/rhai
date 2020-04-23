@@ -1,4 +1,3 @@
-use super::utils::reg_test;
 use super::{reg_binary, reg_binary_mut, reg_unary};
 
 use crate::def_package;
@@ -49,7 +48,8 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     reg_op!(lib, "!=", ne, INT, char, bool, ());
 
     // Special versions for strings - at least avoid copying the first string
-    //reg_test(lib, "<", |x: &mut String, y: String| *x < y, |v| v, map);
+    // use super::utils::reg_test;
+    // reg_test(lib, "<", |x: &mut String, y: String| *x < y, |v| v, map);
     reg_binary_mut(lib, "<", |x: &mut String, y: String| *x < y, map);
     reg_binary_mut(lib, "<=", |x: &mut String, y: String| *x <= y, map);
     reg_binary_mut(lib, ">", |x: &mut String, y: String| *x > y, map);

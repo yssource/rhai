@@ -235,6 +235,7 @@ pub fn reg_unary_mut<T: Variant + Clone, R>(
     lib.functions.insert(hash, f);
 }
 
+#[cfg(not(feature = "sync"))]
 pub(crate) fn reg_test<'a, A: Variant + Clone, B: Variant + Clone, X, R>(
     lib: &mut PackageStore,
     fn_name: &'static str,
