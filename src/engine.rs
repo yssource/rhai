@@ -680,6 +680,14 @@ impl Engine {
                 Ok(self.map_type_name(args[0].type_name()).to_string().into())
             }
 
+            // eval
+            KEYWORD_EVAL if args.len() == 1 && !self.has_override(fn_lib, KEYWORD_EVAL) => {
+                Err(Box::new(EvalAltResult::ErrorRuntime(
+                    "'eval' should not be called in method style. Try eval(...);".into(),
+                    pos,
+                )))
+            }
+
             _ => {
                 // Map property access?
                 if let Some(prop) = extract_prop_from_getter(fn_name) {
@@ -1487,11 +1495,11 @@ impl Engine {
             Stmt::Expr(expr) => {
                 let result = self.eval_expr(scope, fn_lib, expr, level)?;
 
-                Ok(if !matches!(expr.as_ref(), Expr::Assignment(_, _, _)) {
-                    result
-                } else {
+                Ok(if let Expr::Assignment(_, _, _) = *expr.as_ref() {
                     // If it is an assignment, erase the result at the root
                     ().into()
+                } else {
+                    result
                 })
             }
 
