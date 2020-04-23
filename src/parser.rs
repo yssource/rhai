@@ -508,19 +508,17 @@ impl Expr {
 
 /// Consume a particular token, checking that it is the expected one.
 fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
-    if let Some((t, pos)) = input.next() {
-        if t != token {
-            panic!(
-                "expecting {} (found {}) at {}",
-                token.syntax(),
-                t.syntax(),
-                pos
-            );
-        }
-        pos
-    } else {
-        panic!("expecting {} but already EOF", token.syntax());
+    let (t, pos) = input.next().unwrap();
+
+    if t != token {
+        panic!(
+            "expecting {} (found {}) at {}",
+            token.syntax(),
+            t.syntax(),
+            pos
+        );
     }
+    pos
 }
 
 /// Match a particular token, consuming it if matched.
@@ -1269,103 +1267,91 @@ fn parse_binary_op<'a>(
             return Ok(current_lhs);
         }
 
-        if let Some((op_token, pos)) = input.next() {
-            let rhs = parse_unary(input, allow_stmt_expr)?;
+        let (op_token, pos) = input.next().unwrap();
 
-            let next_precedence = if let Some((next_op, _)) = input.peek() {
-                next_op.precedence()
-            } else {
-                0
-            };
+        let rhs = parse_unary(input, allow_stmt_expr)?;
 
-            // Bind to right if the next operator has higher precedence
-            // If same precedence, then check if the operator binds right
-            let rhs = if (current_precedence == next_precedence && bind_right)
-                || current_precedence < next_precedence
-            {
-                parse_binary_op(input, current_precedence, rhs, allow_stmt_expr)?
-            } else {
-                // Otherwise bind to left (even if next operator has the same precedence)
-                rhs
-            };
+        let next_precedence = input.peek().unwrap().0.precedence();
 
-            current_lhs = match op_token {
-                Token::Plus => Expr::FunctionCall("+".into(), vec![current_lhs, rhs], None, pos),
-                Token::Minus => Expr::FunctionCall("-".into(), vec![current_lhs, rhs], None, pos),
-                Token::Multiply => {
-                    Expr::FunctionCall("*".into(), vec![current_lhs, rhs], None, pos)
-                }
-                Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
+        // Bind to right if the next operator has higher precedence
+        // If same precedence, then check if the operator binds right
+        let rhs = if (current_precedence == next_precedence && bind_right)
+            || current_precedence < next_precedence
+        {
+            parse_binary_op(input, current_precedence, rhs, allow_stmt_expr)?
+        } else {
+            // Otherwise bind to left (even if next operator has the same precedence)
+            rhs
+        };
 
-                Token::LeftShift => {
-                    Expr::FunctionCall("<<".into(), vec![current_lhs, rhs], None, pos)
-                }
-                Token::RightShift => {
-                    Expr::FunctionCall(">>".into(), vec![current_lhs, rhs], None, pos)
-                }
-                Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
-                Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
+        current_lhs = match op_token {
+            Token::Plus => Expr::FunctionCall("+".into(), vec![current_lhs, rhs], None, pos),
+            Token::Minus => Expr::FunctionCall("-".into(), vec![current_lhs, rhs], None, pos),
+            Token::Multiply => Expr::FunctionCall("*".into(), vec![current_lhs, rhs], None, pos),
+            Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
 
-                // Comparison operators default to false when passed invalid operands
-                Token::EqualsTo => {
-                    Expr::FunctionCall("==".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-                }
-                Token::NotEqualsTo => {
-                    Expr::FunctionCall("!=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-                }
-                Token::LessThan => {
-                    Expr::FunctionCall("<".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-                }
-                Token::LessThanEqualsTo => {
-                    Expr::FunctionCall("<=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-                }
-                Token::GreaterThan => {
-                    Expr::FunctionCall(">".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-                }
-                Token::GreaterThanEqualsTo => {
-                    Expr::FunctionCall(">=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-                }
+            Token::LeftShift => Expr::FunctionCall("<<".into(), vec![current_lhs, rhs], None, pos),
+            Token::RightShift => Expr::FunctionCall(">>".into(), vec![current_lhs, rhs], None, pos),
+            Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
+            Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
 
-                Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs), pos),
-                Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
-                Token::Ampersand => {
-                    Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos)
-                }
-                Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
-                Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
+            // Comparison operators default to false when passed invalid operands
+            Token::EqualsTo => {
+                Expr::FunctionCall("==".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+            }
+            Token::NotEqualsTo => {
+                Expr::FunctionCall("!=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+            }
+            Token::LessThan => {
+                Expr::FunctionCall("<".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+            }
+            Token::LessThanEqualsTo => {
+                Expr::FunctionCall("<=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+            }
+            Token::GreaterThan => {
+                Expr::FunctionCall(">".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+            }
+            Token::GreaterThanEqualsTo => {
+                Expr::FunctionCall(">=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
+            }
 
-                Token::In => parse_in_expr(current_lhs, rhs, pos)?,
+            Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs), pos),
+            Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
+            Token::Ampersand => Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos),
+            Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
+            Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
 
-                #[cfg(not(feature = "no_object"))]
-                Token::Period => {
-                    fn check_property(expr: Expr) -> Result<Expr, Box<ParseError>> {
-                        match expr {
-                            // xxx.lhs.rhs
-                            Expr::Dot(lhs, rhs, pos) => Ok(Expr::Dot(
-                                Box::new(check_property(*lhs)?),
-                                Box::new(check_property(*rhs)?),
-                                pos,
-                            )),
-                            // xxx.lhs[idx]
-                            Expr::Index(lhs, idx, pos) => {
-                                Ok(Expr::Index(Box::new(check_property(*lhs)?), idx, pos))
-                            }
-                            // xxx.id
-                            Expr::Variable(id, pos) => Ok(Expr::Property(id, pos)),
-                            // xxx.prop
-                            expr @ Expr::Property(_, _) => Ok(expr),
-                            // xxx.fn()
-                            expr @ Expr::FunctionCall(_, _, _, _) => Ok(expr),
-                            expr => Err(PERR::PropertyExpected.into_err(expr.position())),
+            Token::In => parse_in_expr(current_lhs, rhs, pos)?,
+
+            #[cfg(not(feature = "no_object"))]
+            Token::Period => {
+                fn check_property(expr: Expr) -> Result<Expr, Box<ParseError>> {
+                    match expr {
+                        // xxx.lhs.rhs
+                        Expr::Dot(lhs, rhs, pos) => Ok(Expr::Dot(
+                            Box::new(check_property(*lhs)?),
+                            Box::new(check_property(*rhs)?),
+                            pos,
+                        )),
+                        // xxx.lhs[idx]
+                        Expr::Index(lhs, idx, pos) => {
+                            Ok(Expr::Index(Box::new(check_property(*lhs)?), idx, pos))
                         }
+                        // xxx.id
+                        Expr::Variable(id, pos) => Ok(Expr::Property(id, pos)),
+                        // xxx.prop
+                        expr @ Expr::Property(_, _) => Ok(expr),
+                        // xxx.fn()
+                        expr @ Expr::FunctionCall(_, _, _, _) => Ok(expr),
+                        expr => Err(PERR::PropertyExpected.into_err(expr.position())),
                     }
-
-                    Expr::Dot(Box::new(current_lhs), Box::new(check_property(rhs)?), pos)
                 }
 
-                token => return Err(PERR::UnknownOperator(token.syntax().into()).into_err(pos)),
-            };
-        }
+                Expr::Dot(Box::new(current_lhs), Box::new(check_property(rhs)?), pos)
+            }
+
+            token => return Err(PERR::UnknownOperator(token.syntax().into()).into_err(pos)),
+        };
     }
 }
 
@@ -1439,7 +1425,7 @@ fn parse_if<'a>(
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).unwrap_or(false) {
-        Some(Box::new(if matches!(input.peek(), Some((Token::If, _))) {
+        Some(Box::new(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
             parse_if(input, breakable, allow_stmt_expr)?
         } else {
@@ -1676,9 +1662,9 @@ fn parse_stmt<'a>(
         Token::Return | Token::Throw => {
             let pos = *pos;
 
-            let return_type = match input.next() {
-                Some((Token::Return, _)) => ReturnType::Return,
-                Some((Token::Throw, _)) => ReturnType::Exception,
+            let return_type = match input.next().unwrap() {
+                (Token::Return, _) => ReturnType::Return,
+                (Token::Throw, _) => ReturnType::Exception,
                 _ => panic!("token should be return or throw"),
             };
 
@@ -1819,7 +1805,7 @@ fn parse_global_level<'a>(
         // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
-            if matches!(input.peek().expect("should not be None"), (Token::Fn, _)) {
+            if let (Token::Fn, _) = input.peek().unwrap() {
                 let f = parse_fn(input, true)?;
                 functions.insert(calc_fn_def(&f.name, f.params.len()), f);
                 continue;

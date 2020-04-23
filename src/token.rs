@@ -991,6 +991,8 @@ impl<'a> TokenIterator<'a> {
                 }
                 ('~', _) => return Some((Token::PowerOf, pos)),
 
+                ('\0', _) => panic!("should not be EOF"),
+
                 (ch, _) if ch.is_whitespace() => (),
                 (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(ch))), pos)),
             }

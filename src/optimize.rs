@@ -178,7 +178,7 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                 Box::new(optimize_expr(expr, state)),
                 Box::new(optimize_stmt(*if_block, state, true)),
                 match optimize_stmt(*else_block, state, true) {
-                    stmt if matches!(stmt, Stmt::Noop(_)) => None, // Noop -> no else block
+                    Stmt::Noop(_) => None, // Noop -> no else block
                     stmt => Some(Box::new(stmt)),
                 },
             ),
