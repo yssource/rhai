@@ -367,7 +367,7 @@ use rhai::packages::Package                     // load the 'Package' trait to u
 use rhai::packages::CorePackage;                // the 'core' package contains basic functionalities (e.g. arithmetic)
 
 let mut engine = Engine::new_raw();             // create a 'raw' Engine
-let package = CorePackage::new();               // create a package
+let package = CorePackage::new();               // create a package - can be shared among multiple `Engine` instances
 
 engine.load_package(package.get());             // load the package manually
 ```
@@ -377,10 +377,10 @@ The follow packages are available:
 | Package                  | Description                                     | In `CorePackage` | In `StandardPackage` |
 | ------------------------ | ----------------------------------------------- | :--------------: | :------------------: |
 | `BasicArithmeticPackage` | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
-| `BasicIteratorPackage`   | Numeric ranges                                  |       Yes        |         Yes          |
+| `BasicIteratorPackage`   | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
 | `LogicPackage`           | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
 | `BasicStringPackage`     | Basic string functions                          |       Yes        |         Yes          |
-| `BasicTimePackage`       | Basic time functions (e.g. `Instant`)           |       Yes        |         Yes          |
+| `BasicTimePackage`       | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
 | `MoreStringPackage`      | Additional string functions                     |        No        |         Yes          |
 | `BasicMathPackage`       | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
 | `BasicArrayPackage`      | Basic [array] functions                         |        No        |         Yes          |
@@ -456,7 +456,7 @@ type_of('c') == "char";
 type_of(42) == "i64";
 
 let x = 123;
-x.type_of();                    // <- error: 'type_of' cannot use method-call style
+x.type_of() == "i64";                           // method-call style is also OK
 type_of(x) == "i64";
 
 x = 99.999;
@@ -878,12 +878,12 @@ with a special "pretty-print" name, [`type_of()`] will return that name instead.
 engine.register_type::<TestStruct>();
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(type_of(x));                                 // prints "path::to::module::TestStruct"
+print(x.type_of());                                 // prints "path::to::module::TestStruct"
 
 engine.register_type_with_name::<TestStruct>("Hello");
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(type_of(x));                                 // prints "Hello"
+print(x.type_of());                                 // prints "Hello"
 ```
 
 Getters and setters
@@ -1571,7 +1571,7 @@ let json = r#"{
 // Set the second boolean parameter to true in order to map 'null' to '()'
 let map = engine.parse_json(json, true)?;
 
-map.len() == 6;                         // 'map' contains all properties int the JSON string
+map.len() == 6;                         // 'map' contains all properties in the JSON string
 
 // Put the object map into a 'Scope'
 let mut scope = Scope::new();
@@ -1584,7 +1584,10 @@ result == 3;                            // the object map is successfully used i
 
 `timestamp`'s
 -------------
-[`timestamp`]: #timestamp-s
+
+[`timestamp`]: #timestamps
+[timestamp]: #timestamps
+[timestamps]: #timestamps
 
 Timestamps are provided by the [`BasicTimePackage`](#packages) (excluded if using a [raw `Engine`]) via the `timestamp`
 function.
@@ -2246,7 +2249,7 @@ eval("{ let z = y }");      // to keep a variable local, use a statement block
 
 print("z = " + z);          // <- error: variable 'z' not found
 
-"print(42)".eval();         // <- nope... just like 'type_of', method-call style doesn't work
+"print(42)".eval();         // <- nope... method-call style doesn't work
 ```
 
 Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,

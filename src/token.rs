@@ -361,9 +361,11 @@ impl Token {
         use Token::*;
 
         match self {
-            // Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
-            // | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
-            // | PowerOfAssign => 10,
+            // Assignments are not considered expressions - set to zero
+            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
+            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
+            | PowerOfAssign => 0,
+
             Or | XOr | Pipe => 40,
 
             And | Ampersand => 50,
