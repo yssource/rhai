@@ -4,6 +4,8 @@ use crate::def_package;
 use crate::fn_register::map_dynamic as map;
 use crate::parser::INT;
 
+use crate::stdlib::string::String;
+
 // Comparison operators
 pub fn lt<T: PartialOrd>(x: T, y: T) -> bool {
     x < y

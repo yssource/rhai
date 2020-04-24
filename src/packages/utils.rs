@@ -6,7 +6,11 @@ use crate::engine::FnCallArgs;
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
-use crate::stdlib::{any::TypeId, boxed::Box};
+use crate::stdlib::{
+    any::TypeId,
+    boxed::Box,
+    string::{String, ToString},
+};
 
 /// This macro makes it easy to define a _package_ and register functions into it.
 ///

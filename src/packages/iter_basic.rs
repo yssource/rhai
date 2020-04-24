@@ -8,6 +8,7 @@ use crate::parser::INT;
 
 use crate::stdlib::{
     any::TypeId,
+    boxed::Box,
     ops::{Add, Range},
 };
 

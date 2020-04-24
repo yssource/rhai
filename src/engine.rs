@@ -13,7 +13,7 @@ use crate::token::Position;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::HashMap,
     format,
     hash::{Hash, Hasher},
     iter::once,
@@ -23,6 +23,12 @@ use crate::stdlib::{
     sync::Arc,
     vec::Vec,
 };
+
+#[cfg(not(feature = "no_std"))]
+use crate::stdlib::collections::hash_map::DefaultHasher;
+
+#[cfg(feature = "no_std")]
+use ahash::AHasher;
 
 /// An dynamic array of `Dynamic` values.
 ///
@@ -347,17 +353,25 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
 /// Parameter types are passed in via `TypeId` values from an iterator
 /// which can come from any source.
 pub fn calc_fn_spec(fn_name: &str, params: impl Iterator<Item = TypeId>) -> u64 {
+    #[cfg(feature = "no_std")]
+    let mut s: AHasher = Default::default();
+    #[cfg(not(feature = "no_std"))]
     let mut s = DefaultHasher::new();
-    fn_name.hash(&mut s);
+
+    s.write(fn_name.as_bytes());
     params.for_each(|t| t.hash(&mut s));
     s.finish()
 }
 
 /// Calculate a `u64` hash key from a function name and number of parameters (without regard to types).
 pub(crate) fn calc_fn_def(fn_name: &str, params: usize) -> u64 {
+    #[cfg(feature = "no_std")]
+    let mut s: AHasher = Default::default();
+    #[cfg(not(feature = "no_std"))]
     let mut s = DefaultHasher::new();
-    fn_name.hash(&mut s);
-    params.hash(&mut s);
+
+    s.write(fn_name.as_bytes());
+    s.write_usize(params);
     s.finish()
 }
 
@@ -529,67 +543,7 @@ impl Engine {
 
         // First search in script-defined functions (can override built-in)
         if let Some(fn_def) = fn_lib.and_then(|lib| lib.get_function(fn_name, args.len())) {
-            match scope {
-                // Extern scope passed in which is not empty
-                Some(scope) if scope.len() > 0 => {
-                    let scope_len = scope.len();
-
-                    scope.extend(
-                        // Put arguments into scope as variables - variable name is copied
-                        // TODO - avoid copying variable name
-                        fn_def
-                            .params
-                            .iter()
-                            .zip(args.into_iter().map(|v| v.clone()))
-                            .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
-                    );
-
-                    // Evaluate the function at one higher level of call depth
-                    let result = self
-                        .eval_stmt(scope, fn_lib, &fn_def.body, level + 1)
-                        .or_else(|err| match *err {
-                            // Convert return statement to return value
-                            EvalAltResult::Return(x, _) => Ok(x),
-                            err => Err(Box::new(err.set_position(pos))),
-                        });
-
-                    scope.rewind(scope_len);
-
-                    return result;
-                }
-                // No new scope - create internal scope
-                _ => {
-                    let mut scope = Scope::new();
-
-                    scope.extend(
-                        // Put arguments into scope as variables
-                        fn_def
-                            .params
-                            .iter()
-                            .zip(args.into_iter().map(|v| v.clone()))
-                            .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
-                    );
-
-                    // Evaluate the function at one higher level of call depth
-                    return self
-                        .eval_stmt(&mut scope, fn_lib, &fn_def.body, level + 1)
-                        .or_else(|err| match *err {
-                            // Convert return statement to return value
-                            EvalAltResult::Return(x, _) => Ok(x),
-                            err => Err(Box::new(err.set_position(pos))),
-                        });
-                }
-            }
-        }
-
-        // Argument must be a string
-        fn cast_to_string(r: &Dynamic, pos: Position) -> Result<&str, Box<EvalAltResult>> {
-            r.as_str().map_err(|type_name| {
-                Box::new(EvalAltResult::ErrorMismatchOutputType(
-                    type_name.into(),
-                    pos,
-                ))
-            })
+            return self.call_fn_from_lib(scope, fn_lib, fn_def, args, pos, level);
         }
 
         // Search built-in's and external functions
@@ -607,10 +561,22 @@ impl Engine {
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
                 KEYWORD_PRINT if self.on_print.is_some() => {
-                    self.on_print.as_ref().unwrap()(cast_to_string(&result, pos)?).into()
+                    self.on_print.as_ref().unwrap()(result.as_str().map_err(|type_name| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            type_name.into(),
+                            pos,
+                        ))
+                    })?)
+                    .into()
                 }
                 KEYWORD_DEBUG if self.on_debug.is_some() => {
-                    self.on_debug.as_ref().unwrap()(cast_to_string(&result, pos)?).into()
+                    self.on_debug.as_ref().unwrap()(result.as_str().map_err(|type_name| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            type_name.into(),
+                            pos,
+                        ))
+                    })?)
+                    .into()
                 }
                 KEYWORD_PRINT | KEYWORD_DEBUG => ().into(),
                 _ => result,
@@ -649,6 +615,69 @@ impl Engine {
             format!("{} ({})", fn_name, types_list.join(", ")),
             pos,
         )))
+    }
+
+    /// Call a script-defined function.
+    pub(crate) fn call_fn_from_lib(
+        &self,
+        scope: Option<&mut Scope>,
+        fn_lib: Option<&FunctionsLib>,
+        fn_def: &FnDef,
+        args: &mut FnCallArgs,
+        pos: Position,
+        level: usize,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        match scope {
+            // Extern scope passed in which is not empty
+            Some(scope) if scope.len() > 0 => {
+                let scope_len = scope.len();
+
+                scope.extend(
+                    // Put arguments into scope as variables - variable name is copied
+                    // TODO - avoid copying variable name
+                    fn_def
+                        .params
+                        .iter()
+                        .zip(args.into_iter().map(|v| v.clone()))
+                        .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
+                );
+
+                // Evaluate the function at one higher level of call depth
+                let result = self
+                    .eval_stmt(scope, fn_lib, &fn_def.body, level + 1)
+                    .or_else(|err| match *err {
+                        // Convert return statement to return value
+                        EvalAltResult::Return(x, _) => Ok(x),
+                        _ => Err(EvalAltResult::set_position(err, pos)),
+                    });
+
+                scope.rewind(scope_len);
+
+                return result;
+            }
+            // No new scope - create internal scope
+            _ => {
+                let mut scope = Scope::new();
+
+                scope.extend(
+                    // Put arguments into scope as variables
+                    fn_def
+                        .params
+                        .iter()
+                        .zip(args.into_iter().map(|v| v.clone()))
+                        .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
+                );
+
+                // Evaluate the function at one higher level of call depth
+                return self
+                    .eval_stmt(&mut scope, fn_lib, &fn_def.body, level + 1)
+                    .or_else(|err| match *err {
+                        // Convert return statement to return value
+                        EvalAltResult::Return(x, _) => Ok(x),
+                        _ => Err(EvalAltResult::set_position(err, pos)),
+                    });
+            }
+        }
     }
 
     // Has a system function an override?
@@ -710,6 +739,49 @@ impl Engine {
                 self.call_fn_raw(None, fn_lib, fn_name, args, def_val, pos, level)
             }
         }
+    }
+
+    /// Evaluate a text string as a script - used primarily for 'eval'.
+    fn eval_script_expr(
+        &self,
+        scope: &mut Scope,
+        fn_lib: Option<&FunctionsLib>,
+        script: &Dynamic,
+        pos: Position,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let script = script
+            .as_str()
+            .map_err(|type_name| EvalAltResult::ErrorMismatchOutputType(type_name.into(), pos))?;
+
+        // Compile the script text
+        // No optimizations because we only run it once
+        let mut ast = self.compile_with_scope_and_optimization_level(
+            &Scope::new(),
+            script,
+            OptimizationLevel::None,
+        )?;
+
+        // If new functions are defined within the eval string, it is an error
+        if ast.1.len() > 0 {
+            return Err(Box::new(EvalAltResult::ErrorParsing(
+                ParseErrorType::WrongFnDefinition.into_err(pos),
+            )));
+        }
+
+        if let Some(lib) = fn_lib {
+            #[cfg(feature = "sync")]
+            {
+                ast.1 = Arc::new(lib.clone());
+            }
+            #[cfg(not(feature = "sync"))]
+            {
+                ast.1 = Rc::new(lib.clone());
+            }
+        }
+
+        // Evaluate the AST
+        self.eval_ast_with_scope_raw(scope, &ast)
+            .map_err(|err| EvalAltResult::set_position(err, pos))
     }
 
     /// Chain-evaluate a dot setter.
@@ -1392,44 +1464,8 @@ impl Engine {
                     && args.len() == 1
                     && !self.has_override(fn_lib, KEYWORD_EVAL)
                 {
-                    // Get the script text by evaluating the expression
-                    let script = args[0].as_str().map_err(|type_name| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            type_name.into(),
-                            arg_exprs[0].position(),
-                        )
-                    })?;
-
-                    // Compile the script text
-                    // No optimizations because we only run it once
-                    let mut ast = self.compile_with_scope_and_optimization_level(
-                        &Scope::new(),
-                        script,
-                        OptimizationLevel::None,
-                    )?;
-
-                    // If new functions are defined within the eval string, it is an error
-                    if ast.1.len() > 0 {
-                        return Err(Box::new(EvalAltResult::ErrorParsing(
-                            ParseErrorType::WrongFnDefinition.into_err(*pos),
-                        )));
-                    }
-
-                    if let Some(lib) = fn_lib {
-                        #[cfg(feature = "sync")]
-                        {
-                            ast.1 = Arc::new(lib.clone());
-                        }
-                        #[cfg(not(feature = "sync"))]
-                        {
-                            ast.1 = Rc::new(lib.clone());
-                        }
-                    }
-
-                    // Evaluate the AST
-                    return self
-                        .eval_ast_with_scope_raw(scope, &ast)
-                        .map_err(|err| Box::new(err.set_position(*pos)));
+                    // Evaluate the text string as a script
+                    return self.eval_script_expr(scope, fn_lib, args[0], arg_exprs[0].position());
                 }
 
                 // Normal function call

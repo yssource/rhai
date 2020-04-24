@@ -6,6 +6,7 @@ use crate::parser::INT;
 use crate::token::Position;
 
 use crate::stdlib::{
+    boxed::Box,
     error::Error,
     fmt,
     string::{String, ToString},
@@ -283,8 +284,8 @@ impl EvalAltResult {
 
     /// Consume the current `EvalAltResult` and return a new one
     /// with the specified `Position`.
-    pub(crate) fn set_position(mut self, new_position: Position) -> Self {
-        match &mut self {
+    pub(crate) fn set_position(mut err: Box<Self>, new_position: Position) -> Box<Self> {
+        match err.as_mut() {
             #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, _) => (),
 
@@ -314,6 +315,6 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos = new_position,
         }
 
-        self
+        err
     }
 }

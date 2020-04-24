@@ -8,6 +8,7 @@ use crate::parser::INT;
 use crate::stdlib::{
     fmt::{Debug, Display},
     format,
+    string::{String, ToString},
 };
 
 // Register print and debug

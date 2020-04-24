@@ -5,7 +5,12 @@ use crate::engine::Array;
 use crate::fn_register::map_dynamic as map;
 use crate::parser::INT;
 
-use crate::stdlib::fmt::Display;
+use crate::stdlib::{
+    fmt::Display,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 fn prepend<T: Display>(x: T, y: String) -> String {
     format!("{}{}", x, y)

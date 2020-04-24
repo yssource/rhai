@@ -6,7 +6,7 @@ use crate::engine::Array;
 use crate::fn_register::{map_dynamic as map, map_identity as pass};
 use crate::parser::INT;
 
-use crate::stdlib::any::TypeId;
+use crate::stdlib::{any::TypeId, boxed::Box, string::String};
 
 // Register array utility functions
 fn push<T: Variant + Clone>(list: &mut Array, item: T) {

@@ -6,6 +6,11 @@ use crate::engine::Map;
 use crate::fn_register::map_dynamic as map;
 use crate::parser::INT;
 
+use crate::stdlib::{
+    string::{String, ToString},
+    vec::Vec,
+};
+
 fn map_get_keys(map: &mut Map) -> Vec<Dynamic> {
     map.iter()
         .map(|(k, _)| k.to_string().into())

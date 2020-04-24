@@ -187,7 +187,7 @@ pub fn map_result<T: Variant + Clone>(
     pos: Position,
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     data.map(|v| v.into_dynamic())
-        .map_err(|err| Box::new(err.set_position(pos)))
+        .map_err(|err| EvalAltResult::set_position(err, pos))
 }
 
 macro_rules! def_register {

@@ -923,10 +923,15 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
         let mut args: Vec<_> = arg_values.iter_mut().collect();
-        let fn_lib = Some(ast.1.as_ref());
+        let fn_lib = ast.1.as_ref();
         let pos = Position::none();
 
-        let result = self.call_fn_raw(Some(scope), fn_lib, name, &mut args, None, pos, 0)?;
+        let fn_def = fn_lib
+            .get_function(name, args.len())
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))?;
+
+        let result =
+            self.call_fn_from_lib(Some(scope), Some(&fn_lib), fn_def, &mut args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 

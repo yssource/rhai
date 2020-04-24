@@ -12,6 +12,7 @@ use crate::stdlib::{
     collections::HashMap,
     fmt,
     string::String,
+    vec::Vec,
 };
 
 #[cfg(not(feature = "no_std"))]

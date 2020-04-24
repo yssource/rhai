@@ -9,7 +9,7 @@ use crate::token::Position;
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
-use crate::stdlib::{i32, i64};
+use crate::stdlib::{boxed::Box, format, i32, i64};
 
 #[cfg(feature = "only_i32")]
 pub const MAX_INT: INT = i32::MAX;

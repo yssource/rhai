@@ -15,6 +15,7 @@ use num_traits::{
 };
 
 use crate::stdlib::{
+    boxed::Box,
     fmt::Display,
     format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub},
