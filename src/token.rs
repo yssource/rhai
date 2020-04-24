@@ -13,7 +13,6 @@ use crate::stdlib::{
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
-    u16,
     vec::Vec,
 };
 

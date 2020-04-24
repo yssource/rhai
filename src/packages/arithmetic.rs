@@ -19,7 +19,6 @@ use crate::stdlib::{
     fmt::Display,
     format,
     ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub},
-    {i32, i64, u32},
 };
 
 // Checked add
