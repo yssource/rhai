@@ -44,19 +44,19 @@ impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
 
 #[cfg(feature = "sync")]
 pub trait IteratorCallback:
-    Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
+    Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
 {
 }
 #[cfg(feature = "sync")]
-impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
+impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
     for F
 {
 }
 
 #[cfg(not(feature = "sync"))]
-pub trait IteratorCallback: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
+pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
 #[cfg(not(feature = "sync"))]
-impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
+impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
 
 /// Engine public API
 impl Engine {
