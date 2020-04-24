@@ -34,7 +34,7 @@ fn bench_engine_register_fn(bench: &mut Bencher) {
     }
 
     bench.iter(|| {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new_raw();
         engine.register_fn("hello", hello);
     });
 }

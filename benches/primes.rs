@@ -9,8 +9,6 @@ use test::Bencher;
 // This script uses the Sieve of Eratosthenes to calculate prime numbers.
 
 const SCRIPT: &str = r#"
-let now = timestamp();
-
 const MAX_NUMBER_TO_CHECK = 1_000;     // 168 primes <= 1000
 
 let prime_mask = [];
