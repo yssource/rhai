@@ -78,7 +78,7 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
         lib,
         "shift",
         |list: &mut Array| {
-            if !list.is_empty() {
+            if list.is_empty() {
                 ().into()
             } else {
                 list.remove(0)
@@ -106,6 +106,8 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
         |list: &mut Array, len: INT| {
             if len >= 0 {
                 list.truncate(len as usize);
+            } else {
+                list.clear();
             }
         },
         map,
