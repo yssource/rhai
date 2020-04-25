@@ -89,6 +89,8 @@ pub use engine::{calc_fn_spec as calc_fn_hash, Engine};
 pub use error::{ParseError, ParseErrorType};
 pub use fn_call::FuncArgs;
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
+#[cfg(feature = "plugins")]
+pub use fn_register::{Plugin, RegisterPlugin};
 pub use parser::{AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
