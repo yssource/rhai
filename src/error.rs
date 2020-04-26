@@ -100,8 +100,6 @@ pub enum ParseErrorType {
     FnMissingBody(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     AssignmentToInvalidLHS,
-    /// Assignment to a copy of a value.
-    AssignmentToCopy,
     /// Assignment to an a constant variable.
     AssignmentToConstant(String),
     /// Break statement not inside a loop.
@@ -150,7 +148,6 @@ impl ParseError {
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
-            ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
             ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable.",
             ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
         }

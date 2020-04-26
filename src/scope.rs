@@ -4,7 +4,7 @@ use crate::any::{Dynamic, Variant};
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
-use crate::stdlib::{borrow::Cow, iter, vec::Vec};
+use crate::stdlib::{borrow::Cow, cell::RefCell, iter, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -23,7 +23,7 @@ pub struct Entry<'a> {
     /// Type of the entry.
     pub typ: EntryType,
     /// Current value of the entry.
-    pub value: Dynamic,
+    pub value: RefCell<Dynamic>,
     /// A constant expression if the initial value matches one of the recognized types.
     pub expr: Option<Expr>,
 }
@@ -226,15 +226,17 @@ impl<'a> Scope<'a> {
         value: Dynamic,
         map_expr: bool,
     ) {
+        let expr = if map_expr {
+            map_dynamic_to_expr(value.clone(), Position::none())
+        } else {
+            None
+        };
+
         self.0.push(Entry {
             name: name.into(),
             typ: entry_type,
-            value: value.clone(),
-            expr: if map_expr {
-                map_dynamic_to_expr(value, Position::none())
-            } else {
-                None
-            },
+            value: value.into(),
+            expr,
         });
     }
 
@@ -311,7 +313,7 @@ impl<'a> Scope<'a> {
                                 index,
                                 typ: *typ,
                             },
-                            value.clone(),
+                            value.borrow().clone(),
                         ))
                     } else {
                         None
@@ -337,7 +339,7 @@ impl<'a> Scope<'a> {
             .iter()
             .rev()
             .find(|Entry { name: key, .. }| name == key)
-            .and_then(|Entry { value, .. }| value.downcast_ref::<T>().cloned())
+            .and_then(|Entry { value, .. }| value.borrow().downcast_ref::<T>().cloned())
     }
 
     /// Update the value of the named entry.
@@ -377,14 +379,14 @@ impl<'a> Scope<'a> {
                     ..
                 },
                 _,
-            )) => self.0.get_mut(index).unwrap().value = Dynamic::from(value),
+            )) => *self.0.get_mut(index).unwrap().value.borrow_mut() = Dynamic::from(value),
             None => self.push(name, value),
         }
     }
 
     /// Get a mutable reference to an entry in the Scope.
-    pub(crate) fn get_mut(&mut self, key: EntryRef) -> &mut Dynamic {
-        let entry = self.0.get_mut(key.index).expect("invalid index in Scope");
+    pub(crate) fn get_ref(&self, key: EntryRef) -> &RefCell<Dynamic> {
+        let entry = self.0.get(key.index).expect("invalid index in Scope");
         assert_eq!(entry.typ, key.typ, "entry type not matched");
 
         // assert_ne!(
@@ -394,7 +396,7 @@ impl<'a> Scope<'a> {
         // );
         assert_eq!(entry.name, key.name, "incorrect key at Scope entry");
 
-        &mut entry.value
+        &entry.value
     }
 
     /// Get an iterator to entries in the Scope.
@@ -418,7 +420,7 @@ where
             .extend(iter.into_iter().map(|(name, typ, value)| Entry {
                 name: name.into(),
                 typ,
-                value,
+                value: value.into(),
                 expr: None,
             }));
     }
