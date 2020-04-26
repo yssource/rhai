@@ -703,6 +703,8 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
+    /// Index values are pre-calculated and stored in `idx_list`.
+    /// Any spill-overs are stored in `idx_more`.
     fn eval_dot_index_chain_helper(
         &self,
         fn_lib: Option<&FunctionsLib>,
@@ -730,18 +732,18 @@ impl Engine {
 
         // Pop the last index value
         let mut idx_val;
-        let mut idx_fixed = idx_list;
+        let mut idx_list = idx_list;
 
         if let Some(val) = idx_more.pop() {
             // Values in variable list
             idx_val = val;
         } else {
             // No more value in variable list, pop from fixed list
-            let len = idx_fixed.len();
-            let splits = idx_fixed.split_at_mut(len - 1);
+            let len = idx_list.len();
+            let splits = idx_list.split_at_mut(len - 1);
 
             idx_val = mem::replace(splits.1.get_mut(0).unwrap(), ().into());
-            idx_fixed = splits.0;
+            idx_list = splits.0;
         }
 
         if is_index {
@@ -754,7 +756,7 @@ impl Engine {
 
                     let indexed_val = self.get_indexed_mut(obj, idx_val, idx.position(), op_pos, false)?;
                     self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val, idx_rhs.as_ref(), idx_fixed, idx_more, is_index, *pos, level, new_val
+                        fn_lib, indexed_val, idx_rhs.as_ref(), idx_list, idx_more, is_index, *pos, level, new_val
                     )
                 }
                 // xxx[rhs] = new_val
@@ -780,16 +782,18 @@ impl Engine {
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
                     self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
                 }
+                // {xxx:map}.id = ???
+                Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
+                    let mut indexed_val = 
+                        self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, true)?;
+                    indexed_val.set_value(new_val.unwrap(), rhs.position())?;
+                    Ok((().into(), true))
+                }
                 // {xxx:map}.id
                 Expr::Property(id, pos) if obj.is::<Map>() => {
-                    let mut indexed_val = 
-                        self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, new_val.is_some())?;
-                    if let Some(new_val) = new_val {
-                        indexed_val.set_value(new_val, rhs.position())?;
-                        Ok((().into(), true))
-                    } else {
-                        Ok((indexed_val.into_dynamic(), false))
-                    }
+                    let indexed_val = 
+                        self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, false)?;
+                    Ok((indexed_val.into_dynamic(), false))
                 }
                 // xxx.id = ???
                 Expr::Property(id, pos) if new_val.is_some() => {
@@ -819,7 +823,7 @@ impl Engine {
                         )));
                     };
                     self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val, dot_rhs, idx_fixed, idx_more, is_index, *pos, level, new_val
+                        fn_lib, indexed_val, dot_rhs, idx_list, idx_more, is_index, *pos, level, new_val
                     )
                 }
                 // xxx.idx_lhs[idx_expr]
@@ -830,7 +834,7 @@ impl Engine {
                     let mut buf: Dynamic = ().into();
                     let mut args = [obj, &mut buf];
 
-                    let mut indexed_val = if let Expr::Property(id, pos) = dot_lhs.as_ref() {
+                    let indexed_val = &mut (if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                         let fn_name = make_getter(id);
                         self.exec_fn_call(fn_lib, &fn_name, &mut args[..1], None, *pos, 0)?
                     } else {
@@ -839,16 +843,16 @@ impl Engine {
                             "".to_string(),
                             rhs.position(),
                         )));
-                    };
+                    });
                     let (result, changed) = self.eval_dot_index_chain_helper(
-                        fn_lib, (&mut indexed_val).into(), dot_rhs, idx_fixed, idx_more, is_index, *pos, level, new_val
+                        fn_lib, indexed_val.into(), dot_rhs, idx_list, idx_more, is_index, *pos, level, new_val
                     )?;
 
                     // Feed the value back via a setter just in case it has been updated
                     if changed {
                         if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                             let fn_name = make_setter(id);
-                            args[1] = &mut indexed_val;
+                            args[1] = indexed_val;
                             self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0)?;
                         }
                     }
@@ -864,7 +868,7 @@ impl Engine {
         }
     }
 
-    /// Evaluate a dot/index chain
+    /// Evaluate a dot/index chain.
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
@@ -945,6 +949,11 @@ impl Engine {
         }
     }
 
+    /// Evaluate a chain of indexes and store the results in a list.
+    /// The first few results are stored in the array `list` which is of fixed length.
+    /// Any spill-overs are stored in `more`, which is dynamic.
+    /// The fixed length array is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
+    /// The total number of values is returned.
     fn eval_indexed_chain(
         &self,
         scope: &mut Scope,
@@ -955,7 +964,7 @@ impl Engine {
         size: usize,
         level: usize,
     ) -> Result<usize, Box<EvalAltResult>> {
-        let size = match expr {
+        match expr {
             Expr::FunctionCall(_, arg_exprs, _, _) => {
                 let arg_values = arg_exprs
                     .iter()
@@ -967,21 +976,21 @@ impl Engine {
                 } else {
                     more.push(arg_values.into());
                 }
-                size + 1
+                Ok(size + 1)
             }
             Expr::Property(_, _) => {
-                // Placeholder
+                // Store a placeholder - no need to copy the property name
                 if size < list.len() {
                     list[size] = ().into();
                 } else {
                     more.push(().into());
                 }
-                size + 1
+                Ok(size + 1)
             }
             Expr::Index(lhs, rhs, _) | Expr::Dot(lhs, rhs, _) => {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs.as_ref() {
-                    Expr::Property(_, _) => ().into(), // Placeholder
+                    Expr::Property(_, _) => ().into(), // Store a placeholder in case of a property
                     _ => self.eval_expr(scope, fn_lib, lhs, level)?,
                 };
 
@@ -993,7 +1002,7 @@ impl Engine {
                 } else {
                     more.push(lhs_val);
                 }
-                size + 1
+                Ok(size + 1)
             }
             _ => {
                 let val = self.eval_expr(scope, fn_lib, expr, level)?;
@@ -1002,10 +1011,9 @@ impl Engine {
                 } else {
                     more.push(val);
                 }
-                size + 1
+                Ok(size + 1)
             }
-        };
-        Ok(size)
+        }
     }
 
     /// Get the value at the indexed position of a base type
