@@ -49,9 +49,9 @@ pub type FnAny =
 pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>>;
 
 #[cfg(feature = "sync")]
-pub type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
+pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
 #[cfg(not(feature = "sync"))]
-pub type IteratorFn = dyn Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
+pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 #[cfg(debug_assertions)]
 pub const MAX_CALL_STACK_DEPTH: usize = 28;
@@ -1608,8 +1608,7 @@ impl Engine {
                         .find(|pkg| pkg.type_iterators.contains_key(&tid))
                         .and_then(|pkg| pkg.type_iterators.get(&tid))
                 }) {
-                    // Add the loop variable - variable name is copied
-                    // TODO - avoid copying variable name
+                    // Add the loop variable
                     scope.push(name.clone(), ());
 
                     let entry = ScopeSource {
@@ -1618,7 +1617,7 @@ impl Engine {
                         typ: ScopeEntryType::Normal,
                     };
 
-                    for a in iter_fn(&arr) {
+                    for a in iter_fn(arr) {
                         *scope.get_mut(entry) = a;
 
                         match self.eval_stmt(scope, fn_lib, body, level) {
