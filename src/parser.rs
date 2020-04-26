@@ -505,6 +505,7 @@ impl Expr {
         }
     }
 
+    /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(id, pos) => Self::Property(id, pos),
@@ -626,9 +627,10 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
     }
 }
 
-/// Parse an indexing expression.
-fn parse_index_expr<'a>(
-    lhs: Box<Expr>,
+/// Parse an indexing chain.
+/// Indexing binds to the right, so this call parses all possible levels of indexing following in the input.
+fn parse_index_chain<'a>(
+    lhs: Expr,
     input: &mut Peekable<TokenIterator<'a>>,
     pos: Position,
     allow_stmt_expr: bool,
@@ -645,7 +647,7 @@ fn parse_index_expr<'a>(
             ))
             .into_err(*pos))
         }
-        Expr::IntegerConstant(_, pos) => match *lhs {
+        Expr::IntegerConstant(_, pos) => match lhs {
             Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
 
             Expr::Map(_, _) => {
@@ -674,7 +676,7 @@ fn parse_index_expr<'a>(
         },
 
         // lhs[string]
-        Expr::StringConstant(_, pos) => match *lhs {
+        Expr::StringConstant(_, pos) => match lhs {
             Expr::Map(_, _) => (),
 
             Expr::Array(_, _) | Expr::StringConstant(_, _) => {
@@ -742,15 +744,18 @@ fn parse_index_expr<'a>(
         (Token::RightBracket, _) => {
             eat_token(input, Token::RightBracket);
 
-            let idx_expr = Box::new(idx_expr);
-
+            // Any more indexing following?
             match input.peek().unwrap() {
+                // If another indexing level, right-bind it
                 (Token::LeftBracket, _) => {
                     let follow_pos = eat_token(input, Token::LeftBracket);
-                    let follow = parse_index_expr(idx_expr, input, follow_pos, allow_stmt_expr)?;
-                    Ok(Expr::Index(lhs, Box::new(follow), pos))
+                    // Recursively parse the indexing chain, right-binding each
+                    let follow = parse_index_chain(idx_expr, input, follow_pos, allow_stmt_expr)?;
+                    // Indexing binds to right
+                    Ok(Expr::Index(Box::new(lhs), Box::new(follow), pos))
                 }
-                _ => Ok(Expr::Index(lhs, idx_expr, pos)),
+                // Otherwise terminate the indexing chain
+                _ => Ok(Expr::Index(Box::new(lhs), Box::new(idx_expr), pos)),
             }
         }
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
@@ -943,9 +948,7 @@ fn parse_primary<'a>(
                 parse_call_expr(id, input, pos, allow_stmt_expr)?
             }
             // Indexing
-            (expr, Token::LeftBracket) => {
-                parse_index_expr(Box::new(expr), input, pos, allow_stmt_expr)?
-            }
+            (expr, Token::LeftBracket) => parse_index_chain(expr, input, pos, allow_stmt_expr)?,
             // Unknown postfix operator
             (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
         }
@@ -1068,6 +1071,7 @@ fn parse_op_assignment_stmt<'a>(
 fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position, is_index: bool) -> Expr {
     match (lhs, rhs) {
         // idx_lhs[idx_rhs].rhs
+        // Attach dot chain to the bottom level of indexing chain
         (Expr::Index(idx_lhs, idx_rhs, idx_pos), rhs) => Expr::Index(
             idx_lhs,
             Box::new(make_dot_expr(*idx_rhs, rhs, op_pos, true)),

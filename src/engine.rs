@@ -83,7 +83,7 @@ enum Target<'a> {
     /// The target is a variable stored in the current `Scope`.
     Scope(&'a RefCell<Dynamic>),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
-    Value(Dynamic),
+    Value(Box<Dynamic>),
     /// The target is a character inside a String.
     StringChar(Box<(&'a mut Dynamic, usize, Dynamic)>),
 }
@@ -94,7 +94,7 @@ impl Target<'_> {
         match self {
             Target::Ref(r) => r.clone(),
             Target::Scope(r) => r.borrow().clone(),
-            Target::Value(v) => v,
+            Target::Value(v) => *v,
             Target::StringChar(s) => s.2,
         }
     }
@@ -144,7 +144,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
 }
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     fn from(value: T) -> Self {
-        Self::Value(value.into())
+        Self::Value(Box::new(value.into()))
     }
 }
 
@@ -724,7 +724,7 @@ impl Engine {
         let obj = match target {
             Target::Scope(_) => scope_base.as_mut().unwrap().deref_mut(),
             Target::Ref(r) => r,
-            Target::Value(ref mut r) => r,
+            Target::Value(ref mut r) => r.as_mut(),
             Target::StringChar(ref mut x) => &mut x.2,
         };
 
@@ -777,6 +777,7 @@ impl Engine {
                         .collect::<Vec<_>>();
                     let def_val = def_val.as_ref();
                     // A function call is assumed to have side effects, so the value is changed
+                    // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
                     self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
                 }
                 // {xxx:map}.id
