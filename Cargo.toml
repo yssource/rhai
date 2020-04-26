@@ -22,6 +22,7 @@ num-traits = { version = "0.2.11", default-features = false }
 [features]
 #default = ["no_stdlib", "no_function", "no_index", "no_object", "no_float", "only_i32", "unchecked", "no_optimize", "sync"]
 default = []
+plugins = []
 unchecked = []      # unchecked arithmetic
 no_index = []       # no arrays and indexing
 no_float = []       # no floating-point

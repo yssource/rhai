@@ -9,6 +9,49 @@ use crate::token::Position;
 
 use crate::stdlib::{any::TypeId, boxed::Box, string::ToString};
 
+/// A trait to register custom plugins with the `Engine`.
+///
+/// A plugin consists of a number of functions. All functions will be registered with the engine.
+#[cfg(feature = "plugins")]
+pub trait RegisterPlugin<PL: Plugin> {
+    /// Register a custom function with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Dynamic, Engine, INT, Plugin, RegisterDynamicFn, RegisterPlugin};
+    ///
+    /// // A simple custom plugin type. This should not usually be done with hand-written code.
+    /// struct AddOffsetPlugin(INT);
+    /// impl AddOffsetPlugin {
+    ///     fn add_offset(&self, x: INT) -> Dynamic {
+    ///         Dynamic::from(x + self.0)
+    ///     }
+    /// }
+    /// impl Plugin for AddOffsetPlugin {
+    ///     fn name(&self) -> &str {
+    ///         "My Plugin"
+    ///     }
+    ///     fn register_contents(self, engine: &mut Engine) {
+    ///         let add_offset_fn: Box<dyn Fn(INT) -> Dynamic> = {
+    ///             Box::new(move |x| self.add_offset(x))
+    ///         };
+    ///         engine.register_dynamic_fn("add_offset", add_offset_fn);
+    ///     }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.register_plugin(AddOffsetPlugin(50));
+    ///
+    /// assert_eq!(engine.eval::<i64>("add_offset(42)")?, 92);
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn register_plugin(&mut self, plugin: PL);
+}
+
 /// A trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {
     /// Register a custom function with the `Engine`.
@@ -98,6 +141,15 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
     fn register_result_fn(&mut self, name: &str, f: FN);
 }
 
+/// Represents an externally-written plugin for the Rhai interpreter.
+///
+/// This should not be used directly. Use the `plugin_module!` macro instead.
+#[cfg(feature = "plugins")]
+pub trait Plugin {
+    fn register_contents(self, engine: &mut Engine);
+    fn name(&self) -> &str;
+}
+
 // These types are used to build a unique _marker_ tuple type for each combination
 // of function parameter types in order to make each trait implementation unique.
 // That is because stable Rust currently does not allow distinguishing implementations
@@ -125,6 +177,13 @@ pub fn identity<T>(data: &mut T) -> &mut T {
 #[inline]
 pub fn cloned<T: Clone>(data: &mut T) -> T {
     data.clone()
+}
+
+#[cfg(feature = "plugins")]
+impl<PL: Plugin> RegisterPlugin<PL> for Engine {
+    fn register_plugin(&mut self, plugin: PL) {
+        plugin.register_contents(self)
+    }
 }
 
 /// This macro counts the number of arguments via recursion.
