@@ -295,21 +295,21 @@ pub struct Engine {
     /// A hashmap containing all iterators known to the engine.
     pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
     /// A hashmap mapping type names to pretty-print names.
-    pub(crate) type_names: Option<HashMap<String, String>>,
+    pub(crate) type_names: HashMap<String, String>,
 
     /// Closure for implementing the `print` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_print: Option<Box<dyn Fn(&str) + Send + Sync + 'static>>,
+    pub(crate) print: Box<dyn Fn(&str) + Send + Sync + 'static>,
     /// Closure for implementing the `print` command.
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_print: Option<Box<dyn Fn(&str) + 'static>>,
+    pub(crate) print: Box<dyn Fn(&str) + 'static>,
 
     /// Closure for implementing the `debug` command.
     #[cfg(feature = "sync")]
-    pub(crate) on_debug: Option<Box<dyn Fn(&str) + Send + Sync + 'static>>,
+    pub(crate) debug: Box<dyn Fn(&str) + Send + Sync + 'static>,
     /// Closure for implementing the `debug` command.
     #[cfg(not(feature = "sync"))]
-    pub(crate) on_debug: Option<Box<dyn Fn(&str) + 'static>>,
+    pub(crate) debug: Box<dyn Fn(&str) + 'static>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -327,11 +327,11 @@ impl Default for Engine {
             packages: Vec::new(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT),
             type_iterators: HashMap::new(),
-            type_names: None,
+            type_names: HashMap::new(),
 
             // default print/debug implementations
-            on_print: Some(Box::new(default_print)),
-            on_debug: Some(Box::new(default_print)),
+            print: Box::new(default_print),
+            debug: Box::new(default_print),
 
             // optimization level
             #[cfg(feature = "no_optimize")]
@@ -459,9 +459,9 @@ impl Engine {
             packages: Vec::new(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
             type_iterators: HashMap::new(),
-            type_names: None,
-            on_print: None,
-            on_debug: None,
+            type_names: HashMap::new(),
+            print: Box::new(|_| {}),
+            debug: Box::new(|_| {}),
 
             #[cfg(feature = "no_optimize")]
             optimization_level: OptimizationLevel::None,
@@ -539,25 +539,20 @@ impl Engine {
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
-                KEYWORD_PRINT if self.on_print.is_some() => {
-                    self.on_print.as_ref().unwrap()(result.as_str().map_err(|type_name| {
-                        Box::new(EvalAltResult::ErrorMismatchOutputType(
-                            type_name.into(),
-                            pos,
-                        ))
-                    })?)
-                    .into()
-                }
-                KEYWORD_DEBUG if self.on_debug.is_some() => {
-                    self.on_debug.as_ref().unwrap()(result.as_str().map_err(|type_name| {
-                        Box::new(EvalAltResult::ErrorMismatchOutputType(
-                            type_name.into(),
-                            pos,
-                        ))
-                    })?)
-                    .into()
-                }
-                KEYWORD_PRINT | KEYWORD_DEBUG => ().into(),
+                KEYWORD_PRINT => (self.print)(result.as_str().map_err(|type_name| {
+                    Box::new(EvalAltResult::ErrorMismatchOutputType(
+                        type_name.into(),
+                        pos,
+                    ))
+                })?)
+                .into(),
+                KEYWORD_DEBUG => (self.debug)(result.as_str().map_err(|type_name| {
+                    Box::new(EvalAltResult::ErrorMismatchOutputType(
+                        type_name.into(),
+                        pos,
+                    ))
+                })?)
+                .into(),
                 _ => result,
             });
         }
@@ -1493,8 +1488,8 @@ impl Engine {
     /// Map a type_name into a pretty-print name
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
-            .as_ref()
-            .and_then(|list| list.get(name).map(String::as_str))
+            .get(name)
+            .map(String::as_str)
             .unwrap_or(name)
     }
 }

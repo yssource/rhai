@@ -146,14 +146,8 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) {
-        if self.type_names.is_none() {
-            self.type_names = Some(HashMap::new());
-        }
-
         // Add the pretty-print type name into the map
         self.type_names
-            .as_mut()
-            .unwrap()
             .insert(type_name::<T>().to_string(), name.to_string());
     }
 
@@ -994,7 +988,7 @@ impl Engine {
     /// ```
     #[cfg(feature = "sync")]
     pub fn on_print(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.on_print = Some(Box::new(callback));
+        self.print = Box::new(callback);
     }
     /// Override default action of `print` (print to stdout using `println!`)
     ///
@@ -1022,7 +1016,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_print(&mut self, callback: impl Fn(&str) + 'static) {
-        self.on_print = Some(Box::new(callback));
+        self.print = Box::new(callback);
     }
 
     /// Override default action of `debug` (print to stdout using `println!`)
@@ -1051,7 +1045,7 @@ impl Engine {
     /// ```
     #[cfg(feature = "sync")]
     pub fn on_debug(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.on_debug = Some(Box::new(callback));
+        self.debug = Box::new(callback);
     }
     /// Override default action of `debug` (print to stdout using `println!`)
     ///
@@ -1079,6 +1073,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_debug(&mut self, callback: impl Fn(&str) + 'static) {
-        self.on_debug = Some(Box::new(callback));
+        self.debug = Box::new(callback);
     }
 }
