@@ -389,7 +389,7 @@ fn search_scope<'a>(
     id: &str,
     begin: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    let (ScopeSource {  typ, index, .. }, _) = scope
+    let ScopeSource {  typ, index, .. } = scope
         .get(id)
         .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(id.into(), begin)))?;
 
@@ -1162,28 +1162,24 @@ impl Engine {
                             )))
                         }
 
-                        Some((
+                        Some(
                             entry
                             @
                             ScopeSource {
                                 typ: ScopeEntryType::Normal,
                                 ..
-                            },
-                            _,
-                        )) => {
+                            }) => {
                             // Avoid referencing scope which is used below as mut
                             let entry = ScopeSource { name, ..entry };
                             *scope.get_mut(entry) = rhs_val.clone();
                             Ok(rhs_val)
                         }
 
-                        Some((
+                        Some(
                             ScopeSource {
                                 typ: ScopeEntryType::Constant,
                                 ..
-                            },
-                            _,
-                        )) => Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
+                            }) => Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                             name.to_string(),
                             *op_pos,
                         ))),

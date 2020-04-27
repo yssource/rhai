@@ -291,35 +291,22 @@ impl<'a> Scope<'a> {
     }
 
     /// Find an entry in the Scope, starting from the last.
-    pub(crate) fn get(&self, name: &str) -> Option<(EntryRef, Dynamic)> {
+    pub(crate) fn get(&self, name: &str) -> Option<EntryRef> {
         self.0
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find_map(
-                |(
-                    index,
-                    Entry {
+            .find_map(|(index, Entry { name: key, typ, .. })| {
+                if name == key {
+                    Some(EntryRef {
                         name: key,
-                        typ,
-                        value,
-                        ..
-                    },
-                )| {
-                    if name == key {
-                        Some((
-                            EntryRef {
-                                name: key,
-                                index,
-                                typ: *typ,
-                            },
-                            value.clone(),
-                        ))
-                    } else {
-                        None
-                    }
-                },
-            )
+                        index,
+                        typ: *typ,
+                    })
+                } else {
+                    None
+                }
+            })
     }
 
     /// Get the value of an entry in the Scope, starting from the last.
@@ -365,21 +352,15 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
         match self.get(name) {
-            Some((
-                EntryRef {
-                    typ: EntryType::Constant,
-                    ..
-                },
-                _,
-            )) => panic!("variable {} is constant", name),
-            Some((
-                EntryRef {
-                    index,
-                    typ: EntryType::Normal,
-                    ..
-                },
-                _,
-            )) => self.0.get_mut(index).unwrap().value = Dynamic::from(value),
+            Some(EntryRef {
+                typ: EntryType::Constant,
+                ..
+            }) => panic!("variable {} is constant", name),
+            Some(EntryRef {
+                index,
+                typ: EntryType::Normal,
+                ..
+            }) => self.0.get_mut(index).unwrap().value = Dynamic::from(value),
             None => self.push(name, value),
         }
     }
