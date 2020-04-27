@@ -60,6 +60,13 @@ pub const MAX_CALL_STACK_DEPTH: usize = 28;
 #[cfg(not(debug_assertions))]
 pub const MAX_CALL_STACK_DEPTH: usize = 256;
 
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+const FUNCTIONS_COUNT: usize = 512;
+
+#[cfg(any(feature = "only_i32", feature = "only_i64"))]
+const FUNCTIONS_COUNT: usize = 256;
+
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";
@@ -68,13 +75,6 @@ pub const FUNC_TO_STRING: &str = "to_string";
 pub const FUNC_GETTER: &str = "get$";
 pub const FUNC_SETTER: &str = "set$";
 
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-const FUNCTIONS_COUNT: usize = 512;
-
-#[cfg(any(feature = "only_i32", feature = "only_i64"))]
-const FUNCTIONS_COUNT: usize = 256;
-
 /// A type that encapsulates a mutation target for an expression with side effects.
 enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
@@ -82,6 +82,7 @@ enum Target<'a> {
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Box<Dynamic>),
     /// The target is a character inside a String.
+    /// This is necessary because directly pointing to a char inside a String is impossible.
     StringChar(Box<(&'a mut Dynamic, usize, Dynamic)>),
 }
 
@@ -135,6 +136,55 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     fn from(value: T) -> Self {
         Self::Value(Box::new(value.into()))
+    }
+}
+
+/// A type to hold a number of `Dynamic` values in static storage for speed,
+/// and any spill-overs in a `Vec`.
+struct StaticVec {
+    /// Total number of values held.
+    len: usize,
+    /// Static storage.
+    list: [Dynamic; 4],
+    /// Dynamic storage.
+    more: Vec<Dynamic>,
+}
+
+impl StaticVec {
+    /// Create a new `StaticVec`.
+    pub fn new() -> Self {
+        Self {
+            len: 0,
+            list: [().into(), ().into(), ().into(), ().into()],
+            more: Vec::new(),
+        }
+    }
+    /// Push a new value to the end of this `StaticVec`.
+    pub fn push<T: Into<Dynamic>>(&mut self, value: T) {
+        if self.len >= self.list.len() {
+            self.more.push(value.into());
+        } else {
+            self.list[self.len] = value.into();
+        }
+        self.len += 1;
+    }
+    /// Pop a value from the end of this `StaticVec`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `StaticVec` is empty.
+    pub fn pop(&mut self) -> Dynamic {
+        let result = if self.len <= 0 {
+            panic!("nothing to pop!")
+        } else if self.len <= self.list.len() {
+            mem::replace(self.list.get_mut(self.len - 1).unwrap(), ().into())
+        } else {
+            self.more.pop().unwrap()
+        };
+
+        self.len -= 1;
+
+        result
     }
 }
 
@@ -389,11 +439,18 @@ fn search_scope<'a>(
     id: &str,
     begin: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    let ScopeSource {  typ, index, .. } = scope
+    let ScopeSource { typ, index, .. } = scope
         .get(id)
         .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(id.into(), begin)))?;
 
-    Ok((scope.get_mut(ScopeSource { name: id, typ, index }), typ))
+    Ok((
+        scope.get_mut(ScopeSource {
+            name: id,
+            typ,
+            index,
+        }),
+        typ,
+    ))
 }
 
 impl Engine {
@@ -536,8 +593,7 @@ impl Engine {
         // Raise error
         let types_list: Vec<_> = args
             .iter()
-            .map(|x| x.type_name())
-            .map(|name| self.map_type_name(name))
+            .map(|name| self.map_type_name(name.type_name()))
             .collect();
 
         Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
@@ -611,12 +667,12 @@ impl Engine {
 
     // Has a system function an override?
     fn has_override(&self, fn_lib: Option<&FunctionsLib>, name: &str) -> bool {
-        let hash = &calc_fn_hash(name, once(TypeId::of::<String>()));
+        let hash = calc_fn_hash(name, once(TypeId::of::<String>()));
 
         // First check registered functions
-        self.functions.contains_key(hash)
+        self.functions.contains_key(&hash)
             // Then check packages
-            || self.packages.iter().any(|p| p.functions.contains_key(hash))
+            || self.packages.iter().any(|p| p.functions.contains_key(&hash))
             // Then check script-defined functions
             || fn_lib.map_or(false, |lib| lib.has_function(name, 1))
     }
@@ -693,15 +749,12 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
-    /// Index values are pre-calculated and stored in `idx_list`.
-    /// Any spill-overs are stored in `idx_more`.
     fn eval_dot_index_chain_helper(
         &self,
         fn_lib: Option<&FunctionsLib>,
         mut target: Target,
         rhs: &Expr,
-        idx_list: &mut [Dynamic],
-        idx_more: &mut Vec<Dynamic>,
+        idx_values: &mut StaticVec,
         is_index: bool,
         op_pos: Position,
         level: usize,
@@ -715,20 +768,7 @@ impl Engine {
         };
 
         // Pop the last index value
-        let mut idx_val;
-        let mut idx_list = idx_list;
-
-        if let Some(val) = idx_more.pop() {
-            // Values in variable list
-            idx_val = val;
-        } else {
-            // No more value in variable list, pop from fixed list
-            let len = idx_list.len();
-            let splits = idx_list.split_at_mut(len - 1);
-
-            idx_val = mem::replace(splits.1.get_mut(0).unwrap(), ().into());
-            idx_list = splits.0;
-        }
+        let mut idx_val = idx_values.pop();
 
         if is_index {
             match rhs {
@@ -740,7 +780,7 @@ impl Engine {
 
                     let indexed_val = self.get_indexed_mut(obj, idx_val, idx.position(), op_pos, false)?;
                     self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val, idx_rhs.as_ref(), idx_list, idx_more, is_index, *pos, level, new_val
+                        fn_lib, indexed_val, idx_rhs.as_ref(), idx_values, is_index, *pos, level, new_val
                     )
                 }
                 // xxx[rhs] = new_val
@@ -758,9 +798,9 @@ impl Engine {
             match rhs {
                 // xxx.fn_name(arg_expr_list)
                 Expr::FunctionCall(fn_name, _, def_val, pos) => {
-                    let mut args = once(obj)
+                    let mut args: Vec<_> = once(obj)
                         .chain(idx_val.downcast_mut::<Array>().unwrap().iter_mut())
-                        .collect::<Vec<_>>();
+                        .collect();
                     let def_val = def_val.as_ref();
                     // A function call is assumed to have side effects, so the value is changed
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
@@ -768,14 +808,14 @@ impl Engine {
                 }
                 // {xxx:map}.id = ???
                 Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
-                    let mut indexed_val = 
+                    let mut indexed_val =
                         self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, true)?;
                     indexed_val.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((().into(), true))
                 }
                 // {xxx:map}.id
                 Expr::Property(id, pos) if obj.is::<Map>() => {
-                    let indexed_val = 
+                    let indexed_val =
                         self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, false)?;
                     Ok((indexed_val.into_dynamic(), false))
                 }
@@ -807,7 +847,7 @@ impl Engine {
                         )));
                     };
                     self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val, dot_rhs, idx_list, idx_more, is_index, *pos, level, new_val
+                        fn_lib, indexed_val, dot_rhs, idx_values, is_index, *pos, level, new_val
                     )
                 }
                 // xxx.idx_lhs[idx_expr]
@@ -829,7 +869,7 @@ impl Engine {
                         )));
                     });
                     let (result, changed) = self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val.into(), dot_rhs, idx_list, idx_more, is_index, *pos, level, new_val
+                        fn_lib, indexed_val.into(), dot_rhs, idx_values, is_index, *pos, level, new_val
                     )?;
 
                     // Feed the value back via a setter just in case it has been updated
@@ -864,19 +904,9 @@ impl Engine {
         level: usize,
         new_val: Option<Dynamic>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        // Keep four levels of index values in fixed array to reduce allocations
-        let mut idx_list: [Dynamic; 4] = [().into(), ().into(), ().into(), ().into()];
-        // Spill over additional levels into a variable list
-        let idx_more: &mut Vec<Dynamic> = &mut Vec::new();
+        let idx_values = &mut StaticVec::new();
 
-        let size =
-            self.eval_indexed_chain(scope, fn_lib, dot_rhs, &mut idx_list, idx_more, 0, level)?;
-
-        let idx_list = if size < idx_list.len() {
-            &mut idx_list[0..size]
-        } else {
-            &mut idx_list
-        };
+        self.eval_indexed_chain(scope, fn_lib, dot_rhs, idx_values, 0, level)?;
 
         match dot_lhs {
             // id.??? or id[???]
@@ -898,8 +928,7 @@ impl Engine {
                     fn_lib,
                     target.into(),
                     dot_rhs,
-                    idx_list,
-                    idx_more,
+                    idx_values,
                     is_index,
                     op_pos,
                     level,
@@ -921,8 +950,7 @@ impl Engine {
                     fn_lib,
                     val.into(),
                     dot_rhs,
-                    idx_list,
-                    idx_more,
+                    idx_values,
                     is_index,
                     op_pos,
                     level,
@@ -943,11 +971,10 @@ impl Engine {
         scope: &mut Scope,
         fn_lib: Option<&FunctionsLib>,
         expr: &Expr,
-        list: &mut [Dynamic],
-        more: &mut Vec<Dynamic>,
+        idx_values: &mut StaticVec,
         size: usize,
         level: usize,
-    ) -> Result<usize, Box<EvalAltResult>> {
+    ) -> Result<(), Box<EvalAltResult>> {
         match expr {
             Expr::FunctionCall(_, arg_exprs, _, _) => {
                 let arg_values = arg_exprs
@@ -955,22 +982,10 @@ impl Engine {
                     .map(|arg_expr| self.eval_expr(scope, fn_lib, arg_expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                if size < list.len() {
-                    list[size] = arg_values.into();
-                } else {
-                    more.push(arg_values.into());
-                }
-                Ok(size + 1)
+                idx_values.push(arg_values)
             }
-            Expr::Property(_, _) => {
-                // Store a placeholder - no need to copy the property name
-                if size < list.len() {
-                    list[size] = ().into();
-                } else {
-                    more.push(().into());
-                }
-                Ok(size + 1)
-            }
+            // Store a placeholder - no need to copy the property name
+            Expr::Property(_, _) => idx_values.push(()),
             Expr::Index(lhs, rhs, _) | Expr::Dot(lhs, rhs, _) => {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs.as_ref() {
@@ -979,25 +994,14 @@ impl Engine {
                 };
 
                 // Push in reverse order
-                let size = self.eval_indexed_chain(scope, fn_lib, rhs, list, more, size, level)?;
+                self.eval_indexed_chain(scope, fn_lib, rhs, idx_values, size, level)?;
 
-                if size < list.len() {
-                    list[size] = lhs_val;
-                } else {
-                    more.push(lhs_val);
-                }
-                Ok(size + 1)
+                idx_values.push(lhs_val);
             }
-            _ => {
-                let val = self.eval_expr(scope, fn_lib, expr, level)?;
-                if size < list.len() {
-                    list[size] = val;
-                } else {
-                    more.push(val);
-                }
-                Ok(size + 1)
-            }
+            _ => idx_values.push(self.eval_expr(scope, fn_lib, expr, level)?),
         }
+
+        Ok(())
     }
 
     /// Get the value at the indexed position of a base type
@@ -1042,7 +1046,9 @@ impl Engine {
                 Ok(if create {
                     map.entry(index).or_insert(().into()).into()
                 } else {
-                    map.get_mut(&index).map(Target::from).unwrap_or_else(|| Target::from(()))
+                    map.get_mut(&index)
+                        .map(Target::from)
+                        .unwrap_or_else(|| Target::from(()))
                 })
             }
 
@@ -1140,9 +1146,7 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok((*f).into()),
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
-            Expr::Variable(id, pos) => {
-                search_scope(scope, id, *pos).map(|(v, _)| v.clone())
-            }
+            Expr::Variable(id, pos) => search_scope(scope, id, *pos).map(|(v, _)| v.clone()),
             Expr::Property(_, _) => panic!("unexpected property."),
 
             // Statement block
@@ -1168,18 +1172,18 @@ impl Engine {
                             ScopeSource {
                                 typ: ScopeEntryType::Normal,
                                 ..
-                            }) => {
+                            },
+                        ) => {
                             // Avoid referencing scope which is used below as mut
                             let entry = ScopeSource { name, ..entry };
                             *scope.get_mut(entry) = rhs_val.clone();
                             Ok(rhs_val)
                         }
 
-                        Some(
-                            ScopeSource {
-                                typ: ScopeEntryType::Constant,
-                                ..
-                            }) => Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
+                        Some(ScopeSource {
+                            typ: ScopeEntryType::Constant,
+                            ..
+                        }) => Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                             name.to_string(),
                             *op_pos,
                         ))),
