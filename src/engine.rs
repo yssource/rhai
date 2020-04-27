@@ -13,7 +13,6 @@ use crate::token::Position;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    cell::RefCell,
     collections::HashMap,
     format,
     hash::{Hash, Hasher},
@@ -80,8 +79,6 @@ const FUNCTIONS_COUNT: usize = 256;
 enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
     Ref(&'a mut Dynamic),
-    /// The target is a variable stored in the current `Scope`.
-    Scope(&'a RefCell<Dynamic>),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Box<Dynamic>),
     /// The target is a character inside a String.
@@ -93,7 +90,6 @@ impl Target<'_> {
     pub fn into_dynamic(self) -> Dynamic {
         match self {
             Target::Ref(r) => r.clone(),
-            Target::Scope(r) => r.borrow().clone(),
             Target::Value(v) => *v,
             Target::StringChar(s) => s.2,
         }
@@ -102,7 +98,6 @@ impl Target<'_> {
     /// Update the value of the `Target`.
     pub fn set_value(&mut self, new_val: Dynamic, pos: Position) -> Result<(), Box<EvalAltResult>> {
         match self {
-            Target::Scope(r) => *r.borrow_mut() = new_val,
             Target::Ref(r) => **r = new_val,
             Target::Value(_) => {
                 return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(pos)))
@@ -132,11 +127,6 @@ impl Target<'_> {
     }
 }
 
-impl<'a> From<&'a RefCell<Dynamic>> for Target<'a> {
-    fn from(value: &'a RefCell<Dynamic>) -> Self {
-        Self::Scope(value)
-    }
-}
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
         Self::Ref(value)
@@ -395,15 +385,15 @@ fn default_print(s: &str) {
 
 /// Search for a variable within the scope, returning its value and index inside the Scope
 fn search_scope<'a>(
-    scope: &'a Scope,
+    scope: &'a mut Scope,
     id: &str,
     begin: Position,
-) -> Result<(&'a RefCell<Dynamic>, ScopeEntryType), Box<EvalAltResult>> {
-    let (entry, _) = scope
+) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
+    let (ScopeSource {  typ, index, .. }, _) = scope
         .get(id)
         .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(id.into(), begin)))?;
 
-    Ok((&scope.get_ref(entry), entry.typ))
+    Ok((scope.get_mut(ScopeSource { name: id, typ, index }), typ))
 }
 
 impl Engine {
@@ -717,14 +707,8 @@ impl Engine {
         level: usize,
         mut new_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        // Store a copy of the RefMut<Dynamic> from `borrow_mut` since it is a temporary value
-        let mut scope_base = match target {
-            Target::Scope(r) => Some(r.borrow_mut()),
-            Target::Ref(_) | Target::Value(_) | Target::StringChar(_) => None,
-        };
         // Get a reference to the mutation target Dynamic
         let obj = match target {
-            Target::Scope(_) => scope_base.as_mut().unwrap().deref_mut(),
             Target::Ref(r) => r,
             Target::Value(ref mut r) => r.as_mut(),
             Target::StringChar(ref mut x) => &mut x.2,
@@ -1157,7 +1141,7 @@ impl Engine {
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
             Expr::Variable(id, pos) => {
-                search_scope(scope, id, *pos).map(|(v, _)| v.borrow().clone())
+                search_scope(scope, id, *pos).map(|(v, _)| v.clone())
             }
             Expr::Property(_, _) => panic!("unexpected property."),
 
@@ -1189,7 +1173,7 @@ impl Engine {
                         )) => {
                             // Avoid referencing scope which is used below as mut
                             let entry = ScopeSource { name, ..entry };
-                            *scope.get_ref(entry).borrow_mut() = rhs_val.clone();
+                            *scope.get_mut(entry) = rhs_val.clone();
                             Ok(rhs_val)
                         }
 
@@ -1440,7 +1424,7 @@ impl Engine {
                     };
 
                     for a in iter_fn(arr) {
-                        *scope.get_ref(entry).borrow_mut() = a;
+                        *scope.get_mut(entry) = a;
 
                         match self.eval_stmt(scope, fn_lib, body, level) {
                             Ok(_) => (),
