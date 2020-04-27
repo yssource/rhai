@@ -37,7 +37,7 @@ fn sub_string(s: &mut String, start: INT, len: INT) -> String {
         len as usize
     };
 
-    chars[offset..][..len].into_iter().collect::<String>()
+    chars[offset..][..len].into_iter().collect()
 }
 fn crop_string(s: &mut String, start: INT, len: INT) {
     let offset = if s.is_empty() || len <= 0 {
