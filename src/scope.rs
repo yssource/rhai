@@ -392,10 +392,7 @@ impl Default for Scope<'_> {
     }
 }
 
-impl<'a, K> iter::Extend<(K, EntryType, Dynamic)> for Scope<'a>
-where
-    K: Into<Cow<'a, str>>,
-{
+impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, EntryType, Dynamic)> for Scope<'a> {
     fn extend<T: IntoIterator<Item = (K, EntryType, Dynamic)>>(&mut self, iter: T) {
         self.0
             .extend(iter.into_iter().map(|(name, typ, value)| Entry {

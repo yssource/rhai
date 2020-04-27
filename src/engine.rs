@@ -436,21 +436,14 @@ fn default_print(s: &str) {
 /// Search for a variable within the scope, returning its value and index inside the Scope
 fn search_scope<'a>(
     scope: &'a mut Scope,
-    id: &str,
+    name: &str,
     begin: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
     let ScopeSource { typ, index, .. } = scope
-        .get(id)
-        .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(id.into(), begin)))?;
+        .get(name)
+        .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), begin)))?;
 
-    Ok((
-        scope.get_mut(ScopeSource {
-            name: id,
-            typ,
-            index,
-        }),
-        typ,
-    ))
+    Ok((scope.get_mut(ScopeSource { name, typ, index }), typ))
 }
 
 impl Engine {
@@ -512,7 +505,7 @@ impl Engine {
     pub(crate) fn call_fn_raw(
         &self,
         scope: Option<&mut Scope>,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         fn_name: &str,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
@@ -525,10 +518,10 @@ impl Engine {
         }
 
         #[cfg(feature = "no_function")]
-        const fn_lib: Option<&FunctionsLib> = None;
+        const fn_lib: &FunctionsLib = None;
 
         // First search in script-defined functions (can override built-in)
-        if let Some(fn_def) = fn_lib.and_then(|lib| lib.get_function(fn_name, args.len())) {
+        if let Some(fn_def) = fn_lib.get_function(fn_name, args.len()) {
             return self.call_fn_from_lib(scope, fn_lib, fn_def, args, pos, level);
         }
 
@@ -606,7 +599,7 @@ impl Engine {
     pub(crate) fn call_fn_from_lib(
         &self,
         scope: Option<&mut Scope>,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         fn_def: &FnDef,
         args: &mut FnCallArgs,
         pos: Position,
@@ -666,7 +659,7 @@ impl Engine {
     }
 
     // Has a system function an override?
-    fn has_override(&self, fn_lib: Option<&FunctionsLib>, name: &str) -> bool {
+    fn has_override(&self, fn_lib: &FunctionsLib, name: &str) -> bool {
         let hash = calc_fn_hash(name, once(TypeId::of::<String>()));
 
         // First check registered functions
@@ -674,13 +667,13 @@ impl Engine {
             // Then check packages
             || self.packages.iter().any(|p| p.functions.contains_key(&hash))
             // Then check script-defined functions
-            || fn_lib.map_or(false, |lib| lib.has_function(name, 1))
+            || fn_lib.has_function(name, 1)
     }
 
     // Perform an actual function call, taking care of special functions
     fn exec_fn_call(
         &self,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         fn_name: &str,
         args: &mut [&mut Dynamic],
         def_val: Option<&Dynamic>,
@@ -709,7 +702,7 @@ impl Engine {
     fn eval_script_expr(
         &self,
         scope: &mut Scope,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         script: &Dynamic,
         pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -732,15 +725,13 @@ impl Engine {
             )));
         }
 
-        if let Some(lib) = fn_lib {
-            #[cfg(feature = "sync")]
-            {
-                ast.1 = Arc::new(lib.clone());
-            }
-            #[cfg(not(feature = "sync"))]
-            {
-                ast.1 = Rc::new(lib.clone());
-            }
+        #[cfg(feature = "sync")]
+        {
+            ast.1 = Arc::new(fn_lib.clone());
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            ast.1 = Rc::new(fn_lib.clone());
         }
 
         // Evaluate the AST
@@ -751,7 +742,7 @@ impl Engine {
     /// Chain-evaluate a dot/index chain.
     fn eval_dot_index_chain_helper(
         &self,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         mut target: Target,
         rhs: &Expr,
         idx_values: &mut StaticVec,
@@ -896,7 +887,7 @@ impl Engine {
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
         is_index: bool,
@@ -969,7 +960,7 @@ impl Engine {
     fn eval_indexed_chain(
         &self,
         scope: &mut Scope,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         expr: &Expr,
         idx_values: &mut StaticVec,
         size: usize,
@@ -1083,7 +1074,7 @@ impl Engine {
     fn eval_in_expr(
         &self,
         scope: &mut Scope,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
@@ -1136,7 +1127,7 @@ impl Engine {
     fn eval_expr(
         &self,
         scope: &mut Scope,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         expr: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1325,7 +1316,7 @@ impl Engine {
     pub(crate) fn eval_stmt(
         &self,
         scope: &mut Scope,
-        fn_lib: Option<&FunctionsLib>,
+        fn_lib: &FunctionsLib,
         stmt: &Stmt,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {

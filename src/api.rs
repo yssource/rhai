@@ -804,7 +804,7 @@ impl Engine {
         ast.0
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
+                self.eval_stmt(scope, ast.1.as_ref(), stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -867,7 +867,7 @@ impl Engine {
         ast.0
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
+                self.eval_stmt(scope, ast.1.as_ref(), stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -930,8 +930,7 @@ impl Engine {
             .get_function(name, args.len())
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))?;
 
-        let result =
-            self.call_fn_from_lib(Some(scope), Some(&fn_lib), fn_def, &mut args, pos, 0)?;
+        let result = self.call_fn_from_lib(Some(scope), fn_lib, fn_def, &mut args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 
