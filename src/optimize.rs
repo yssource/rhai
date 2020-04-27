@@ -646,12 +646,12 @@ fn optimize<'a>(
         .filter(|ScopeEntry { typ, expr, .. }| {
             // Get all the constants with definite constant expressions
             *typ == ScopeEntryType::Constant
-                && expr.as_ref().map(Expr::is_constant).unwrap_or(false)
+                && expr.as_ref().map(|v| v.is_constant()).unwrap_or(false)
         })
         .for_each(|ScopeEntry { name, expr, .. }| {
             state.push_constant(
                 name.as_ref(),
-                expr.as_ref().expect("should be Some(expr)").clone(),
+                (**expr.as_ref().expect("should be Some(expr)")).clone(),
             )
         });
 

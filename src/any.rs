@@ -212,7 +212,7 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => write!(f, "{}", value),
             Union::Array(value) => write!(f, "{:?}", value),
-            Union::Map(value) => write!(f, "{:?}", value),
+            Union::Map(value) => write!(f, "#{:?}", value),
             Union::Variant(_) => write!(f, "?"),
         }
     }
@@ -229,7 +229,7 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => write!(f, "{:?}", value),
             Union::Array(value) => write!(f, "{:?}", value),
-            Union::Map(value) => write!(f, "{:?}", value),
+            Union::Map(value) => write!(f, "#{:?}", value),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
     }
@@ -268,16 +268,6 @@ fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<T, Box<X>> {
 }
 
 impl Dynamic {
-    /// Get a reference to the inner `Union`.
-    pub(crate) fn get_ref(&self) -> &Union {
-        &self.0
-    }
-
-    /// Get a mutable reference to the inner `Union`.
-    pub(crate) fn get_mut(&mut self) -> &mut Union {
-        &mut self.0
-    }
-
     /// Create a `Dynamic` from any type.  A `Dynamic` value is simply returned as is.
     ///
     /// Beware that you need to pass in an `Array` type for it to be recognized as an `Array`.

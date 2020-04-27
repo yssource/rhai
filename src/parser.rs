@@ -476,32 +476,40 @@ impl Expr {
     /// Is a particular token allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match self {
-            Expr::IntegerConstant(_, _)
-            | Expr::FloatConstant(_, _)
-            | Expr::CharConstant(_, _)
-            | Expr::In(_, _, _)
-            | Expr::And(_, _, _)
-            | Expr::Or(_, _, _)
-            | Expr::True(_)
-            | Expr::False(_)
-            | Expr::Unit(_) => false,
+            Self::IntegerConstant(_, _)
+            | Self::FloatConstant(_, _)
+            | Self::CharConstant(_, _)
+            | Self::In(_, _, _)
+            | Self::And(_, _, _)
+            | Self::Or(_, _, _)
+            | Self::True(_)
+            | Self::False(_)
+            | Self::Unit(_) => false,
 
-            Expr::StringConstant(_, _)
-            | Expr::Stmt(_, _)
-            | Expr::FunctionCall(_, _, _, _)
-            | Expr::Assignment(_, _, _)
-            | Expr::Dot(_, _, _)
-            | Expr::Index(_, _, _)
-            | Expr::Array(_, _)
-            | Expr::Map(_, _) => match token {
+            Self::StringConstant(_, _)
+            | Self::Stmt(_, _)
+            | Self::FunctionCall(_, _, _, _)
+            | Self::Assignment(_, _, _)
+            | Self::Dot(_, _, _)
+            | Self::Index(_, _, _)
+            | Self::Array(_, _)
+            | Self::Map(_, _) => match token {
                 Token::LeftBracket => true,
                 _ => false,
             },
 
-            Expr::Variable(_, _) | Expr::Property(_, _) => match token {
+            Self::Variable(_, _) | Self::Property(_, _) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
                 _ => false,
             },
+        }
+    }
+
+    /// Convert a `Variable` into a `Property`.  All other variants are untouched.
+    pub(crate) fn into_property(self) -> Self {
+        match self {
+            Self::Variable(id, pos) => Self::Property(id, pos),
+            _ => self,
         }
     }
 }
@@ -619,9 +627,10 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
     }
 }
 
-/// Parse an indexing expression.
-fn parse_index_expr<'a>(
-    lhs: Box<Expr>,
+/// Parse an indexing chain.
+/// Indexing binds to the right, so this call parses all possible levels of indexing following in the input.
+fn parse_index_chain<'a>(
+    lhs: Expr,
     input: &mut Peekable<TokenIterator<'a>>,
     pos: Position,
     allow_stmt_expr: bool,
@@ -638,7 +647,7 @@ fn parse_index_expr<'a>(
             ))
             .into_err(*pos))
         }
-        Expr::IntegerConstant(_, pos) => match *lhs {
+        Expr::IntegerConstant(_, pos) => match lhs {
             Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
 
             Expr::Map(_, _) => {
@@ -667,7 +676,7 @@ fn parse_index_expr<'a>(
         },
 
         // lhs[string]
-        Expr::StringConstant(_, pos) => match *lhs {
+        Expr::StringConstant(_, pos) => match lhs {
             Expr::Map(_, _) => (),
 
             Expr::Array(_, _) | Expr::StringConstant(_, _) => {
@@ -734,7 +743,20 @@ fn parse_index_expr<'a>(
     match input.peek().unwrap() {
         (Token::RightBracket, _) => {
             eat_token(input, Token::RightBracket);
-            Ok(Expr::Index(lhs, Box::new(idx_expr), pos))
+
+            // Any more indexing following?
+            match input.peek().unwrap() {
+                // If another indexing level, right-bind it
+                (Token::LeftBracket, _) => {
+                    let follow_pos = eat_token(input, Token::LeftBracket);
+                    // Recursively parse the indexing chain, right-binding each
+                    let follow = parse_index_chain(idx_expr, input, follow_pos, allow_stmt_expr)?;
+                    // Indexing binds to right
+                    Ok(Expr::Index(Box::new(lhs), Box::new(follow), pos))
+                }
+                // Otherwise terminate the indexing chain
+                _ => Ok(Expr::Index(Box::new(lhs), Box::new(idx_expr), pos)),
+            }
         }
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
         (_, pos) => Err(PERR::MissingToken(
@@ -926,9 +948,7 @@ fn parse_primary<'a>(
                 parse_call_expr(id, input, pos, allow_stmt_expr)?
             }
             // Indexing
-            (expr, Token::LeftBracket) => {
-                parse_index_expr(Box::new(expr), input, pos, allow_stmt_expr)?
-            }
+            (expr, Token::LeftBracket) => parse_index_chain(expr, input, pos, allow_stmt_expr)?,
             // Unknown postfix operator
             (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
         }
@@ -1005,71 +1025,6 @@ fn parse_unary<'a>(
     }
 }
 
-/// Parse an assignment.
-fn parse_assignment(lhs: Expr, rhs: Expr, pos: Position) -> Result<Expr, Box<ParseError>> {
-    // Is the LHS in a valid format for an assignment target?
-    fn valid_assignment_chain(expr: &Expr, is_top: bool) -> Option<Box<ParseError>> {
-        match expr {
-            // var
-            Expr::Variable(_, _) => {
-                assert!(is_top, "property expected but gets variable");
-                None
-            }
-            // property
-            Expr::Property(_, _) => {
-                assert!(!is_top, "variable expected but gets property");
-                None
-            }
-
-            // idx_lhs[...]
-            Expr::Index(idx_lhs, _, pos) => match idx_lhs.as_ref() {
-                // var[...]
-                Expr::Variable(_, _) => {
-                    assert!(is_top, "property expected but gets variable");
-                    None
-                }
-                // property[...]
-                Expr::Property(_, _) => {
-                    assert!(!is_top, "variable expected but gets property");
-                    None
-                }
-                // ???[...][...]
-                Expr::Index(_, _, _) => Some(ParseErrorType::AssignmentToCopy.into_err(*pos)),
-                // idx_lhs[...]
-                _ => Some(ParseErrorType::AssignmentToInvalidLHS.into_err(*pos)),
-            },
-
-            // dot_lhs.dot_rhs
-            Expr::Dot(dot_lhs, dot_rhs, pos) => match dot_lhs.as_ref() {
-                // var.dot_rhs
-                Expr::Variable(_, _) if is_top => valid_assignment_chain(dot_rhs, false),
-                // property.dot_rhs
-                Expr::Property(_, _) if !is_top => valid_assignment_chain(dot_rhs, false),
-                // idx_lhs[...].dot_rhs
-                Expr::Index(idx_lhs, _, _) => match idx_lhs.as_ref() {
-                    // var[...].dot_rhs
-                    Expr::Variable(_, _) if is_top => valid_assignment_chain(dot_rhs, false),
-                    // property[...].dot_rhs
-                    Expr::Property(_, _) if !is_top => valid_assignment_chain(dot_rhs, false),
-                    // ???[...][...].dot_rhs
-                    Expr::Index(_, _, _) => Some(ParseErrorType::AssignmentToCopy.into_err(*pos)),
-                    // idx_lhs[...].dot_rhs
-                    _ => Some(ParseErrorType::AssignmentToCopy.into_err(idx_lhs.position())),
-                },
-
-                expr => panic!("unexpected dot expression {:#?}", expr),
-            },
-
-            _ => Some(ParseErrorType::AssignmentToInvalidLHS.into_err(expr.position())),
-        }
-    }
-
-    match valid_assignment_chain(&lhs, true) {
-        None => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-        Some(err) => Err(err),
-    }
-}
-
 fn parse_assignment_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     lhs: Expr,
@@ -1077,7 +1032,7 @@ fn parse_assignment_stmt<'a>(
 ) -> Result<Expr, Box<ParseError>> {
     let pos = eat_token(input, Token::Equals);
     let rhs = parse_expr(input, allow_stmt_expr)?;
-    parse_assignment(lhs, rhs, pos)
+    Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
 }
 
 /// Parse an operator-assignment expression.
@@ -1108,15 +1063,52 @@ fn parse_op_assignment_stmt<'a>(
     let rhs = parse_expr(input, allow_stmt_expr)?;
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
-    parse_assignment(
-        lhs,
-        Expr::FunctionCall(op.into(), vec![lhs_copy, rhs], None, pos),
-        pos,
-    )
+    let rhs_expr = Expr::FunctionCall(op.into(), vec![lhs_copy, rhs], None, pos);
+    Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs_expr), pos))
 }
 
-/// Parse an 'in' expression.
-fn parse_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<ParseError>> {
+/// Make a dot expression.
+fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position, is_index: bool) -> Expr {
+    match (lhs, rhs) {
+        // idx_lhs[idx_rhs].rhs
+        // Attach dot chain to the bottom level of indexing chain
+        (Expr::Index(idx_lhs, idx_rhs, idx_pos), rhs) => Expr::Index(
+            idx_lhs,
+            Box::new(make_dot_expr(*idx_rhs, rhs, op_pos, true)),
+            idx_pos,
+        ),
+        // lhs.id
+        (lhs, rhs @ Expr::Variable(_, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
+            let lhs = if is_index { lhs.into_property() } else { lhs };
+            Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos)
+        }
+        // lhs.dot_lhs.dot_rhs
+        (lhs, Expr::Dot(dot_lhs, dot_rhs, dot_pos)) => Expr::Dot(
+            Box::new(lhs),
+            Box::new(Expr::Dot(
+                Box::new(dot_lhs.into_property()),
+                Box::new(dot_rhs.into_property()),
+                dot_pos,
+            )),
+            op_pos,
+        ),
+        // lhs.idx_lhs[idx_rhs]
+        (lhs, Expr::Index(idx_lhs, idx_rhs, idx_pos)) => Expr::Dot(
+            Box::new(lhs),
+            Box::new(Expr::Index(
+                Box::new(idx_lhs.into_property()),
+                Box::new(idx_rhs.into_property()),
+                idx_pos,
+            )),
+            op_pos,
+        ),
+        // lhs.rhs
+        (lhs, rhs) => Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos),
+    }
+}
+
+/// Make an 'in' expression.
+fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<ParseError>> {
     match (&lhs, &rhs) {
         (_, Expr::IntegerConstant(_, pos))
         | (_, Expr::FloatConstant(_, pos))
@@ -1321,34 +1313,10 @@ fn parse_binary_op<'a>(
             Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
             Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
 
-            Token::In => parse_in_expr(current_lhs, rhs, pos)?,
+            Token::In => make_in_expr(current_lhs, rhs, pos)?,
 
             #[cfg(not(feature = "no_object"))]
-            Token::Period => {
-                fn check_property(expr: Expr) -> Result<Expr, Box<ParseError>> {
-                    match expr {
-                        // xxx.lhs.rhs
-                        Expr::Dot(lhs, rhs, pos) => Ok(Expr::Dot(
-                            Box::new(check_property(*lhs)?),
-                            Box::new(check_property(*rhs)?),
-                            pos,
-                        )),
-                        // xxx.lhs[idx]
-                        Expr::Index(lhs, idx, pos) => {
-                            Ok(Expr::Index(Box::new(check_property(*lhs)?), idx, pos))
-                        }
-                        // xxx.id
-                        Expr::Variable(id, pos) => Ok(Expr::Property(id, pos)),
-                        // xxx.prop
-                        expr @ Expr::Property(_, _) => Ok(expr),
-                        // xxx.fn()
-                        expr @ Expr::FunctionCall(_, _, _, _) => Ok(expr),
-                        expr => Err(PERR::PropertyExpected.into_err(expr.position())),
-                    }
-                }
-
-                Expr::Dot(Box::new(current_lhs), Box::new(check_property(rhs)?), pos)
-            }
+            Token::Period => make_dot_expr(current_lhs, rhs, pos, false),
 
             token => return Err(PERR::UnknownOperator(token.syntax().into()).into_err(pos)),
         };

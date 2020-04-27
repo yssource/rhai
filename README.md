@@ -1947,7 +1947,7 @@ Properties and methods in a Rust custom type registered with the [`Engine`] can 
 ```rust
 let a = new_ts();           // constructor function
 a.field = 500;              // property access
-a.update();                 // method call
+a.update();                 // method call, 'a' can be changed
 
 update(a);                  // this works, but 'a' is unchanged because only
                             // a COPY of 'a' is passed to 'update' by VALUE

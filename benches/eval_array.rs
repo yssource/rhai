@@ -51,7 +51,7 @@ fn bench_eval_array_large_set(bench: &mut Bencher) {
     let script = r#"let x = [ 1, 2.345, "hello", true,
                                 [ 1, 2, 3, [ "hey", [ "deeply", "nested" ], "jude" ] ]
                             ];
-                            x[4] = 42
+                            x[4][3][1][1] = 42
     "#;
 
     let mut engine = Engine::new();
