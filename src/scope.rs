@@ -28,14 +28,6 @@ pub struct Entry<'a> {
     pub expr: Option<Box<Expr>>,
 }
 
-/// Information about a particular entry in the Scope.
-#[derive(Debug, Hash, Copy, Clone)]
-pub(crate) struct EntryRef<'a> {
-    pub name: &'a str,
-    pub index: usize,
-    pub typ: EntryType,
-}
-
 /// A type containing information about the current scope.
 /// Useful for keeping state between `Engine` evaluation runs.
 ///
@@ -291,18 +283,14 @@ impl<'a> Scope<'a> {
     }
 
     /// Find an entry in the Scope, starting from the last.
-    pub(crate) fn get(&self, name: &str) -> Option<EntryRef> {
+    pub(crate) fn get(&self, name: &str) -> Option<(usize, EntryType)> {
         self.0
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
             .find_map(|(index, Entry { name: key, typ, .. })| {
                 if name == key {
-                    Some(EntryRef {
-                        name: key,
-                        index,
-                        typ: *typ,
-                    })
+                    Some((index, *typ))
                 } else {
                     None
                 }
@@ -352,30 +340,23 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
         match self.get(name) {
-            Some(EntryRef {
-                typ: EntryType::Constant,
-                ..
-            }) => panic!("variable {} is constant", name),
-            Some(EntryRef {
-                index,
-                typ: EntryType::Normal,
-                ..
-            }) => self.0.get_mut(index).unwrap().value = Dynamic::from(value),
+            Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
+            Some((index, EntryType::Normal)) => {
+                self.0.get_mut(index).unwrap().value = Dynamic::from(value)
+            }
             None => self.push(name, value),
         }
     }
 
     /// Get a mutable reference to an entry in the Scope.
-    pub(crate) fn get_mut(&mut self, key: EntryRef) -> &mut Dynamic {
-        let entry = self.0.get_mut(key.index).expect("invalid index in Scope");
-        assert_eq!(entry.typ, key.typ, "entry type not matched");
+    pub(crate) fn get_mut(&mut self, index: usize) -> &mut Dynamic {
+        let entry = self.0.get_mut(index).expect("invalid index in Scope");
 
         // assert_ne!(
         //     entry.typ,
         //     EntryType::Constant,
         //     "get mut of constant entry"
         // );
-        assert_eq!(entry.name, key.name, "incorrect key at Scope entry");
 
         &mut entry.value
     }

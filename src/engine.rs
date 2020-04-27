@@ -7,7 +7,7 @@ use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
 use crate::parser::{Expr, FnDef, ReturnType, Stmt};
 use crate::result::EvalAltResult;
-use crate::scope::{EntryRef as ScopeSource, EntryType as ScopeEntryType, Scope};
+use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
 
 use crate::stdlib::{
@@ -439,11 +439,11 @@ fn search_scope<'a>(
     name: &str,
     begin: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    let ScopeSource { typ, index, .. } = scope
+    let (index, typ) = scope
         .get(name)
         .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), begin)))?;
 
-    Ok((scope.get_mut(ScopeSource { name, typ, index }), typ))
+    Ok((scope.get_mut(index), typ))
 }
 
 impl Engine {
@@ -516,9 +516,6 @@ impl Engine {
         if level > self.max_call_stack_depth {
             return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
         }
-
-        #[cfg(feature = "no_function")]
-        const fn_lib: &FunctionsLib = None;
 
         // First search in script-defined functions (can override built-in)
         if let Some(fn_def) = fn_lib.get_function(fn_name, args.len()) {
@@ -1152,27 +1149,15 @@ impl Engine {
                             )))
                         }
 
-                        Some(
-                            entry
-                            @
-                            ScopeSource {
-                                typ: ScopeEntryType::Normal,
-                                ..
-                            },
-                        ) => {
+                        Some((index, ScopeEntryType::Normal)) => {
                             // Avoid referencing scope which is used below as mut
-                            let entry = ScopeSource { name, ..entry };
-                            *scope.get_mut(entry) = rhs_val.clone();
+                            *scope.get_mut(index) = rhs_val.clone();
                             Ok(rhs_val)
                         }
 
-                        Some(ScopeSource {
-                            typ: ScopeEntryType::Constant,
-                            ..
-                        }) => Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                            name.to_string(),
-                            *op_pos,
-                        ))),
+                        Some((_, ScopeEntryType::Constant)) => Err(Box::new(
+                            EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
+                        )),
                     },
 
                     // idx_lhs[idx_expr] = rhs
@@ -1402,15 +1387,10 @@ impl Engine {
                 }) {
                     // Add the loop variable
                     scope.push(name.clone(), ());
-
-                    let entry = ScopeSource {
-                        name,
-                        index: scope.len() - 1,
-                        typ: ScopeEntryType::Normal,
-                    };
+                    let index = scope.len() - 1;
 
                     for a in iter_fn(arr) {
-                        *scope.get_mut(entry) = a;
+                        *scope.get_mut(index) = a;
 
                         match self.eval_stmt(scope, fn_lib, body, level) {
                             Ok(_) => (),
