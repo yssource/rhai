@@ -25,7 +25,7 @@ pub struct Entry<'a> {
     /// Current value of the entry.
     pub value: Dynamic,
     /// A constant expression if the initial value matches one of the recognized types.
-    pub expr: Option<Expr>,
+    pub expr: Option<Box<Expr>>,
 }
 
 /// Information about a particular entry in the Scope.
@@ -227,7 +227,7 @@ impl<'a> Scope<'a> {
         map_expr: bool,
     ) {
         let expr = if map_expr {
-            map_dynamic_to_expr(value.clone(), Position::none())
+            map_dynamic_to_expr(value.clone(), Position::none()).map(Box::new)
         } else {
             None
         };
