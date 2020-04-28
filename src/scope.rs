@@ -349,7 +349,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Get a mutable reference to an entry in the Scope.
-    pub(crate) fn get_mut(&mut self, index: usize) -> &mut Dynamic {
+    pub(crate) fn get_mut(&mut self, index: usize) -> (&mut Dynamic, EntryType) {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
 
         // assert_ne!(
@@ -358,7 +358,7 @@ impl<'a> Scope<'a> {
         //     "get mut of constant entry"
         // );
 
-        &mut entry.value
+        (&mut entry.value, entry.typ)
     }
 
     /// Get an iterator to entries in the Scope.

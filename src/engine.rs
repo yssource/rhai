@@ -188,6 +188,23 @@ impl StaticVec {
     }
 }
 
+/// A type that holds all the current states of the Engine.
+#[derive(Debug, Clone, Hash, Copy)]
+pub struct State {
+    /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
+    /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
+    /// When that happens, this flag is turned on to force a scope lookup by name.
+    pub always_search: bool,
+}
+
+impl State {
+    pub fn new() -> Self {
+        Self {
+            always_search: false,
+        }
+    }
+}
+
 /// A type that holds a library (`HashMap`) of script-defined functions.
 ///
 /// Since script-defined functions have `Dynamic` parameters, functions with the same name
@@ -439,11 +456,11 @@ fn search_scope<'a>(
     name: &str,
     begin: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    let (index, typ) = scope
+    let (index, _) = scope
         .get(name)
         .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), begin)))?;
 
-    Ok((scope.get_mut(index), typ))
+    Ok(scope.get_mut(index))
 }
 
 impl Engine {
@@ -601,6 +618,7 @@ impl Engine {
             // Extern scope passed in which is not empty
             Some(scope) if scope.len() > 0 => {
                 let scope_len = scope.len();
+                let mut state = State::new();
 
                 scope.extend(
                     // Put arguments into scope as variables - variable name is copied
@@ -614,7 +632,7 @@ impl Engine {
 
                 // Evaluate the function at one higher level of call depth
                 let result = self
-                    .eval_stmt(scope, fn_lib, &fn_def.body, level + 1)
+                    .eval_stmt(scope, &mut state, fn_lib, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -628,6 +646,7 @@ impl Engine {
             // No new scope - create internal scope
             _ => {
                 let mut scope = Scope::new();
+                let mut state = State::new();
 
                 scope.extend(
                     // Put arguments into scope as variables
@@ -640,7 +659,7 @@ impl Engine {
 
                 // Evaluate the function at one higher level of call depth
                 return self
-                    .eval_stmt(&mut scope, fn_lib, &fn_def.body, level + 1)
+                    .eval_stmt(&mut scope, &mut state, fn_lib, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -784,7 +803,7 @@ impl Engine {
                     let mut args: Vec<_> = once(obj)
                         .chain(idx_val.downcast_mut::<Array>().unwrap().iter_mut())
                         .collect();
-                    let def_val = def_val.as_ref();
+                    let def_val = def_val.as_deref();
                     // A function call is assumed to have side effects, so the value is changed
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
                     self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
@@ -879,6 +898,7 @@ impl Engine {
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
+        state: &mut State,
         fn_lib: &FunctionsLib,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
@@ -889,12 +909,16 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let idx_values = &mut StaticVec::new();
 
-        self.eval_indexed_chain(scope, fn_lib, dot_rhs, idx_values, 0, level)?;
+        self.eval_indexed_chain(scope, state, fn_lib, dot_rhs, idx_values, 0, level)?;
 
         match dot_lhs {
             // id.??? or id[???]
-            Expr::Variable(id, _, pos) => {
-                let (target, typ) = search_scope(scope, id, *pos)?;
+            Expr::Variable(id, index, pos) => {
+                let (target, typ) = if !state.always_search && *index > 0 {
+                    scope.get_mut(scope.len() - *index)
+                } else {
+                    search_scope(scope, id, *pos)?
+                };
 
                 // Constants cannot be modified
                 match typ {
@@ -927,7 +951,7 @@ impl Engine {
             }
             // {expr}.??? or {expr}[???]
             expr => {
-                let val = self.eval_expr(scope, fn_lib, expr, level)?;
+                let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
 
                 self.eval_dot_index_chain_helper(
                     fn_lib,
@@ -952,6 +976,7 @@ impl Engine {
     fn eval_indexed_chain(
         &self,
         scope: &mut Scope,
+        state: &mut State,
         fn_lib: &FunctionsLib,
         expr: &Expr,
         idx_values: &mut StaticVec,
@@ -962,7 +987,7 @@ impl Engine {
             Expr::FunctionCall(_, arg_exprs, _, _) => {
                 let arg_values = arg_exprs
                     .iter()
-                    .map(|arg_expr| self.eval_expr(scope, fn_lib, arg_expr, level))
+                    .map(|arg_expr| self.eval_expr(scope, state, fn_lib, arg_expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 idx_values.push(arg_values)
@@ -973,15 +998,15 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs.as_ref() {
                     Expr::Property(_, _) => ().into(), // Store a placeholder in case of a property
-                    _ => self.eval_expr(scope, fn_lib, lhs, level)?,
+                    _ => self.eval_expr(scope, state, fn_lib, lhs, level)?,
                 };
 
                 // Push in reverse order
-                self.eval_indexed_chain(scope, fn_lib, rhs, idx_values, size, level)?;
+                self.eval_indexed_chain(scope, state, fn_lib, rhs, idx_values, size, level)?;
 
                 idx_values.push(lhs_val);
             }
-            _ => idx_values.push(self.eval_expr(scope, fn_lib, expr, level)?),
+            _ => idx_values.push(self.eval_expr(scope, state, fn_lib, expr, level)?),
         }
 
         Ok(())
@@ -1066,13 +1091,14 @@ impl Engine {
     fn eval_in_expr(
         &self,
         scope: &mut Scope,
+        state: &mut State,
         fn_lib: &FunctionsLib,
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut lhs_value = self.eval_expr(scope, fn_lib, lhs, level)?;
-        let rhs_value = self.eval_expr(scope, fn_lib, rhs, level)?;
+        let mut lhs_value = self.eval_expr(scope, state, fn_lib, lhs, level)?;
+        let rhs_value = self.eval_expr(scope, state, fn_lib, rhs, level)?;
 
         match rhs_value {
             Dynamic(Union::Array(mut rhs_value)) => {
@@ -1119,6 +1145,7 @@ impl Engine {
     fn eval_expr(
         &self,
         scope: &mut Scope,
+        state: &mut State,
         fn_lib: &FunctionsLib,
         expr: &Expr,
         level: usize,
@@ -1129,15 +1156,18 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok((*f).into()),
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
+            Expr::Variable(_, index, _) if !state.always_search && *index > 0 => {
+                Ok(scope.get_mut(scope.len() - *index).0.clone())
+            }
             Expr::Variable(id, _, pos) => search_scope(scope, id, *pos).map(|(v, _)| v.clone()),
             Expr::Property(_, _) => panic!("unexpected property."),
 
             // Statement block
-            Expr::Stmt(stmt, _) => self.eval_stmt(scope, fn_lib, stmt, level),
+            Expr::Stmt(stmt, _) => self.eval_stmt(scope, state, fn_lib, stmt, level),
 
             // lhs = rhs
             Expr::Assignment(lhs, rhs, op_pos) => {
-                let rhs_val = self.eval_expr(scope, fn_lib, rhs, level)?;
+                let rhs_val = self.eval_expr(scope, state, fn_lib, rhs, level)?;
 
                 match lhs.as_ref() {
                     // name = rhs
@@ -1151,7 +1181,7 @@ impl Engine {
 
                         Some((index, ScopeEntryType::Normal)) => {
                             // Avoid referencing scope which is used below as mut
-                            *scope.get_mut(index) = rhs_val.clone();
+                            *scope.get_mut(index).0 = rhs_val.clone();
                             Ok(rhs_val)
                         }
 
@@ -1165,7 +1195,7 @@ impl Engine {
                     Expr::Index(idx_lhs, idx_expr, op_pos) => {
                         let new_val = Some(rhs_val);
                         self.eval_dot_index_chain(
-                            scope, fn_lib, idx_lhs, idx_expr, true, *op_pos, level, new_val,
+                            scope, state, fn_lib, idx_lhs, idx_expr, true, *op_pos, level, new_val,
                         )
                     }
                     // dot_lhs.dot_rhs = rhs
@@ -1173,7 +1203,7 @@ impl Engine {
                     Expr::Dot(dot_lhs, dot_rhs, _) => {
                         let new_val = Some(rhs_val);
                         self.eval_dot_index_chain(
-                            scope, fn_lib, dot_lhs, dot_rhs, false, *op_pos, level, new_val,
+                            scope, state, fn_lib, dot_lhs, dot_rhs, false, *op_pos, level, new_val,
                         )
                     }
                     // Error assignment to constant
@@ -1193,22 +1223,22 @@ impl Engine {
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(lhs, idx_expr, op_pos) => {
-                self.eval_dot_index_chain(scope, fn_lib, lhs, idx_expr, true, *op_pos, level, None)
-            }
+            Expr::Index(lhs, idx_expr, op_pos) => self.eval_dot_index_chain(
+                scope, state, fn_lib, lhs, idx_expr, true, *op_pos, level, None,
+            ),
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(lhs, dot_rhs, op_pos) => {
-                self.eval_dot_index_chain(scope, fn_lib, lhs, dot_rhs, false, *op_pos, level, None)
-            }
+            Expr::Dot(lhs, dot_rhs, op_pos) => self.eval_dot_index_chain(
+                scope, state, fn_lib, lhs, dot_rhs, false, *op_pos, level, None,
+            ),
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(contents, _) => {
                 let mut arr = Array::new();
 
                 contents.into_iter().try_for_each(|item| {
-                    self.eval_expr(scope, fn_lib, item, level)
+                    self.eval_expr(scope, state, fn_lib, item, level)
                         .map(|val| arr.push(val))
                 })?;
 
@@ -1220,9 +1250,10 @@ impl Engine {
                 let mut map = Map::new();
 
                 contents.into_iter().try_for_each(|(key, expr, _)| {
-                    self.eval_expr(scope, fn_lib, &expr, level).map(|val| {
-                        map.insert(key.clone(), val);
-                    })
+                    self.eval_expr(scope, state, fn_lib, &expr, level)
+                        .map(|val| {
+                            map.insert(key.clone(), val);
+                        })
                 })?;
 
                 Ok(Dynamic(Union::Map(Box::new(map))))
@@ -1231,7 +1262,7 @@ impl Engine {
             Expr::FunctionCall(fn_name, arg_exprs, def_val, pos) => {
                 let mut arg_values = arg_exprs
                     .iter()
-                    .map(|expr| self.eval_expr(scope, fn_lib, expr, level))
+                    .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
@@ -1242,27 +1273,34 @@ impl Engine {
                     && !self.has_override(fn_lib, KEYWORD_EVAL)
                 {
                     // Evaluate the text string as a script
-                    return self.eval_script_expr(scope, fn_lib, args[0], arg_exprs[0].position());
+                    let result =
+                        self.eval_script_expr(scope, fn_lib, args[0], arg_exprs[0].position());
+
+                    // IMPORTANT! The eval may define new variables in the current scope!
+                    //            We can no longer trust the variable offsets.
+                    state.always_search = true;
+
+                    return result;
                 }
 
                 // Normal function call
-                let def_val = def_val.as_ref();
+                let def_val = def_val.as_deref();
                 self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, level)
             }
 
             Expr::In(lhs, rhs, _) => {
-                self.eval_in_expr(scope, fn_lib, lhs.as_ref(), rhs.as_ref(), level)
+                self.eval_in_expr(scope, state, fn_lib, lhs.as_ref(), rhs.as_ref(), level)
             }
 
             Expr::And(lhs, rhs, _) => Ok((self
-                    .eval_expr(scope, fn_lib,lhs.as_ref(), level)?
+                    .eval_expr(scope, state, fn_lib, lhs.as_ref(), level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
                     })?
                     && // Short-circuit using &&
                 self
-                    .eval_expr(scope, fn_lib,rhs.as_ref(), level)?
+                    .eval_expr(scope, state, fn_lib, rhs.as_ref(), level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
@@ -1270,14 +1308,14 @@ impl Engine {
             .into()),
 
             Expr::Or(lhs, rhs, _) => Ok((self
-                    .eval_expr(scope,fn_lib, lhs.as_ref(), level)?
+                    .eval_expr(scope, state, fn_lib, lhs.as_ref(), level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
                     })?
                     || // Short-circuit using ||
                 self
-                    .eval_expr(scope,fn_lib, rhs.as_ref(), level)?
+                    .eval_expr(scope, state, fn_lib, rhs.as_ref(), level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
@@ -1296,6 +1334,7 @@ impl Engine {
     pub(crate) fn eval_stmt(
         &self,
         scope: &mut Scope,
+        state: &mut State,
         fn_lib: &FunctionsLib,
         stmt: &Stmt,
         level: usize,
@@ -1306,7 +1345,7 @@ impl Engine {
 
             // Expression as statement
             Stmt::Expr(expr) => {
-                let result = self.eval_expr(scope, fn_lib, expr, level)?;
+                let result = self.eval_expr(scope, state, fn_lib, expr, level)?;
 
                 Ok(if let Expr::Assignment(_, _, _) = *expr.as_ref() {
                     // If it is an assignment, erase the result at the root
@@ -1321,24 +1360,28 @@ impl Engine {
                 let prev_len = scope.len();
 
                 let result = block.iter().try_fold(().into(), |_, stmt| {
-                    self.eval_stmt(scope, fn_lib, stmt, level)
+                    self.eval_stmt(scope, state, fn_lib, stmt, level)
                 });
 
                 scope.rewind(prev_len);
+
+                // The impact of an eval statement goes away at the end of a block
+                // because any new variables introduced will go out of scope
+                state.always_search = false;
 
                 result
             }
 
             // If-else statement
             Stmt::IfThenElse(guard, if_body, else_body) => self
-                .eval_expr(scope, fn_lib, guard, level)?
+                .eval_expr(scope, state, fn_lib, guard, level)?
                 .as_bool()
                 .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(guard.position())))
                 .and_then(|guard_val| {
                     if guard_val {
-                        self.eval_stmt(scope, fn_lib, if_body, level)
+                        self.eval_stmt(scope, state, fn_lib, if_body, level)
                     } else if let Some(stmt) = else_body {
-                        self.eval_stmt(scope, fn_lib, stmt.as_ref(), level)
+                        self.eval_stmt(scope, state, fn_lib, stmt.as_ref(), level)
                     } else {
                         Ok(().into())
                     }
@@ -1346,8 +1389,11 @@ impl Engine {
 
             // While loop
             Stmt::While(guard, body) => loop {
-                match self.eval_expr(scope, fn_lib, guard, level)?.as_bool() {
-                    Ok(true) => match self.eval_stmt(scope, fn_lib, body, level) {
+                match self
+                    .eval_expr(scope, state, fn_lib, guard, level)?
+                    .as_bool()
+                {
+                    Ok(true) => match self.eval_stmt(scope, state, fn_lib, body, level) {
                         Ok(_) => (),
                         Err(err) => match *err {
                             EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1364,7 +1410,7 @@ impl Engine {
 
             // Loop statement
             Stmt::Loop(body) => loop {
-                match self.eval_stmt(scope, fn_lib, body, level) {
+                match self.eval_stmt(scope, state, fn_lib, body, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1376,7 +1422,7 @@ impl Engine {
 
             // For loop
             Stmt::For(name, expr, body) => {
-                let arr = self.eval_expr(scope, fn_lib, expr, level)?;
+                let arr = self.eval_expr(scope, state, fn_lib, expr, level)?;
                 let tid = arr.type_id();
 
                 if let Some(iter_fn) = self.type_iterators.get(&tid).or_else(|| {
@@ -1390,9 +1436,9 @@ impl Engine {
                     let index = scope.len() - 1;
 
                     for a in iter_fn(arr) {
-                        *scope.get_mut(index) = a;
+                        *scope.get_mut(index).0 = a;
 
-                        match self.eval_stmt(scope, fn_lib, body, level) {
+                        match self.eval_stmt(scope, state, fn_lib, body, level) {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1422,7 +1468,7 @@ impl Engine {
 
             // Return value
             Stmt::ReturnWithVal(Some(a), ReturnType::Return, pos) => Err(Box::new(
-                EvalAltResult::Return(self.eval_expr(scope, fn_lib, a, level)?, *pos),
+                EvalAltResult::Return(self.eval_expr(scope, state, fn_lib, a, level)?, *pos),
             )),
 
             // Empty throw
@@ -1432,7 +1478,7 @@ impl Engine {
 
             // Throw value
             Stmt::ReturnWithVal(Some(a), ReturnType::Exception, pos) => {
-                let val = self.eval_expr(scope, fn_lib, a, level)?;
+                let val = self.eval_expr(scope, state, fn_lib, a, level)?;
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     val.take_string().unwrap_or_else(|_| "".to_string()),
                     *pos,
@@ -1441,7 +1487,7 @@ impl Engine {
 
             // Let statement
             Stmt::Let(name, Some(expr), _) => {
-                let val = self.eval_expr(scope, fn_lib, expr, level)?;
+                let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Normal, val, false);
                 Ok(().into())
@@ -1455,7 +1501,7 @@ impl Engine {
 
             // Const statement
             Stmt::Const(name, expr, _) if expr.is_constant() => {
-                let val = self.eval_expr(scope, fn_lib, expr, level)?;
+                let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
                 scope.push_dynamic_value(name.clone(), ScopeEntryType::Constant, val, true);
                 Ok(().into())

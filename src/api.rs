@@ -1,7 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, Map};
+use crate::engine::{make_getter, make_setter, Engine, Map, State};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
@@ -795,10 +795,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let mut state = State::new();
+
         ast.0
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, ast.1.as_ref(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -858,10 +860,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
+        let mut state = State::new();
+
         ast.0
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, ast.1.as_ref(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
             })
             .map_or_else(
                 |err| match *err {

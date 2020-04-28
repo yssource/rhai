@@ -34,10 +34,10 @@ fn test_eval_function() -> Result<(), Box<EvalAltResult>> {
                 script +=    "y += foo(y);";
                 script +=    "x + y";
 
-                eval(script)
+                eval(script) + x + y
     "#
         )?,
-        42
+        84
     );
 
     assert_eq!(
@@ -54,7 +54,8 @@ fn test_eval_function() -> Result<(), Box<EvalAltResult>> {
         32
     );
 
-    assert!(!scope.contains("z"));
+    assert!(scope.contains("script"));
+    assert_eq!(scope.len(), 3);
 
     Ok(())
 }
