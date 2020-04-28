@@ -368,12 +368,12 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             //id = id2 = expr2
             Expr::Assignment(id2, expr2, pos2) => match (*id, *id2) {
                 // var = var = expr2 -> var = expr2
-                (Expr::Variable(var, _), Expr::Variable(var2, _)) if var == var2 => {
+                (Expr::Variable(var, sp, _), Expr::Variable(var2, sp2, _)) if var == var2 && sp == sp2 => {
                     // Assignment to the same variable - fold
                     state.set_dirty();
 
                     Expr::Assignment(
-                        Box::new(Expr::Variable(var, pos)),
+                        Box::new(Expr::Variable(var, sp, pos)),
                         Box::new(optimize_expr(*expr2, state)),
                         pos,
                     )
@@ -397,13 +397,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(lhs, rhs, pos) => match (*lhs, *rhs) {
             // map.string
-            (Expr::Map(items, pos), Expr::Property(s, _))
-                if items.iter().all(|(_, x, _)| x.is_pure()) =>
-            {
+            (Expr::Map(items, pos), Expr::Property(s, _)) if items.iter().all(|(_, x, _)| x.is_pure()) => {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                items.into_iter().find(|(name, _, _)| name == s.as_ref())
+                items.into_iter().find(|(name, _, _)| name == &s)
                     .map(|(_, expr, _)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -428,13 +426,11 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 items.remove(i as usize).set_position(pos)
             }
             // map[string]
-            (Expr::Map(items, pos), Expr::StringConstant(s, _))
-                if items.iter().all(|(_, x, _)| x.is_pure()) =>
-            {
+            (Expr::Map(items, pos), Expr::StringConstant(s, _)) if items.iter().all(|(_, x, _)| x.is_pure()) => {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                items.into_iter().find(|(name, _, _)| name == s.as_ref())
+                items.into_iter().find(|(name, _, _)| name == &s)
                     .map(|(_, expr, _)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -470,7 +466,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             // "xxx" in "xxxxx"
             (Expr::StringConstant(lhs, pos), Expr::StringConstant(rhs, _)) => {
                 state.set_dirty();
-                if rhs.contains(lhs.as_ref()) {
+                if rhs.contains(&lhs) {
                     Expr::True(pos)
                 } else {
                     Expr::False(pos)
@@ -613,7 +609,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             Expr::FunctionCall(id, args.into_iter().map(|a| optimize_expr(a, state)).collect(), def_value, pos),
 
         // constant-name
-        Expr::Variable(name, pos) if state.contains_constant(&name) => {
+        Expr::Variable(name, _, pos) if state.contains_constant(&name) => {
             state.set_dirty();
 
             // Replace constant with value

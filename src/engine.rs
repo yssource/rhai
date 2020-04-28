@@ -893,7 +893,7 @@ impl Engine {
 
         match dot_lhs {
             // id.??? or id[???]
-            Expr::Variable(id, pos) => {
+            Expr::Variable(id, _, pos) => {
                 let (target, typ) = search_scope(scope, id, *pos)?;
 
                 // Constants cannot be modified
@@ -1129,7 +1129,7 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok((*f).into()),
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
-            Expr::Variable(id, pos) => search_scope(scope, id, *pos).map(|(v, _)| v.clone()),
+            Expr::Variable(id, _, pos) => search_scope(scope, id, *pos).map(|(v, _)| v.clone()),
             Expr::Property(_, _) => panic!("unexpected property."),
 
             // Statement block
@@ -1141,7 +1141,7 @@ impl Engine {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(name, pos) => match scope.get(name) {
+                    Expr::Variable(name, _, pos) => match scope.get(name) {
                         None => {
                             return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
                                 name.to_string(),

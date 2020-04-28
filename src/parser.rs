@@ -12,7 +12,6 @@ use crate::stdlib::{
     boxed::Box,
     char,
     collections::HashMap,
-    fmt::Display,
     format,
     iter::Peekable,
     ops::Add,
@@ -196,11 +195,11 @@ pub enum Stmt {
     /// loop { stmt }
     Loop(Box<Stmt>),
     /// for id in expr { stmt }
-    For(Cow<'static, str>, Box<Expr>, Box<Stmt>),
+    For(String, Box<Expr>, Box<Stmt>),
     /// let id = expr
-    Let(Cow<'static, str>, Option<Box<Expr>>, Position),
+    Let(String, Option<Box<Expr>>, Position),
     /// const id = expr
-    Const(Cow<'static, str>, Box<Expr>, Position),
+    Const(String, Box<Expr>, Position),
     /// { stmt; ... }
     Block(Vec<Stmt>, Position),
     /// { stmt }
@@ -280,14 +279,16 @@ pub enum Expr {
     /// Character constant.
     CharConstant(char, Position),
     /// String constant.
-    StringConstant(Cow<'static, str>, Position),
+    StringConstant(String, Position),
     /// Variable access.
-    Variable(Cow<'static, str>, Position),
+    Variable(String, usize, Position),
     /// Property access.
-    Property(Cow<'static, str>, Position),
+    Property(String, Position),
     /// { stmt }
     Stmt(Box<Stmt>, Position),
     /// func(expr, ... )
+    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
+    /// and the function names are predictable, so no need to allocate a new `String`.
     FunctionCall(Cow<'static, str>, Vec<Expr>, Option<Dynamic>, Position),
     /// expr = expr
     Assignment(Box<Expr>, Box<Expr>, Position),
@@ -325,7 +326,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(f, _) => (*f).into(),
             Self::CharConstant(c, _) => (*c).into(),
-            Self::StringConstant(s, _) => s.to_string().into(),
+            Self::StringConstant(s, _) => s.clone().into(),
             Self::True(_) => true.into(),
             Self::False(_) => false.into(),
             Self::Unit(_) => ().into(),
@@ -382,7 +383,7 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, pos)
+            | Self::Variable(_, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
             | Self::FunctionCall(_, _, _, pos)
@@ -408,7 +409,7 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, pos)
+            | Self::Variable(_, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
             | Self::FunctionCall(_, _, _, pos)
@@ -439,7 +440,7 @@ impl Expr {
 
             Self::Stmt(stmt, _) => stmt.is_pure(),
 
-            Self::Variable(_, _) => true,
+            Self::Variable(_, _, _) => true,
 
             expr => expr.is_constant(),
         }
@@ -498,7 +499,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Variable(_, _) | Self::Property(_, _) => match token {
+            Self::Variable(_, _, _) | Self::Property(_, _) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
                 _ => false,
             },
@@ -508,7 +509,7 @@ impl Expr {
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     pub(crate) fn into_property(self) -> Self {
         match self {
-            Self::Variable(id, pos) => Self::Property(id, pos),
+            Self::Variable(id, _, pos) => Self::Property(id, pos),
             _ => self,
         }
     }
@@ -567,8 +568,8 @@ fn parse_paren_expr<'a>(
 }
 
 /// Parse a function call.
-fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
-    id: S,
+fn parse_call_expr<'a>(
+    id: String,
     input: &mut Peekable<TokenIterator<'a>>,
     begin: Position,
     allow_stmt_expr: bool,
@@ -916,8 +917,8 @@ fn parse_primary<'a>(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(x, pos),
         Token::CharConstant(c) => Expr::CharConstant(c, pos),
-        Token::StringConst(s) => Expr::StringConstant(s.into(), pos),
-        Token::Identifier(s) => Expr::Variable(s.into(), pos),
+        Token::StringConst(s) => Expr::StringConstant(s, pos),
+        Token::Identifier(s) => Expr::Variable(s, 0, pos),
         Token::LeftParen => parse_paren_expr(input, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
         Token::LeftBracket => parse_array_literal(input, pos, allow_stmt_expr)?,
@@ -943,7 +944,7 @@ fn parse_primary<'a>(
 
         root_expr = match (root_expr, token) {
             // Function call
-            (Expr::Variable(id, pos), Token::LeftParen)
+            (Expr::Variable(id, _, pos), Token::LeftParen)
             | (Expr::Property(id, pos), Token::LeftParen) => {
                 parse_call_expr(id, input, pos, allow_stmt_expr)?
             }
@@ -1078,7 +1079,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position, is_index: bool) -> Expr
             idx_pos,
         ),
         // lhs.id
-        (lhs, rhs @ Expr::Variable(_, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
+        (lhs, rhs @ Expr::Variable(_, _, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
             let lhs = if is_index { lhs.into_property() } else { lhs };
             Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos)
         }
@@ -1479,7 +1480,7 @@ fn parse_for<'a>(
     let expr = parse_expr(input, allow_stmt_expr)?;
     let body = parse_block(input, true, allow_stmt_expr)?;
 
-    Ok(Stmt::For(name.into(), Box::new(expr), Box::new(body)))
+    Ok(Stmt::For(name, Box::new(expr), Box::new(body)))
 }
 
 /// Parse a variable definition statement.
@@ -1505,10 +1506,10 @@ fn parse_let<'a>(
 
         match var_type {
             // let name = expr
-            ScopeEntryType::Normal => Ok(Stmt::Let(name.into(), Some(Box::new(init_value)), pos)),
+            ScopeEntryType::Normal => Ok(Stmt::Let(name, Some(Box::new(init_value)), pos)),
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
-                Ok(Stmt::Const(name.into(), Box::new(init_value), pos))
+                Ok(Stmt::Const(name, Box::new(init_value), pos))
             }
             // const name = expr - error
             ScopeEntryType::Constant => {
@@ -1517,7 +1518,7 @@ fn parse_let<'a>(
         }
     } else {
         // let name
-        Ok(Stmt::Let(name.into(), None, pos))
+        Ok(Stmt::Let(name, None, pos))
     }
 }
 
@@ -1840,7 +1841,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
         Union::Char(value) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value) => Some(Expr::StringConstant((*value).into(), pos)),
+        Union::Str(value) => Some(Expr::StringConstant((*value).clone(), pos)),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]
