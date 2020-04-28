@@ -12,12 +12,10 @@ use crate::stdlib::{
 };
 
 fn map_get_keys(map: &mut Map) -> Vec<Dynamic> {
-    map.iter()
-        .map(|(k, _)| k.to_string().into())
-        .collect::<Vec<_>>()
+    map.iter().map(|(k, _)| k.to_string().into()).collect()
 }
 fn map_get_values(map: &mut Map) -> Vec<Dynamic> {
-    map.iter().map(|(_, v)| v.clone()).collect::<Vec<_>>()
+    map.iter().map(|(_, v)| v.clone()).collect()
 }
 
 #[cfg(not(feature = "no_object"))]

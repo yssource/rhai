@@ -87,10 +87,10 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
                 #[cfg(not(feature = "unchecked"))]
                 {
                     if seconds > (MAX_INT as u64) {
-                        return Err(EvalAltResult::ErrorArithmetic(
+                        return Err(Box::new(EvalAltResult::ErrorArithmetic(
                             format!("Integer overflow for timestamp.elapsed(): {}", seconds),
                             Position::none(),
-                        ));
+                        )));
                     }
                 }
                 return Ok(seconds as INT);

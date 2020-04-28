@@ -143,6 +143,7 @@ fn test_map_return() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_index"))]
 fn test_map_for() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
