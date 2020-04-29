@@ -729,10 +729,10 @@ pub fn optimize_into_ast(
 
                     // Optimize the function body
                     let mut body =
-                        optimize(vec![fn_def.body], engine, &Scope::new(), &fn_lib, level);
+                        optimize(vec![*fn_def.body], engine, &Scope::new(), &fn_lib, level);
 
                     // {} -> Noop
-                    fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                    fn_def.body = Box::new(match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
                         // { return val; } -> val
                         Stmt::ReturnWithVal(Some(val), ReturnType::Return, _) => Stmt::Expr(val),
                         // { return; } -> ()
@@ -741,7 +741,7 @@ pub fn optimize_into_ast(
                         }
                         // All others
                         stmt => stmt,
-                    };
+                    });
                 }
                 fn_def
             })

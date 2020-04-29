@@ -189,7 +189,7 @@ impl StaticVec {
 }
 
 /// A type that holds all the current states of the Engine.
-#[derive(Debug, Clone, Hash, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
@@ -198,6 +198,7 @@ pub struct State {
 }
 
 impl State {
+    /// Create a new `State`.
     pub fn new() -> Self {
         Self {
             always_search: false,
@@ -914,10 +915,9 @@ impl Engine {
         match dot_lhs {
             // id.??? or id[???]
             Expr::Variable(id, index, pos) => {
-                let (target, typ) = if !state.always_search && *index > 0 {
-                    scope.get_mut(scope.len() - *index)
-                } else {
-                    search_scope(scope, id, *pos)?
+                let (target, typ) = match index {
+                    Some(i) if !state.always_search => scope.get_mut(scope.len() - i.get()),
+                    _ => search_scope(scope, id, *pos)?,
                 };
 
                 // Constants cannot be modified
@@ -1156,8 +1156,8 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok((*f).into()),
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
-            Expr::Variable(_, index, _) if !state.always_search && *index > 0 => {
-                Ok(scope.get_mut(scope.len() - *index).0.clone())
+            Expr::Variable(_, Some(index), _) if !state.always_search => {
+                Ok(scope.get_mut(scope.len() - index.get()).0.clone())
             }
             Expr::Variable(id, _, pos) => search_scope(scope, id, *pos).map(|(v, _)| v.clone()),
             Expr::Property(_, _) => panic!("unexpected property."),
@@ -1272,13 +1272,17 @@ impl Engine {
                     && args.len() == 1
                     && !self.has_override(fn_lib, KEYWORD_EVAL)
                 {
+                    let prev_len = scope.len();
+
                     // Evaluate the text string as a script
                     let result =
                         self.eval_script_expr(scope, fn_lib, args[0], arg_exprs[0].position());
 
-                    // IMPORTANT! The eval may define new variables in the current scope!
-                    //            We can no longer trust the variable offsets.
-                    state.always_search = true;
+                    if scope.len() != prev_len {
+                        // IMPORTANT! If the eval defines new variables in the current scope,
+                        //            all variable offsets from this point on will be mis-aligned.
+                        state.always_search = true;
+                    }
 
                     return result;
                 }

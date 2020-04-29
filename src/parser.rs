@@ -14,6 +14,7 @@ use crate::stdlib::{
     collections::HashMap,
     format,
     iter::Peekable,
+    num::NonZeroUsize,
     ops::Add,
     rc::Rc,
     string::{String, ToString},
@@ -169,7 +170,7 @@ pub struct FnDef {
     /// Names of function parameters.
     pub params: Vec<String>,
     /// Function body.
-    pub body: Stmt,
+    pub body: Box<Stmt>,
     /// Position of the function definition.
     pub pos: Position,
 }
@@ -184,29 +185,37 @@ pub enum ReturnType {
 }
 
 /// A type that encapsulates a local stack with variable names to simulate an actual runtime scope.
+#[derive(Debug, Clone)]
 struct Stack(Vec<String>);
 
 impl Stack {
+    /// Create a new `Stack`.
     pub fn new() -> Self {
         Self(Vec::new())
     }
+    /// Get the number of variables in the `Stack`.
     pub fn len(&self) -> usize {
         self.0.len()
     }
+    /// Push (add) a new variable onto the `Stack`.
     pub fn push(&mut self, name: String) {
         self.0.push(name);
     }
+    /// Rewind the stack to a previous size.
     pub fn rewind(&mut self, len: usize) {
         self.0.truncate(len);
     }
-    pub fn find(&self, name: &str) -> usize {
+    /// Find a variable by name in the `Stack`, searching in reverse.
+    /// The return value is the offset to be deducted from `Stack::len`,
+    /// i.e. the top element of the `Stack` is offset 1.
+    /// Return zero when the variable name is not found in the `Stack`.
+    pub fn find(&self, name: &str) -> Option<NonZeroUsize> {
         self.0
             .iter()
             .rev()
             .enumerate()
             .find(|(_, n)| *n == name)
-            .map(|(i, _)| i + 1)
-            .unwrap_or(0)
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 }
 
@@ -308,7 +317,7 @@ pub enum Expr {
     /// String constant.
     StringConstant(String, Position),
     /// Variable access.
-    Variable(String, usize, Position),
+    Variable(String, Option<NonZeroUsize>, Position),
     /// Property access.
     Property(String, Position),
     /// { stmt }
@@ -1836,10 +1845,10 @@ fn parse_fn<'a>(
         })?;
 
     // Parse function body
-    let body = match input.peek().unwrap() {
+    let body = Box::new(match input.peek().unwrap() {
         (Token::LeftBrace, _) => parse_block(input, stack, false, allow_stmt_expr)?,
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
-    };
+    });
 
     let params = params.into_iter().map(|(p, _)| p).collect();
 
