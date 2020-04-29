@@ -4,7 +4,7 @@ use crate::any::{Dynamic, Variant};
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
-use crate::stdlib::{borrow::Cow, iter, vec::Vec};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -349,7 +349,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Get a mutable reference to an entry in the Scope.
-    pub(crate) fn get_mut(&mut self, index: usize) -> &mut Dynamic {
+    pub(crate) fn get_mut(&mut self, index: usize) -> (&mut Dynamic, EntryType) {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
 
         // assert_ne!(
@@ -358,11 +358,11 @@ impl<'a> Scope<'a> {
         //     "get mut of constant entry"
         // );
 
-        &mut entry.value
+        (&mut entry.value, entry.typ)
     }
 
     /// Get an iterator to entries in the Scope.
-    pub fn iter(&self) -> impl Iterator<Item = &Entry> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev() // Always search a Scope in reverse order
     }
 }

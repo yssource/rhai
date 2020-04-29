@@ -12,9 +12,9 @@ use crate::stdlib::{
     boxed::Box,
     char,
     collections::HashMap,
-    fmt::Display,
     format,
     iter::Peekable,
+    num::NonZeroUsize,
     ops::Add,
     rc::Rc,
     string::{String, ToString},
@@ -170,7 +170,7 @@ pub struct FnDef {
     /// Names of function parameters.
     pub params: Vec<String>,
     /// Function body.
-    pub body: Stmt,
+    pub body: Box<Stmt>,
     /// Position of the function definition.
     pub pos: Position,
 }
@@ -182,6 +182,41 @@ pub enum ReturnType {
     Return,
     /// `throw` statement.
     Exception,
+}
+
+/// A type that encapsulates a local stack with variable names to simulate an actual runtime scope.
+#[derive(Debug, Clone)]
+struct Stack(Vec<String>);
+
+impl Stack {
+    /// Create a new `Stack`.
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+    /// Get the number of variables in the `Stack`.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Push (add) a new variable onto the `Stack`.
+    pub fn push(&mut self, name: String) {
+        self.0.push(name);
+    }
+    /// Rewind the stack to a previous size.
+    pub fn rewind(&mut self, len: usize) {
+        self.0.truncate(len);
+    }
+    /// Find a variable by name in the `Stack`, searching in reverse.
+    /// The return value is the offset to be deducted from `Stack::len`,
+    /// i.e. the top element of the `Stack` is offset 1.
+    /// Return zero when the variable name is not found in the `Stack`.
+    pub fn find(&self, name: &str) -> Option<NonZeroUsize> {
+        self.0
+            .iter()
+            .rev()
+            .enumerate()
+            .find(|(_, n)| *n == name)
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
+    }
 }
 
 /// A statement.
@@ -196,11 +231,11 @@ pub enum Stmt {
     /// loop { stmt }
     Loop(Box<Stmt>),
     /// for id in expr { stmt }
-    For(Cow<'static, str>, Box<Expr>, Box<Stmt>),
+    For(String, Box<Expr>, Box<Stmt>),
     /// let id = expr
-    Let(Cow<'static, str>, Option<Box<Expr>>, Position),
+    Let(String, Option<Box<Expr>>, Position),
     /// const id = expr
-    Const(Cow<'static, str>, Box<Expr>, Position),
+    Const(String, Box<Expr>, Position),
     /// { stmt; ... }
     Block(Vec<Stmt>, Position),
     /// { stmt }
@@ -280,15 +315,22 @@ pub enum Expr {
     /// Character constant.
     CharConstant(char, Position),
     /// String constant.
-    StringConstant(Cow<'static, str>, Position),
+    StringConstant(String, Position),
     /// Variable access.
-    Variable(Cow<'static, str>, Position),
+    Variable(String, Option<NonZeroUsize>, Position),
     /// Property access.
-    Property(Cow<'static, str>, Position),
+    Property(String, Position),
     /// { stmt }
     Stmt(Box<Stmt>, Position),
     /// func(expr, ... )
-    FunctionCall(Cow<'static, str>, Vec<Expr>, Option<Dynamic>, Position),
+    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
+    /// and the function names are predictable, so no need to allocate a new `String`.
+    FunctionCall(
+        Cow<'static, str>,
+        Box<Vec<Expr>>,
+        Option<Box<Dynamic>>,
+        Position,
+    ),
     /// expr = expr
     Assignment(Box<Expr>, Box<Expr>, Position),
     /// lhs.rhs
@@ -325,7 +367,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(f, _) => (*f).into(),
             Self::CharConstant(c, _) => (*c).into(),
-            Self::StringConstant(s, _) => s.to_string().into(),
+            Self::StringConstant(s, _) => s.clone().into(),
             Self::True(_) => true.into(),
             Self::False(_) => false.into(),
             Self::Unit(_) => ().into(),
@@ -382,7 +424,7 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, pos)
+            | Self::Variable(_, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
             | Self::FunctionCall(_, _, _, pos)
@@ -408,7 +450,7 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, pos)
+            | Self::Variable(_, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
             | Self::FunctionCall(_, _, _, pos)
@@ -439,7 +481,7 @@ impl Expr {
 
             Self::Stmt(stmt, _) => stmt.is_pure(),
 
-            Self::Variable(_, _) => true,
+            Self::Variable(_, _, _) => true,
 
             expr => expr.is_constant(),
         }
@@ -498,7 +540,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Variable(_, _) | Self::Property(_, _) => match token {
+            Self::Variable(_, _, _) | Self::Property(_, _) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
                 _ => false,
             },
@@ -508,7 +550,7 @@ impl Expr {
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     pub(crate) fn into_property(self) -> Self {
         match self {
-            Self::Variable(id, pos) => Self::Property(id, pos),
+            Self::Variable(id, _, pos) => Self::Property(id, pos),
             _ => self,
         }
     }
@@ -543,6 +585,7 @@ fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool
 /// Parse ( expr )
 fn parse_paren_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -550,7 +593,7 @@ fn parse_paren_expr<'a>(
         return Ok(Expr::Unit(begin));
     }
 
-    let expr = parse_expr(input, allow_stmt_expr)?;
+    let expr = parse_expr(input, stack, allow_stmt_expr)?;
 
     match input.next().unwrap() {
         // ( xxx )
@@ -567,13 +610,14 @@ fn parse_paren_expr<'a>(
 }
 
 /// Parse a function call.
-fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
-    id: S,
+fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
+    id: String,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
-    let mut args_expr_list = Vec::new();
+    let mut args = Vec::new();
 
     match input.peek().unwrap() {
         // id <EOF>
@@ -589,19 +633,19 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
         // id()
         (Token::RightParen, _) => {
             eat_token(input, Token::RightParen);
-            return Ok(Expr::FunctionCall(id.into(), args_expr_list, None, begin));
+            return Ok(Expr::FunctionCall(id.into(), Box::new(args), None, begin));
         }
         // id...
         _ => (),
     }
 
     loop {
-        args_expr_list.push(parse_expr(input, allow_stmt_expr)?);
+        args.push(parse_expr(input, stack, allow_stmt_expr)?);
 
         match input.peek().unwrap() {
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
-                return Ok(Expr::FunctionCall(id.into(), args_expr_list, None, begin));
+                return Ok(Expr::FunctionCall(id.into(), Box::new(args), None, begin));
             }
             (Token::Comma, _) => {
                 eat_token(input, Token::Comma);
@@ -630,12 +674,13 @@ fn parse_call_expr<'a, S: Into<Cow<'static, str>> + Display>(
 /// Parse an indexing chain.
 /// Indexing binds to the right, so this call parses all possible levels of indexing following in the input.
 fn parse_index_chain<'a>(
-    lhs: Expr,
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
+    lhs: Expr,
     pos: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
-    let idx_expr = parse_expr(input, allow_stmt_expr)?;
+    let idx_expr = parse_expr(input, stack, allow_stmt_expr)?;
 
     // Check type of indexing - must be integer or string
     match &idx_expr {
@@ -750,7 +795,8 @@ fn parse_index_chain<'a>(
                 (Token::LeftBracket, _) => {
                     let follow_pos = eat_token(input, Token::LeftBracket);
                     // Recursively parse the indexing chain, right-binding each
-                    let follow = parse_index_chain(idx_expr, input, follow_pos, allow_stmt_expr)?;
+                    let follow =
+                        parse_index_chain(input, stack, idx_expr, follow_pos, allow_stmt_expr)?;
                     // Indexing binds to right
                     Ok(Expr::Index(Box::new(lhs), Box::new(follow), pos))
                 }
@@ -770,6 +816,7 @@ fn parse_index_chain<'a>(
 /// Parse an array literal.
 fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -777,7 +824,7 @@ fn parse_array_literal<'a>(
 
     if !match_token(input, Token::RightBracket)? {
         while !input.peek().unwrap().0.is_eof() {
-            arr.push(parse_expr(input, allow_stmt_expr)?);
+            arr.push(parse_expr(input, stack, allow_stmt_expr)?);
 
             match input.peek().unwrap() {
                 (Token::Comma, _) => eat_token(input, Token::Comma),
@@ -811,6 +858,7 @@ fn parse_array_literal<'a>(
 /// Parse a map literal.
 fn parse_map_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -852,7 +900,7 @@ fn parse_map_literal<'a>(
                 }
             };
 
-            let expr = parse_expr(input, allow_stmt_expr)?;
+            let expr = parse_expr(input, stack, allow_stmt_expr)?;
 
             map.push((name, expr, pos));
 
@@ -898,13 +946,14 @@ fn parse_map_literal<'a>(
 /// Parse a primary expression.
 fn parse_primary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     let (token, pos) = match input.peek().unwrap() {
         // { - block statement as expression
         (Token::LeftBrace, pos) if allow_stmt_expr => {
             let pos = *pos;
-            return parse_block(input, false, allow_stmt_expr)
+            return parse_block(input, stack, false, allow_stmt_expr)
                 .map(|block| Expr::Stmt(Box::new(block), pos));
         }
         (Token::EOF, pos) => return Err(PERR::UnexpectedEOF.into_err(*pos)),
@@ -916,13 +965,16 @@ fn parse_primary<'a>(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(x, pos),
         Token::CharConstant(c) => Expr::CharConstant(c, pos),
-        Token::StringConst(s) => Expr::StringConstant(s.into(), pos),
-        Token::Identifier(s) => Expr::Variable(s.into(), pos),
-        Token::LeftParen => parse_paren_expr(input, pos, allow_stmt_expr)?,
+        Token::StringConst(s) => Expr::StringConstant(s, pos),
+        Token::Identifier(s) => {
+            let index = stack.find(&s);
+            Expr::Variable(s, index, pos)
+        }
+        Token::LeftParen => parse_paren_expr(input, stack, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
-        Token::LeftBracket => parse_array_literal(input, pos, allow_stmt_expr)?,
+        Token::LeftBracket => parse_array_literal(input, stack, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_object"))]
-        Token::MapStart => parse_map_literal(input, pos, allow_stmt_expr)?,
+        Token::MapStart => parse_map_literal(input, stack, pos, allow_stmt_expr)?,
         Token::True => Expr::True(pos),
         Token::False => Expr::False(pos),
         Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
@@ -943,12 +995,14 @@ fn parse_primary<'a>(
 
         root_expr = match (root_expr, token) {
             // Function call
-            (Expr::Variable(id, pos), Token::LeftParen)
+            (Expr::Variable(id, _, pos), Token::LeftParen)
             | (Expr::Property(id, pos), Token::LeftParen) => {
-                parse_call_expr(id, input, pos, allow_stmt_expr)?
+                parse_call_expr(input, stack, id, pos, allow_stmt_expr)?
             }
             // Indexing
-            (expr, Token::LeftBracket) => parse_index_chain(expr, input, pos, allow_stmt_expr)?,
+            (expr, Token::LeftBracket) => {
+                parse_index_chain(input, stack, expr, pos, allow_stmt_expr)?
+            }
             // Unknown postfix operator
             (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
         }
@@ -960,6 +1014,7 @@ fn parse_primary<'a>(
 /// Parse a potential unary operator.
 fn parse_unary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     match input.peek().unwrap() {
@@ -967,7 +1022,7 @@ fn parse_unary<'a>(
         (Token::If, pos) => {
             let pos = *pos;
             Ok(Expr::Stmt(
-                Box::new(parse_if(input, false, allow_stmt_expr)?),
+                Box::new(parse_if(input, stack, false, allow_stmt_expr)?),
                 pos,
             ))
         }
@@ -975,7 +1030,7 @@ fn parse_unary<'a>(
         (Token::UnaryMinus, _) => {
             let pos = eat_token(input, Token::UnaryMinus);
 
-            match parse_unary(input, allow_stmt_expr)? {
+            match parse_unary(input, stack, allow_stmt_expr)? {
                 // Negative integer
                 Expr::IntegerConstant(i, _) => i
                     .checked_neg()
@@ -1000,49 +1055,51 @@ fn parse_unary<'a>(
                 Expr::FloatConstant(f, pos) => Ok(Expr::FloatConstant(-f, pos)),
 
                 // Call negative function
-                expr => Ok(Expr::FunctionCall("-".into(), vec![expr], None, pos)),
+                e => Ok(Expr::FunctionCall("-".into(), Box::new(vec![e]), None, pos)),
             }
         }
         // +expr
         (Token::UnaryPlus, _) => {
             eat_token(input, Token::UnaryPlus);
-            parse_unary(input, allow_stmt_expr)
+            parse_unary(input, stack, allow_stmt_expr)
         }
         // !expr
         (Token::Bang, _) => {
             let pos = eat_token(input, Token::Bang);
             Ok(Expr::FunctionCall(
                 "!".into(),
-                vec![parse_primary(input, allow_stmt_expr)?],
-                Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
+                Box::new(vec![parse_primary(input, stack, allow_stmt_expr)?]),
+                Some(Box::new(false.into())), // NOT operator, when operating on invalid operand, defaults to false
                 pos,
             ))
         }
         // <EOF>
         (Token::EOF, pos) => Err(PERR::UnexpectedEOF.into_err(*pos)),
         // All other tokens
-        _ => parse_primary(input, allow_stmt_expr),
+        _ => parse_primary(input, stack, allow_stmt_expr),
     }
 }
 
 fn parse_assignment_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     lhs: Expr,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     let pos = eat_token(input, Token::Equals);
-    let rhs = parse_expr(input, allow_stmt_expr)?;
+    let rhs = parse_expr(input, stack, allow_stmt_expr)?;
     Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
 }
 
 /// Parse an operator-assignment expression.
 fn parse_op_assignment_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     lhs: Expr,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     let (op, pos) = match *input.peek().unwrap() {
-        (Token::Equals, _) => return parse_assignment_stmt(input, lhs, allow_stmt_expr),
+        (Token::Equals, _) => return parse_assignment_stmt(input, stack, lhs, allow_stmt_expr),
         (Token::PlusAssign, pos) => ("+", pos),
         (Token::MinusAssign, pos) => ("-", pos),
         (Token::MultiplyAssign, pos) => ("*", pos),
@@ -1060,10 +1117,10 @@ fn parse_op_assignment_stmt<'a>(
     input.next();
 
     let lhs_copy = lhs.clone();
-    let rhs = parse_expr(input, allow_stmt_expr)?;
+    let rhs = parse_expr(input, stack, allow_stmt_expr)?;
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
-    let rhs_expr = Expr::FunctionCall(op.into(), vec![lhs_copy, rhs], None, pos);
+    let rhs_expr = Expr::FunctionCall(op.into(), Box::new(vec![lhs_copy, rhs]), None, pos);
     Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs_expr), pos))
 }
 
@@ -1078,7 +1135,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position, is_index: bool) -> Expr
             idx_pos,
         ),
         // lhs.id
-        (lhs, rhs @ Expr::Variable(_, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
+        (lhs, rhs @ Expr::Variable(_, _, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
             let lhs = if is_index { lhs.into_property() } else { lhs };
             Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos)
         }
@@ -1239,6 +1296,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
 /// Parse a binary expression.
 fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     parent_precedence: u8,
     lhs: Expr,
     allow_stmt_expr: bool,
@@ -1261,7 +1319,7 @@ fn parse_binary_op<'a>(
 
         let (op_token, pos) = input.next().unwrap();
 
-        let rhs = parse_unary(input, allow_stmt_expr)?;
+        let rhs = parse_unary(input, stack, allow_stmt_expr)?;
 
         let next_precedence = input.peek().unwrap().0.precedence();
 
@@ -1270,48 +1328,90 @@ fn parse_binary_op<'a>(
         let rhs = if (current_precedence == next_precedence && bind_right)
             || current_precedence < next_precedence
         {
-            parse_binary_op(input, current_precedence, rhs, allow_stmt_expr)?
+            parse_binary_op(input, stack, current_precedence, rhs, allow_stmt_expr)?
         } else {
             // Otherwise bind to left (even if next operator has the same precedence)
             rhs
         };
 
-        current_lhs = match op_token {
-            Token::Plus => Expr::FunctionCall("+".into(), vec![current_lhs, rhs], None, pos),
-            Token::Minus => Expr::FunctionCall("-".into(), vec![current_lhs, rhs], None, pos),
-            Token::Multiply => Expr::FunctionCall("*".into(), vec![current_lhs, rhs], None, pos),
-            Token::Divide => Expr::FunctionCall("/".into(), vec![current_lhs, rhs], None, pos),
+        let cmp_default = Some(Box::new(false.into()));
 
-            Token::LeftShift => Expr::FunctionCall("<<".into(), vec![current_lhs, rhs], None, pos),
-            Token::RightShift => Expr::FunctionCall(">>".into(), vec![current_lhs, rhs], None, pos),
-            Token::Modulo => Expr::FunctionCall("%".into(), vec![current_lhs, rhs], None, pos),
-            Token::PowerOf => Expr::FunctionCall("~".into(), vec![current_lhs, rhs], None, pos),
+        current_lhs = match op_token {
+            Token::Plus => {
+                Expr::FunctionCall("+".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::Minus => {
+                Expr::FunctionCall("-".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::Multiply => {
+                Expr::FunctionCall("*".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::Divide => {
+                Expr::FunctionCall("/".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+
+            Token::LeftShift => {
+                Expr::FunctionCall("<<".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::RightShift => {
+                Expr::FunctionCall(">>".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::Modulo => {
+                Expr::FunctionCall("%".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::PowerOf => {
+                Expr::FunctionCall("~".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
 
             // Comparison operators default to false when passed invalid operands
-            Token::EqualsTo => {
-                Expr::FunctionCall("==".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-            }
-            Token::NotEqualsTo => {
-                Expr::FunctionCall("!=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-            }
-            Token::LessThan => {
-                Expr::FunctionCall("<".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-            }
-            Token::LessThanEqualsTo => {
-                Expr::FunctionCall("<=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-            }
-            Token::GreaterThan => {
-                Expr::FunctionCall(">".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-            }
-            Token::GreaterThanEqualsTo => {
-                Expr::FunctionCall(">=".into(), vec![current_lhs, rhs], Some(false.into()), pos)
-            }
+            Token::EqualsTo => Expr::FunctionCall(
+                "==".into(),
+                Box::new(vec![current_lhs, rhs]),
+                cmp_default,
+                pos,
+            ),
+            Token::NotEqualsTo => Expr::FunctionCall(
+                "!=".into(),
+                Box::new(vec![current_lhs, rhs]),
+                cmp_default,
+                pos,
+            ),
+            Token::LessThan => Expr::FunctionCall(
+                "<".into(),
+                Box::new(vec![current_lhs, rhs]),
+                cmp_default,
+                pos,
+            ),
+            Token::LessThanEqualsTo => Expr::FunctionCall(
+                "<=".into(),
+                Box::new(vec![current_lhs, rhs]),
+                cmp_default,
+                pos,
+            ),
+            Token::GreaterThan => Expr::FunctionCall(
+                ">".into(),
+                Box::new(vec![current_lhs, rhs]),
+                cmp_default,
+                pos,
+            ),
+            Token::GreaterThanEqualsTo => Expr::FunctionCall(
+                ">=".into(),
+                Box::new(vec![current_lhs, rhs]),
+                cmp_default,
+                pos,
+            ),
 
             Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs), pos),
             Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
-            Token::Ampersand => Expr::FunctionCall("&".into(), vec![current_lhs, rhs], None, pos),
-            Token::Pipe => Expr::FunctionCall("|".into(), vec![current_lhs, rhs], None, pos),
-            Token::XOr => Expr::FunctionCall("^".into(), vec![current_lhs, rhs], None, pos),
+            Token::Ampersand => {
+                Expr::FunctionCall("&".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::Pipe => {
+                Expr::FunctionCall("|".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
+            Token::XOr => {
+                Expr::FunctionCall("^".into(), Box::new(vec![current_lhs, rhs]), None, pos)
+            }
 
             Token::In => make_in_expr(current_lhs, rhs, pos)?,
 
@@ -1326,10 +1426,11 @@ fn parse_binary_op<'a>(
 /// Parse an expression.
 fn parse_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
-    let lhs = parse_unary(input, allow_stmt_expr)?;
-    parse_binary_op(input, 1, lhs, allow_stmt_expr)
+    let lhs = parse_unary(input, stack, allow_stmt_expr)?;
+    parse_binary_op(input, stack, 1, lhs, allow_stmt_expr)
 }
 
 /// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
@@ -1379,6 +1480,7 @@ fn ensure_not_assignment<'a>(
 /// Parse an if statement.
 fn parse_if<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     breakable: bool,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
@@ -1387,18 +1489,18 @@ fn parse_if<'a>(
 
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, allow_stmt_expr)?;
+    let guard = parse_expr(input, stack, allow_stmt_expr)?;
     ensure_not_assignment(input)?;
-    let if_body = parse_block(input, breakable, allow_stmt_expr)?;
+    let if_body = parse_block(input, stack, breakable, allow_stmt_expr)?;
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).unwrap_or(false) {
         Some(Box::new(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
-            parse_if(input, breakable, allow_stmt_expr)?
+            parse_if(input, stack, breakable, allow_stmt_expr)?
         } else {
             // if guard { if_body } else { else-body }
-            parse_block(input, breakable, allow_stmt_expr)?
+            parse_block(input, stack, breakable, allow_stmt_expr)?
         }))
     } else {
         None
@@ -1414,6 +1516,7 @@ fn parse_if<'a>(
 /// Parse a while loop.
 fn parse_while<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
     // while ...
@@ -1421,9 +1524,9 @@ fn parse_while<'a>(
 
     // while guard { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, allow_stmt_expr)?;
+    let guard = parse_expr(input, stack, allow_stmt_expr)?;
     ensure_not_assignment(input)?;
-    let body = parse_block(input, true, allow_stmt_expr)?;
+    let body = parse_block(input, stack, true, allow_stmt_expr)?;
 
     Ok(Stmt::While(Box::new(guard), Box::new(body)))
 }
@@ -1431,13 +1534,14 @@ fn parse_while<'a>(
 /// Parse a loop statement.
 fn parse_loop<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
     // loop ...
     eat_token(input, Token::Loop);
 
     // loop { body }
-    let body = parse_block(input, true, allow_stmt_expr)?;
+    let body = parse_block(input, stack, true, allow_stmt_expr)?;
 
     Ok(Stmt::Loop(Box::new(body)))
 }
@@ -1445,6 +1549,7 @@ fn parse_loop<'a>(
 /// Parse a for loop.
 fn parse_for<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
     // for ...
@@ -1476,15 +1581,22 @@ fn parse_for<'a>(
 
     // for name in expr { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let expr = parse_expr(input, allow_stmt_expr)?;
-    let body = parse_block(input, true, allow_stmt_expr)?;
+    let expr = parse_expr(input, stack, allow_stmt_expr)?;
 
-    Ok(Stmt::For(name.into(), Box::new(expr), Box::new(body)))
+    let prev_len = stack.len();
+    stack.push(name.clone());
+
+    let body = parse_block(input, stack, true, allow_stmt_expr)?;
+
+    stack.rewind(prev_len);
+
+    Ok(Stmt::For(name, Box::new(expr), Box::new(body)))
 }
 
 /// Parse a variable definition statement.
 fn parse_let<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     var_type: ScopeEntryType,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
@@ -1501,14 +1613,18 @@ fn parse_let<'a>(
     // let name = ...
     if match_token(input, Token::Equals)? {
         // let name = expr
-        let init_value = parse_expr(input, allow_stmt_expr)?;
+        let init_value = parse_expr(input, stack, allow_stmt_expr)?;
 
         match var_type {
             // let name = expr
-            ScopeEntryType::Normal => Ok(Stmt::Let(name.into(), Some(Box::new(init_value)), pos)),
+            ScopeEntryType::Normal => {
+                stack.push(name.clone());
+                Ok(Stmt::Let(name, Some(Box::new(init_value)), pos))
+            }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
-                Ok(Stmt::Const(name.into(), Box::new(init_value), pos))
+                stack.push(name.clone());
+                Ok(Stmt::Const(name, Box::new(init_value), pos))
             }
             // const name = expr - error
             ScopeEntryType::Constant => {
@@ -1517,13 +1633,14 @@ fn parse_let<'a>(
         }
     } else {
         // let name
-        Ok(Stmt::Let(name.into(), None, pos))
+        Ok(Stmt::Let(name, None, pos))
     }
 }
 
 /// Parse a statement block.
 fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     breakable: bool,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
@@ -1539,10 +1656,11 @@ fn parse_block<'a>(
     };
 
     let mut statements = Vec::new();
+    let prev_len = stack.len();
 
     while !match_token(input, Token::RightBrace)? {
         // Parse statements inside the block
-        let stmt = parse_stmt(input, breakable, allow_stmt_expr)?;
+        let stmt = parse_stmt(input, stack, breakable, allow_stmt_expr)?;
 
         // See if it needs a terminating semicolon
         let need_semicolon = !stmt.is_self_terminated();
@@ -1578,22 +1696,26 @@ fn parse_block<'a>(
         }
     }
 
+    stack.rewind(prev_len);
+
     Ok(Stmt::Block(statements, pos))
 }
 
 /// Parse an expression as a statement.
 fn parse_expr_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
-    let expr = parse_expr(input, allow_stmt_expr)?;
-    let expr = parse_op_assignment_stmt(input, expr, allow_stmt_expr)?;
+    let expr = parse_expr(input, stack, allow_stmt_expr)?;
+    let expr = parse_op_assignment_stmt(input, stack, expr, allow_stmt_expr)?;
     Ok(Stmt::Expr(Box::new(expr)))
 }
 
 /// Parse a single statement.
 fn parse_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     breakable: bool,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
@@ -1606,16 +1728,16 @@ fn parse_stmt<'a>(
         // Semicolon - empty statement
         Token::SemiColon => Ok(Stmt::Noop(*pos)),
 
-        Token::LeftBrace => parse_block(input, breakable, allow_stmt_expr),
+        Token::LeftBrace => parse_block(input, stack, breakable, allow_stmt_expr),
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
         Token::Fn => Err(PERR::WrongFnDefinition.into_err(*pos)),
 
-        Token::If => parse_if(input, breakable, allow_stmt_expr),
-        Token::While => parse_while(input, allow_stmt_expr),
-        Token::Loop => parse_loop(input, allow_stmt_expr),
-        Token::For => parse_for(input, allow_stmt_expr),
+        Token::If => parse_if(input, stack, breakable, allow_stmt_expr),
+        Token::While => parse_while(input, stack, allow_stmt_expr),
+        Token::Loop => parse_loop(input, stack, allow_stmt_expr),
+        Token::For => parse_for(input, stack, allow_stmt_expr),
 
         Token::Continue if breakable => {
             let pos = eat_token(input, Token::Continue);
@@ -1643,23 +1765,24 @@ fn parse_stmt<'a>(
                 (Token::SemiColon, _) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
                 // `return` or `throw` with expression
                 (_, _) => {
-                    let expr = parse_expr(input, allow_stmt_expr)?;
+                    let expr = parse_expr(input, stack, allow_stmt_expr)?;
                     let pos = expr.position();
                     Ok(Stmt::ReturnWithVal(Some(Box::new(expr)), return_type, pos))
                 }
             }
         }
 
-        Token::Let => parse_let(input, ScopeEntryType::Normal, allow_stmt_expr),
-        Token::Const => parse_let(input, ScopeEntryType::Constant, allow_stmt_expr),
+        Token::Let => parse_let(input, stack, ScopeEntryType::Normal, allow_stmt_expr),
+        Token::Const => parse_let(input, stack, ScopeEntryType::Constant, allow_stmt_expr),
 
-        _ => parse_expr_stmt(input, allow_stmt_expr),
+        _ => parse_expr_stmt(input, stack, allow_stmt_expr),
     }
 }
 
 /// Parse a function definition.
 fn parse_fn<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<FnDef, Box<ParseError>> {
     let pos = input.next().expect("should be fn").1;
@@ -1682,7 +1805,10 @@ fn parse_fn<'a>(
 
         loop {
             match input.next().unwrap() {
-                (Token::Identifier(s), pos) => params.push((s, pos)),
+                (Token::Identifier(s), pos) => {
+                    stack.push(s.clone());
+                    params.push((s, pos))
+                }
                 (Token::LexError(err), pos) => {
                     return Err(PERR::BadInput(err.to_string()).into_err(pos))
                 }
@@ -1719,10 +1845,10 @@ fn parse_fn<'a>(
         })?;
 
     // Parse function body
-    let body = match input.peek().unwrap() {
-        (Token::LeftBrace, _) => parse_block(input, false, allow_stmt_expr)?,
+    let body = Box::new(match input.peek().unwrap() {
+        (Token::LeftBrace, _) => parse_block(input, stack, false, allow_stmt_expr)?,
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
-    };
+    });
 
     let params = params.into_iter().map(|(p, _)| p).collect();
 
@@ -1740,7 +1866,8 @@ pub fn parse_global_expr<'a>(
     scope: &Scope,
     optimization_level: OptimizationLevel,
 ) -> Result<AST, Box<ParseError>> {
-    let expr = parse_expr(input, false)?;
+    let mut stack = Stack::new();
+    let expr = parse_expr(input, &mut stack, false)?;
 
     match input.peek().unwrap() {
         (Token::EOF, _) => (),
@@ -1768,20 +1895,22 @@ fn parse_global_level<'a>(
 ) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), Box<ParseError>> {
     let mut statements = Vec::<Stmt>::new();
     let mut functions = HashMap::<u64, FnDef>::new();
+    let mut stack = Stack::new();
 
     while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
             if let (Token::Fn, _) = input.peek().unwrap() {
-                let f = parse_fn(input, true)?;
+                let mut stack = Stack::new();
+                let f = parse_fn(input, &mut stack, true)?;
                 functions.insert(calc_fn_def(&f.name, f.params.len()), f);
                 continue;
             }
         }
 
         // Actual statement
-        let stmt = parse_stmt(input, false, true)?;
+        let stmt = parse_stmt(input, &mut stack, false, true)?;
 
         let need_semicolon = !stmt.is_self_terminated();
 
@@ -1840,7 +1969,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
         Union::Char(value) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value) => Some(Expr::StringConstant((*value).into(), pos)),
+        Union::Str(value) => Some(Expr::StringConstant((*value).clone(), pos)),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]
