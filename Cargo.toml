@@ -33,7 +33,7 @@ only_i64 = []       # set INT=i64 (default) and disable support for all other in
 sync = []           # restrict to only types that implement Send + Sync
 
 # compiling for no-std
-no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm" ]
+no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]
 
 # other developer features
 no_stdlib = []      # do not register the standard library
@@ -63,4 +63,5 @@ optional = true
 [dependencies.ahash]
 version = "0.3.2"
 default-features = false
+features = ["compile-time-rng"]
 optional = true

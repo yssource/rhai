@@ -3,7 +3,7 @@
 use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
-fn test_get_set() -> Result<(), EvalAltResult> {
+fn test_get_set() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestStruct {
         x: INT,
@@ -36,7 +36,7 @@ fn test_get_set() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_big_get_set() -> Result<(), EvalAltResult> {
+fn test_big_get_set() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestChild {
         x: INT,

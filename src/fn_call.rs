@@ -5,15 +5,15 @@
 use crate::any::{Dynamic, Variant};
 use crate::stdlib::vec::Vec;
 
-/// Trait that represent arguments to a function call.
-/// Any data type that can be converted into a `Vec` of `Dynamic` values can be used
+/// Trait that represents arguments to a function call.
+/// Any data type that can be converted into a `Vec<Dynamic>` can be used
 /// as arguments to a function call.
 pub trait FuncArgs {
-    /// Convert to a `Vec` of `Dynamic` arguments.
+    /// Convert to a `Vec<Dynamic>` of the function call arguments.
     fn into_vec(self) -> Vec<Dynamic>;
 }
 
-// Macro to implement `FuncArgs` for tuples of standard types (each can be
+/// Macro to implement `FuncArgs` for tuples of standard types (each can be
 /// converted into `Dynamic`).
 macro_rules! impl_args {
     ($($p:ident),*) => {

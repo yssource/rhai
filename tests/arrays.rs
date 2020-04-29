@@ -2,7 +2,7 @@
 use rhai::{Array, Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
-fn test_arrays() -> Result<(), EvalAltResult> {
+fn test_arrays() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("let x = [1, 2, 3]; x[1]")?, 2);
@@ -13,6 +13,7 @@ fn test_arrays() -> Result<(), EvalAltResult> {
     );
     assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
 
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(
         engine.eval::<INT>(
             r"
@@ -35,7 +36,7 @@ fn test_arrays() -> Result<(), EvalAltResult> {
             r"
                 let x = [1, 2, 3];
                 x += [4, 5];
-                x.len()
+                len(x)
            "
         )?,
         5
@@ -58,7 +59,7 @@ fn test_arrays() -> Result<(), EvalAltResult> {
 
 #[test]
 #[cfg(not(feature = "no_object"))]
-fn test_array_with_structs() -> Result<(), EvalAltResult> {
+fn test_array_with_structs() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestStruct {
         x: INT,

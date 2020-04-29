@@ -40,7 +40,7 @@ impl CommandWrapper {
 
 #[cfg(not(feature = "no_object"))]
 #[test]
-fn test_side_effects_command() -> Result<(), EvalAltResult> {
+fn test_side_effects_command() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let mut scope = Scope::new();
 
@@ -80,7 +80,7 @@ fn test_side_effects_command() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_side_effects_print() -> Result<(), EvalAltResult> {
+fn test_side_effects_print() -> Result<(), Box<EvalAltResult>> {
     use std::sync::Arc;
     use std::sync::RwLock;
 

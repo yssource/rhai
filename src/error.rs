@@ -2,7 +2,7 @@
 
 use crate::token::Position;
 
-use crate::stdlib::{char, error::Error, fmt, string::String};
+use crate::stdlib::{boxed::Box, char, error::Error, fmt, string::String};
 
 /// Error when tokenizing the script text.
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -19,6 +19,8 @@ pub enum LexError {
     MalformedChar(String),
     /// An identifier is in an invalid format.
     MalformedIdentifier(String),
+    /// Bad keyword encountered when tokenizing the script text.
+    ImproperKeyword(String),
 }
 
 impl Error for LexError {}
@@ -32,6 +34,7 @@ impl fmt::Display for LexError {
             Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
             Self::MalformedIdentifier(s) => write!(f, "Variable name is not proper: '{}'", s),
             Self::UnterminatedString => write!(f, "Open string is not terminated"),
+            Self::ImproperKeyword(s) => write!(f, "{}", s),
         }
     }
 }
@@ -97,8 +100,6 @@ pub enum ParseErrorType {
     FnMissingBody(String),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     AssignmentToInvalidLHS,
-    /// Assignment to a copy of a value.
-    AssignmentToCopy,
     /// Assignment to an a constant variable.
     AssignmentToConstant(String),
     /// Break statement not inside a loop.
@@ -147,7 +148,6 @@ impl ParseError {
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
-            ParseErrorType::AssignmentToCopy => "Cannot assign to this expression because it will only be changing a copy of the value",
             ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable.",
             ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
         }

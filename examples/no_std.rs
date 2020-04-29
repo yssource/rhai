@@ -2,7 +2,13 @@
 
 use rhai::{Engine, EvalAltResult, INT};
 
-fn main() -> Result<(), EvalAltResult> {
+#[cfg(feature = "no_std")]
+extern crate alloc;
+
+#[cfg(feature = "no_std")]
+use alloc::boxed::Box;
+
+fn main() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let result = engine.eval::<INT>("40 + 2")?;

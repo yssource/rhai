@@ -16,9 +16,7 @@ fn mat_gen(n) {
 
     for i in range(0, n) {
         for j in range(0, n) {
-			let foo = m[i];
-            foo[j] = tmp * (i.to_float() - j.to_float()) * (i.to_float() + j.to_float());
-			m[i] = foo;
+            m[i][j] = tmp * (i.to_float() - j.to_float()) * (i.to_float() + j.to_float());
         }
     }
 	
@@ -34,9 +32,7 @@ fn mat_mul(a, b) {
 	
     for i in range(0, n) {
         for j in range(0, p) {
-			let foo = b2[j];
-            foo[i] = b[i][j];
-			b2[j] = foo;
+            b2[j][i] = b[i][j];
         }
     }
 

@@ -16,7 +16,7 @@ impl TestStruct {
 }
 
 #[cfg(not(feature = "no_object"))]
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     engine.register_type::<TestStruct>();

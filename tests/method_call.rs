@@ -3,7 +3,7 @@
 use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
-fn test_method_call() -> Result<(), EvalAltResult> {
+fn test_method_call() -> Result<(), Box<EvalAltResult>> {
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct TestStruct {
         x: INT,

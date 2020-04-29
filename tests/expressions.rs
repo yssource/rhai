@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
-fn test_expressions() -> Result<(), EvalAltResult> {
+fn test_expressions() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let mut scope = Scope::new();
 
@@ -28,7 +28,7 @@ fn test_expressions() -> Result<(), EvalAltResult> {
 /// This example taken from https://github.com/jonathandturner/rhai/issues/115
 #[test]
 #[cfg(not(feature = "no_object"))]
-fn test_expressions_eval() -> Result<(), EvalAltResult> {
+fn test_expressions_eval() -> Result<(), Box<EvalAltResult>> {
     #[derive(Debug, Clone)]
     struct AGENT {
         pub gender: String,

@@ -1,7 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{calc_fn_spec, make_getter, make_setter, Engine, FnAny, Map};
+use crate::engine::{make_getter, make_setter, Engine, Map, State};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
@@ -44,28 +44,22 @@ impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
 
 #[cfg(feature = "sync")]
 pub trait IteratorCallback:
-    Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
+    Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
 {
 }
 #[cfg(feature = "sync")]
-impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
+impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
     for F
 {
 }
 
 #[cfg(not(feature = "sync"))]
-pub trait IteratorCallback: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
+pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
 #[cfg(not(feature = "sync"))]
-impl<F: Fn(&Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
+impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
 
 /// Engine public API
 impl Engine {
-    /// Register a custom function.
-    pub(crate) fn register_fn_raw(&mut self, fn_name: &str, args: Vec<TypeId>, f: Box<FnAny>) {
-        self.functions
-            .insert(calc_fn_spec(fn_name, args.into_iter()), f);
-    }
-
     /// Register a custom type for use with the `Engine`.
     /// The type must implement `Clone`.
     ///
@@ -82,7 +76,7 @@ impl Engine {
     ///     fn update(&mut self, offset: i64)   { self.field += offset; }
     /// }
     ///
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, RegisterFn};
     ///
     /// let mut engine = Engine::new();
@@ -122,7 +116,7 @@ impl Engine {
     ///     fn new() -> Self { TestStruct { field: 1 } }
     /// }
     ///
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, RegisterFn};
     ///
     /// let mut engine = Engine::new();
@@ -152,14 +146,8 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) {
-        if self.type_names.is_none() {
-            self.type_names = Some(HashMap::new());
-        }
-
         // Add the pretty-print type name into the map
         self.type_names
-            .as_mut()
-            .unwrap()
             .insert(type_name::<T>().to_string(), name.to_string());
     }
 
@@ -188,7 +176,7 @@ impl Engine {
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
     ///
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, RegisterFn};
     ///
     /// let mut engine = Engine::new();
@@ -230,7 +218,7 @@ impl Engine {
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, RegisterFn};
     ///
     /// let mut engine = Engine::new();
@@ -281,7 +269,7 @@ impl Engine {
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, RegisterFn};
     ///
     /// let mut engine = Engine::new();
@@ -316,7 +304,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -330,7 +318,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
+    pub fn compile(&self, script: &str) -> Result<AST, Box<ParseError>> {
         self.compile_with_scope(&Scope::new(), script)
     }
 
@@ -341,7 +329,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_optimize"))]
     /// # {
     /// use rhai::{Engine, Scope, OptimizationLevel};
@@ -371,7 +359,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
+    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, Box<ParseError>> {
         self.compile_with_scope_and_optimization_level(scope, script, self.optimization_level)
     }
 
@@ -381,22 +369,22 @@ impl Engine {
         scope: &Scope,
         script: &str,
         optimization_level: OptimizationLevel,
-    ) -> Result<AST, ParseError> {
+    ) -> Result<AST, Box<ParseError>> {
         let scripts = [script];
         let stream = lex(&scripts);
-        parse(&mut stream.peekable(), self, scope, optimization_level).map_err(|err| *err)
+        parse(&mut stream.peekable(), self, scope, optimization_level)
     }
 
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
-    fn read_file(path: PathBuf) -> Result<String, EvalAltResult> {
+    fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
         let mut f = File::open(path.clone())
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(path.clone(), err))?;
+            .map_err(|err| Box::new(EvalAltResult::ErrorReadingScriptFile(path.clone(), err)))?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents)
-            .map_err(|err| EvalAltResult::ErrorReadingScriptFile(path.clone(), err))?;
+            .map_err(|err| Box::new(EvalAltResult::ErrorReadingScriptFile(path.clone(), err)))?;
 
         Ok(contents)
     }
@@ -406,7 +394,7 @@ impl Engine {
     /// # Example
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -422,7 +410,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    pub fn compile_file(&self, path: PathBuf) -> Result<AST, EvalAltResult> {
+    pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
 
@@ -433,7 +421,7 @@ impl Engine {
     /// # Example
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_optimize"))]
     /// # {
     /// use rhai::{Engine, Scope, OptimizationLevel};
@@ -461,7 +449,7 @@ impl Engine {
         &self,
         scope: &Scope,
         path: PathBuf,
-    ) -> Result<AST, EvalAltResult> {
+    ) -> Result<AST, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
 
@@ -473,7 +461,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -489,7 +477,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, EvalAltResult> {
+    pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, Box<EvalAltResult>> {
         let mut scope = Scope::new();
 
         // Trims the JSON string and add a '#' in front
@@ -516,7 +504,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -530,7 +518,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
+    pub fn compile_expression(&self, script: &str) -> Result<AST, Box<ParseError>> {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
 
@@ -543,7 +531,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_optimize"))]
     /// # {
     /// use rhai::{Engine, Scope, OptimizationLevel};
@@ -577,12 +565,11 @@ impl Engine {
         &self,
         scope: &Scope,
         script: &str,
-    ) -> Result<AST, ParseError> {
+    ) -> Result<AST, Box<ParseError>> {
         let scripts = [script];
         let stream = lex(&scripts);
 
         parse_global_expr(&mut stream.peekable(), self, scope, self.optimization_level)
-            .map_err(|err| *err)
     }
 
     /// Evaluate a script file.
@@ -590,7 +577,7 @@ impl Engine {
     /// # Example
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -601,7 +588,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, EvalAltResult> {
+    pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
 
@@ -610,7 +597,7 @@ impl Engine {
     /// # Example
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, Scope};
     ///
     /// let engine = Engine::new();
@@ -629,7 +616,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         path: PathBuf,
-    ) -> Result<T, EvalAltResult> {
+    ) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval_with_scope::<T>(scope, &contents))
     }
 
@@ -638,7 +625,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -647,7 +634,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
+    pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
         self.eval_with_scope(&mut Scope::new(), script)
     }
 
@@ -656,7 +643,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, Scope};
     ///
     /// let engine = Engine::new();
@@ -677,7 +664,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         script: &str,
-    ) -> Result<T, EvalAltResult> {
+    ) -> Result<T, Box<EvalAltResult>> {
         // Since the AST will be thrown away afterwards, don't bother to optimize it
         let ast =
             self.compile_with_scope_and_optimization_level(scope, script, OptimizationLevel::None)?;
@@ -689,7 +676,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -698,7 +685,10 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_expression<T: Variant + Clone>(&self, script: &str) -> Result<T, EvalAltResult> {
+    pub fn eval_expression<T: Variant + Clone>(
+        &self,
+        script: &str,
+    ) -> Result<T, Box<EvalAltResult>> {
         self.eval_expression_with_scope(&mut Scope::new(), script)
     }
 
@@ -707,7 +697,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, Scope};
     ///
     /// let engine = Engine::new();
@@ -724,7 +714,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         script: &str,
-    ) -> Result<T, EvalAltResult> {
+    ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
         let stream = lex(&scripts);
         // Since the AST will be thrown away afterwards, don't bother to optimize it
@@ -737,7 +727,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -750,7 +740,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, EvalAltResult> {
+    pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
         self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
 
@@ -759,7 +749,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// use rhai::{Engine, Scope};
     ///
     /// let engine = Engine::new();
@@ -787,15 +777,16 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-    ) -> Result<T, EvalAltResult> {
-        let result = self
-            .eval_ast_with_scope_raw(scope, ast)
-            .map_err(|err| *err)?;
+    ) -> Result<T, Box<EvalAltResult>> {
+        let result = self.eval_ast_with_scope_raw(scope, ast)?;
 
         let return_type = self.map_type_name(result.type_name());
 
         return result.try_cast::<T>().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(return_type.to_string(), Position::none())
+            Box::new(EvalAltResult::ErrorMismatchOutputType(
+                return_type.to_string(),
+                Position::none(),
+            ))
         });
     }
 
@@ -804,10 +795,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let mut state = State::new();
+
         ast.0
             .iter()
-            .try_fold(Dynamic::from_unit(), |_, stmt| {
-                self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
+            .try_fold(().into(), |_, stmt| {
+                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -818,7 +811,7 @@ impl Engine {
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
-    pub fn consume_file(&self, path: PathBuf) -> Result<(), EvalAltResult> {
+    pub fn consume_file(&self, path: PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
 
@@ -829,19 +822,23 @@ impl Engine {
         &self,
         scope: &mut Scope,
         path: PathBuf,
-    ) -> Result<(), EvalAltResult> {
+    ) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume_with_scope(scope, &contents))
     }
 
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume(&self, script: &str) -> Result<(), EvalAltResult> {
+    pub fn consume(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
         self.consume_with_scope(&mut Scope::new(), script)
     }
 
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume_with_scope(&self, scope: &mut Scope, script: &str) -> Result<(), EvalAltResult> {
+    pub fn consume_with_scope(
+        &self,
+        scope: &mut Scope,
+        script: &str,
+    ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
         let stream = lex(&scripts);
 
@@ -852,7 +849,7 @@ impl Engine {
 
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    pub fn consume_ast(&self, ast: &AST) -> Result<(), EvalAltResult> {
+    pub fn consume_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
         self.consume_ast_with_scope(&mut Scope::new(), ast)
     }
 
@@ -862,16 +859,18 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-    ) -> Result<(), EvalAltResult> {
+    ) -> Result<(), Box<EvalAltResult>> {
+        let mut state = State::new();
+
         ast.0
             .iter()
-            .try_fold(Dynamic::from_unit(), |_, stmt| {
-                self.eval_stmt(scope, Some(ast.1.as_ref()), stmt, 0)
+            .try_fold(().into(), |_, stmt| {
+                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
                     EvalAltResult::Return(_, _) => Ok(()),
-                    err => Err(err),
+                    err => Err(Box::new(err)),
                 },
                 |_| Ok(()),
             )
@@ -882,7 +881,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_function"))]
     /// # {
     /// use rhai::{Engine, Scope};
@@ -919,21 +918,26 @@ impl Engine {
         ast: &AST,
         name: &str,
         args: A,
-    ) -> Result<T, EvalAltResult> {
+    ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
         let mut args: Vec<_> = arg_values.iter_mut().collect();
-        let fn_lib = Some(ast.1.as_ref());
+        let fn_lib = ast.1.as_ref();
         let pos = Position::none();
 
-        let result = self
-            .call_fn_raw(Some(scope), fn_lib, name, &mut args, None, pos, 0)
-            .map_err(|err| *err)?;
+        let fn_def = fn_lib
+            .get_function(name, args.len())
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))?;
+
+        let result = self.call_fn_from_lib(Some(scope), fn_lib, fn_def, &mut args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 
-        return result
-            .try_cast()
-            .ok_or_else(|| EvalAltResult::ErrorMismatchOutputType(return_type.into(), pos));
+        return result.try_cast().ok_or_else(|| {
+            Box::new(EvalAltResult::ErrorMismatchOutputType(
+                return_type.into(),
+                pos,
+            ))
+        });
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
@@ -967,7 +971,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
     /// use rhai::Engine;
@@ -988,14 +992,14 @@ impl Engine {
     /// ```
     #[cfg(feature = "sync")]
     pub fn on_print(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.on_print = Some(Box::new(callback));
+        self.print = Box::new(callback);
     }
     /// Override default action of `print` (print to stdout using `println!`)
     ///
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
     /// use rhai::Engine;
@@ -1016,7 +1020,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_print(&mut self, callback: impl Fn(&str) + 'static) {
-        self.on_print = Some(Box::new(callback));
+        self.print = Box::new(callback);
     }
 
     /// Override default action of `debug` (print to stdout using `println!`)
@@ -1024,7 +1028,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
     /// use rhai::Engine;
@@ -1045,14 +1049,14 @@ impl Engine {
     /// ```
     #[cfg(feature = "sync")]
     pub fn on_debug(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.on_debug = Some(Box::new(callback));
+        self.debug = Box::new(callback);
     }
     /// Override default action of `debug` (print to stdout using `println!`)
     ///
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), rhai::EvalAltResult> {
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
     /// use rhai::Engine;
@@ -1073,6 +1077,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "sync"))]
     pub fn on_debug(&mut self, callback: impl Fn(&str) + 'static) {
-        self.on_debug = Some(Box::new(callback));
+        self.debug = Box::new(callback);
     }
 }

@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
-fn test_unary_minus() -> Result<(), EvalAltResult> {
+fn test_unary_minus() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("let x = -5; x")?, -5);

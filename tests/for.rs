@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, INT};
 
 #[cfg(not(feature = "no_index"))]
 #[test]
-fn test_for_array() -> Result<(), EvalAltResult> {
+fn test_for_array() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let script = r"
@@ -31,8 +31,9 @@ fn test_for_array() -> Result<(), EvalAltResult> {
 }
 
 #[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_index"))]
 #[test]
-fn test_for_object() -> Result<(), EvalAltResult> {
+fn test_for_object() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let script = r#"

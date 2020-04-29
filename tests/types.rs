@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
 #[test]
-fn test_type_of() -> Result<(), EvalAltResult> {
+fn test_type_of() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestStruct {
         x: INT,

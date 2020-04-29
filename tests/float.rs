@@ -4,7 +4,7 @@ use rhai::{Engine, EvalAltResult, RegisterFn, FLOAT};
 const EPSILON: FLOAT = 0.000_000_000_1;
 
 #[test]
-fn test_float() -> Result<(), EvalAltResult> {
+fn test_float() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -22,7 +22,7 @@ fn test_float() -> Result<(), EvalAltResult> {
 
 #[test]
 #[cfg(not(feature = "no_object"))]
-fn struct_with_float() -> Result<(), EvalAltResult> {
+fn struct_with_float() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestStruct {
         x: f64,

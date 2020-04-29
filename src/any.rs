@@ -9,8 +9,10 @@ use crate::parser::FLOAT;
 use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
+    collections::HashMap,
     fmt,
     string::String,
+    vec::Vec,
 };
 
 #[cfg(not(feature = "no_std"))]
@@ -65,6 +67,9 @@ impl<T: Any + Clone> Variant for T {
 }
 
 /// A trait to represent any type.
+///
+/// `From<_>` is implemented for `i64` (`i32` if `only_i32`), `f64` (if not `no_float`),
+/// `bool`, `String`, `char`, `Vec<T>` (into `Array`) and `HashMap<String, T>` (into `Map`).
 #[cfg(feature = "sync")]
 pub trait Variant: Any + Send + Sync {
     /// Convert this `Variant` trait object to `&dyn Any`.
@@ -207,7 +212,7 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => write!(f, "{}", value),
             Union::Array(value) => write!(f, "{:?}", value),
-            Union::Map(value) => write!(f, "{:?}", value),
+            Union::Map(value) => write!(f, "#{:?}", value),
             Union::Variant(_) => write!(f, "?"),
         }
     }
@@ -224,7 +229,7 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => write!(f, "{:?}", value),
             Union::Array(value) => write!(f, "{:?}", value),
-            Union::Map(value) => write!(f, "{:?}", value),
+            Union::Map(value) => write!(f, "#{:?}", value),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
     }
@@ -263,16 +268,6 @@ fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<T, Box<X>> {
 }
 
 impl Dynamic {
-    /// Get a reference to the inner `Union`.
-    pub(crate) fn get_ref(&self) -> &Union {
-        &self.0
-    }
-
-    /// Get a mutable reference to the inner `Union`.
-    pub(crate) fn get_mut(&mut self) -> &mut Union {
-        &mut self.0
-    }
-
     /// Create a `Dynamic` from any type.  A `Dynamic` value is simply returned as is.
     ///
     /// Beware that you need to pass in an `Array` type for it to be recognized as an `Array`.
@@ -450,7 +445,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as the system integer type `INT` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_int(&self) -> Result<INT, &'static str> {
+    pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
             _ => Err(self.type_name()),
@@ -459,7 +454,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a `bool` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_bool(&self) -> Result<bool, &'static str> {
+    pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b) => Ok(b),
             _ => Err(self.type_name()),
@@ -468,7 +463,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a `char` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_char(&self) -> Result<char, &'static str> {
+    pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n) => Ok(n),
             _ => Err(self.type_name()),
@@ -477,7 +472,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a string and return the string slice.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_str(&self) -> Result<&str, &'static str> {
+    pub fn as_str(&self) -> Result<&str, &'static str> {
         match &self.0 {
             Union::Str(s) => Ok(s),
             _ => Err(self.type_name()),
@@ -486,31 +481,60 @@ impl Dynamic {
 
     /// Convert the `Dynamic` into `String` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn take_string(self) -> Result<String, &'static str> {
+    pub fn take_string(self) -> Result<String, &'static str> {
         match self.0 {
             Union::Str(s) => Ok(*s),
             _ => Err(self.type_name()),
         }
     }
+}
 
-    pub(crate) fn from_unit() -> Self {
-        Self(Union::Unit(()))
+impl From<()> for Dynamic {
+    fn from(value: ()) -> Self {
+        Self(Union::Unit(value))
     }
-    pub(crate) fn from_bool(value: bool) -> Self {
+}
+impl From<bool> for Dynamic {
+    fn from(value: bool) -> Self {
         Self(Union::Bool(value))
     }
-    pub(crate) fn from_int(value: INT) -> Self {
+}
+impl From<INT> for Dynamic {
+    fn from(value: INT) -> Self {
         Self(Union::Int(value))
     }
-    #[cfg(not(feature = "no_float"))]
-    pub(crate) fn from_float(value: FLOAT) -> Self {
+}
+#[cfg(not(feature = "no_float"))]
+impl From<FLOAT> for Dynamic {
+    fn from(value: FLOAT) -> Self {
         Self(Union::Float(value))
     }
-    pub(crate) fn from_char(value: char) -> Self {
+}
+impl From<char> for Dynamic {
+    fn from(value: char) -> Self {
         Self(Union::Char(value))
     }
-    pub(crate) fn from_string(value: String) -> Self {
+}
+impl From<String> for Dynamic {
+    fn from(value: String) -> Self {
         Self(Union::Str(Box::new(value)))
+    }
+}
+impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
+    fn from(value: Vec<T>) -> Self {
+        Self(Union::Array(Box::new(
+            value.into_iter().map(Dynamic::from).collect(),
+        )))
+    }
+}
+impl<T: Variant + Clone> From<HashMap<String, T>> for Dynamic {
+    fn from(value: HashMap<String, T>) -> Self {
+        Self(Union::Map(Box::new(
+            value
+                .into_iter()
+                .map(|(k, v)| (k, Dynamic::from(v)))
+                .collect(),
+        )))
     }
 }
 

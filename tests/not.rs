@@ -1,7 +1,7 @@
 use rhai::{Engine, EvalAltResult};
 
 #[test]
-fn test_not() -> Result<(), EvalAltResult> {
+fn test_not() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(

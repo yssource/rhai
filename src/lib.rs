@@ -23,7 +23,7 @@
 //! ```,no_run
 //! use rhai::{Engine, EvalAltResult, RegisterFn};
 //!
-//! fn main() -> Result<(), EvalAltResult>
+//! fn main() -> Result<(), Box<EvalAltResult>>
 //! {
 //!     // Define external function
 //!     fn compute_something(x: i64) -> bool {
@@ -71,13 +71,13 @@ extern crate alloc;
 
 mod any;
 mod api;
-mod builtin;
 mod engine;
 mod error;
 mod fn_call;
 mod fn_func;
 mod fn_register;
 mod optimize;
+pub mod packages;
 mod parser;
 mod result;
 mod scope;
@@ -85,7 +85,7 @@ mod stdlib;
 mod token;
 
 pub use any::Dynamic;
-pub use engine::Engine;
+pub use engine::{calc_fn_spec as calc_fn_hash, Engine};
 pub use error::{ParseError, ParseErrorType};
 pub use fn_call::FuncArgs;
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};

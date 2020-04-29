@@ -13,29 +13,28 @@ use crate::stdlib::{
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
-    usize,
     vec::Vec,
 };
 
 type LERR = LexError;
 
 /// A location (line number + character position) in the input script.
+///
+/// In order to keep footprint small, both line number and character position have 16-bit resolution,
+/// meaning they go up to a maximum of 65,535 lines/characters per line.
+/// Advancing beyond the maximum line length or maximum number of lines is not an error but has no effect.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
     /// Line number - 0 = none
-    line: usize,
+    line: u16,
     /// Character position - 0 = BOL
-    pos: usize,
+    pos: u16,
 }
 
 impl Position {
     /// Create a new `Position`.
-    pub fn new(line: usize, position: usize) -> Self {
+    pub fn new(line: u16, position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
-        assert!(
-            line != usize::MAX || position != usize::MAX,
-            "invalid position"
-        );
 
         Self {
             line,
@@ -48,7 +47,7 @@ impl Position {
         if self.is_none() {
             None
         } else {
-            Some(self.line)
+            Some(self.line as usize)
         }
     }
 
@@ -57,13 +56,18 @@ impl Position {
         if self.is_none() || self.pos == 0 {
             None
         } else {
-            Some(self.pos)
+            Some(self.pos as usize)
         }
     }
 
     /// Advance by one character position.
     pub(crate) fn advance(&mut self) {
-        self.pos += 1;
+        assert!(!self.is_none(), "cannot advance Position::none");
+
+        // Advance up to maximum position
+        if self.pos < u16::MAX {
+            self.pos += 1;
+        }
     }
 
     /// Go backwards by one character position.
@@ -73,14 +77,20 @@ impl Position {
     /// Panics if already at beginning of a line - cannot rewind to a previous line.
     ///
     pub(crate) fn rewind(&mut self) {
+        assert!(!self.is_none(), "cannot rewind Position::none");
         assert!(self.pos > 0, "cannot rewind at position 0");
         self.pos -= 1;
     }
 
     /// Advance to the next line.
     pub(crate) fn new_line(&mut self) {
-        self.line += 1;
-        self.pos = 0;
+        assert!(!self.is_none(), "cannot advance Position::none");
+
+        // Advance up to maximum position
+        if self.line < u16::MAX {
+            self.line += 1;
+            self.pos = 0;
+        }
     }
 
     /// Create a `Position` representing no position.
@@ -350,9 +360,10 @@ impl Token {
         use Token::*;
 
         match self {
+            // Assignments are not considered expressions - set to zero
             Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
             | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
-            | PowerOfAssign => 10,
+            | PowerOfAssign => 0,
 
             Or | XOr | Pipe => 40,
 
@@ -659,7 +670,7 @@ impl<'a> TokenIterator<'a> {
                                 .map(Token::IntegerConstant)
                                 .unwrap_or_else(|_| {
                                     Token::LexError(Box::new(LERR::MalformedNumber(
-                                        result.iter().collect(),
+                                        result.into_iter().collect(),
                                     )))
                                 }),
                             pos,
@@ -675,7 +686,7 @@ impl<'a> TokenIterator<'a> {
                         return Some((
                             num.unwrap_or_else(|_| {
                                 Token::LexError(Box::new(LERR::MalformedNumber(
-                                    result.iter().collect(),
+                                    result.into_iter().collect(),
                                 )))
                             }),
                             pos,
@@ -869,6 +880,18 @@ impl<'a> TokenIterator<'a> {
 
                 ('=', '=') => {
                     self.eat_next();
+
+                    // Warn against `===`
+                    if self.peek_next() == Some('=') {
+                        return Some((
+                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                    "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
+                                        .to_string(),
+                                ))),
+                                pos,
+                            ));
+                    }
+
                     return Some((Token::EqualsTo, pos));
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
@@ -913,6 +936,18 @@ impl<'a> TokenIterator<'a> {
 
                 ('!', '=') => {
                     self.eat_next();
+
+                    // Warn against `!==`
+                    if self.peek_next() == Some('=') {
+                        return Some((
+                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                    "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
+                                        .to_string(),
+                                ))),
+                                pos,
+                            ));
+                    }
+
                     return Some((Token::NotEqualsTo, pos));
                 }
                 ('!', _) => return Some((Token::Bang, pos)),
@@ -954,6 +989,8 @@ impl<'a> TokenIterator<'a> {
                     return Some((Token::PowerOfAssign, pos));
                 }
                 ('~', _) => return Some((Token::PowerOf, pos)),
+
+                ('\0', _) => panic!("should not be EOF"),
 
                 (ch, _) if ch.is_whitespace() => (),
                 (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(ch))), pos)),

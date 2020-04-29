@@ -4,7 +4,7 @@ use crate::any::{Dynamic, Variant};
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
-use crate::stdlib::{borrow::Cow, iter, vec::Vec};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -25,15 +25,7 @@ pub struct Entry<'a> {
     /// Current value of the entry.
     pub value: Dynamic,
     /// A constant expression if the initial value matches one of the recognized types.
-    pub expr: Option<Expr>,
-}
-
-/// Information about a particular entry in the Scope.
-#[derive(Debug, Hash, Copy, Clone)]
-pub(crate) struct EntryRef<'a> {
-    pub name: &'a str,
-    pub index: usize,
-    pub typ: EntryType,
+    pub expr: Option<Box<Expr>>,
 }
 
 /// A type containing information about the current scope.
@@ -42,7 +34,7 @@ pub(crate) struct EntryRef<'a> {
 /// # Example
 ///
 /// ```
-/// # fn main() -> Result<(), rhai::EvalAltResult> {
+/// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
 /// use rhai::{Engine, Scope};
 ///
 /// let engine = Engine::new();
@@ -226,15 +218,17 @@ impl<'a> Scope<'a> {
         value: Dynamic,
         map_expr: bool,
     ) {
+        let expr = if map_expr {
+            map_dynamic_to_expr(value.clone(), Position::none()).map(Box::new)
+        } else {
+            None
+        };
+
         self.0.push(Entry {
             name: name.into(),
             typ: entry_type,
-            value: value.clone(),
-            expr: if map_expr {
-                map_dynamic_to_expr(value, Position::none())
-            } else {
-                None
-            },
+            value: value.into(),
+            expr,
         });
     }
 
@@ -289,35 +283,18 @@ impl<'a> Scope<'a> {
     }
 
     /// Find an entry in the Scope, starting from the last.
-    pub(crate) fn get(&self, name: &str) -> Option<(EntryRef, Dynamic)> {
+    pub(crate) fn get(&self, name: &str) -> Option<(usize, EntryType)> {
         self.0
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find_map(
-                |(
-                    index,
-                    Entry {
-                        name: key,
-                        typ,
-                        value,
-                        ..
-                    },
-                )| {
-                    if name == key {
-                        Some((
-                            EntryRef {
-                                name: key,
-                                index,
-                                typ: *typ,
-                            },
-                            value.clone(),
-                        ))
-                    } else {
-                        None
-                    }
-                },
-            )
+            .find_map(|(index, Entry { name: key, typ, .. })| {
+                if name == key {
+                    Some((index, *typ))
+                } else {
+                    None
+                }
+            })
     }
 
     /// Get the value of an entry in the Scope, starting from the last.
@@ -363,42 +340,29 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
         match self.get(name) {
-            Some((
-                EntryRef {
-                    typ: EntryType::Constant,
-                    ..
-                },
-                _,
-            )) => panic!("variable {} is constant", name),
-            Some((
-                EntryRef {
-                    index,
-                    typ: EntryType::Normal,
-                    ..
-                },
-                _,
-            )) => self.0.get_mut(index).unwrap().value = Dynamic::from(value),
+            Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
+            Some((index, EntryType::Normal)) => {
+                self.0.get_mut(index).unwrap().value = Dynamic::from(value)
+            }
             None => self.push(name, value),
         }
     }
 
     /// Get a mutable reference to an entry in the Scope.
-    pub(crate) fn get_mut(&mut self, key: EntryRef) -> &mut Dynamic {
-        let entry = self.0.get_mut(key.index).expect("invalid index in Scope");
-        assert_eq!(entry.typ, key.typ, "entry type not matched");
+    pub(crate) fn get_mut(&mut self, index: usize) -> (&mut Dynamic, EntryType) {
+        let entry = self.0.get_mut(index).expect("invalid index in Scope");
 
         // assert_ne!(
         //     entry.typ,
         //     EntryType::Constant,
         //     "get mut of constant entry"
         // );
-        assert_eq!(entry.name, key.name, "incorrect key at Scope entry");
 
-        &mut entry.value
+        (&mut entry.value, entry.typ)
     }
 
     /// Get an iterator to entries in the Scope.
-    pub fn iter(&self) -> impl Iterator<Item = &Entry> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev() // Always search a Scope in reverse order
     }
 }
@@ -409,16 +373,13 @@ impl Default for Scope<'_> {
     }
 }
 
-impl<'a, K> iter::Extend<(K, EntryType, Dynamic)> for Scope<'a>
-where
-    K: Into<Cow<'a, str>>,
-{
+impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, EntryType, Dynamic)> for Scope<'a> {
     fn extend<T: IntoIterator<Item = (K, EntryType, Dynamic)>>(&mut self, iter: T) {
         self.0
             .extend(iter.into_iter().map(|(name, typ, value)| Entry {
                 name: name.into(),
                 typ,
-                value,
+                value: value.into(),
                 expr: None,
             }));
     }

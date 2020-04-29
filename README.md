@@ -13,19 +13,20 @@ to add scripting to any application.
 
 Rhai's current features set:
 
-* `no-std` support
-* Easy integration with Rust native functions and types, including getter/setter/methods
-* Easily call a script-defined function from Rust
+* Easy-to-use language similar to JS+Rust
+* Easy integration with Rust [native functions](#working-with-functions) and [types](#custom-types-and-methods),
+  including [getter/setter](#getters-and-setters)/[methods](#members-and-methods)
+* Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
-* Easy-to-use language similar to JS+Rust
-* Support for function overloading
-* Support for operator overloading
-* Compiled script is optimized for repeat evaluations
-* Support for minimal builds by excluding unneeded language features
+* [`no-std`](#optional-features) support
+* Support for [function overloading](#function-overloading)
+* Support for [operator overloading](#operator-overloading)
+* Compiled script is [optimized](#script-optimization) for repeat evaluations
+* Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
-  to do checked arithmetic operations); for [`no_std`] builds, a number of additional dependencies are
+  to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
 **Note:** Currently, the version is 0.13.0, so the language and API's may change before they stabilize.
@@ -116,10 +117,13 @@ Opt out of as many features as possible, if they are not needed, to reduce code 
 all code is compiled in as what a script requires cannot be predicted. If a language feature is not needed,
 omitting them via special features is a prudent strategy to optimize the build for size.
 
-Start by using [`Engine::new_raw`](#raw-engine) to create a _raw_ engine which does not register the standard library of utility
-functions.  Secondly, omitting arrays (`no_index`) yields the most code-size savings, followed by floating-point support
-(`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).  Disable script-defined
-functions (`no_function`) only when the feature is not needed because code size savings is minimal.
+Omitting arrays (`no_index`) yields the most code-size savings, followed by floating-point support
+(`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).
+Disable script-defined functions (`no_function`) only when the feature is not needed because code size savings is minimal.
+
+[`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
+This makes the scripting language quite useless as even basic arithmetic operators are not supported.
+Selectively include the necessary operators by loading specific [packages](#packages) while minimizing the code footprint.
 
 Related
 -------
@@ -199,7 +203,7 @@ To get going with Rhai, create an instance of the scripting engine via `Engine::
 ```rust
 use rhai::{Engine, EvalAltResult};
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -320,7 +324,7 @@ let script = "fn calc(x, y) { x + y.len() < 42 }";
 //   1) a tuple made up of the types of the script function's parameters
 //   2) the return type of the script function
 //
-// 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, EvalAltResult>> and is callable!
+// 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
 let func = Func::<(i64, String), bool>::create_from_script(
 //                ^^^^^^^^^^^^^ function parameter types in tuple
 
@@ -336,7 +340,7 @@ schedule_callback(func);                        // pass it as a callback to anot
 // Although there is nothing you can't do by manually writing out the closure yourself...
 let engine = Engine::new();
 let ast = engine.compile(script)?;
-schedule_callback(Box::new(move |x: i64, y: String| -> Result<bool, EvalAltResult> {
+schedule_callback(Box::new(move |x: i64, y: String| -> Result<bool, Box<EvalAltResult>> {
     engine.call_fn(&mut Scope::new(), &ast, "calc", (x, y))
 }));
 ```
@@ -349,16 +353,40 @@ Raw `Engine`
 `Engine::new` creates a scripting [`Engine`] with common functionalities (e.g. printing to the console via `print`).
 In many controlled embedded environments, however, these are not needed.
 
-Use `Engine::new_raw` to create a _raw_ `Engine`, in which:
+Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, not even basic arithmetic and logic operators!
 
-* the `print` and `debug` statements do nothing instead of displaying to the console (see [`print` and `debug`](#print-and-debug) below)
-* the _standard library_ of utility functions is _not_ loaded by default (load it using the `register_stdlib` method).
+### Packages
+
+Rhai functional features are provided in different _packages_ that can be loaded via a call to `load_package`.
+Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be imported in order for
+packages to be used.
 
 ```rust
-let mut engine = Engine::new_raw();             // create a 'raw' Engine
+use rhai::Engine;
+use rhai::packages::Package                     // load the 'Package' trait to use packages
+use rhai::packages::CorePackage;                // the 'core' package contains basic functionalities (e.g. arithmetic)
 
-engine.register_stdlib();                       // register the standard library manually
+let mut engine = Engine::new_raw();             // create a 'raw' Engine
+let package = CorePackage::new();               // create a package - can be shared among multiple `Engine` instances
+
+engine.load_package(package.get());             // load the package manually
 ```
+
+The follow packages are available:
+
+| Package                  | Description                                     | In `CorePackage` | In `StandardPackage` |
+| ------------------------ | ----------------------------------------------- | :--------------: | :------------------: |
+| `BasicArithmeticPackage` | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
+| `BasicIteratorPackage`   | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
+| `LogicPackage`           | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
+| `BasicStringPackage`     | Basic string functions                          |       Yes        |         Yes          |
+| `BasicTimePackage`       | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
+| `MoreStringPackage`      | Additional string functions                     |        No        |         Yes          |
+| `BasicMathPackage`       | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
+| `BasicArrayPackage`      | Basic [array] functions                         |        No        |         Yes          |
+| `BasicMapPackage`        | Basic [object map] functions                    |        No        |         Yes          |
+| `CorePackage`            | Basic essentials                                |                  |                      |
+| `StandardPackage`        | Standard library                                |                  |                      |
 
 Evaluate expressions only
 -------------------------
@@ -401,7 +429,7 @@ The following primitive types are supported natively:
 | **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
 | **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
-| **Timestamp** (implemented in standard library)                               | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
+| **Timestamp** (implemented in the [`BasicTimePackage`](#packages))            | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
 | **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
@@ -428,7 +456,7 @@ type_of('c') == "char";
 type_of(42) == "i64";
 
 let x = 123;
-x.type_of();                    // <- error: 'type_of' cannot use method-call style
+x.type_of() == "i64";                           // method-call style is also OK
 type_of(x) == "i64";
 
 x = 99.999;
@@ -507,6 +535,16 @@ match item.type_name() {                        // 'type_name' returns the name 
 }
 ```
 
+The following conversion traits are implemented for `Dynamic`:
+
+* `From<i64>` (`i32` if [`only_i32`])
+* `From<f64>` (if not [`no_float`])
+* `From<bool>`
+* `From<String>`
+* `From<char>`
+* `From<Vec<T>>` (into an [array])
+* `From<HashMap<String, T>>` (into an [object map]).
+
 Value conversions
 -----------------
 
@@ -532,12 +570,12 @@ Traits
 
 A number of traits, under the `rhai::` module namespace, provide additional functionalities.
 
-| Trait               | Description                                                                       | Methods                                 |
-| ------------------- | --------------------------------------------------------------------------------- | --------------------------------------- |
-| `RegisterFn`        | Trait for registering functions                                                   | `register_fn`                           |
-| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                             | `register_dynamic_fn`                   |
-| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, EvalAltResult>` | `register_result_fn`                    |
-| `Func`              | Trait for creating anonymous functions from script                                | `create_from_ast`, `create_from_script` |
+| Trait               | Description                                                                            | Methods                                 |
+| ------------------- | -------------------------------------------------------------------------------------- | --------------------------------------- |
+| `RegisterFn`        | Trait for registering functions                                                        | `register_fn`                           |
+| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                                  | `register_dynamic_fn`                   |
+| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
+| `Func`              | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
 
 Working with functions
 ----------------------
@@ -560,7 +598,7 @@ fn get_an_any() -> Dynamic {
     Dynamic::from(42_i64)
 }
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -629,18 +667,20 @@ Fallible functions
 If a function is _fallible_ (i.e. it returns a `Result<_, Error>`), it can be registered with `register_result_fn`
 (using the `RegisterResultFn` trait).
 
-The function must return `Result<_, EvalAltResult>`. `EvalAltResult` implements `From<&str>` and `From<String>` etc.
-and the error text gets converted into `EvalAltResult::ErrorRuntime`.
+The function must return `Result<_, Box<EvalAltResult>>`. `Box<EvalAltResult>` implements `From<&str>` and `From<String>` etc.
+and the error text gets converted into `Box<EvalAltResult::ErrorRuntime>`.
+
+The error values are `Box`-ed in order to reduce memory footprint of the error path, which should be hit rarely.
 
 ```rust
 use rhai::{Engine, EvalAltResult, Position};
 use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
 // Function that may fail
-fn safe_divide(x: i64, y: i64) -> Result<i64, EvalAltResult> {
+fn safe_divide(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero!".into())         // short-cut to create EvalAltResult
+        Err("Division by zero!".into())         // short-cut to create Box<EvalAltResult::ErrorRuntime>
     } else {
         Ok(x / y)
     }
@@ -654,7 +694,7 @@ fn main()
     engine.register_result_fn("divide", safe_divide);
 
     if let Err(error) = engine.eval::<i64>("divide(40, 0)") {
-       println!("Error: {:?}", error);          // prints ErrorRuntime("Division by zero detected!", (1, 1)")
+       println!("Error: {:?}", *error);         // prints ErrorRuntime("Division by zero detected!", (1, 1)")
     }
 }
 ```
@@ -741,7 +781,7 @@ impl TestStruct {
     }
 }
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -838,12 +878,12 @@ with a special "pretty-print" name, [`type_of()`] will return that name instead.
 engine.register_type::<TestStruct>();
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(type_of(x));                                 // prints "path::to::module::TestStruct"
+print(x.type_of());                                 // prints "path::to::module::TestStruct"
 
 engine.register_type_with_name::<TestStruct>("Hello");
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(type_of(x));                                 // prints "Hello"
+print(x.type_of());                                 // prints "Hello"
 ```
 
 Getters and setters
@@ -905,7 +945,7 @@ threaded through multiple invocations:
 ```rust
 use rhai::{Engine, Scope, EvalAltResult};
 
-fn main() -> Result<(), EvalAltResult>
+fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
@@ -1116,7 +1156,7 @@ number = -5 - +5;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on
+The following standard functions (defined in the [`BasicMathPackage`] but excluded if using a [raw `Engine`]) operate on
 `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                       |
@@ -1127,7 +1167,7 @@ The following standard functions (defined in the standard library but excluded i
 Floating-point functions
 ------------------------
 
-The following standard functions (defined in the standard library but excluded if using a [raw `Engine`]) operate on `f64` only:
+The following standard functions (defined in the [`BasicMathPackage`](#packages) but excluded if using a [raw `Engine`]) operate on `f64` only:
 
 | Category         | Functions                                                    |
 | ---------------- | ------------------------------------------------------------ |
@@ -1174,8 +1214,8 @@ Unicode characters.
 Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
 In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
 
-Strings can be built up from other strings and types via the `+` operator (provided by the standard library but excluded
-if using a [raw `Engine`]). This is particularly useful when printing output.
+Strings can be built up from other strings and types via the `+` operator (provided by the [`MoreStringPackage`](#packages)
+but excluded if using a [raw `Engine`]). This is particularly useful when printing output.
 
 [`type_of()`] a string returns `"string"`.
 
@@ -1225,7 +1265,7 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 ### Built-in functions
 
-The following standard methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on strings:
+The following standard methods (defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
 
 | Function     | Parameter(s)                                                 | Description                                                                                       |
 | ------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
@@ -1300,7 +1340,7 @@ Arrays are disabled via the [`no_index`] feature.
 
 ### Built-in functions
 
-The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on arrays:
+The following methods (defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
 
 | Function     | Parameter(s)                                                          | Description                                                                                          |
 | ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -1400,6 +1440,7 @@ engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(i
 Object maps
 -----------
 
+[`Map`]: #object-maps
 [object map]: #object-maps
 [object maps]: #object-maps
 
@@ -1420,7 +1461,7 @@ Object maps are disabled via the [`no_object`] feature.
 
 ### Built-in functions
 
-The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on object maps:
+The following methods (defined in the [`BasicMapPackage`](#packages) but excluded if using a [raw `Engine`]) operate on object maps:
 
 | Function     | Parameter(s)                        | Description                                                                                                                              |
 | ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1430,8 +1471,8 @@ The following methods (defined in the standard library but excluded if using a [
 | `remove`     | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
 | `mixin`      | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
 | `+` operator | first object map, second object map | merges the first object map with the second                                                                                              |
-| `keys`       | _none_                              | returns an [array] of all the property names (in random order)                                                                           |
-| `values`     | _none_                              | returns an [array] of all the property values (in random order)                                                                          |
+| `keys`       | _none_                              | returns an [array] of all the property names (in random order), not available under [`no_index`]                                         |
+| `values`     | _none_                              | returns an [array] of all the property values (in random order), not available under [`no_index`]                                        |
 
 ### Examples
 
@@ -1530,7 +1571,7 @@ let json = r#"{
 // Set the second boolean parameter to true in order to map 'null' to '()'
 let map = engine.parse_json(json, true)?;
 
-map.len() == 6;                         // 'map' contains all properties int the JSON string
+map.len() == 6;                         // 'map' contains all properties in the JSON string
 
 // Put the object map into a 'Scope'
 let mut scope = Scope::new();
@@ -1543,16 +1584,19 @@ result == 3;                            // the object map is successfully used i
 
 `timestamp`'s
 -------------
-[`timestamp`]: #timestamp-s
 
-Timestamps are provided by the standard library (excluded if using a [raw `Engine`]) via the `timestamp`
+[`timestamp`]: #timestamps
+[timestamp]: #timestamps
+[timestamps]: #timestamps
+
+Timestamps are provided by the [`BasicTimePackage`](#packages) (excluded if using a [raw `Engine`]) via the `timestamp`
 function.
 
 The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp returns `"timestamp"`.
 
 ### Built-in functions
 
-The following methods (defined in the standard library but excluded if using a [raw `Engine`]) operate on timestamps:
+The following methods (defined in the [`BasicTimePackage`](#packages) but excluded if using a [raw `Engine`]) operate on timestamps:
 
 | Function     | Parameter(s)                       | Description                                              |
 | ------------ | ---------------------------------- | -------------------------------------------------------- |
@@ -1600,13 +1644,13 @@ ts == 42;               // false - types are not the same
 Boolean operators
 -----------------
 
-| Operator | Description                     |
-| -------- | ------------------------------- |
-| `!`      | Boolean _Not_                   |
-| `&&`     | Boolean _And_ (short-circuits)  |
-| `\|\|`   | Boolean _Or_ (short-circuits)   |
-| `&`      | Boolean _And_ (full evaluation) |
-| `\|`     | Boolean _Or_ (full evaluation)  |
+| Operator | Description                           |
+| -------- | ------------------------------------- |
+| `!`      | Boolean _Not_                         |
+| `&&`     | Boolean _And_ (short-circuits)        |
+| `\|\|`   | Boolean _Or_ (short-circuits)         |
+| `&`      | Boolean _And_ (doesn't short-circuit) |
+| `\|`     | Boolean _Or_ (doesn't short-circuit)  |
 
 Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated
 if the first one already proves the condition wrong.
@@ -1766,7 +1810,7 @@ return 123 + 456;           // returns 579
 Errors and `throw`-ing exceptions
 --------------------------------
 
-All of [`Engine`]'s evaluation/consuming methods return `Result<T, rhai::EvalAltResult>` with `EvalAltResult`
+All of [`Engine`]'s evaluation/consuming methods return `Result<T, Box<rhai::EvalAltResult>>` with `EvalAltResult`
 holding error information. To deliberately return an error during an evaluation, use the `throw` keyword.
 
 ```rust
@@ -1876,7 +1920,7 @@ Unlike C/C++, functions can be defined _anywhere_ within the global level. A fun
 prior to being used in a script; a statement in the script can freely call a function defined afterwards.
 This is similar to Rust and many other modern languages.
 
-### Functions overloading
+### Function overloading
 
 Functions can be _overloaded_ and are resolved purely upon the function's _name_ and the _number_ of parameters
 (but not parameter _types_, since all parameters are the same type - [`Dynamic`]).
@@ -1903,7 +1947,7 @@ Properties and methods in a Rust custom type registered with the [`Engine`] can 
 ```rust
 let a = new_ts();           // constructor function
 a.field = 500;              // property access
-a.update();                 // method call
+a.update();                 // method call, 'a' can be changed
 
 update(a);                  // this works, but 'a' is unchanged because only
                             // a COPY of 'a' is passed to 'update' by VALUE
@@ -2205,7 +2249,7 @@ eval("{ let z = y }");      // to keep a variable local, use a statement block
 
 print("z = " + z);          // <- error: variable 'z' not found
 
-"print(42)".eval();         // <- nope... just like 'type_of', method-call style doesn't work
+"print(42)".eval();         // <- nope... method-call style doesn't work
 ```
 
 Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,

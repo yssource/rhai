@@ -1,6 +1,6 @@
 use rhai::{Engine, EvalAltResult, Scope, INT};
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let mut scope = Scope::new();
 

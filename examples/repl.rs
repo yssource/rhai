@@ -157,7 +157,7 @@ fn main() {
             Ok(_) => (),
             Err(err) => {
                 println!();
-                print_error(&input, err);
+                print_error(&input, *err);
                 println!();
             }
         }

@@ -3,7 +3,7 @@
 use rhai::{Engine, EvalAltResult, Map, Scope, INT};
 
 #[test]
-fn test_map_indexing() -> Result<(), EvalAltResult> {
+fn test_map_indexing() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     #[cfg(not(feature = "no_index"))]
@@ -81,7 +81,7 @@ fn test_map_indexing() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_map_assign() -> Result<(), EvalAltResult> {
+fn test_map_assign() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c$": "hello"}; x"#)?;
@@ -112,7 +112,7 @@ fn test_map_assign() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_map_return() -> Result<(), EvalAltResult> {
+fn test_map_return() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let x = engine.eval::<Map>(r#"#{a: 1, b: true, "c$": "hello"}"#)?;
@@ -143,7 +143,8 @@ fn test_map_return() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_map_for() -> Result<(), EvalAltResult> {
+#[cfg(not(feature = "no_index"))]
+fn test_map_for() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -170,7 +171,7 @@ fn test_map_for() -> Result<(), EvalAltResult> {
 #[test]
 /// Because a Rhai object map literal is almost the same as JSON,
 /// it is possible to convert from JSON into a Rhai object map.
-fn test_map_json() -> Result<(), EvalAltResult> {
+fn test_map_json() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let json = r#"{"a":1, "b":true, "c":42, "$d e f!":"hello", "z":null}"#;

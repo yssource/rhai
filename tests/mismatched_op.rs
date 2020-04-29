@@ -4,10 +4,10 @@ use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 fn test_mismatched_op() {
     let engine = Engine::new();
 
-    assert!(
-        matches!(engine.eval::<INT>(r#""hello, " + "world!""#).expect_err("expects error"),
-        EvalAltResult::ErrorMismatchOutputType(err, _) if err == "string")
-    );
+    assert!(matches!(
+        *engine.eval::<INT>(r#""hello, " + "world!""#).expect_err("expects error"),
+        EvalAltResult::ErrorMismatchOutputType(err, _) if err == "string"
+    ));
 }
 
 #[test]
@@ -33,12 +33,14 @@ fn test_mismatched_op_custom_type() {
         .expect_err("expects error");
 
     #[cfg(feature = "only_i32")]
-    assert!(
-        matches!(r, EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i32, TestStruct)")
-    );
+    assert!(matches!(
+        *r,
+        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i32, TestStruct)"
+    ));
 
     #[cfg(not(feature = "only_i32"))]
-    assert!(
-        matches!(r, EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i64, TestStruct)")
-    );
+    assert!(matches!(
+        *r,
+        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i64, TestStruct)"
+    ));
 }

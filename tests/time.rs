@@ -7,7 +7,7 @@ use rhai::{Engine, EvalAltResult, INT};
 use rhai::FLOAT;
 
 #[test]
-fn test_timestamp() -> Result<(), EvalAltResult> {
+fn test_timestamp() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<String>("type_of(timestamp())")?, "timestamp");

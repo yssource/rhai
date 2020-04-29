@@ -1,6 +1,6 @@
 use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 
-fn main() -> Result<(), EvalAltResult> {
+fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     fn add(x: INT, y: INT) -> INT {

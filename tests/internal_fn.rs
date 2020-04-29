@@ -3,7 +3,7 @@
 use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
-fn test_internal_fn() -> Result<(), EvalAltResult> {
+fn test_internal_fn() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -16,7 +16,7 @@ fn test_internal_fn() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_big_internal_fn() -> Result<(), EvalAltResult> {
+fn test_big_internal_fn() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -35,7 +35,7 @@ fn test_big_internal_fn() -> Result<(), EvalAltResult> {
 }
 
 #[test]
-fn test_internal_fn_overloading() -> Result<(), EvalAltResult> {
+fn test_internal_fn_overloading() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(

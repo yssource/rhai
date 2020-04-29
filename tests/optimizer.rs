@@ -3,8 +3,8 @@
 use rhai::{Engine, EvalAltResult, OptimizationLevel, INT};
 
 #[test]
-fn test_optimizer() -> Result<(), EvalAltResult> {
-    fn run_test(engine: &mut Engine) -> Result<(), EvalAltResult> {
+fn test_optimizer() -> Result<(), Box<EvalAltResult>> {
+    fn run_test(engine: &mut Engine) -> Result<(), Box<EvalAltResult>> {
         assert_eq!(engine.eval::<INT>(r"if true { 42 } else { 123 }")?, 42);
         assert_eq!(
             engine.eval::<INT>(r"if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
