@@ -376,7 +376,7 @@ The follow packages are available:
 
 | Package                  | Description                                     | In `CorePackage` | In `StandardPackage` |
 | ------------------------ | ----------------------------------------------- | :--------------: | :------------------: |
-| `BasicArithmeticPackage` | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
+| `ArithmeticPackage`      | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
 | `BasicIteratorPackage`   | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
 | `LogicPackage`           | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
 | `BasicStringPackage`     | Basic string functions                          |       Yes        |         Yes          |
