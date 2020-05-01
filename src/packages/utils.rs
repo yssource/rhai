@@ -239,44 +239,6 @@ pub fn reg_unary_mut<T: Variant + Clone, R>(
     lib.functions.insert(hash, f);
 }
 
-#[cfg(not(feature = "sync"))]
-pub(crate) fn reg_test<'a, A: Variant + Clone, B: Variant + Clone, X, R>(
-    lib: &mut PackageStore,
-    fn_name: &'static str,
-
-    #[cfg(not(feature = "sync"))] func: impl Fn(X, B) -> R + 'static,
-    #[cfg(feature = "sync")] func: impl Fn(X, B) -> R + Send + Sync + 'static,
-
-    map: impl Fn(&mut A) -> X + 'static,
-
-    #[cfg(not(feature = "sync"))] map_result: impl Fn(R, Position) -> Result<Dynamic, Box<EvalAltResult>>
-        + 'static,
-    #[cfg(feature = "sync")] map_result: impl Fn(R, Position) -> Result<Dynamic, Box<EvalAltResult>>
-        + Send
-        + Sync
-        + 'static,
-) {
-    //println!("register {}({}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>());
-
-    let hash = calc_fn_hash(
-        fn_name,
-        [TypeId::of::<A>(), TypeId::of::<B>()].iter().cloned(),
-    );
-
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 2, args, pos)?;
-
-        let mut drain = args.iter_mut();
-        let x: X = map(drain.next().unwrap().downcast_mut::<A>().unwrap());
-        let y: B = drain.next().unwrap().downcast_mut::<B>().unwrap().clone();
-
-        let r = func(x, y);
-        map_result(r, pos)
-    });
-
-    lib.functions.insert(hash, f);
-}
-
 /// Add a function with two parameters to the package.
 ///
 /// `map_result` is a function that maps the return type of the function to `Result<Dynamic, EvalAltResult>`.
