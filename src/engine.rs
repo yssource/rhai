@@ -806,7 +806,7 @@ impl Engine {
         } else {
             match rhs {
                 // xxx.fn_name(arg_expr_list)
-                Expr::FunctionCall(fn_name, _, def_val, pos) => {
+                Expr::FnCall(fn_name, _, def_val, pos) => {
                     let mut args: Vec<_> = once(obj)
                         .chain(idx_val.downcast_mut::<Array>().unwrap().iter_mut())
                         .collect();
@@ -976,7 +976,7 @@ impl Engine {
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
         match expr {
-            Expr::FunctionCall(_, arg_exprs, _, _) => {
+            Expr::FnCall(_, arg_exprs, _, _) => {
                 let arg_values = arg_exprs
                     .iter()
                     .map(|arg_expr| self.eval_expr(scope, state, fn_lib, arg_expr, level))
@@ -1233,7 +1233,7 @@ impl Engine {
                     .collect::<Result<HashMap<_, _>, _>>()?,
             )))),
 
-            Expr::FunctionCall(fn_name, arg_exprs, def_val, pos) => {
+            Expr::FnCall(fn_name, arg_exprs, def_val, pos) => {
                 let mut arg_values = arg_exprs
                     .iter()
                     .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
@@ -1242,7 +1242,7 @@ impl Engine {
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 
                 // eval - only in function call style
-                if fn_name == KEYWORD_EVAL
+                if fn_name.as_ref() == KEYWORD_EVAL
                     && args.len() == 1
                     && !self.has_override(fn_lib, KEYWORD_EVAL)
                 {
@@ -1409,7 +1409,8 @@ impl Engine {
                         .and_then(|pkg| pkg.type_iterators.get(&tid))
                 }) {
                     // Add the loop variable
-                    scope.push(name.clone(), ());
+                    let var_name = name.as_ref().clone();
+                    scope.push(var_name, ());
                     let index = scope.len() - 1;
 
                     for a in iter_fn(arr) {
@@ -1466,13 +1467,15 @@ impl Engine {
             Stmt::Let(name, Some(expr), _) => {
                 let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
-                scope.push_dynamic_value(name.clone(), ScopeEntryType::Normal, val, false);
+                let var_name = name.as_ref().clone();
+                scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
                 Ok(Default::default())
             }
 
             Stmt::Let(name, None, _) => {
                 // TODO - avoid copying variable name in inner block?
-                scope.push(name.clone(), ());
+                let var_name = name.as_ref().clone();
+                scope.push(var_name, ());
                 Ok(Default::default())
             }
 
@@ -1480,7 +1483,8 @@ impl Engine {
             Stmt::Const(name, expr, _) if expr.is_constant() => {
                 let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
                 // TODO - avoid copying variable name in inner block?
-                scope.push_dynamic_value(name.clone(), ScopeEntryType::Constant, val, true);
+                let var_name = name.as_ref().clone();
+                scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
                 Ok(Default::default())
             }
 
