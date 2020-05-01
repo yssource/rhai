@@ -1057,15 +1057,25 @@ impl Engine {
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
 
-                let num_chars = s.chars().count();
-
                 if index >= 0 {
-                    let index = index as usize;
-                    let ch = s.chars().nth(index).unwrap();
-                    Ok(Target::StringChar(Box::new((val, index, ch.into()))))
+                    let ch = s.chars().nth(index as usize).ok_or_else(|| {
+                        Box::new(EvalAltResult::ErrorStringBounds(
+                            s.chars().count(),
+                            index,
+                            idx_pos,
+                        ))
+                    })?;
+
+                    Ok(Target::StringChar(Box::new((
+                        val,
+                        index as usize,
+                        ch.into(),
+                    ))))
                 } else {
                     Err(Box::new(EvalAltResult::ErrorStringBounds(
-                        num_chars, index, idx_pos,
+                        s.chars().count(),
+                        index,
+                        idx_pos,
                     )))
                 }
             }

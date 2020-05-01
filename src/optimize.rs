@@ -435,9 +435,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
-            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _))
-                if i >= 0 && (i as usize) < s.chars().count() =>
-            {
+            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if i >= 0 && (i as usize) < s.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
                 Expr::CharConstant(s.chars().nth(i as usize).expect("should get char"), pos)
@@ -550,11 +548,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 optimize_expr(lhs, state)
             }
             // lhs || rhs
-            (lhs, rhs) => Expr::Or(
-                Box::new(optimize_expr(lhs, state)),
-                Box::new(optimize_expr(rhs, state)),
-                pos
-            ),
+            (lhs, rhs) => Expr::Or(Box::new(optimize_expr(lhs, state)), Box::new(optimize_expr(rhs, state)), pos),
         },
 
         // Do not call some special keywords
