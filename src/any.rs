@@ -252,6 +252,12 @@ impl Clone for Dynamic {
     }
 }
 
+impl Default for Dynamic {
+    fn default() -> Self {
+        Self(Union::Unit(()))
+    }
+}
+
 /// Cast a Boxed type into another type.
 fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<T, Box<X>> {
     // Only allow casting to the exact same type
@@ -359,22 +365,16 @@ impl Dynamic {
             return cast_box::<_, T>(Box::new(self)).ok();
         }
 
-        match &self.0 {
-            Union::Unit(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
-            Union::Bool(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
-            Union::Str(value) => (value.as_ref() as &dyn Variant)
-                .downcast_ref::<T>()
-                .cloned(),
-            Union::Char(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
-            Union::Int(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
+        match self.0 {
+            Union::Unit(ref value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
+            Union::Bool(ref value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
+            Union::Str(value) => cast_box::<_, T>(value).ok(),
+            Union::Char(ref value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
+            Union::Int(ref value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
-            Union::Array(value) => (value.as_ref() as &dyn Variant)
-                .downcast_ref::<T>()
-                .cloned(),
-            Union::Map(value) => (value.as_ref() as &dyn Variant)
-                .downcast_ref::<T>()
-                .cloned(),
+            Union::Float(ref value) => (value as &dyn Variant).downcast_ref::<T>().cloned(),
+            Union::Array(value) => cast_box::<_, T>(value).ok(),
+            Union::Map(value) => cast_box::<_, T>(value).ok(),
             Union::Variant(value) => value.as_ref().as_ref().downcast_ref::<T>().cloned(),
         }
     }

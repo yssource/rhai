@@ -376,7 +376,7 @@ The follow packages are available:
 
 | Package                  | Description                                     | In `CorePackage` | In `StandardPackage` |
 | ------------------------ | ----------------------------------------------- | :--------------: | :------------------: |
-| `BasicArithmeticPackage` | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
+| `ArithmeticPackage`      | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
 | `BasicIteratorPackage`   | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
 | `LogicPackage`           | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
 | `BasicStringPackage`     | Basic string functions                          |       Yes        |         Yes          |
@@ -1979,17 +1979,20 @@ engine.on_print(|x| println!("hello: {}", x));
 engine.on_debug(|x| println!("DEBUG: {}", x));
 
 // Example: quick-'n-dirty logging
-let mut log: Vec<String> = Vec::new();
+let logbook = Arc::new(RwLock::new(Vec::<String>::new()));
 
 // Redirect print/debug output to 'log'
-engine.on_print(|s| log.push(format!("entry: {}", s)));
-engine.on_debug(|s| log.push(format!("DEBUG: {}", s)));
+let log = logbook.clone();
+engine.on_print(move |s| log.write().unwrap().push(format!("entry: {}", s)));
+
+let log = logbook.clone();
+engine.on_debug(move |s| log.write().unwrap().push(format!("DEBUG: {}", s)));
 
 // Evaluate script
 engine.eval::<()>(script)?;
 
-// 'log' captures all the 'print' and 'debug' output
-for entry in log {
+// 'logbook' captures all the 'print' and 'debug' output
+for entry in logbook.read().unwrap().iter() {
     println!("{}", entry);
 }
 ```

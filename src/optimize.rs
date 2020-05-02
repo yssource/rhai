@@ -435,9 +435,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
-            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _))
-                if i >= 0 && (i as usize) < s.chars().count() =>
-            {
+            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if i >= 0 && (i as usize) < s.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
                 Expr::CharConstant(s.chars().nth(i as usize).expect("should get char"), pos)
@@ -550,26 +548,22 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 optimize_expr(lhs, state)
             }
             // lhs || rhs
-            (lhs, rhs) => Expr::Or(
-                Box::new(optimize_expr(lhs, state)),
-                Box::new(optimize_expr(rhs, state)),
-                pos
-            ),
+            (lhs, rhs) => Expr::Or(Box::new(optimize_expr(lhs, state)), Box::new(optimize_expr(rhs, state)), pos),
         },
 
         // Do not call some special keywords
-        Expr::FunctionCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref())=>
-            Expr::FunctionCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
+        Expr::FnCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref().as_ref())=>
+            Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
 
         // Eagerly call functions
-        Expr::FunctionCall(id, args, def_value, pos)
+        Expr::FnCall(id, args, def_value, pos)
                 if state.optimization_level == OptimizationLevel::Full // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
-            if state.fn_lib.iter().find(|(name, len)| name == &id && *len == args.len()).is_some() {
+            if state.fn_lib.iter().find(|(name, len)| name == id.as_ref() && *len == args.len()).is_some() {
                 // A script-defined function overrides the built-in function - do not make the call
-                return Expr::FunctionCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos);
+                return Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos);
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
@@ -577,7 +571,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
 
             // Save the typename of the first argument if it is `type_of()`
             // This is to avoid `call_args` being passed into the closure
-            let arg_for_type_of = if id == KEYWORD_TYPE_OF  && call_args.len() == 1 {
+            let arg_for_type_of = if *id == KEYWORD_TYPE_OF && call_args.len() == 1 {
                 state.engine.map_type_name(call_args[0].type_name())
             } else {
                 ""
@@ -600,13 +594,13 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     })
                 ).unwrap_or_else(||
                     // Optimize function call arguments
-                    Expr::FunctionCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos)
+                    Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos)
                 )
         }
 
         // id(args ..) -> optimize function call arguments
-        Expr::FunctionCall(id, args, def_value, pos) =>
-            Expr::FunctionCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
+        Expr::FnCall(id, args, def_value, pos) =>
+            Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
 
         // constant-name
         Expr::Variable(name, _, pos) if state.contains_constant(&name) => {

@@ -1,8 +1,7 @@
-use super::{reg_binary, reg_trinary, reg_unary_mut, PackageStore};
+use super::{reg_binary, reg_trinary, PackageStore};
 
-use crate::any::{Dynamic, Union, Variant};
+use crate::any::{Dynamic, Variant};
 use crate::def_package;
-use crate::engine::{Array, Map};
 use crate::fn_register::map_dynamic as map;
 use crate::parser::INT;
 
