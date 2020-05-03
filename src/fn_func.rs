@@ -116,5 +116,4 @@ macro_rules! def_anonymous_fn {
     };
 }
 
-#[rustfmt::skip]
 def_anonymous_fn!(A, B, C, D, E, F, G, H, J, K, L, M, N, P, Q, R, S, T, U, V);

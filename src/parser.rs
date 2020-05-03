@@ -15,7 +15,7 @@ use crate::stdlib::{
     format,
     iter::Peekable,
     num::NonZeroUsize,
-    ops::Add,
+    ops::{Add, Deref, DerefMut},
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
@@ -193,18 +193,6 @@ impl Stack {
     pub fn new() -> Self {
         Self(Vec::new())
     }
-    /// Get the number of variables in the `Stack`.
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-    /// Push (add) a new variable onto the `Stack`.
-    pub fn push(&mut self, name: String) {
-        self.0.push(name);
-    }
-    /// Rewind the stack to a previous size.
-    pub fn rewind(&mut self, len: usize) {
-        self.0.truncate(len);
-    }
     /// Find a variable by name in the `Stack`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `Stack` is offset 1.
@@ -216,6 +204,20 @@ impl Stack {
             .enumerate()
             .find(|(_, n)| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
+    }
+}
+
+impl Deref for Stack {
+    type Target = Vec<String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Stack {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -1639,7 +1641,7 @@ fn parse_for<'a>(
 
     let body = parse_block(input, stack, true, allow_stmt_expr)?;
 
-    stack.rewind(prev_len);
+    stack.truncate(prev_len);
 
     Ok(Stmt::For(Box::new(name), Box::new(expr), Box::new(body)))
 }
@@ -1747,7 +1749,7 @@ fn parse_block<'a>(
         }
     }
 
-    stack.rewind(prev_len);
+    stack.truncate(prev_len);
 
     Ok(Stmt::Block(statements, pos))
 }

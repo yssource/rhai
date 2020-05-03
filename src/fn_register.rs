@@ -7,7 +7,7 @@ use crate::engine::{calc_fn_spec, Engine, FnCallArgs};
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
-use crate::stdlib::{any::TypeId, boxed::Box, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, mem, string::ToString};
 
 /// A trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {
@@ -115,16 +115,19 @@ pub trait RegisterResultFn<FN, ARGS, RET> {
 pub struct Mut<T>(T);
 //pub struct Ref<T>(T);
 
-/// Identity dereferencing function.
+/// Dereference into &mut.
 #[inline]
-pub fn identity<T>(data: &mut T) -> &mut T {
-    data
+pub fn by_ref<T: Clone + 'static>(data: &mut Dynamic) -> &mut T {
+    // Directly cast the &mut Dynamic into &mut T to access the underlying data.
+    data.downcast_mut::<T>().unwrap()
 }
 
-/// Clone dereferencing function.
+/// Dereference into value.
 #[inline]
-pub fn cloned<T: Clone>(data: &mut T) -> T {
-    data.clone()
+pub fn by_value<T: Clone + 'static>(data: &mut Dynamic) -> T {
+    // We consume the argument and then replace it with () - the argument is not supposed to be used again.
+    // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
+    mem::replace(data, Default::default()).cast::<T>()
 }
 
 /// This macro counts the number of arguments via recursion.
@@ -135,7 +138,7 @@ macro_rules! count_args {
 
 /// This macro creates a closure wrapping a registered function.
 macro_rules! make_func {
-	($fn_name:ident : $fn:ident : $map:expr ; $($par:ident => $clone:expr),*) => {
+	($fn_name:ident : $fn:ident : $map:expr ; $($par:ident => $convert:expr),*) => {
 //   ^ function name
 //                    ^ function pointer
 //                                ^ result mapping function
@@ -153,14 +156,16 @@ macro_rules! make_func {
 			#[allow(unused_variables, unused_mut)]
 			let mut drain = args.iter_mut();
 			$(
-			// Downcast every element, return in case of a type mismatch
-			let $par: &mut $par = drain.next().unwrap().downcast_mut().unwrap();
+			// Downcast every element, panic in case of a type mismatch (which shouldn't happen).
+			// Call the user-supplied function using ($convert) to access it either by value or by reference.
+			let $par = ($convert)(drain.next().unwrap());
 			)*
 
-			// Call the user-supplied function using ($clone) to
-			// potentially clone the value, otherwise pass the reference.
-			let r = $fn($(($clone)($par)),*);
-			$map(r, pos)
+            // Call the function with each parameter value
+			let r = $fn($($par),*);
+
+            // Map the result
+            $map(r, pos)
 		};
 	};
 }
@@ -259,18 +264,17 @@ macro_rules! def_register {
         //def_register!(imp_pop $($par => $mark => $param),*);
     };
     ($p0:ident $(, $p:ident)*) => {
-        def_register!(imp $p0 => $p0      => $p0      => cloned         $(, $p => $p => $p => cloned)*);
-        def_register!(imp $p0 => Mut<$p0> => &mut $p0 => identity       $(, $p => $p => $p => cloned)*);
+        def_register!(imp $p0 => $p0      => $p0      => by_value $(, $p => $p => $p => by_value)*);
+        def_register!(imp $p0 => Mut<$p0> => &mut $p0 => by_ref   $(, $p => $p => $p => by_value)*);
         // handle the first parameter                    ^ first parameter passed through
-        //                                                                                    ^ others passed by value (cloned)
+        //                                                                              ^ others passed by value (by_value)
 
         // Currently does not support first argument which is a reference, as there will be
         // conflicting implementations since &T: Any and T: Any cannot be distinguished
-        //def_register!(imp $p0 => Ref<$p0> => &$p0     => identity       $(, $p => $p => $p => Clone::clone)*);
+        //def_register!(imp $p0 => Ref<$p0> => &$p0     => by_ref   $(, $p => $p => $p => by_value)*);
 
         def_register!($($p),*);
     };
 }
 
-#[rustfmt::skip]
 def_register!(A, B, C, D, E, F, G, H, J, K, L, M, N, P, Q, R, S, T, U, V);

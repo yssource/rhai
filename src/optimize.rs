@@ -371,12 +371,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 (Expr::Variable(var, sp, _), Expr::Variable(var2, sp2, _)) if var == var2 && sp == sp2 => {
                     // Assignment to the same variable - fold
                     state.set_dirty();
-
-                    Expr::Assignment(
-                        Box::new(Expr::Variable(var, sp, pos)),
-                        Box::new(optimize_expr(*expr2, state)),
-                        pos,
-                    )
+                    Expr::Assignment(Box::new(Expr::Variable(var, sp, pos)), Box::new(optimize_expr(*expr2, state)), pos)
                 }
                 // id1 = id2 = expr2
                 (id1, id2) => Expr::Assignment(

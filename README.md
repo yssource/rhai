@@ -374,19 +374,19 @@ engine.load_package(package.get());             // load the package manually
 
 The follow packages are available:
 
-| Package                  | Description                                     | In `CorePackage` | In `StandardPackage` |
-| ------------------------ | ----------------------------------------------- | :--------------: | :------------------: |
-| `ArithmeticPackage`      | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
-| `BasicIteratorPackage`   | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
-| `LogicPackage`           | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
-| `BasicStringPackage`     | Basic string functions                          |       Yes        |         Yes          |
-| `BasicTimePackage`       | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
-| `MoreStringPackage`      | Additional string functions                     |        No        |         Yes          |
-| `BasicMathPackage`       | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
-| `BasicArrayPackage`      | Basic [array] functions                         |        No        |         Yes          |
-| `BasicMapPackage`        | Basic [object map] functions                    |        No        |         Yes          |
-| `CorePackage`            | Basic essentials                                |                  |                      |
-| `StandardPackage`        | Standard library                                |                  |                      |
+| Package                | Description                                     | In `CorePackage` | In `StandardPackage` |
+| ---------------------- | ----------------------------------------------- | :--------------: | :------------------: |
+| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
+| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
+| `LogicPackage`         | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
+| `BasicStringPackage`   | Basic string functions                          |       Yes        |         Yes          |
+| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
+| `MoreStringPackage`    | Additional string functions                     |        No        |         Yes          |
+| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
+| `BasicArrayPackage`    | Basic [array] functions                         |        No        |         Yes          |
+| `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
+| `CorePackage`          | Basic essentials                                |                  |                      |
+| `StandardPackage`      | Standard library                                |                  |                      |
 
 Evaluate expressions only
 -------------------------
@@ -427,7 +427,7 @@ The following primitive types are supported natively:
 | **Boolean value**                                                             | `bool`                                                                                               | `"bool"`              | `"true"` or `"false"` |
 | **Unicode character**                                                         | `char`                                                                                               | `"char"`              | `"A"`, `"x"` etc.     |
 | **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
-| **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
+| **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ?, ?, ? ]"`       |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
 | **Timestamp** (implemented in the [`BasicTimePackage`](#packages))            | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
@@ -1372,7 +1372,8 @@ y[2] == 3;
 y[3] == 4;
 
 (1 in y) == true;       // use 'in' to test if an item exists in the array
-(42 in y) == false;
+(42 in y) == false;     // 'in' uses the '==' operator (which users can override)
+                        // to check if the target item exists in the array
 
 y[1] = 42;              // array elements can be reassigned
 
@@ -1494,7 +1495,7 @@ y.a == 42;
 
 y["baz!$@"] == 123.456; // access via index notation
 
-"baz!$@" in y == true;  // use 'in' to test if a property exists in the object map, prints true
+"baz!$@" in y == true;  // use 'in' to test if a property exists in the object map
 ("z" in y) == false;
 
 ts.obj = y;             // object maps can be assigned completely (by value copy)

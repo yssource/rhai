@@ -396,7 +396,24 @@ impl Dynamic {
     /// assert_eq!(x.cast::<u32>(), 42);
     /// ```
     pub fn cast<T: Variant + Clone>(self) -> T {
-        self.try_cast::<T>().unwrap()
+        //self.try_cast::<T>().unwrap()
+
+        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+            return cast_box::<_, T>(Box::new(self)).unwrap();
+        }
+
+        match self.0 {
+            Union::Unit(ref value) => (value as &dyn Variant).downcast_ref::<T>().unwrap().clone(),
+            Union::Bool(ref value) => (value as &dyn Variant).downcast_ref::<T>().unwrap().clone(),
+            Union::Str(value) => cast_box::<_, T>(value).unwrap(),
+            Union::Char(ref value) => (value as &dyn Variant).downcast_ref::<T>().unwrap().clone(),
+            Union::Int(ref value) => (value as &dyn Variant).downcast_ref::<T>().unwrap().clone(),
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(ref value) => (value as &dyn Variant).downcast_ref::<T>().unwrap().clone(),
+            Union::Array(value) => cast_box::<_, T>(value).unwrap(),
+            Union::Map(value) => cast_box::<_, T>(value).unwrap(),
+            Union::Variant(value) => value.as_ref().as_ref().downcast_ref::<T>().unwrap().clone(),
+        }
     }
 
     /// Get a reference of a specific type to the `Dynamic`.

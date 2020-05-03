@@ -692,7 +692,7 @@ impl Engine {
         &self,
         fn_lib: &FunctionsLib,
         fn_name: &str,
-        args: &mut [&mut Dynamic],
+        args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
         level: usize,
@@ -1227,7 +1227,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Expr::Array(contents, _) => Ok(Dynamic(Union::Array(Box::new(
                 contents
-                    .into_iter()
+                    .iter()
                     .map(|item| self.eval_expr(scope, state, fn_lib, item, level))
                     .collect::<Result<Vec<_>, _>>()?,
             )))),
@@ -1235,9 +1235,9 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Expr::Map(contents, _) => Ok(Dynamic(Union::Map(Box::new(
                 contents
-                    .into_iter()
+                    .iter()
                     .map(|(key, expr, _)| {
-                        self.eval_expr(scope, state, fn_lib, &expr, level)
+                        self.eval_expr(scope, state, fn_lib, expr, level)
                             .map(|val| (key.clone(), val))
                     })
                     .collect::<Result<HashMap<_, _>, _>>()?,
