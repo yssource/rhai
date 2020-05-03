@@ -828,7 +828,7 @@ impl Engine {
                         self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, false)?;
                     Ok((indexed_val.clone_into_dynamic(), false))
                 }
-                // xxx.id = ???
+                // xxx.id = ??? a
                 Expr::Property(id, pos) if new_val.is_some() => {
                     let fn_name = make_setter(id);
                     let mut args = [obj, new_val.as_mut().unwrap()];
