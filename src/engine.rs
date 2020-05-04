@@ -885,7 +885,11 @@ impl Engine {
                         if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                             let fn_name = make_setter(id);
                             args[1] = indexed_val;
-                            self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0)?;
+                            self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).or_else(|err| match *err {
+                                // If there is no setter, no need to feed it back because the property is read-only
+                                EvalAltResult::ErrorDotExpr(_,_) => Ok(Default::default()),
+                                err => Err(Box::new(err))
+                            })?;
                         }
                     }
 
