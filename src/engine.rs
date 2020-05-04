@@ -1188,7 +1188,8 @@ impl Engine {
                         Some((index, ScopeEntryType::Normal)) => {
                             *scope.get_mut(index).0 = rhs_val;
                             Ok(Default::default())
-                        }
+                        },
+                        Some((_, ScopeEntryType::Subscope)) => unreachable!(),
                     },
                     // idx_lhs[idx_expr] = rhs
                     #[cfg(not(feature = "no_index"))]
@@ -1495,6 +1496,11 @@ impl Engine {
                 let var_name = name.as_ref().clone();
                 scope.push(var_name, ());
                 Ok(Default::default())
+            }
+
+            // Import statement
+            Stmt::Import(_name_expr, _alias) => {
+                unimplemented!()
             }
 
             // Const statement
