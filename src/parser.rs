@@ -1070,9 +1070,9 @@ fn parse_primary<'a>(
             (Expr::Property(id, pos), Token::LeftParen) => {
                 parse_call_expr(input, stack, id, None, pos, allow_stmt_expr)?
             }
-            // moduled
+            // module access
             #[cfg(not(feature = "no_import"))]
-            (Expr::Variable(id, mut modules, _, pos), Token::DoubleColon) => {
+            (Expr::Variable(id, mut modules, mut index, pos), Token::DoubleColon) => {
                 match input.next().unwrap() {
                     (Token::Identifier(id2), pos2) => {
                         if let Some(ref mut modules) = modules {
@@ -1081,10 +1081,11 @@ fn parse_primary<'a>(
                             let mut vec = StaticVec::new();
                             vec.push((*id, pos));
                             modules = Some(Box::new(vec));
+
+                            let root = modules.as_ref().unwrap().get(0);
+                            index = stack.find_sub_scope(&root.0);
                         }
 
-                        let root = modules.as_ref().unwrap().get(0);
-                        let index = stack.find_sub_scope(&root.0);
                         Expr::Variable(Box::new(id2), modules, index, pos2)
                     }
                     (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
@@ -1828,6 +1829,7 @@ fn parse_import<'a>(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
+    stack.push((name.clone(), ScopeEntryType::SubScope));
     Ok(Stmt::Import(Box::new(expr), Box::new(name), pos))
 }
 

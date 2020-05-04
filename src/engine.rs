@@ -18,6 +18,7 @@ use crate::stdlib::{
     hash::{Hash, Hasher},
     iter::once,
     mem,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     rc::Rc,
     string::{String, ToString},
@@ -40,6 +41,32 @@ pub type Array = Vec<Dynamic>;
 ///
 /// Not available under the `no_object` feature.
 pub type Map = HashMap<String, Dynamic>;
+
+/// A sub-scope - basically an imported module namespace.
+///
+/// Not available under the `no_import` feature.
+#[derive(Debug, Clone)]
+pub struct SubScope(HashMap<String, Dynamic>);
+
+impl SubScope {
+    /// Create a new sub-scope.
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+impl Deref for SubScope {
+    type Target = HashMap<String, Dynamic>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for SubScope {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
@@ -472,39 +499,68 @@ fn default_print(s: &str) {
     println!("{}", s);
 }
 
-/// Search for a variable within the scope, returning its value and index inside the Scope
-fn search_scope<'a>(
+/// Search for a variable within the scope
+fn search_scope_variables<'a>(
     scope: &'a mut Scope,
     name: &str,
-    modules: Option<&Box<StaticVec<(String, Position)>>>,
+    index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    if let Some(modules) = modules {
-        let (id, root_pos) = modules.get(0); // First module
-        let mut sub_scope = scope
-            .find_sub_scope(id)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?;
-
-        for x in 1..modules.len() {
-            let (id, id_pos) = modules.get(x);
-
-            sub_scope = sub_scope
-                .get_mut(id)
-                .unwrap()
-                .downcast_mut::<Map>()
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
-        }
-
-        sub_scope
-            .get_mut(name)
-            .map(|v| (v, ScopeEntryType::Constant))
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))
+    let index = if let Some(index) = index {
+        scope.len() - index.get()
     } else {
-        let (index, _) = scope
+        scope
             .get_index(name)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?;
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?
+            .0
+    };
 
-        Ok(scope.get_mut(index))
+    Ok(scope.get_mut(index))
+}
+
+/// Search for a sub-scope within the scope
+fn search_scope_modules<'a>(
+    scope: &'a mut Scope,
+    name: &str,
+    modules: &Box<StaticVec<(String, Position)>>,
+    index: Option<NonZeroUsize>,
+    pos: Position,
+) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
+    let (id, root_pos) = modules.get(0); // First module
+
+    let mut sub_scope = if let Some(index) = index {
+        scope
+            .get_mut(scope.len() - index.get())
+            .0
+            .downcast_mut::<SubScope>()
+            .unwrap()
+    } else {
+        scope
+            .find_sub_scope(id)
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
+    };
+
+    for x in 1..modules.len() {
+        let (id, id_pos) = modules.get(x);
+
+        sub_scope = sub_scope
+            .get_mut(id)
+            .and_then(|v| v.downcast_mut::<SubScope>())
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
+    }
+
+    let result = sub_scope
+        .get_mut(name)
+        .map(|v| (v, ScopeEntryType::Constant))
+        .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?;
+
+    if result.0.is::<SubScope>() {
+        Err(Box::new(EvalAltResult::ErrorVariableNotFound(
+            name.into(),
+            pos,
+        )))
+    } else {
+        Ok(result)
     }
 }
 
@@ -973,20 +1029,24 @@ impl Engine {
         match dot_lhs {
             // id.??? or id[???]
             Expr::Variable(id, modules, index, pos) => {
-                let (target, typ) = match index {
-                    Some(i) if !state.always_search => scope.get_mut(scope.len() - i.get()),
-                    _ => search_scope(scope, id, modules.as_ref(), *pos)?,
+                let index = if state.always_search { None } else { *index };
+
+                let (target, typ) = if let Some(modules) = modules {
+                    search_scope_modules(scope, id, modules, index, *pos)?
+                } else {
+                    search_scope_variables(scope, id, index, *pos)?
                 };
 
                 // Constants cannot be modified
                 match typ {
+                    ScopeEntryType::SubScope => unreachable!(),
                     ScopeEntryType::Constant if new_val.is_some() => {
                         return Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                             id.to_string(),
                             *pos,
                         )));
                     }
-                    _ => (),
+                    ScopeEntryType::Constant | ScopeEntryType::Normal => (),
                 }
 
                 let this_ptr = target.into();
@@ -1206,11 +1266,16 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok((*f).into()),
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
-            Expr::Variable(_, None, Some(index), _) if !state.always_search => {
-                Ok(scope.get_mut(scope.len() - index.get()).0.clone())
-            }
-            Expr::Variable(id, modules, _, pos) => {
-                search_scope(scope, id, modules.as_ref(), *pos).map(|(v, _)| v.clone())
+            Expr::Variable(id, modules, index, pos) => {
+                let index = if state.always_search { None } else { *index };
+
+                let val = if let Some(modules) = modules {
+                    search_scope_modules(scope, id, modules, index, *pos)?
+                } else {
+                    search_scope_variables(scope, id, index, *pos)?
+                };
+
+                Ok(val.0.clone())
             }
             Expr::Property(_, _) => unreachable!(),
 
@@ -1223,8 +1288,15 @@ impl Engine {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(name, modules, _, pos) => {
-                        match search_scope(scope, name, modules.as_ref(), *pos)? {
+                    Expr::Variable(name, modules, index, pos) => {
+                        let index = if state.always_search { None } else { *index };
+                        let val = if let Some(modules) = modules {
+                            search_scope_modules(scope, name, modules, index, *pos)?
+                        } else {
+                            search_scope_variables(scope, name, index, *pos)?
+                        };
+
+                        match val {
                             (_, ScopeEntryType::Constant) => Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
                             )),
@@ -1562,7 +1634,7 @@ impl Engine {
                     .eval_expr(scope, state, fn_lib, expr, level)?
                     .try_cast::<String>()
                 {
-                    let mut module = Map::new();
+                    let mut module = SubScope::new();
                     module.insert("kitty".to_string(), "foo".to_string().into());
                     module.insert("path".to_string(), path.into());
 

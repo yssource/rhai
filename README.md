@@ -1977,8 +1977,8 @@ When embedding Rhai into an application, it is usually necessary to trap `print`
 (for logging into a tracking log, for example).
 
 ```rust
-// Any function or closure that takes an &str argument can be used to override
-// print and debug
+// Any function or closure that takes an '&str' argument can be used to override
+// 'print' and 'debug'
 engine.on_print(|x| println!("hello: {}", x));
 engine.on_debug(|x| println!("DEBUG: {}", x));
 
@@ -2007,14 +2007,36 @@ Using external modules
 [module]: #using-external-modules
 [modules]: #using-external-modules
 
+Rhai allows organizing code (functions and variables) into _modules_.  A module is a single script file
+with `export` statements that _exports_ certain global variables and functions as contents of the module.
+
+Everything exported as part of a module is constant and read-only.
+
+A module can be _imported_ via the `import` statement, and its members accessed via '`::`' similar to C++.
+
 ```rust
-import "crypto" as crypto;  // Import an external script file as a module
+import "crypto" as crypto;  // import the script file 'crypto.rhai' as a module
 
-crypto::encrypt(secret);    // Use functions defined under the module via '::'
+crypto::encrypt(secret);    // use functions defined under the module via '::'
 
-print(crypto::status);      // Module variables are constants
+print(crypto::status);      // module variables are constants
 
-crypto::hash::sha256(key);  // Sub-modules are also supported
+crypto::hash::sha256(key);  // sub-modules are also supported
+```
+
+`import` statements are _scoped_, meaning that they are only accessible inside the scope that they're imported.
+
+```rust
+let mod = "crypto";
+
+if secured {                // new block scope
+    import mod as crypto;   // import module (the path needs not be a constant string)
+
+    crypto::encrypt(key);   // use a function in the module
+}                           // the module disappears at the end of the block scope
+
+crypto::encrypt(others);    // <- this causes a run-time error because the 'crypto' module
+                            //    is no longer available!
 ```
 
 Script optimization

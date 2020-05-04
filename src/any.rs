@@ -1,6 +1,6 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::engine::{Array, Map};
+use crate::engine::{Array, Map, SubScope};
 use crate::parser::INT;
 
 #[cfg(not(feature = "no_float"))]
@@ -135,6 +135,7 @@ pub enum Union {
     Float(FLOAT),
     Array(Box<Array>),
     Map(Box<Map>),
+    SubScope(Box<SubScope>),
     Variant(Box<Box<dyn Variant>>),
 }
 
@@ -165,6 +166,7 @@ impl Dynamic {
             Union::Float(_) => TypeId::of::<FLOAT>(),
             Union::Array(_) => TypeId::of::<Array>(),
             Union::Map(_) => TypeId::of::<Map>(),
+            Union::SubScope(_) => TypeId::of::<SubScope>(),
             Union::Variant(value) => (***value).type_id(),
         }
     }
@@ -181,6 +183,7 @@ impl Dynamic {
             Union::Float(_) => type_name::<FLOAT>(),
             Union::Array(_) => "array",
             Union::Map(_) => "map",
+            Union::SubScope(_) => "sub-scope",
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
@@ -201,6 +204,7 @@ impl fmt::Display for Dynamic {
             Union::Float(value) => write!(f, "{}", value),
             Union::Array(value) => write!(f, "{:?}", value),
             Union::Map(value) => write!(f, "#{:?}", value),
+            Union::SubScope(value) => write!(f, "#{:?}", value),
             Union::Variant(_) => write!(f, "?"),
         }
     }
@@ -218,6 +222,7 @@ impl fmt::Debug for Dynamic {
             Union::Float(value) => write!(f, "{:?}", value),
             Union::Array(value) => write!(f, "{:?}", value),
             Union::Map(value) => write!(f, "#{:?}", value),
+            Union::SubScope(value) => write!(f, "#{:?}", value),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
     }
@@ -235,6 +240,7 @@ impl Clone for Dynamic {
             Union::Float(value) => Self(Union::Float(value)),
             Union::Array(ref value) => Self(Union::Array(value.clone())),
             Union::Map(ref value) => Self(Union::Map(value.clone())),
+            Union::SubScope(ref value) => Self(Union::SubScope(value.clone())),
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
         }
     }
@@ -363,6 +369,7 @@ impl Dynamic {
             Union::Float(ref value) => (value as &dyn Any).downcast_ref::<T>().cloned(),
             Union::Array(value) => cast_box::<_, T>(value).ok(),
             Union::Map(value) => cast_box::<_, T>(value).ok(),
+            Union::SubScope(value) => cast_box::<_, T>(value).ok(),
             Union::Variant(value) => value.as_any().downcast_ref::<T>().cloned(),
         }
     }
@@ -400,6 +407,7 @@ impl Dynamic {
             Union::Float(ref value) => (value as &dyn Any).downcast_ref::<T>().unwrap().clone(),
             Union::Array(value) => cast_box::<_, T>(value).unwrap(),
             Union::Map(value) => cast_box::<_, T>(value).unwrap(),
+            Union::SubScope(value) => cast_box::<_, T>(value).unwrap(),
             Union::Variant(value) => value.as_any().downcast_ref::<T>().unwrap().clone(),
         }
     }
@@ -422,6 +430,7 @@ impl Dynamic {
             Union::Float(value) => (value as &dyn Any).downcast_ref::<T>(),
             Union::Array(value) => (value.as_ref() as &dyn Any).downcast_ref::<T>(),
             Union::Map(value) => (value.as_ref() as &dyn Any).downcast_ref::<T>(),
+            Union::SubScope(value) => (value.as_ref() as &dyn Any).downcast_ref::<T>(),
             Union::Variant(value) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
         }
     }
@@ -444,6 +453,7 @@ impl Dynamic {
             Union::Float(value) => (value as &mut dyn Any).downcast_mut::<T>(),
             Union::Array(value) => (value.as_mut() as &mut dyn Any).downcast_mut::<T>(),
             Union::Map(value) => (value.as_mut() as &mut dyn Any).downcast_mut::<T>(),
+            Union::SubScope(value) => (value.as_mut() as &mut dyn Any).downcast_mut::<T>(),
             Union::Variant(value) => value.as_mut().as_mut_any().downcast_mut::<T>(),
         }
     }

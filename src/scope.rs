@@ -1,7 +1,7 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
-use crate::any::{Dynamic, Variant};
-use crate::engine::Map;
+use crate::any::{Dynamic, Union, Variant};
+use crate::engine::SubScope;
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
@@ -175,11 +175,11 @@ impl<'a> Scope<'a> {
     /// # Examples
     ///
     /// ```
-    /// use rhai::{Scope, Map};
+    /// use rhai::{Scope, SubScope};
     ///
     /// let mut my_scope = Scope::new();
     ///
-    /// let mut sub_scope = Map::new();
+    /// let mut sub_scope = SubScope::new();
     /// sub_scope.insert("x".to_string(), 42_i64.into());
     ///
     /// my_scope.push_sub_scope("my_plugin", sub_scope);
@@ -187,8 +187,13 @@ impl<'a> Scope<'a> {
     /// let s = my_scope.find_sub_scope("my_plugin").unwrap();
     /// assert_eq!(*s.get("x").unwrap().downcast_ref::<i64>().unwrap(), 42);
     /// ```
-    pub fn push_sub_scope<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Map) {
-        self.push_dynamic_value(name, EntryType::SubScope, value.into(), true);
+    pub fn push_sub_scope<K: Into<Cow<'a, str>>>(&mut self, name: K, value: SubScope) {
+        self.push_dynamic_value(
+            name,
+            EntryType::SubScope,
+            Dynamic(Union::SubScope(Box::new(value))),
+            true,
+        );
     }
 
     /// Add (push) a new constant to the Scope.
@@ -352,9 +357,9 @@ impl<'a> Scope<'a> {
     }
 
     /// Find a sub-scope in the Scope, starting from the last entry.
-    pub fn find_sub_scope(&mut self, name: &str) -> Option<&mut Map> {
+    pub fn find_sub_scope(&mut self, name: &str) -> Option<&mut SubScope> {
         let index = self.get_sub_scope_index(name)?;
-        self.get_mut(index).0.downcast_mut()
+        self.get_mut(index).0.downcast_mut::<SubScope>()
     }
 
     /// Get the value of an entry in the Scope, starting from the last.
