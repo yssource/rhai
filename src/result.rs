@@ -61,6 +61,8 @@ pub enum EvalAltResult {
     ErrorFor(Position),
     /// Usage of an unknown variable. Wrapped value is the name of the variable.
     ErrorVariableNotFound(String, Position),
+    /// Usage of an unknown namespace. Wrapped value is the name of the namespace.
+    ErrorNamespaceNotFound(String, Position),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     ErrorAssignmentToUnknownLHS(Position),
     /// Assignment to a constant variable.
@@ -119,6 +121,7 @@ impl EvalAltResult {
             Self::ErrorLogicGuard(_) => "Boolean value expected",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
+            Self::ErrorNamespaceNotFound(_, _) => "Namespace not found",
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"
             }
@@ -150,9 +153,10 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
 
-            Self::ErrorFunctionNotFound(s, pos) | Self::ErrorVariableNotFound(s, pos) => {
-                write!(f, "{}: '{}' ({})", desc, s, pos)
-            }
+            Self::ErrorFunctionNotFound(s, pos)
+            | Self::ErrorVariableNotFound(s, pos)
+            | Self::ErrorNamespaceNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
+
             Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
 
             Self::ErrorIndexingType(_, pos)
@@ -269,6 +273,7 @@ impl EvalAltResult {
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
+            | Self::ErrorNamespaceNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
@@ -303,6 +308,7 @@ impl EvalAltResult {
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
+            | Self::ErrorNamespaceNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)

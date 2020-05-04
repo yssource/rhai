@@ -1,7 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
-use crate::engine::{calc_fn_def, Engine, FunctionsLib};
+use crate::engine::{calc_fn_def, Engine, FunctionsLib, StaticVec};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -246,10 +246,10 @@ pub enum Stmt {
     Continue(Position),
     /// break
     Break(Position),
-    /// `return`/`throw`
+    /// return/throw
     ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
     /// import expr
-    Import(Box<Expr>, Option<String>)
+    Import(Box<Expr>, Option<String>),
 }
 
 impl Stmt {
@@ -264,9 +264,9 @@ impl Stmt {
             | Stmt::Break(pos)
             | Stmt::ReturnWithVal(_, _, pos) => *pos,
 
-            Stmt::IfThenElse(expr, _, _)
-            | Stmt::Expr(expr)
-            | Stmt::Import(expr, _) => expr.position(),
+            Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) | Stmt::Import(expr, _) => {
+                expr.position()
+            }
 
             Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
         }
@@ -326,27 +326,23 @@ pub enum Expr {
     CharConstant(char, Position),
     /// String constant.
     StringConstant(String, Position),
-    /// Variable access.
-    Variable(Box<String>, Option<NonZeroUsize>, Position),
+    /// Variable access - (variable name, optional namespaces, optional index, position)
+    Variable(
+        Box<String>,
+        Option<Box<StaticVec<(String, Position)>>>,
+        Option<NonZeroUsize>,
+        Position,
+    ),
     /// Property access.
     Property(String, Position),
     /// { stmt }
     Stmt(Box<Stmt>, Position),
-    /// func(expr, ... )
+    /// func(expr, ... ) - (function name, optional namespaces, arguments, optional default value, position)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<Cow<'static, str>>,
-        Box<Vec<Expr>>,
-        Option<Box<Dynamic>>,
-        Position,
-    ),
-    /// subscope::func(expr, ... )
-    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
-    /// and the function names are predictable, so no need to allocate a new `String`.
-    SubscopeFnCall(
-        String,
-        Box<Cow<'static, str>>,
+        Option<Box<StaticVec<(String, Position)>>>,
         Box<Vec<Expr>>,
         Option<Box<Dynamic>>,
         Position,
@@ -444,11 +440,10 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, _, pos)
+            | Self::Variable(_, _, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
-            | Self::FnCall(_, _, _, pos)
-            | Self::SubscopeFnCall(_, _, _, _, pos)
+            | Self::FnCall(_, _, _, _, pos)
             | Self::And(_, _, pos)
             | Self::Or(_, _, pos)
             | Self::In(_, _, pos)
@@ -471,11 +466,10 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, _, pos)
+            | Self::Variable(_, _, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
-            | Self::FnCall(_, _, _, pos)
-            | Self::SubscopeFnCall(_, _, _, _, pos)
+            | Self::FnCall(_, _, _, _, pos)
             | Self::And(_, _, pos)
             | Self::Or(_, _, pos)
             | Self::In(_, _, pos)
@@ -503,7 +497,7 @@ impl Expr {
 
             Self::Stmt(stmt, _) => stmt.is_pure(),
 
-            Self::Variable(_, _, _) => true,
+            Self::Variable(_, _, _, _) => true,
 
             expr => expr.is_constant(),
         }
@@ -552,8 +546,7 @@ impl Expr {
 
             Self::StringConstant(_, _)
             | Self::Stmt(_, _)
-            | Self::FnCall(_, _, _, _)
-            | Self::SubscopeFnCall(_, _, _, _, _)
+            | Self::FnCall(_, _, _, _, _)
             | Self::Assignment(_, _, _)
             | Self::Dot(_, _, _)
             | Self::Index(_, _, _)
@@ -563,7 +556,19 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Variable(_, _, _) | Self::Property(_, _) => match token {
+            Self::Variable(_, None, _, _) => match token {
+                Token::LeftBracket | Token::LeftParen => true,
+                #[cfg(not(feature = "no_import"))]
+                Token::DoubleColon => true,
+                _ => false,
+            },
+            Self::Variable(_, _, _, _) => match token {
+                #[cfg(not(feature = "no_import"))]
+                Token::DoubleColon => true,
+                _ => false,
+            },
+
+            Self::Property(_, _) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
                 _ => false,
             },
@@ -573,7 +578,7 @@ impl Expr {
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     pub(crate) fn into_property(self) -> Self {
         match self {
-            Self::Variable(id, _, pos) => Self::Property(*id, pos),
+            Self::Variable(id, None, _, pos) => Self::Property(*id, pos),
             _ => self,
         }
     }
@@ -637,6 +642,7 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
     id: String,
+    namespaces: Option<Box<StaticVec<(String, Position)>>>,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -658,6 +664,7 @@ fn parse_call_expr<'a>(
             eat_token(input, Token::RightParen);
             return Ok(Expr::FnCall(
                 Box::new(id.into()),
+                namespaces,
                 Box::new(args),
                 None,
                 begin,
@@ -673,8 +680,10 @@ fn parse_call_expr<'a>(
         match input.peek().unwrap() {
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
+
                 return Ok(Expr::FnCall(
                     Box::new(id.into()),
+                    namespaces,
                     Box::new(args),
                     None,
                     begin,
@@ -1001,7 +1010,7 @@ fn parse_primary<'a>(
         Token::StringConst(s) => Expr::StringConstant(s, pos),
         Token::Identifier(s) => {
             let index = stack.find(&s);
-            Expr::Variable(Box::new(s), index, pos)
+            Expr::Variable(Box::new(s), None, index, pos)
         }
         Token::LeftParen => parse_paren_expr(input, stack, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
@@ -1024,19 +1033,36 @@ fn parse_primary<'a>(
             break;
         }
 
-        let (token, pos) = input.next().unwrap();
+        let (token, token_pos) = input.next().unwrap();
 
         root_expr = match (root_expr, token) {
             // Function call
-            (Expr::Variable(id, _, pos), Token::LeftParen) => {
-                parse_call_expr(input, stack, *id, pos, allow_stmt_expr)?
+            (Expr::Variable(id, namespaces, _, pos), Token::LeftParen) => {
+                parse_call_expr(input, stack, *id, namespaces, pos, allow_stmt_expr)?
             }
             (Expr::Property(id, pos), Token::LeftParen) => {
-                parse_call_expr(input, stack, id, pos, allow_stmt_expr)?
+                parse_call_expr(input, stack, id, None, pos, allow_stmt_expr)?
+            }
+            // Namespaced
+            #[cfg(not(feature = "no_import"))]
+            (Expr::Variable(id, mut namespaces, _, pos), Token::DoubleColon) => {
+                match input.next().unwrap() {
+                    (Token::Identifier(id2), pos2) => {
+                        if let Some(ref mut namespaces) = namespaces {
+                            namespaces.push((*id, pos));
+                        } else {
+                            let mut vec = StaticVec::new();
+                            vec.push((*id, pos));
+                            namespaces = Some(Box::new(vec));
+                        }
+                        Expr::Variable(Box::new(id2), namespaces, None, pos2)
+                    }
+                    (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
+                }
             }
             // Indexing
             (expr, Token::LeftBracket) => {
-                parse_index_chain(input, stack, expr, pos, allow_stmt_expr)?
+                parse_index_chain(input, stack, expr, token_pos, allow_stmt_expr)?
             }
             // Unknown postfix operator
             (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
@@ -1092,6 +1118,7 @@ fn parse_unary<'a>(
                 // Call negative function
                 e => Ok(Expr::FnCall(
                     Box::new("-".into()),
+                    None,
                     Box::new(vec![e]),
                     None,
                     pos,
@@ -1108,6 +1135,7 @@ fn parse_unary<'a>(
             let pos = eat_token(input, Token::Bang);
             Ok(Expr::FnCall(
                 Box::new("!".into()),
+                None,
                 Box::new(vec![parse_primary(input, stack, allow_stmt_expr)?]),
                 Some(Box::new(false.into())), // NOT operator, when operating on invalid operand, defaults to false
                 pos,
@@ -1161,24 +1189,33 @@ fn parse_op_assignment_stmt<'a>(
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
     let args = vec![lhs_copy, rhs];
-    let rhs_expr = Expr::FnCall(Box::new(op.into()), Box::new(args), None, pos);
+    let rhs_expr = Expr::FnCall(Box::new(op.into()), None, Box::new(args), None, pos);
     Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs_expr), pos))
 }
 
 /// Make a dot expression.
-fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position, is_index: bool) -> Expr {
-    match (lhs, rhs) {
+fn make_dot_expr(
+    lhs: Expr,
+    rhs: Expr,
+    op_pos: Position,
+    is_index: bool,
+) -> Result<Expr, Box<ParseError>> {
+    Ok(match (lhs, rhs) {
         // idx_lhs[idx_rhs].rhs
         // Attach dot chain to the bottom level of indexing chain
         (Expr::Index(idx_lhs, idx_rhs, idx_pos), rhs) => Expr::Index(
             idx_lhs,
-            Box::new(make_dot_expr(*idx_rhs, rhs, op_pos, true)),
+            Box::new(make_dot_expr(*idx_rhs, rhs, op_pos, true)?),
             idx_pos,
         ),
         // lhs.id
-        (lhs, rhs @ Expr::Variable(_, _, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
+        (lhs, rhs @ Expr::Variable(_, None, _, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
             let lhs = if is_index { lhs.into_property() } else { lhs };
             Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos)
+        }
+        // lhs.namespace::id - syntax error
+        (_, Expr::Variable(_, Some(namespaces), _, _)) => {
+            return Err(PERR::PropertyExpected.into_err(namespaces.get(0).1))
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(dot_lhs, dot_rhs, dot_pos)) => Expr::Dot(
@@ -1202,7 +1239,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position, is_index: bool) -> Expr
         ),
         // lhs.rhs
         (lhs, rhs) => Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos),
-    }
+    })
 }
 
 /// Make an 'in' expression.
@@ -1380,24 +1417,28 @@ fn parse_binary_op<'a>(
         current_lhs = match op_token {
             Token::Plus => Expr::FnCall(
                 Box::new("+".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::Minus => Expr::FnCall(
                 Box::new("-".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::Multiply => Expr::FnCall(
                 Box::new("*".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::Divide => Expr::FnCall(
                 Box::new("/".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1405,24 +1446,28 @@ fn parse_binary_op<'a>(
 
             Token::LeftShift => Expr::FnCall(
                 Box::new("<<".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::RightShift => Expr::FnCall(
                 Box::new(">>".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::Modulo => Expr::FnCall(
                 Box::new("%".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::PowerOf => Expr::FnCall(
                 Box::new("~".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1431,36 +1476,42 @@ fn parse_binary_op<'a>(
             // Comparison operators default to false when passed invalid operands
             Token::EqualsTo => Expr::FnCall(
                 Box::new("==".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
             ),
             Token::NotEqualsTo => Expr::FnCall(
                 Box::new("!=".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
             ),
             Token::LessThan => Expr::FnCall(
                 Box::new("<".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
             ),
             Token::LessThanEqualsTo => Expr::FnCall(
                 Box::new("<=".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
             ),
             Token::GreaterThan => Expr::FnCall(
                 Box::new(">".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
             ),
             Token::GreaterThanEqualsTo => Expr::FnCall(
                 Box::new(">=".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
@@ -1470,18 +1521,21 @@ fn parse_binary_op<'a>(
             Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
             Token::Ampersand => Expr::FnCall(
                 Box::new("&".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::Pipe => Expr::FnCall(
                 Box::new("|".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
             ),
             Token::XOr => Expr::FnCall(
                 Box::new("^".into()),
+                None,
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1490,7 +1544,7 @@ fn parse_binary_op<'a>(
             Token::In => make_in_expr(current_lhs, rhs, pos)?,
 
             #[cfg(not(feature = "no_object"))]
-            Token::Period => make_dot_expr(current_lhs, rhs, pos, false),
+            Token::Period => make_dot_expr(current_lhs, rhs, pos, false)?,
 
             token => return Err(PERR::UnknownOperator(token.syntax().into()).into_err(pos)),
         };
@@ -1704,8 +1758,8 @@ fn parse_let<'a>(
             ScopeEntryType::Constant => {
                 Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
             }
-
-            ScopeEntryType::Subscope => unreachable!(),
+            // Variable cannot be a sub-scope
+            ScopeEntryType::SubScope => unreachable!(),
         }
     } else {
         // let name

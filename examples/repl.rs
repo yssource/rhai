@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST};
+use rhai::{Dynamic, Engine, EvalAltResult, Map, Scope, AST, INT};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;

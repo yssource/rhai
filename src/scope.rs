@@ -1,6 +1,7 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::any::{Dynamic, Variant};
+use crate::engine::Map;
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
@@ -13,8 +14,8 @@ pub enum EntryType {
     Normal,
     /// Immutable constant value.
     Constant,
-    /// Name of a subscope, allowing member access with the :: operator.
-    Subscope,
+    /// Name of a sub-scope, allowing member access with the :: operator.
+    SubScope,
 }
 
 /// An entry in the Scope.
@@ -167,22 +168,27 @@ impl<'a> Scope<'a> {
         self.push_dynamic_value(name, EntryType::Normal, value, false);
     }
 
-    /// Add (push) a new subscope to the Scope.
+    /// Add (push) a new sub-scope to the Scope.
     ///
-    /// Subscopes are used for access to members in modules and plugins.
+    /// Sub-scopes are used for accessing members in modules and plugins under a namespace.
     ///
     /// # Examples
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use rhai::{Scope, Map};
     ///
     /// let mut my_scope = Scope::new();
     ///
-    /// my_scope.push_subscope("x".to_string(), "My Plugin".to_string());
-    /// assert_eq!(my_scope.get_subscope("x").unwrap(), "My Plugin");
+    /// let mut sub_scope = Map::new();
+    /// sub_scope.insert("x".to_string(), 42_i64.into());
+    ///
+    /// my_scope.push_sub_scope("my_plugin", sub_scope);
+    ///
+    /// let s = my_scope.find_sub_scope("my_plugin").unwrap();
+    /// assert_eq!(*s.get("x").unwrap().downcast_ref::<i64>().unwrap(), 42);
     /// ```
-    pub fn push_subscope(&mut self, name: String, value: String) {
-        self.push_dynamic_value(name, EntryType::Subscope, Dynamic::from(value), true);
+    pub fn push_sub_scope<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Map) {
+        self.push_dynamic_value(name, EntryType::SubScope, value.into(), true);
     }
 
     /// Add (push) a new constant to the Scope.
@@ -284,6 +290,8 @@ impl<'a> Scope<'a> {
 
     /// Does the scope contain the entry?
     ///
+    /// Sub-scopes are ignored.
+    ///
     /// # Examples
     ///
     /// ```
@@ -299,36 +307,44 @@ impl<'a> Scope<'a> {
         self.0
             .iter()
             .rev() // Always search a Scope in reverse order
-            .any(|Entry { name: key, .. }| name == key)
+            .any(|Entry { name: key, typ, .. }| match typ {
+                EntryType::Normal | EntryType::Constant => name == key,
+                EntryType::SubScope => false,
+            })
     }
 
     /// Find an entry in the Scope, starting from the last.
+    ///
+    /// Sub-scopes are ignored.
     pub(crate) fn get(&self, name: &str) -> Option<(usize, EntryType)> {
         self.0
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find_map(|(index, Entry { name: key, typ, .. })| {
-                if name == key {
-                    Some((index, *typ))
-                } else {
-                    None
+            .find_map(|(index, Entry { name: key, typ, .. })| match typ {
+                EntryType::Normal | EntryType::Constant => {
+                    if name == key {
+                        Some((index, *typ))
+                    } else {
+                        None
+                    }
                 }
+                EntryType::SubScope => None,
             })
     }
 
-    /// Get the subscope of an entry in the Scope, starting from the last.
-    ///
-    pub fn get_subscope(&self, name: &str) -> Option<String> {
+    /// Find a sub-scope in the Scope, starting from the last entry.
+    pub fn find_sub_scope(&mut self, name: &str) -> Option<&mut Map> {
         self.0
-            .iter()
+            .iter_mut()
             .rev()
-            .find(|Entry { name: key, typ, .. }| name == key &&
-                        std::mem::discriminant(typ) == std::mem::discriminant(&EntryType::Subscope))
-            .and_then(|Entry { value, .. }| value.downcast_ref::<String>().cloned())
+            .find(|Entry { name: key, typ, .. }| name == key && *typ == EntryType::SubScope)
+            .and_then(|Entry { value, .. }| value.downcast_mut::<Map>())
     }
 
     /// Get the value of an entry in the Scope, starting from the last.
+    ///
+    /// Sub-scopes are ignored.
     ///
     /// # Examples
     ///
@@ -344,7 +360,10 @@ impl<'a> Scope<'a> {
         self.0
             .iter()
             .rev()
-            .find(|Entry { name: key, .. }| name == key)
+            .find(|Entry { name: key, typ, .. }| match typ {
+                EntryType::Normal | EntryType::Constant => name == key,
+                EntryType::SubScope => false,
+            })
             .and_then(|Entry { value, .. }| value.downcast_ref::<T>().cloned())
     }
 
@@ -371,14 +390,13 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
         match self.get(name) {
+            None => self.push(name, value),
             Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
             Some((index, EntryType::Normal)) => {
                 self.0.get_mut(index).unwrap().value = Dynamic::from(value)
             }
-            Some((index, EntryType::Subscope)) => {
-                self.0.get_mut(index).unwrap().value = Dynamic::from(value)
-            }
-            None => self.push(name, value),
+            // Sub-scopes cannot be modified
+            Some((_, EntryType::SubScope)) => unreachable!(),
         }
     }
 

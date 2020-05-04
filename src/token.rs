@@ -153,6 +153,7 @@ pub enum Token {
     RightShift,
     SemiColon,
     Colon,
+    #[cfg(not(feature = "no_import"))]
     DoubleColon,
     Comma,
     Period,
@@ -198,6 +199,12 @@ pub enum Token {
     XOrAssign,
     ModuloAssign,
     PowerOfAssign,
+    #[cfg(not(feature = "no_import"))]
+    Import,
+    #[cfg(not(feature = "no_import"))]
+    Export,
+    #[cfg(not(feature = "no_import"))]
+    As,
     LexError(Box<LexError>),
     EOF,
 }
@@ -231,6 +238,7 @@ impl Token {
                 Divide => "/",
                 SemiColon => ";",
                 Colon => ":",
+                #[cfg(not(feature = "no_import"))]
                 DoubleColon => "::",
                 Comma => ",",
                 Period => ".",
@@ -245,6 +253,8 @@ impl Token {
                 Else => "else",
                 While => "while",
                 Loop => "loop",
+                For => "for",
+                In => "in",
                 LessThan => "<",
                 GreaterThan => ">",
                 Bang => "!",
@@ -278,8 +288,12 @@ impl Token {
                 ModuloAssign => "%=",
                 PowerOf => "~",
                 PowerOfAssign => "~=",
-                For => "for",
-                In => "in",
+                #[cfg(not(feature = "no_import"))]
+                Import => "import",
+                #[cfg(not(feature = "no_import"))]
+                Export => "export",
+                #[cfg(not(feature = "no_import"))]
+                As => "as",
                 EOF => "{EOF}",
                 _ => panic!("operator should be match in outer scope"),
             })
@@ -743,6 +757,13 @@ impl<'a> TokenIterator<'a> {
                             "for" => Token::For,
                             "in" => Token::In,
 
+                            #[cfg(not(feature = "no_import"))]
+                            "import" => Token::Import,
+                            #[cfg(not(feature = "no_import"))]
+                            "export" => Token::Export,
+                            #[cfg(not(feature = "no_import"))]
+                            "as" => Token::As,
+
                             #[cfg(not(feature = "no_function"))]
                             "fn" => Token::Fn,
 
@@ -897,6 +918,7 @@ impl<'a> TokenIterator<'a> {
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
 
+                #[cfg(not(feature = "no_import"))]
                 (':', ':') => {
                     self.eat_next();
                     return Some((Token::DoubleColon, pos));

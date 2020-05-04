@@ -120,7 +120,7 @@ impl Target<'_> {
                         chars.iter().for_each(|&ch| s.push(ch));
                     }
                 }
-                _ => panic!("should be String"),
+                _ => unreachable!(),
             },
         }
 
@@ -139,9 +139,10 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// A type to hold a number of `Dynamic` values in static storage for speed,
+/// A type to hold a number of values in static storage for speed,
 /// and any spill-overs in a `Vec`.
-struct StaticVec<T: Default> {
+#[derive(Debug, Clone)]
+pub struct StaticVec<T: Default + Clone> {
     /// Total number of values held.
     len: usize,
     /// Static storage. 4 slots should be enough for most cases - i.e. four levels of indirection.
@@ -150,7 +151,7 @@ struct StaticVec<T: Default> {
     more: Vec<T>,
 }
 
-impl<T: Default> StaticVec<T> {
+impl<T: Default + Clone> StaticVec<T> {
     /// Create a new `StaticVec`.
     pub fn new() -> Self {
         Self {
@@ -190,6 +191,21 @@ impl<T: Default> StaticVec<T> {
         self.len -= 1;
 
         result
+    }
+    /// Get the number of items in this `StaticVec`.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+    pub fn get(&self, index: usize) -> &T {
+        if index >= self.len {
+            panic!("index OOB in StaticVec");
+        }
+
+        if index < self.list.len() {
+            self.list.get(index).unwrap()
+        } else {
+            self.more.get(index - self.list.len()).unwrap()
+        }
     }
 }
 
@@ -460,13 +476,38 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    begin: Position,
+    namespaces: Option<&Box<StaticVec<(String, Position)>>>,
+    pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    let (index, _) = scope
-        .get(name)
-        .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), begin)))?;
+    if let Some(namespaces) = namespaces {
+        let (id, root_pos) = namespaces.get(0); // First namespace
+        let mut sub_scope = scope
+            .find_sub_scope(id)
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorNamespaceNotFound(id.into(), *root_pos)))?;
 
-    Ok(scope.get_mut(index))
+        for x in 1..namespaces.len() {
+            let (id, id_pos) = namespaces.get(x);
+
+            sub_scope = sub_scope
+                .get_mut(id)
+                .unwrap()
+                .downcast_mut::<Map>()
+                .ok_or_else(|| {
+                    Box::new(EvalAltResult::ErrorNamespaceNotFound(id.into(), *id_pos))
+                })?;
+        }
+
+        sub_scope
+            .get_mut(name)
+            .map(|v| (v, ScopeEntryType::Constant))
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))
+    } else {
+        let (index, _) = scope
+            .get(name)
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?;
+
+        Ok(scope.get_mut(index))
+    }
 }
 
 impl Engine {
@@ -813,7 +854,7 @@ impl Engine {
         } else {
             match rhs {
                 // xxx.fn_name(arg_expr_list)
-                Expr::FnCall(fn_name, _, def_val, pos) => {
+                Expr::FnCall(fn_name, None,_, def_val, pos) => {
                     let mut args: Vec<_> = once(obj)
                         .chain(idx_val.downcast_mut::<Array>().unwrap().iter_mut())
                         .collect();
@@ -822,6 +863,8 @@ impl Engine {
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
                     self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
                 }
+                // xxx.namespace::fn_name(...) - syntax error
+                Expr::FnCall(_,_,_,_,_) => unreachable!(),
                 // {xxx:map}.id = ???
                 Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
                     let mut indexed_val =
@@ -927,10 +970,10 @@ impl Engine {
 
         match dot_lhs {
             // id.??? or id[???]
-            Expr::Variable(id, index, pos) => {
+            Expr::Variable(id, namespaces, index, pos) => {
                 let (target, typ) = match index {
                     Some(i) if !state.always_search => scope.get_mut(scope.len() - i.get()),
-                    _ => search_scope(scope, id, *pos)?,
+                    _ => search_scope(scope, id, namespaces.as_ref(), *pos)?,
                 };
 
                 // Constants cannot be modified
@@ -984,7 +1027,7 @@ impl Engine {
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
         match expr {
-            Expr::FnCall(_, arg_exprs, _, _) => {
+            Expr::FnCall(_, None, arg_exprs, _, _) => {
                 let arg_values = arg_exprs
                     .iter()
                     .map(|arg_expr| self.eval_expr(scope, state, fn_lib, arg_expr, level))
@@ -992,6 +1035,7 @@ impl Engine {
 
                 idx_values.push(arg_values)
             }
+            Expr::FnCall(_, _, _, _, _) => unreachable!(),
             Expr::Property(_, _) => idx_values.push(()), // Store a placeholder - no need to copy the property name
             Expr::Index(lhs, rhs, _) | Expr::Dot(lhs, rhs, _) => {
                 // Evaluate in left-to-right order
@@ -1160,11 +1204,13 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok((*f).into()),
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
-            Expr::Variable(_, Some(index), _) if !state.always_search => {
+            Expr::Variable(_, None, Some(index), _) if !state.always_search => {
                 Ok(scope.get_mut(scope.len() - index.get()).0.clone())
             }
-            Expr::Variable(id, _, pos) => search_scope(scope, id, *pos).map(|(v, _)| v.clone()),
-            Expr::Property(_, _) => panic!("unexpected property."),
+            Expr::Variable(id, namespaces, _, pos) => {
+                search_scope(scope, id, namespaces.as_ref(), *pos).map(|(v, _)| v.clone())
+            }
+            Expr::Property(_, _) => unreachable!(),
 
             // Statement block
             Expr::Stmt(stmt, _) => self.eval_stmt(scope, state, fn_lib, stmt, level),
@@ -1175,22 +1221,19 @@ impl Engine {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(name, _, pos) => match scope.get(name) {
-                        None => {
-                            return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
-                                name.to_string(),
-                                *pos,
-                            )))
+                    Expr::Variable(name, namespaces, _, pos) => {
+                        match search_scope(scope, name, namespaces.as_ref(), *pos)? {
+                            (_, ScopeEntryType::Constant) => Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
+                            )),
+                            (value_ptr, ScopeEntryType::Normal) => {
+                                *value_ptr = rhs_val;
+                                Ok(Default::default())
+                            }
+                            // End variable cannot be a sub-scope
+                            (_, ScopeEntryType::SubScope) => unreachable!(),
                         }
-                        Some((_, ScopeEntryType::Constant)) => Err(Box::new(
-                            EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
-                        )),
-                        Some((index, ScopeEntryType::Normal)) => {
-                            *scope.get_mut(index).0 = rhs_val;
-                            Ok(Default::default())
-                        },
-                        Some((_, ScopeEntryType::Subscope)) => unreachable!(),
-                    },
+                    }
                     // idx_lhs[idx_expr] = rhs
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(idx_lhs, idx_expr, op_pos) => {
@@ -1252,7 +1295,8 @@ impl Engine {
                     .collect::<Result<HashMap<_, _>, _>>()?,
             )))),
 
-            Expr::FnCall(fn_name, arg_exprs, def_val, pos) => {
+            // TODO - handle namespaced function call
+            Expr::FnCall(fn_name, namespaces, arg_exprs, def_val, pos) => {
                 let mut arg_values = arg_exprs
                     .iter()
                     .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
@@ -1322,7 +1366,7 @@ impl Engine {
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
 
-            _ => panic!("should not appear: {:?}", expr),
+            _ => unreachable!(),
         }
     }
 
@@ -1499,9 +1543,7 @@ impl Engine {
             }
 
             // Import statement
-            Stmt::Import(_name_expr, _alias) => {
-                unimplemented!()
-            }
+            Stmt::Import(_name_expr, _alias) => unimplemented!(),
 
             // Const statement
             Stmt::Const(name, expr, _) if expr.is_constant() => {
@@ -1512,7 +1554,8 @@ impl Engine {
                 Ok(Default::default())
             }
 
-            Stmt::Const(_, _, _) => panic!("constant expression not constant!"),
+            // Const expression not constant
+            Stmt::Const(_, _, _) => unreachable!(),
         }
     }
 
