@@ -628,11 +628,14 @@ impl Engine {
 
                 // Put arguments into scope as variables - variable name is copied
                 scope.extend(
-                    // TODO - avoid copying variable name
                     fn_def
                         .params
                         .iter()
-                        .zip(args.into_iter().map(|v| v.clone()))
+                        .zip(
+                            // Actually consume the arguments instead of cloning them
+                            args.into_iter()
+                                .map(|v| mem::replace(*v, Default::default())),
+                        )
                         .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
                 );
 
@@ -659,7 +662,11 @@ impl Engine {
                     fn_def
                         .params
                         .iter()
-                        .zip(args.into_iter().map(|v| v.clone()))
+                        .zip(
+                            // Actually consume the arguments instead of cloning them
+                            args.into_iter()
+                                .map(|v| mem::replace(*v, Default::default())),
+                        )
                         .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
                 );
 
@@ -884,6 +891,7 @@ impl Engine {
                     if may_be_changed {
                         if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                             let fn_name = make_setter(id);
+                            // Reuse args because the first &mut parameter will not be consumed
                             args[1] = indexed_val;
                             self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0)?;
                         }
