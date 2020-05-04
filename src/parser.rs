@@ -186,7 +186,7 @@ pub enum ReturnType {
 
 /// A type that encapsulates a local stack with variable names to simulate an actual runtime scope.
 #[derive(Debug, Clone)]
-struct Stack(Vec<String>);
+struct Stack(Vec<(String, ScopeEntryType)>);
 
 impl Stack {
     /// Create a new `Stack`.
@@ -202,13 +202,31 @@ impl Stack {
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, n)| *n == name)
+            .find(|(_, (n, typ))| match typ {
+                ScopeEntryType::Normal | ScopeEntryType::Constant => *n == name,
+                ScopeEntryType::SubScope => false,
+            })
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
+    }
+    /// Find a sub-scope by name in the `Stack`, searching in reverse.
+    /// The return value is the offset to be deducted from `Stack::len`,
+    /// i.e. the top element of the `Stack` is offset 1.
+    /// Return zero when the variable name is not found in the `Stack`.
+    pub fn find_sub_scope(&self, name: &str) -> Option<NonZeroUsize> {
+        self.0
+            .iter()
+            .rev()
+            .enumerate()
+            .find(|(_, (n, typ))| match typ {
+                ScopeEntryType::SubScope => *n == name,
+                ScopeEntryType::Normal | ScopeEntryType::Constant => false,
+            })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 }
 
 impl Deref for Stack {
-    type Target = Vec<String>;
+    type Target = Vec<(String, ScopeEntryType)>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -248,8 +266,8 @@ pub enum Stmt {
     Break(Position),
     /// return/throw
     ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
-    /// import expr
-    Import(Box<Expr>, Option<String>),
+    /// import expr as module
+    Import(Box<Expr>, Box<String>, Position),
 }
 
 impl Stmt {
@@ -259,14 +277,13 @@ impl Stmt {
             Stmt::Noop(pos)
             | Stmt::Let(_, _, pos)
             | Stmt::Const(_, _, pos)
+            | Stmt::Import(_, _, pos)
             | Stmt::Block(_, pos)
             | Stmt::Continue(pos)
             | Stmt::Break(pos)
             | Stmt::ReturnWithVal(_, _, pos) => *pos,
 
-            Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) | Stmt::Import(expr, _) => {
-                expr.position()
-            }
+            Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
 
             Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
         }
@@ -279,14 +296,14 @@ impl Stmt {
             | Stmt::While(_, _)
             | Stmt::Loop(_)
             | Stmt::For(_, _, _)
-            | Stmt::Block(_, _)
-            | Stmt::Import(_, _) => true,
+            | Stmt::Block(_, _) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
             Stmt::Noop(_) => false,
 
             Stmt::Let(_, _, _)
             | Stmt::Const(_, _, _)
+            | Stmt::Import(_, _, _)
             | Stmt::Expr(_)
             | Stmt::Continue(_)
             | Stmt::Break(_)
@@ -310,7 +327,7 @@ impl Stmt {
             Stmt::Let(_, _, _) | Stmt::Const(_, _, _) => false,
             Stmt::Block(statements, _) => statements.iter().all(Stmt::is_pure),
             Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
-            Stmt::Import(_, _) => false,
+            Stmt::Import(_, _, _) => false,
         }
     }
 }
@@ -326,7 +343,7 @@ pub enum Expr {
     CharConstant(char, Position),
     /// String constant.
     StringConstant(String, Position),
-    /// Variable access - (variable name, optional namespaces, optional index, position)
+    /// Variable access - (variable name, optional modules, optional index, position)
     Variable(
         Box<String>,
         Option<Box<StaticVec<(String, Position)>>>,
@@ -337,7 +354,7 @@ pub enum Expr {
     Property(String, Position),
     /// { stmt }
     Stmt(Box<Stmt>, Position),
-    /// func(expr, ... ) - (function name, optional namespaces, arguments, optional default value, position)
+    /// func(expr, ... ) - (function name, optional modules, arguments, optional default value, position)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
@@ -614,11 +631,11 @@ fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool
 fn parse_paren_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
-    begin: Position,
+    pos: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     if match_token(input, Token::RightParen)? {
-        return Ok(Expr::Unit(begin));
+        return Ok(Expr::Unit(pos));
     }
 
     let expr = parse_expr(input, stack, allow_stmt_expr)?;
@@ -630,7 +647,7 @@ fn parse_paren_expr<'a>(
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
         // ( xxx ???
         (_, pos) => Err(PERR::MissingToken(
-            ")".into(),
+            Token::RightParen.into(),
             "for a matching ( in this expression".into(),
         )
         .into_err(pos)),
@@ -642,7 +659,7 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
     id: String,
-    namespaces: Option<Box<StaticVec<(String, Position)>>>,
+    modules: Option<Box<StaticVec<(String, Position)>>>,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -652,7 +669,7 @@ fn parse_call_expr<'a>(
         // id <EOF>
         (Token::EOF, pos) => {
             return Err(PERR::MissingToken(
-                ")".into(),
+                Token::RightParen.into(),
                 format!("to close the arguments list of this function call '{}'", id),
             )
             .into_err(*pos))
@@ -664,7 +681,7 @@ fn parse_call_expr<'a>(
             eat_token(input, Token::RightParen);
             return Ok(Expr::FnCall(
                 Box::new(id.into()),
-                namespaces,
+                modules,
                 Box::new(args),
                 None,
                 begin,
@@ -683,7 +700,7 @@ fn parse_call_expr<'a>(
 
                 return Ok(Expr::FnCall(
                     Box::new(id.into()),
-                    namespaces,
+                    modules,
                     Box::new(args),
                     None,
                     begin,
@@ -694,7 +711,7 @@ fn parse_call_expr<'a>(
             }
             (Token::EOF, pos) => {
                 return Err(PERR::MissingToken(
-                    ")".into(),
+                    Token::RightParen.into(),
                     format!("to close the arguments list of this function call '{}'", id),
                 )
                 .into_err(*pos))
@@ -704,7 +721,7 @@ fn parse_call_expr<'a>(
             }
             (_, pos) => {
                 return Err(PERR::MissingToken(
-                    ",".into(),
+                    Token::Comma.into(),
                     format!("to separate the arguments to function call '{}'", id),
                 )
                 .into_err(*pos))
@@ -848,7 +865,7 @@ fn parse_index_chain<'a>(
         }
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
         (_, pos) => Err(PERR::MissingToken(
-            "]".into(),
+            Token::RightBracket.into(),
             "for a matching [ in this index expression".into(),
         )
         .into_err(*pos)),
@@ -859,7 +876,7 @@ fn parse_index_chain<'a>(
 fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
-    begin: Position,
+    pos: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     let mut arr = Vec::new();
@@ -875,17 +892,18 @@ fn parse_array_literal<'a>(
                     break;
                 }
                 (Token::EOF, pos) => {
-                    return Err(
-                        PERR::MissingToken("]".into(), "to end this array literal".into())
-                            .into_err(*pos),
+                    return Err(PERR::MissingToken(
+                        Token::RightBracket.into(),
+                        "to end this array literal".into(),
                     )
+                    .into_err(*pos))
                 }
                 (Token::LexError(err), pos) => {
                     return Err(PERR::BadInput(err.to_string()).into_err(*pos))
                 }
                 (_, pos) => {
                     return Err(PERR::MissingToken(
-                        ",".into(),
+                        Token::Comma.into(),
                         "to separate the items of this array literal".into(),
                     )
                     .into_err(*pos))
@@ -894,14 +912,14 @@ fn parse_array_literal<'a>(
         }
     }
 
-    Ok(Expr::Array(arr, begin))
+    Ok(Expr::Array(arr, pos))
 }
 
 /// Parse a map literal.
 fn parse_map_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
-    begin: Position,
+    pos: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     let mut map = Vec::new();
@@ -917,10 +935,16 @@ fn parse_map_literal<'a>(
                     return Err(PERR::BadInput(err.to_string()).into_err(pos))
                 }
                 (_, pos) if map.is_empty() => {
-                    return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err(pos))
+                    return Err(
+                        PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                            .into_err(pos),
+                    )
                 }
                 (Token::EOF, pos) => {
-                    return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err(pos))
+                    return Err(
+                        PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                            .into_err(pos),
+                    )
                 }
                 (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
             };
@@ -932,7 +956,7 @@ fn parse_map_literal<'a>(
                 }
                 (_, pos) => {
                     return Err(PERR::MissingToken(
-                        ":".into(),
+                        Token::Colon.into(),
                         format!(
                             "to follow the property '{}' in this object map literal",
                             name
@@ -956,7 +980,7 @@ fn parse_map_literal<'a>(
                 }
                 (Token::Identifier(_), pos) => {
                     return Err(PERR::MissingToken(
-                        ",".into(),
+                        Token::Comma.into(),
                         "to separate the items of this object map literal".into(),
                     )
                     .into_err(*pos))
@@ -965,7 +989,10 @@ fn parse_map_literal<'a>(
                     return Err(PERR::BadInput(err.to_string()).into_err(*pos))
                 }
                 (_, pos) => {
-                    return Err(PERR::MissingToken("}".into(), MISSING_RBRACE.into()).into_err(*pos))
+                    return Err(
+                        PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                            .into_err(*pos),
+                    )
                 }
             }
         }
@@ -982,7 +1009,7 @@ fn parse_map_literal<'a>(
         })
         .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
 
-    Ok(Expr::Map(map, begin))
+    Ok(Expr::Map(map, pos))
 }
 
 /// Parse a primary expression.
@@ -1037,25 +1064,28 @@ fn parse_primary<'a>(
 
         root_expr = match (root_expr, token) {
             // Function call
-            (Expr::Variable(id, namespaces, _, pos), Token::LeftParen) => {
-                parse_call_expr(input, stack, *id, namespaces, pos, allow_stmt_expr)?
+            (Expr::Variable(id, modules, _, pos), Token::LeftParen) => {
+                parse_call_expr(input, stack, *id, modules, pos, allow_stmt_expr)?
             }
             (Expr::Property(id, pos), Token::LeftParen) => {
                 parse_call_expr(input, stack, id, None, pos, allow_stmt_expr)?
             }
-            // Namespaced
+            // moduled
             #[cfg(not(feature = "no_import"))]
-            (Expr::Variable(id, mut namespaces, _, pos), Token::DoubleColon) => {
+            (Expr::Variable(id, mut modules, _, pos), Token::DoubleColon) => {
                 match input.next().unwrap() {
                     (Token::Identifier(id2), pos2) => {
-                        if let Some(ref mut namespaces) = namespaces {
-                            namespaces.push((*id, pos));
+                        if let Some(ref mut modules) = modules {
+                            modules.push((*id, pos));
                         } else {
                             let mut vec = StaticVec::new();
                             vec.push((*id, pos));
-                            namespaces = Some(Box::new(vec));
+                            modules = Some(Box::new(vec));
                         }
-                        Expr::Variable(Box::new(id2), namespaces, None, pos2)
+
+                        let root = modules.as_ref().unwrap().get(0);
+                        let index = stack.find_sub_scope(&root.0);
+                        Expr::Variable(Box::new(id2), modules, index, pos2)
                     }
                     (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
                 }
@@ -1213,9 +1243,9 @@ fn make_dot_expr(
             let lhs = if is_index { lhs.into_property() } else { lhs };
             Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos)
         }
-        // lhs.namespace::id - syntax error
-        (_, Expr::Variable(_, Some(namespaces), _, _)) => {
-            return Err(PERR::PropertyExpected.into_err(namespaces.get(0).1))
+        // lhs.module::id - syntax error
+        (_, Expr::Variable(_, Some(modules), _, _)) => {
+            return Err(PERR::PropertyExpected.into_err(modules.get(0).1))
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(dot_lhs, dot_rhs, dot_pos)) => Expr::Dot(
@@ -1546,7 +1576,7 @@ fn parse_binary_op<'a>(
             #[cfg(not(feature = "no_object"))]
             Token::Period => make_dot_expr(current_lhs, rhs, pos, false)?,
 
-            token => return Err(PERR::UnknownOperator(token.syntax().into()).into_err(pos)),
+            token => return Err(PERR::UnknownOperator(token.into()).into_err(pos)),
         };
     }
 }
@@ -1701,7 +1731,7 @@ fn parse_for<'a>(
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
         (_, pos) => {
             return Err(
-                PERR::MissingToken("in".into(), "after the iteration variable".into())
+                PERR::MissingToken(Token::In.into(), "after the iteration variable".into())
                     .into_err(pos),
             )
         }
@@ -1712,7 +1742,7 @@ fn parse_for<'a>(
     let expr = parse_expr(input, stack, allow_stmt_expr)?;
 
     let prev_len = stack.len();
-    stack.push(name.clone());
+    stack.push((name.clone(), ScopeEntryType::Normal));
 
     let body = parse_block(input, stack, true, allow_stmt_expr)?;
 
@@ -1746,12 +1776,12 @@ fn parse_let<'a>(
         match var_type {
             // let name = expr
             ScopeEntryType::Normal => {
-                stack.push(name.clone());
+                stack.push((name.clone(), ScopeEntryType::Normal));
                 Ok(Stmt::Let(Box::new(name), Some(Box::new(init_value)), pos))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
-                stack.push(name.clone());
+                stack.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(name), Box::new(init_value), pos))
             }
             // const name = expr - error
@@ -1767,6 +1797,40 @@ fn parse_let<'a>(
     }
 }
 
+/// Parse an import statement.
+#[cfg(not(feature = "no_import"))]
+fn parse_import<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    stack: &mut Stack,
+    allow_stmt_expr: bool,
+) -> Result<Stmt, Box<ParseError>> {
+    // import ...
+    let pos = eat_token(input, Token::Import);
+
+    // import expr ...
+    let expr = parse_expr(input, stack, allow_stmt_expr)?;
+
+    // import expr as ...
+    match input.next().unwrap() {
+        (Token::As, _) => (),
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken(Token::As.into(), "in this import statement".into())
+                    .into_err(pos),
+            )
+        }
+    }
+
+    // import expr as name ...
+    let (name, _) = match input.next().unwrap() {
+        (Token::Identifier(s), pos) => (s, pos),
+        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+    };
+
+    Ok(Stmt::Import(Box::new(expr), Box::new(name), pos))
+}
+
 /// Parse a statement block.
 fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
@@ -1779,9 +1843,11 @@ fn parse_block<'a>(
         (Token::LeftBrace, pos) => pos,
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
         (_, pos) => {
-            return Err(
-                PERR::MissingToken("{".into(), "to start a statement block".into()).into_err(pos),
+            return Err(PERR::MissingToken(
+                Token::LeftBrace.into(),
+                "to start a statement block".into(),
             )
+            .into_err(pos))
         }
     };
 
@@ -1818,10 +1884,11 @@ fn parse_block<'a>(
             // { ... stmt ???
             (_, pos) => {
                 // Semicolons are not optional between statements
-                return Err(
-                    PERR::MissingToken(";".into(), "to terminate this statement".into())
-                        .into_err(*pos),
-                );
+                return Err(PERR::MissingToken(
+                    Token::SemiColon.into(),
+                    "to terminate this statement".into(),
+                )
+                .into_err(*pos));
             }
         }
     }
@@ -1905,6 +1972,8 @@ fn parse_stmt<'a>(
         Token::Let => parse_let(input, stack, ScopeEntryType::Normal, allow_stmt_expr),
         Token::Const => parse_let(input, stack, ScopeEntryType::Constant, allow_stmt_expr),
 
+        Token::Import => parse_import(input, stack, allow_stmt_expr),
+
         _ => parse_expr_stmt(input, stack, allow_stmt_expr),
     }
 }
@@ -1936,25 +2005,29 @@ fn parse_fn<'a>(
         loop {
             match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
-                    stack.push(s.clone());
+                    stack.push((s.clone(), ScopeEntryType::Normal));
                     params.push((s, pos))
                 }
                 (Token::LexError(err), pos) => {
                     return Err(PERR::BadInput(err.to_string()).into_err(pos))
                 }
-                (_, pos) => return Err(PERR::MissingToken(")".into(), end_err).into_err(pos)),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(Token::RightParen.into(), end_err).into_err(pos))
+                }
             }
 
             match input.next().unwrap() {
                 (Token::RightParen, _) => break,
                 (Token::Comma, _) => (),
                 (Token::Identifier(_), pos) => {
-                    return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos))
+                    return Err(PERR::MissingToken(Token::Comma.into(), sep_err).into_err(pos))
                 }
                 (Token::LexError(err), pos) => {
                     return Err(PERR::BadInput(err.to_string()).into_err(pos))
                 }
-                (_, pos) => return Err(PERR::MissingToken(",".into(), sep_err).into_err(pos)),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(Token::Comma.into(), sep_err).into_err(pos))
+                }
             }
         }
     }
@@ -2064,10 +2137,11 @@ fn parse_global_level<'a>(
             // stmt ???
             (_, pos) => {
                 // Semicolons are not optional between statements
-                return Err(
-                    PERR::MissingToken(";".into(), "to terminate this statement".into())
-                        .into_err(*pos),
-                );
+                return Err(PERR::MissingToken(
+                    Token::SemiColon.into(),
+                    "to terminate this statement".into(),
+                )
+                .into_err(*pos));
             }
         }
     }

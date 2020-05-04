@@ -476,25 +476,23 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    namespaces: Option<&Box<StaticVec<(String, Position)>>>,
+    modules: Option<&Box<StaticVec<(String, Position)>>>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    if let Some(namespaces) = namespaces {
-        let (id, root_pos) = namespaces.get(0); // First namespace
+    if let Some(modules) = modules {
+        let (id, root_pos) = modules.get(0); // First module
         let mut sub_scope = scope
             .find_sub_scope(id)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorNamespaceNotFound(id.into(), *root_pos)))?;
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?;
 
-        for x in 1..namespaces.len() {
-            let (id, id_pos) = namespaces.get(x);
+        for x in 1..modules.len() {
+            let (id, id_pos) = modules.get(x);
 
             sub_scope = sub_scope
                 .get_mut(id)
                 .unwrap()
                 .downcast_mut::<Map>()
-                .ok_or_else(|| {
-                    Box::new(EvalAltResult::ErrorNamespaceNotFound(id.into(), *id_pos))
-                })?;
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
         }
 
         sub_scope
@@ -503,7 +501,7 @@ fn search_scope<'a>(
             .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))
     } else {
         let (index, _) = scope
-            .get(name)
+            .get_index(name)
             .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?;
 
         Ok(scope.get_mut(index))
@@ -863,7 +861,7 @@ impl Engine {
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
                     self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
                 }
-                // xxx.namespace::fn_name(...) - syntax error
+                // xxx.module::fn_name(...) - syntax error
                 Expr::FnCall(_,_,_,_,_) => unreachable!(),
                 // {xxx:map}.id = ???
                 Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
@@ -934,7 +932,7 @@ impl Engine {
                     if may_be_changed {
                         if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                             let fn_name = make_setter(id);
-                            // Reuse args because the first &mut parameter will not be consumed
+                            // Re-use args because the first &mut parameter will not be consumed
                             args[1] = indexed_val;
                             self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).or_else(|err| match *err {
                                 // If there is no setter, no need to feed it back because the property is read-only
@@ -974,10 +972,10 @@ impl Engine {
 
         match dot_lhs {
             // id.??? or id[???]
-            Expr::Variable(id, namespaces, index, pos) => {
+            Expr::Variable(id, modules, index, pos) => {
                 let (target, typ) = match index {
                     Some(i) if !state.always_search => scope.get_mut(scope.len() - i.get()),
-                    _ => search_scope(scope, id, namespaces.as_ref(), *pos)?,
+                    _ => search_scope(scope, id, modules.as_ref(), *pos)?,
                 };
 
                 // Constants cannot be modified
@@ -1211,8 +1209,8 @@ impl Engine {
             Expr::Variable(_, None, Some(index), _) if !state.always_search => {
                 Ok(scope.get_mut(scope.len() - index.get()).0.clone())
             }
-            Expr::Variable(id, namespaces, _, pos) => {
-                search_scope(scope, id, namespaces.as_ref(), *pos).map(|(v, _)| v.clone())
+            Expr::Variable(id, modules, _, pos) => {
+                search_scope(scope, id, modules.as_ref(), *pos).map(|(v, _)| v.clone())
             }
             Expr::Property(_, _) => unreachable!(),
 
@@ -1225,8 +1223,8 @@ impl Engine {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(name, namespaces, _, pos) => {
-                        match search_scope(scope, name, namespaces.as_ref(), *pos)? {
+                    Expr::Variable(name, modules, _, pos) => {
+                        match search_scope(scope, name, modules.as_ref(), *pos)? {
                             (_, ScopeEntryType::Constant) => Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
                             )),
@@ -1299,8 +1297,8 @@ impl Engine {
                     .collect::<Result<HashMap<_, _>, _>>()?,
             )))),
 
-            // TODO - handle namespaced function call
-            Expr::FnCall(fn_name, namespaces, arg_exprs, def_val, pos) => {
+            // TODO - handle moduled function call
+            Expr::FnCall(fn_name, modules, arg_exprs, def_val, pos) => {
                 let mut arg_values = arg_exprs
                     .iter()
                     .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
@@ -1546,9 +1544,6 @@ impl Engine {
                 Ok(Default::default())
             }
 
-            // Import statement
-            Stmt::Import(_name_expr, _alias) => unimplemented!(),
-
             // Const statement
             Stmt::Const(name, expr, _) if expr.is_constant() => {
                 let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
@@ -1560,6 +1555,25 @@ impl Engine {
 
             // Const expression not constant
             Stmt::Const(_, _, _) => unreachable!(),
+
+            // Import statement
+            Stmt::Import(expr, name, _) => {
+                if let Some(path) = self
+                    .eval_expr(scope, state, fn_lib, expr, level)?
+                    .try_cast::<String>()
+                {
+                    let mut module = Map::new();
+                    module.insert("kitty".to_string(), "foo".to_string().into());
+                    module.insert("path".to_string(), path.into());
+
+                    // TODO - avoid copying module name in inner block?
+                    let mod_name = name.as_ref().clone();
+                    scope.push_sub_scope(mod_name, module);
+                    Ok(Default::default())
+                } else {
+                    Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
+                }
+            }
         }
     }
 

@@ -53,6 +53,8 @@ pub enum EvalAltResult {
     ErrorNumericIndexExpr(Position),
     /// Trying to index into a map with an index that is not `String`.
     ErrorStringIndexExpr(Position),
+    /// Trying to import with an expression that is not `String`.
+    ErrorImportExpr(Position),
     /// Invalid arguments for `in` operator.
     ErrorInExpr(Position),
     /// The guard expression in an `if` or `while` statement does not return a boolean value.
@@ -61,8 +63,8 @@ pub enum EvalAltResult {
     ErrorFor(Position),
     /// Usage of an unknown variable. Wrapped value is the name of the variable.
     ErrorVariableNotFound(String, Position),
-    /// Usage of an unknown namespace. Wrapped value is the name of the namespace.
-    ErrorNamespaceNotFound(String, Position),
+    /// Usage of an unknown module. Wrapped value is the name of the module.
+    ErrorModuleNotFound(String, Position),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     ErrorAssignmentToUnknownLHS(Position),
     /// Assignment to a constant variable.
@@ -108,6 +110,7 @@ impl EvalAltResult {
             Self::ErrorIndexingType(_, _) => {
                 "Indexing can only be performed on an array, an object map, or a string"
             }
+            Self::ErrorImportExpr(_) => "Importing a module expects a string path",
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
@@ -121,7 +124,7 @@ impl EvalAltResult {
             Self::ErrorLogicGuard(_) => "Boolean value expected",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
-            Self::ErrorNamespaceNotFound(_, _) => "Namespace not found",
+            Self::ErrorModuleNotFound(_, _) => "module not found",
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"
             }
@@ -155,13 +158,14 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorFunctionNotFound(s, pos)
             | Self::ErrorVariableNotFound(s, pos)
-            | Self::ErrorNamespaceNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
+            | Self::ErrorModuleNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
 
             Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
 
             Self::ErrorIndexingType(_, pos)
             | Self::ErrorNumericIndexExpr(pos)
             | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorImportExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
@@ -270,10 +274,11 @@ impl EvalAltResult {
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorNumericIndexExpr(pos)
             | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorImportExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
-            | Self::ErrorNamespaceNotFound(_, pos)
+            | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
@@ -305,10 +310,11 @@ impl EvalAltResult {
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorNumericIndexExpr(pos)
             | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorImportExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
-            | Self::ErrorNamespaceNotFound(_, pos)
+            | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)

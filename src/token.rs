@@ -422,6 +422,12 @@ impl Token {
     }
 }
 
+impl From<Token> for String {
+    fn from(token: Token) -> Self {
+        token.syntax().into()
+    }
+}
+
 /// An iterator on a `Token` stream.
 pub struct TokenIterator<'a> {
     /// Can the next token be a unary operator?

@@ -23,6 +23,7 @@ Rhai's current features set:
 * [`no-std`](#optional-features) support
 * Support for [function overloading](#function-overloading)
 * Support for [operator overloading](#operator-overloading)
+* Support for loading external [modules]
 * Compiled script is [optimized](#script-optimization) for repeat evaluations
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
@@ -69,6 +70,7 @@ Optional features
 | `no_object`   | Disable support for custom types and objects.                                                                                         |
 | `no_float`    | Disable floating-point numbers and math if not needed.                                                                                |
 | `no_optimize` | Disable the script optimizer.                                                                                                         |
+| `no_import`   | Disable modules.                                                                                                                      |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                      |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                      |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                  |
@@ -84,6 +86,7 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`no_function`]: #optional-features
 [`no_object`]: #optional-features
 [`no_optimize`]: #optional-features
+[`no_import`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
 [`no_std`]: #optional-features
@@ -1996,6 +1999,22 @@ engine.eval::<()>(script)?;
 for entry in logbook.read().unwrap().iter() {
     println!("{}", entry);
 }
+```
+
+Using external modules
+----------------------
+
+[module]: #using-external-modules
+[modules]: #using-external-modules
+
+```rust
+import "crypto" as crypto;  // Import an external script file as a module
+
+crypto::encrypt(secret);    // Use functions defined under the module via '::'
+
+print(crypto::status);      // Module variables are constants
+
+crypto::hash::sha256(key);  // Sub-modules are also supported
 ```
 
 Script optimization

@@ -596,8 +596,8 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         }
 
         // id(args ..) -> optimize function call arguments
-        Expr::FnCall(id, namespaces, args, def_value, pos) =>
-            Expr::FnCall(id, namespaces, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
+        Expr::FnCall(id, modules, args, def_value, pos) =>
+            Expr::FnCall(id, modules, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
 
         // constant-name
         Expr::Variable(name, None, _, pos) if state.contains_constant(&name) => {

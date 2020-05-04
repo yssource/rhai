@@ -316,7 +316,7 @@ impl<'a> Scope<'a> {
     /// Find an entry in the Scope, starting from the last.
     ///
     /// Sub-scopes are ignored.
-    pub(crate) fn get(&self, name: &str) -> Option<(usize, EntryType)> {
+    pub(crate) fn get_index(&self, name: &str) -> Option<(usize, EntryType)> {
         self.0
             .iter()
             .enumerate()
@@ -333,13 +333,28 @@ impl<'a> Scope<'a> {
             })
     }
 
+    /// Find a sub-scope in the Scope, starting from the last.
+    pub(crate) fn get_sub_scope_index(&self, name: &str) -> Option<usize> {
+        self.0
+            .iter()
+            .enumerate()
+            .rev() // Always search a Scope in reverse order
+            .find_map(|(index, Entry { name: key, typ, .. })| match typ {
+                EntryType::SubScope => {
+                    if name == key {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                }
+                EntryType::Normal | EntryType::Constant => None,
+            })
+    }
+
     /// Find a sub-scope in the Scope, starting from the last entry.
     pub fn find_sub_scope(&mut self, name: &str) -> Option<&mut Map> {
-        self.0
-            .iter_mut()
-            .rev()
-            .find(|Entry { name: key, typ, .. }| name == key && *typ == EntryType::SubScope)
-            .and_then(|Entry { value, .. }| value.downcast_mut::<Map>())
+        let index = self.get_sub_scope_index(name)?;
+        self.get_mut(index).0.downcast_mut()
     }
 
     /// Get the value of an entry in the Scope, starting from the last.
@@ -389,7 +404,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
     /// ```
     pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
-        match self.get(name) {
+        match self.get_index(name) {
             None => self.push(name, value),
             Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
             Some((index, EntryType::Normal)) => {
