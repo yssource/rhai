@@ -248,6 +248,8 @@ pub enum Stmt {
     Break(Position),
     /// `return`/`throw`
     ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
+    /// import expr
+    Import(Box<Expr>, Option<String>)
 }
 
 impl Stmt {
@@ -261,7 +263,11 @@ impl Stmt {
             | Stmt::Continue(pos)
             | Stmt::Break(pos)
             | Stmt::ReturnWithVal(_, _, pos) => *pos,
-            Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
+
+            Stmt::IfThenElse(expr, _, _)
+            | Stmt::Expr(expr)
+            | Stmt::Import(expr, _) => expr.position(),
+
             Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
         }
     }
@@ -273,7 +279,8 @@ impl Stmt {
             | Stmt::While(_, _)
             | Stmt::Loop(_)
             | Stmt::For(_, _, _)
-            | Stmt::Block(_, _) => true,
+            | Stmt::Block(_, _)
+            | Stmt::Import(_, _) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
             Stmt::Noop(_) => false,
@@ -303,6 +310,7 @@ impl Stmt {
             Stmt::Let(_, _, _) | Stmt::Const(_, _, _) => false,
             Stmt::Block(statements, _) => statements.iter().all(Stmt::is_pure),
             Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
+            Stmt::Import(_, _) => false,
         }
     }
 }
@@ -328,6 +336,16 @@ pub enum Expr {
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
+        Box<Cow<'static, str>>,
+        Box<Vec<Expr>>,
+        Option<Box<Dynamic>>,
+        Position,
+    ),
+    /// subscope::func(expr, ... )
+    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
+    /// and the function names are predictable, so no need to allocate a new `String`.
+    SubscopeFnCall(
+        String,
         Box<Cow<'static, str>>,
         Box<Vec<Expr>>,
         Option<Box<Dynamic>>,
@@ -430,6 +448,7 @@ impl Expr {
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
             | Self::FnCall(_, _, _, pos)
+            | Self::SubscopeFnCall(_, _, _, _, pos)
             | Self::And(_, _, pos)
             | Self::Or(_, _, pos)
             | Self::In(_, _, pos)
@@ -456,6 +475,7 @@ impl Expr {
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
             | Self::FnCall(_, _, _, pos)
+            | Self::SubscopeFnCall(_, _, _, _, pos)
             | Self::And(_, _, pos)
             | Self::Or(_, _, pos)
             | Self::In(_, _, pos)
@@ -533,6 +553,7 @@ impl Expr {
             Self::StringConstant(_, _)
             | Self::Stmt(_, _)
             | Self::FnCall(_, _, _, _)
+            | Self::SubscopeFnCall(_, _, _, _, _)
             | Self::Assignment(_, _, _)
             | Self::Dot(_, _, _)
             | Self::Index(_, _, _)
@@ -1683,6 +1704,8 @@ fn parse_let<'a>(
             ScopeEntryType::Constant => {
                 Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
             }
+
+            ScopeEntryType::Subscope => unreachable!(),
         }
     } else {
         // let name

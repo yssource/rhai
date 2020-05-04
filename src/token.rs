@@ -153,6 +153,7 @@ pub enum Token {
     RightShift,
     SemiColon,
     Colon,
+    DoubleColon,
     Comma,
     Period,
     #[cfg(not(feature = "no_object"))]
@@ -230,6 +231,7 @@ impl Token {
                 Divide => "/",
                 SemiColon => ";",
                 Colon => ":",
+                DoubleColon => "::",
                 Comma => ",",
                 Period => ".",
                 #[cfg(not(feature = "no_object"))]
@@ -874,7 +876,6 @@ impl<'a> TokenIterator<'a> {
                 ('/', _) => return Some((Token::Divide, pos)),
 
                 (';', _) => return Some((Token::SemiColon, pos)),
-                (':', _) => return Some((Token::Colon, pos)),
                 (',', _) => return Some((Token::Comma, pos)),
                 ('.', _) => return Some((Token::Period, pos)),
 
@@ -895,6 +896,12 @@ impl<'a> TokenIterator<'a> {
                     return Some((Token::EqualsTo, pos));
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
+
+                (':', ':') => {
+                    self.eat_next();
+                    return Some((Token::DoubleColon, pos));
+                }
+                (':', _) => return Some((Token::Colon, pos)),
 
                 ('<', '=') => {
                     self.eat_next();

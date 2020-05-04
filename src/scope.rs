@@ -13,6 +13,8 @@ pub enum EntryType {
     Normal,
     /// Immutable constant value.
     Constant,
+    /// Name of a subscope, allowing member access with the :: operator.
+    Subscope,
 }
 
 /// An entry in the Scope.
@@ -165,6 +167,24 @@ impl<'a> Scope<'a> {
         self.push_dynamic_value(name, EntryType::Normal, value, false);
     }
 
+    /// Add (push) a new subscope to the Scope.
+    ///
+    /// Subscopes are used for access to members in modules and plugins.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push_subscope("x".to_string(), "My Plugin".to_string());
+    /// assert_eq!(my_scope.get_subscope("x").unwrap(), "My Plugin");
+    /// ```
+    pub fn push_subscope(&mut self, name: String, value: String) {
+        self.push_dynamic_value(name, EntryType::Subscope, Dynamic::from(value), true);
+    }
+
     /// Add (push) a new constant to the Scope.
     ///
     /// Constants are immutable and cannot be assigned to.  Their values never change.
@@ -297,6 +317,17 @@ impl<'a> Scope<'a> {
             })
     }
 
+    /// Get the subscope of an entry in the Scope, starting from the last.
+    ///
+    pub fn get_subscope(&self, name: &str) -> Option<String> {
+        self.0
+            .iter()
+            .rev()
+            .find(|Entry { name: key, typ, .. }| name == key &&
+                        std::mem::discriminant(typ) == std::mem::discriminant(&EntryType::Subscope))
+            .and_then(|Entry { value, .. }| value.downcast_ref::<String>().cloned())
+    }
+
     /// Get the value of an entry in the Scope, starting from the last.
     ///
     /// # Examples
@@ -342,6 +373,9 @@ impl<'a> Scope<'a> {
         match self.get(name) {
             Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
             Some((index, EntryType::Normal)) => {
+                self.0.get_mut(index).unwrap().value = Dynamic::from(value)
+            }
+            Some((index, EntryType::Subscope)) => {
                 self.0.get_mut(index).unwrap().value = Dynamic::from(value)
             }
             None => self.push(name, value),
