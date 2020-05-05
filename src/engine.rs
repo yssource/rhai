@@ -3,19 +3,20 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
+use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
 use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
+use crate::utils::{calc_fn_def, StaticVec};
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     collections::HashMap,
     format,
-    hash::{Hash, Hasher},
     iter::once,
     mem,
     num::NonZeroUsize,
@@ -26,12 +27,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_std"))]
-use crate::stdlib::collections::hash_map::DefaultHasher;
-
-#[cfg(feature = "no_std")]
-use ahash::AHasher;
-
 /// An dynamic array of `Dynamic` values.
 ///
 /// Not available under the `no_index` feature.
@@ -41,32 +36,6 @@ pub type Array = Vec<Dynamic>;
 ///
 /// Not available under the `no_object` feature.
 pub type Map = HashMap<String, Dynamic>;
-
-/// An imported module.
-///
-/// Not available under the `no_module` feature.
-#[derive(Debug, Clone)]
-pub struct Module(HashMap<String, Dynamic>);
-
-impl Module {
-    /// Create a new module.
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-impl Deref for Module {
-    type Target = HashMap<String, Dynamic>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Module {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
@@ -166,78 +135,8 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// A type to hold a number of values in static storage for speed,
-/// and any spill-overs in a `Vec`.
-#[derive(Debug, Clone)]
-pub struct StaticVec<T: Default + Clone> {
-    /// Total number of values held.
-    len: usize,
-    /// Static storage. 4 slots should be enough for most cases - i.e. four levels of indirection.
-    list: [T; 4],
-    /// Dynamic storage. For spill-overs.
-    more: Vec<T>,
-}
-
-impl<T: Default + Clone> StaticVec<T> {
-    /// Create a new `StaticVec`.
-    pub fn new() -> Self {
-        Self {
-            len: 0,
-            list: [
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            ],
-            more: Vec::new(),
-        }
-    }
-    /// Push a new value to the end of this `StaticVec`.
-    pub fn push<X: Into<T>>(&mut self, value: X) {
-        if self.len >= self.list.len() {
-            self.more.push(value.into());
-        } else {
-            self.list[self.len] = value.into();
-        }
-        self.len += 1;
-    }
-    /// Pop a value from the end of this `StaticVec`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `StaticVec` is empty.
-    pub fn pop(&mut self) -> T {
-        let result = if self.len <= 0 {
-            panic!("nothing to pop!")
-        } else if self.len <= self.list.len() {
-            mem::replace(self.list.get_mut(self.len - 1).unwrap(), Default::default())
-        } else {
-            self.more.pop().unwrap()
-        };
-
-        self.len -= 1;
-
-        result
-    }
-    /// Get the number of items in this `StaticVec`.
-    pub fn len(&self) -> usize {
-        self.len
-    }
-    pub fn get(&self, index: usize) -> &T {
-        if index >= self.len {
-            panic!("index OOB in StaticVec");
-        }
-
-        if index < self.list.len() {
-            self.list.get(index).unwrap()
-        } else {
-            self.more.get(index - self.list.len()).unwrap()
-        }
-    }
-}
-
 /// A type that holds all the current states of the Engine.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
@@ -466,33 +365,6 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     }
 }
 
-/// Calculate a `u64` hash key from a function name and parameter types.
-///
-/// Parameter types are passed in via `TypeId` values from an iterator
-/// which can come from any source.
-pub fn calc_fn_spec(fn_name: &str, params: impl Iterator<Item = TypeId>) -> u64 {
-    #[cfg(feature = "no_std")]
-    let mut s: AHasher = Default::default();
-    #[cfg(not(feature = "no_std"))]
-    let mut s = DefaultHasher::new();
-
-    s.write(fn_name.as_bytes());
-    params.for_each(|t| t.hash(&mut s));
-    s.finish()
-}
-
-/// Calculate a `u64` hash key from a function name and number of parameters (without regard to types).
-pub(crate) fn calc_fn_def(fn_name: &str, params: usize) -> u64 {
-    #[cfg(feature = "no_std")]
-    let mut s: AHasher = Default::default();
-    #[cfg(not(feature = "no_std"))]
-    let mut s = DefaultHasher::new();
-
-    s.write(fn_name.as_bytes());
-    s.write_usize(params);
-    s.finish()
-}
-
 /// Print/debug to stdout
 fn default_print(s: &str) {
     #[cfg(not(feature = "no_std"))]
@@ -503,12 +375,13 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    modules: &Option<Box<StaticVec<(String, Position)>>>,
+    modules: &ModuleRef,
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
     if let Some(modules) = modules {
-        let (id, root_pos) = modules.get(0); // First module
+        let mut drain = modules.iter();
+        let (id, root_pos) = drain.next().unwrap(); // First module
 
         let mut module = if let Some(index) = index {
             scope
@@ -522,9 +395,7 @@ fn search_scope<'a>(
                 .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
         };
 
-        for x in 1..modules.len() {
-            let (id, id_pos) = modules.get(x);
-
+        for (id, id_pos) in drain {
             module = module
                 .get_mut(id)
                 .and_then(|v| v.downcast_mut::<Module>())

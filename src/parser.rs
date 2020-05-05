@@ -1,11 +1,12 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
-use crate::engine::{calc_fn_def, Engine, FunctionsLib, StaticVec};
+use crate::engine::{Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
+use crate::utils::{calc_fn_def, StaticVec};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -42,6 +43,9 @@ pub type FLOAT = f64;
 
 type PERR = ParseErrorType;
 
+/// A chain of module names to qualify a variable or function call.
+/// A `StaticVec` is used because most module-level access contains only one level,
+/// and it is wasteful to always allocate a `Vec` with one element.
 pub type ModuleRef = Option<Box<StaticVec<(String, Position)>>>;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
@@ -1079,7 +1083,7 @@ fn parse_primary<'a>(
                             vec.push((*id, pos));
                             modules = Some(Box::new(vec));
 
-                            let root = modules.as_ref().unwrap().get(0);
+                            let root = modules.as_ref().unwrap().iter().next().unwrap();
                             index = stack.find_sub_scope(&root.0);
                         }
 
@@ -1243,7 +1247,7 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, Some(modules), _, _)) => {
-            return Err(PERR::PropertyExpected.into_err(modules.get(0).1))
+            return Err(PERR::PropertyExpected.into_err(modules.iter().next().unwrap().1))
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(dot_lhs, dot_rhs, dot_pos)) => Expr::Dot(

@@ -3,9 +3,10 @@
 #![allow(non_snake_case)]
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{calc_fn_spec, Engine, FnCallArgs};
+use crate::engine::{Engine, FnCallArgs};
 use crate::result::EvalAltResult;
 use crate::token::Position;
+use crate::utils::calc_fn_spec;
 
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::ToString};
 

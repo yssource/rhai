@@ -76,6 +76,7 @@ mod error;
 mod fn_call;
 mod fn_func;
 mod fn_register;
+mod module;
 mod optimize;
 pub mod packages;
 mod parser;
@@ -83,9 +84,10 @@ mod result;
 mod scope;
 mod stdlib;
 mod token;
+mod utils;
 
 pub use any::Dynamic;
-pub use engine::{calc_fn_spec as calc_fn_hash, Engine};
+pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
 pub use fn_call::FuncArgs;
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
@@ -93,6 +95,7 @@ pub use parser::{AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use token::Position;
+pub use utils::calc_fn_spec as calc_fn_hash;
 
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;

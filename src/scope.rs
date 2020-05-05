@@ -1,7 +1,7 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::any::{Dynamic, Union, Variant};
-use crate::engine::Module;
+use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 

@@ -1,6 +1,7 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::engine::{Array, Map, Module};
+use crate::engine::{Array, Map};
+use crate::module::Module;
 use crate::parser::INT;
 
 #[cfg(not(feature = "no_float"))]
