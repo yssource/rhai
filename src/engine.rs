@@ -1530,7 +1530,10 @@ impl Engine {
                     .eval_expr(scope, state, fn_lib, expr, level)?
                     .try_cast::<String>()
                 {
-                    let module = self.module_resolver.resolve(self, &path)?;
+                    let module = self
+                        .module_resolver
+                        .resolve(self, &path)
+                        .map_err(|err| EvalAltResult::set_position(err, expr.position()))?;
 
                     // TODO - avoid copying module name in inner block?
                     let mod_name = name.as_ref().clone();

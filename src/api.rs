@@ -437,13 +437,23 @@ impl Engine {
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
-        let mut f = File::open(path.clone())
-            .map_err(|err| Box::new(EvalAltResult::ErrorReadingScriptFile(path.clone(), err)))?;
+        let mut f = File::open(path.clone()).map_err(|err| {
+            Box::new(EvalAltResult::ErrorReadingScriptFile(
+                path.clone(),
+                Position::none(),
+                err,
+            ))
+        })?;
 
         let mut contents = String::new();
 
-        f.read_to_string(&mut contents)
-            .map_err(|err| Box::new(EvalAltResult::ErrorReadingScriptFile(path.clone(), err)))?;
+        f.read_to_string(&mut contents).map_err(|err| {
+            Box::new(EvalAltResult::ErrorReadingScriptFile(
+                path.clone(),
+                Position::none(),
+                err,
+            ))
+        })?;
 
         Ok(contents)
     }

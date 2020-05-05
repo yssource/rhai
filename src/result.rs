@@ -29,7 +29,7 @@ pub enum EvalAltResult {
     ///
     /// Never appears under the `no_std` feature.
     #[cfg(not(feature = "no_std"))]
-    ErrorReadingScriptFile(PathBuf, std::io::Error),
+    ErrorReadingScriptFile(PathBuf, Position, std::io::Error),
 
     /// Call to an unknown function. Wrapped value is the name of the function.
     ErrorFunctionNotFound(String, Position),
@@ -94,7 +94,7 @@ impl EvalAltResult {
     pub(crate) fn desc(&self) -> &str {
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
+            Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
 
             Self::ErrorParsing(p) => p.desc(),
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
@@ -150,8 +150,12 @@ impl fmt::Display for EvalAltResult {
 
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(path, err) => {
+            Self::ErrorReadingScriptFile(path, pos, err) if pos.is_none() => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)
+            }
+            #[cfg(not(feature = "no_std"))]
+            Self::ErrorReadingScriptFile(path, pos, err) => {
+                write!(f, "{} '{}': {} ({})", desc, path.display(), err, pos)
             }
 
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
@@ -261,7 +265,7 @@ impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _) => Position::none(),
+            Self::ErrorReadingScriptFile(_, pos, _) => *pos,
 
             Self::ErrorParsing(err) => err.position(),
 
@@ -297,7 +301,7 @@ impl EvalAltResult {
     pub(crate) fn set_position(mut err: Box<Self>, new_position: Position) -> Box<Self> {
         match err.as_mut() {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _) => (),
+            Self::ErrorReadingScriptFile(_, pos, _) => *pos = new_position,
 
             Self::ErrorParsing(err) => err.1 = new_position,
 

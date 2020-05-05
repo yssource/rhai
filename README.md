@@ -2120,6 +2120,13 @@ Built-in module resolvers are grouped under the `rhai::module_resolvers` module 
 | `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                        |
 | `NullModuleResolver`   | The default module resolution service under the [`no_std`] feature. Always returns an `EvalAltResult::ErrorModuleNotFound` error.                                                                                                                                          |
 
+An [`Engine`]'s module resolver is set via a call to `set_module_resolver`:
+
+```rust
+// Use the 'NullModuleResolver'
+engine.set_module_resolver(rhai::module_resolvers::NullModuleResolver::new());
+```
+
 Script optimization
 ===================
 
