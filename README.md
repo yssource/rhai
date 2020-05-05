@@ -70,7 +70,7 @@ Optional features
 | `no_object`   | Disable support for custom types and objects.                                                                                         |
 | `no_float`    | Disable floating-point numbers and math if not needed.                                                                                |
 | `no_optimize` | Disable the script optimizer.                                                                                                         |
-| `no_import`   | Disable modules.                                                                                                                      |
+| `no_module`   | Disable modules.                                                                                                                      |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                      |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                      |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                  |
@@ -86,7 +86,7 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`no_function`]: #optional-features
 [`no_object`]: #optional-features
 [`no_optimize`]: #optional-features
-[`no_import`]: #optional-features
+[`no_module`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
 [`no_std`]: #optional-features

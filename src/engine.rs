@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
-use crate::parser::{Expr, FnDef, ReturnType, Stmt};
+use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -42,27 +42,27 @@ pub type Array = Vec<Dynamic>;
 /// Not available under the `no_object` feature.
 pub type Map = HashMap<String, Dynamic>;
 
-/// A sub-scope - basically an imported module namespace.
+/// An imported module.
 ///
-/// Not available under the `no_import` feature.
+/// Not available under the `no_module` feature.
 #[derive(Debug, Clone)]
-pub struct SubScope(HashMap<String, Dynamic>);
+pub struct Module(HashMap<String, Dynamic>);
 
-impl SubScope {
-    /// Create a new sub-scope.
+impl Module {
+    /// Create a new module.
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 }
 
-impl Deref for SubScope {
+impl Deref for Module {
     type Target = HashMap<String, Dynamic>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for SubScope {
+impl DerefMut for Module {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -500,67 +500,61 @@ fn default_print(s: &str) {
 }
 
 /// Search for a variable within the scope
-fn search_scope_variables<'a>(
+fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
+    modules: &Option<Box<StaticVec<(String, Position)>>>,
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    let index = if let Some(index) = index {
-        scope.len() - index.get()
+    if let Some(modules) = modules {
+        let (id, root_pos) = modules.get(0); // First module
+
+        let mut module = if let Some(index) = index {
+            scope
+                .get_mut(scope.len() - index.get())
+                .0
+                .downcast_mut::<Module>()
+                .unwrap()
+        } else {
+            scope
+                .find_module(id)
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
+        };
+
+        for x in 1..modules.len() {
+            let (id, id_pos) = modules.get(x);
+
+            module = module
+                .get_mut(id)
+                .and_then(|v| v.downcast_mut::<Module>())
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
+        }
+
+        let result = module
+            .get_mut(name)
+            .map(|v| (v, ScopeEntryType::Constant))
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?;
+
+        if result.0.is::<Module>() {
+            Err(Box::new(EvalAltResult::ErrorVariableNotFound(
+                name.into(),
+                pos,
+            )))
+        } else {
+            Ok(result)
+        }
     } else {
-        scope
-            .get_index(name)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?
-            .0
-    };
+        let index = if let Some(index) = index {
+            scope.len() - index.get()
+        } else {
+            scope
+                .get_index(name)
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?
+                .0
+        };
 
-    Ok(scope.get_mut(index))
-}
-
-/// Search for a sub-scope within the scope
-fn search_scope_modules<'a>(
-    scope: &'a mut Scope,
-    name: &str,
-    modules: &Box<StaticVec<(String, Position)>>,
-    index: Option<NonZeroUsize>,
-    pos: Position,
-) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    let (id, root_pos) = modules.get(0); // First module
-
-    let mut sub_scope = if let Some(index) = index {
-        scope
-            .get_mut(scope.len() - index.get())
-            .0
-            .downcast_mut::<SubScope>()
-            .unwrap()
-    } else {
-        scope
-            .find_sub_scope(id)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
-    };
-
-    for x in 1..modules.len() {
-        let (id, id_pos) = modules.get(x);
-
-        sub_scope = sub_scope
-            .get_mut(id)
-            .and_then(|v| v.downcast_mut::<SubScope>())
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
-    }
-
-    let result = sub_scope
-        .get_mut(name)
-        .map(|v| (v, ScopeEntryType::Constant))
-        .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?;
-
-    if result.0.is::<SubScope>() {
-        Err(Box::new(EvalAltResult::ErrorVariableNotFound(
-            name.into(),
-            pos,
-        )))
-    } else {
-        Ok(result)
+        Ok(scope.get_mut(index))
     }
 }
 
@@ -620,11 +614,13 @@ impl Engine {
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai
+    // TODO - handle moduled function call
     pub(crate) fn call_fn_raw(
         &self,
         scope: Option<&mut Scope>,
         fn_lib: &FunctionsLib,
         fn_name: &str,
+        modules: &ModuleRef,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
@@ -794,6 +790,7 @@ impl Engine {
         &self,
         fn_lib: &FunctionsLib,
         fn_name: &str,
+        modules: &ModuleRef,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
@@ -801,12 +798,20 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(fn_lib, KEYWORD_TYPE_OF) => {
+            KEYWORD_TYPE_OF
+                if modules.is_none()
+                    && args.len() == 1
+                    && !self.has_override(fn_lib, KEYWORD_TYPE_OF) =>
+            {
                 Ok(self.map_type_name(args[0].type_name()).to_string().into())
             }
 
             // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL if args.len() == 1 && !self.has_override(fn_lib, KEYWORD_EVAL) => {
+            KEYWORD_EVAL
+                if modules.is_none()
+                    && args.len() == 1
+                    && !self.has_override(fn_lib, KEYWORD_EVAL) =>
+            {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     pos,
@@ -814,7 +819,7 @@ impl Engine {
             }
 
             // Normal method call
-            _ => self.call_fn_raw(None, fn_lib, fn_name, args, def_val, pos, level),
+            _ => self.call_fn_raw(None, fn_lib, fn_name, modules, args, def_val, pos, level),
         }
     }
 
@@ -915,7 +920,7 @@ impl Engine {
                     let def_val = def_val.as_deref();
                     // A function call is assumed to have side effects, so the value is changed
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
-                    self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(fn_lib, fn_name, &None, &mut args, def_val, *pos, 0).map(|v| (v, true))
                 }
                 // xxx.module::fn_name(...) - syntax error
                 Expr::FnCall(_,_,_,_,_) => unreachable!(),
@@ -936,13 +941,13 @@ impl Engine {
                 Expr::Property(id, pos) if new_val.is_some() => {
                     let fn_name = make_setter(id);
                     let mut args = [obj, new_val.as_mut().unwrap()];
-                    self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(fn_lib, &fn_name, &None, &mut args, None, *pos, 0).map(|v| (v, true))
                 }
                 // xxx.id
                 Expr::Property(id, pos) => {
                     let fn_name = make_getter(id);
                     let mut args = [obj];
-                    self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).map(|v| (v, false))
+                    self.exec_fn_call(fn_lib, &fn_name, &None, &mut args, None, *pos, 0).map(|v| (v, false))
                 }
                 // {xxx:map}.idx_lhs[idx_expr]
                 Expr::Index(dot_lhs, dot_rhs, pos) |
@@ -972,7 +977,7 @@ impl Engine {
 
                     let indexed_val = &mut (if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                         let fn_name = make_getter(id);
-                        self.exec_fn_call(fn_lib, &fn_name, &mut args[..1], None, *pos, 0)?
+                        self.exec_fn_call(fn_lib, &fn_name, &None, &mut args[..1], None, *pos, 0)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -990,7 +995,7 @@ impl Engine {
                             let fn_name = make_setter(id);
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = indexed_val;
-                            self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).or_else(|err| match *err {
+                            self.exec_fn_call(fn_lib, &fn_name, &None, &mut args, None, *pos, 0).or_else(|err| match *err {
                                 // If there is no setter, no need to feed it back because the property is read-only
                                 EvalAltResult::ErrorDotExpr(_,_) => Ok(Default::default()),
                                 err => Err(Box::new(err))
@@ -1030,16 +1035,11 @@ impl Engine {
             // id.??? or id[???]
             Expr::Variable(id, modules, index, pos) => {
                 let index = if state.always_search { None } else { *index };
-
-                let (target, typ) = if let Some(modules) = modules {
-                    search_scope_modules(scope, id, modules, index, *pos)?
-                } else {
-                    search_scope_variables(scope, id, index, *pos)?
-                };
+                let (target, typ) = search_scope(scope, id, modules, index, *pos)?;
 
                 // Constants cannot be modified
                 match typ {
-                    ScopeEntryType::SubScope => unreachable!(),
+                    ScopeEntryType::Module => unreachable!(),
                     ScopeEntryType::Constant if new_val.is_some() => {
                         return Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                             id.to_string(),
@@ -1223,9 +1223,10 @@ impl Engine {
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value, value];
                     let def_value = Some(&def_value);
+                    let pos = rhs.position();
 
                     if self
-                        .call_fn_raw(None, fn_lib, "==", args, def_value, rhs.position(), level)?
+                        .call_fn_raw(None, fn_lib, "==", &None, args, def_value, pos, level)?
                         .as_bool()
                         .unwrap_or(false)
                     {
@@ -1268,13 +1269,7 @@ impl Engine {
             Expr::CharConstant(c, _) => Ok((*c).into()),
             Expr::Variable(id, modules, index, pos) => {
                 let index = if state.always_search { None } else { *index };
-
-                let val = if let Some(modules) = modules {
-                    search_scope_modules(scope, id, modules, index, *pos)?
-                } else {
-                    search_scope_variables(scope, id, index, *pos)?
-                };
-
+                let val = search_scope(scope, id, modules, index, *pos)?;
                 Ok(val.0.clone())
             }
             Expr::Property(_, _) => unreachable!(),
@@ -1290,13 +1285,7 @@ impl Engine {
                     // name = rhs
                     Expr::Variable(name, modules, index, pos) => {
                         let index = if state.always_search { None } else { *index };
-                        let val = if let Some(modules) = modules {
-                            search_scope_modules(scope, name, modules, index, *pos)?
-                        } else {
-                            search_scope_variables(scope, name, index, *pos)?
-                        };
-
-                        match val {
+                        match search_scope(scope, name, modules, index, *pos)? {
                             (_, ScopeEntryType::Constant) => Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
                             )),
@@ -1304,8 +1293,8 @@ impl Engine {
                                 *value_ptr = rhs_val;
                                 Ok(Default::default())
                             }
-                            // End variable cannot be a sub-scope
-                            (_, ScopeEntryType::SubScope) => unreachable!(),
+                            // End variable cannot be a module
+                            (_, ScopeEntryType::Module) => unreachable!(),
                         }
                     }
                     // idx_lhs[idx_expr] = rhs
@@ -1369,7 +1358,6 @@ impl Engine {
                     .collect::<Result<HashMap<_, _>, _>>()?,
             )))),
 
-            // TODO - handle moduled function call
             Expr::FnCall(fn_name, modules, arg_exprs, def_val, pos) => {
                 let mut arg_values = arg_exprs
                     .iter()
@@ -1380,6 +1368,7 @@ impl Engine {
 
                 // eval - only in function call style
                 if fn_name.as_ref() == KEYWORD_EVAL
+                    && modules.is_none()
                     && args.len() == 1
                     && !self.has_override(fn_lib, KEYWORD_EVAL)
                 {
@@ -1399,7 +1388,8 @@ impl Engine {
                 }
 
                 // Normal function call - except for eval (handled above)
-                self.exec_fn_call(fn_lib, fn_name, &mut args, def_val.as_deref(), *pos, level)
+                let def_value = def_val.as_deref();
+                self.exec_fn_call(fn_lib, fn_name, modules, &mut args, def_value, *pos, level)
             }
 
             Expr::In(lhs, rhs, _) => {
@@ -1634,13 +1624,13 @@ impl Engine {
                     .eval_expr(scope, state, fn_lib, expr, level)?
                     .try_cast::<String>()
                 {
-                    let mut module = SubScope::new();
+                    let mut module = Module::new();
                     module.insert("kitty".to_string(), "foo".to_string().into());
                     module.insert("path".to_string(), path.into());
 
                     // TODO - avoid copying module name in inner block?
                     let mod_name = name.as_ref().clone();
-                    scope.push_sub_scope(mod_name, module);
+                    scope.push_module(mod_name, module);
                     Ok(Default::default())
                 } else {
                     Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))

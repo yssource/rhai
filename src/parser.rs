@@ -42,6 +42,8 @@ pub type FLOAT = f64;
 
 type PERR = ParseErrorType;
 
+pub type ModuleRef = Option<Box<StaticVec<(String, Position)>>>;
+
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
@@ -204,7 +206,7 @@ impl Stack {
             .enumerate()
             .find(|(_, (n, typ))| match typ {
                 ScopeEntryType::Normal | ScopeEntryType::Constant => *n == name,
-                ScopeEntryType::SubScope => false,
+                ScopeEntryType::Module => false,
             })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
@@ -218,7 +220,7 @@ impl Stack {
             .rev()
             .enumerate()
             .find(|(_, (n, typ))| match typ {
-                ScopeEntryType::SubScope => *n == name,
+                ScopeEntryType::Module => *n == name,
                 ScopeEntryType::Normal | ScopeEntryType::Constant => false,
             })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
@@ -344,12 +346,7 @@ pub enum Expr {
     /// String constant.
     StringConstant(String, Position),
     /// Variable access - (variable name, optional modules, optional index, position)
-    Variable(
-        Box<String>,
-        Option<Box<StaticVec<(String, Position)>>>,
-        Option<NonZeroUsize>,
-        Position,
-    ),
+    Variable(Box<String>, ModuleRef, Option<NonZeroUsize>, Position),
     /// Property access.
     Property(String, Position),
     /// { stmt }
@@ -359,7 +356,7 @@ pub enum Expr {
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<Cow<'static, str>>,
-        Option<Box<StaticVec<(String, Position)>>>,
+        ModuleRef,
         Box<Vec<Expr>>,
         Option<Box<Dynamic>>,
         Position,
@@ -575,12 +572,12 @@ impl Expr {
 
             Self::Variable(_, None, _, _) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
-                #[cfg(not(feature = "no_import"))]
+                #[cfg(not(feature = "no_module"))]
                 Token::DoubleColon => true,
                 _ => false,
             },
             Self::Variable(_, _, _, _) => match token {
-                #[cfg(not(feature = "no_import"))]
+                #[cfg(not(feature = "no_module"))]
                 Token::DoubleColon => true,
                 _ => false,
             },
@@ -659,7 +656,7 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
     id: String,
-    modules: Option<Box<StaticVec<(String, Position)>>>,
+    modules: ModuleRef,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -1071,7 +1068,7 @@ fn parse_primary<'a>(
                 parse_call_expr(input, stack, id, None, pos, allow_stmt_expr)?
             }
             // module access
-            #[cfg(not(feature = "no_import"))]
+            #[cfg(not(feature = "no_module"))]
             (Expr::Variable(id, mut modules, mut index, pos), Token::DoubleColon) => {
                 match input.next().unwrap() {
                     (Token::Identifier(id2), pos2) => {
@@ -1790,7 +1787,7 @@ fn parse_let<'a>(
                 Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
             }
             // Variable cannot be a sub-scope
-            ScopeEntryType::SubScope => unreachable!(),
+            ScopeEntryType::Module => unreachable!(),
         }
     } else {
         // let name
@@ -1799,7 +1796,7 @@ fn parse_let<'a>(
 }
 
 /// Parse an import statement.
-#[cfg(not(feature = "no_import"))]
+#[cfg(not(feature = "no_module"))]
 fn parse_import<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
@@ -1829,7 +1826,7 @@ fn parse_import<'a>(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
-    stack.push((name.clone(), ScopeEntryType::SubScope));
+    stack.push((name.clone(), ScopeEntryType::Module));
     Ok(Stmt::Import(Box::new(expr), Box::new(name), pos))
 }
 

@@ -231,6 +231,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
         }
         // let id;
         Stmt::Let(_, None, _) => stmt,
+        // import expr as id;
+        Stmt::Import(expr, id, pos) => Stmt::Import(Box::new(optimize_expr(*expr, state)), id, pos),
         // { block }
         Stmt::Block(block, pos) => {
             let orig_len = block.len(); // Original number of statements in the block, for change detection
@@ -260,7 +262,7 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                 result.push(stmt);
             }
 
-            // Remove all let statements at the end of a block - the new variables will go away anyway.
+            // Remove all let/import statements at the end of a block - the new variables will go away anyway.
             // But be careful only remove ones that have no initial values or have values that are pure expressions,
             // otherwise there may be side effects.
             let mut removed = false;
@@ -268,7 +270,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
             while let Some(expr) = result.pop() {
                 match expr {
                     Stmt::Let(_, None, _) => removed = true,
-                    Stmt::Let(_, Some(val_expr), _) if val_expr.is_pure() => removed = true,
+                    Stmt::Let(_, Some(val_expr), _) => removed = val_expr.is_pure(),
+                    Stmt::Import(expr, _, _) => removed = expr.is_pure(),
                     _ => {
                         result.push(expr);
                         break;
@@ -323,6 +326,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                     state.set_dirty();
                     Stmt::Noop(pos)
                 }
+                // Only one let/import statement - leave it alone
+                [Stmt::Let(_, _, _)] | [Stmt::Import(_, _, _)] => Stmt::Block(result, pos),
                 // Only one statement - promote
                 [_] => {
                     state.set_dirty();
@@ -666,7 +671,10 @@ fn optimize<'a>(
                     _ => {
                         // Keep all variable declarations at this level
                         // and always keep the last return value
-                        let keep = matches!(stmt, Stmt::Let(_, _, _)) || i == num_statements - 1;
+                        let keep = match stmt {
+                            Stmt::Let(_, _, _) | Stmt::Import(_, _, _) => true,
+                            _ => i == num_statements - 1,
+                        };
                         optimize_stmt(stmt, &mut state, keep)
                     }
                 }

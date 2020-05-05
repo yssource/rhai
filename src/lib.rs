@@ -103,9 +103,6 @@ pub use engine::Array;
 #[cfg(not(feature = "no_object"))]
 pub use engine::Map;
 
-#[cfg(not(feature = "no_import"))]
-pub use engine::SubScope;
-
 #[cfg(not(feature = "no_float"))]
 pub use parser::FLOAT;
 

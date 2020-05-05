@@ -28,7 +28,7 @@ no_float = []       # no floating-point
 no_function = []    # no script-defined functions
 no_object = []      # no custom objects
 no_optimize = []    # no script optimizer
-no_import = []      # no modules
+no_module = []      # no modules
 only_i32 = []       # set INT=i32 (useful for 32-bit systems)
 only_i64 = []       # set INT=i64 (default) and disable support for all other integer types
 sync = []           # restrict to only types that implement Send + Sync
