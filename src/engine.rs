@@ -395,7 +395,7 @@ fn search_scope<'a>(
         };
 
         Ok((
-            module.get_qualified_variable_mut(name, modules.as_ref(), pos)?,
+            module.get_qualified_var_mut(name, modules.as_ref(), pos)?,
             // Module variables are constant
             ScopeEntryType::Constant,
         ))
@@ -469,13 +469,11 @@ impl Engine {
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai
-    // TODO - handle moduled function call
     pub(crate) fn call_fn_raw(
         &self,
         scope: Option<&mut Scope>,
         fn_lib: &FunctionsLib,
         fn_name: &str,
-        modules: &ModuleRef,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
@@ -643,7 +641,6 @@ impl Engine {
         &self,
         fn_lib: &FunctionsLib,
         fn_name: &str,
-        modules: &ModuleRef,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
@@ -651,28 +648,19 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF
-                if modules.is_none()
-                    && args.len() == 1
-                    && !self.has_override(fn_lib, KEYWORD_TYPE_OF) =>
-            {
+            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(fn_lib, KEYWORD_TYPE_OF) => {
                 Ok(self.map_type_name(args[0].type_name()).to_string().into())
             }
 
             // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL
-                if modules.is_none()
-                    && args.len() == 1
-                    && !self.has_override(fn_lib, KEYWORD_EVAL) =>
-            {
+            KEYWORD_EVAL if args.len() == 1 && !self.has_override(fn_lib, KEYWORD_EVAL) => {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     pos,
                 )))
             }
-
             // Normal method call
-            _ => self.call_fn_raw(None, fn_lib, fn_name, modules, args, def_val, pos, level),
+            _ => self.call_fn_raw(None, fn_lib, fn_name, args, def_val, pos, level),
         }
     }
 
@@ -767,7 +755,7 @@ impl Engine {
                     let def_val = def_val.as_deref();
                     // A function call is assumed to have side effects, so the value is changed
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
-                    self.exec_fn_call(fn_lib, fn_name, &None, &mut args, def_val, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
                 }
                 // xxx.module::fn_name(...) - syntax error
                 Expr::FnCall(_,_,_,_,_) => unreachable!(),
@@ -788,13 +776,13 @@ impl Engine {
                 Expr::Property(id, pos) if new_val.is_some() => {
                     let fn_name = make_setter(id);
                     let mut args = [obj, new_val.as_mut().unwrap()];
-                    self.exec_fn_call(fn_lib, &fn_name, &None, &mut args, None, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).map(|v| (v, true))
                 }
                 // xxx.id
                 Expr::Property(id, pos) => {
                     let fn_name = make_getter(id);
                     let mut args = [obj];
-                    self.exec_fn_call(fn_lib, &fn_name, &None, &mut args, None, *pos, 0).map(|v| (v, false))
+                    self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).map(|v| (v, false))
                 }
                 // {xxx:map}.idx_lhs[idx_expr]
                 Expr::Index(dot_lhs, dot_rhs, pos) |
@@ -824,7 +812,7 @@ impl Engine {
 
                     let indexed_val = &mut (if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                         let fn_name = make_getter(id);
-                        self.exec_fn_call(fn_lib, &fn_name, &None, &mut args[..1], None, *pos, 0)?
+                        self.exec_fn_call(fn_lib, &fn_name, &mut args[..1], None, *pos, 0)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -842,7 +830,7 @@ impl Engine {
                             let fn_name = make_setter(id);
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = indexed_val;
-                            self.exec_fn_call(fn_lib, &fn_name, &None, &mut args, None, *pos, 0).or_else(|err| match *err {
+                            self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).or_else(|err| match *err {
                                 // If there is no setter, no need to feed it back because the property is read-only
                                 EvalAltResult::ErrorDotExpr(_,_) => Ok(Default::default()),
                                 err => Err(Box::new(err))
@@ -1073,7 +1061,7 @@ impl Engine {
                     let pos = rhs.position();
 
                     if self
-                        .call_fn_raw(None, fn_lib, "==", &None, args, def_value, pos, level)?
+                        .call_fn_raw(None, fn_lib, "==", args, def_value, pos, level)?
                         .as_bool()
                         .unwrap_or(false)
                     {
@@ -1213,12 +1201,26 @@ impl Engine {
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 
-                // eval - only in function call style
-                if fn_name.as_ref() == KEYWORD_EVAL
-                    && modules.is_none()
+                if let Some(modules) = modules {
+                    // Module-qualified function call
+                    let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
+
+                    let (id, root_pos) = modules.get(0); // First module
+
+                    let module = scope.find_module(id).ok_or_else(|| {
+                        Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
+                    })?;
+                    match module.get_qualified_fn(fn_name, hash, modules.as_ref(), *pos) {
+                        Ok(func) => func(&mut args, *pos)
+                            .map_err(|err| EvalAltResult::set_position(err, *pos)),
+                        Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
+                        Err(err) => Err(err),
+                    }
+                } else if fn_name.as_ref() == KEYWORD_EVAL
                     && args.len() == 1
                     && !self.has_override(fn_lib, KEYWORD_EVAL)
                 {
+                    // eval - only in function call style
                     let prev_len = scope.len();
 
                     // Evaluate the text string as a script
@@ -1231,12 +1233,12 @@ impl Engine {
                         state.always_search = true;
                     }
 
-                    return result;
+                    result
+                } else {
+                    // Normal function call - except for eval (handled above)
+                    let def_value = def_val.as_deref();
+                    self.exec_fn_call(fn_lib, fn_name, &mut args, def_value, *pos, level)
                 }
-
-                // Normal function call - except for eval (handled above)
-                let def_value = def_val.as_deref();
-                self.exec_fn_call(fn_lib, fn_name, modules, &mut args, def_value, *pos, level)
             }
 
             Expr::In(lhs, rhs, _) => {
@@ -1472,8 +1474,9 @@ impl Engine {
                     .try_cast::<String>()
                 {
                     let mut module = Module::new();
-                    module.set_variable("kitty", "foo".to_string());
-                    module.set_variable("path", path);
+                    module.set_var("kitty", "foo".to_string());
+                    module.set_var("path", path);
+                    module.set_fn_1_mut("calc", |x: &mut String| Ok(x.len() as crate::parser::INT));
 
                     // TODO - avoid copying module name in inner block?
                     let mod_name = name.as_ref().clone();

@@ -172,7 +172,7 @@ impl<'a> Scope<'a> {
     /// Add (push) a new module to the Scope.
     ///
     /// Modules are used for accessing member variables, functions and plugins under a namespace.
-    pub(crate) fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Module) {
+    pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Module) {
         self.push_dynamic_value(
             name,
             EntryType::Module,

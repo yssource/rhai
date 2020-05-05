@@ -589,13 +589,8 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Variable(_, None, _, _) => match token {
-                Token::LeftBracket | Token::LeftParen => true,
-                #[cfg(not(feature = "no_module"))]
-                Token::DoubleColon => true,
-                _ => false,
-            },
             Self::Variable(_, _, _, _) => match token {
+                Token::LeftBracket | Token::LeftParen => true,
                 #[cfg(not(feature = "no_module"))]
                 Token::DoubleColon => true,
                 _ => false,
