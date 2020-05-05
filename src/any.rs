@@ -206,6 +206,9 @@ impl fmt::Display for Dynamic {
             Union::Array(value) => write!(f, "{:?}", value),
             Union::Map(value) => write!(f, "#{:?}", value),
             Union::Module(value) => write!(f, "{:?}", value),
+
+            #[cfg(not(feature = "no_std"))]
+            Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "?"),
         }
     }
@@ -224,6 +227,9 @@ impl fmt::Debug for Dynamic {
             Union::Array(value) => write!(f, "{:?}", value),
             Union::Map(value) => write!(f, "#{:?}", value),
             Union::Module(value) => write!(f, "{:?}", value),
+
+            #[cfg(not(feature = "no_std"))]
+            Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
     }
