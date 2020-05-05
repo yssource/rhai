@@ -941,11 +941,11 @@ struct TestStruct {
 
 impl TestStruct {
     fn get_field(&mut self, index: i64) -> i64 {
-        self.field
+        self.fields[index as usize]
     }
 
     fn new() -> Self {
-        TestStruct { field: vec![1, 2, 42, 4, 5] }
+        TestStruct { fields: vec![1, 2, 42, 4, 5] }
     }
 }
 
@@ -961,8 +961,9 @@ let result = engine.eval::<i64>("let a = new_ts(); a[2]")?;
 println!("Answer: {}", result);                     // prints 42
 ```
 
-Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set` and `register_get_set`
-are not available when the [`no_object`] feature is turned on.
+Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set`, `register_get_set`
+and `register_indexer` are not available when the [`no_object`] feature is turned on.
+`register_indexer` is also not available when the [`no_index`] feature is turned on. 
 
 `Scope` - Initializing and maintaining state
 -------------------------------------------
