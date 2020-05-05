@@ -15,7 +15,7 @@ Rhai's current features set:
 
 * Easy-to-use language similar to JS+Rust
 * Easy integration with Rust [native functions](#working-with-functions) and [types](#custom-types-and-methods),
-  including [getter/setter](#getters-and-setters)/[methods](#members-and-methods)
+  including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers)
 * Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
@@ -919,6 +919,41 @@ engine.register_get_set("xyz", TestStruct::get_field, TestStruct::set_field);
 engine.register_fn("new_ts", TestStruct::new);
 
 let result = engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?;
+
+println!("Answer: {}", result);                     // prints 42
+```
+
+Indexers
+--------
+
+Custom types can also expose an _indexer_ by registering an indexer function.
+A custom with an indexer function defined can use the bracket '`[]`' notation to get a property value
+(but not update it - indexers are read-only).
+
+```rust
+#[derive(Clone)]
+struct TestStruct {
+    fields: Vec<i64>
+}
+
+impl TestStruct {
+    fn get_field(&mut self, index: i64) -> i64 {
+        self.field
+    }
+
+    fn new() -> Self {
+        TestStruct { field: vec![1, 2, 42, 4, 5] }
+    }
+}
+
+let engine = Engine::new();
+
+engine.register_type::<TestStruct>();
+
+engine.register_fn("new_ts", TestStruct::new);
+engine.register_indexer(TestStruct::get_field);
+
+let result = engine.eval::<i64>("let a = new_ts(); a[2]")?;
 
 println!("Answer: {}", result);                     // prints 42
 ```

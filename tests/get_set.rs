@@ -8,6 +8,7 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
     struct TestStruct {
         x: INT,
         y: INT,
+        array: Vec<INT>,
     }
 
     impl TestStruct {
@@ -24,7 +25,11 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
         }
 
         fn new() -> Self {
-            TestStruct { x: 1, y: 0 }
+            TestStruct {
+                x: 1,
+                y: 0,
+                array: vec![1, 2, 3, 4, 5],
+            }
         }
     }
 
@@ -37,9 +42,15 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("add", |value: &mut INT| *value += 41);
     engine.register_fn("new_ts", TestStruct::new);
 
+    #[cfg(not(feature = "no_index"))]
+    engine.register_indexer(|value: &mut TestStruct, index: INT| value.array[index as usize]);
+
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x = 500; a.x")?, 500);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x.add(); a.x")?, 42);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.y.add(); a.y")?, 0);
+
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(engine.eval::<INT>("let a = new_ts(); a[3]")?, 4);
 
     Ok(())
 }

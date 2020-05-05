@@ -74,6 +74,7 @@ pub const KEYWORD_EVAL: &str = "eval";
 pub const FUNC_TO_STRING: &str = "to_string";
 pub const FUNC_GETTER: &str = "get$";
 pub const FUNC_SETTER: &str = "set$";
+pub const FUNC_INDEXER: &str = "$index$";
 
 /// A type that encapsulates a mutation target for an expression with side effects.
 enum Target<'a> {
@@ -577,6 +578,11 @@ impl Engine {
             });
         }
 
+        // Return default value (if any)
+        if let Some(val) = def_val {
+            return Ok(val.clone());
+        }
+
         // Getter function not found?
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -593,17 +599,20 @@ impl Engine {
             )));
         }
 
-        // Return default value (if any)
-        if let Some(val) = def_val {
-            return Ok(val.clone());
-        }
-
-        // Raise error
         let types_list: Vec<_> = args
             .iter()
             .map(|name| self.map_type_name(name.type_name()))
             .collect();
 
+        // Getter function not found?
+        if fn_name == FUNC_INDEXER {
+            return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+                format!("[]({})", types_list.join(", ")),
+                pos,
+            )));
+        }
+
+        // Raise error
         Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
             format!("{} ({})", fn_name, types_list.join(", ")),
             pos,
@@ -787,20 +796,20 @@ impl Engine {
                 Expr::Index(idx, idx_rhs, pos) => {
                     let is_index = matches!(rhs, Expr::Index(_,_,_));
 
-                    let indexed_val = self.get_indexed_mut(obj, idx_val, idx.position(), op_pos, false)?;
+                    let indexed_val = self.get_indexed_mut(fn_lib, obj, idx_val, idx.position(), op_pos, false)?;
                     self.eval_dot_index_chain_helper(
                         fn_lib, indexed_val, idx_rhs.as_ref(), idx_values, is_index, *pos, level, new_val
                     )
                 }
                 // xxx[rhs] = new_val
                 _ if new_val.is_some() => {
-                    let mut indexed_val = self.get_indexed_mut(obj, idx_val, rhs.position(), op_pos, true)?;
+                    let mut indexed_val = self.get_indexed_mut(fn_lib, obj, idx_val, rhs.position(), op_pos, true)?;
                     indexed_val.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
                 }
                 // xxx[rhs]
                 _ => self
-                    .get_indexed_mut(obj, idx_val, rhs.position(), op_pos, false)
+                    .get_indexed_mut(fn_lib, obj, idx_val, rhs.position(), op_pos, false)
                     .map(|v| (v.clone_into_dynamic(), false))
             }
         } else {
@@ -818,14 +827,14 @@ impl Engine {
                 // {xxx:map}.id = ???
                 Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
                     let mut indexed_val =
-                        self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, true)?;
+                        self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, true)?;
                     indexed_val.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
                 }
                 // {xxx:map}.id
                 Expr::Property(id, pos) if obj.is::<Map>() => {
                     let indexed_val =
-                        self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, false)?;
+                        self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, false)?;
                     Ok((indexed_val.clone_into_dynamic(), false))
                 }
                 // xxx.id = ???
@@ -847,7 +856,7 @@ impl Engine {
                     let is_index = matches!(rhs, Expr::Index(_,_,_));
 
                     let indexed_val = if let Expr::Property(id, pos) = dot_lhs.as_ref() {
-                        self.get_indexed_mut(obj, id.to_string().into(), *pos, op_pos, false)?
+                        self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, false)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -1010,8 +1019,9 @@ impl Engine {
     /// Get the value at the indexed position of a base type
     fn get_indexed_mut<'a>(
         &self,
+        fn_lib: &FunctionsLib,
         val: &'a mut Dynamic,
-        idx: Dynamic,
+        mut idx: Dynamic,
         idx_pos: Position,
         op_pos: Position,
         create: bool,
@@ -1084,11 +1094,18 @@ impl Engine {
                 }
             }
 
-            // Error - cannot be indexed
-            _ => Err(Box::new(EvalAltResult::ErrorIndexingType(
-                type_name.to_string(),
-                op_pos,
-            ))),
+            _ => {
+                let args = &mut [val, &mut idx];
+                self.exec_fn_call(fn_lib, FUNC_INDEXER, args, None, op_pos, 0)
+                    .map(|v| v.into())
+                    .map_err(|_| {
+                        Box::new(EvalAltResult::ErrorIndexingType(
+                            // Error - cannot be indexed
+                            type_name.to_string(),
+                            op_pos,
+                        ))
+                    })
+            }
         }
     }
 
