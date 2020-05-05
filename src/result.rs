@@ -47,7 +47,7 @@ pub enum EvalAltResult {
     /// String indexing out-of-bounds.
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, INT, Position),
-    /// Trying to index into a type that is not an array, an object map, or a string.
+    /// Trying to index into a type that is not an array, an object map, or a string, and has no indexer function defined.
     ErrorIndexingType(String, Position),
     /// Trying to index into an array or string with an index that is not `i64`.
     ErrorNumericIndexExpr(Position),
@@ -108,7 +108,7 @@ impl EvalAltResult {
             }
             Self::ErrorStringIndexExpr(_) => "Indexing into an object map expects a string index",
             Self::ErrorIndexingType(_, _) => {
-                "Indexing can only be performed on an array, an object map, or a string"
+                "Indexing can only be performed on an array, an object map, a string, or a type with an indexer function defined"
             }
             Self::ErrorImportExpr(_) => "Importing a module expects a string path",
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
