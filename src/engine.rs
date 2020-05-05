@@ -6,7 +6,7 @@ use crate::error::ParseErrorType;
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
-use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt};
+use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -159,7 +159,7 @@ impl State {
 /// and number of parameters are considered equivalent.
 ///
 /// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_def`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FunctionsLib(
     #[cfg(feature = "sync")] HashMap<u64, Arc<FnDef>>,
     #[cfg(not(feature = "sync"))] HashMap<u64, Rc<FnDef>>,
@@ -168,7 +168,7 @@ pub struct FunctionsLib(
 impl FunctionsLib {
     /// Create a new `FunctionsLib`.
     pub fn new() -> Self {
-        FunctionsLib(HashMap::new())
+        Default::default()
     }
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
     pub fn from_vec(vec: Vec<FnDef>) -> Self {
@@ -289,10 +289,10 @@ impl Default for Engine {
     fn default() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
-            packages: Vec::new(),
+            packages: Default::default(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT),
-            type_iterators: HashMap::new(),
-            type_names: HashMap::new(),
+            type_iterators: Default::default(),
+            type_names: Default::default(),
 
             // default print/debug implementations
             print: Box::new(default_print),
@@ -380,10 +380,9 @@ fn search_scope<'a>(
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
     if let Some(modules) = modules {
-        let mut drain = modules.iter();
-        let (id, root_pos) = drain.next().unwrap(); // First module
+        let (id, root_pos) = modules.get(0); // First module
 
-        let mut module = if let Some(index) = index {
+        let module = if let Some(index) = index {
             scope
                 .get_mut(scope.len() - index.get())
                 .0
@@ -395,26 +394,11 @@ fn search_scope<'a>(
                 .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
         };
 
-        for (id, id_pos) in drain {
-            module = module
-                .get_mut(id)
-                .and_then(|v| v.downcast_mut::<Module>())
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
-        }
-
-        let result = module
-            .get_mut(name)
-            .map(|v| (v, ScopeEntryType::Constant))
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?;
-
-        if result.0.is::<Module>() {
-            Err(Box::new(EvalAltResult::ErrorVariableNotFound(
-                name.into(),
-                pos,
-            )))
-        } else {
-            Ok(result)
-        }
+        Ok((
+            module.get_qualified_variable_mut(name, modules.as_ref(), pos)?,
+            // Module variables are constant
+            ScopeEntryType::Constant,
+        ))
     } else {
         let index = if let Some(index) = index {
             scope.len() - index.get()
@@ -439,10 +423,10 @@ impl Engine {
     /// Use the `load_package` method to load packages of functions.
     pub fn new_raw() -> Self {
         Self {
-            packages: Vec::new(),
+            packages: Default::default(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
-            type_iterators: HashMap::new(),
-            type_names: HashMap::new(),
+            type_iterators: Default::default(),
+            type_names: Default::default(),
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
 
@@ -595,8 +579,7 @@ impl Engine {
                         .iter()
                         .zip(
                             // Actually consume the arguments instead of cloning them
-                            args.into_iter()
-                                .map(|v| mem::replace(*v, Default::default())),
+                            args.into_iter().map(|v| mem::take(*v)),
                         )
                         .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
                 );
@@ -626,8 +609,7 @@ impl Engine {
                         .iter()
                         .zip(
                             // Actually consume the arguments instead of cloning them
-                            args.into_iter()
-                                .map(|v| mem::replace(*v, Default::default())),
+                            args.into_iter().map(|v| mem::take(*v)),
                         )
                         .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
                 );
@@ -715,20 +697,14 @@ impl Engine {
         )?;
 
         // If new functions are defined within the eval string, it is an error
-        if ast.1.len() > 0 {
+        if ast.fn_lib().len() > 0 {
             return Err(Box::new(EvalAltResult::ErrorParsing(
                 ParseErrorType::WrongFnDefinition.into_err(pos),
             )));
         }
 
-        #[cfg(feature = "sync")]
-        {
-            ast.1 = Arc::new(fn_lib.clone());
-        }
-        #[cfg(not(feature = "sync"))]
-        {
-            ast.1 = Rc::new(fn_lib.clone());
-        }
+        let statements = mem::take(ast.statements_mut());
+        ast = AST::new(statements, fn_lib.clone());
 
         // Evaluate the AST
         self.eval_ast_with_scope_raw(scope, &ast)
@@ -1496,8 +1472,8 @@ impl Engine {
                     .try_cast::<String>()
                 {
                     let mut module = Module::new();
-                    module.insert("kitty".to_string(), "foo".to_string().into());
-                    module.insert("path".to_string(), path.into());
+                    module.set_variable("kitty", "foo".to_string());
+                    module.set_variable("path", path);
 
                     // TODO - avoid copying module name in inner block?
                     let mod_name = name.as_ref().clone();

@@ -2,6 +2,7 @@
 
 use crate::stdlib::{
     any::TypeId,
+    fmt,
     hash::{Hash, Hasher},
     mem,
     vec::Vec,
@@ -44,7 +45,7 @@ pub(crate) fn calc_fn_def(fn_name: &str, num_params: usize) -> u64 {
 ///
 /// This is essentially a knock-off of the [`staticvec`](https://crates.io/crates/staticvec) crate.
 /// This simplified implementation here is to avoid pulling in another crate.
-#[derive(Debug, Clone)]
+#[derive(Clone, Default)]
 pub struct StaticVec<T: Default + Clone> {
     /// Total number of values held.
     len: usize,
@@ -57,16 +58,7 @@ pub struct StaticVec<T: Default + Clone> {
 impl<T: Default + Clone> StaticVec<T> {
     /// Create a new `StaticVec`.
     pub fn new() -> Self {
-        Self {
-            len: 0,
-            list: [
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            ],
-            more: Vec::new(),
-        }
+        Default::default()
     }
     /// Push a new value to the end of this `StaticVec`.
     pub fn push<X: Into<T>>(&mut self, value: X) {
@@ -86,7 +78,7 @@ impl<T: Default + Clone> StaticVec<T> {
         let result = if self.len <= 0 {
             panic!("nothing to pop!")
         } else if self.len <= self.list.len() {
-            mem::replace(self.list.get_mut(self.len - 1).unwrap(), Default::default())
+            mem::take(self.list.get_mut(self.len - 1).unwrap())
         } else {
             self.more.pop().unwrap()
         };
@@ -124,5 +116,13 @@ impl<T: Default + Clone> StaticVec<T> {
         };
 
         self.list[..num].iter().chain(self.more.iter())
+    }
+}
+
+impl<T: Default + Clone + fmt::Debug> fmt::Debug for StaticVec<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[ ")?;
+        self.iter().try_for_each(|v| write!(f, "{:?}, ", v))?;
+        write!(f, "]")
     }
 }

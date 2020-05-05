@@ -68,9 +68,9 @@ fn main() {
     let mut scope = Scope::new();
 
     let mut input = String::new();
-    let mut main_ast = AST::new();
-    let mut ast_u = AST::new();
-    let mut ast = AST::new();
+    let mut main_ast: AST = Default::default();
+    let mut ast_u: AST = Default::default();
+    let mut ast: AST = Default::default();
 
     println!("Rhai REPL tool");
     println!("==============");

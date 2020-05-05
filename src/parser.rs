@@ -51,17 +51,44 @@ pub type ModuleRef = Option<Box<StaticVec<(String, Position)>>>;
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AST(
-    pub(crate) Vec<Stmt>,
-    #[cfg(feature = "sync")] pub(crate) Arc<FunctionsLib>,
-    #[cfg(not(feature = "sync"))] pub(crate) Rc<FunctionsLib>,
+    /// Global statements.
+    Vec<Stmt>,
+    /// Script-defined functions, wrapped in an `Arc` for shared access.
+    #[cfg(feature = "sync")]
+    Arc<FunctionsLib>,
+    /// Script-defined functions, wrapped in an `Rc` for shared access.
+    #[cfg(not(feature = "sync"))]
+    Rc<FunctionsLib>,
 );
 
 impl AST {
     /// Create a new `AST`.
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(statements: Vec<Stmt>, fn_lib: FunctionsLib) -> Self {
+        #[cfg(feature = "sync")]
+        {
+            Self(statements, Arc::new(fn_lib))
+        }
+        #[cfg(not(feature = "sync"))]
+        {
+            Self(statements, Rc::new(fn_lib))
+        }
+    }
+
+    /// Get the statements.
+    pub(crate) fn statements(&self) -> &Vec<Stmt> {
+        &self.0
+    }
+
+    /// Get a mutable reference to the statements.
+    pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
+        &mut self.0
+    }
+
+    /// Get the script-defined functions.
+    pub(crate) fn fn_lib(&self) -> &FunctionsLib {
+        self.1.as_ref()
     }
 
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
@@ -148,18 +175,6 @@ impl AST {
     }
 }
 
-impl Default for AST {
-    fn default() -> Self {
-        #[cfg(feature = "sync")]
-        {
-            Self(vec![], Arc::new(FunctionsLib::new()))
-        }
-        #[cfg(not(feature = "sync"))]
-        {
-            Self(vec![], Rc::new(FunctionsLib::new()))
-        }
-    }
-}
 impl Add<Self> for &AST {
     type Output = AST;
 
@@ -191,13 +206,13 @@ pub enum ReturnType {
 }
 
 /// A type that encapsulates a local stack with variable names to simulate an actual runtime scope.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct Stack(Vec<(String, ScopeEntryType)>);
 
 impl Stack {
     /// Create a new `Stack`.
     pub fn new() -> Self {
-        Self(Vec::new())
+        Default::default()
     }
     /// Find a variable by name in the `Stack`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,

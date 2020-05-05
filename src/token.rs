@@ -122,7 +122,7 @@ impl fmt::Display for Position {
 
 impl fmt::Debug for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}:{})", self.line, self.pos)
+        write!(f, "{}:{}", self.line, self.pos)
     }
 }
 

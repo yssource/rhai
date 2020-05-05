@@ -205,7 +205,7 @@ impl fmt::Display for Dynamic {
             Union::Float(value) => write!(f, "{}", value),
             Union::Array(value) => write!(f, "{:?}", value),
             Union::Map(value) => write!(f, "#{:?}", value),
-            Union::Module(value) => write!(f, "#{:?}", value),
+            Union::Module(value) => write!(f, "{:?}", value),
             Union::Variant(_) => write!(f, "?"),
         }
     }
@@ -223,7 +223,7 @@ impl fmt::Debug for Dynamic {
             Union::Float(value) => write!(f, "{:?}", value),
             Union::Array(value) => write!(f, "{:?}", value),
             Union::Map(value) => write!(f, "#{:?}", value),
-            Union::Module(value) => write!(f, "#{:?}", value),
+            Union::Module(value) => write!(f, "{:?}", value),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
     }

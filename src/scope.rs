@@ -60,7 +60,7 @@ pub struct Entry<'a> {
 /// allowing for automatic _shadowing_.
 ///
 /// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Scope<'a>(Vec<Entry<'a>>);
 
 impl<'a> Scope<'a> {
@@ -77,7 +77,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
     pub fn new() -> Self {
-        Self(Vec::new())
+        Default::default()
     }
 
     /// Empty the Scope.
@@ -177,7 +177,7 @@ impl<'a> Scope<'a> {
             name,
             EntryType::Module,
             Dynamic(Union::Module(Box::new(value))),
-            true,
+            false,
         );
     }
 
@@ -419,12 +419,6 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the Scope.
     pub(crate) fn iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev() // Always search a Scope in reverse order
-    }
-}
-
-impl Default for Scope<'_> {
-    fn default() -> Self {
-        Scope::new()
     }
 }
 

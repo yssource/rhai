@@ -13,9 +13,7 @@ use crate::token::Position;
 use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
     vec,
     vec::Vec,
 };
@@ -747,16 +745,13 @@ pub fn optimize_into_ast(
             .collect(),
     );
 
-    AST(
+    AST::new(
         match level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => {
                 optimize(statements, engine, &scope, &fn_lib, level)
             }
         },
-        #[cfg(feature = "sync")]
-        Arc::new(lib),
-        #[cfg(not(feature = "sync"))]
-        Rc::new(lib),
+        lib,
     )
 }

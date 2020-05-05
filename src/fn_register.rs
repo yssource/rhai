@@ -128,7 +128,7 @@ pub fn by_ref<T: Clone + 'static>(data: &mut Dynamic) -> &mut T {
 pub fn by_value<T: Clone + 'static>(data: &mut Dynamic) -> T {
     // We consume the argument and then replace it with () - the argument is not supposed to be used again.
     // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
-    mem::replace(data, Default::default()).cast::<T>()
+    mem::take(data).cast::<T>()
 }
 
 /// This macro counts the number of arguments via recursion.

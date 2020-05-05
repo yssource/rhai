@@ -15,6 +15,7 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
     collections::HashMap,
+    mem,
     string::{String, ToString},
     vec::Vec,
 };
@@ -797,10 +798,10 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut state = State::new();
 
-        ast.0
+        ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -862,10 +863,10 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         let mut state = State::new();
 
-        ast.0
+        ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -921,7 +922,7 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
         let mut args: Vec<_> = arg_values.iter_mut().collect();
-        let fn_lib = ast.1.as_ref();
+        let fn_lib = ast.fn_lib();
         let pos = Position::none();
 
         let fn_def = fn_lib
@@ -955,15 +956,17 @@ impl Engine {
     pub fn optimize_ast(
         &self,
         scope: &Scope,
-        ast: AST,
+        mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
         let fn_lib = ast
-            .1
+            .fn_lib()
             .iter()
             .map(|(_, fn_def)| fn_def.as_ref().clone())
             .collect();
-        optimize_into_ast(self, scope, ast.0, fn_lib, optimization_level)
+
+        let stmt = mem::take(ast.statements_mut());
+        optimize_into_ast(self, scope, stmt, fn_lib, optimization_level)
     }
 
     /// Override default action of `print` (print to stdout using `println!`)
