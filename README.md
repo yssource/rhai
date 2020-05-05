@@ -579,6 +579,7 @@ A number of traits, under the `rhai::` module namespace, provide additional func
 | `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                                  | `register_dynamic_fn`                   |
 | `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
 | `Func`              | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
+| `ModuleResolver`    | Trait implemented by module resolution services                                        | `resolve`                               |
 
 Working with functions
 ----------------------
@@ -2103,6 +2104,21 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::answer + 1")? == 42;
 // Call module-qualified functions
 engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer)")? == 42;
 ```
+
+### Module resolvers
+
+When encountering an `import` statement, Rhai attempts to _resolve_ the module based on the path string.
+_Module Resolvers_ are service types that implement the [`ModuleResolver`](#traits) trait.
+There are a number of standard resolvers built into Rhai, the default being the `FileModuleResolver`
+which simply loads a script file based on the path (with `.rhai` extension attached) and execute it to form a module.
+
+Built-in module resolvers are grouped under the `rhai::module_resolvers` module namespace.
+
+| Module Resolver        | Description                                                                                                                                                                                                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function. |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                        |
+| `NullModuleResolver`   | The default module resolution service under the [`no_std`] feature. Always returns an `EvalAltResult::ErrorModuleNotFound` error.                                                                                                                                          |
 
 Script optimization
 ===================

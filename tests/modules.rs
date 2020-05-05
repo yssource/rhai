@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_module"))]
-use rhai::{Engine, EvalAltResult, Module, Scope, INT};
+use rhai::{module_resolvers, Engine, EvalAltResult, Module, Scope, INT};
 
 #[test]
 fn test_module() {
@@ -11,7 +11,7 @@ fn test_module() {
 }
 
 #[test]
-fn test_sub_module() -> Result<(), Box<EvalAltResult>> {
+fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     let mut module = Module::new();
 
     let mut sub_module = Module::new();
@@ -50,6 +50,31 @@ fn test_sub_module() -> Result<(), Box<EvalAltResult>> {
         engine.eval_expression_with_scope::<INT>(
             &mut scope,
             "question::life::universe::inc(question::life::universe::answer)"
+        )?,
+        42
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
+    let mut resolver = module_resolvers::StaticModuleResolver::new();
+
+    let mut module = Module::new();
+    module.set_var("answer", 42 as INT);
+
+    resolver.add_module("hello", module);
+
+    let mut engine = Engine::new();
+    engine.set_module_resolver(resolver);
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                import "hello" as h;
+                h::answer
+    "#
         )?,
         42
     );

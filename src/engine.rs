@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::module::Module;
+use crate::module::{resolvers, Module, ModuleResolver};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
 use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt, AST};
@@ -260,6 +260,10 @@ pub struct Engine {
 
     /// A hashmap containing all iterators known to the engine.
     pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
+
+    /// A module resolution service.
+    pub(crate) module_resolver: Box<dyn ModuleResolver>,
+
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: HashMap<String, String>,
 
@@ -293,6 +297,13 @@ impl Default for Engine {
             packages: Default::default(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT),
             type_iterators: Default::default(),
+
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(not(feature = "no_std"))]
+            module_resolver: Box::new(resolvers::FileModuleResolver::new()),
+            #[cfg(any(feature = "no_std", feature = "no_module"))]
+            module_resolver: Box::new(resolvers::NullModuleResolver::new()),
+
             type_names: Default::default(),
 
             // default print/debug implementations
@@ -427,6 +438,13 @@ impl Engine {
             packages: Default::default(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
             type_iterators: Default::default(),
+
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(not(feature = "no_std"))]
+            module_resolver: Box::new(resolvers::FileModuleResolver::new()),
+            #[cfg(any(feature = "no_std", feature = "no_module"))]
+            module_resolver: Box::new(resolvers::NullModuleResolver::new()),
+
             type_names: Default::default(),
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
@@ -455,7 +473,7 @@ impl Engine {
         self.packages.insert(0, package);
     }
 
-    /// Control whether and how the `Engine` will optimize an AST after compilation
+    /// Control whether and how the `Engine` will optimize an AST after compilation.
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
@@ -469,7 +487,15 @@ impl Engine {
         self.max_call_stack_depth = levels
     }
 
-    /// Universal method for calling functions either registered with the `Engine` or written in Rhai
+    /// Set the module resolution service used by the `Engine`.
+    ///
+    /// Not available under the `no_module` feature.
+    #[cfg(not(feature = "no_module"))]
+    pub fn set_module_resolver(&mut self, resolver: impl ModuleResolver + 'static) {
+        self.module_resolver = Box::new(resolver);
+    }
+
+    /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
     pub(crate) fn call_fn_raw(
         &self,
         scope: Option<&mut Scope>,
@@ -1220,18 +1246,29 @@ impl Engine {
 
                 if let Some(modules) = modules {
                     // Module-qualified function call
-                    let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
+                    let modules = modules.as_ref();
 
                     let (id, root_pos) = modules.get(0); // First module
 
                     let module = scope.find_module(id).ok_or_else(|| {
                         Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
                     })?;
-                    match module.get_qualified_fn(fn_name, hash, modules.as_ref(), *pos) {
-                        Ok(func) => func(&mut args, *pos)
-                            .map_err(|err| EvalAltResult::set_position(err, *pos)),
-                        Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
-                        Err(err) => Err(err),
+
+                    // First search in script-defined functions (can override built-in)
+                    if let Some(fn_def) =
+                        module.get_qualified_fn_lib(fn_name, args.len(), modules)?
+                    {
+                        self.call_fn_from_lib(None, fn_lib, fn_def, &mut args, *pos, level)
+                    } else {
+                        // Then search in Rust functions
+                        let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
+
+                        match module.get_qualified_fn(fn_name, hash, modules, *pos) {
+                            Ok(func) => func(&mut args, *pos)
+                                .map_err(|err| EvalAltResult::set_position(err, *pos)),
+                            Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
+                            Err(err) => Err(err),
+                        }
                     }
                 } else if fn_name.as_ref() == KEYWORD_EVAL
                     && args.len() == 1
@@ -1486,14 +1523,14 @@ impl Engine {
 
             // Import statement
             Stmt::Import(expr, name, _) => {
+                #[cfg(feature = "no_module")]
+                unreachable!();
+
                 if let Some(path) = self
                     .eval_expr(scope, state, fn_lib, expr, level)?
                     .try_cast::<String>()
                 {
-                    let mut module = Module::new();
-                    module.set_var("kitty", "foo".to_string());
-                    module.set_var("path", path);
-                    module.set_fn_1_mut("calc", |x: &mut String| Ok(x.len() as crate::parser::INT));
+                    let module = self.module_resolver.resolve(self, &path)?;
 
                     // TODO - avoid copying module name in inner block?
                     let mod_name = name.as_ref().clone();

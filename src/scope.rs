@@ -5,7 +5,7 @@ use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
-use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -414,6 +414,11 @@ impl<'a> Scope<'a> {
         // );
 
         (&mut entry.value, entry.typ)
+    }
+
+    /// Get an iterator to entries in the Scope.
+    pub(crate) fn into_iter(self) -> impl Iterator<Item = Entry<'a>> {
+        self.0.into_iter()
     }
 
     /// Get an iterator to entries in the Scope.

@@ -110,7 +110,12 @@ pub use engine::Map;
 pub use parser::FLOAT;
 
 #[cfg(not(feature = "no_module"))]
-pub use module::Module;
+pub use module::{Module, ModuleResolver};
+
+#[cfg(not(feature = "no_module"))]
+pub mod module_resolvers {
+    pub use crate::module::resolvers::*;
+}
 
 #[cfg(not(feature = "no_optimize"))]
 pub use optimize::OptimizationLevel;

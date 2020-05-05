@@ -2,28 +2,44 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{FnAny, FnCallArgs, FunctionsLib};
+use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib};
+use crate::parser::FnDef;
 use crate::result::EvalAltResult;
+use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
 use crate::token::Token;
 use crate::utils::StaticVec;
 
-use crate::stdlib::{any::TypeId, collections::HashMap, fmt, iter::empty, mem, string::String};
+use crate::stdlib::{
+    any::TypeId, collections::HashMap, fmt, iter::empty, mem, rc::Rc, string::String, sync::Arc,
+};
+
+/// A trait that encapsulates a module resolution service.
+pub trait ModuleResolver {
+    /// Resolve a module based on a path string.
+    fn resolve(&self, engine: &Engine, path: &str) -> Result<Module, Box<EvalAltResult>>;
+}
 
 /// An imported module, which may contain variables, sub-modules,
 /// external Rust functions, and script-defined functions.
 ///
 /// Not available under the `no_module` feature.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Module {
     /// Sub-modules.
     modules: HashMap<String, Module>,
     /// Module variables, including sub-modules.
     variables: HashMap<String, Dynamic>,
+
     /// External Rust functions.
-    functions: HashMap<u64, Box<FnAny>>,
+    #[cfg(not(feature = "sync"))]
+    functions: HashMap<u64, Rc<Box<FnAny>>>,
+    /// External Rust functions.
+    #[cfg(feature = "sync")]
+    functions: HashMap<u64, Arc<Box<FnAny>>>,
+
     /// Script-defined functions.
-    lib: FunctionsLib,
+    fn_lib: FunctionsLib,
 }
 
 impl fmt::Debug for Module {
@@ -33,16 +49,8 @@ impl fmt::Debug for Module {
             "<module {:?}, functions={}, lib={}>",
             self.variables,
             self.functions.len(),
-            self.lib.len()
+            self.fn_lib.len()
         )
-    }
-}
-
-impl Clone for Module {
-    fn clone(&self) -> Self {
-        // `Module` implements `Clone` so it can fit inside a `Dynamic`
-        // but we should never actually clone it.
-        unimplemented!()
     }
 }
 
@@ -147,7 +155,13 @@ impl Module {
     /// If there is an existing Rust function of the same hash, it is replaced.
     pub fn set_fn(&mut self, fn_name: &str, params: &[TypeId], func: Box<FnAny>) -> u64 {
         let hash = calc_fn_hash(fn_name, params.iter().cloned());
-        self.functions.insert(hash, func);
+
+        #[cfg(not(feature = "sync"))]
+        self.functions.insert(hash, Rc::new(func));
+
+        #[cfg(feature = "sync")]
+        self.functions.insert(hash, Arc::new(func));
+
         hash
     }
 
@@ -163,10 +177,8 @@ impl Module {
             + Sync
             + 'static,
     ) -> u64 {
-        let hash = calc_fn_hash(fn_name, empty());
         let f = move |_: &mut FnCallArgs, _: Position| func().map(|v| v.into());
-        self.functions.insert(hash, Box::new(f));
-        hash
+        self.set_fn(fn_name, &[], Box::new(f))
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -181,13 +193,10 @@ impl Module {
             + Sync
             + 'static,
     ) -> u64 {
-        let hash = calc_fn_hash(fn_name, [TypeId::of::<A>()].iter().cloned());
-
         let f = move |args: &mut FnCallArgs, _: Position| {
             func(mem::take(args[0]).cast::<A>()).map(|v| v.into())
         };
-        self.functions.insert(hash, Box::new(f));
-        hash
+        self.set_fn(fn_name, &[TypeId::of::<A>()], Box::new(f))
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -202,13 +211,10 @@ impl Module {
             + Sync
             + 'static,
     ) -> u64 {
-        let hash = calc_fn_hash(fn_name, [TypeId::of::<A>()].iter().cloned());
-
         let f = move |args: &mut FnCallArgs, _: Position| {
             func(args[0].downcast_mut::<A>().unwrap()).map(|v| v.into())
         };
-        self.functions.insert(hash, Box::new(f));
-        hash
+        self.set_fn(fn_name, &[TypeId::of::<A>()], Box::new(f))
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -223,19 +229,17 @@ impl Module {
             + Sync
             + 'static,
     ) -> u64 {
-        let hash = calc_fn_hash(
-            fn_name,
-            [TypeId::of::<A>(), TypeId::of::<B>()].iter().cloned(),
-        );
-
         let f = move |args: &mut FnCallArgs, _: Position| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
 
             func(a, b).map(|v| v.into())
         };
-        self.functions.insert(hash, Box::new(f));
-        hash
+        self.set_fn(
+            fn_name,
+            &[TypeId::of::<A>(), TypeId::of::<B>()],
+            Box::new(f),
+        )
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
@@ -252,19 +256,17 @@ impl Module {
             + Sync
             + 'static,
     ) -> u64 {
-        let hash = calc_fn_hash(
-            fn_name,
-            [TypeId::of::<A>(), TypeId::of::<B>()].iter().cloned(),
-        );
-
         let f = move |args: &mut FnCallArgs, _: Position| {
             let b = mem::take(args[1]).cast::<B>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
             func(a, b).map(|v| v.into())
         };
-        self.functions.insert(hash, Box::new(f));
-        hash
+        self.set_fn(
+            fn_name,
+            &[TypeId::of::<A>(), TypeId::of::<B>()],
+            Box::new(f),
+        )
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -284,13 +286,6 @@ impl Module {
             + Sync
             + 'static,
     ) -> u64 {
-        let hash = calc_fn_hash(
-            fn_name,
-            [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
-                .iter()
-                .cloned(),
-        );
-
         let f = move |args: &mut FnCallArgs, _: Position| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
@@ -298,8 +293,11 @@ impl Module {
 
             func(a, b, c).map(|v| v.into())
         };
-        self.functions.insert(hash, Box::new(f));
-        hash
+        self.set_fn(
+            fn_name,
+            &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()],
+            Box::new(f),
+        )
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -321,13 +319,6 @@ impl Module {
             + Sync
             + 'static,
     ) -> u64 {
-        let hash = calc_fn_hash(
-            fn_name,
-            [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
-                .iter()
-                .cloned(),
-        );
-
         let f = move |args: &mut FnCallArgs, _: Position| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
@@ -335,8 +326,11 @@ impl Module {
 
             func(a, b, c).map(|v| v.into())
         };
-        self.functions.insert(hash, Box::new(f));
-        hash
+        self.set_fn(
+            fn_name,
+            &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()],
+            Box::new(f),
+        )
     }
 
     /// Get a Rust function.
@@ -344,7 +338,7 @@ impl Module {
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
     pub fn get_fn(&self, hash: u64) -> Option<&Box<FnAny>> {
-        self.functions.get(&hash)
+        self.functions.get(&hash).map(|v| v.as_ref())
     }
 
     /// Get a modules-qualified function.
@@ -373,5 +367,142 @@ impl Module {
 
                 Box::new(EvalAltResult::ErrorFunctionNotFound(fn_name, pos))
             })?)
+    }
+
+    /// Get a script-defined function.
+    pub fn get_fn_lib(&self) -> &FunctionsLib {
+        &self.fn_lib
+    }
+
+    /// Get a modules-qualified functions library.
+    pub(crate) fn get_qualified_fn_lib(
+        &mut self,
+        name: &str,
+        args: usize,
+        modules: &StaticVec<(String, Position)>,
+    ) -> Result<Option<&FnDef>, Box<EvalAltResult>> {
+        Ok(self
+            .get_qualified_module_mut(modules)?
+            .fn_lib
+            .get_function(name, args))
+    }
+}
+
+pub mod resolvers {
+    use super::*;
+
+    #[cfg(not(feature = "no_std"))]
+    use crate::stdlib::path::PathBuf;
+
+    /// A module resolution service that loads module script files (assumed `.rhai` extension).
+    #[cfg(not(feature = "no_std"))]
+    #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct FileModuleResolver(PathBuf);
+
+    #[cfg(not(feature = "no_std"))]
+    impl FileModuleResolver {
+        /// Create a new `FileModuleResolver` with a specific base path.
+        pub fn new_with_path(path: PathBuf) -> Self {
+            Self(path)
+        }
+        /// Create a new `FileModuleResolver` with the current directory as base path.
+        pub fn new() -> Self {
+            Default::default()
+        }
+    }
+
+    #[cfg(not(feature = "no_std"))]
+    impl Default for FileModuleResolver {
+        fn default() -> Self {
+            Self::new_with_path(".".into())
+        }
+    }
+
+    #[cfg(not(feature = "no_std"))]
+    impl ModuleResolver for FileModuleResolver {
+        fn resolve(&self, engine: &Engine, path: &str) -> Result<Module, Box<EvalAltResult>> {
+            // Load the script file (attaching `.rhai`)
+            let mut file_path = self.0.clone();
+            file_path.push(path);
+            file_path.set_extension("rhai");
+
+            // Compile it
+            let ast = engine.compile_file(file_path)?;
+
+            // Use new scope
+            let mut scope = Scope::new();
+
+            // Run the script
+            engine.eval_ast_with_scope_raw(&mut scope, &ast)?;
+
+            // Create new module
+            let mut module = Module::new();
+
+            // Variables left in the scope become module variables
+            for entry in scope.into_iter() {
+                match entry.typ {
+                    ScopeEntryType::Normal | ScopeEntryType::Constant => {
+                        module
+                            .variables
+                            .insert(entry.name.into_owned(), entry.value);
+                    }
+                    ScopeEntryType::Module => {
+                        module
+                            .modules
+                            .insert(entry.name.into_owned(), entry.value.cast::<Module>());
+                    }
+                }
+            }
+
+            module.fn_lib = FunctionsLib::new().merge(ast.fn_lib());
+
+            Ok(module)
+        }
+    }
+
+    /// A module resolution service that serves modules added into it.
+    #[derive(Debug, Clone, Default)]
+    pub struct StaticModuleResolver(HashMap<String, Module>);
+
+    impl StaticModuleResolver {
+        /// Create a new `StaticModuleResolver`.
+        pub fn new() -> Self {
+            Default::default()
+        }
+        /// Add a named module.
+        pub fn add_module(&mut self, name: &str, module: Module) {
+            self.0.insert(name.to_string(), module);
+        }
+    }
+
+    impl ModuleResolver for StaticModuleResolver {
+        fn resolve(&self, _: &Engine, path: &str) -> Result<Module, Box<EvalAltResult>> {
+            self.0.get(path).cloned().ok_or_else(|| {
+                Box::new(EvalAltResult::ErrorModuleNotFound(
+                    path.to_string(),
+                    Position::none(),
+                ))
+            })
+        }
+    }
+
+    /// A module resolution service that always returns a not-found error.
+    #[derive(Debug, Clone, PartialEq, Eq, Copy, Default)]
+    pub struct NullModuleResolver;
+
+    impl NullModuleResolver {
+        /// Create a new `NullModuleResolver`.
+        pub fn new() -> Self {
+            Default::default()
+        }
+    }
+
+    impl ModuleResolver for NullModuleResolver {
+        fn resolve(&self, _: &Engine, path: &str) -> Result<Module, Box<EvalAltResult>> {
+            Err(Box::new(EvalAltResult::ErrorModuleNotFound(
+                path.to_string(),
+                Position::none(),
+            )))
+        }
     }
 }
