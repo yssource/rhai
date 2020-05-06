@@ -221,11 +221,11 @@ impl Stack {
             })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
-    /// Find a sub-scope by name in the `Stack`, searching in reverse.
+    /// Find a module by name in the `Stack`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `Stack` is offset 1.
     /// Return zero when the variable name is not found in the `Stack`.
-    pub fn find_sub_scope(&self, name: &str) -> Option<NonZeroUsize> {
+    pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.0
             .iter()
             .rev()
@@ -1115,7 +1115,7 @@ fn parse_primary<'a>(
                             modules = Some(Box::new(vec));
 
                             let root = modules.as_ref().unwrap().iter().next().unwrap();
-                            index = stack.find_sub_scope(&root.0);
+                            index = stack.find_module(&root.0);
                         }
 
                         Expr::Variable(Box::new(id2), modules, index, pos2)
@@ -1831,12 +1831,23 @@ fn parse_let<'a>(
             ScopeEntryType::Constant => {
                 Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
             }
-            // Variable cannot be a sub-scope
+            // Variable cannot be a module
             ScopeEntryType::Module => unreachable!(),
         }
     } else {
         // let name
-        Ok(Stmt::Let(Box::new(name), None, pos))
+        match var_type {
+            ScopeEntryType::Normal => {
+                stack.push((name.clone(), ScopeEntryType::Normal));
+                Ok(Stmt::Let(Box::new(name), None, pos))
+            }
+            ScopeEntryType::Constant => {
+                stack.push((name.clone(), ScopeEntryType::Constant));
+                Ok(Stmt::Const(Box::new(name), Box::new(Expr::Unit(pos)), pos))
+            }
+            // Variable cannot be a module
+            ScopeEntryType::Module => unreachable!(),
+        }
     }
 }
 
