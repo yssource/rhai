@@ -262,7 +262,7 @@ pub struct Engine {
     pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
 
     /// A module resolution service.
-    pub(crate) module_resolver: Box<dyn ModuleResolver>,
+    pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: HashMap<String, String>,
@@ -300,9 +300,9 @@ impl Default for Engine {
 
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
-            module_resolver: Box::new(resolvers::FileModuleResolver::new()),
+            module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
             #[cfg(any(feature = "no_std", feature = "no_module"))]
-            module_resolver: Box::new(resolvers::NullModuleResolver::new()),
+            module_resolver: None,
 
             type_names: Default::default(),
 
@@ -438,13 +438,7 @@ impl Engine {
             packages: Default::default(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
             type_iterators: Default::default(),
-
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(not(feature = "no_std"))]
-            module_resolver: Box::new(resolvers::FileModuleResolver::new()),
-            #[cfg(any(feature = "no_std", feature = "no_module"))]
-            module_resolver: Box::new(resolvers::NullModuleResolver::new()),
-
+            module_resolver: None,
             type_names: Default::default(),
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
@@ -491,8 +485,8 @@ impl Engine {
     ///
     /// Not available under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
-    pub fn set_module_resolver(&mut self, resolver: impl ModuleResolver + 'static) {
-        self.module_resolver = Box::new(resolver);
+    pub fn set_module_resolver(&mut self, resolver: Option<impl ModuleResolver + 'static>) {
+        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn ModuleResolver>);
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
@@ -1264,8 +1258,7 @@ impl Engine {
                         let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
 
                         match module.get_qualified_fn(fn_name, hash, modules, *pos) {
-                            Ok(func) => func(&mut args, *pos)
-                                .map_err(|err| EvalAltResult::set_position(err, *pos)),
+                            Ok(func) => func(&mut args, *pos),
                             Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
                             Err(err) => Err(err),
                         }
@@ -1530,15 +1523,19 @@ impl Engine {
                     .eval_expr(scope, state, fn_lib, expr, level)?
                     .try_cast::<String>()
                 {
-                    let module = self
-                        .module_resolver
-                        .resolve(self, &path)
-                        .map_err(|err| EvalAltResult::set_position(err, expr.position()))?;
+                    if let Some(resolver) = self.module_resolver.as_ref() {
+                        let module = resolver.resolve(self, &path, expr.position())?;
 
-                    // TODO - avoid copying module name in inner block?
-                    let mod_name = name.as_ref().clone();
-                    scope.push_module(mod_name, module);
-                    Ok(Default::default())
+                        // TODO - avoid copying module name in inner block?
+                        let mod_name = name.as_ref().clone();
+                        scope.push_module(mod_name, module);
+                        Ok(Default::default())
+                    } else {
+                        Err(Box::new(EvalAltResult::ErrorModuleNotFound(
+                            path,
+                            expr.position(),
+                        )))
+                    }
                 } else {
                     Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                 }

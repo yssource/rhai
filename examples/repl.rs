@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Map, Scope, AST, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST, INT};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -163,6 +163,7 @@ fn main() {
         }
 
         // Throw away all the statements, leaving only the functions
+        #[cfg(not(feature = "no_function"))]
         main_ast.retain_functions();
     }
 }

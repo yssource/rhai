@@ -153,11 +153,9 @@ pub enum Token {
     RightShift,
     SemiColon,
     Colon,
-    #[cfg(not(feature = "no_module"))]
     DoubleColon,
     Comma,
     Period,
-    #[cfg(not(feature = "no_object"))]
     MapStart,
     Equals,
     True,
@@ -182,7 +180,6 @@ pub enum Token {
     XOr,
     Ampersand,
     And,
-    #[cfg(not(feature = "no_function"))]
     Fn,
     Continue,
     Break,
@@ -199,11 +196,8 @@ pub enum Token {
     XOrAssign,
     ModuloAssign,
     PowerOfAssign,
-    #[cfg(not(feature = "no_module"))]
     Import,
-    #[cfg(not(feature = "no_module"))]
     Export,
-    #[cfg(not(feature = "no_module"))]
     As,
     LexError(Box<LexError>),
     EOF,
@@ -238,11 +232,9 @@ impl Token {
                 Divide => "/",
                 SemiColon => ";",
                 Colon => ":",
-                #[cfg(not(feature = "no_module"))]
                 DoubleColon => "::",
                 Comma => ",",
                 Period => ".",
-                #[cfg(not(feature = "no_object"))]
                 MapStart => "#{",
                 Equals => "=",
                 True => "true",
@@ -266,7 +258,6 @@ impl Token {
                 Or => "||",
                 Ampersand => "&",
                 And => "&&",
-                #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
                 Continue => "continue",
                 Break => "break",
@@ -288,11 +279,8 @@ impl Token {
                 ModuloAssign => "%=",
                 PowerOf => "~",
                 PowerOfAssign => "~=",
-                #[cfg(not(feature = "no_module"))]
                 Import => "import",
-                #[cfg(not(feature = "no_module"))]
                 Export => "export",
-                #[cfg(not(feature = "no_module"))]
                 As => "as",
                 EOF => "{EOF}",
                 _ => panic!("operator should be match in outer scope"),

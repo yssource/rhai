@@ -2118,13 +2118,16 @@ Built-in module resolvers are grouped under the `rhai::module_resolvers` module 
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function. |
 | `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                        |
-| `NullModuleResolver`   | The default module resolution service under the [`no_std`] feature. Always returns an `EvalAltResult::ErrorModuleNotFound` error.                                                                                                                                          |
 
 An [`Engine`]'s module resolver is set via a call to `set_module_resolver`:
 
 ```rust
-// Use the 'NullModuleResolver'
-engine.set_module_resolver(rhai::module_resolvers::NullModuleResolver::new());
+// Use the 'StaticModuleResolver'
+let resolver = rhai::module_resolvers::StaticModuleResolver::new();
+engine.set_module_resolver(Some(resolver));
+
+// Effectively disable 'import' statements by setting module resolver to 'None'
+engine.set_module_resolver(None);
 ```
 
 Script optimization

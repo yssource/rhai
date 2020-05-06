@@ -67,13 +67,9 @@ impl AST {
     /// Create a new `AST`.
     pub fn new(statements: Vec<Stmt>, fn_lib: FunctionsLib) -> Self {
         #[cfg(feature = "sync")]
-        {
-            Self(statements, Arc::new(fn_lib))
-        }
+        return Self(statements, Arc::new(fn_lib));
         #[cfg(not(feature = "sync"))]
-        {
-            Self(statements, Rc::new(fn_lib))
-        }
+        return Self(statements, Rc::new(fn_lib));
     }
 
     /// Get the statements.
@@ -148,13 +144,9 @@ impl AST {
         };
 
         #[cfg(feature = "sync")]
-        {
-            Self(ast, Arc::new(functions.merge(other.1.as_ref())))
-        }
+        return Self(ast, Arc::new(functions.merge(other.1.as_ref())));
         #[cfg(not(feature = "sync"))]
-        {
-            Self(ast, Rc::new(functions.merge(other.1.as_ref())))
-        }
+        return Self(ast, Rc::new(functions.merge(other.1.as_ref())));
     }
 
     /// Clear all function definitions in the `AST`.
@@ -1810,7 +1802,6 @@ fn parse_let<'a>(
 }
 
 /// Parse an import statement.
-#[cfg(not(feature = "no_module"))]
 fn parse_import<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
@@ -1941,7 +1932,6 @@ fn parse_stmt<'a>(
         Token::LeftBrace => parse_block(input, stack, breakable, allow_stmt_expr),
 
         // fn ...
-        #[cfg(not(feature = "no_function"))]
         Token::Fn => Err(PERR::WrongFnDefinition.into_err(*pos)),
 
         Token::If => parse_if(input, stack, breakable, allow_stmt_expr),
@@ -2115,14 +2105,11 @@ fn parse_global_level<'a>(
 
     while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
-        #[cfg(not(feature = "no_function"))]
-        {
-            if let (Token::Fn, _) = input.peek().unwrap() {
-                let mut stack = Stack::new();
-                let f = parse_fn(input, &mut stack, true)?;
-                functions.insert(calc_fn_def(&f.name, f.params.len()), f);
-                continue;
-            }
+        if let (Token::Fn, _) = input.peek().unwrap() {
+            let mut stack = Stack::new();
+            let f = parse_fn(input, &mut stack, true)?;
+            functions.insert(calc_fn_def(&f.name, f.params.len()), f);
+            continue;
         }
 
         // Actual statement

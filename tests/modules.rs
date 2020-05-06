@@ -64,10 +64,10 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     let mut module = Module::new();
     module.set_var("answer", 42 as INT);
 
-    resolver.add_module("hello", module);
+    resolver.insert("hello".to_string(), module);
 
     let mut engine = Engine::new();
-    engine.set_module_resolver(resolver);
+    engine.set_module_resolver(Some(resolver));
 
     assert_eq!(
         engine.eval::<INT>(
