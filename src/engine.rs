@@ -1112,10 +1112,11 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value)) => {
                 let def_value = false.into();
+                let args = &mut [&mut lhs_value, &mut Default::default()];
 
                 // Call the '==' operator to compare each value
                 for value in rhs_value.iter_mut() {
-                    let args = &mut [&mut lhs_value, value];
+                    args[1] = value;
                     let def_value = Some(&def_value);
                     let pos = rhs.position();
 
