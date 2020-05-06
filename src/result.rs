@@ -29,7 +29,7 @@ pub enum EvalAltResult {
     ///
     /// Never appears under the `no_std` feature.
     #[cfg(not(feature = "no_std"))]
-    ErrorReadingScriptFile(PathBuf, std::io::Error),
+    ErrorReadingScriptFile(PathBuf, Position, std::io::Error),
 
     /// Call to an unknown function. Wrapped value is the name of the function.
     ErrorFunctionNotFound(String, Position),
@@ -47,12 +47,14 @@ pub enum EvalAltResult {
     /// String indexing out-of-bounds.
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, INT, Position),
-    /// Trying to index into a type that is not an array, an object map, or a string.
+    /// Trying to index into a type that is not an array, an object map, or a string, and has no indexer function defined.
     ErrorIndexingType(String, Position),
     /// Trying to index into an array or string with an index that is not `i64`.
     ErrorNumericIndexExpr(Position),
     /// Trying to index into a map with an index that is not `String`.
     ErrorStringIndexExpr(Position),
+    /// Trying to import with an expression that is not `String`.
+    ErrorImportExpr(Position),
     /// Invalid arguments for `in` operator.
     ErrorInExpr(Position),
     /// The guard expression in an `if` or `while` statement does not return a boolean value.
@@ -61,6 +63,8 @@ pub enum EvalAltResult {
     ErrorFor(Position),
     /// Usage of an unknown variable. Wrapped value is the name of the variable.
     ErrorVariableNotFound(String, Position),
+    /// Usage of an unknown module. Wrapped value is the name of the module.
+    ErrorModuleNotFound(String, Position),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     ErrorAssignmentToUnknownLHS(Position),
     /// Assignment to a constant variable.
@@ -90,7 +94,7 @@ impl EvalAltResult {
     pub(crate) fn desc(&self) -> &str {
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _) => "Cannot read from script file",
+            Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
 
             Self::ErrorParsing(p) => p.desc(),
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
@@ -104,8 +108,9 @@ impl EvalAltResult {
             }
             Self::ErrorStringIndexExpr(_) => "Indexing into an object map expects a string index",
             Self::ErrorIndexingType(_, _) => {
-                "Indexing can only be performed on an array, an object map, or a string"
+                "Indexing can only be performed on an array, an object map, a string, or a type with an indexer function defined"
             }
+            Self::ErrorImportExpr(_) => "Importing a module expects a string path",
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
@@ -119,6 +124,7 @@ impl EvalAltResult {
             Self::ErrorLogicGuard(_) => "Boolean value expected",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
+            Self::ErrorModuleNotFound(_, _) => "module not found",
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"
             }
@@ -144,20 +150,26 @@ impl fmt::Display for EvalAltResult {
 
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(path, err) => {
+            Self::ErrorReadingScriptFile(path, pos, err) if pos.is_none() => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)
+            }
+            #[cfg(not(feature = "no_std"))]
+            Self::ErrorReadingScriptFile(path, pos, err) => {
+                write!(f, "{} '{}': {} ({})", desc, path.display(), err, pos)
             }
 
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
 
-            Self::ErrorFunctionNotFound(s, pos) | Self::ErrorVariableNotFound(s, pos) => {
-                write!(f, "{}: '{}' ({})", desc, s, pos)
-            }
+            Self::ErrorFunctionNotFound(s, pos)
+            | Self::ErrorVariableNotFound(s, pos)
+            | Self::ErrorModuleNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
+
             Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
 
             Self::ErrorIndexingType(_, pos)
             | Self::ErrorNumericIndexExpr(pos)
             | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorImportExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
@@ -253,7 +265,7 @@ impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _) => Position::none(),
+            Self::ErrorReadingScriptFile(_, pos, _) => *pos,
 
             Self::ErrorParsing(err) => err.position(),
 
@@ -266,9 +278,11 @@ impl EvalAltResult {
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorNumericIndexExpr(pos)
             | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorImportExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
+            | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)
@@ -287,7 +301,7 @@ impl EvalAltResult {
     pub(crate) fn set_position(mut err: Box<Self>, new_position: Position) -> Box<Self> {
         match err.as_mut() {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _) => (),
+            Self::ErrorReadingScriptFile(_, pos, _) => *pos = new_position,
 
             Self::ErrorParsing(err) => err.1 = new_position,
 
@@ -300,9 +314,11 @@ impl EvalAltResult {
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorNumericIndexExpr(pos)
             | Self::ErrorStringIndexExpr(pos)
+            | Self::ErrorImportExpr(pos)
             | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
+            | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, pos)

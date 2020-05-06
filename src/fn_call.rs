@@ -22,7 +22,7 @@ macro_rules! impl_args {
             fn into_vec(self) -> Vec<Dynamic> {
                 let ($($p,)*) = self;
 
-                #[allow(unused_variables, unused_mut)]
+                #[allow(unused_mut)]
                 let mut v = Vec::new();
                 $(v.push($p.into_dynamic());)*
 
@@ -42,5 +42,4 @@ macro_rules! impl_args {
     };
 }
 
-#[rustfmt::skip]
 impl_args!(A, B, C, D, E, F, G, H, J, K, L, M, N, P, Q, R, S, T, U, V);

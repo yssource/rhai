@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST};
+use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST, INT};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -68,9 +68,9 @@ fn main() {
     let mut scope = Scope::new();
 
     let mut input = String::new();
-    let mut main_ast = AST::new();
-    let mut ast_u = AST::new();
-    let mut ast = AST::new();
+    let mut main_ast: AST = Default::default();
+    let mut ast_u: AST = Default::default();
+    let mut ast: AST = Default::default();
 
     println!("Rhai REPL tool");
     println!("==============");
@@ -163,6 +163,7 @@ fn main() {
         }
 
         // Throw away all the statements, leaving only the functions
+        #[cfg(not(feature = "no_function"))]
         main_ast.retain_functions();
     }
 }

@@ -122,7 +122,7 @@ impl fmt::Display for Position {
 
 impl fmt::Debug for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}:{})", self.line, self.pos)
+        write!(f, "{}:{}", self.line, self.pos)
     }
 }
 
@@ -153,9 +153,9 @@ pub enum Token {
     RightShift,
     SemiColon,
     Colon,
+    DoubleColon,
     Comma,
     Period,
-    #[cfg(not(feature = "no_object"))]
     MapStart,
     Equals,
     True,
@@ -180,7 +180,6 @@ pub enum Token {
     XOr,
     Ampersand,
     And,
-    #[cfg(not(feature = "no_function"))]
     Fn,
     Continue,
     Break,
@@ -197,6 +196,9 @@ pub enum Token {
     XOrAssign,
     ModuloAssign,
     PowerOfAssign,
+    Import,
+    Export,
+    As,
     LexError(Box<LexError>),
     EOF,
 }
@@ -230,9 +232,9 @@ impl Token {
                 Divide => "/",
                 SemiColon => ";",
                 Colon => ":",
+                DoubleColon => "::",
                 Comma => ",",
                 Period => ".",
-                #[cfg(not(feature = "no_object"))]
                 MapStart => "#{",
                 Equals => "=",
                 True => "true",
@@ -243,6 +245,8 @@ impl Token {
                 Else => "else",
                 While => "while",
                 Loop => "loop",
+                For => "for",
+                In => "in",
                 LessThan => "<",
                 GreaterThan => ">",
                 Bang => "!",
@@ -254,7 +258,6 @@ impl Token {
                 Or => "||",
                 Ampersand => "&",
                 And => "&&",
-                #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
                 Continue => "continue",
                 Break => "break",
@@ -276,8 +279,9 @@ impl Token {
                 ModuloAssign => "%=",
                 PowerOf => "~",
                 PowerOfAssign => "~=",
-                For => "for",
-                In => "in",
+                Import => "import",
+                Export => "export",
+                As => "as",
                 EOF => "{EOF}",
                 _ => panic!("operator should be match in outer scope"),
             })
@@ -403,6 +407,12 @@ impl Token {
 
             _ => false,
         }
+    }
+}
+
+impl From<Token> for String {
+    fn from(token: Token) -> Self {
+        token.syntax().into()
     }
 }
 
@@ -741,6 +751,13 @@ impl<'a> TokenIterator<'a> {
                             "for" => Token::For,
                             "in" => Token::In,
 
+                            #[cfg(not(feature = "no_module"))]
+                            "import" => Token::Import,
+                            #[cfg(not(feature = "no_module"))]
+                            "export" => Token::Export,
+                            #[cfg(not(feature = "no_module"))]
+                            "as" => Token::As,
+
                             #[cfg(not(feature = "no_function"))]
                             "fn" => Token::Fn,
 
@@ -874,7 +891,6 @@ impl<'a> TokenIterator<'a> {
                 ('/', _) => return Some((Token::Divide, pos)),
 
                 (';', _) => return Some((Token::SemiColon, pos)),
-                (':', _) => return Some((Token::Colon, pos)),
                 (',', _) => return Some((Token::Comma, pos)),
                 ('.', _) => return Some((Token::Period, pos)),
 
@@ -895,6 +911,13 @@ impl<'a> TokenIterator<'a> {
                     return Some((Token::EqualsTo, pos));
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
+
+                #[cfg(not(feature = "no_module"))]
+                (':', ':') => {
+                    self.eat_next();
+                    return Some((Token::DoubleColon, pos));
+                }
+                (':', _) => return Some((Token::Colon, pos)),
 
                 ('<', '=') => {
                     self.eat_next();

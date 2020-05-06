@@ -7,6 +7,10 @@ fn addme(a, b) {
     a + b;              // notice that the last value is returned even if terminated by a semicolon
 }
 
-print(addme(a, 4));     // should print 46
+print("addme(a, 4) should be 46:");
+
+print(addme(a, 4));
+
+print("a should still be 3:");
 
 print(a);               // should print 3 - 'a' is never changed

@@ -1,7 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, Map, State};
+use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
@@ -11,10 +11,14 @@ use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{lex, Position};
 
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
+
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
     collections::HashMap,
+    mem,
     string::{String, ToString},
     vec::Vec,
 };
@@ -41,6 +45,16 @@ impl<F: Fn(&mut T, U) + Send + Sync + 'static, T, U> ObjectSetCallback<T, U> for
 pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + 'static {}
 #[cfg(not(feature = "sync"))]
 impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
+
+#[cfg(feature = "sync")]
+pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + Send + Sync + 'static {}
+#[cfg(feature = "sync")]
+impl<F: Fn(&mut T, X) -> U + Send + Sync + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
+
+#[cfg(not(feature = "sync"))]
+pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(&mut T, X) -> U + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
 
 #[cfg(feature = "sync")]
 pub trait IteratorCallback:
@@ -299,6 +313,54 @@ impl Engine {
         self.register_set(name, set_fn);
     }
 
+    /// Register an indexer function for a registered type with the `Engine`.
+    ///
+    /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     fields: Vec<i64>
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///
+    ///     // Even a getter must start with `&mut self` and not `&self`.
+    ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register an indexer.
+    /// engine.register_indexer(TestStruct::get_field);
+    ///
+    /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn register_indexer<T, X, U, F>(&mut self, callback: F)
+    where
+        T: Variant + Clone,
+        U: Variant + Clone,
+        X: Variant + Clone,
+        F: ObjectIndexerCallback<T, X, U>,
+    {
+        self.register_fn(FUNC_INDEXER, callback);
+    }
+
     /// Compile a string into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
@@ -378,13 +440,23 @@ impl Engine {
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
-        let mut f = File::open(path.clone())
-            .map_err(|err| Box::new(EvalAltResult::ErrorReadingScriptFile(path.clone(), err)))?;
+        let mut f = File::open(path.clone()).map_err(|err| {
+            Box::new(EvalAltResult::ErrorReadingScriptFile(
+                path.clone(),
+                Position::none(),
+                err,
+            ))
+        })?;
 
         let mut contents = String::new();
 
-        f.read_to_string(&mut contents)
-            .map_err(|err| Box::new(EvalAltResult::ErrorReadingScriptFile(path.clone(), err)))?;
+        f.read_to_string(&mut contents).map_err(|err| {
+            Box::new(EvalAltResult::ErrorReadingScriptFile(
+                path.clone(),
+                Position::none(),
+                err,
+            ))
+        })?;
 
         Ok(contents)
     }
@@ -797,10 +869,10 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut state = State::new();
 
-        ast.0
+        ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -862,10 +934,10 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         let mut state = State::new();
 
-        ast.0
+        ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.1.as_ref(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -921,7 +993,7 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
         let mut args: Vec<_> = arg_values.iter_mut().collect();
-        let fn_lib = ast.1.as_ref();
+        let fn_lib = ast.fn_lib();
         let pos = Position::none();
 
         let fn_def = fn_lib
@@ -955,15 +1027,17 @@ impl Engine {
     pub fn optimize_ast(
         &self,
         scope: &Scope,
-        ast: AST,
+        mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
         let fn_lib = ast
-            .1
+            .fn_lib()
             .iter()
             .map(|(_, fn_def)| fn_def.as_ref().clone())
             .collect();
-        optimize_into_ast(self, scope, ast.0, fn_lib, optimization_level)
+
+        let stmt = mem::take(ast.statements_mut());
+        optimize_into_ast(self, scope, stmt, fn_lib, optimization_level)
     }
 
     /// Override default action of `print` (print to stdout using `println!`)

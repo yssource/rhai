@@ -1,6 +1,6 @@
 // This script runs for-loops
 
-let arr = [1,2,3,4];
+let arr = [1, 2, 3, 4];
 
 for a in arr {
     for b in [10, 20] {

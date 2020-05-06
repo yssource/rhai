@@ -47,6 +47,7 @@ pub trait Package {
 }
 
 /// Type to store all functions in the package.
+#[derive(Default)]
 pub struct PackageStore {
     /// All functions, keyed by a hash created from the function name and parameter types.
     pub functions: HashMap<u64, Box<FnAny>>,
@@ -58,10 +59,7 @@ pub struct PackageStore {
 impl PackageStore {
     /// Create a new `PackageStore`.
     pub fn new() -> Self {
-        Self {
-            functions: HashMap::new(),
-            type_iterators: HashMap::new(),
-        }
+        Default::default()
     }
 }
 

@@ -15,7 +15,7 @@ Rhai's current features set:
 
 * Easy-to-use language similar to JS+Rust
 * Easy integration with Rust [native functions](#working-with-functions) and [types](#custom-types-and-methods),
-  including [getter/setter](#getters-and-setters)/[methods](#members-and-methods)
+  including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers)
 * Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
@@ -23,13 +23,14 @@ Rhai's current features set:
 * [`no-std`](#optional-features) support
 * Support for [function overloading](#function-overloading)
 * Support for [operator overloading](#operator-overloading)
+* Support for loading external [modules]
 * Compiled script is [optimized](#script-optimization) for repeat evaluations
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.13.0, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.14.1, so the language and API's may change before they stabilize.
 
 Installation
 ------------
@@ -38,7 +39,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.13.0"
+rhai = "0.14.1"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -69,6 +70,7 @@ Optional features
 | `no_object`   | Disable support for custom types and objects.                                                                                         |
 | `no_float`    | Disable floating-point numbers and math if not needed.                                                                                |
 | `no_optimize` | Disable the script optimizer.                                                                                                         |
+| `no_module`   | Disable modules.                                                                                                                      |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                      |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                      |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                  |
@@ -84,6 +86,7 @@ Excluding unneeded functionalities can result in smaller, faster builds as well 
 [`no_function`]: #optional-features
 [`no_object`]: #optional-features
 [`no_optimize`]: #optional-features
+[`no_module`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
 [`no_std`]: #optional-features
@@ -374,19 +377,19 @@ engine.load_package(package.get());             // load the package manually
 
 The follow packages are available:
 
-| Package                  | Description                                     | In `CorePackage` | In `StandardPackage` |
-| ------------------------ | ----------------------------------------------- | :--------------: | :------------------: |
-| `ArithmeticPackage`      | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
-| `BasicIteratorPackage`   | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
-| `LogicPackage`           | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
-| `BasicStringPackage`     | Basic string functions                          |       Yes        |         Yes          |
-| `BasicTimePackage`       | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
-| `MoreStringPackage`      | Additional string functions                     |        No        |         Yes          |
-| `BasicMathPackage`       | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
-| `BasicArrayPackage`      | Basic [array] functions                         |        No        |         Yes          |
-| `BasicMapPackage`        | Basic [object map] functions                    |        No        |         Yes          |
-| `CorePackage`            | Basic essentials                                |                  |                      |
-| `StandardPackage`        | Standard library                                |                  |                      |
+| Package                | Description                                     | In `CorePackage` | In `StandardPackage` |
+| ---------------------- | ----------------------------------------------- | :--------------: | :------------------: |
+| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
+| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
+| `LogicPackage`         | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
+| `BasicStringPackage`   | Basic string functions                          |       Yes        |         Yes          |
+| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
+| `MoreStringPackage`    | Additional string functions                     |        No        |         Yes          |
+| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
+| `BasicArrayPackage`    | Basic [array] functions                         |        No        |         Yes          |
+| `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
+| `CorePackage`          | Basic essentials                                |                  |                      |
+| `StandardPackage`      | Standard library                                |                  |                      |
 
 Evaluate expressions only
 -------------------------
@@ -427,7 +430,7 @@ The following primitive types are supported natively:
 | **Boolean value**                                                             | `bool`                                                                                               | `"bool"`              | `"true"` or `"false"` |
 | **Unicode character**                                                         | `char`                                                                                               | `"char"`              | `"A"`, `"x"` etc.     |
 | **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
-| **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ? ? ? ]"`         |
+| **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ?, ?, ? ]"`       |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
 | **Timestamp** (implemented in the [`BasicTimePackage`](#packages))            | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
@@ -576,6 +579,7 @@ A number of traits, under the `rhai::` module namespace, provide additional func
 | `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                                  | `register_dynamic_fn`                   |
 | `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
 | `Func`              | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
+| `ModuleResolver`    | Trait implemented by module resolution services                                        | `resolve`                               |
 
 Working with functions
 ----------------------
@@ -923,8 +927,44 @@ let result = engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?;
 println!("Answer: {}", result);                     // prints 42
 ```
 
-Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set` and `register_get_set`
-are not available when the [`no_object`] feature is turned on.
+Indexers
+--------
+
+Custom types can also expose an _indexer_ by registering an indexer function.
+A custom with an indexer function defined can use the bracket '`[]`' notation to get a property value
+(but not update it - indexers are read-only).
+
+```rust
+#[derive(Clone)]
+struct TestStruct {
+    fields: Vec<i64>
+}
+
+impl TestStruct {
+    fn get_field(&mut self, index: i64) -> i64 {
+        self.fields[index as usize]
+    }
+
+    fn new() -> Self {
+        TestStruct { fields: vec![1, 2, 42, 4, 5] }
+    }
+}
+
+let engine = Engine::new();
+
+engine.register_type::<TestStruct>();
+
+engine.register_fn("new_ts", TestStruct::new);
+engine.register_indexer(TestStruct::get_field);
+
+let result = engine.eval::<i64>("let a = new_ts(); a[2]")?;
+
+println!("Answer: {}", result);                     // prints 42
+```
+
+Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set`, `register_get_set`
+and `register_indexer` are not available when the [`no_object`] feature is turned on.
+`register_indexer` is also not available when the [`no_index`] feature is turned on. 
 
 `Scope` - Initializing and maintaining state
 -------------------------------------------
@@ -1372,7 +1412,8 @@ y[2] == 3;
 y[3] == 4;
 
 (1 in y) == true;       // use 'in' to test if an item exists in the array
-(42 in y) == false;
+(42 in y) == false;     // 'in' uses the '==' operator (which users can override)
+                        // to check if the target item exists in the array
 
 y[1] = 42;              // array elements can be reassigned
 
@@ -1494,7 +1535,7 @@ y.a == 42;
 
 y["baz!$@"] == 123.456; // access via index notation
 
-"baz!$@" in y == true;  // use 'in' to test if a property exists in the object map, prints true
+"baz!$@" in y == true;  // use 'in' to test if a property exists in the object map
 ("z" in y) == false;
 
 ts.obj = y;             // object maps can be assigned completely (by value copy)
@@ -1973,8 +2014,8 @@ When embedding Rhai into an application, it is usually necessary to trap `print`
 (for logging into a tracking log, for example).
 
 ```rust
-// Any function or closure that takes an &str argument can be used to override
-// print and debug
+// Any function or closure that takes an '&str' argument can be used to override
+// 'print' and 'debug'
 engine.on_print(|x| println!("hello: {}", x));
 engine.on_debug(|x| println!("DEBUG: {}", x));
 
@@ -1995,6 +2036,98 @@ engine.eval::<()>(script)?;
 for entry in logbook.read().unwrap().iter() {
     println!("{}", entry);
 }
+```
+
+Using external modules
+----------------------
+
+[module]: #using-external-modules
+[modules]: #using-external-modules
+
+Rhai allows organizing code (functions and variables) into _modules_.  A module is a single script file
+with `export` statements that _exports_ certain global variables and functions as contents of the module.
+
+Everything exported as part of a module is constant and read-only.
+
+### Importing modules
+
+A module can be _imported_ via the `import` statement, and its members accessed via '`::`' similar to C++.
+
+```rust
+import "crypto" as crypto;  // import the script file 'crypto.rhai' as a module
+
+crypto::encrypt(secret);    // use functions defined under the module via '::'
+
+print(crypto::status);      // module variables are constants
+
+crypto::hash::sha256(key);  // sub-modules are also supported
+```
+
+`import` statements are _scoped_, meaning that they are only accessible inside the scope that they're imported.
+
+```rust
+let mod = "crypto";
+
+if secured {                // new block scope
+    import mod as crypto;   // import module (the path needs not be a constant string)
+
+    crypto::encrypt(key);   // use a function in the module
+}                           // the module disappears at the end of the block scope
+
+crypto::encrypt(others);    // <- this causes a run-time error because the 'crypto' module
+                            //    is no longer available!
+```
+
+### Creating custom modules from Rust
+
+To load a custom module into an [`Engine`], first create a `Module` type, add variables/functions into it,
+then finally push it into a custom [`Scope`].  This has the equivalent effect of putting an `import` statement
+at the beginning of any script run.
+
+```rust
+use rhai::{Engine, Scope, Module, i64};
+
+let mut engine = Engine::new();
+let mut scope = Scope::new();
+
+let mut module = Module::new();             // new module
+module.set_var("answer", 41_i64);           // variable 'answer' under module
+module.set_fn_1("inc", |x: i64| Ok(x+1));   // use the 'set_fn_XXX' API to add functions
+
+// Push the module into the custom scope under the name 'question'
+// This is equivalent to 'import "..." as question;'
+scope.push_module("question", module);
+
+// Use module-qualified variables
+engine.eval_expression_with_scope::<i64>(&scope, "question::answer + 1")? == 42;
+
+// Call module-qualified functions
+engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer)")? == 42;
+```
+
+### Module resolvers
+
+When encountering an `import` statement, Rhai attempts to _resolve_ the module based on the path string.
+_Module Resolvers_ are service types that implement the [`ModuleResolver`](#traits) trait.
+There are a number of standard resolvers built into Rhai, the default being the `FileModuleResolver`
+which simply loads a script file based on the path (with `.rhai` extension attached) and execute it to form a module.
+
+Built-in module resolvers are grouped under the `rhai::module_resolvers` module namespace.
+
+| Module Resolver        | Description                                                                                                                                                                                                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function. |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                        |
+
+An [`Engine`]'s module resolver is set via a call to `set_module_resolver`:
+
+```rust
+// Use the 'StaticModuleResolver'
+let resolver = rhai::module_resolvers::StaticModuleResolver::new();
+engine.set_module_resolver(Some(resolver));
+
+// Effectively disable 'import' statements by setting module resolver to 'None'
+engine.set_module_resolver(None);
 ```
 
 Script optimization

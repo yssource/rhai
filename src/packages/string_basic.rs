@@ -1,9 +1,15 @@
 use super::{reg_binary, reg_binary_mut, reg_none, reg_unary, reg_unary_mut};
 
 use crate::def_package;
-use crate::engine::{Array, Map, FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
+use crate::engine::{FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::fn_register::map_dynamic as map;
 use crate::parser::INT;
+
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
 
 use crate::stdlib::{
     fmt::{Debug, Display},
@@ -18,6 +24,7 @@ fn to_debug<T: Debug>(x: &mut T) -> String {
 fn to_string<T: Display>(x: &mut T) -> String {
     format!("{}", x)
 }
+#[cfg(not(feature = "no_object"))]
 fn format_map(x: &mut Map) -> String {
     format!("#{:?}", x)
 }

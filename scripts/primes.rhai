@@ -13,18 +13,17 @@ prime_mask[1] = false;
 let total_primes_found = 0;
 
 for p in range(2, MAX_NUMBER_TO_CHECK) {
-    if prime_mask[p] {
-        print(p);
+    if !prime_mask[p] { continue; }
 
-        total_primes_found += 1;
-        let i = 2 * p;
+    print(p);
 
-        while i < MAX_NUMBER_TO_CHECK {
-            prime_mask[i] = false;
-            i += p;
-        }
+    total_primes_found += 1;
+
+    for i in range(2 * p, MAX_NUMBER_TO_CHECK, p) {
+        prime_mask[i] = false;
+        i += p;
     }
 }
 
-print("Total " + total_primes_found + " primes.");
+print("Total " + total_primes_found + " primes <= " + MAX_NUMBER_TO_CHECK);
 print("Run time = " + now.elapsed() + " seconds.");

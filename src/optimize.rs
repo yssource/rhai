@@ -13,9 +13,7 @@ use crate::token::Position;
 use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
     vec,
     vec::Vec,
 };
@@ -231,6 +229,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
         }
         // let id;
         Stmt::Let(_, None, _) => stmt,
+        // import expr as id;
+        Stmt::Import(expr, id, pos) => Stmt::Import(Box::new(optimize_expr(*expr, state)), id, pos),
         // { block }
         Stmt::Block(block, pos) => {
             let orig_len = block.len(); // Original number of statements in the block, for change detection
@@ -260,7 +260,7 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                 result.push(stmt);
             }
 
-            // Remove all let statements at the end of a block - the new variables will go away anyway.
+            // Remove all let/import statements at the end of a block - the new variables will go away anyway.
             // But be careful only remove ones that have no initial values or have values that are pure expressions,
             // otherwise there may be side effects.
             let mut removed = false;
@@ -268,7 +268,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
             while let Some(expr) = result.pop() {
                 match expr {
                     Stmt::Let(_, None, _) => removed = true,
-                    Stmt::Let(_, Some(val_expr), _) if val_expr.is_pure() => removed = true,
+                    Stmt::Let(_, Some(val_expr), _) => removed = val_expr.is_pure(),
+                    Stmt::Import(expr, _, _) => removed = expr.is_pure(),
                     _ => {
                         result.push(expr);
                         break;
@@ -323,6 +324,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                     state.set_dirty();
                     Stmt::Noop(pos)
                 }
+                // Only one let/import statement - leave it alone
+                [Stmt::Let(_, _, _)] | [Stmt::Import(_, _, _)] => Stmt::Block(result, pos),
                 // Only one statement - promote
                 [_] => {
                     state.set_dirty();
@@ -368,15 +371,12 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             //id = id2 = expr2
             Expr::Assignment(id2, expr2, pos2) => match (*id, *id2) {
                 // var = var = expr2 -> var = expr2
-                (Expr::Variable(var, sp, _), Expr::Variable(var2, sp2, _)) if var == var2 && sp == sp2 => {
+                (Expr::Variable(var, None, sp, _), Expr::Variable(var2, None, sp2, _))
+                    if var == var2 && sp == sp2 =>
+                {
                     // Assignment to the same variable - fold
                     state.set_dirty();
-
-                    Expr::Assignment(
-                        Box::new(Expr::Variable(var, sp, pos)),
-                        Box::new(optimize_expr(*expr2, state)),
-                        pos,
-                    )
+                    Expr::Assignment(Box::new(Expr::Variable(var, None, sp, pos)), Box::new(optimize_expr(*expr2, state)), pos)
                 }
                 // id1 = id2 = expr2
                 (id1, id2) => Expr::Assignment(
@@ -552,18 +552,18 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         },
 
         // Do not call some special keywords
-        Expr::FnCall(id, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref().as_ref())=>
-            Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
+        Expr::FnCall(id, None, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref().as_ref())=>
+            Expr::FnCall(id, None, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
 
         // Eagerly call functions
-        Expr::FnCall(id, args, def_value, pos)
+        Expr::FnCall(id, None, args, def_value, pos)
                 if state.optimization_level == OptimizationLevel::Full // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
             if state.fn_lib.iter().find(|(name, len)| name == id.as_ref() && *len == args.len()).is_some() {
                 // A script-defined function overrides the built-in function - do not make the call
-                return Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos);
+                return Expr::FnCall(id, None, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos);
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
@@ -594,16 +594,16 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     })
                 ).unwrap_or_else(||
                     // Optimize function call arguments
-                    Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos)
+                    Expr::FnCall(id, None, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos)
                 )
         }
 
         // id(args ..) -> optimize function call arguments
-        Expr::FnCall(id, args, def_value, pos) =>
-            Expr::FnCall(id, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
+        Expr::FnCall(id, modules, args, def_value, pos) =>
+            Expr::FnCall(id, modules, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
 
         // constant-name
-        Expr::Variable(name, _, pos) if state.contains_constant(&name) => {
+        Expr::Variable(name, None, _, pos) if state.contains_constant(&name) => {
             state.set_dirty();
 
             // Replace constant with value
@@ -669,7 +669,10 @@ fn optimize<'a>(
                     _ => {
                         // Keep all variable declarations at this level
                         // and always keep the last return value
-                        let keep = matches!(stmt, Stmt::Let(_, _, _)) || i == num_statements - 1;
+                        let keep = match stmt {
+                            Stmt::Let(_, _, _) | Stmt::Import(_, _, _) => true,
+                            _ => i == num_statements - 1,
+                        };
                         optimize_stmt(stmt, &mut state, keep)
                     }
                 }
@@ -708,11 +711,16 @@ pub fn optimize_into_ast(
     #[cfg(feature = "no_optimize")]
     const level: OptimizationLevel = OptimizationLevel::None;
 
+    #[cfg(not(feature = "no_function"))]
     let fn_lib: Vec<_> = functions
         .iter()
         .map(|fn_def| (fn_def.name.as_str(), fn_def.params.len()))
         .collect();
 
+    #[cfg(feature = "no_function")]
+    const fn_lib: &[(&str, usize)] = &[];
+
+    #[cfg(not(feature = "no_function"))]
     let lib = FunctionsLib::from_vec(
         functions
             .iter()
@@ -742,16 +750,16 @@ pub fn optimize_into_ast(
             .collect(),
     );
 
-    AST(
+    #[cfg(feature = "no_function")]
+    let lib: FunctionsLib = Default::default();
+
+    AST::new(
         match level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => {
                 optimize(statements, engine, &scope, &fn_lib, level)
             }
         },
-        #[cfg(feature = "sync")]
-        Arc::new(lib),
-        #[cfg(not(feature = "sync"))]
-        Rc::new(lib),
+        lib,
     )
 }
