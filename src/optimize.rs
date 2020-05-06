@@ -711,11 +711,16 @@ pub fn optimize_into_ast(
     #[cfg(feature = "no_optimize")]
     const level: OptimizationLevel = OptimizationLevel::None;
 
+    #[cfg(not(feature = "no_function"))]
     let fn_lib: Vec<_> = functions
         .iter()
         .map(|fn_def| (fn_def.name.as_str(), fn_def.params.len()))
         .collect();
 
+    #[cfg(feature = "no_function")]
+    const fn_lib: &[(&str, usize)] = &[];
+
+    #[cfg(not(feature = "no_function"))]
     let lib = FunctionsLib::from_vec(
         functions
             .iter()
@@ -744,6 +749,9 @@ pub fn optimize_into_ast(
             })
             .collect(),
     );
+
+    #[cfg(feature = "no_function")]
+    let lib: FunctionsLib = Default::default();
 
     AST::new(
         match level {

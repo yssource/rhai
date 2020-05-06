@@ -39,6 +39,7 @@ pub type INT = i32;
 /// The system floating-point type.
 ///
 /// Not available under the `no_float` feature.
+#[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
 
 type PERR = ParseErrorType;
@@ -143,13 +144,11 @@ impl AST {
             (true, true) => vec![],
         };
 
-        #[cfg(feature = "sync")]
-        return Self(ast, Arc::new(functions.merge(other.1.as_ref())));
-        #[cfg(not(feature = "sync"))]
-        return Self(ast, Rc::new(functions.merge(other.1.as_ref())));
+        Self::new(ast, functions.merge(other.1.as_ref()))
     }
 
     /// Clear all function definitions in the `AST`.
+    #[cfg(not(feature = "no_function"))]
     pub fn clear_functions(&mut self) {
         #[cfg(feature = "sync")]
         {
@@ -162,6 +161,7 @@ impl AST {
     }
 
     /// Clear all statements in the `AST`, leaving only function definitions.
+    #[cfg(not(feature = "no_function"))]
     pub fn retain_functions(&mut self) {
         self.0 = vec![];
     }
@@ -351,6 +351,7 @@ pub enum Expr {
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
+    #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT, Position),
     /// Character constant.
     CharConstant(char, Position),
@@ -413,6 +414,7 @@ impl Expr {
             Self::False(_) => false.into(),
             Self::Unit(_) => ().into(),
 
+            #[cfg(not(feature = "no_index"))]
             Self::Array(items, _) if items.iter().all(Self::is_constant) => {
                 Dynamic(Union::Array(Box::new(
                     items
@@ -422,6 +424,7 @@ impl Expr {
                 )))
             }
 
+            #[cfg(not(feature = "no_object"))]
             Self::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
                     items
@@ -442,8 +445,10 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_str(&self) -> String {
         match self {
-            Self::IntegerConstant(i, _) => i.to_string(),
+            #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(f, _) => f.to_string(),
+
+            Self::IntegerConstant(i, _) => i.to_string(),
             Self::CharConstant(c, _) => c.to_string(),
             Self::StringConstant(_, _) => "string".to_string(),
             Self::True(_) => "true".to_string(),
@@ -459,8 +464,10 @@ impl Expr {
     /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_, pos) => *pos,
+
             Self::IntegerConstant(_, pos)
-            | Self::FloatConstant(_, pos)
             | Self::CharConstant(_, pos)
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
@@ -485,8 +492,10 @@ impl Expr {
     /// Get the `Position` of the expression.
     pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
         match &mut self {
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_, pos) => *pos = new_pos,
+
             Self::IntegerConstant(_, pos)
-            | Self::FloatConstant(_, pos)
             | Self::CharConstant(_, pos)
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
@@ -531,8 +540,10 @@ impl Expr {
     /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_, _) => true,
+
             Self::IntegerConstant(_, _)
-            | Self::FloatConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
             | Self::True(_)
@@ -559,8 +570,10 @@ impl Expr {
     /// Is a particular token allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match self {
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_, _) => false,
+
             Self::IntegerConstant(_, _)
-            | Self::FloatConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::In(_, _, _)
             | Self::And(_, _, _)
@@ -764,8 +777,15 @@ fn parse_index_chain<'a>(
                 .into_err(*pos))
             }
 
-            Expr::FloatConstant(_, pos)
-            | Expr::CharConstant(_, pos)
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, pos) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(pos))
+            }
+
+            Expr::CharConstant(_, pos)
             | Expr::Assignment(_, _, pos)
             | Expr::And(_, _, pos)
             | Expr::Or(_, _, pos)
@@ -792,8 +812,16 @@ fn parse_index_chain<'a>(
                 )
                 .into_err(*pos))
             }
-            Expr::FloatConstant(_, pos)
-            | Expr::CharConstant(_, pos)
+
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, pos) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(pos))
+            }
+
+            Expr::CharConstant(_, pos)
             | Expr::Assignment(_, _, pos)
             | Expr::And(_, _, pos)
             | Expr::Or(_, _, pos)
@@ -811,6 +839,7 @@ fn parse_index_chain<'a>(
         },
 
         // lhs[float]
+        #[cfg(not(feature = "no_float"))]
         Expr::FloatConstant(_, pos) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a float".into(),
@@ -1095,6 +1124,7 @@ fn parse_primary<'a>(
                 }
             }
             // Indexing
+            #[cfg(not(feature = "no_index"))]
             (expr, Token::LeftBracket) => {
                 parse_index_chain(input, stack, expr, token_pos, allow_stmt_expr)?
             }
@@ -1280,7 +1310,6 @@ fn make_dot_expr(
 fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<ParseError>> {
     match (&lhs, &rhs) {
         (_, Expr::IntegerConstant(_, pos))
-        | (_, Expr::FloatConstant(_, pos))
         | (_, Expr::And(_, _, pos))
         | (_, Expr::Or(_, _, pos))
         | (_, Expr::In(_, _, pos))
@@ -1294,11 +1323,20 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
             .into_err(*pos))
         }
 
+        #[cfg(not(feature = "no_float"))]
+        (_, Expr::FloatConstant(_, pos)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression expects a string, array or object map".into(),
+            )
+            .into_err(*pos))
+        }
+
         // "xxx" in "xxxx", 'x' in "xxxx" - OK!
         (Expr::StringConstant(_, _), Expr::StringConstant(_, _))
         | (Expr::CharConstant(_, _), Expr::StringConstant(_, _)) => (),
 
         // 123.456 in "xxxx"
+        #[cfg(not(feature = "no_float"))]
         (Expr::FloatConstant(_, pos), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a float".into(),
@@ -1352,6 +1390,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
         | (Expr::CharConstant(_, _), Expr::Map(_, _)) => (),
 
         // 123.456 in #{...}
+        #[cfg(not(feature = "no_float"))]
         (Expr::FloatConstant(_, pos), Expr::Map(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a float".into(),
@@ -1975,6 +2014,7 @@ fn parse_stmt<'a>(
         Token::Let => parse_let(input, stack, ScopeEntryType::Normal, allow_stmt_expr),
         Token::Const => parse_let(input, stack, ScopeEntryType::Constant, allow_stmt_expr),
 
+        #[cfg(not(feature = "no_module"))]
         Token::Import => parse_import(input, stack, allow_stmt_expr),
 
         _ => parse_expr_stmt(input, stack, allow_stmt_expr),
@@ -2105,13 +2145,15 @@ fn parse_global_level<'a>(
 
     while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
-        if let (Token::Fn, _) = input.peek().unwrap() {
-            let mut stack = Stack::new();
-            let f = parse_fn(input, &mut stack, true)?;
-            functions.insert(calc_fn_def(&f.name, f.params.len()), f);
-            continue;
+        #[cfg(not(feature = "no_function"))]
+        {
+            if let (Token::Fn, _) = input.peek().unwrap() {
+                let mut stack = Stack::new();
+                let f = parse_fn(input, &mut stack, true)?;
+                functions.insert(calc_fn_def(&f.name, f.params.len()), f);
+                continue;
+            }
         }
-
         // Actual statement
         let stmt = parse_stmt(input, &mut stack, false, true)?;
 

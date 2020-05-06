@@ -1,3 +1,5 @@
+#![cfg(not(feature = "no_index"))]
+
 use super::{reg_binary, reg_binary_mut, reg_trinary_mut, reg_unary_mut};
 
 use crate::any::{Dynamic, Variant};

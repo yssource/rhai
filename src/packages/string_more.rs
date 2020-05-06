@@ -1,9 +1,11 @@
 use super::{reg_binary, reg_binary_mut, reg_trinary_mut, reg_unary_mut};
 
 use crate::def_package;
-use crate::engine::Array;
 use crate::fn_register::map_dynamic as map;
 use crate::parser::INT;
+
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
 
 use crate::stdlib::{
     fmt::Display,

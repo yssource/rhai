@@ -1,9 +1,11 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::any::{Dynamic, Union, Variant};
-use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
+
+#[cfg(not(feature = "no_module"))]
+use crate::module::Module;
 
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec, vec::Vec};
 
@@ -172,6 +174,7 @@ impl<'a> Scope<'a> {
     /// Add (push) a new module to the Scope.
     ///
     /// Modules are used for accessing member variables, functions and plugins under a namespace.
+    #[cfg(not(feature = "no_module"))]
     pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Module) {
         self.push_dynamic_value(
             name,
@@ -340,6 +343,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Find a module in the Scope, starting from the last entry.
+    #[cfg(not(feature = "no_module"))]
     pub fn find_module(&mut self, name: &str) -> Option<&mut Module> {
         let index = self.get_module_index(name)?;
         self.get_mut(index).0.downcast_mut::<Module>()

@@ -1,11 +1,18 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::engine::{Array, Map};
+#[cfg(not(feature = "no_module"))]
 use crate::module::Module;
+
 use crate::parser::INT;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
+
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
 
 use crate::stdlib::{
     any::{type_name, Any, TypeId},
@@ -134,8 +141,11 @@ pub enum Union {
     Int(INT),
     #[cfg(not(feature = "no_float"))]
     Float(FLOAT),
+    #[cfg(not(feature = "no_index"))]
     Array(Box<Array>),
+    #[cfg(not(feature = "no_object"))]
     Map(Box<Map>),
+    #[cfg(not(feature = "no_module"))]
     Module(Box<Module>),
     Variant(Box<Box<dyn Variant>>),
 }
@@ -165,8 +175,11 @@ impl Dynamic {
             Union::Int(_) => TypeId::of::<INT>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(_) => TypeId::of::<FLOAT>(),
+            #[cfg(not(feature = "no_index"))]
             Union::Array(_) => TypeId::of::<Array>(),
+            #[cfg(not(feature = "no_object"))]
             Union::Map(_) => TypeId::of::<Map>(),
+            #[cfg(not(feature = "no_module"))]
             Union::Module(_) => TypeId::of::<Module>(),
             Union::Variant(value) => (***value).type_id(),
         }
@@ -182,8 +195,11 @@ impl Dynamic {
             Union::Int(_) => type_name::<INT>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(_) => type_name::<FLOAT>(),
+            #[cfg(not(feature = "no_index"))]
             Union::Array(_) => "array",
+            #[cfg(not(feature = "no_object"))]
             Union::Map(_) => "map",
+            #[cfg(not(feature = "no_module"))]
             Union::Module(_) => "sub-scope",
 
             #[cfg(not(feature = "no_std"))]
@@ -203,8 +219,11 @@ impl fmt::Display for Dynamic {
             Union::Int(value) => write!(f, "{}", value),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => write!(f, "{}", value),
+            #[cfg(not(feature = "no_index"))]
             Union::Array(value) => write!(f, "{:?}", value),
+            #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
+            #[cfg(not(feature = "no_module"))]
             Union::Module(value) => write!(f, "{:?}", value),
 
             #[cfg(not(feature = "no_std"))]
@@ -224,8 +243,11 @@ impl fmt::Debug for Dynamic {
             Union::Int(value) => write!(f, "{:?}", value),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => write!(f, "{:?}", value),
+            #[cfg(not(feature = "no_index"))]
             Union::Array(value) => write!(f, "{:?}", value),
+            #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
+            #[cfg(not(feature = "no_module"))]
             Union::Module(value) => write!(f, "{:?}", value),
 
             #[cfg(not(feature = "no_std"))]
@@ -245,8 +267,11 @@ impl Clone for Dynamic {
             Union::Int(value) => Self(Union::Int(value)),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => Self(Union::Float(value)),
+            #[cfg(not(feature = "no_index"))]
             Union::Array(ref value) => Self(Union::Array(value.clone())),
+            #[cfg(not(feature = "no_object"))]
             Union::Map(ref value) => Self(Union::Map(value.clone())),
+            #[cfg(not(feature = "no_module"))]
             Union::Module(ref value) => Self(Union::Module(value.clone())),
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
         }
@@ -260,13 +285,13 @@ impl Default for Dynamic {
 }
 
 /// Cast a Boxed type into another type.
-fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<T, Box<X>> {
+fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, Box<X>> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {
         // SAFETY: just checked whether we are pointing to the correct type
         unsafe {
             let raw: *mut dyn Any = Box::into_raw(item as Box<dyn Any>);
-            Ok(*Box::from_raw(raw as *mut T))
+            Ok(Box::from_raw(raw as *mut T))
         }
     } else {
         // Return the consumed item for chaining.
@@ -320,31 +345,33 @@ impl Dynamic {
             }
         }
 
-        let var = Box::new(value);
+        let mut var = Box::new(value);
 
-        Self(
-            cast_box::<_, Dynamic>(var)
-                .map(|x| x.0)
-                .or_else(|var| {
-                    cast_box::<_, String>(var)
-                        .map(Box::new)
-                        .map(Union::Str)
-                        .or_else(|var| {
-                            cast_box::<_, Array>(var)
-                                .map(Box::new)
-                                .map(Union::Array)
-                                .or_else(|var| {
-                                    cast_box::<_, Map>(var)
-                                        .map(Box::new)
-                                        .map(Union::Map)
-                                        .or_else(|var| -> Result<Union, ()> {
-                                            Ok(Union::Variant(Box::new(var)))
-                                        })
-                                })
-                        })
-                })
-                .unwrap(),
-        )
+        var = match cast_box::<_, Dynamic>(var) {
+            Ok(d) => return *d,
+            Err(var) => var,
+        };
+        var = match cast_box::<_, String>(var) {
+            Ok(s) => return Self(Union::Str(s)),
+            Err(var) => var,
+        };
+        #[cfg(not(feature = "no_index"))]
+        {
+            var = match cast_box::<_, Array>(var) {
+                Ok(array) => return Self(Union::Array(array)),
+                Err(var) => var,
+            };
+        }
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            var = match cast_box::<_, Map>(var) {
+                Ok(map) => return Self(Union::Map(map)),
+                Err(var) => var,
+            }
+        }
+
+        Self(Union::Variant(Box::new(var)))
     }
 
     /// Get a copy of the `Dynamic` value as a specific type.
@@ -363,20 +390,23 @@ impl Dynamic {
     /// ```
     pub fn try_cast<T: Variant + Clone>(self) -> Option<T> {
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return cast_box::<_, T>(Box::new(self)).ok();
+            return cast_box::<_, T>(Box::new(self)).ok().map(|v| *v);
         }
 
         match self.0 {
             Union::Unit(ref value) => (value as &dyn Any).downcast_ref::<T>().cloned(),
             Union::Bool(ref value) => (value as &dyn Any).downcast_ref::<T>().cloned(),
-            Union::Str(value) => cast_box::<_, T>(value).ok(),
+            Union::Str(value) => cast_box::<_, T>(value).ok().map(|v| *v),
             Union::Char(ref value) => (value as &dyn Any).downcast_ref::<T>().cloned(),
             Union::Int(ref value) => (value as &dyn Any).downcast_ref::<T>().cloned(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(ref value) => (value as &dyn Any).downcast_ref::<T>().cloned(),
-            Union::Array(value) => cast_box::<_, T>(value).ok(),
-            Union::Map(value) => cast_box::<_, T>(value).ok(),
-            Union::Module(value) => cast_box::<_, T>(value).ok(),
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(value) => cast_box::<_, T>(value).ok().map(|v| *v),
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(value) => cast_box::<_, T>(value).ok().map(|v| *v),
+            #[cfg(not(feature = "no_module"))]
+            Union::Module(value) => cast_box::<_, T>(value).ok().map(|v| *v),
             Union::Variant(value) => value.as_any().downcast_ref::<T>().cloned(),
         }
     }
@@ -401,20 +431,23 @@ impl Dynamic {
         //self.try_cast::<T>().unwrap()
 
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return cast_box::<_, T>(Box::new(self)).unwrap();
+            return *cast_box::<_, T>(Box::new(self)).unwrap();
         }
 
         match self.0 {
             Union::Unit(ref value) => (value as &dyn Any).downcast_ref::<T>().unwrap().clone(),
             Union::Bool(ref value) => (value as &dyn Any).downcast_ref::<T>().unwrap().clone(),
-            Union::Str(value) => cast_box::<_, T>(value).unwrap(),
+            Union::Str(value) => *cast_box::<_, T>(value).unwrap(),
             Union::Char(ref value) => (value as &dyn Any).downcast_ref::<T>().unwrap().clone(),
             Union::Int(ref value) => (value as &dyn Any).downcast_ref::<T>().unwrap().clone(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(ref value) => (value as &dyn Any).downcast_ref::<T>().unwrap().clone(),
-            Union::Array(value) => cast_box::<_, T>(value).unwrap(),
-            Union::Map(value) => cast_box::<_, T>(value).unwrap(),
-            Union::Module(value) => cast_box::<_, T>(value).unwrap(),
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(value) => *cast_box::<_, T>(value).unwrap(),
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(value) => *cast_box::<_, T>(value).unwrap(),
+            #[cfg(not(feature = "no_module"))]
+            Union::Module(value) => *cast_box::<_, T>(value).unwrap(),
             Union::Variant(value) => value.as_any().downcast_ref::<T>().unwrap().clone(),
         }
     }
@@ -435,8 +468,11 @@ impl Dynamic {
             Union::Int(value) => (value as &dyn Any).downcast_ref::<T>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => (value as &dyn Any).downcast_ref::<T>(),
+            #[cfg(not(feature = "no_index"))]
             Union::Array(value) => (value.as_ref() as &dyn Any).downcast_ref::<T>(),
+            #[cfg(not(feature = "no_object"))]
             Union::Map(value) => (value.as_ref() as &dyn Any).downcast_ref::<T>(),
+            #[cfg(not(feature = "no_module"))]
             Union::Module(value) => (value.as_ref() as &dyn Any).downcast_ref::<T>(),
             Union::Variant(value) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
         }
@@ -458,8 +494,11 @@ impl Dynamic {
             Union::Int(value) => (value as &mut dyn Any).downcast_mut::<T>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value) => (value as &mut dyn Any).downcast_mut::<T>(),
+            #[cfg(not(feature = "no_index"))]
             Union::Array(value) => (value.as_mut() as &mut dyn Any).downcast_mut::<T>(),
+            #[cfg(not(feature = "no_object"))]
             Union::Map(value) => (value.as_mut() as &mut dyn Any).downcast_mut::<T>(),
+            #[cfg(not(feature = "no_module"))]
             Union::Module(value) => (value.as_mut() as &mut dyn Any).downcast_mut::<T>(),
             Union::Variant(value) => value.as_mut().as_mut_any().downcast_mut::<T>(),
         }
@@ -542,6 +581,7 @@ impl From<String> for Dynamic {
         Self(Union::Str(Box::new(value)))
     }
 }
+#[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
     fn from(value: Vec<T>) -> Self {
         Self(Union::Array(Box::new(
@@ -549,6 +589,7 @@ impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
         )))
     }
 }
+#[cfg(not(feature = "no_object"))]
 impl<T: Variant + Clone> From<HashMap<String, T>> for Dynamic {
     fn from(value: HashMap<String, T>) -> Self {
         Self(Union::Map(Box::new(

@@ -1,9 +1,10 @@
 //! Module defining external-loaded modules for Rhai.
+#![cfg(not(feature = "no_module"))]
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib};
-use crate::parser::FnDef;
+use crate::parser::{FnDef, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -12,11 +13,12 @@ use crate::utils::StaticVec;
 
 use crate::stdlib::{
     any::TypeId,
+    boxed::Box,
     collections::HashMap,
     fmt, mem,
     ops::{Deref, DerefMut},
     rc::Rc,
-    string::String,
+    string::{String, ToString},
     sync::Arc,
 };
 
@@ -70,21 +72,61 @@ impl fmt::Debug for Module {
 
 impl Module {
     /// Create a new module.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_var("answer", 42_i64);
+    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// ```
     pub fn new() -> Self {
         Default::default()
     }
 
     /// Does a variable exist in the module?
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_var("answer", 42_i64);
+    /// assert!(module.contains_var("answer"));
+    /// ```
     pub fn contains_var(&self, name: &str) -> bool {
         self.variables.contains_key(name)
     }
 
     /// Get the value of a module variable.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_var("answer", 42_i64);
+    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// ```
     pub fn get_var_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.get_var(name).and_then(|v| v.try_cast::<T>())
     }
 
-    /// Get a module variable.
+    /// Get a module variable as a `Dynamic`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_var("answer", 42_i64);
+    /// assert_eq!(module.get_var("answer").unwrap().cast::<i64>(), 42);
+    /// ```
     pub fn get_var(&self, name: &str) -> Option<Dynamic> {
         self.variables.get(name).cloned()
     }
@@ -97,6 +139,16 @@ impl Module {
     /// Set a variable into the module.
     ///
     /// If there is an existing variable of the same name, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_var("answer", 42_i64);
+    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// ```
     pub fn set_var<K: Into<String>, T: Into<Dynamic>>(&mut self, name: K, value: T) {
         self.variables.insert(name.into(), value.into());
     }
@@ -115,16 +167,49 @@ impl Module {
     }
 
     /// Does a sub-module exist in the module?
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let sub_module = Module::new();
+    /// module.set_sub_module("question", sub_module);
+    /// assert!(module.contains_sub_module("question"));
+    /// ```
     pub fn contains_sub_module(&self, name: &str) -> bool {
         self.modules.contains_key(name)
     }
 
     /// Get a sub-module.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let sub_module = Module::new();
+    /// module.set_sub_module("question", sub_module);
+    /// assert!(module.get_sub_module("question").is_some());
+    /// ```
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
         self.modules.get(name)
     }
 
     /// Get a mutable reference to a sub-module.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let sub_module = Module::new();
+    /// module.set_sub_module("question", sub_module);
+    /// assert!(module.get_sub_module_mut("question").is_some());
+    /// ```
     pub fn get_sub_module_mut(&mut self, name: &str) -> Option<&mut Module> {
         self.modules.get_mut(name)
     }
@@ -132,6 +217,17 @@ impl Module {
     /// Set a sub-module into the module.
     ///
     /// If there is an existing sub-module of the same name, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let sub_module = Module::new();
+    /// module.set_sub_module("question", sub_module);
+    /// assert!(module.get_sub_module("question").is_some());
+    /// ```
     pub fn set_sub_module<K: Into<String>>(&mut self, name: K, sub_module: Module) {
         self.modules.insert(name.into(), sub_module.into());
     }
@@ -160,6 +256,16 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_0("calc", || Ok(42_i64));
+    /// assert!(module.contains_fn(hash));
+    /// ```
     pub fn contains_fn(&self, hash: u64) -> bool {
         self.functions.contains_key(&hash)
     }
@@ -181,6 +287,16 @@ impl Module {
     /// Set a Rust function taking no parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_0("calc", || Ok(42_i64));
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn set_fn_0<T: Into<Dynamic>>(
         &mut self,
         fn_name: &str,
@@ -199,6 +315,16 @@ impl Module {
     /// Set a Rust function taking one parameter into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn set_fn_1<A: Variant + Clone, T: Into<Dynamic>>(
         &mut self,
         fn_name: &str,
@@ -217,6 +343,16 @@ impl Module {
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn set_fn_1_mut<A: Variant + Clone, T: Into<Dynamic>>(
         &mut self,
         fn_name: &str,
@@ -235,6 +371,18 @@ impl Module {
     /// Set a Rust function taking two parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_2("calc", |x: i64, y: String| {
+    ///     Ok(x + y.len() as i64)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Into<Dynamic>>(
         &mut self,
         fn_name: &str,
@@ -256,7 +404,17 @@ impl Module {
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
     /// returning a hash key.
     ///
-    /// If there is a similar existing Rust function, it is replaced.
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: String| {
+    ///     *x += y.len() as i64; Ok(*x)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Into<Dynamic>>(
         &mut self,
         fn_name: &str,
@@ -278,6 +436,18 @@ impl Module {
     /// Set a Rust function taking three parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_3("calc", |x: i64, y: String, z: i64| {
+    ///     Ok(x + y.len() as i64 + z)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn set_fn_3<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -306,6 +476,18 @@ impl Module {
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: String, z: i64| {
+    ///     *x += y.len() as i64 + z; Ok(*x)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn set_fn_3_mut<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -334,6 +516,16 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
     pub fn get_fn(&self, hash: u64) -> Option<&Box<FnAny>> {
         self.functions.get(&hash).map(|v| v.as_ref())
     }
@@ -366,7 +558,16 @@ impl Module {
             })?)
     }
 
-    /// Get a script-defined function.
+    /// Get the script-defined functions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// assert_eq!(module.get_fn_lib().len(), 0);
+    /// ```
     pub fn get_fn_lib(&self) -> &FunctionsLib {
         &self.fn_lib
     }
@@ -383,10 +584,61 @@ impl Module {
             .fn_lib
             .get_function(name, args))
     }
+
+    /// Create a new `Module` by evaluating an `AST`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Module};
+    ///
+    /// let engine = Engine::new();
+    /// let ast = engine.compile("let answer = 42;")?;
+    /// let module = Module::eval_ast_as_new(&ast, &engine)?;
+    /// assert!(module.contains_var("answer"));
+    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn eval_ast_as_new(ast: &AST, engine: &Engine) -> FuncReturn<Self> {
+        // Use new scope
+        let mut scope = Scope::new();
+
+        // Run the script
+        engine.eval_ast_with_scope_raw(&mut scope, &ast)?;
+
+        // Create new module
+        let mut module = Module::new();
+
+        scope.into_iter().for_each(
+            |ScopeEntry {
+                 name, typ, value, ..
+             }| {
+                match typ {
+                    // Variables left in the scope become module variables
+                    ScopeEntryType::Normal | ScopeEntryType::Constant => {
+                        module.variables.insert(name.into_owned(), value);
+                    }
+                    // Modules left in the scope become sub-modules
+                    ScopeEntryType::Module => {
+                        module
+                            .modules
+                            .insert(name.into_owned(), value.cast::<Module>());
+                    }
+                }
+            },
+        );
+
+        module.fn_lib = module.fn_lib.merge(ast.fn_lib());
+
+        Ok(module)
+    }
 }
 
 /// Re-export module resolvers.
 pub mod resolvers {
+    #[cfg(not(feature = "no_std"))]
     pub use super::file::FileModuleResolver;
     pub use super::stat::StaticModuleResolver;
 }
@@ -403,6 +655,20 @@ mod file {
     /// allow specification of a base directory with module path used as a relative path offset
     /// to the base directory. The script file is then forced to be in a specified extension
     /// (default `.rhai`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Engine;
+    /// use rhai::module_resolvers::FileModuleResolver;
+    ///
+    /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
+    /// // with file extension '.x'.
+    /// let resolver = FileModuleResolver::new_with_path_and_extension("./scripts", "x");
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.set_module_resolver(Some(resolver));
+    /// ```
     #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
     pub struct FileModuleResolver {
         path: PathBuf,
@@ -411,16 +677,66 @@ mod file {
 
     impl FileModuleResolver {
         /// Create a new `FileModuleResolver` with a specific base path.
-        pub fn new_with_path(path: PathBuf) -> Self {
-            Self::new_with_path_and_extension(path, "rhai".to_string())
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use rhai::Engine;
+        /// use rhai::module_resolvers::FileModuleResolver;
+        ///
+        /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
+        /// // with file extension '.rhai' (the default).
+        /// let resolver = FileModuleResolver::new_with_path("./scripts");
+        ///
+        /// let mut engine = Engine::new();
+        /// engine.set_module_resolver(Some(resolver));
+        /// ```
+        pub fn new_with_path<P: Into<PathBuf>>(path: P) -> Self {
+            Self::new_with_path_and_extension(path, "rhai")
         }
+
         /// Create a new `FileModuleResolver` with a specific base path and file extension.
         ///
         /// The default extension is `.rhai`.
-        pub fn new_with_path_and_extension(path: PathBuf, extension: String) -> Self {
-            Self { path, extension }
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use rhai::Engine;
+        /// use rhai::module_resolvers::FileModuleResolver;
+        ///
+        /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
+        /// // with file extension '.x'.
+        /// let resolver = FileModuleResolver::new_with_path_and_extension("./scripts", "x");
+        ///
+        /// let mut engine = Engine::new();
+        /// engine.set_module_resolver(Some(resolver));
+        /// ```
+        pub fn new_with_path_and_extension<P: Into<PathBuf>, E: Into<String>>(
+            path: P,
+            extension: E,
+        ) -> Self {
+            Self {
+                path: path.into(),
+                extension: extension.into(),
+            }
         }
+
         /// Create a new `FileModuleResolver` with the current directory as base path.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use rhai::Engine;
+        /// use rhai::module_resolvers::FileModuleResolver;
+        ///
+        /// // Create a new 'FileModuleResolver' loading scripts from the current directory
+        /// // with file extension '.rhai' (the default).
+        /// let resolver = FileModuleResolver::new();
+        ///
+        /// let mut engine = Engine::new();
+        /// engine.set_module_resolver(Some(resolver));
+        /// ```
         pub fn new() -> Self {
             Default::default()
         }
@@ -443,39 +759,8 @@ mod file {
                 .compile_file(file_path)
                 .map_err(|err| EvalAltResult::set_position(err, pos))?;
 
-            // Use new scope
-            let mut scope = Scope::new();
-
-            // Run the script
-            engine
-                .eval_ast_with_scope_raw(&mut scope, &ast)
-                .map_err(|err| EvalAltResult::set_position(err, pos))?;
-
-            // Create new module
-            let mut module = Module::new();
-
-            scope.into_iter().for_each(
-                |ScopeEntry {
-                     name, typ, value, ..
-                 }| {
-                    match typ {
-                        // Variables left in the scope become module variables
-                        ScopeEntryType::Normal | ScopeEntryType::Constant => {
-                            module.variables.insert(name.into_owned(), value);
-                        }
-                        // Modules left in the scope become sub-modules
-                        ScopeEntryType::Module => {
-                            module
-                                .modules
-                                .insert(name.into_owned(), value.cast::<Module>());
-                        }
-                    }
-                },
-            );
-
-            module.fn_lib = module.fn_lib.merge(ast.fn_lib());
-
-            Ok(module)
+            Module::eval_ast_as_new(&ast, engine)
+                .map_err(|err| EvalAltResult::set_position(err, pos))
         }
     }
 }
@@ -485,11 +770,41 @@ mod stat {
     use super::*;
 
     /// A module resolution service that serves modules added into it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Engine, Module};
+    /// use rhai::module_resolvers::StaticModuleResolver;
+    ///
+    /// let mut resolver = StaticModuleResolver::new();
+    ///
+    /// let module = Module::new();
+    /// resolver.insert("hello".to_string(), module);
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.set_module_resolver(Some(resolver));
+    /// ```
     #[derive(Debug, Clone, Default)]
     pub struct StaticModuleResolver(HashMap<String, Module>);
 
     impl StaticModuleResolver {
         /// Create a new `StaticModuleResolver`.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use rhai::{Engine, Module};
+        /// use rhai::module_resolvers::StaticModuleResolver;
+        ///
+        /// let mut resolver = StaticModuleResolver::new();
+        ///
+        /// let module = Module::new();
+        /// resolver.insert("hello".to_string(), module);
+        ///
+        /// let mut engine = Engine::new();
+        /// engine.set_module_resolver(Some(resolver));
+        /// ```
         pub fn new() -> Self {
             Default::default()
         }

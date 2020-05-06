@@ -3,7 +3,6 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::module::{resolvers, Module, ModuleResolver};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
 use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt, AST};
@@ -11,6 +10,9 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
 use crate::utils::{calc_fn_def, StaticVec};
+
+#[cfg(not(feature = "no_module"))]
+use crate::module::{resolvers, Module, ModuleResolver};
 
 use crate::stdlib::{
     any::TypeId,
@@ -30,11 +32,13 @@ use crate::stdlib::{
 /// An dynamic array of `Dynamic` values.
 ///
 /// Not available under the `no_index` feature.
+#[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
 /// An dynamic hash map of `Dynamic` values with `String` keys.
 ///
 /// Not available under the `no_object` feature.
+#[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<String, Dynamic>;
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
@@ -262,6 +266,7 @@ pub struct Engine {
     pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
 
     /// A module resolution service.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
@@ -301,7 +306,8 @@ impl Default for Engine {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
             module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
-            #[cfg(any(feature = "no_std", feature = "no_module"))]
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(feature = "no_std")]
             module_resolver: None,
 
             type_names: Default::default(),
@@ -391,38 +397,41 @@ fn search_scope<'a>(
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
-    if let Some(modules) = modules {
-        let (id, root_pos) = modules.get(0); // First module
+    #[cfg(not(feature = "no_module"))]
+    {
+        if let Some(modules) = modules {
+            let (id, root_pos) = modules.get(0); // First module
 
-        let module = if let Some(index) = index {
-            scope
-                .get_mut(scope.len() - index.get())
-                .0
-                .downcast_mut::<Module>()
-                .unwrap()
-        } else {
-            scope
-                .find_module(id)
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
-        };
+            let module = if let Some(index) = index {
+                scope
+                    .get_mut(scope.len() - index.get())
+                    .0
+                    .downcast_mut::<Module>()
+                    .unwrap()
+            } else {
+                scope.find_module(id).ok_or_else(|| {
+                    Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
+                })?
+            };
 
-        Ok((
-            module.get_qualified_var_mut(name, modules.as_ref(), pos)?,
-            // Module variables are constant
-            ScopeEntryType::Constant,
-        ))
-    } else {
-        let index = if let Some(index) = index {
-            scope.len() - index.get()
-        } else {
-            scope
-                .get_index(name)
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?
-                .0
-        };
-
-        Ok(scope.get_mut(index))
+            return Ok((
+                module.get_qualified_var_mut(name, modules.as_ref(), pos)?,
+                // Module variables are constant
+                ScopeEntryType::Constant,
+            ));
+        }
     }
+
+    let index = if let Some(index) = index {
+        scope.len() - index.get()
+    } else {
+        scope
+            .get_index(name)
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?
+            .0
+    };
+
+    Ok(scope.get_mut(index))
 }
 
 impl Engine {
@@ -438,7 +447,10 @@ impl Engine {
             packages: Default::default(),
             functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
             type_iterators: Default::default(),
+
+            #[cfg(not(feature = "no_module"))]
             module_resolver: None,
+
             type_names: Default::default(),
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
@@ -721,7 +733,7 @@ impl Engine {
         }
 
         let statements = mem::take(ast.statements_mut());
-        ast = AST::new(statements, fn_lib.clone());
+        let ast = AST::new(statements, fn_lib.clone());
 
         // Evaluate the AST
         self.eval_ast_with_scope_raw(scope, &ast)
@@ -779,7 +791,7 @@ impl Engine {
                 // xxx.fn_name(arg_expr_list)
                 Expr::FnCall(fn_name, None,_, def_val, pos) => {
                     let mut args: Vec<_> = once(obj)
-                        .chain(idx_val.downcast_mut::<Array>().unwrap().iter_mut())
+                        .chain(idx_val.downcast_mut::<Vec<Dynamic>>().unwrap().iter_mut())
                         .collect();
                     let def_val = def_val.as_deref();
                     // A function call is assumed to have side effects, so the value is changed
@@ -789,6 +801,7 @@ impl Engine {
                 // xxx.module::fn_name(...) - syntax error
                 Expr::FnCall(_,_,_,_,_) => unreachable!(),
                 // {xxx:map}.id = ???
+                #[cfg(not(feature = "no_object"))]
                 Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
                     let mut indexed_val =
                         self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, true)?;
@@ -796,6 +809,7 @@ impl Engine {
                     Ok((Default::default(), true))
                 }
                 // {xxx:map}.id
+                #[cfg(not(feature = "no_object"))]
                 Expr::Property(id, pos) if obj.is::<Map>() => {
                     let indexed_val =
                         self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, false)?;
@@ -813,6 +827,7 @@ impl Engine {
                     let mut args = [obj];
                     self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).map(|v| (v, false))
                 }
+                #[cfg(not(feature = "no_object"))]
                 // {xxx:map}.idx_lhs[idx_expr]
                 Expr::Index(dot_lhs, dot_rhs, pos) |
                 // {xxx:map}.dot_lhs.rhs
@@ -959,7 +974,10 @@ impl Engine {
                     .map(|arg_expr| self.eval_expr(scope, state, fn_lib, arg_expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                idx_values.push(arg_values)
+                #[cfg(not(feature = "no_index"))]
+                idx_values.push(arg_values);
+                #[cfg(feature = "no_index")]
+                idx_values.push(Dynamic::from(arg_values));
             }
             Expr::FnCall(_, _, _, _, _) => unreachable!(),
             Expr::Property(_, _) => idx_values.push(()), // Store a placeholder - no need to copy the property name
@@ -994,6 +1012,7 @@ impl Engine {
         let type_name = self.map_type_name(val.type_name());
 
         match val {
+            #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr)) => {
                 // val_array[idx]
                 let index = idx
@@ -1015,6 +1034,7 @@ impl Engine {
                 }
             }
 
+            #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map)) => {
                 // val_map[idx]
                 let index = idx
@@ -1030,6 +1050,7 @@ impl Engine {
                 })
             }
 
+            #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Str(s)) => {
                 // val_string[idx]
                 let index = idx
@@ -1088,6 +1109,7 @@ impl Engine {
         let rhs_value = self.eval_expr(scope, state, fn_lib, rhs, level)?;
 
         match rhs_value {
+            #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value)) => {
                 let def_value = false.into();
 
@@ -1108,6 +1130,7 @@ impl Engine {
 
                 Ok(false.into())
             }
+            #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
                 // Only allows String or char
                 Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(s.as_ref()).into()),
@@ -1230,7 +1253,8 @@ impl Engine {
                     .collect::<Result<HashMap<_, _>, _>>()?,
             )))),
 
-            Expr::FnCall(fn_name, modules, arg_exprs, def_val, pos) => {
+            // Normal function call
+            Expr::FnCall(fn_name, None, arg_exprs, def_val, pos) => {
                 let mut arg_values = arg_exprs
                     .iter()
                     .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
@@ -1238,32 +1262,7 @@ impl Engine {
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 
-                if let Some(modules) = modules {
-                    // Module-qualified function call
-                    let modules = modules.as_ref();
-
-                    let (id, root_pos) = modules.get(0); // First module
-
-                    let module = scope.find_module(id).ok_or_else(|| {
-                        Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
-                    })?;
-
-                    // First search in script-defined functions (can override built-in)
-                    if let Some(fn_def) =
-                        module.get_qualified_fn_lib(fn_name, args.len(), modules)?
-                    {
-                        self.call_fn_from_lib(None, fn_lib, fn_def, &mut args, *pos, level)
-                    } else {
-                        // Then search in Rust functions
-                        let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
-
-                        match module.get_qualified_fn(fn_name, hash, modules, *pos) {
-                            Ok(func) => func(&mut args, *pos),
-                            Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
-                            Err(err) => Err(err),
-                        }
-                    }
-                } else if fn_name.as_ref() == KEYWORD_EVAL
+                if fn_name.as_ref() == KEYWORD_EVAL
                     && args.len() == 1
                     && !self.has_override(fn_lib, KEYWORD_EVAL)
                 {
@@ -1285,6 +1284,39 @@ impl Engine {
                     // Normal function call - except for eval (handled above)
                     let def_value = def_val.as_deref();
                     self.exec_fn_call(fn_lib, fn_name, &mut args, def_value, *pos, level)
+                }
+            }
+
+            // Module-qualified function call
+            #[cfg(not(feature = "no_module"))]
+            Expr::FnCall(fn_name, Some(modules), arg_exprs, def_val, pos) => {
+                let modules = modules.as_ref();
+
+                let mut arg_values = arg_exprs
+                    .iter()
+                    .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let mut args: Vec<_> = arg_values.iter_mut().collect();
+
+                let (id, root_pos) = modules.get(0); // First module
+
+                let module = scope.find_module(id).ok_or_else(|| {
+                    Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
+                })?;
+
+                // First search in script-defined functions (can override built-in)
+                if let Some(fn_def) = module.get_qualified_fn_lib(fn_name, args.len(), modules)? {
+                    self.call_fn_from_lib(None, fn_lib, fn_def, &mut args, *pos, level)
+                } else {
+                    // Then search in Rust functions
+                    let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
+
+                    match module.get_qualified_fn(fn_name, hash, modules, *pos) {
+                        Ok(func) => func(&mut args, *pos),
+                        Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
+                        Err(err) => Err(err),
+                    }
                 }
             }
 
@@ -1519,25 +1551,28 @@ impl Engine {
                 #[cfg(feature = "no_module")]
                 unreachable!();
 
-                if let Some(path) = self
-                    .eval_expr(scope, state, fn_lib, expr, level)?
-                    .try_cast::<String>()
+                #[cfg(not(feature = "no_module"))]
                 {
-                    if let Some(resolver) = self.module_resolver.as_ref() {
-                        let module = resolver.resolve(self, &path, expr.position())?;
+                    if let Some(path) = self
+                        .eval_expr(scope, state, fn_lib, expr, level)?
+                        .try_cast::<String>()
+                    {
+                        if let Some(resolver) = self.module_resolver.as_ref() {
+                            let module = resolver.resolve(self, &path, expr.position())?;
 
-                        // TODO - avoid copying module name in inner block?
-                        let mod_name = name.as_ref().clone();
-                        scope.push_module(mod_name, module);
-                        Ok(Default::default())
+                            // TODO - avoid copying module name in inner block?
+                            let mod_name = name.as_ref().clone();
+                            scope.push_module(mod_name, module);
+                            Ok(Default::default())
+                        } else {
+                            Err(Box::new(EvalAltResult::ErrorModuleNotFound(
+                                path,
+                                expr.position(),
+                            )))
+                        }
                     } else {
-                        Err(Box::new(EvalAltResult::ErrorModuleNotFound(
-                            path,
-                            expr.position(),
-                        )))
+                        Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                     }
-                } else {
-                    Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                 }
             }
         }

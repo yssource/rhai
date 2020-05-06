@@ -1,7 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, Map, State, FUNC_INDEXER};
+use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_register::RegisterFn;
@@ -10,6 +10,9 @@ use crate::parser::{parse, parse_global_expr, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{lex, Position};
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
