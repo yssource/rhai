@@ -9,6 +9,7 @@ use crate::token::Position;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
+    mem,
     string::{String, ToString},
 };
 
@@ -170,9 +171,9 @@ pub fn reg_unary<T: Variant + Clone, R>(
         check_num_args(fn_name, 1, args, pos)?;
 
         let mut drain = args.iter_mut();
-        let x: &mut T = drain.next().unwrap().downcast_mut().unwrap();
+        let x = mem::take(*drain.next().unwrap()).cast::<T>();
 
-        let r = func(x.clone());
+        let r = func(x);
         map_result(r, pos)
     });
 
@@ -286,10 +287,10 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
         check_num_args(fn_name, 2, args, pos)?;
 
         let mut drain = args.iter_mut();
-        let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
+        let x = mem::take(*drain.next().unwrap()).cast::<A>();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
 
-        let r = func(x.clone(), y.clone());
+        let r = func(x, y);
         map_result(r, pos)
     });
 
@@ -351,9 +352,9 @@ pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
 
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
 
-        let r = func(x, y.clone());
+        let r = func(x, y);
         map_result(r, pos)
     });
 
@@ -390,11 +391,11 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
         check_num_args(fn_name, 3, args, pos)?;
 
         let mut drain = args.iter_mut();
-        let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
-        let z: &mut C = drain.next().unwrap().downcast_mut().unwrap();
+        let x = mem::take(*drain.next().unwrap()).cast::<A>();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
+        let z = mem::take(*drain.next().unwrap()).cast::<C>();
 
-        let r = func(x.clone(), y.clone(), z.clone());
+        let r = func(x, y, z);
         map_result(r, pos)
     });
 
@@ -432,10 +433,10 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
 
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
-        let z: &mut C = drain.next().unwrap().downcast_mut().unwrap();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
+        let z = mem::take(*drain.next().unwrap()).cast::<C>();
 
-        let r = func(x, y.clone(), z.clone());
+        let r = func(x, y, z);
         map_result(r, pos)
     });
 

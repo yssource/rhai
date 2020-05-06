@@ -502,6 +502,12 @@ impl Engine {
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
+    ///
+    /// ## WARNING
+    ///
+    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
+    /// All function arguments not in the first position are always passed by value and thus consumed.
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_fn_raw(
         &self,
         scope: Option<&mut Scope>,
@@ -596,6 +602,12 @@ impl Engine {
     }
 
     /// Call a script-defined function.
+    ///
+    /// ## WARNING
+    ///
+    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
+    /// All function arguments not in the first position are always passed by value and thus consumed.
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_fn_from_lib(
         &self,
         scope: Option<&mut Scope>,
@@ -678,6 +690,12 @@ impl Engine {
     }
 
     // Perform an actual function call, taking care of special functions
+    ///
+    /// ## WARNING
+    ///
+    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
+    /// All function arguments not in the first position are always passed by value and thus consumed.
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     fn exec_fn_call(
         &self,
         fn_lib: &FunctionsLib,
@@ -1105,17 +1123,20 @@ impl Engine {
         rhs: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut lhs_value = self.eval_expr(scope, state, fn_lib, lhs, level)?;
+        let lhs_value = self.eval_expr(scope, state, fn_lib, lhs, level)?;
         let rhs_value = self.eval_expr(scope, state, fn_lib, rhs, level)?;
 
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(mut rhs_value)) => {
+            Dynamic(Union::Array(rhs_value)) => {
                 let def_value = false.into();
 
-                // Call the '==' operator to compare each value
-                for value in rhs_value.iter_mut() {
-                    let args = &mut [&mut lhs_value, value];
+                // Call the `==` operator to compare each value
+                for value in rhs_value.iter() {
+                    // WARNING - Always clone the values here because they'll be consumed by the function call.
+                    //           Do not pass the `&mut` straight through because the `==` implementation
+                    //           very likely takes parameters passed by value!
+                    let args = &mut [&mut lhs_value.clone(), &mut value.clone()];
                     let def_value = Some(&def_value);
                     let pos = rhs.position();
 
