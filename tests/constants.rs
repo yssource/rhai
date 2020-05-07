@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_constant() -> Result<(), Box<EvalAltResult>> {
@@ -8,13 +8,13 @@ fn test_constant() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine.eval::<INT>("const x = 123; x = 42;").expect_err("expects error"),
-        EvalAltResult::ErrorAssignmentToConstant(var, _) if var == "x"
+        EvalAltResult::ErrorParsing(err) if err.error_type() == &ParseErrorType::AssignmentToConstant("x".to_string())
     ));
 
     #[cfg(not(feature = "no_index"))]
     assert!(matches!(
         *engine.eval::<INT>("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
-        EvalAltResult::ErrorAssignmentToConstant(var, _) if var == "x"
+        EvalAltResult::ErrorParsing(err) if err.error_type() == &ParseErrorType::AssignmentToConstant("x".to_string())
     ));
 
     Ok(())

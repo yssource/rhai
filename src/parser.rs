@@ -152,11 +152,11 @@ impl AST {
     pub fn clear_functions(&mut self) {
         #[cfg(feature = "sync")]
         {
-            self.1 = Arc::new(FunctionsLib::new());
+            self.1 = Arc::new(Default::default());
         }
         #[cfg(not(feature = "sync"))]
         {
-            self.1 = Rc::new(FunctionsLib::new());
+            self.1 = Rc::new(Default::default());
         }
     }
 
@@ -1212,15 +1212,47 @@ fn parse_unary<'a>(
     }
 }
 
-fn parse_assignment_stmt<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn make_assignment_stmt<'a>(
     stack: &mut Stack,
     lhs: Expr,
-    allow_stmt_expr: bool,
+    rhs: Expr,
+    pos: Position,
 ) -> Result<Expr, Box<ParseError>> {
-    let pos = eat_token(input, Token::Equals);
-    let rhs = parse_expr(input, stack, allow_stmt_expr)?;
-    Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
+    match &lhs {
+        Expr::Variable(_, _, None, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+        Expr::Variable(name, _, Some(index), var_pos) => {
+            match stack[(stack.len() - index.get())].1 {
+                ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+                // Constant values cannot be assigned to
+                ScopeEntryType::Constant => {
+                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
+                }
+                ScopeEntryType::Module => unreachable!(),
+            }
+        }
+        Expr::Index(idx_lhs, _, _) | Expr::Dot(idx_lhs, _, _) => match idx_lhs.as_ref() {
+            Expr::Variable(_, _, None, _) => {
+                Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
+            }
+            Expr::Variable(name, _, Some(index), var_pos) => {
+                match stack[(stack.len() - index.get())].1 {
+                    ScopeEntryType::Normal => {
+                        Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
+                    }
+                    // Constant values cannot be assigned to
+                    ScopeEntryType::Constant => {
+                        Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
+                    }
+                    ScopeEntryType::Module => unreachable!(),
+                }
+            }
+            _ => Err(PERR::AssignmentToCopy.into_err(idx_lhs.position())),
+        },
+        expr if expr.is_constant() => {
+            Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
+        }
+        _ => Err(PERR::AssignmentToCopy.into_err(lhs.position())),
+    }
 }
 
 /// Parse an operator-assignment expression.
@@ -1231,7 +1263,11 @@ fn parse_op_assignment_stmt<'a>(
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
     let (op, pos) = match *input.peek().unwrap() {
-        (Token::Equals, _) => return parse_assignment_stmt(input, stack, lhs, allow_stmt_expr),
+        (Token::Equals, _) => {
+            let pos = eat_token(input, Token::Equals);
+            let rhs = parse_expr(input, stack, allow_stmt_expr)?;
+            return make_assignment_stmt(stack, lhs, rhs, pos);
+        }
         (Token::PlusAssign, pos) => ("+", pos),
         (Token::MinusAssign, pos) => ("-", pos),
         (Token::MultiplyAssign, pos) => ("*", pos),
@@ -1254,7 +1290,7 @@ fn parse_op_assignment_stmt<'a>(
     // lhs op= rhs -> lhs = op(lhs, rhs)
     let args = vec![lhs_copy, rhs];
     let rhs_expr = Expr::FnCall(Box::new(op.into()), None, Box::new(args), None, pos);
-    Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs_expr), pos))
+    make_assignment_stmt(stack, lhs, rhs_expr, pos)
 }
 
 /// Make a dot expression.
