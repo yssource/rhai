@@ -867,12 +867,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut state = State::new();
+        let mut state = State::new(ast.fn_lib());
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
+                self.eval_stmt(scope, &mut state, stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -932,12 +932,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut state = State::new();
+        let mut state = State::new(ast.fn_lib());
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
+                self.eval_stmt(scope, &mut state, stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -1000,7 +1000,9 @@ impl Engine {
             .get_function(name, args.len())
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))?;
 
-        let result = self.call_fn_from_lib(Some(scope), fn_lib, fn_def, &mut args, pos, 0)?;
+        let state = State::new(fn_lib);
+
+        let result = self.call_script_fn(Some(scope), &state, fn_def, &mut args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 

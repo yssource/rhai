@@ -117,6 +117,16 @@ impl<T: Default + Clone> StaticVec<T> {
 
         self.list[..num].iter().chain(self.more.iter())
     }
+    /// Get a mutable iterator to entries in the `StaticVec`.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        let num = if self.len >= self.list.len() {
+            self.list.len()
+        } else {
+            self.len
+        };
+
+        self.list[..num].iter_mut().chain(self.more.iter_mut())
+    }
 }
 
 impl<T: Default + Clone + fmt::Debug> fmt::Debug for StaticVec<T> {
