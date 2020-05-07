@@ -13,6 +13,7 @@ use crate::token::Position;
 use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
+    iter::empty,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -117,7 +118,7 @@ fn call_fn(
     pos: Position,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     // Search built-in's and external functions
-    let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
+    let hash = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
 
     base_package
         .get_function(hash)
@@ -376,11 +377,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 // id1 = id2 = expr2
                 (id1, id2) => Expr::Assignment(
                     Box::new(id1),
-                    Box::new(Expr::Assignment(
-                        Box::new(id2),
-                        Box::new(optimize_expr(*expr2, state)),
-                        pos2,
-                    )),
+                    Box::new(Expr::Assignment(Box::new(id2), Box::new(optimize_expr(*expr2, state)), pos2)),
                     pos,
                 ),
             },

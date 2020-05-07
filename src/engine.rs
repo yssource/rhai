@@ -3,14 +3,15 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
+use crate::module::ModuleRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{
     CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
 };
-use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt, AST};
+use crate::parser::{Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::token::Position;
+use crate::token::{Position, Token};
 use crate::utils::{calc_fn_def, StaticVec};
 
 #[cfg(not(feature = "no_module"))]
@@ -21,7 +22,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     format,
-    iter::once,
+    iter::{empty, once},
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
@@ -392,14 +393,14 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    modules: &ModuleRef,
+    modules: &Option<Box<ModuleRef>>,
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_module"))]
     {
         if let Some(modules) = modules {
-            let (id, root_pos) = modules.get(0); // First module
+            let (id, root_pos) = modules.get(0);
 
             let module = if let Some(index) = index {
                 scope
@@ -409,12 +410,15 @@ fn search_scope<'a>(
                     .unwrap()
             } else {
                 scope.find_module(id).ok_or_else(|| {
-                    Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
+                    Box::new(EvalAltResult::ErrorModuleNotFound(
+                        id.to_string(),
+                        *root_pos,
+                    ))
                 })?
             };
 
             return Ok((
-                module.get_qualified_var_mut(name, modules.as_ref(), pos)?,
+                module.get_qualified_var_mut(name, modules.key(), pos)?,
                 // Module variables are constant
                 ScopeEntryType::Constant,
             ));
@@ -527,7 +531,7 @@ impl Engine {
         }
 
         // Search built-in's and external functions
-        let fn_spec = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
+        let fn_spec = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
 
         if let Some(func) = self
             .base_package
@@ -676,7 +680,7 @@ impl Engine {
 
     // Has a system function an override?
     fn has_override(&self, state: &State, name: &str) -> bool {
-        let hash = calc_fn_hash(name, once(TypeId::of::<String>()));
+        let hash = calc_fn_hash(empty(), name, once(TypeId::of::<String>()));
 
         // First check registered functions
         self.base_package.contains_function(hash)
@@ -1176,8 +1180,8 @@ impl Engine {
             Expr::CharConstant(c, _) => Ok((*c).into()),
             Expr::Variable(id, modules, index, pos) => {
                 let index = if state.always_search { None } else { *index };
-                let val = search_scope(scope, id, modules, index, *pos)?;
-                Ok(val.0.clone())
+                let (val, _) = search_scope(scope, id, modules, index, *pos)?;
+                Ok(val.clone())
             }
             Expr::Property(_, _) => unreachable!(),
 
@@ -1190,18 +1194,19 @@ impl Engine {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(name, modules, index, pos) => {
+                    Expr::Variable(id, modules, index, pos) => {
                         let index = if state.always_search { None } else { *index };
-                        match search_scope(scope, name, modules, index, *pos)? {
-                            (_, ScopeEntryType::Constant) => Err(Box::new(
-                                EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *pos),
+                        let (value_ptr, typ) = search_scope(scope, id, modules, index, *pos)?;
+                        match typ {
+                            ScopeEntryType::Constant => Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant(id.to_string(), *pos),
                             )),
-                            (value_ptr, ScopeEntryType::Normal) => {
+                            ScopeEntryType::Normal => {
                                 *value_ptr = rhs_val;
                                 Ok(Default::default())
                             }
                             // End variable cannot be a module
-                            (_, ScopeEntryType::Module) => unreachable!(),
+                            ScopeEntryType::Module => unreachable!(),
                         }
                     }
                     // idx_lhs[idx_expr] = rhs
@@ -1322,9 +1327,13 @@ impl Engine {
                     self.call_script_fn(None, state, fn_def, &mut args, *pos, level)
                 } else {
                     // Then search in Rust functions
-                    let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
+                    let hash = calc_fn_hash(
+                        modules.iter().map(|(m, _)| m.as_str()),
+                        fn_name,
+                        args.iter().map(|a| a.type_id()),
+                    );
 
-                    match module.get_qualified_fn(fn_name, hash, modules, *pos) {
+                    match module.get_qualified_fn(fn_name, hash, *pos) {
                         Ok(func) => func(&mut args, *pos),
                         Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
                         Err(err) => Err(err),

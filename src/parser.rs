@@ -1,8 +1,10 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
+use crate::calc_fn_hash;
 use crate::engine::{Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
+use crate::module::ModuleRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
@@ -14,7 +16,7 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     format,
-    iter::Peekable,
+    iter::{empty, Peekable},
     num::NonZeroUsize,
     ops::{Add, Deref, DerefMut},
     rc::Rc,
@@ -43,11 +45,6 @@ pub type INT = i32;
 pub type FLOAT = f64;
 
 type PERR = ParseErrorType;
-
-/// A chain of module names to qualify a variable or function call.
-/// A `StaticVec` is used because most module-level access contains only one level,
-/// and it is wasteful to always allocate a `Vec` with one element.
-pub type ModuleRef = Option<Box<StaticVec<(String, Position)>>>;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
@@ -357,8 +354,13 @@ pub enum Expr {
     CharConstant(char, Position),
     /// String constant.
     StringConstant(String, Position),
-    /// Variable access - (variable name, optional modules, optional index, position)
-    Variable(Box<String>, ModuleRef, Option<NonZeroUsize>, Position),
+    /// Variable access - (variable name, optional modules, hash, optional index, position)
+    Variable(
+        Box<String>,
+        Option<Box<ModuleRef>>,
+        Option<NonZeroUsize>,
+        Position,
+    ),
     /// Property access.
     Property(String, Position),
     /// { stmt }
@@ -368,7 +370,7 @@ pub enum Expr {
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<Cow<'static, str>>,
-        ModuleRef,
+        Option<Box<ModuleRef>>,
         Box<Vec<Expr>>,
         Option<Box<Dynamic>>,
         Position,
@@ -675,7 +677,7 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
     id: String,
-    modules: ModuleRef,
+    modules: Option<Box<ModuleRef>>,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -1110,12 +1112,11 @@ fn parse_primary<'a>(
                         if let Some(ref mut modules) = modules {
                             modules.push((*id, pos));
                         } else {
+                            index = stack.find_module(id.as_ref());
+
                             let mut vec = StaticVec::new();
                             vec.push((*id, pos));
-                            modules = Some(Box::new(vec));
-
-                            let root = modules.as_ref().unwrap().iter().next().unwrap();
-                            index = stack.find_module(&root.0);
+                            modules = Some(Box::new(vec.into()));
                         }
 
                         Expr::Variable(Box::new(id2), modules, index, pos2)
@@ -1131,6 +1132,15 @@ fn parse_primary<'a>(
             // Unknown postfix operator
             (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
         }
+    }
+
+    match &mut root_expr {
+        // Calculate hash key for module-qualified variables
+        Expr::Variable(id, Some(modules), _, _) => {
+            let hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), id, empty());
+            modules.set_key(hash);
+        }
+        _ => (),
     }
 
     Ok(root_expr)
@@ -1315,7 +1325,7 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, Some(modules), _, _)) => {
-            return Err(PERR::PropertyExpected.into_err(modules.iter().next().unwrap().1))
+            return Err(PERR::PropertyExpected.into_err(modules.get(0).1))
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(dot_lhs, dot_rhs, dot_pos)) => Expr::Dot(
