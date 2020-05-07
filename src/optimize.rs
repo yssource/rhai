@@ -4,7 +4,7 @@ use crate::engine::{
     Engine, FnAny, FnCallArgs, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
     KEYWORD_TYPE_OF,
 };
-use crate::packages::PackageLibrary;
+use crate::packages::{PackageStore, PackagesCollection};
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
@@ -110,8 +110,8 @@ impl<'a> State<'a> {
 
 /// Call a registered function
 fn call_fn(
-    packages: &Vec<PackageLibrary>,
-    functions: &HashMap<u64, Box<FnAny>>,
+    packages: &PackagesCollection,
+    base_package: &PackageStore,
     fn_name: &str,
     args: &mut FnCallArgs,
     pos: Position,
@@ -119,14 +119,9 @@ fn call_fn(
     // Search built-in's and external functions
     let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
 
-    functions
-        .get(&hash)
-        .or_else(|| {
-            packages
-                .iter()
-                .find(|p| p.functions.contains_key(&hash))
-                .and_then(|p| p.functions.get(&hash))
-        })
+    base_package
+        .get_function(hash)
+        .or_else(|| packages.get_function(hash))
         .map(|func| func(args, pos))
         .transpose()
 }
@@ -577,7 +572,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            call_fn(&state.engine.packages, &state.engine.functions, &id, &mut call_args, pos).ok()
+            call_fn(&state.engine.packages, &state.engine.base_package, &id, &mut call_args, pos).ok()
                 .and_then(|result|
                     result.or_else(|| {
                         if !arg_for_type_of.is_empty() {

@@ -2,7 +2,7 @@
 
 use crate::engine::{FnAny, IteratorFn};
 
-use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc};
+use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
 
 mod arithmetic;
 mod array_basic;
@@ -61,6 +61,30 @@ impl PackageStore {
     pub fn new() -> Self {
         Default::default()
     }
+    /// Get an iterator over the keys of the functions in the `PackageStore`.
+    pub fn function_keys(&self) -> impl Iterator<Item = &u64> {
+        self.functions.keys()
+    }
+    /// Get an iterator over the `TypeId` of the type iterators in the `PackageStore`.
+    pub fn type_iterator_keys(&self) -> impl Iterator<Item = &TypeId> {
+        self.type_iterators.keys()
+    }
+    /// Does the specified function hash key exist in the `PackageStore`?
+    pub fn contains_function(&self, hash: u64) -> bool {
+        self.functions.contains_key(&hash)
+    }
+    /// Get specified function via its hash key.
+    pub fn get_function(&self, hash: u64) -> Option<&Box<FnAny>> {
+        self.functions.get(&hash)
+    }
+    /// Does the specified TypeId iterator exist in the `PackageStore`?
+    pub fn contains_iterator(&self, id: TypeId) -> bool {
+        self.type_iterators.contains_key(&id)
+    }
+    /// Get the specified TypeId iterator.
+    pub fn get_iterator(&self, id: TypeId) -> Option<&Box<IteratorFn>> {
+        self.type_iterators.get(&id)
+    }
 }
 
 /// Type which `Rc`-wraps a `PackageStore` to facilitate sharing library instances.
@@ -70,3 +94,49 @@ pub type PackageLibrary = Rc<PackageStore>;
 /// Type which `Arc`-wraps a `PackageStore` to facilitate sharing library instances.
 #[cfg(feature = "sync")]
 pub type PackageLibrary = Arc<PackageStore>;
+
+#[derive(Default)]
+/// Type containing a collection of `PackageLibrary` instances.
+/// All function and type iterator keys in the loaded packages are indexed for fast access.
+pub(crate) struct PackagesCollection {
+    /// Collection of `PackageLibrary` instances.
+    packages: Vec<PackageLibrary>,
+    /// Index of all function keys, pointing to the offset in `packages`.
+    function_keys: HashMap<u64, usize>,
+    /// Index of all type iterator `TypeId`'s, pointing to the offset in `packages`.
+    iterator_types: HashMap<TypeId, usize>,
+}
+
+impl PackagesCollection {
+    /// Add a `PackageLibrary` into the `PackagesCollection`.
+    pub fn push(&mut self, package: PackageLibrary) {
+        let index = self.packages.len();
+        package.function_keys().for_each(|&hash| {
+            self.function_keys.insert(hash, index);
+        });
+        package.type_iterator_keys().for_each(|&id| {
+            self.iterator_types.insert(id, index);
+        });
+        self.packages.push(package);
+    }
+    /// Does the specified function hash key exist in the `PackagesCollection`?
+    pub fn contains_function(&self, hash: u64) -> bool {
+        self.function_keys.contains_key(&hash)
+    }
+    /// Get specified function via its hash key.
+    pub fn get_function(&self, hash: u64) -> Option<&Box<FnAny>> {
+        self.function_keys
+            .get(&hash)
+            .and_then(|&index| self.packages[index].functions.get(&hash))
+    }
+    /// Does the specified TypeId iterator exist in the `PackagesCollection`?
+    pub fn contains_iterator(&self, id: TypeId) -> bool {
+        self.iterator_types.contains_key(&id)
+    }
+    /// Get the specified TypeId iterator.
+    pub fn get_iterator(&self, id: TypeId) -> Option<&Box<IteratorFn>> {
+        self.iterator_types
+            .get(&id)
+            .and_then(|&index| self.packages[index].type_iterators.get(&id))
+    }
+}

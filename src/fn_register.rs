@@ -221,7 +221,7 @@ macro_rules! def_register {
                 let fn_name = name.to_string();
                 let func = make_func!(fn_name : f : map_dynamic ; $($par => $clone),*);
                 let hash = calc_fn_spec(name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.functions.insert(hash, Box::new(func));
+                self.base_package.functions.insert(hash, Box::new(func));
             }
         }
 
@@ -239,7 +239,7 @@ macro_rules! def_register {
                 let fn_name = name.to_string();
                 let func = make_func!(fn_name : f : map_identity ; $($par => $clone),*);
                 let hash = calc_fn_spec(name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.functions.insert(hash, Box::new(func));
+                self.base_package.functions.insert(hash, Box::new(func));
             }
         }
 
@@ -258,7 +258,7 @@ macro_rules! def_register {
                 let fn_name = name.to_string();
                 let func = make_func!(fn_name : f : map_result ; $($par => $clone),*);
                 let hash = calc_fn_spec(name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.functions.insert(hash, Box::new(func));
+                self.base_package.functions.insert(hash, Box::new(func));
             }
         }
 

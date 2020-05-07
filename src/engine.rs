@@ -4,7 +4,9 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::optimize::OptimizationLevel;
-use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
+use crate::packages::{
+    CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
+};
 use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -59,13 +61,6 @@ pub const MAX_CALL_STACK_DEPTH: usize = 28;
 
 #[cfg(not(debug_assertions))]
 pub const MAX_CALL_STACK_DEPTH: usize = 256;
-
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-const FUNCTIONS_COUNT: usize = 512;
-
-#[cfg(any(feature = "only_i32", feature = "only_i64"))]
-const FUNCTIONS_COUNT: usize = 256;
 
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
@@ -185,10 +180,6 @@ pub struct FunctionsLib(
 );
 
 impl FunctionsLib {
-    /// Create a new `FunctionsLib`.
-    pub fn new() -> Self {
-        Default::default()
-    }
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
     pub fn from_vec(vec: Vec<FnDef>) -> Self {
         FunctionsLib(
@@ -270,14 +261,9 @@ impl DerefMut for FunctionsLib {
 /// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
     /// A collection of all library packages loaded into the engine.
-    pub(crate) packages: Vec<PackageLibrary>,
-    /// A `HashMap` containing all compiled functions known to the engine.
-    ///
-    /// The key of the `HashMap` is a `u64` hash calculated by the function `crate::calc_fn_hash`.
-    pub(crate) functions: HashMap<u64, Box<FnAny>>,
-
-    /// A hashmap containing all iterators known to the engine.
-    pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
+    pub(crate) packages: PackagesCollection,
+    /// A collection of all library packages loaded into the engine.
+    pub(crate) base_package: PackageStore,
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
@@ -314,8 +300,7 @@ impl Default for Engine {
         // Create the new scripting Engine
         let mut engine = Self {
             packages: Default::default(),
-            functions: HashMap::with_capacity(FUNCTIONS_COUNT),
-            type_iterators: Default::default(),
+            base_package: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
@@ -459,8 +444,7 @@ impl Engine {
     pub fn new_raw() -> Self {
         Self {
             packages: Default::default(),
-            functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
-            type_iterators: Default::default(),
+            base_package: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
@@ -490,7 +474,7 @@ impl Engine {
     /// In other words, loaded packages are searched in reverse order.
     pub fn load_package(&mut self, package: PackageLibrary) {
         // Push the package to the top - packages are searched in reverse order
-        self.packages.insert(0, package);
+        self.packages.push(package);
     }
 
     /// Control whether and how the `Engine` will optimize an AST after compilation.
@@ -545,12 +529,11 @@ impl Engine {
         // Search built-in's and external functions
         let fn_spec = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
 
-        if let Some(func) = self.functions.get(&fn_spec).or_else(|| {
-            self.packages
-                .iter()
-                .find(|pkg| pkg.functions.contains_key(&fn_spec))
-                .and_then(|pkg| pkg.functions.get(&fn_spec))
-        }) {
+        if let Some(func) = self
+            .base_package
+            .get_function(fn_spec)
+            .or_else(|| self.packages.get_function(fn_spec))
+        {
             // Run external function
             let result = func(args, pos)?;
 
@@ -696,9 +679,9 @@ impl Engine {
         let hash = calc_fn_hash(name, once(TypeId::of::<String>()));
 
         // First check registered functions
-        self.functions.contains_key(&hash)
+        self.base_package.contains_function(hash)
             // Then check packages
-            || self.packages.iter().any(|p| p.functions.contains_key(&hash))
+            || self.packages.contains_function(hash)
             // Then check script-defined functions
             || state.has_function(name, 1)
     }
@@ -1211,7 +1194,7 @@ impl Engine {
                         let index = if state.always_search { None } else { *index };
                         match search_scope(scope, name, modules, index, *pos)? {
                             (_, ScopeEntryType::Constant) => Err(Box::new(
-                                EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
+                                EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *pos),
                             )),
                             (value_ptr, ScopeEntryType::Normal) => {
                                 *value_ptr = rhs_val;
@@ -1482,12 +1465,11 @@ impl Engine {
                 let arr = self.eval_expr(scope, state, expr, level)?;
                 let tid = arr.type_id();
 
-                if let Some(iter_fn) = self.type_iterators.get(&tid).or_else(|| {
-                    self.packages
-                        .iter()
-                        .find(|pkg| pkg.type_iterators.contains_key(&tid))
-                        .and_then(|pkg| pkg.type_iterators.get(&tid))
-                }) {
+                if let Some(iter_fn) = self
+                    .base_package
+                    .get_iterator(tid)
+                    .or_else(|| self.packages.get_iterator(tid))
+                {
                     // Add the loop variable
                     let var_name = name.as_ref().clone();
                     scope.push(var_name, ());
