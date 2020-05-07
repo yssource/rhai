@@ -81,3 +81,71 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    let mut resolver = rhai::module_resolvers::StaticModuleResolver::new();
+    let mut sub_module = Module::new();
+    sub_module.set_var("foo", true);
+    resolver.insert("another module".to_string(), sub_module);
+
+    engine.set_module_resolver(Some(resolver));
+
+    let ast = engine.compile(
+        r#"
+        // Functions become module functions
+        fn calc(x) {
+            x + 1
+        }
+        fn add_len(x, y) {
+            x + y.len()
+        }
+    
+        // Imported modules become sub-modules
+        import "another module" as extra;
+    
+        // Variables defined at global level become module variables
+        const x = 123;
+        let foo = 41;
+        let hello;
+    
+        // Final variable values become constant module variable values
+        foo = calc(foo);
+        hello = "hello, " + foo + " worlds!";
+    "#,
+    )?;
+
+    let module = Module::eval_ast_as_new(&ast, &engine)?;
+
+    let mut scope = Scope::new();
+    scope.push_module("testing", module);
+
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::x")?,
+        123
+    );
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::foo")?,
+        42
+    );
+    assert!(engine.eval_expression_with_scope::<bool>(&mut scope, "testing::extra::foo")?);
+    assert_eq!(
+        engine.eval_expression_with_scope::<String>(&mut scope, "testing::hello")?,
+        "hello, 42 worlds!"
+    );
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::calc(999)")?,
+        1000
+    );
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(
+            &mut scope,
+            "testing::add_len(testing::foo, testing::hello)"
+        )?,
+        59
+    );
+
+    Ok(())
+}

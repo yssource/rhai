@@ -740,6 +740,15 @@ mod file {
         pub fn new() -> Self {
             Default::default()
         }
+
+        /// Create a `Module` from a file path.
+        pub fn create_module<P: Into<PathBuf>>(
+            &self,
+            engine: &Engine,
+            path: &str,
+        ) -> Result<Module, Box<EvalAltResult>> {
+            self.resolve(engine, path, Default::default())
+        }
     }
 
     impl ModuleResolver for FileModuleResolver {

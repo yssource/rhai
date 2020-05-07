@@ -2080,7 +2080,7 @@ crypto::encrypt(others);    // <- this causes a run-time error because the 'cryp
 
 ### Creating custom modules from Rust
 
-To load a custom module into an [`Engine`], first create a `Module` type, add variables/functions into it,
+To load a custom module (written in Rust) into an [`Engine`], first create a `Module` type, add variables/functions into it,
 then finally push it into a custom [`Scope`].  This has the equivalent effect of putting an `import` statement
 at the beginning of any script run.
 
@@ -2105,6 +2105,47 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::answer + 1")? == 42;
 engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer)")? == 42;
 ```
 
+### Creating a module from an `AST`
+
+It is easy to convert a pre-compiled `AST` into a module, just use `Module::eval_ast_as_new`:
+
+```rust
+use rhai::{Engine, Module};
+
+let engine = Engine::new();
+
+// Compile a script into an 'AST'
+let ast = engine.compile(r#"
+    // Functions become module functions
+    fn calc(x) {
+        x + 1
+    }
+    fn add_len(x, y) {
+        x + y.len()
+    }
+
+    // Imported modules become sub-modules
+    import "another module" as extra;
+
+    // Variables defined at global level become module variables
+    const x = 123;
+    let foo = 41;
+    let hello;
+
+    // Final variable values become constant module variable values
+    foo = calc(foo);
+    hello = "hello, " + foo + " worlds!";
+"#)?;
+
+// Convert the 'AST' into a module, using the 'Engine' to evaluate it first
+let module = Module::eval_ast_as_new(&ast, &engine)?;
+
+// 'module' now can be loaded into a custom 'Scope' for future use.  It contains:
+//   - sub-module: 'extra'
+//   - functions: 'calc', 'add_len'
+//   - variables: 'x', 'foo', 'hello'
+```
+
 ### Module resolvers
 
 When encountering an `import` statement, Rhai attempts to _resolve_ the module based on the path string.
@@ -2114,10 +2155,10 @@ which simply loads a script file based on the path (with `.rhai` extension attac
 
 Built-in module resolvers are grouped under the `rhai::module_resolvers` module namespace.
 
-| Module Resolver        | Description                                                                                                                                                                                                                                                                |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function. |
-| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                        |
+| Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                                                                                                            |
 
 An [`Engine`]'s module resolver is set via a call to `set_module_resolver`:
 
