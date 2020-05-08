@@ -30,6 +30,8 @@ pub struct Entry<'a> {
     pub typ: EntryType,
     /// Current value of the entry.
     pub value: Dynamic,
+    /// Alias of the entry.
+    pub alias: Option<Box<String>>,
     /// A constant expression if the initial value matches one of the recognized types.
     pub expr: Option<Box<Expr>>,
 }
@@ -248,6 +250,7 @@ impl<'a> Scope<'a> {
         self.0.push(Entry {
             name: name.into(),
             typ: entry_type,
+            alias: None,
             value: value.into(),
             expr,
         });
@@ -412,14 +415,13 @@ impl<'a> Scope<'a> {
     /// Get a mutable reference to an entry in the Scope.
     pub(crate) fn get_mut(&mut self, index: usize) -> (&mut Dynamic, EntryType) {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
-
-        // assert_ne!(
-        //     entry.typ,
-        //     EntryType::Constant,
-        //     "get mut of constant entry"
-        // );
-
         (&mut entry.value, entry.typ)
+    }
+
+    /// Update the access type of an entry in the Scope.
+    pub(crate) fn set_entry_alias(&mut self, index: usize, alias: String) {
+        let entry = self.0.get_mut(index).expect("invalid index in Scope");
+        entry.alias = Some(Box::new(alias));
     }
 
     /// Get an iterator to entries in the Scope.
@@ -439,6 +441,7 @@ impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, EntryType, Dynamic)> for Scope<
             .extend(iter.into_iter().map(|(name, typ, value)| Entry {
                 name: name.into(),
                 typ,
+                alias: None,
                 value: value.into(),
                 expr: None,
             }));

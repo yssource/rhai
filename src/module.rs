@@ -31,6 +31,7 @@ pub trait ModuleResolver {
     fn resolve(
         &self,
         engine: &Engine,
+        scope: Scope,
         path: &str,
         pos: Position,
     ) -> Result<Module, Box<EvalAltResult>>;
@@ -570,17 +571,15 @@ impl Module {
     /// use rhai::{Engine, Module};
     ///
     /// let engine = Engine::new();
+    /// let mut scope = Scope::new();
     /// let ast = engine.compile("let answer = 42;")?;
-    /// let module = Module::eval_ast_as_new(&ast, &engine)?;
+    /// let module = Module::eval_ast_as_new(scope, &ast, &engine)?;
     /// assert!(module.contains_var("answer"));
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_ast_as_new(ast: &AST, engine: &Engine) -> FuncReturn<Self> {
-        // Use new scope
-        let mut scope = Scope::new();
-
+    pub fn eval_ast_as_new(mut scope: Scope, ast: &AST, engine: &Engine) -> FuncReturn<Self> {
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &ast)?;
 
@@ -589,13 +588,19 @@ impl Module {
 
         scope.into_iter().for_each(
             |ScopeEntry {
-                 name, typ, value, ..
+                 name,
+                 typ,
+                 value,
+                 alias,
+                 ..
              }| {
                 match typ {
-                    // Variables left in the scope become module variables
-                    ScopeEntryType::Normal | ScopeEntryType::Constant => {
-                        module.variables.insert(name.into_owned(), value);
+                    // Variables with an alias left in the scope become module variables
+                    ScopeEntryType::Normal | ScopeEntryType::Constant if alias.is_some() => {
+                        module.variables.insert(*alias.unwrap(), value);
                     }
+                    // Variables with no alias are private and not exported
+                    ScopeEntryType::Normal | ScopeEntryType::Constant => (),
                     // Modules left in the scope become sub-modules
                     ScopeEntryType::Module => {
                         module
@@ -788,9 +793,10 @@ mod file {
         pub fn create_module<P: Into<PathBuf>>(
             &self,
             engine: &Engine,
+            scope: Scope,
             path: &str,
         ) -> Result<Module, Box<EvalAltResult>> {
-            self.resolve(engine, path, Default::default())
+            self.resolve(engine, scope, path, Default::default())
         }
     }
 
@@ -798,6 +804,7 @@ mod file {
         fn resolve(
             &self,
             engine: &Engine,
+            scope: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {
@@ -811,7 +818,7 @@ mod file {
                 .compile_file(file_path)
                 .map_err(|err| EvalAltResult::set_position(err, pos))?;
 
-            Module::eval_ast_as_new(&ast, engine)
+            Module::eval_ast_as_new(scope, &ast, engine)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         }
     }
@@ -938,6 +945,7 @@ mod stat {
         fn resolve(
             &self,
             _: &Engine,
+            _: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {

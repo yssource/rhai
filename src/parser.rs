@@ -284,6 +284,8 @@ pub enum Stmt {
     ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
     /// import expr as module
     Import(Box<Expr>, Box<String>, Position),
+    /// expr id as name, ...
+    Export(Vec<(String, Position, Option<(String, Position)>)>),
 }
 
 impl Stmt {
@@ -302,6 +304,8 @@ impl Stmt {
             Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
 
             Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
+
+            Stmt::Export(list) => list.get(0).unwrap().1,
         }
     }
 
@@ -320,6 +324,7 @@ impl Stmt {
             Stmt::Let(_, _, _)
             | Stmt::Const(_, _, _)
             | Stmt::Import(_, _, _)
+            | Stmt::Export(_)
             | Stmt::Expr(_)
             | Stmt::Continue(_)
             | Stmt::Break(_)
@@ -344,6 +349,7 @@ impl Stmt {
             Stmt::Block(statements, _) => statements.iter().all(Stmt::is_pure),
             Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
             Stmt::Import(_, _, _) => false,
+            Stmt::Export(_) => false,
         }
     }
 }
@@ -1970,6 +1976,63 @@ fn parse_import<'a>(
     Ok(Stmt::Import(Box::new(expr), Box::new(name), pos))
 }
 
+/// Parse an export statement.
+fn parse_export<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Box<ParseError>> {
+    eat_token(input, Token::Export);
+
+    let mut exports = Vec::new();
+
+    loop {
+        let (id, id_pos) = match input.next().unwrap() {
+            (Token::Identifier(s), pos) => (s.clone(), pos),
+            (Token::LexError(err), pos) => {
+                return Err(PERR::BadInput(err.to_string()).into_err(pos))
+            }
+            (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+        };
+
+        let rename = if match_token(input, Token::As)? {
+            match input.next().unwrap() {
+                (Token::Identifier(s), pos) => Some((s.clone(), pos)),
+                (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+            }
+        } else {
+            None
+        };
+
+        exports.push((id, id_pos, rename));
+
+        match input.peek().unwrap() {
+            (Token::Comma, _) => {
+                eat_token(input, Token::Comma);
+            }
+            (Token::Identifier(_), pos) => {
+                return Err(PERR::MissingToken(
+                    Token::Comma.into(),
+                    "to separate the list of exports".into(),
+                )
+                .into_err(*pos))
+            }
+            _ => break,
+        }
+    }
+
+    // Check for duplicating parameters
+    exports
+        .iter()
+        .enumerate()
+        .try_for_each(|(i, (p1, _, _))| {
+            exports
+                .iter()
+                .skip(i + 1)
+                .find(|(p2, _, _)| p2 == p1)
+                .map_or_else(|| Ok(()), |(p2, pos, _)| Err((p2, *pos)))
+        })
+        .map_err(|(p, pos)| PERR::DuplicatedExport(p.to_string()).into_err(pos))?;
+
+    Ok(Stmt::Export(exports))
+}
+
 /// Parse a statement block.
 fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
@@ -1995,7 +2058,7 @@ fn parse_block<'a>(
 
     while !match_token(input, Token::RightBrace)? {
         // Parse statements inside the block
-        let stmt = parse_stmt(input, stack, breakable, allow_stmt_expr)?;
+        let stmt = parse_stmt(input, stack, breakable, false, allow_stmt_expr)?;
 
         // See if it needs a terminating semicolon
         let need_semicolon = !stmt.is_self_terminated();
@@ -2053,6 +2116,7 @@ fn parse_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
     breakable: bool,
+    is_global: bool,
     allow_stmt_expr: bool,
 ) -> Result<Stmt, Box<ParseError>> {
     let (token, pos) = match input.peek().unwrap() {
@@ -2113,6 +2177,12 @@ fn parse_stmt<'a>(
         #[cfg(not(feature = "no_module"))]
         Token::Import => parse_import(input, stack, allow_stmt_expr),
 
+        #[cfg(not(feature = "no_module"))]
+        Token::Export if !is_global => Err(PERR::WrongExport.into_err(*pos)),
+
+        #[cfg(not(feature = "no_module"))]
+        Token::Export => parse_export(input),
+
         _ => parse_expr_stmt(input, stack, allow_stmt_expr),
     }
 }
@@ -2123,7 +2193,7 @@ fn parse_fn<'a>(
     stack: &mut Stack,
     allow_stmt_expr: bool,
 ) -> Result<FnDef, Box<ParseError>> {
-    let pos = input.next().expect("should be fn").1;
+    let pos = eat_token(input, Token::Fn);
 
     let name = match input.next().unwrap() {
         (Token::Identifier(s), _) => s,
@@ -2258,7 +2328,7 @@ fn parse_global_level<'a>(
             }
         }
         // Actual statement
-        let stmt = parse_stmt(input, &mut stack, false, true)?;
+        let stmt = parse_stmt(input, &mut stack, false, true, true)?;
 
         let need_semicolon = !stmt.is_self_terminated();
 

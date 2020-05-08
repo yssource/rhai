@@ -1622,7 +1622,10 @@ impl Engine {
                         .try_cast::<String>()
                     {
                         if let Some(resolver) = self.module_resolver.as_ref() {
-                            let module = resolver.resolve(self, &path, expr.position())?;
+                            // Use an empty scope to create a module
+                            let mut mod_scope = Scope::new();
+                            let module =
+                                resolver.resolve(self, mod_scope, &path, expr.position())?;
 
                             // TODO - avoid copying module name in inner block?
                             let mod_name = name.as_ref().clone();
@@ -1638,6 +1641,36 @@ impl Engine {
                         Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                     }
                 }
+            }
+
+            // Export statement
+            Stmt::Export(list) => {
+                for (id, id_pos, rename) in list {
+                    let mut found = false;
+
+                    // Mark scope variables as public
+                    match scope.get_index(id) {
+                        Some((index, ScopeEntryType::Normal))
+                        | Some((index, ScopeEntryType::Constant)) => {
+                            let alias = rename
+                                .as_ref()
+                                .map(|(n, _)| n.clone())
+                                .unwrap_or_else(|| id.clone());
+                            scope.set_entry_alias(index, alias);
+                            found = true;
+                        }
+                        Some((_, ScopeEntryType::Module)) => unreachable!(),
+                        _ => (),
+                    }
+
+                    if !found {
+                        return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
+                            id.into(),
+                            *id_pos,
+                        )));
+                    }
+                }
+                Ok(Default::default())
             }
         }
     }

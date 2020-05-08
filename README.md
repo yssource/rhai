@@ -2044,10 +2044,30 @@ Using external modules
 [module]: #using-external-modules
 [modules]: #using-external-modules
 
-Rhai allows organizing code (functions and variables) into _modules_.  A module is a single script file
-with `export` statements that _exports_ certain global variables and functions as contents of the module.
+Rhai allows organizing code (functions and variables) into _modules_.
+Modules can be disabled via the [`no_module`] feature.
 
-Everything exported as part of a module is constant and read-only.
+### Exporting variables and functions
+
+A module is a single script (or pre-compiled `AST`) containing global variables and functions.
+The `export` statement, which can only be at global level, exposes selected variables as members of a module.
+Variables not exported are private and invisible to the outside.
+
+All functions are automatically exported. Everything exported from a module is **constant** (**read-only**).
+
+```rust
+// This is a module script.
+
+fn inc(x) { x + 1 }         // function
+
+let private = 123;          // variable not exported - invisible to outside
+let x = 42;                 // this will be exported below
+
+export x;                   // the variable 'x' is exported under its own name
+
+export x as answer;         // the variable 'x' is exported under the alias 'answer'
+                            // another script can load this module and access 'x' as 'module::answer'
+```
 
 ### Importing modules
 

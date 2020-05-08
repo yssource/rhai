@@ -98,6 +98,14 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_function` feature.
     FnMissingBody(String),
+    /// An export statement has duplicated names.
+    ///
+    /// Never appears under the `no_module` feature.
+    DuplicatedExport(String),
+    /// Export statement not at global level.
+    ///
+    /// Never appears under the `no_module` feature.
+    WrongExport,
     /// Assignment to a copy of a value.
     AssignmentToCopy,
     /// Assignment to an a constant variable.
@@ -147,6 +155,8 @@ impl ParseError {
             ParseErrorType::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
+            ParseErrorType::DuplicatedExport(_) => "Duplicated variable/function in export statement",
+            ParseErrorType::WrongExport => "Export statement can only appear at global level",
             ParseErrorType::AssignmentToCopy => "Only a copy of the value is change with this assignment",
             ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant value.",
             ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
@@ -192,6 +202,12 @@ impl fmt::Display for ParseError {
             ParseErrorType::FnDuplicatedParam(s, arg) => {
                 write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
             }
+
+            ParseErrorType::DuplicatedExport(s) => write!(
+                f,
+                "Duplicated variable/function '{}' in export statement",
+                s
+            )?,
 
             ParseErrorType::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s)?,
 
