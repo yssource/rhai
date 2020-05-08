@@ -114,23 +114,25 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
         // Final variable values become constant module variable values
         foo = calc(foo);
         hello = "hello, " + foo + " worlds!";
+
+        export x as abc, foo, hello, extra as foobar;
     "#,
     )?;
 
-    let module = Module::eval_ast_as_new(&ast, &engine)?;
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
     let mut scope = Scope::new();
     scope.push_module("testing", module);
 
     assert_eq!(
-        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::x")?,
+        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::abc")?,
         123
     );
     assert_eq!(
         engine.eval_expression_with_scope::<INT>(&mut scope, "testing::foo")?,
         42
     );
-    assert!(engine.eval_expression_with_scope::<bool>(&mut scope, "testing::extra::foo")?);
+    assert!(engine.eval_expression_with_scope::<bool>(&mut scope, "testing::foobar::foo")?);
     assert_eq!(
         engine.eval_expression_with_scope::<String>(&mut scope, "testing::hello")?,
         "hello, 42 worlds!"

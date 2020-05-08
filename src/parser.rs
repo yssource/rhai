@@ -719,6 +719,7 @@ fn parse_call_expr<'a>(
                     // Calculate hash
                     let hash = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
                     modules.set_key(hash);
+                    modules.set_index(stack.find_module(&modules.get(0).0));
                 }
             }
             return Ok(Expr::FnCall(
@@ -751,6 +752,7 @@ fn parse_call_expr<'a>(
                             repeat(EMPTY_TYPE_ID()).take(args.len()),
                         );
                         modules.set_key(hash);
+                        modules.set_index(stack.find_module(&modules.get(0).0));
                     }
                 }
                 return Ok(Expr::FnCall(
@@ -1147,14 +1149,12 @@ fn parse_primary<'a>(
             }
             // module access
             #[cfg(not(feature = "no_module"))]
-            (Expr::Variable(id, mut modules, mut index, pos), Token::DoubleColon) => {
+            (Expr::Variable(id, mut modules, index, pos), Token::DoubleColon) => {
                 match input.next().unwrap() {
                     (Token::Identifier(id2), pos2) => {
                         if let Some(ref mut modules) = modules {
                             modules.push((*id, pos));
                         } else {
-                            index = stack.find_module(id.as_ref());
-
                             let mut m: ModuleRef = Default::default();
                             m.push((*id, pos));
                             modules = Some(Box::new(m));
@@ -1181,6 +1181,7 @@ fn parse_primary<'a>(
         Expr::Variable(id, Some(modules), _, _) => {
             let hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), id, empty());
             modules.set_key(hash);
+            modules.set_index(stack.find_module(&modules.get(0).0));
         }
         _ => (),
     }
@@ -2131,7 +2132,8 @@ fn parse_stmt<'a>(
         Token::LeftBrace => parse_block(input, stack, breakable, allow_stmt_expr),
 
         // fn ...
-        Token::Fn => Err(PERR::WrongFnDefinition.into_err(*pos)),
+        Token::Fn if !is_global => Err(PERR::WrongFnDefinition.into_err(*pos)),
+        Token::Fn => unreachable!(),
 
         Token::If => parse_if(input, stack, breakable, allow_stmt_expr),
         Token::While => parse_while(input, stack, allow_stmt_expr),

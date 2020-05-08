@@ -17,6 +17,7 @@ use crate::stdlib::{
     fmt,
     iter::{empty, repeat},
     mem,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     rc::Rc,
     string::{String, ToString},
@@ -568,12 +569,11 @@ impl Module {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Module};
+    /// use rhai::{Engine, Module, Scope};
     ///
     /// let engine = Engine::new();
-    /// let mut scope = Scope::new();
-    /// let ast = engine.compile("let answer = 42;")?;
-    /// let module = Module::eval_ast_as_new(scope, &ast, &engine)?;
+    /// let ast = engine.compile("let answer = 42; export answer;")?;
+    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
     /// assert!(module.contains_var("answer"));
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// # Ok(())
@@ -599,14 +599,14 @@ impl Module {
                     ScopeEntryType::Normal | ScopeEntryType::Constant if alias.is_some() => {
                         module.variables.insert(*alias.unwrap(), value);
                     }
-                    // Variables with no alias are private and not exported
-                    ScopeEntryType::Normal | ScopeEntryType::Constant => (),
                     // Modules left in the scope become sub-modules
-                    ScopeEntryType::Module => {
+                    ScopeEntryType::Module if alias.is_some() => {
                         module
                             .modules
-                            .insert(name.into_owned(), value.cast::<Module>());
+                            .insert(*alias.unwrap(), value.cast::<Module>());
                     }
+                    // Variables and modules with no alias are private and not exported
+                    _ => (),
                 }
             },
         );
@@ -830,14 +830,18 @@ mod file {
 /// A `StaticVec` is used because most module-level access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
 #[derive(Clone, Hash, Default)]
-pub struct ModuleRef(StaticVec<(String, Position)>, u64);
+pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>, u64);
 
 impl fmt::Debug for ModuleRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)?;
 
-        if self.1 > 0 {
-            write!(f, " -> {:0>16x}", self.1)
+        if self.2 > 0 {
+            if let Some(index) = self.1 {
+                write!(f, " -> {},{:0>16x}", index, self.2)
+            } else {
+                write!(f, " -> {:0>16x}", self.2)
+            }
         } else {
             Ok(())
         }
@@ -869,16 +873,22 @@ impl fmt::Display for ModuleRef {
 
 impl From<StaticVec<(String, Position)>> for ModuleRef {
     fn from(modules: StaticVec<(String, Position)>) -> Self {
-        Self(modules, 0)
+        Self(modules, None, 0)
     }
 }
 
 impl ModuleRef {
-    pub fn key(&self) -> u64 {
+    pub(crate) fn key(&self) -> u64 {
+        self.2
+    }
+    pub(crate) fn set_key(&mut self, key: u64) {
+        self.2 = key
+    }
+    pub(crate) fn index(&self) -> Option<NonZeroUsize> {
         self.1
     }
-    pub fn set_key(&mut self, key: u64) {
-        self.1 = key
+    pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
+        self.1 = index
     }
 }
 

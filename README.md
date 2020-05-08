@@ -2158,7 +2158,7 @@ let ast = engine.compile(r#"
 "#)?;
 
 // Convert the 'AST' into a module, using the 'Engine' to evaluate it first
-let module = Module::eval_ast_as_new(&ast, &engine)?;
+let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
 // 'module' now can be loaded into a custom 'Scope' for future use.  It contains:
 //   - sub-module: 'extra'

@@ -434,7 +434,7 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    #[cfg(not(feature = "no_module"))] mut modules: &Option<Box<ModuleRef>>,
+    #[cfg(not(feature = "no_module"))] modules: &Option<Box<ModuleRef>>,
     #[cfg(feature = "no_module")] _: &Option<ModuleRef>,
     index: Option<NonZeroUsize>,
     pos: Position,
@@ -444,7 +444,7 @@ fn search_scope<'a>(
         if let Some(modules) = modules {
             let (id, root_pos) = modules.get(0);
 
-            let module = if let Some(index) = index {
+            let module = if let Some(index) = modules.index() {
                 scope
                     .get_mut(scope.len() - index.get())
                     .0
@@ -1369,9 +1369,17 @@ impl Engine {
 
                 let (id, root_pos) = modules.get(0); // First module
 
-                let module = scope.find_module(id).ok_or_else(|| {
-                    Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
-                })?;
+                let module = if let Some(index) = modules.index() {
+                    scope
+                        .get_mut(scope.len() - index.get())
+                        .0
+                        .downcast_mut::<Module>()
+                        .unwrap()
+                } else {
+                    scope.find_module(id).ok_or_else(|| {
+                        Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
+                    })?
+                };
 
                 // First search in script-defined functions (can override built-in)
                 if let Some(fn_def) = module.get_qualified_scripted_fn(modules.key()) {
@@ -1623,9 +1631,8 @@ impl Engine {
                     {
                         if let Some(resolver) = self.module_resolver.as_ref() {
                             // Use an empty scope to create a module
-                            let mut mod_scope = Scope::new();
                             let module =
-                                resolver.resolve(self, mod_scope, &path, expr.position())?;
+                                resolver.resolve(self, Scope::new(), &path, expr.position())?;
 
                             // TODO - avoid copying module name in inner block?
                             let mod_name = name.as_ref().clone();
@@ -1649,18 +1656,18 @@ impl Engine {
                     let mut found = false;
 
                     // Mark scope variables as public
-                    match scope.get_index(id) {
-                        Some((index, ScopeEntryType::Normal))
-                        | Some((index, ScopeEntryType::Constant)) => {
-                            let alias = rename
-                                .as_ref()
-                                .map(|(n, _)| n.clone())
-                                .unwrap_or_else(|| id.clone());
-                            scope.set_entry_alias(index, alias);
-                            found = true;
-                        }
-                        Some((_, ScopeEntryType::Module)) => unreachable!(),
-                        _ => (),
+                    if let Some(index) = scope
+                        .get_index(id)
+                        .map(|(i, _)| i)
+                        .or_else(|| scope.get_module_index(id))
+                    {
+                        let alias = rename
+                            .as_ref()
+                            .map(|(n, _)| n.clone())
+                            .unwrap_or_else(|| id.clone());
+
+                        scope.set_entry_alias(index, alias);
+                        found = true;
                     }
 
                     if !found {
