@@ -11,8 +11,8 @@ use crate::packages::{
 use crate::parser::{Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::token::{Position, Token};
-use crate::utils::{calc_fn_def, StaticVec};
+use crate::token::Position;
+use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::{resolvers, Module, ModuleResolver};
@@ -22,7 +22,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     format,
-    iter::{empty, once},
+    iter::{empty, once, repeat},
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
@@ -158,27 +158,39 @@ impl<'a> State<'a> {
     }
     /// Does a certain script-defined function exist in the `State`?
     pub fn has_function(&self, name: &str, params: usize) -> bool {
-        self.fn_lib.contains_key(&calc_fn_def(name, params))
+        self.fn_lib.contains_key(&calc_fn_hash(
+            empty(),
+            name,
+            repeat(EMPTY_TYPE_ID()).take(params),
+        ))
     }
     /// Get a script-defined function definition from the `State`.
     pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
         self.fn_lib
-            .get(&calc_fn_def(name, params))
+            .get(&calc_fn_hash(
+                empty(),
+                name,
+                repeat(EMPTY_TYPE_ID()).take(params),
+            ))
             .map(|f| f.as_ref())
     }
 }
+
+/// A sharable script-defined function.
+#[cfg(feature = "sync")]
+pub type ScriptedFunction = Arc<FnDef>;
+#[cfg(not(feature = "sync"))]
+pub type ScriptedFunction = Rc<FnDef>;
 
 /// A type that holds a library (`HashMap`) of script-defined functions.
 ///
 /// Since script-defined functions have `Dynamic` parameters, functions with the same name
 /// and number of parameters are considered equivalent.
 ///
-/// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_def`.
+/// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_hash`
+/// with dummy parameter types `EMPTY_TYPE_ID()` repeated the correct number of times.
 #[derive(Debug, Clone, Default)]
-pub struct FunctionsLib(
-    #[cfg(feature = "sync")] HashMap<u64, Arc<FnDef>>,
-    #[cfg(not(feature = "sync"))] HashMap<u64, Rc<FnDef>>,
-);
+pub struct FunctionsLib(HashMap<u64, ScriptedFunction>);
 
 impl FunctionsLib {
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
@@ -186,7 +198,11 @@ impl FunctionsLib {
         FunctionsLib(
             vec.into_iter()
                 .map(|f| {
-                    let hash = calc_fn_def(&f.name, f.params.len());
+                    let hash = calc_fn_hash(
+                        empty(),
+                        &f.name,
+                        repeat(EMPTY_TYPE_ID()).take(f.params.len()),
+                    );
 
                     #[cfg(feature = "sync")]
                     {
@@ -201,12 +217,21 @@ impl FunctionsLib {
         )
     }
     /// Does a certain function exist in the `FunctionsLib`?
-    pub fn has_function(&self, name: &str, params: usize) -> bool {
-        self.contains_key(&calc_fn_def(name, params))
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    pub fn has_function(&self, hash: u64) -> bool {
+        self.contains_key(&hash)
     }
     /// Get a function definition from the `FunctionsLib`.
-    pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
-        self.get(&calc_fn_def(name, params)).map(|f| f.as_ref())
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    pub fn get_function(&self, hash: u64) -> Option<&FnDef> {
+        self.get(&hash).map(|fn_def| fn_def.as_ref())
+    }
+    /// Get a function definition from the `FunctionsLib`.
+    pub fn get_function_by_signature(&self, name: &str, params: usize) -> Option<&FnDef> {
+        let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
+        self.get_function(hash)
     }
     /// Merge another `FunctionsLib` into this `FunctionsLib`.
     pub fn merge(&self, other: &Self) -> Self {
@@ -219,6 +244,12 @@ impl FunctionsLib {
             functions.extend(other.iter().map(|(hash, fn_def)| (*hash, fn_def.clone())));
             functions
         }
+    }
+}
+
+impl From<Vec<(u64, ScriptedFunction)>> for FunctionsLib {
+    fn from(values: Vec<(u64, ScriptedFunction)>) -> Self {
+        FunctionsLib(values.into_iter().collect())
     }
 }
 
@@ -1323,17 +1354,14 @@ impl Engine {
                 })?;
 
                 // First search in script-defined functions (can override built-in)
-                if let Some(fn_def) = module.get_qualified_fn_lib(fn_name, args.len(), modules)? {
+                if let Some(fn_def) = module.get_qualified_scripted_fn(modules.key()) {
                     self.call_script_fn(None, state, fn_def, &mut args, *pos, level)
                 } else {
                     // Then search in Rust functions
-                    let hash = calc_fn_hash(
-                        modules.iter().map(|(m, _)| m.as_str()),
-                        fn_name,
-                        args.iter().map(|a| a.type_id()),
-                    );
+                    let hash1 = modules.key();
+                    let hash2 = calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
 
-                    match module.get_qualified_fn(fn_name, hash, *pos) {
+                    match module.get_qualified_fn(fn_name, hash1 ^ hash2, *pos) {
                         Ok(func) => func(&mut args, *pos),
                         Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
                         Err(err) => Err(err),

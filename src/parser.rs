@@ -8,7 +8,7 @@ use crate::module::ModuleRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
-use crate::utils::{calc_fn_def, StaticVec};
+use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -16,7 +16,7 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     format,
-    iter::{empty, Peekable},
+    iter::{empty, repeat, Peekable},
     num::NonZeroUsize,
     ops::{Add, Deref, DerefMut},
     rc::Rc,
@@ -677,7 +677,7 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
     id: String,
-    modules: Option<Box<ModuleRef>>,
+    mut modules: Option<Box<ModuleRef>>,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -697,6 +697,13 @@ fn parse_call_expr<'a>(
         // id()
         (Token::RightParen, _) => {
             eat_token(input, Token::RightParen);
+
+            if let Some(modules) = modules.as_mut() {
+                // Calculate hash
+                let hash = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
+                modules.set_key(hash);
+            }
+
             return Ok(Expr::FnCall(
                 Box::new(id.into()),
                 modules,
@@ -713,8 +720,19 @@ fn parse_call_expr<'a>(
         args.push(parse_expr(input, stack, allow_stmt_expr)?);
 
         match input.peek().unwrap() {
+            // id(...args)
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
+
+                if let Some(modules) = modules.as_mut() {
+                    // Calculate hash
+                    let hash = calc_fn_hash(
+                        modules.iter().map(|(m, _)| m.as_str()),
+                        &id,
+                        repeat(EMPTY_TYPE_ID()).take(args.len()),
+                    );
+                    modules.set_key(hash);
+                }
 
                 return Ok(Expr::FnCall(
                     Box::new(id.into()),
@@ -724,9 +742,11 @@ fn parse_call_expr<'a>(
                     begin,
                 ));
             }
+            // id(...args,
             (Token::Comma, _) => {
                 eat_token(input, Token::Comma);
             }
+            // id(...args <EOF>
             (Token::EOF, pos) => {
                 return Err(PERR::MissingToken(
                     Token::RightParen.into(),
@@ -734,9 +754,11 @@ fn parse_call_expr<'a>(
                 )
                 .into_err(*pos))
             }
+            // id(...args <error>
             (Token::LexError(err), pos) => {
                 return Err(PERR::BadInput(err.to_string()).into_err(*pos))
             }
+            // id(...args ???
             (_, pos) => {
                 return Err(PERR::MissingToken(
                     Token::Comma.into(),
@@ -2207,7 +2229,14 @@ fn parse_global_level<'a>(
             if let (Token::Fn, _) = input.peek().unwrap() {
                 let mut stack = Stack::new();
                 let f = parse_fn(input, &mut stack, true)?;
-                functions.insert(calc_fn_def(&f.name, f.params.len()), f);
+                functions.insert(
+                    calc_fn_hash(
+                        empty(),
+                        &f.name,
+                        repeat(EMPTY_TYPE_ID()).take(f.params.len()),
+                    ),
+                    f,
+                );
                 continue;
             }
         }

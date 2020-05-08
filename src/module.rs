@@ -3,19 +3,19 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib};
+use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib, ScriptedFunction};
 use crate::parser::{FnDef, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token};
-use crate::utils::StaticVec;
+use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     collections::HashMap,
     fmt,
-    iter::{empty, once},
+    iter::{empty, repeat},
     mem,
     ops::{Deref, DerefMut},
     rc::Rc,
@@ -67,6 +67,9 @@ pub struct Module {
 
     /// Script-defined functions.
     fn_lib: FunctionsLib,
+
+    /// Flattened collection of all script-defined functions, including those in sub-modules.
+    all_fn_lib: FunctionsLib,
 }
 
 impl fmt::Debug for Module {
@@ -237,26 +240,6 @@ impl Module {
     /// ```
     pub fn set_sub_module<K: Into<String>>(&mut self, name: K, sub_module: Module) {
         self.modules.insert(name.into(), sub_module.into());
-    }
-
-    /// Get a mutable reference to a modules chain.
-    /// The first module is always skipped and assumed to be the same as `self`.
-    pub(crate) fn get_qualified_module_mut(
-        &mut self,
-        modules: &StaticVec<(String, Position)>,
-    ) -> Result<&mut Module, Box<EvalAltResult>> {
-        let mut drain = modules.iter();
-        drain.next().unwrap(); // Skip first module
-
-        let mut module = self;
-
-        for (id, id_pos) in drain {
-            module = module
-                .get_sub_module_mut(id)
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
-        }
-
-        Ok(module)
     }
 
     /// Does the particular Rust function exist in the module?
@@ -576,17 +559,11 @@ impl Module {
         &self.fn_lib
     }
 
-    /// Get a modules-qualified functions library.
-    pub(crate) fn get_qualified_fn_lib(
-        &mut self,
-        name: &str,
-        args: usize,
-        modules: &StaticVec<(String, Position)>,
-    ) -> Result<Option<&FnDef>, Box<EvalAltResult>> {
-        Ok(self
-            .get_qualified_module_mut(modules)?
-            .fn_lib
-            .get_function(name, args))
+    /// Get a modules-qualified script-defined functions.
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    pub(crate) fn get_qualified_scripted_fn(&mut self, hash: u64) -> Option<&FnDef> {
+        self.all_fn_lib.get_function(hash)
     }
 
     /// Create a new `Module` by evaluating an `AST`.
@@ -648,11 +625,12 @@ impl Module {
             names: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
             functions: &mut Vec<(u64, NativeFunction)>,
+            fn_lib: &mut Vec<(u64, ScriptedFunction)>,
         ) {
             for (n, m) in module.modules.iter_mut() {
                 // Collect all the sub-modules first.
                 names.push(n);
-                collect(m, names, variables, functions);
+                collect(m, names, variables, functions, fn_lib);
                 names.pop();
             }
 
@@ -661,28 +639,42 @@ impl Module {
                 let hash = calc_fn_hash(names.iter().map(|v| *v), var_name, empty());
                 variables.push((hash, value.clone()));
             }
-            // Collect all functions
+            // Collect all Rust functions
             for (fn_name, params, func) in module.functions.values() {
-                let hash = calc_fn_hash(names.iter().map(|v| *v), fn_name, params.iter().cloned());
-                functions.push((hash, func.clone()));
+                let hash1 = calc_fn_hash(
+                    names.iter().map(|v| *v),
+                    fn_name,
+                    repeat(EMPTY_TYPE_ID()).take(params.len()),
+                );
+                let hash2 = calc_fn_hash(empty(), "", params.iter().cloned());
+                functions.push((hash1 ^ hash2, func.clone()));
+            }
+            // Collect all script-defined functions
+            for fn_def in module.fn_lib.values() {
+                let hash = calc_fn_hash(
+                    names.iter().map(|v| *v),
+                    &fn_def.name,
+                    repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
+                );
+                fn_lib.push((hash, fn_def.clone()));
             }
         }
 
         let mut variables = Vec::new();
         let mut functions = Vec::new();
+        let mut fn_lib = Vec::new();
 
-        collect(self, &mut vec!["root"], &mut variables, &mut functions);
+        collect(
+            self,
+            &mut vec!["root"],
+            &mut variables,
+            &mut functions,
+            &mut fn_lib,
+        );
 
-        self.all_variables.clear();
-        self.all_functions.clear();
-
-        for (key, value) in variables {
-            self.all_variables.insert(key, value);
-        }
-
-        for (key, value) in functions {
-            self.all_functions.insert(key, value);
-        }
+        self.all_variables = variables.into_iter().collect();
+        self.all_functions = functions.into_iter().collect();
+        self.all_fn_lib = fn_lib.into();
     }
 }
 
@@ -843,7 +835,7 @@ impl fmt::Debug for ModuleRef {
         fmt::Debug::fmt(&self.0, f)?;
 
         if self.1 > 0 {
-            write!(f, " -> {}", self.1)
+            write!(f, " -> {:0>16x}", self.1)
         } else {
             Ok(())
         }

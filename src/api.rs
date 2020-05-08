@@ -999,7 +999,7 @@ impl Engine {
         let pos = Position::none();
 
         let fn_def = fn_lib
-            .get_function(name, args.len())
+            .get_function_by_signature(name, args.len())
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))?;
 
         let state = State::new(fn_lib);
