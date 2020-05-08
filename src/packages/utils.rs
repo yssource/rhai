@@ -44,18 +44,20 @@ macro_rules! def_package {
         pub struct $package($root::packages::PackageLibrary);
 
         impl $root::packages::Package for $package {
-            fn new() -> Self {
-                let mut pkg = $root::packages::PackageStore::new();
-                Self::init(&mut pkg);
-                Self(pkg.into())
-            }
-
             fn get(&self) -> $root::packages::PackageLibrary {
                 self.0.clone()
             }
 
             fn init($lib: &mut $root::packages::PackageStore) {
                 $block
+            }
+        }
+
+        impl $package {
+            pub fn new() -> Self {
+                let mut pkg = $root::packages::PackageStore::new();
+                <Self as $root::packages::Package>::init(&mut pkg);
+                Self(pkg.into())
             }
         }
     };

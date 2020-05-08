@@ -3,7 +3,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib, ScriptedFunction};
+use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib, NativeFunction, ScriptedFunction};
 use crate::parser::{FnDef, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
@@ -24,11 +24,6 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
-
-#[cfg(not(feature = "sync"))]
-type NativeFunction = Rc<Box<FnAny>>;
-#[cfg(feature = "sync")]
-type NativeFunction = Arc<Box<FnAny>>;
 
 /// A trait that encapsulates a module resolution service.
 pub trait ModuleResolver {

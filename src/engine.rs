@@ -176,9 +176,17 @@ impl<'a> State<'a> {
     }
 }
 
+/// An external native Rust function.
+#[cfg(not(feature = "sync"))]
+pub type NativeFunction = Rc<Box<FnAny>>;
+/// An external native Rust function.
+#[cfg(feature = "sync")]
+pub type NativeFunction = Arc<Box<FnAny>>;
+
 /// A sharable script-defined function.
 #[cfg(feature = "sync")]
 pub type ScriptedFunction = Arc<FnDef>;
+/// A sharable script-defined function.
 #[cfg(not(feature = "sync"))]
 pub type ScriptedFunction = Rc<FnDef>;
 
@@ -508,6 +516,15 @@ impl Engine {
     /// When searching for functions, packages loaded later are preferred.
     /// In other words, loaded packages are searched in reverse order.
     pub fn load_package(&mut self, package: PackageLibrary) {
+        // Push the package to the top - packages are searched in reverse order
+        self.packages.push(package);
+    }
+
+    /// Load a new package into the `Engine`.
+    ///
+    /// When searching for functions, packages loaded later are preferred.
+    /// In other words, loaded packages are searched in reverse order.
+    pub fn load_packages(&mut self, package: PackageLibrary) {
         // Push the package to the top - packages are searched in reverse order
         self.packages.push(package);
     }
