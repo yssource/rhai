@@ -3,7 +3,6 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::module::ModuleRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{
     CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
@@ -15,7 +14,10 @@ use crate::token::Position;
 use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 #[cfg(not(feature = "no_module"))]
-use crate::module::{resolvers, Module, ModuleResolver};
+use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
+
+#[cfg(feature = "no_module")]
+use crate::parser::ModuleRef;
 
 use crate::stdlib::{
     any::TypeId,
@@ -432,7 +434,8 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    modules: &Option<Box<ModuleRef>>,
+    #[cfg(not(feature = "no_module"))] mut modules: &Option<Box<ModuleRef>>,
+    #[cfg(feature = "no_module")] _: &Option<ModuleRef>,
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {

@@ -4,11 +4,17 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::engine::{Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::module::ModuleRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
-use crate::utils::{StaticVec, EMPTY_TYPE_ID};
+use crate::utils::EMPTY_TYPE_ID;
+
+#[cfg(not(feature = "no_module"))]
+use crate::module::ModuleRef;
+
+#[cfg(feature = "no_module")]
+#[derive(Debug, Clone, Copy)]
+pub struct ModuleRef;
 
 use crate::stdlib::{
     borrow::Cow,
@@ -357,7 +363,8 @@ pub enum Expr {
     /// Variable access - (variable name, optional modules, hash, optional index, position)
     Variable(
         Box<String>,
-        Option<Box<ModuleRef>>,
+        #[cfg(not(feature = "no_module"))] Option<Box<ModuleRef>>,
+        #[cfg(feature = "no_module")] Option<ModuleRef>,
         Option<NonZeroUsize>,
         Position,
     ),
@@ -370,7 +377,8 @@ pub enum Expr {
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<Cow<'static, str>>,
-        Option<Box<ModuleRef>>,
+        #[cfg(not(feature = "no_module"))] Option<Box<ModuleRef>>,
+        #[cfg(feature = "no_module")] Option<ModuleRef>,
         Box<Vec<Expr>>,
         Option<Box<Dynamic>>,
         Position,
@@ -677,7 +685,8 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
     id: String,
-    mut modules: Option<Box<ModuleRef>>,
+    #[cfg(not(feature = "no_module"))] mut modules: Option<Box<ModuleRef>>,
+    #[cfg(feature = "no_module")] modules: Option<ModuleRef>,
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
@@ -698,12 +707,14 @@ fn parse_call_expr<'a>(
         (Token::RightParen, _) => {
             eat_token(input, Token::RightParen);
 
-            if let Some(modules) = modules.as_mut() {
-                // Calculate hash
-                let hash = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
-                modules.set_key(hash);
+            #[cfg(not(feature = "no_module"))]
+            {
+                if let Some(modules) = modules.as_mut() {
+                    // Calculate hash
+                    let hash = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
+                    modules.set_key(hash);
+                }
             }
-
             return Ok(Expr::FnCall(
                 Box::new(id.into()),
                 modules,
@@ -724,16 +735,18 @@ fn parse_call_expr<'a>(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                if let Some(modules) = modules.as_mut() {
-                    // Calculate hash
-                    let hash = calc_fn_hash(
-                        modules.iter().map(|(m, _)| m.as_str()),
-                        &id,
-                        repeat(EMPTY_TYPE_ID()).take(args.len()),
-                    );
-                    modules.set_key(hash);
+                #[cfg(not(feature = "no_module"))]
+                {
+                    if let Some(modules) = modules.as_mut() {
+                        // Calculate hash
+                        let hash = calc_fn_hash(
+                            modules.iter().map(|(m, _)| m.as_str()),
+                            &id,
+                            repeat(EMPTY_TYPE_ID()).take(args.len()),
+                        );
+                        modules.set_key(hash);
+                    }
                 }
-
                 return Ok(Expr::FnCall(
                     Box::new(id.into()),
                     modules,
@@ -1136,9 +1149,9 @@ fn parse_primary<'a>(
                         } else {
                             index = stack.find_module(id.as_ref());
 
-                            let mut vec = StaticVec::new();
-                            vec.push((*id, pos));
-                            modules = Some(Box::new(vec.into()));
+                            let mut m: ModuleRef = Default::default();
+                            m.push((*id, pos));
+                            modules = Some(Box::new(m));
                         }
 
                         Expr::Variable(Box::new(id2), modules, index, pos2)
@@ -1158,6 +1171,7 @@ fn parse_primary<'a>(
 
     match &mut root_expr {
         // Calculate hash key for module-qualified variables
+        #[cfg(not(feature = "no_module"))]
         Expr::Variable(id, Some(modules), _, _) => {
             let hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), id, empty());
             modules.set_key(hash);
@@ -1347,7 +1361,10 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, Some(modules), _, _)) => {
-            return Err(PERR::PropertyExpected.into_err(modules.get(0).1))
+            #[cfg(feature = "no_module")]
+            unreachable!();
+            #[cfg(not(feature = "no_module"))]
+            return Err(PERR::PropertyExpected.into_err(modules.get(0).1));
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(dot_lhs, dot_rhs, dot_pos)) => Expr::Dot(
