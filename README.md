@@ -2127,7 +2127,8 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer
 
 ### Creating a module from an `AST`
 
-It is easy to convert a pre-compiled `AST` into a module, just use `Module::eval_ast_as_new`:
+It is easy to convert a pre-compiled `AST` into a module, just use `Module::eval_ast_as_new`.
+Don't forget the `export` statement, otherwise there will be nothing inside the module!
 
 ```rust
 use rhai::{Engine, Module};
@@ -2144,26 +2145,33 @@ let ast = engine.compile(r#"
         x + y.len()
     }
 
-    // Imported modules become sub-modules
+    // Imported modules can become sub-modules
     import "another module" as extra;
 
-    // Variables defined at global level become module variables
+    // Variables defined at global level can become module variables
     const x = 123;
     let foo = 41;
     let hello;
 
-    // Final variable values become constant module variable values
+    // Variable values become constant module variable values
     foo = calc(foo);
     hello = "hello, " + foo + " worlds!";
+
+    // Finally, export the variables and modules
+    export
+        x as abc,           // aliased variable name
+        foo,
+        hello,
+        extra as foobar;    // export sub-module
 "#)?;
 
 // Convert the 'AST' into a module, using the 'Engine' to evaluate it first
 let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
 // 'module' now can be loaded into a custom 'Scope' for future use.  It contains:
-//   - sub-module: 'extra'
+//   - sub-module: 'foobar' (renamed from 'extra')
 //   - functions: 'calc', 'add_len'
-//   - variables: 'x', 'foo', 'hello'
+//   - variables: 'abc' (renamed from 'x'), 'foo', 'hello'
 ```
 
 ### Module resolvers

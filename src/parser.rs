@@ -716,9 +716,16 @@ fn parse_call_expr<'a>(
             #[cfg(not(feature = "no_module"))]
             {
                 if let Some(modules) = modules.as_mut() {
-                    // Calculate hash
-                    let hash = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
-                    modules.set_key(hash);
+                    // Rust functions are indexed in two steps:
+                    // 1) Calculate a hash in a similar manner to script-defined functions,
+                    //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
+                    let hash1 = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
+                    // 2) Calculate a second hash with no qualifiers, empty function name, and
+                    //    the actual list of parameter `TypeId`'.s
+                    // 3) The final hash is the XOR of the two hashes.
+
+                    // Cache the first hash
+                    modules.set_key(hash1);
                     modules.set_index(stack.find_module(&modules.get(0).0));
                 }
             }
@@ -745,13 +752,20 @@ fn parse_call_expr<'a>(
                 #[cfg(not(feature = "no_module"))]
                 {
                     if let Some(modules) = modules.as_mut() {
-                        // Calculate hash
-                        let hash = calc_fn_hash(
+                        // Rust functions are indexed in two steps:
+                        // 1) Calculate a hash in a similar manner to script-defined functions,
+                        //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
+                        let hash1 = calc_fn_hash(
                             modules.iter().map(|(m, _)| m.as_str()),
                             &id,
                             repeat(EMPTY_TYPE_ID()).take(args.len()),
                         );
-                        modules.set_key(hash);
+                        // 2) Calculate a second hash with no qualifiers, empty function name, and
+                        //    the actual list of parameter `TypeId`'.s
+                        // 3) The final hash is the XOR of the two hashes.
+
+                        // Cache the first hash
+                        modules.set_key(hash1);
                         modules.set_index(stack.find_module(&modules.get(0).0));
                     }
                 }
@@ -1176,9 +1190,10 @@ fn parse_primary<'a>(
     }
 
     match &mut root_expr {
-        // Calculate hash key for module-qualified variables
+        // Cache the hash key for module-qualified variables
         #[cfg(not(feature = "no_module"))]
         Expr::Variable(id, Some(modules), _, _) => {
+            // Qualifiers + variable name
             let hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), id, empty());
             modules.set_key(hash);
             modules.set_index(stack.find_module(&modules.get(0).0));
@@ -2317,15 +2332,16 @@ fn parse_global_level<'a>(
         {
             if let (Token::Fn, _) = input.peek().unwrap() {
                 let mut stack = Stack::new();
-                let f = parse_fn(input, &mut stack, true)?;
-                functions.insert(
-                    calc_fn_hash(
-                        empty(),
-                        &f.name,
-                        repeat(EMPTY_TYPE_ID()).take(f.params.len()),
-                    ),
-                    f,
+                let func = parse_fn(input, &mut stack, true)?;
+
+                // Qualifiers (none) + function name + argument `TypeId`'s
+                let hash = calc_fn_hash(
+                    empty(),
+                    &func.name,
+                    repeat(EMPTY_TYPE_ID()).take(func.params.len()),
                 );
+
+                functions.insert(hash, func);
                 continue;
             }
         }

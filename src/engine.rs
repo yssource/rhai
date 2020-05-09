@@ -160,21 +160,15 @@ impl<'a> State<'a> {
     }
     /// Does a certain script-defined function exist in the `State`?
     pub fn has_function(&self, name: &str, params: usize) -> bool {
-        self.fn_lib.contains_key(&calc_fn_hash(
-            empty(),
-            name,
-            repeat(EMPTY_TYPE_ID()).take(params),
-        ))
+        // Qualifiers (none) + function name + placeholders (one for each parameter).
+        let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
+        self.fn_lib.contains_key(&hash)
     }
     /// Get a script-defined function definition from the `State`.
     pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
-        self.fn_lib
-            .get(&calc_fn_hash(
-                empty(),
-                name,
-                repeat(EMPTY_TYPE_ID()).take(params),
-            ))
-            .map(|f| f.as_ref())
+        // Qualifiers (none) + function name + placeholders (one for each parameter).
+        let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
+        self.fn_lib.get(&hash).map(|f| f.as_ref())
     }
 }
 
@@ -207,20 +201,21 @@ impl FunctionsLib {
     pub fn from_vec(vec: Vec<FnDef>) -> Self {
         FunctionsLib(
             vec.into_iter()
-                .map(|f| {
+                .map(|fn_def| {
+                    // Qualifiers (none) + function name + placeholders (one for each parameter).
                     let hash = calc_fn_hash(
                         empty(),
-                        &f.name,
-                        repeat(EMPTY_TYPE_ID()).take(f.params.len()),
+                        &fn_def.name,
+                        repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
                     );
 
                     #[cfg(feature = "sync")]
                     {
-                        (hash, Arc::new(f))
+                        (hash, Arc::new(fn_def))
                     }
                     #[cfg(not(feature = "sync"))]
                     {
-                        (hash, Rc::new(f))
+                        (hash, Rc::new(fn_def))
                     }
                 })
                 .collect(),
@@ -240,6 +235,7 @@ impl FunctionsLib {
     }
     /// Get a function definition from the `FunctionsLib`.
     pub fn get_function_by_signature(&self, name: &str, params: usize) -> Option<&FnDef> {
+        // Qualifiers (none) + function name + placeholders (one for each parameter).
         let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
         self.get_function(hash)
     }
@@ -582,6 +578,7 @@ impl Engine {
         }
 
         // Search built-in's and external functions
+        // Qualifiers (none) + function name + argument `TypeId`'s.
         let fn_spec = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
 
         if let Some(func) = self
@@ -731,6 +728,7 @@ impl Engine {
 
     // Has a system function an override?
     fn has_override(&self, state: &State, name: &str) -> bool {
+        // Qualifiers (none) + function name + argument `TypeId`'s.
         let hash = calc_fn_hash(empty(), name, once(TypeId::of::<String>()));
 
         // First check registered functions
@@ -1386,10 +1384,18 @@ impl Engine {
                     self.call_script_fn(None, state, fn_def, &mut args, *pos, level)
                 } else {
                     // Then search in Rust functions
-                    let hash1 = modules.key();
-                    let hash2 = calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
 
-                    match module.get_qualified_fn(fn_name, hash1 ^ hash2, *pos) {
+                    // Rust functions are indexed in two steps:
+                    // 1) Calculate a hash in a similar manner to script-defined functions,
+                    //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
+                    let hash1 = modules.key();
+                    // 2) Calculate a second hash with no qualifiers, empty function name, and
+                    //    the actual list of parameter `TypeId`'.s
+                    let hash2 = calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
+                    // 3) The final hash is the XOR of the two hashes.
+                    let hash = hash1 ^ hash2;
+
+                    match module.get_qualified_fn(fn_name, hash, *pos) {
                         Ok(func) => func(&mut args, *pos),
                         Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
                         Err(err) => Err(err),

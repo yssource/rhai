@@ -618,41 +618,51 @@ impl Module {
 
     /// Scan through all the sub-modules in the `Module` build an index of all
     /// variables and external Rust functions via hashing.
-    pub(crate) fn collect_all_sub_modules(&mut self) {
+    pub(crate) fn index_all_sub_modules(&mut self) {
         // Collect a particular module.
-        fn collect<'a>(
+        fn index_module<'a>(
             module: &'a mut Module,
-            names: &mut Vec<&'a str>,
+            qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
             functions: &mut Vec<(u64, NativeFunction)>,
             fn_lib: &mut Vec<(u64, ScriptedFunction)>,
         ) {
-            for (n, m) in module.modules.iter_mut() {
-                // Collect all the sub-modules first.
-                names.push(n);
-                collect(m, names, variables, functions, fn_lib);
-                names.pop();
+            for (name, m) in module.modules.iter_mut() {
+                // Index all the sub-modules first.
+                qualifiers.push(name);
+                index_module(m, qualifiers, variables, functions, fn_lib);
+                qualifiers.pop();
             }
 
-            // Collect all variables
+            // Index all variables
             for (var_name, value) in module.variables.iter() {
-                let hash = calc_fn_hash(names.iter().map(|v| *v), var_name, empty());
+                // Qualifiers + variable name
+                let hash = calc_fn_hash(qualifiers.iter().map(|v| *v), var_name, empty());
                 variables.push((hash, value.clone()));
             }
-            // Collect all Rust functions
+            // Index all Rust functions
             for (fn_name, params, func) in module.functions.values() {
+                // Rust functions are indexed in two steps:
+                // 1) Calculate a hash in a similar manner to script-defined functions,
+                //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
                 let hash1 = calc_fn_hash(
-                    names.iter().map(|v| *v),
+                    qualifiers.iter().map(|v| *v),
                     fn_name,
                     repeat(EMPTY_TYPE_ID()).take(params.len()),
                 );
+                // 2) Calculate a second hash with no qualifiers, empty function name, and
+                //    the actual list of parameter `TypeId`'.s
                 let hash2 = calc_fn_hash(empty(), "", params.iter().cloned());
-                functions.push((hash1 ^ hash2, func.clone()));
+                // 3) The final hash is the XOR of the two hashes.
+                let hash = hash1 ^ hash2;
+
+                functions.push((hash, func.clone()));
             }
-            // Collect all script-defined functions
+            // Index all script-defined functions
             for fn_def in module.fn_lib.values() {
+                // Qualifiers + function name + placeholders (one for each parameter)
                 let hash = calc_fn_hash(
-                    names.iter().map(|v| *v),
+                    qualifiers.iter().map(|v| *v),
                     &fn_def.name,
                     repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
                 );
@@ -664,7 +674,7 @@ impl Module {
         let mut functions = Vec::new();
         let mut fn_lib = Vec::new();
 
-        collect(
+        index_module(
             self,
             &mut vec!["root"],
             &mut variables,

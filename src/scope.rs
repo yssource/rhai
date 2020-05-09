@@ -178,7 +178,7 @@ impl<'a> Scope<'a> {
     /// Modules are used for accessing member variables, functions and plugins under a namespace.
     #[cfg(not(feature = "no_module"))]
     pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, mut value: Module) {
-        value.collect_all_sub_modules();
+        value.index_all_sub_modules();
 
         self.push_dynamic_value(
             name,

@@ -115,7 +115,11 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
         foo = calc(foo);
         hello = "hello, " + foo + " worlds!";
 
-        export x as abc, foo, hello, extra as foobar;
+        export
+            x as abc,
+            foo,
+            hello,
+            extra as foobar;
     "#,
     )?;
 
