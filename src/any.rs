@@ -145,6 +145,8 @@ impl dyn Variant {
 pub struct Dynamic(pub(crate) Union);
 
 /// Internal `Dynamic` representation.
+///
+/// Most variants are boxed to reduce the size.
 pub enum Union {
     Unit(()),
     Bool(bool),
