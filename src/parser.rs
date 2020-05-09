@@ -280,9 +280,9 @@ pub enum Stmt {
     /// for id in expr { stmt }
     For(Box<(String, Expr, Stmt)>),
     /// let id = expr
-    Let(Box<(String, Option<Expr>, Position)>),
+    Let(Box<((String, Position), Option<Expr>)>),
     /// const id = expr
-    Const(Box<(String, Expr, Position)>),
+    Const(Box<((String, Position), Expr)>),
     /// { stmt; ... }
     Block(Box<(Vec<Stmt>, Position)>),
     /// { stmt }
@@ -292,11 +292,11 @@ pub enum Stmt {
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal(Box<(Option<Expr>, ReturnType, Position)>),
+    ReturnWithVal(Box<((ReturnType, Position), Option<Expr>)>),
     /// import expr as module
-    Import(Box<(Expr, String, Position)>),
+    Import(Box<(Expr, (String, Position))>),
     /// expr id as name, ...
-    Export(Box<Vec<(String, Position, Option<(String, Position)>)>>),
+    Export(Box<Vec<((String, Position), Option<(String, Position)>)>>),
 }
 
 impl Stmt {
@@ -304,17 +304,17 @@ impl Stmt {
     pub fn position(&self) -> Position {
         match self {
             Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos,
-            Stmt::Let(x) => x.2,
-            Stmt::Const(x) => x.2,
-            Stmt::ReturnWithVal(x) => x.2,
+            Stmt::Let(x) => (x.0).1,
+            Stmt::Const(x) => (x.0).1,
+            Stmt::ReturnWithVal(x) => (x.0).1,
             Stmt::Block(x) => x.1,
             Stmt::IfThenElse(x) => x.0.position(),
             Stmt::Expr(x) => x.position(),
             Stmt::While(x) => x.1.position(),
             Stmt::Loop(x) => x.position(),
             Stmt::For(x) => x.2.position(),
-            Stmt::Import(x) => x.2,
-            Stmt::Export(x) => x.get(0).unwrap().1,
+            Stmt::Import(x) => (x.1).1,
+            Stmt::Export(x) => (x.get(0).unwrap().0).1,
         }
     }
 
@@ -379,23 +379,22 @@ pub enum Expr {
     CharConstant(Box<(char, Position)>),
     /// String constant.
     StringConstant(Box<(String, Position)>),
-    /// Variable access - (variable name, optional modules, hash, optional index, position)
-    Variable(Box<(String, MRef, u64, Option<NonZeroUsize>, Position)>),
+    /// Variable access - ((variable name, position), optional modules, hash, optional index)
+    Variable(Box<((String, Position), MRef, u64, Option<NonZeroUsize>)>),
     /// Property access.
     Property(Box<(String, Position)>),
     /// { stmt }
     Stmt(Box<(Stmt, Position)>),
-    /// func(expr, ... ) - (function name, optional modules, hash, arguments, optional default value, position)
+    /// func(expr, ... ) - ((function name, position), optional modules, hash, arguments, optional default value)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<(
-            Cow<'static, str>,
+            (Cow<'static, str>, Position),
             MRef,
             u64,
             Vec<Expr>,
-            Option<Box<Dynamic>>,
-            Position,
+            Option<Dynamic>,
         )>,
     ),
     /// expr = expr
@@ -407,7 +406,7 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Box<(Vec<Expr>, Position)>),
     /// #{ name:expr, ... }
-    Map(Box<(Vec<(String, Expr, Position)>, Position)>),
+    Map(Box<(Vec<((String, Position), Expr)>, Position)>),
     /// lhs in rhs
     In(Box<(Expr, Expr, Position)>),
     /// lhs && rhs
@@ -445,10 +444,10 @@ impl Expr {
             ))),
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(x) if x.0.iter().all(|(_, v, _)| v.is_constant()) => {
+            Self::Map(x) if x.0.iter().all(|(_, v)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
                     x.0.iter()
-                        .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
+                        .map(|((k, _), v)| (k.clone(), v.get_constant_value()))
                         .collect::<HashMap<_, _>>(),
                 )))
             }
@@ -493,8 +492,8 @@ impl Expr {
             Self::Map(x) => x.1,
             Self::Property(x) => x.1,
             Self::Stmt(x) => x.1,
-            Self::Variable(x) => x.4,
-            Self::FnCall(x) => x.5,
+            Self::Variable(x) => (x.0).1,
+            Self::FnCall(x) => (x.0).1,
 
             Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
 
@@ -515,10 +514,10 @@ impl Expr {
             Self::StringConstant(x) => x.1 = new_pos,
             Self::Array(x) => x.1 = new_pos,
             Self::Map(x) => x.1 = new_pos,
-            Self::Variable(x) => x.4 = new_pos,
+            Self::Variable(x) => (x.0).1 = new_pos,
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(x) => x.5 = new_pos,
+            Self::FnCall(x) => (x.0).1 = new_pos,
             Self::And(x) => x.2 = new_pos,
             Self::Or(x) => x.2 = new_pos,
             Self::In(x) => x.2 = new_pos,
@@ -541,7 +540,8 @@ impl Expr {
             Self::Array(x) => x.0.iter().all(Self::is_pure),
 
             Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
-                x.0.is_pure() && x.1.is_pure()
+                let (lhs, rhs, _) = x.as_ref();
+                lhs.is_pure() && rhs.is_pure()
             }
 
             Self::Stmt(x) => x.0.is_pure(),
@@ -569,7 +569,7 @@ impl Expr {
             Self::Array(x) => x.0.iter().all(Self::is_constant),
 
             // An map literal is constant if all items are constant
-            Self::Map(x) => x.0.iter().map(|(_, expr, _)| expr).all(Self::is_constant),
+            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             // Check in expression
             Self::In(x) => match (&x.0, &x.1) {
@@ -626,7 +626,10 @@ impl Expr {
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     pub(crate) fn into_property(self) -> Self {
         match self {
-            Self::Variable(x) if x.1.is_none() => Self::Property(Box::new((x.0.clone(), x.4))),
+            Self::Variable(x) if x.1.is_none() => {
+                let (name, pos) = x.0;
+                Self::Property(Box::new((name.clone(), pos)))
+            }
             _ => self,
         }
     }
@@ -713,34 +716,31 @@ fn parse_call_expr<'a>(
             eat_token(input, Token::RightParen);
 
             #[cfg(not(feature = "no_module"))]
-            let hash1 = {
+            let hash_fn_def = {
                 if let Some(modules) = modules.as_mut() {
                     modules.set_index(stack.find_module(&modules.get(0).0));
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
                     //    i.e. qualifiers + function name + no parameters.
-                    let hash1 = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
                     // 2) Calculate a second hash with no qualifiers, empty function name, and
                     //    the actual list of parameter `TypeId`'.s
                     // 3) The final hash is the XOR of the two hashes.
-
-                    hash1
+                    calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty())
                 } else {
                     calc_fn_hash(empty(), &id, empty())
                 }
             };
             // Qualifiers (none) + function name + no parameters.
             #[cfg(feature = "no_module")]
-            let hash1 = calc_fn_hash(empty(), &id, empty());
+            let hash_fn_def = calc_fn_hash(empty(), &id, empty());
 
             return Ok(Expr::FnCall(Box::new((
-                id.into(),
+                (id.into(), begin),
                 modules,
-                hash1,
+                hash_fn_def,
                 args,
                 None,
-                begin,
             ))));
         }
         // id...
@@ -756,38 +756,36 @@ fn parse_call_expr<'a>(
                 eat_token(input, Token::RightParen);
 
                 #[cfg(not(feature = "no_module"))]
-                let hash1 = {
+                let hash_fn_def = {
                     if let Some(modules) = modules.as_mut() {
                         modules.set_index(stack.find_module(&modules.get(0).0));
 
                         // Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
                         //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                        let hash1 = calc_fn_hash(
-                            modules.iter().map(|(m, _)| m.as_str()),
-                            &id,
-                            repeat(EMPTY_TYPE_ID()).take(args.len()),
-                        );
                         // 2) Calculate a second hash with no qualifiers, empty function name, and
                         //    the actual list of parameter `TypeId`'.s
                         // 3) The final hash is the XOR of the two hashes.
-
-                        hash1
+                        calc_fn_hash(
+                            modules.iter().map(|(m, _)| m.as_str()),
+                            &id,
+                            repeat(EMPTY_TYPE_ID()).take(args.len()),
+                        )
                     } else {
                         calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()))
                     }
                 };
                 // Qualifiers (none) + function name + dummy parameter types (one for each parameter).
                 #[cfg(feature = "no_module")]
-                let hash1 = calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()));
+                let hash_fn_def =
+                    calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()));
 
                 return Ok(Expr::FnCall(Box::new((
-                    id.into(),
+                    (id.into(), begin),
                     modules,
-                    hash1,
+                    hash_fn_def,
                     args,
                     None,
-                    begin,
                 ))));
             }
             // id(...args,
@@ -1094,7 +1092,7 @@ fn parse_map_literal<'a>(
 
             let expr = parse_expr(input, stack, allow_stmt_expr)?;
 
-            map.push((name, expr, pos));
+            map.push(((name, pos), expr));
 
             match input.peek().unwrap() {
                 (Token::Comma, _) => {
@@ -1127,11 +1125,11 @@ fn parse_map_literal<'a>(
     // Check for duplicating properties
     map.iter()
         .enumerate()
-        .try_for_each(|(i, (k1, _, _))| {
+        .try_for_each(|(i, ((k1, _), _))| {
             map.iter()
                 .skip(i + 1)
-                .find(|(k2, _, _)| k2 == k1)
-                .map_or_else(|| Ok(()), |(k2, _, pos)| Err((k2, *pos)))
+                .find(|((k2, _), _)| k2 == k1)
+                .map_or_else(|| Ok(()), |((k2, pos), _)| Err((k2, *pos)))
         })
         .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
 
@@ -1163,7 +1161,7 @@ fn parse_primary<'a>(
         Token::StringConst(s) => Expr::StringConstant(Box::new((s, pos))),
         Token::Identifier(s) => {
             let index = stack.find(&s);
-            Expr::Variable(Box::new((s, None, 0, index, pos)))
+            Expr::Variable(Box::new(((s, pos), None, 0, index)))
         }
         Token::LeftParen => parse_paren_expr(input, stack, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
@@ -1191,24 +1189,27 @@ fn parse_primary<'a>(
         root_expr = match (root_expr, token) {
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                parse_call_expr(input, stack, x.0, x.1, x.4, allow_stmt_expr)?
+                let ((name, pos), modules, _, _) = *x;
+                parse_call_expr(input, stack, name, modules, pos, allow_stmt_expr)?
             }
             (Expr::Property(x), Token::LeftParen) => {
-                parse_call_expr(input, stack, x.0, None, x.1, allow_stmt_expr)?
+                let (name, pos) = *x;
+                parse_call_expr(input, stack, name, None, pos, allow_stmt_expr)?
             }
             // module access
             #[cfg(not(feature = "no_module"))]
-            (Expr::Variable(mut x), Token::DoubleColon) => match input.next().unwrap() {
+            (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    if let Some(ref mut modules) = x.1 {
-                        modules.push((x.0, x.4));
+                    let ((name, pos), mut modules, _, index) = *x;
+                    if let Some(ref mut modules) = modules {
+                        modules.push((name, pos));
                     } else {
                         let mut m: ModuleRef = Default::default();
-                        m.push((x.0, x.4));
-                        x.1 = Some(Box::new(m));
+                        m.push((name, pos));
+                        modules = Some(Box::new(m));
                     }
 
-                    Expr::Variable(Box::new((id2, x.1, 0, x.3, pos2)))
+                    Expr::Variable(Box::new(((id2, pos2), modules, 0, index)))
                 }
                 (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
             },
@@ -1226,10 +1227,11 @@ fn parse_primary<'a>(
         // Cache the hash key for module-qualified variables
         #[cfg(not(feature = "no_module"))]
         Expr::Variable(x) if x.1.is_some() => {
-            let modules = x.1.as_mut().unwrap();
+            let ((name, _), modules, hash, _) = x.as_mut();
+            let modules = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
-            x.2 = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), &x.0, empty());
+            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, empty());
             modules.set_index(stack.find_module(&modules.get(0).0));
         }
         _ => (),
@@ -1292,12 +1294,11 @@ fn parse_unary<'a>(
                     let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
                     Ok(Expr::FnCall(Box::new((
-                        op.into(),
+                        (op.into(), pos),
                         None,
                         hash,
                         vec![e],
                         None,
-                        pos,
                     ))))
                 }
             }
@@ -1310,16 +1311,17 @@ fn parse_unary<'a>(
         // !expr
         (Token::Bang, _) => {
             let pos = eat_token(input, Token::Bang);
+            let expr = vec![parse_primary(input, stack, allow_stmt_expr)?];
+
             let op = "!";
             let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
             Ok(Expr::FnCall(Box::new((
-                op.into(),
+                (op.into(), pos),
                 None,
                 hash,
-                vec![parse_primary(input, stack, allow_stmt_expr)?],
-                Some(Box::new(false.into())), // NOT operator, when operating on invalid operand, defaults to false
-                pos,
+                expr,
+                Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
             ))))
         }
         // <EOF>
@@ -1338,11 +1340,12 @@ fn make_assignment_stmt<'a>(
     match &lhs {
         Expr::Variable(x) if x.3.is_none() => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
         Expr::Variable(x) => {
-            match stack[(stack.len() - x.3.unwrap().get())].1 {
+            let ((name, name_pos), _, _, index) = x.as_ref();
+            match stack[(stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
                 // Constant values cannot be assigned to
                 ScopeEntryType::Constant => {
-                    Err(PERR::AssignmentToConstant(x.0.to_string()).into_err(x.4))
+                    Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
                 }
                 ScopeEntryType::Module => unreachable!(),
             }
@@ -1350,11 +1353,12 @@ fn make_assignment_stmt<'a>(
         Expr::Index(x) | Expr::Dot(x) => match &x.0 {
             Expr::Variable(x) if x.3.is_none() => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
             Expr::Variable(x) => {
-                match stack[(stack.len() - x.3.unwrap().get())].1 {
+                let ((name, name_pos), _, _, index) = x.as_ref();
+                match stack[(stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
                     // Constant values cannot be assigned to
                     ScopeEntryType::Constant => {
-                        Err(PERR::AssignmentToConstant(x.0.to_string()).into_err(x.4))
+                        Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
                     }
                     ScopeEntryType::Module => unreachable!(),
                 }
@@ -1403,7 +1407,7 @@ fn parse_op_assignment_stmt<'a>(
     // lhs op= rhs -> lhs = op(lhs, rhs)
     let args = vec![lhs_copy, rhs];
     let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(args.len()));
-    let rhs_expr = Expr::FnCall(Box::new((op.into(), None, hash, args, None, pos)));
+    let rhs_expr = Expr::FnCall(Box::new(((op.into(), pos), None, hash, args, None)));
     make_assignment_stmt(stack, lhs, rhs_expr, pos)
 }
 
@@ -1423,15 +1427,13 @@ fn make_dot_expr(
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let lhs = if is_index { lhs.into_property() } else { lhs };
-            Expr::Dot(Box::new((
-                lhs,
-                Expr::Property(Box::new((x.0, x.4))),
-                op_pos,
-            )))
+            let rhs = Expr::Property(Box::new(x.0));
+            Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }
         (lhs, Expr::Property(x)) => {
             let lhs = if is_index { lhs.into_property() } else { lhs };
-            Expr::Dot(Box::new((lhs, Expr::Property(x), op_pos)))
+            let rhs = Expr::Property(x);
+            Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
@@ -1441,17 +1443,31 @@ fn make_dot_expr(
             return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
         }
         // lhs.dot_lhs.dot_rhs
-        (lhs, Expr::Dot(x)) => Expr::Dot(Box::new((
-            lhs,
-            Expr::Dot(Box::new((x.0.into_property(), x.1.into_property(), x.2))),
-            op_pos,
-        ))),
+        (lhs, Expr::Dot(x)) => {
+            let (dot_lhs, dot_rhs, pos) = *x;
+            Expr::Dot(Box::new((
+                lhs,
+                Expr::Dot(Box::new((
+                    dot_lhs.into_property(),
+                    dot_rhs.into_property(),
+                    pos,
+                ))),
+                op_pos,
+            )))
+        }
         // lhs.idx_lhs[idx_rhs]
-        (lhs, Expr::Index(x)) => Expr::Dot(Box::new((
-            lhs,
-            Expr::Index(Box::new((x.0.into_property(), x.1.into_property(), x.2))),
-            op_pos,
-        ))),
+        (lhs, Expr::Index(x)) => {
+            let (idx_lhs, idx_rhs, pos) = *x;
+            Expr::Dot(Box::new((
+                lhs,
+                Expr::Index(Box::new((
+                    idx_lhs.into_property(),
+                    idx_rhs.into_property(),
+                    pos,
+                ))),
+                op_pos,
+            )))
+        }
         // lhs.rhs
         (lhs, rhs) => Expr::Dot(Box::new((lhs, rhs.into_property(), op_pos))),
     })
@@ -1664,32 +1680,32 @@ fn parse_binary_op<'a>(
             rhs
         };
 
-        let cmp_default = Some(Box::new(false.into()));
+        let cmp_def = Some(false.into());
         let op = op_token.syntax();
         let hash = calc_fn_hash(empty(), &op, repeat(EMPTY_TYPE_ID()).take(2));
         let mut args = vec![current_lhs, rhs];
 
         current_lhs = match op_token {
-            Token::Plus => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::Minus => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::Multiply => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::Divide => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::Plus => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::Minus => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::Multiply => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::Divide => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
 
-            Token::LeftShift => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::RightShift => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::Modulo => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::PowerOf => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::LeftShift => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::RightShift => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::Modulo => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::PowerOf => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
 
             // Comparison operators default to false when passed invalid operands
-            Token::EqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
-            Token::NotEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
-            Token::LessThan => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
+            Token::EqualsTo => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
+            Token::NotEqualsTo => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
+            Token::LessThan => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
             Token::LessThanEqualsTo => {
-                Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos)))
+                Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def)))
             }
-            Token::GreaterThan => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
+            Token::GreaterThan => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
             Token::GreaterThanEqualsTo => {
-                Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos)))
+                Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def)))
             }
 
             Token::Or => {
@@ -1702,9 +1718,9 @@ fn parse_binary_op<'a>(
                 let current_lhs = args.pop().unwrap();
                 Expr::And(Box::new((current_lhs, rhs, pos)))
             }
-            Token::Ampersand => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::Pipe => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
-            Token::XOr => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::Ampersand => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::Pipe => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            Token::XOr => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
 
             Token::In => {
                 let rhs = args.pop().unwrap();
@@ -1916,12 +1932,12 @@ fn parse_let<'a>(
             // let name = expr
             ScopeEntryType::Normal => {
                 stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new((name, Some(init_value), pos))))
+                Ok(Stmt::Let(Box::new(((name, pos), Some(init_value)))))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
                 stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new((name, init_value, pos))))
+                Ok(Stmt::Const(Box::new(((name, pos), init_value))))
             }
             // const name = expr - error
             ScopeEntryType::Constant => {
@@ -1935,11 +1951,11 @@ fn parse_let<'a>(
         match var_type {
             ScopeEntryType::Normal => {
                 stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new((name, None, pos))))
+                Ok(Stmt::Let(Box::new(((name, pos), None))))
             }
             ScopeEntryType::Constant => {
                 stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new((name, Expr::Unit(pos), pos))))
+                Ok(Stmt::Const(Box::new(((name, pos), Expr::Unit(pos)))))
             }
             // Variable cannot be a module
             ScopeEntryType::Module => unreachable!(),
@@ -1978,7 +1994,7 @@ fn parse_import<'a>(
     };
 
     stack.push((name.clone(), ScopeEntryType::Module));
-    Ok(Stmt::Import(Box::new((expr, name, pos))))
+    Ok(Stmt::Import(Box::new((expr, (name, pos)))))
 }
 
 /// Parse an export statement.
@@ -2005,7 +2021,7 @@ fn parse_export<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Box
             None
         };
 
-        exports.push((id, id_pos, rename));
+        exports.push(((id, id_pos), rename));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -2026,14 +2042,14 @@ fn parse_export<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Box
     exports
         .iter()
         .enumerate()
-        .try_for_each(|(i, (p1, _, _))| {
+        .try_for_each(|(i, ((id1, _), _))| {
             exports
                 .iter()
                 .skip(i + 1)
-                .find(|(p2, _, _)| p2 == p1)
-                .map_or_else(|| Ok(()), |(p2, pos, _)| Err((p2, *pos)))
+                .find(|((id2, _), _)| id2 == id1)
+                .map_or_else(|| Ok(()), |((id2, pos), _)| Err((id2, *pos)))
         })
-        .map_err(|(p, pos)| PERR::DuplicatedExport(p.to_string()).into_err(pos))?;
+        .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
 
     Ok(Stmt::Export(Box::new(exports)))
 }
@@ -2165,10 +2181,10 @@ fn parse_stmt<'a>(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Stmt::ReturnWithVal(Box::new((None, return_type, *pos)))),
+                (Token::EOF, pos) => Ok(Stmt::ReturnWithVal(Box::new(((return_type, *pos), None)))),
                 // `return;` or `throw;`
                 (Token::SemiColon, _) => {
-                    Ok(Stmt::ReturnWithVal(Box::new((None, return_type, pos))))
+                    Ok(Stmt::ReturnWithVal(Box::new(((return_type, pos), None))))
                 }
                 // `return` or `throw` with expression
                 (_, _) => {
@@ -2176,9 +2192,8 @@ fn parse_stmt<'a>(
                     let pos = expr.position();
 
                     Ok(Stmt::ReturnWithVal(Box::new((
+                        (return_type, pos),
                         Some(expr),
-                        return_type,
-                        pos,
                     ))))
                 }
             }
@@ -2448,13 +2463,14 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Map(map) => {
             let items: Vec<_> = map
                 .into_iter()
-                .map(|(k, v)| (k, map_dynamic_to_expr(v, pos), pos))
+                .map(|(k, v)| ((k, pos), map_dynamic_to_expr(v, pos)))
                 .collect();
-            if items.iter().all(|(_, expr, _)| expr.is_some()) {
+
+            if items.iter().all(|(_, expr)| expr.is_some()) {
                 Some(Expr::Map(Box::new((
                     items
                         .into_iter()
-                        .map(|(k, expr, pos)| (k, expr.unwrap(), pos))
+                        .map(|((k, pos), expr)| ((k, pos), expr.unwrap()))
                         .collect(),
                     pos,
                 ))))
