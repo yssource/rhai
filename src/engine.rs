@@ -1200,7 +1200,9 @@ impl Engine {
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(rhs_value)) => {
+                let op = "==";
                 let def_value = false.into();
+                let fn_def = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter() {
@@ -1210,11 +1212,9 @@ impl Engine {
                     let args = &mut [&mut lhs_value.clone(), &mut value.clone()];
                     let def_value = Some(&def_value);
                     let pos = rhs.position();
-                    let op = "==";
 
                     // Qualifiers (none) + function name + argument `TypeId`'s.
                     let fn_spec = calc_fn_hash(empty(), op, args.iter().map(|a| a.type_id()));
-                    let fn_def = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
                     if self
                         .call_fn_raw(
