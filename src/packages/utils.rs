@@ -9,6 +9,8 @@ use crate::token::Position;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
+    iter::empty,
+    mem,
     string::{String, ToString},
 };
 
@@ -42,18 +44,20 @@ macro_rules! def_package {
         pub struct $package($root::packages::PackageLibrary);
 
         impl $root::packages::Package for $package {
-            fn new() -> Self {
-                let mut pkg = $root::packages::PackageStore::new();
-                Self::init(&mut pkg);
-                Self(pkg.into())
-            }
-
             fn get(&self) -> $root::packages::PackageLibrary {
                 self.0.clone()
             }
 
             fn init($lib: &mut $root::packages::PackageStore) {
                 $block
+            }
+        }
+
+        impl $package {
+            pub fn new() -> Self {
+                let mut pkg = $root::packages::PackageStore::new();
+                <Self as $root::packages::Package>::init(&mut pkg);
+                Self(pkg.into())
             }
         }
     };
@@ -114,7 +118,7 @@ pub fn reg_none<R>(
         + Sync
         + 'static,
 ) {
-    let hash = calc_fn_hash(fn_name, ([] as [TypeId; 0]).iter().cloned());
+    let hash = calc_fn_hash(empty(), fn_name, ([] as [TypeId; 0]).iter().cloned());
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
         check_num_args(fn_name, 0, args, pos)?;
@@ -164,15 +168,15 @@ pub fn reg_unary<T: Variant + Clone, R>(
 ) {
     //println!("register {}({})", fn_name, crate::std::any::type_name::<T>());
 
-    let hash = calc_fn_hash(fn_name, [TypeId::of::<T>()].iter().cloned());
+    let hash = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
         check_num_args(fn_name, 1, args, pos)?;
 
         let mut drain = args.iter_mut();
-        let x: &mut T = drain.next().unwrap().downcast_mut().unwrap();
+        let x = mem::take(*drain.next().unwrap()).cast::<T>();
 
-        let r = func(x.clone());
+        let r = func(x);
         map_result(r, pos)
     });
 
@@ -224,7 +228,7 @@ pub fn reg_unary_mut<T: Variant + Clone, R>(
 ) {
     //println!("register {}(&mut {})", fn_name, crate::std::any::type_name::<T>());
 
-    let hash = calc_fn_hash(fn_name, [TypeId::of::<T>()].iter().cloned());
+    let hash = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
         check_num_args(fn_name, 1, args, pos)?;
@@ -278,6 +282,7 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
     //println!("register {}({}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>());
 
     let hash = calc_fn_hash(
+        empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>()].iter().cloned(),
     );
@@ -286,10 +291,10 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
         check_num_args(fn_name, 2, args, pos)?;
 
         let mut drain = args.iter_mut();
-        let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
+        let x = mem::take(*drain.next().unwrap()).cast::<A>();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
 
-        let r = func(x.clone(), y.clone());
+        let r = func(x, y);
         map_result(r, pos)
     });
 
@@ -342,6 +347,7 @@ pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
     //println!("register {}(&mut {}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>());
 
     let hash = calc_fn_hash(
+        empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>()].iter().cloned(),
     );
@@ -351,9 +357,9 @@ pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
 
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
 
-        let r = func(x, y.clone());
+        let r = func(x, y);
         map_result(r, pos)
     });
 
@@ -380,6 +386,7 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
     //println!("register {}({}, {}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>(), crate::std::any::type_name::<C>());
 
     let hash = calc_fn_hash(
+        empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
             .iter()
@@ -390,11 +397,11 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
         check_num_args(fn_name, 3, args, pos)?;
 
         let mut drain = args.iter_mut();
-        let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
-        let z: &mut C = drain.next().unwrap().downcast_mut().unwrap();
+        let x = mem::take(*drain.next().unwrap()).cast::<A>();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
+        let z = mem::take(*drain.next().unwrap()).cast::<C>();
 
-        let r = func(x.clone(), y.clone(), z.clone());
+        let r = func(x, y, z);
         map_result(r, pos)
     });
 
@@ -421,6 +428,7 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
     //println!("register {}(&mut {}, {}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>(), crate::std::any::type_name::<C>());
 
     let hash = calc_fn_hash(
+        empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
             .iter()
@@ -432,10 +440,10 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
 
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
-        let y: &mut B = drain.next().unwrap().downcast_mut().unwrap();
-        let z: &mut C = drain.next().unwrap().downcast_mut().unwrap();
+        let y = mem::take(*drain.next().unwrap()).cast::<B>();
+        let z = mem::take(*drain.next().unwrap()).cast::<C>();
 
-        let r = func(x, y.clone(), z.clone());
+        let r = func(x, y, z);
         map_result(r, pos)
     });
 

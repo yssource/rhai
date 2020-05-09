@@ -8,7 +8,7 @@ use crate::result::EvalAltResult;
 use crate::token::Position;
 use crate::utils::calc_fn_spec;
 
-use crate::stdlib::{any::TypeId, boxed::Box, mem, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, iter::empty, mem, string::ToString};
 
 /// A trait to register custom plugins with the `Engine`.
 ///
@@ -279,8 +279,8 @@ macro_rules! def_register {
             fn register_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
                 let func = make_func!(fn_name : f : map_dynamic ; $($par => $clone),*);
-                let hash = calc_fn_spec(name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.functions.insert(hash, Box::new(func));
+                let hash = calc_fn_spec(empty(), name, [$(TypeId::of::<$par>()),*].iter().cloned());
+                self.base_package.functions.insert(hash, Box::new(func));
             }
         }
 
@@ -297,8 +297,8 @@ macro_rules! def_register {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
                 let func = make_func!(fn_name : f : map_identity ; $($par => $clone),*);
-                let hash = calc_fn_spec(name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.functions.insert(hash, Box::new(func));
+                let hash = calc_fn_spec(empty(), name, [$(TypeId::of::<$par>()),*].iter().cloned());
+                self.base_package.functions.insert(hash, Box::new(func));
             }
         }
 
@@ -316,8 +316,8 @@ macro_rules! def_register {
             fn register_result_fn(&mut self, name: &str, f: FN) {
                 let fn_name = name.to_string();
                 let func = make_func!(fn_name : f : map_result ; $($par => $clone),*);
-                let hash = calc_fn_spec(name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.functions.insert(hash, Box::new(func));
+                let hash = calc_fn_spec(empty(), name, [$(TypeId::of::<$par>()),*].iter().cloned());
+                self.base_package.functions.insert(hash, Box::new(func));
             }
         }
 

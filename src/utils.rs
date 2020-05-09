@@ -14,30 +14,32 @@ use crate::stdlib::collections::hash_map::DefaultHasher;
 #[cfg(feature = "no_std")]
 use ahash::AHasher;
 
-/// Calculate a `u64` hash key from a function name and parameter types.
-///
-/// Parameter types are passed in via `TypeId` values from an iterator
-/// which can come from any source.
-pub fn calc_fn_spec(fn_name: &str, params: impl Iterator<Item = TypeId>) -> u64 {
-    #[cfg(feature = "no_std")]
-    let mut s: AHasher = Default::default();
-    #[cfg(not(feature = "no_std"))]
-    let mut s = DefaultHasher::new();
-
-    s.write(fn_name.as_bytes());
-    params.for_each(|t| t.hash(&mut s));
-    s.finish()
+pub fn EMPTY_TYPE_ID() -> TypeId {
+    TypeId::of::<()>()
 }
 
-/// Calculate a `u64` hash key from a function name and number of parameters (without regard to types).
-pub(crate) fn calc_fn_def(fn_name: &str, num_params: usize) -> u64 {
+/// Calculate a `u64` hash key from a module-qualified function name and parameter types.
+///
+/// Module names are passed in via `&str` references from an iterator.
+/// Parameter types are passed in via `TypeId` values from an iterator.
+///
+/// ### Note
+///
+/// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
+pub fn calc_fn_spec<'a>(
+    modules: impl Iterator<Item = &'a str>,
+    fn_name: &str,
+    params: impl Iterator<Item = TypeId>,
+) -> u64 {
     #[cfg(feature = "no_std")]
     let mut s: AHasher = Default::default();
     #[cfg(not(feature = "no_std"))]
     let mut s = DefaultHasher::new();
 
+    // We always skip the first module
+    modules.skip(1).for_each(|m| m.hash(&mut s));
     s.write(fn_name.as_bytes());
-    s.write_usize(num_params);
+    params.for_each(|t| t.hash(&mut s));
     s.finish()
 }
 
@@ -45,7 +47,7 @@ pub(crate) fn calc_fn_def(fn_name: &str, num_params: usize) -> u64 {
 ///
 /// This is essentially a knock-off of the [`staticvec`](https://crates.io/crates/staticvec) crate.
 /// This simplified implementation here is to avoid pulling in another crate.
-#[derive(Clone, Default)]
+#[derive(Clone, Hash, Default)]
 pub struct StaticVec<T: Default + Clone> {
     /// Total number of values held.
     len: usize,
@@ -116,6 +118,16 @@ impl<T: Default + Clone> StaticVec<T> {
         };
 
         self.list[..num].iter().chain(self.more.iter())
+    }
+    /// Get a mutable iterator to entries in the `StaticVec`.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        let num = if self.len >= self.list.len() {
+            self.list.len()
+        } else {
+            self.len
+        };
+
+        self.list[..num].iter_mut().chain(self.more.iter_mut())
     }
 }
 

@@ -4,22 +4,27 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::optimize::OptimizationLevel;
-use crate::packages::{CorePackage, Package, PackageLibrary, StandardPackage};
-use crate::parser::{Expr, FnDef, ModuleRef, ReturnType, Stmt, AST};
+use crate::packages::{
+    CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
+};
+use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
-use crate::utils::{calc_fn_def, StaticVec};
+use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 #[cfg(not(feature = "no_module"))]
-use crate::module::{resolvers, Module, ModuleResolver};
+use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
+
+#[cfg(feature = "no_module")]
+use crate::parser::ModuleRef;
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     collections::HashMap,
     format,
-    iter::once,
+    iter::{empty, once, repeat},
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
@@ -59,13 +64,6 @@ pub const MAX_CALL_STACK_DEPTH: usize = 28;
 
 #[cfg(not(debug_assertions))]
 pub const MAX_CALL_STACK_DEPTH: usize = 256;
-
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-const FUNCTIONS_COUNT: usize = 512;
-
-#[cfg(any(feature = "only_i32", feature = "only_i64"))]
-const FUNCTIONS_COUNT: usize = 256;
 
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
@@ -141,66 +139,113 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 }
 
 /// A type that holds all the current states of the Engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct State {
+#[derive(Debug, Clone, Copy)]
+pub struct State<'a> {
+    /// Global script-defined functions.
+    pub fn_lib: &'a FunctionsLib,
+
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
     pub always_search: bool,
 }
 
-impl State {
+impl<'a> State<'a> {
     /// Create a new `State`.
-    pub fn new() -> Self {
+    pub fn new(fn_lib: &'a FunctionsLib) -> Self {
         Self {
             always_search: false,
+            fn_lib,
         }
     }
+    /// Does a certain script-defined function exist in the `State`?
+    pub fn has_function(&self, hash: u64) -> bool {
+        self.fn_lib.contains_key(&hash)
+    }
+    /// Get a script-defined function definition from the `State`.
+    pub fn get_function(&self, hash: u64) -> Option<&FnDef> {
+        self.fn_lib.get(&hash).map(|f| f.as_ref())
+    }
 }
+
+/// An external native Rust function.
+#[cfg(not(feature = "sync"))]
+pub type NativeFunction = Rc<Box<FnAny>>;
+/// An external native Rust function.
+#[cfg(feature = "sync")]
+pub type NativeFunction = Arc<Box<FnAny>>;
+
+/// A sharable script-defined function.
+#[cfg(feature = "sync")]
+pub type ScriptedFunction = Arc<FnDef>;
+/// A sharable script-defined function.
+#[cfg(not(feature = "sync"))]
+pub type ScriptedFunction = Rc<FnDef>;
 
 /// A type that holds a library (`HashMap`) of script-defined functions.
 ///
 /// Since script-defined functions have `Dynamic` parameters, functions with the same name
 /// and number of parameters are considered equivalent.
 ///
-/// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_def`.
+/// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_hash`
+/// with dummy parameter types `EMPTY_TYPE_ID()` repeated the correct number of times.
 #[derive(Debug, Clone, Default)]
-pub struct FunctionsLib(
-    #[cfg(feature = "sync")] HashMap<u64, Arc<FnDef>>,
-    #[cfg(not(feature = "sync"))] HashMap<u64, Rc<FnDef>>,
-);
+pub struct FunctionsLib(HashMap<u64, ScriptedFunction>);
 
 impl FunctionsLib {
-    /// Create a new `FunctionsLib`.
-    pub fn new() -> Self {
-        Default::default()
-    }
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
     pub fn from_vec(vec: Vec<FnDef>) -> Self {
         FunctionsLib(
             vec.into_iter()
-                .map(|f| {
-                    let hash = calc_fn_def(&f.name, f.params.len());
+                .map(|fn_def| {
+                    // Qualifiers (none) + function name + placeholders (one for each parameter).
+                    let hash = calc_fn_hash(
+                        empty(),
+                        &fn_def.name,
+                        repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
+                    );
 
                     #[cfg(feature = "sync")]
                     {
-                        (hash, Arc::new(f))
+                        (hash, Arc::new(fn_def))
                     }
                     #[cfg(not(feature = "sync"))]
                     {
-                        (hash, Rc::new(f))
+                        (hash, Rc::new(fn_def))
                     }
                 })
                 .collect(),
         )
     }
     /// Does a certain function exist in the `FunctionsLib`?
-    pub fn has_function(&self, name: &str, params: usize) -> bool {
-        self.contains_key(&calc_fn_def(name, params))
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    pub fn has_function(&self, hash: u64) -> bool {
+        self.contains_key(&hash)
     }
     /// Get a function definition from the `FunctionsLib`.
-    pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
-        self.get(&calc_fn_def(name, params)).map(|f| f.as_ref())
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    pub fn get_function(&self, hash: u64) -> Option<&FnDef> {
+        self.get(&hash).map(|fn_def| fn_def.as_ref())
+    }
+    /// Get a function definition from the `FunctionsLib`.
+    pub fn get_function_by_signature(
+        &self,
+        name: &str,
+        params: usize,
+        public_only: bool,
+    ) -> Option<&FnDef> {
+        // Qualifiers (none) + function name + placeholders (one for each parameter).
+        let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
+        let fn_def = self.get_function(hash);
+
+        match fn_def.as_ref().map(|f| f.access) {
+            None => None,
+            Some(FnAccess::Private) if public_only => None,
+            Some(FnAccess::Private) => fn_def,
+            Some(FnAccess::Public) => fn_def,
+        }
     }
     /// Merge another `FunctionsLib` into this `FunctionsLib`.
     pub fn merge(&self, other: &Self) -> Self {
@@ -213,6 +258,12 @@ impl FunctionsLib {
             functions.extend(other.iter().map(|(hash, fn_def)| (*hash, fn_def.clone())));
             functions
         }
+    }
+}
+
+impl From<Vec<(u64, ScriptedFunction)>> for FunctionsLib {
+    fn from(values: Vec<(u64, ScriptedFunction)>) -> Self {
+        FunctionsLib(values.into_iter().collect())
     }
 }
 
@@ -256,14 +307,9 @@ impl DerefMut for FunctionsLib {
 /// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
     /// A collection of all library packages loaded into the engine.
-    pub(crate) packages: Vec<PackageLibrary>,
-    /// A `HashMap` containing all compiled functions known to the engine.
-    ///
-    /// The key of the `HashMap` is a `u64` hash calculated by the function `crate::calc_fn_hash`.
-    pub(crate) functions: HashMap<u64, Box<FnAny>>,
-
-    /// A hashmap containing all iterators known to the engine.
-    pub(crate) type_iterators: HashMap<TypeId, Box<IteratorFn>>,
+    pub(crate) packages: PackagesCollection,
+    /// A collection of all library packages loaded into the engine.
+    pub(crate) base_package: PackageStore,
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
@@ -300,8 +346,7 @@ impl Default for Engine {
         // Create the new scripting Engine
         let mut engine = Self {
             packages: Default::default(),
-            functions: HashMap::with_capacity(FUNCTIONS_COUNT),
-            type_iterators: Default::default(),
+            base_package: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
@@ -393,16 +438,17 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    modules: &ModuleRef,
+    #[cfg(not(feature = "no_module"))] modules: Option<(&Box<ModuleRef>, u64)>,
+    #[cfg(feature = "no_module")] _: Option<(&ModuleRef, u64)>,
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_module"))]
     {
-        if let Some(modules) = modules {
-            let (id, root_pos) = modules.get(0); // First module
+        if let Some((modules, hash)) = modules {
+            let (id, root_pos) = modules.get(0);
 
-            let module = if let Some(index) = index {
+            let module = if let Some(index) = modules.index() {
                 scope
                     .get_mut(scope.len() - index.get())
                     .0
@@ -410,12 +456,15 @@ fn search_scope<'a>(
                     .unwrap()
             } else {
                 scope.find_module(id).ok_or_else(|| {
-                    Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
+                    Box::new(EvalAltResult::ErrorModuleNotFound(
+                        id.to_string(),
+                        *root_pos,
+                    ))
                 })?
             };
 
             return Ok((
-                module.get_qualified_var_mut(name, modules.as_ref(), pos)?,
+                module.get_qualified_var_mut(name, hash, pos)?,
                 // Module variables are constant
                 ScopeEntryType::Constant,
             ));
@@ -445,8 +494,7 @@ impl Engine {
     pub fn new_raw() -> Self {
         Self {
             packages: Default::default(),
-            functions: HashMap::with_capacity(FUNCTIONS_COUNT / 2),
-            type_iterators: Default::default(),
+            base_package: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
@@ -476,7 +524,16 @@ impl Engine {
     /// In other words, loaded packages are searched in reverse order.
     pub fn load_package(&mut self, package: PackageLibrary) {
         // Push the package to the top - packages are searched in reverse order
-        self.packages.insert(0, package);
+        self.packages.push(package);
+    }
+
+    /// Load a new package into the `Engine`.
+    ///
+    /// When searching for functions, packages loaded later are preferred.
+    /// In other words, loaded packages are searched in reverse order.
+    pub fn load_packages(&mut self, package: PackageLibrary) {
+        // Push the package to the top - packages are searched in reverse order
+        self.packages.push(package);
     }
 
     /// Control whether and how the `Engine` will optimize an AST after compilation.
@@ -502,11 +559,19 @@ impl Engine {
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
+    ///
+    /// ## WARNING
+    ///
+    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
+    /// All function arguments not in the first position are always passed by value and thus consumed.
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_fn_raw(
         &self,
         scope: Option<&mut Scope>,
-        fn_lib: &FunctionsLib,
+        state: &State,
         fn_name: &str,
+        hash_fn_spec: u64,
+        hash_fn_def: u64,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
@@ -518,19 +583,18 @@ impl Engine {
         }
 
         // First search in script-defined functions (can override built-in)
-        if let Some(fn_def) = fn_lib.get_function(fn_name, args.len()) {
-            return self.call_fn_from_lib(scope, fn_lib, fn_def, args, pos, level);
+        if hash_fn_def > 0 {
+            if let Some(fn_def) = state.get_function(hash_fn_def) {
+                return self.call_script_fn(scope, state, fn_def, args, pos, level);
+            }
         }
 
         // Search built-in's and external functions
-        let fn_spec = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
-
-        if let Some(func) = self.functions.get(&fn_spec).or_else(|| {
-            self.packages
-                .iter()
-                .find(|pkg| pkg.functions.contains_key(&fn_spec))
-                .and_then(|pkg| pkg.functions.get(&fn_spec))
-        }) {
+        if let Some(func) = self
+            .base_package
+            .get_function(hash_fn_spec)
+            .or_else(|| self.packages.get_function(hash_fn_spec))
+        {
             // Run external function
             let result = func(args, pos)?;
 
@@ -596,10 +660,16 @@ impl Engine {
     }
 
     /// Call a script-defined function.
-    pub(crate) fn call_fn_from_lib(
+    ///
+    /// ## WARNING
+    ///
+    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
+    /// All function arguments not in the first position are always passed by value and thus consumed.
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
+    pub(crate) fn call_script_fn(
         &self,
         scope: Option<&mut Scope>,
-        fn_lib: &FunctionsLib,
+        state: &State,
         fn_def: &FnDef,
         args: &mut FnCallArgs,
         pos: Position,
@@ -609,7 +679,7 @@ impl Engine {
             // Extern scope passed in which is not empty
             Some(scope) if scope.len() > 0 => {
                 let scope_len = scope.len();
-                let mut state = State::new();
+                let mut state = State::new(state.fn_lib);
 
                 // Put arguments into scope as variables - variable name is copied
                 scope.extend(
@@ -625,7 +695,7 @@ impl Engine {
 
                 // Evaluate the function at one higher level of call depth
                 let result = self
-                    .eval_stmt(scope, &mut state, fn_lib, &fn_def.body, level + 1)
+                    .eval_stmt(scope, &mut state, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -639,7 +709,7 @@ impl Engine {
             // No new scope - create internal scope
             _ => {
                 let mut scope = Scope::new();
-                let mut state = State::new();
+                let mut state = State::new(state.fn_lib);
 
                 // Put arguments into scope as variables
                 scope.extend(
@@ -655,7 +725,7 @@ impl Engine {
 
                 // Evaluate the function at one higher level of call depth
                 return self
-                    .eval_stmt(&mut scope, &mut state, fn_lib, &fn_def.body, level + 1)
+                    .eval_stmt(&mut scope, &mut state, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -666,42 +736,65 @@ impl Engine {
     }
 
     // Has a system function an override?
-    fn has_override(&self, fn_lib: &FunctionsLib, name: &str) -> bool {
-        let hash = calc_fn_hash(name, once(TypeId::of::<String>()));
-
+    fn has_override(&self, state: &State, hash_fn_spec: u64, hash_fn_def: u64) -> bool {
         // First check registered functions
-        self.functions.contains_key(&hash)
+        self.base_package.contains_function(hash_fn_spec)
             // Then check packages
-            || self.packages.iter().any(|p| p.functions.contains_key(&hash))
+            || self.packages.contains_function(hash_fn_spec)
             // Then check script-defined functions
-            || fn_lib.has_function(name, 1)
+            || state.has_function(hash_fn_def)
     }
 
     // Perform an actual function call, taking care of special functions
+    ///
+    /// ## WARNING
+    ///
+    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
+    /// All function arguments not in the first position are always passed by value and thus consumed.
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     fn exec_fn_call(
         &self,
-        fn_lib: &FunctionsLib,
+        state: &State,
         fn_name: &str,
+        hash_fn_def: u64,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        // Qualifiers (none) + function name + argument `TypeId`'s.
+        let hash_fn_spec = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
+
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(fn_lib, KEYWORD_TYPE_OF) => {
+            KEYWORD_TYPE_OF
+                if args.len() == 1 && !self.has_override(state, hash_fn_spec, hash_fn_def) =>
+            {
                 Ok(self.map_type_name(args[0].type_name()).to_string().into())
             }
 
             // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL if args.len() == 1 && !self.has_override(fn_lib, KEYWORD_EVAL) => {
+            KEYWORD_EVAL
+                if args.len() == 1 && !self.has_override(state, hash_fn_spec, hash_fn_def) =>
+            {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     pos,
                 )))
             }
+
             // Normal method call
-            _ => self.call_fn_raw(None, fn_lib, fn_name, args, def_val, pos, level),
+            _ => self.call_fn_raw(
+                None,
+                state,
+                fn_name,
+                hash_fn_spec,
+                hash_fn_def,
+                args,
+                def_val,
+                pos,
+                level,
+            ),
         }
     }
 
@@ -709,7 +802,7 @@ impl Engine {
     fn eval_script_expr(
         &self,
         scope: &mut Scope,
-        fn_lib: &FunctionsLib,
+        state: &State,
         script: &Dynamic,
         pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -733,7 +826,7 @@ impl Engine {
         }
 
         let statements = mem::take(ast.statements_mut());
-        let ast = AST::new(statements, fn_lib.clone());
+        let ast = AST::new(statements, state.fn_lib.clone());
 
         // Evaluate the AST
         self.eval_ast_with_scope_raw(scope, &ast)
@@ -743,7 +836,7 @@ impl Engine {
     /// Chain-evaluate a dot/index chain.
     fn eval_dot_index_chain_helper(
         &self,
-        fn_lib: &FunctionsLib,
+        state: &State,
         mut target: Target,
         rhs: &Expr,
         idx_values: &mut StaticVec<Dynamic>,
@@ -764,78 +857,95 @@ impl Engine {
 
         if is_index {
             match rhs {
-                // xxx[idx].dot_rhs...
-                Expr::Dot(idx, idx_rhs, pos) |
-                // xxx[idx][dot_rhs]...
-                Expr::Index(idx, idx_rhs, pos) => {
-                    let is_index = matches!(rhs, Expr::Index(_,_,_));
+                // xxx[idx].dot_rhs... | xxx[idx][dot_rhs]...
+                Expr::Dot(x) | Expr::Index(x) => {
+                    let is_index = matches!(rhs, Expr::Index(_));
 
-                    let indexed_val = self.get_indexed_mut(fn_lib, obj, idx_val, idx.position(), op_pos, false)?;
+                    let indexed_val =
+                        self.get_indexed_mut(state, obj, idx_val, x.0.position(), op_pos, false)?;
                     self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val, idx_rhs.as_ref(), idx_values, is_index, *pos, level, new_val
+                        state,
+                        indexed_val,
+                        &x.1,
+                        idx_values,
+                        is_index,
+                        x.2,
+                        level,
+                        new_val,
                     )
                 }
                 // xxx[rhs] = new_val
                 _ if new_val.is_some() => {
-                    let mut indexed_val = self.get_indexed_mut(fn_lib, obj, idx_val, rhs.position(), op_pos, true)?;
+                    let mut indexed_val =
+                        self.get_indexed_mut(state, obj, idx_val, rhs.position(), op_pos, true)?;
                     indexed_val.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
                 }
                 // xxx[rhs]
                 _ => self
-                    .get_indexed_mut(fn_lib, obj, idx_val, rhs.position(), op_pos, false)
-                    .map(|v| (v.clone_into_dynamic(), false))
+                    .get_indexed_mut(state, obj, idx_val, rhs.position(), op_pos, false)
+                    .map(|v| (v.clone_into_dynamic(), false)),
             }
         } else {
             match rhs {
                 // xxx.fn_name(arg_expr_list)
-                Expr::FnCall(fn_name, None,_, def_val, pos) => {
+                Expr::FnCall(x) if x.1.is_none() => {
+                    let ((name, pos), modules, hash, args, def_val) = x.as_ref();
+
                     let mut args: Vec<_> = once(obj)
-                        .chain(idx_val.downcast_mut::<Vec<Dynamic>>().unwrap().iter_mut())
+                        .chain(
+                            idx_val
+                                .downcast_mut::<StaticVec<Dynamic>>()
+                                .unwrap()
+                                .iter_mut(),
+                        )
                         .collect();
-                    let def_val = def_val.as_deref();
                     // A function call is assumed to have side effects, so the value is changed
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
-                    self.exec_fn_call(fn_lib, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(state, name, *hash, &mut args, def_val.as_ref(), *pos, 0)
+                        .map(|v| (v, true))
                 }
                 // xxx.module::fn_name(...) - syntax error
-                Expr::FnCall(_,_,_,_,_) => unreachable!(),
+                Expr::FnCall(_) => unreachable!(),
                 // {xxx:map}.id = ???
                 #[cfg(not(feature = "no_object"))]
-                Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
+                Expr::Property(x) if obj.is::<Map>() && new_val.is_some() => {
+                    let index = x.0.clone().into();
                     let mut indexed_val =
-                        self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, true)?;
+                        self.get_indexed_mut(state, obj, index, x.1, op_pos, true)?;
                     indexed_val.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
                 }
                 // {xxx:map}.id
                 #[cfg(not(feature = "no_object"))]
-                Expr::Property(id, pos) if obj.is::<Map>() => {
+                Expr::Property(x) if obj.is::<Map>() => {
+                    let index = x.0.clone().into();
                     let indexed_val =
-                        self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, false)?;
+                        self.get_indexed_mut(state, obj, index, x.1, op_pos, false)?;
                     Ok((indexed_val.clone_into_dynamic(), false))
                 }
                 // xxx.id = ??? a
-                Expr::Property(id, pos) if new_val.is_some() => {
-                    let fn_name = make_setter(id);
+                Expr::Property(x) if new_val.is_some() => {
+                    let fn_name = make_setter(&x.0);
                     let mut args = [obj, new_val.as_mut().unwrap()];
-                    self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(state, &fn_name, 0, &mut args, None, x.1, 0)
+                        .map(|v| (v, true))
                 }
                 // xxx.id
-                Expr::Property(id, pos) => {
-                    let fn_name = make_getter(id);
+                Expr::Property(x) => {
+                    let fn_name = make_getter(&x.0);
                     let mut args = [obj];
-                    self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).map(|v| (v, false))
+                    self.exec_fn_call(state, &fn_name, 0, &mut args, None, x.1, 0)
+                        .map(|v| (v, false))
                 }
                 #[cfg(not(feature = "no_object"))]
-                // {xxx:map}.idx_lhs[idx_expr]
-                Expr::Index(dot_lhs, dot_rhs, pos) |
-                // {xxx:map}.dot_lhs.rhs
-                Expr::Dot(dot_lhs, dot_rhs, pos) if obj.is::<Map>() => {
-                    let is_index = matches!(rhs, Expr::Index(_,_,_));
+                // {xxx:map}.idx_lhs[idx_expr] | {xxx:map}.dot_lhs.rhs
+                Expr::Index(x) | Expr::Dot(x) if obj.is::<Map>() => {
+                    let is_index = matches!(rhs, Expr::Index(_));
 
-                    let indexed_val = if let Expr::Property(id, pos) = dot_lhs.as_ref() {
-                        self.get_indexed_mut(fn_lib, obj, id.to_string().into(), *pos, op_pos, false)?
+                    let indexed_val = if let Expr::Property(p) = &x.0 {
+                        let index = p.0.clone().into();
+                        self.get_indexed_mut(state, obj, index, x.2, op_pos, false)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -844,19 +954,24 @@ impl Engine {
                         )));
                     };
                     self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val, dot_rhs, idx_values, is_index, *pos, level, new_val
+                        state,
+                        indexed_val,
+                        &x.1,
+                        idx_values,
+                        is_index,
+                        x.2,
+                        level,
+                        new_val,
                     )
                 }
-                // xxx.idx_lhs[idx_expr]
-                Expr::Index(dot_lhs, dot_rhs, pos) |
-                // xxx.dot_lhs.rhs
-                Expr::Dot(dot_lhs, dot_rhs, pos) => {
-                    let is_index = matches!(rhs, Expr::Index(_,_,_));
+                // xxx.idx_lhs[idx_expr] | xxx.dot_lhs.rhs
+                Expr::Index(x) | Expr::Dot(x) => {
+                    let is_index = matches!(rhs, Expr::Index(_));
                     let mut args = [obj, &mut Default::default()];
 
-                    let indexed_val = &mut (if let Expr::Property(id, pos) = dot_lhs.as_ref() {
-                        let fn_name = make_getter(id);
-                        self.exec_fn_call(fn_lib, &fn_name, &mut args[..1], None, *pos, 0)?
+                    let indexed_val = &mut (if let Expr::Property(p) = &x.0 {
+                        let fn_name = make_getter(&p.0);
+                        self.exec_fn_call(state, &fn_name, 0, &mut args[..1], None, x.2, 0)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -865,20 +980,28 @@ impl Engine {
                         )));
                     });
                     let (result, may_be_changed) = self.eval_dot_index_chain_helper(
-                        fn_lib, indexed_val.into(), dot_rhs, idx_values, is_index, *pos, level, new_val
+                        state,
+                        indexed_val.into(),
+                        &x.1,
+                        idx_values,
+                        is_index,
+                        x.2,
+                        level,
+                        new_val,
                     )?;
 
                     // Feed the value back via a setter just in case it has been updated
                     if may_be_changed {
-                        if let Expr::Property(id, pos) = dot_lhs.as_ref() {
-                            let fn_name = make_setter(id);
+                        if let Expr::Property(p) = &x.0 {
+                            let fn_name = make_setter(&p.0);
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = indexed_val;
-                            self.exec_fn_call(fn_lib, &fn_name, &mut args, None, *pos, 0).or_else(|err| match *err {
-                                // If there is no setter, no need to feed it back because the property is read-only
-                                EvalAltResult::ErrorDotExpr(_,_) => Ok(Default::default()),
-                                err => Err(Box::new(err))
-                            })?;
+                            self.exec_fn_call(state, &fn_name, 0, &mut args, None, x.2, 0)
+                                .or_else(|err| match *err {
+                                    // If there is no setter, no need to feed it back because the property is read-only
+                                    EvalAltResult::ErrorDotExpr(_, _) => Ok(Default::default()),
+                                    err => Err(Box::new(err)),
+                                })?;
                         }
                     }
 
@@ -898,7 +1021,6 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
-        fn_lib: &FunctionsLib,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
         is_index: bool,
@@ -908,20 +1030,22 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let idx_values = &mut StaticVec::new();
 
-        self.eval_indexed_chain(scope, state, fn_lib, dot_rhs, idx_values, 0, level)?;
+        self.eval_indexed_chain(scope, state, dot_rhs, idx_values, 0, level)?;
 
         match dot_lhs {
             // id.??? or id[???]
-            Expr::Variable(id, modules, index, pos) => {
+            Expr::Variable(x) => {
+                let ((name, pos), modules, hash, index) = x.as_ref();
                 let index = if state.always_search { None } else { *index };
-                let (target, typ) = search_scope(scope, id, modules, index, *pos)?;
+                let mod_and_hash = modules.as_ref().map(|m| (m, *hash));
+                let (target, typ) = search_scope(scope, &name, mod_and_hash, index, *pos)?;
 
                 // Constants cannot be modified
                 match typ {
                     ScopeEntryType::Module => unreachable!(),
                     ScopeEntryType::Constant if new_val.is_some() => {
                         return Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                            id.to_string(),
+                            name.clone(),
                             *pos,
                         )));
                     }
@@ -930,7 +1054,7 @@ impl Engine {
 
                 let this_ptr = target.into();
                 self.eval_dot_index_chain_helper(
-                    fn_lib, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
+                    state, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
                 )
                 .map(|(v, _)| v)
             }
@@ -942,10 +1066,10 @@ impl Engine {
             }
             // {expr}.??? or {expr}[???]
             expr => {
-                let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
+                let val = self.eval_expr(scope, state, expr, level)?;
                 let this_ptr = val.into();
                 self.eval_dot_index_chain_helper(
-                    fn_lib, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
+                    state, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
                 )
                 .map(|(v, _)| v)
             }
@@ -961,39 +1085,36 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
-        fn_lib: &FunctionsLib,
         expr: &Expr,
         idx_values: &mut StaticVec<Dynamic>,
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
         match expr {
-            Expr::FnCall(_, None, arg_exprs, _, _) => {
-                let arg_values = arg_exprs
-                    .iter()
-                    .map(|arg_expr| self.eval_expr(scope, state, fn_lib, arg_expr, level))
-                    .collect::<Result<Vec<_>, _>>()?;
+            Expr::FnCall(x) if x.1.is_none() => {
+                let mut arg_values = StaticVec::<Dynamic>::new();
 
-                #[cfg(not(feature = "no_index"))]
-                idx_values.push(arg_values);
-                #[cfg(feature = "no_index")]
+                for arg_expr in x.3.iter() {
+                    arg_values.push(self.eval_expr(scope, state, arg_expr, level)?);
+                }
+
                 idx_values.push(Dynamic::from(arg_values));
             }
-            Expr::FnCall(_, _, _, _, _) => unreachable!(),
-            Expr::Property(_, _) => idx_values.push(()), // Store a placeholder - no need to copy the property name
-            Expr::Index(lhs, rhs, _) | Expr::Dot(lhs, rhs, _) => {
+            Expr::FnCall(_) => unreachable!(),
+            Expr::Property(_) => idx_values.push(()), // Store a placeholder - no need to copy the property name
+            Expr::Index(x) | Expr::Dot(x) => {
                 // Evaluate in left-to-right order
-                let lhs_val = match lhs.as_ref() {
-                    Expr::Property(_, _) => Default::default(), // Store a placeholder in case of a property
-                    _ => self.eval_expr(scope, state, fn_lib, lhs, level)?,
+                let lhs_val = match x.0 {
+                    Expr::Property(_) => Default::default(), // Store a placeholder in case of a property
+                    _ => self.eval_expr(scope, state, &x.0, level)?,
                 };
 
                 // Push in reverse order
-                self.eval_indexed_chain(scope, state, fn_lib, rhs, idx_values, size, level)?;
+                self.eval_indexed_chain(scope, state, &x.1, idx_values, size, level)?;
 
                 idx_values.push(lhs_val);
             }
-            _ => idx_values.push(self.eval_expr(scope, state, fn_lib, expr, level)?),
+            _ => idx_values.push(self.eval_expr(scope, state, expr, level)?),
         }
 
         Ok(())
@@ -1002,7 +1123,7 @@ impl Engine {
     /// Get the value at the indexed position of a base type
     fn get_indexed_mut<'a>(
         &self,
-        fn_lib: &FunctionsLib,
+        state: &State,
         val: &'a mut Dynamic,
         mut idx: Dynamic,
         idx_pos: Position,
@@ -1082,7 +1203,7 @@ impl Engine {
 
             _ => {
                 let args = &mut [val, &mut idx];
-                self.exec_fn_call(fn_lib, FUNC_INDEXER, args, None, op_pos, 0)
+                self.exec_fn_call(state, FUNC_INDEXER, 0, args, None, op_pos, 0)
                     .map(|v| v.into())
                     .map_err(|_| {
                         Box::new(EvalAltResult::ErrorIndexingType(
@@ -1100,27 +1221,36 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
-        fn_lib: &FunctionsLib,
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut lhs_value = self.eval_expr(scope, state, fn_lib, lhs, level)?;
-        let rhs_value = self.eval_expr(scope, state, fn_lib, rhs, level)?;
+        let lhs_value = self.eval_expr(scope, state, lhs, level)?;
+        let rhs_value = self.eval_expr(scope, state, rhs, level)?;
 
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(mut rhs_value)) => {
+            Dynamic(Union::Array(rhs_value)) => {
+                let op = "==";
                 let def_value = false.into();
+                let fn_def = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
-                // Call the '==' operator to compare each value
-                for value in rhs_value.iter_mut() {
-                    let args = &mut [&mut lhs_value, value];
+                // Call the `==` operator to compare each value
+                for value in rhs_value.iter() {
+                    // WARNING - Always clone the values here because they'll be consumed by the function call.
+                    //           Do not pass the `&mut` straight through because the `==` implementation
+                    //           very likely takes parameters passed by value!
+                    let args = &mut [&mut lhs_value.clone(), &mut value.clone()];
                     let def_value = Some(&def_value);
                     let pos = rhs.position();
 
+                    // Qualifiers (none) + function name + argument `TypeId`'s.
+                    let fn_spec = calc_fn_hash(empty(), op, args.iter().map(|a| a.type_id()));
+
                     if self
-                        .call_fn_raw(None, fn_lib, "==", args, def_value, pos, level)?
+                        .call_fn_raw(
+                            None, state, op, fn_spec, fn_def, args, def_value, pos, level,
+                        )?
                         .as_bool()
                         .unwrap_or(false)
                     {
@@ -1152,126 +1282,135 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
-        fn_lib: &FunctionsLib,
         expr: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         match expr {
-            Expr::IntegerConstant(i, _) => Ok((*i).into()),
+            Expr::IntegerConstant(x) => Ok(x.0.into()),
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(f, _) => Ok((*f).into()),
-            Expr::StringConstant(s, _) => Ok(s.to_string().into()),
-            Expr::CharConstant(c, _) => Ok((*c).into()),
-            Expr::Variable(id, modules, index, pos) => {
+            Expr::FloatConstant(x) => Ok(x.0.into()),
+            Expr::StringConstant(x) => Ok(x.0.to_string().into()),
+            Expr::CharConstant(x) => Ok(x.0.into()),
+            Expr::Variable(x) => {
+                let ((name, pos), modules, hash, index) = x.as_ref();
                 let index = if state.always_search { None } else { *index };
-                let val = search_scope(scope, id, modules, index, *pos)?;
-                Ok(val.0.clone())
+                let mod_and_hash = modules.as_ref().map(|m| (m, *hash));
+                let (val, _) = search_scope(scope, name, mod_and_hash, index, *pos)?;
+                Ok(val.clone())
             }
-            Expr::Property(_, _) => unreachable!(),
+            Expr::Property(_) => unreachable!(),
 
             // Statement block
-            Expr::Stmt(stmt, _) => self.eval_stmt(scope, state, fn_lib, stmt, level),
+            Expr::Stmt(stmt) => self.eval_stmt(scope, state, &stmt.0, level),
 
             // lhs = rhs
-            Expr::Assignment(lhs, rhs, op_pos) => {
-                let rhs_val = self.eval_expr(scope, state, fn_lib, rhs, level)?;
+            Expr::Assignment(x) => {
+                let op_pos = x.2;
+                let rhs_val = self.eval_expr(scope, state, &x.1, level)?;
 
-                match lhs.as_ref() {
+                match &x.0 {
                     // name = rhs
-                    Expr::Variable(name, modules, index, pos) => {
+                    Expr::Variable(x) => {
+                        let ((name, pos), modules, hash, index) = x.as_ref();
                         let index = if state.always_search { None } else { *index };
-                        match search_scope(scope, name, modules, index, *pos)? {
-                            (_, ScopeEntryType::Constant) => Err(Box::new(
-                                EvalAltResult::ErrorAssignmentToConstant(name.to_string(), *op_pos),
+                        let mod_and_hash = modules.as_ref().map(|m| (m, *hash));
+                        let (value_ptr, typ) =
+                            search_scope(scope, name, mod_and_hash, index, *pos)?;
+                        match typ {
+                            ScopeEntryType::Constant => Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant(name.clone(), *pos),
                             )),
-                            (value_ptr, ScopeEntryType::Normal) => {
+                            ScopeEntryType::Normal => {
                                 *value_ptr = rhs_val;
                                 Ok(Default::default())
                             }
                             // End variable cannot be a module
-                            (_, ScopeEntryType::Module) => unreachable!(),
+                            ScopeEntryType::Module => unreachable!(),
                         }
                     }
                     // idx_lhs[idx_expr] = rhs
                     #[cfg(not(feature = "no_index"))]
-                    Expr::Index(idx_lhs, idx_expr, op_pos) => {
+                    Expr::Index(x) => {
                         let new_val = Some(rhs_val);
                         self.eval_dot_index_chain(
-                            scope, state, fn_lib, idx_lhs, idx_expr, true, *op_pos, level, new_val,
+                            scope, state, &x.0, &x.1, true, x.2, level, new_val,
                         )
                     }
                     // dot_lhs.dot_rhs = rhs
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(dot_lhs, dot_rhs, _) => {
+                    Expr::Dot(x) => {
                         let new_val = Some(rhs_val);
                         self.eval_dot_index_chain(
-                            scope, state, fn_lib, dot_lhs, dot_rhs, false, *op_pos, level, new_val,
+                            scope, state, &x.0, &x.1, false, op_pos, level, new_val,
                         )
                     }
                     // Error assignment to constant
                     expr if expr.is_constant() => {
                         Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                             expr.get_constant_str(),
-                            lhs.position(),
+                            expr.position(),
                         )))
                     }
                     // Syntax error
-                    _ => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
-                        lhs.position(),
+                    expr => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                        expr.position(),
                     ))),
                 }
             }
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(lhs, idx_expr, op_pos) => self.eval_dot_index_chain(
-                scope, state, fn_lib, lhs, idx_expr, true, *op_pos, level, None,
-            ),
+            Expr::Index(x) => {
+                self.eval_dot_index_chain(scope, state, &x.0, &x.1, true, x.2, level, None)
+            }
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(lhs, dot_rhs, op_pos) => self.eval_dot_index_chain(
-                scope, state, fn_lib, lhs, dot_rhs, false, *op_pos, level, None,
-            ),
+            Expr::Dot(x) => {
+                self.eval_dot_index_chain(scope, state, &x.0, &x.1, false, x.2, level, None)
+            }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(contents, _) => Ok(Dynamic(Union::Array(Box::new(
-                contents
-                    .iter()
-                    .map(|item| self.eval_expr(scope, state, fn_lib, item, level))
+            Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(
+                x.0.iter()
+                    .map(|item| self.eval_expr(scope, state, item, level))
                     .collect::<Result<Vec<_>, _>>()?,
             )))),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(contents, _) => Ok(Dynamic(Union::Map(Box::new(
-                contents
-                    .iter()
-                    .map(|(key, expr, _)| {
-                        self.eval_expr(scope, state, fn_lib, expr, level)
+            Expr::Map(x) => Ok(Dynamic(Union::Map(Box::new(
+                x.0.iter()
+                    .map(|((key, _), expr)| {
+                        self.eval_expr(scope, state, expr, level)
                             .map(|val| (key.clone(), val))
                     })
                     .collect::<Result<HashMap<_, _>, _>>()?,
             )))),
 
             // Normal function call
-            Expr::FnCall(fn_name, None, arg_exprs, def_val, pos) => {
-                let mut arg_values = arg_exprs
+            Expr::FnCall(x) if x.1.is_none() => {
+                let ((name, pos), _, hash_fn_def, args_expr, def_val) = x.as_ref();
+
+                let mut arg_values = args_expr
                     .iter()
-                    .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
+                    .map(|expr| self.eval_expr(scope, state, expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 
-                if fn_name.as_ref() == KEYWORD_EVAL
+                let hash_fn_spec =
+                    calc_fn_hash(empty(), KEYWORD_EVAL, once(TypeId::of::<String>()));
+
+                if name == KEYWORD_EVAL
                     && args.len() == 1
-                    && !self.has_override(fn_lib, KEYWORD_EVAL)
+                    && !self.has_override(state, hash_fn_spec, *hash_fn_def)
                 {
                     // eval - only in function call style
                     let prev_len = scope.len();
 
                     // Evaluate the text string as a script
                     let result =
-                        self.eval_script_expr(scope, fn_lib, args[0], arg_exprs[0].position());
+                        self.eval_script_expr(scope, state, args[0], args_expr[0].position());
 
                     if scope.len() != prev_len {
                         // IMPORTANT! If the eval defines new variables in the current scope,
@@ -1282,77 +1421,105 @@ impl Engine {
                     result
                 } else {
                     // Normal function call - except for eval (handled above)
-                    let def_value = def_val.as_deref();
-                    self.exec_fn_call(fn_lib, fn_name, &mut args, def_value, *pos, level)
+                    self.exec_fn_call(
+                        state,
+                        name,
+                        *hash_fn_def,
+                        &mut args,
+                        def_val.as_ref(),
+                        *pos,
+                        level,
+                    )
                 }
             }
 
             // Module-qualified function call
             #[cfg(not(feature = "no_module"))]
-            Expr::FnCall(fn_name, Some(modules), arg_exprs, def_val, pos) => {
-                let modules = modules.as_ref();
+            Expr::FnCall(x) if x.1.is_some() => {
+                let ((name, pos), modules, hash_fn_def, args_expr, def_val) = x.as_ref();
+                let modules = modules.as_ref().unwrap();
 
-                let mut arg_values = arg_exprs
+                let mut arg_values = args_expr
                     .iter()
-                    .map(|expr| self.eval_expr(scope, state, fn_lib, expr, level))
+                    .map(|expr| self.eval_expr(scope, state, expr, level))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 
                 let (id, root_pos) = modules.get(0); // First module
 
-                let module = scope.find_module(id).ok_or_else(|| {
-                    Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
-                })?;
+                let module = if let Some(index) = modules.index() {
+                    scope
+                        .get_mut(scope.len() - index.get())
+                        .0
+                        .downcast_mut::<Module>()
+                        .unwrap()
+                } else {
+                    scope.find_module(id).ok_or_else(|| {
+                        Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
+                    })?
+                };
 
                 // First search in script-defined functions (can override built-in)
-                if let Some(fn_def) = module.get_qualified_fn_lib(fn_name, args.len(), modules)? {
-                    self.call_fn_from_lib(None, fn_lib, fn_def, &mut args, *pos, level)
+                if let Some(fn_def) = module.get_qualified_scripted_fn(*hash_fn_def) {
+                    self.call_script_fn(None, state, fn_def, &mut args, *pos, level)
                 } else {
                     // Then search in Rust functions
-                    let hash = calc_fn_hash(fn_name, args.iter().map(|a| a.type_id()));
 
-                    match module.get_qualified_fn(fn_name, hash, modules, *pos) {
+                    // Rust functions are indexed in two steps:
+                    // 1) Calculate a hash in a similar manner to script-defined functions,
+                    //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
+                    // 2) Calculate a second hash with no qualifiers, empty function name, and
+                    //    the actual list of parameter `TypeId`'.s
+                    let hash_fn_args = calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
+                    // 3) The final hash is the XOR of the two hashes.
+                    let hash = *hash_fn_def ^ hash_fn_args;
+
+                    match module.get_qualified_fn(name, hash, *pos) {
                         Ok(func) => func(&mut args, *pos),
-                        Err(_) if def_val.is_some() => Ok(def_val.as_deref().unwrap().clone()),
+                        Err(_) if def_val.is_some() => Ok(def_val.clone().unwrap()),
                         Err(err) => Err(err),
                     }
                 }
             }
 
-            Expr::In(lhs, rhs, _) => {
-                self.eval_in_expr(scope, state, fn_lib, lhs.as_ref(), rhs.as_ref(), level)
-            }
+            Expr::In(x) => self.eval_in_expr(scope, state, &x.0, &x.1, level),
 
-            Expr::And(lhs, rhs, _) => Ok((self
-                    .eval_expr(scope, state, fn_lib, lhs.as_ref(), level)?
+            Expr::And(x) => {
+                let (lhs, rhs, _) = x.as_ref();
+                Ok((self
+                    .eval_expr(scope, state, lhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
                     })?
                     && // Short-circuit using &&
                 self
-                    .eval_expr(scope, state, fn_lib, rhs.as_ref(), level)?
+                    .eval_expr(scope, state, rhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
                     })?)
-            .into()),
+                .into())
+            }
 
-            Expr::Or(lhs, rhs, _) => Ok((self
-                    .eval_expr(scope, state, fn_lib, lhs.as_ref(), level)?
+            Expr::Or(x) => {
+                let (lhs, rhs, _) = x.as_ref();
+                Ok((self
+                    .eval_expr(scope, state, lhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
                     })?
                     || // Short-circuit using ||
                 self
-                    .eval_expr(scope, state, fn_lib, rhs.as_ref(), level)?
+                    .eval_expr(scope, state, rhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
                     })?)
-            .into()),
+                .into())
+            }
 
             Expr::True(_) => Ok(true.into()),
             Expr::False(_) => Ok(false.into()),
@@ -1367,7 +1534,6 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
-        fn_lib: &FunctionsLib,
         stmt: &Stmt,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1377,9 +1543,9 @@ impl Engine {
 
             // Expression as statement
             Stmt::Expr(expr) => {
-                let result = self.eval_expr(scope, state, fn_lib, expr, level)?;
+                let result = self.eval_expr(scope, state, expr, level)?;
 
-                Ok(if let Expr::Assignment(_, _, _) = *expr.as_ref() {
+                Ok(if let Expr::Assignment(_) = *expr.as_ref() {
                     // If it is an assignment, erase the result at the root
                     Default::default()
                 } else {
@@ -1388,11 +1554,11 @@ impl Engine {
             }
 
             // Block scope
-            Stmt::Block(block, _) => {
+            Stmt::Block(x) => {
                 let prev_len = scope.len();
 
-                let result = block.iter().try_fold(Default::default(), |_, stmt| {
-                    self.eval_stmt(scope, state, fn_lib, stmt, level)
+                let result = x.0.iter().try_fold(Default::default(), |_, stmt| {
+                    self.eval_stmt(scope, state, stmt, level)
                 });
 
                 scope.rewind(prev_len);
@@ -1405,27 +1571,24 @@ impl Engine {
             }
 
             // If-else statement
-            Stmt::IfThenElse(guard, if_body, else_body) => self
-                .eval_expr(scope, state, fn_lib, guard, level)?
+            Stmt::IfThenElse(x) => self
+                .eval_expr(scope, state, &x.0, level)?
                 .as_bool()
-                .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(guard.position())))
+                .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(x.0.position())))
                 .and_then(|guard_val| {
                     if guard_val {
-                        self.eval_stmt(scope, state, fn_lib, if_body, level)
-                    } else if let Some(stmt) = else_body {
-                        self.eval_stmt(scope, state, fn_lib, stmt.as_ref(), level)
+                        self.eval_stmt(scope, state, &x.1, level)
+                    } else if let Some(stmt) = &x.2 {
+                        self.eval_stmt(scope, state, stmt, level)
                     } else {
                         Ok(Default::default())
                     }
                 }),
 
             // While loop
-            Stmt::While(guard, body) => loop {
-                match self
-                    .eval_expr(scope, state, fn_lib, guard, level)?
-                    .as_bool()
-                {
-                    Ok(true) => match self.eval_stmt(scope, state, fn_lib, body, level) {
+            Stmt::While(x) => loop {
+                match self.eval_expr(scope, state, &x.0, level)?.as_bool() {
+                    Ok(true) => match self.eval_stmt(scope, state, &x.1, level) {
                         Ok(_) => (),
                         Err(err) => match *err {
                             EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1434,15 +1597,13 @@ impl Engine {
                         },
                     },
                     Ok(false) => return Ok(Default::default()),
-                    Err(_) => {
-                        return Err(Box::new(EvalAltResult::ErrorLogicGuard(guard.position())))
-                    }
+                    Err(_) => return Err(Box::new(EvalAltResult::ErrorLogicGuard(x.0.position()))),
                 }
             },
 
             // Loop statement
             Stmt::Loop(body) => loop {
-                match self.eval_stmt(scope, state, fn_lib, body, level) {
+                match self.eval_stmt(scope, state, body, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1453,25 +1614,24 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(name, expr, body) => {
-                let arr = self.eval_expr(scope, state, fn_lib, expr, level)?;
-                let tid = arr.type_id();
+            Stmt::For(x) => {
+                let iter_type = self.eval_expr(scope, state, &x.1, level)?;
+                let tid = iter_type.type_id();
 
-                if let Some(iter_fn) = self.type_iterators.get(&tid).or_else(|| {
-                    self.packages
-                        .iter()
-                        .find(|pkg| pkg.type_iterators.contains_key(&tid))
-                        .and_then(|pkg| pkg.type_iterators.get(&tid))
-                }) {
+                if let Some(iter_fn) = self
+                    .base_package
+                    .get_iterator(tid)
+                    .or_else(|| self.packages.get_iterator(tid))
+                {
                     // Add the loop variable
-                    let var_name = name.as_ref().clone();
-                    scope.push(var_name, ());
+                    let name = x.0.clone();
+                    scope.push(name, ());
                     let index = scope.len() - 1;
 
-                    for a in iter_fn(arr) {
+                    for a in iter_fn(iter_type) {
                         *scope.get_mut(index).0 = a;
 
-                        match self.eval_stmt(scope, state, fn_lib, body, level) {
+                        match self.eval_stmt(scope, state, &x.2, level) {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1484,7 +1644,7 @@ impl Engine {
                     scope.rewind(scope.len() - 1);
                     Ok(Default::default())
                 } else {
-                    Err(Box::new(EvalAltResult::ErrorFor(expr.position())))
+                    Err(Box::new(EvalAltResult::ErrorFor(x.1.position())))
                 }
             }
 
@@ -1494,74 +1654,83 @@ impl Engine {
             // Break statement
             Stmt::Break(pos) => Err(Box::new(EvalAltResult::ErrorLoopBreak(true, *pos))),
 
-            // Empty return
-            Stmt::ReturnWithVal(None, ReturnType::Return, pos) => {
-                Err(Box::new(EvalAltResult::Return(Default::default(), *pos)))
-            }
-
             // Return value
-            Stmt::ReturnWithVal(Some(a), ReturnType::Return, pos) => Err(Box::new(
-                EvalAltResult::Return(self.eval_expr(scope, state, fn_lib, a, level)?, *pos),
-            )),
-
-            // Empty throw
-            Stmt::ReturnWithVal(None, ReturnType::Exception, pos) => {
-                Err(Box::new(EvalAltResult::ErrorRuntime("".into(), *pos)))
-            }
-
-            // Throw value
-            Stmt::ReturnWithVal(Some(a), ReturnType::Exception, pos) => {
-                let val = self.eval_expr(scope, state, fn_lib, a, level)?;
-                Err(Box::new(EvalAltResult::ErrorRuntime(
-                    val.take_string().unwrap_or_else(|_| "".to_string()),
-                    *pos,
+            Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
+                Err(Box::new(EvalAltResult::Return(
+                    self.eval_expr(scope, state, x.1.as_ref().unwrap(), level)?,
+                    (x.0).1,
                 )))
             }
 
+            // Empty return
+            Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Return => {
+                Err(Box::new(EvalAltResult::Return(Default::default(), (x.0).1)))
+            }
+
+            // Throw value
+            Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
+                let val = self.eval_expr(scope, state, x.1.as_ref().unwrap(), level)?;
+                Err(Box::new(EvalAltResult::ErrorRuntime(
+                    val.take_string().unwrap_or_else(|_| "".to_string()),
+                    (x.0).1,
+                )))
+            }
+
+            // Empty throw
+            Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Exception => {
+                Err(Box::new(EvalAltResult::ErrorRuntime("".into(), (x.0).1)))
+            }
+
+            Stmt::ReturnWithVal(_) => unreachable!(),
+
             // Let statement
-            Stmt::Let(name, Some(expr), _) => {
-                let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
+            Stmt::Let(x) if x.1.is_some() => {
+                let ((var_name, _), expr) = x.as_ref();
+                let val = self.eval_expr(scope, state, expr.as_ref().unwrap(), level)?;
                 // TODO - avoid copying variable name in inner block?
-                let var_name = name.as_ref().clone();
-                scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
+                scope.push_dynamic_value(var_name.clone(), ScopeEntryType::Normal, val, false);
                 Ok(Default::default())
             }
 
-            Stmt::Let(name, None, _) => {
+            Stmt::Let(x) => {
+                let ((var_name, _), _) = x.as_ref();
                 // TODO - avoid copying variable name in inner block?
-                let var_name = name.as_ref().clone();
-                scope.push(var_name, ());
+                scope.push(var_name.clone(), ());
                 Ok(Default::default())
             }
 
             // Const statement
-            Stmt::Const(name, expr, _) if expr.is_constant() => {
-                let val = self.eval_expr(scope, state, fn_lib, expr, level)?;
+            Stmt::Const(x) if x.1.is_constant() => {
+                let ((var_name, _), expr) = x.as_ref();
+                let val = self.eval_expr(scope, state, &expr, level)?;
                 // TODO - avoid copying variable name in inner block?
-                let var_name = name.as_ref().clone();
-                scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
+                scope.push_dynamic_value(var_name.clone(), ScopeEntryType::Constant, val, true);
                 Ok(Default::default())
             }
 
             // Const expression not constant
-            Stmt::Const(_, _, _) => unreachable!(),
+            Stmt::Const(_) => unreachable!(),
 
             // Import statement
-            Stmt::Import(expr, name, _) => {
+            Stmt::Import(x) => {
+                let (expr, (name, _)) = x.as_ref();
+
                 #[cfg(feature = "no_module")]
                 unreachable!();
 
                 #[cfg(not(feature = "no_module"))]
                 {
                     if let Some(path) = self
-                        .eval_expr(scope, state, fn_lib, expr, level)?
+                        .eval_expr(scope, state, &expr, level)?
                         .try_cast::<String>()
                     {
                         if let Some(resolver) = self.module_resolver.as_ref() {
-                            let module = resolver.resolve(self, &path, expr.position())?;
+                            // Use an empty scope to create a module
+                            let module =
+                                resolver.resolve(self, Scope::new(), &path, expr.position())?;
 
                             // TODO - avoid copying module name in inner block?
-                            let mod_name = name.as_ref().clone();
+                            let mod_name = name.clone();
                             scope.push_module(mod_name, module);
                             Ok(Default::default())
                         } else {
@@ -1574,6 +1743,36 @@ impl Engine {
                         Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                     }
                 }
+            }
+
+            // Export statement
+            Stmt::Export(list) => {
+                for ((id, id_pos), rename) in list.as_ref() {
+                    let mut found = false;
+
+                    // Mark scope variables as public
+                    if let Some(index) = scope
+                        .get_index(id)
+                        .map(|(i, _)| i)
+                        .or_else(|| scope.get_module_index(id))
+                    {
+                        let alias = rename
+                            .as_ref()
+                            .map(|(n, _)| n.clone())
+                            .unwrap_or_else(|| id.clone());
+
+                        scope.set_entry_alias(index, alias);
+                        found = true;
+                    }
+
+                    if !found {
+                        return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
+                            id.into(),
+                            *id_pos,
+                        )));
+                    }
+                }
+                Ok(Default::default())
             }
         }
     }

@@ -268,6 +268,7 @@ let ast = engine.compile_file("hello_world.rhai".into())?;
 ### Calling Rhai functions from Rust
 
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `call_fn`.
+Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
 
 ```rust
 // Define functions in a script.
@@ -287,6 +288,11 @@ let ast = engine.compile(true,
         fn hello() {
             42
         }
+
+        // this one is private and cannot be called by 'call_fn'
+        private hidden() {
+            throw "you shouldn't see me!";
+        }
     ")?;
 
 // A custom scope can also contain any variables/constants available to the functions
@@ -300,11 +306,15 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", ( String::from("abc"
 //                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //                                                          put arguments in a tuple
 
-let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?;
 //                                                          ^^^^^^^^^^ tuple of one
 
-let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 //                                                          ^^ unit = tuple of zero
+
+// The following call will return a function-not-found error because
+// 'hidden' is declared with 'private'.
+let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
 ### Creating Rust anonymous functions from Rhai script
@@ -2044,10 +2054,34 @@ Using external modules
 [module]: #using-external-modules
 [modules]: #using-external-modules
 
-Rhai allows organizing code (functions and variables) into _modules_.  A module is a single script file
-with `export` statements that _exports_ certain global variables and functions as contents of the module.
+Rhai allows organizing code (functions and variables) into _modules_.
+Modules can be disabled via the [`no_module`] feature.
 
-Everything exported as part of a module is constant and read-only.
+### Exporting variables and functions
+
+A module is a single script (or pre-compiled `AST`) containing global variables and functions.
+The `export` statement, which can only be at global level, exposes selected variables as members of a module.
+Variables not exported are private and invisible to the outside.
+All functions are automatically exported, unless it is prefixed with `private`.
+Functions declared `private` are invisible to the outside.
+
+Everything exported from a module is **constant** (**read-only**).
+
+```rust
+// This is a module script.
+
+fn inc(x) { x + 1 }         // public function
+
+private fn foo() {}         // private function - invisible to outside
+
+let private = 123;          // variable not exported - invisible to outside
+let x = 42;                 // this will be exported below
+
+export x;                   // the variable 'x' is exported under its own name
+
+export x as answer;         // the variable 'x' is exported under the alias 'answer'
+                            // another script can load this module and access 'x' as 'module::answer'
+```
 
 ### Importing modules
 
@@ -2080,7 +2114,7 @@ crypto::encrypt(others);    // <- this causes a run-time error because the 'cryp
 
 ### Creating custom modules from Rust
 
-To load a custom module into an [`Engine`], first create a `Module` type, add variables/functions into it,
+To load a custom module (written in Rust) into an [`Engine`], first create a `Module` type, add variables/functions into it,
 then finally push it into a custom [`Scope`].  This has the equivalent effect of putting an `import` statement
 at the beginning of any script run.
 
@@ -2105,6 +2139,55 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::answer + 1")? == 42;
 engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer)")? == 42;
 ```
 
+### Creating a module from an `AST`
+
+It is easy to convert a pre-compiled `AST` into a module, just use `Module::eval_ast_as_new`.
+Don't forget the `export` statement, otherwise there will be nothing inside the module!
+
+```rust
+use rhai::{Engine, Module};
+
+let engine = Engine::new();
+
+// Compile a script into an 'AST'
+let ast = engine.compile(r#"
+    // Functions become module functions
+    fn calc(x) {
+        x + 1
+    }
+    fn add_len(x, y) {
+        x + y.len()
+    }
+
+    // Imported modules can become sub-modules
+    import "another module" as extra;
+
+    // Variables defined at global level can become module variables
+    const x = 123;
+    let foo = 41;
+    let hello;
+
+    // Variable values become constant module variable values
+    foo = calc(foo);
+    hello = "hello, " + foo + " worlds!";
+
+    // Finally, export the variables and modules
+    export
+        x as abc,           // aliased variable name
+        foo,
+        hello,
+        extra as foobar;    // export sub-module
+"#)?;
+
+// Convert the 'AST' into a module, using the 'Engine' to evaluate it first
+let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+
+// 'module' now can be loaded into a custom 'Scope' for future use.  It contains:
+//   - sub-module: 'foobar' (renamed from 'extra')
+//   - functions: 'calc', 'add_len'
+//   - variables: 'abc' (renamed from 'x'), 'foo', 'hello'
+```
+
 ### Module resolvers
 
 When encountering an `import` statement, Rhai attempts to _resolve_ the module based on the path string.
@@ -2114,10 +2197,10 @@ which simply loads a script file based on the path (with `.rhai` extension attac
 
 Built-in module resolvers are grouped under the `rhai::module_resolvers` module namespace.
 
-| Module Resolver        | Description                                                                                                                                                                                                                                                                |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function. |
-| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                        |
+| Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                                                                                                            |
 
 An [`Engine`]'s module resolver is set via a call to `set_module_resolver`:
 
