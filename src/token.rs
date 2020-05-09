@@ -206,14 +206,14 @@ pub enum Token {
 
 impl Token {
     /// Get the syntax of the token.
-    pub fn syntax(&self) -> Cow<str> {
+    pub fn syntax(&self) -> Cow<'static, str> {
         use Token::*;
 
         match self {
             IntegerConstant(i) => i.to_string().into(),
             #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
-            Identifier(s) => s.into(),
+            Identifier(s) => s.clone().into(),
             CharConstant(c) => c.to_string().into(),
             LexError(err) => err.to_string().into(),
 

@@ -7,7 +7,7 @@ use crate::token::Position;
 #[cfg(not(feature = "no_module"))]
 use crate::module::Module;
 
-use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec, vec::Vec};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]

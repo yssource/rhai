@@ -197,7 +197,7 @@ pub struct FnDef {
     /// Names of function parameters.
     pub params: Vec<String>,
     /// Function body.
-    pub body: Box<Stmt>,
+    pub body: Stmt,
     /// Position of the function definition.
     pub pos: Position,
 }
@@ -272,19 +272,19 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
+    IfThenElse(Box<(Expr, Stmt, Option<Stmt>)>),
     /// while expr { stmt }
-    While(Box<Expr>, Box<Stmt>),
+    While(Box<(Expr, Stmt)>),
     /// loop { stmt }
     Loop(Box<Stmt>),
     /// for id in expr { stmt }
-    For(Box<String>, Box<Expr>, Box<Stmt>),
+    For(Box<(String, Expr, Stmt)>),
     /// let id = expr
-    Let(Box<String>, Option<Box<Expr>>, Position),
+    Let(Box<(String, Option<Expr>, Position)>),
     /// const id = expr
-    Const(Box<String>, Box<Expr>, Position),
+    Const(Box<(String, Expr, Position)>),
     /// { stmt; ... }
-    Block(Vec<Stmt>, Position),
+    Block(Box<(Vec<Stmt>, Position)>),
     /// { stmt }
     Expr(Box<Expr>),
     /// continue
@@ -292,54 +292,52 @@ pub enum Stmt {
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal(Option<Box<Expr>>, ReturnType, Position),
+    ReturnWithVal(Box<(Option<Expr>, ReturnType, Position)>),
     /// import expr as module
-    Import(Box<Expr>, Box<String>, Position),
+    Import(Box<(Expr, String, Position)>),
     /// expr id as name, ...
-    Export(Vec<(String, Position, Option<(String, Position)>)>),
+    Export(Box<Vec<(String, Position, Option<(String, Position)>)>>),
 }
 
 impl Stmt {
     /// Get the `Position` of this statement.
     pub fn position(&self) -> Position {
         match self {
-            Stmt::Noop(pos)
-            | Stmt::Let(_, _, pos)
-            | Stmt::Const(_, _, pos)
-            | Stmt::Import(_, _, pos)
-            | Stmt::Block(_, pos)
-            | Stmt::Continue(pos)
-            | Stmt::Break(pos)
-            | Stmt::ReturnWithVal(_, _, pos) => *pos,
-
-            Stmt::IfThenElse(expr, _, _) | Stmt::Expr(expr) => expr.position(),
-
-            Stmt::While(_, stmt) | Stmt::Loop(stmt) | Stmt::For(_, _, stmt) => stmt.position(),
-
-            Stmt::Export(list) => list.get(0).unwrap().1,
+            Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos,
+            Stmt::Let(x) => x.2,
+            Stmt::Const(x) => x.2,
+            Stmt::ReturnWithVal(x) => x.2,
+            Stmt::Block(x) => x.1,
+            Stmt::IfThenElse(x) => x.0.position(),
+            Stmt::Expr(x) => x.position(),
+            Stmt::While(x) => x.1.position(),
+            Stmt::Loop(x) => x.position(),
+            Stmt::For(x) => x.2.position(),
+            Stmt::Import(x) => x.2,
+            Stmt::Export(x) => x.get(0).unwrap().1,
         }
     }
 
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Stmt::IfThenElse(_, _, _)
-            | Stmt::While(_, _)
+            Stmt::IfThenElse(_)
+            | Stmt::While(_)
             | Stmt::Loop(_)
-            | Stmt::For(_, _, _)
-            | Stmt::Block(_, _) => true,
+            | Stmt::For(_)
+            | Stmt::Block(_) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
             Stmt::Noop(_) => false,
 
-            Stmt::Let(_, _, _)
-            | Stmt::Const(_, _, _)
-            | Stmt::Import(_, _, _)
+            Stmt::Let(_)
+            | Stmt::Const(_)
+            | Stmt::Import(_)
             | Stmt::Export(_)
             | Stmt::Expr(_)
             | Stmt::Continue(_)
             | Stmt::Break(_)
-            | Stmt::ReturnWithVal(_, _, _) => false,
+            | Stmt::ReturnWithVal(_) => false,
         }
     }
 
@@ -348,76 +346,74 @@ impl Stmt {
         match self {
             Stmt::Noop(_) => true,
             Stmt::Expr(expr) => expr.is_pure(),
-            Stmt::IfThenElse(guard, if_block, Some(else_block)) => {
-                guard.is_pure() && if_block.is_pure() && else_block.is_pure()
+            Stmt::IfThenElse(x) if x.2.is_some() => {
+                x.0.is_pure() && x.1.is_pure() && x.2.as_ref().unwrap().is_pure()
             }
-            Stmt::IfThenElse(guard, block, None) | Stmt::While(guard, block) => {
-                guard.is_pure() && block.is_pure()
-            }
-            Stmt::Loop(block) => block.is_pure(),
-            Stmt::For(_, range, block) => range.is_pure() && block.is_pure(),
-            Stmt::Let(_, _, _) | Stmt::Const(_, _, _) => false,
-            Stmt::Block(statements, _) => statements.iter().all(Stmt::is_pure),
-            Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_, _, _) => false,
-            Stmt::Import(_, _, _) => false,
+            Stmt::IfThenElse(x) => x.1.is_pure(),
+            Stmt::While(x) => x.0.is_pure() && x.1.is_pure(),
+            Stmt::Loop(x) => x.is_pure(),
+            Stmt::For(x) => x.1.is_pure() && x.2.is_pure(),
+            Stmt::Let(_) | Stmt::Const(_) => false,
+            Stmt::Block(x) => x.0.iter().all(Stmt::is_pure),
+            Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_) => false,
+            Stmt::Import(_) => false,
             Stmt::Export(_) => false,
         }
     }
 }
 
+#[cfg(not(feature = "no_module"))]
+type MRef = Option<Box<ModuleRef>>;
+#[cfg(feature = "no_module")]
+type MRef = Option<ModuleRef>;
+
 /// An expression.
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// Integer constant.
-    IntegerConstant(INT, Position),
+    IntegerConstant(Box<(INT, Position)>),
     /// Floating-point constant.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FLOAT, Position),
+    FloatConstant(Box<(FLOAT, Position)>),
     /// Character constant.
-    CharConstant(char, Position),
+    CharConstant(Box<(char, Position)>),
     /// String constant.
-    StringConstant(String, Position),
+    StringConstant(Box<(String, Position)>),
     /// Variable access - (variable name, optional modules, hash, optional index, position)
-    Variable(
-        Box<String>,
-        #[cfg(not(feature = "no_module"))] Option<Box<ModuleRef>>,
-        #[cfg(feature = "no_module")] Option<ModuleRef>,
-        u64,
-        Option<NonZeroUsize>,
-        Position,
-    ),
+    Variable(Box<(String, MRef, u64, Option<NonZeroUsize>, Position)>),
     /// Property access.
-    Property(String, Position),
+    Property(Box<(String, Position)>),
     /// { stmt }
-    Stmt(Box<Stmt>, Position),
+    Stmt(Box<(Stmt, Position)>),
     /// func(expr, ... ) - (function name, optional modules, hash, arguments, optional default value, position)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
-        Box<Cow<'static, str>>,
-        #[cfg(not(feature = "no_module"))] Option<Box<ModuleRef>>,
-        #[cfg(feature = "no_module")] Option<ModuleRef>,
-        u64,
-        Box<Vec<Expr>>,
-        Option<Box<Dynamic>>,
-        Position,
+        Box<(
+            Cow<'static, str>,
+            MRef,
+            u64,
+            Vec<Expr>,
+            Option<Box<Dynamic>>,
+            Position,
+        )>,
     ),
     /// expr = expr
-    Assignment(Box<Expr>, Box<Expr>, Position),
+    Assignment(Box<(Expr, Expr, Position)>),
     /// lhs.rhs
-    Dot(Box<Expr>, Box<Expr>, Position),
+    Dot(Box<(Expr, Expr, Position)>),
     /// expr[expr]
-    Index(Box<Expr>, Box<Expr>, Position),
+    Index(Box<(Expr, Expr, Position)>),
     /// [ expr, ... ]
-    Array(Vec<Expr>, Position),
+    Array(Box<(Vec<Expr>, Position)>),
     /// #{ name:expr, ... }
-    Map(Vec<(String, Expr, Position)>, Position),
+    Map(Box<(Vec<(String, Expr, Position)>, Position)>),
     /// lhs in rhs
-    In(Box<Expr>, Box<Expr>, Position),
+    In(Box<(Expr, Expr, Position)>),
     /// lhs && rhs
-    And(Box<Expr>, Box<Expr>, Position),
+    And(Box<(Expr, Expr, Position)>),
     /// lhs || rhs
-    Or(Box<Expr>, Box<Expr>, Position),
+    Or(Box<(Expr, Expr, Position)>),
     /// true
     True(Position),
     /// false
@@ -434,30 +430,24 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
-            Self::IntegerConstant(i, _) => (*i).into(),
+            Self::IntegerConstant(x) => x.0.into(),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(f, _) => (*f).into(),
-            Self::CharConstant(c, _) => (*c).into(),
-            Self::StringConstant(s, _) => s.clone().into(),
+            Self::FloatConstant(x) => x.0.into(),
+            Self::CharConstant(x) => x.0.into(),
+            Self::StringConstant(x) => x.0.clone().into(),
             Self::True(_) => true.into(),
             Self::False(_) => false.into(),
             Self::Unit(_) => ().into(),
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(items, _) if items.iter().all(Self::is_constant) => {
-                Dynamic(Union::Array(Box::new(
-                    items
-                        .iter()
-                        .map(Self::get_constant_value)
-                        .collect::<Vec<_>>(),
-                )))
-            }
+            Self::Array(x) if x.0.iter().all(Self::is_constant) => Dynamic(Union::Array(Box::new(
+                x.0.iter().map(Self::get_constant_value).collect::<Vec<_>>(),
+            ))),
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(items, _) if items.iter().all(|(_, v, _)| v.is_constant()) => {
+            Self::Map(x) if x.0.iter().all(|(_, v, _)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
-                    items
-                        .iter()
+                    x.0.iter()
                         .map(|(k, v, _)| (k.clone(), v.get_constant_value()))
                         .collect::<HashMap<_, _>>(),
                 )))
@@ -475,16 +465,16 @@ impl Expr {
     pub fn get_constant_str(&self) -> String {
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(f, _) => f.to_string(),
+            Self::FloatConstant(x) => x.0.to_string(),
 
-            Self::IntegerConstant(i, _) => i.to_string(),
-            Self::CharConstant(c, _) => c.to_string(),
-            Self::StringConstant(_, _) => "string".to_string(),
+            Self::IntegerConstant(x) => x.0.to_string(),
+            Self::CharConstant(x) => x.0.to_string(),
+            Self::StringConstant(_) => "string".to_string(),
             Self::True(_) => "true".to_string(),
             Self::False(_) => "false".to_string(),
             Self::Unit(_) => "()".to_string(),
 
-            Self::Array(items, _) if items.iter().all(Self::is_constant) => "array".to_string(),
+            Self::Array(x) if x.0.iter().all(Self::is_constant) => "array".to_string(),
 
             _ => panic!("cannot get value of non-constant expression"),
         }
@@ -494,27 +484,23 @@ impl Expr {
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, pos) => *pos,
+            Self::FloatConstant(x) => x.1,
 
-            Self::IntegerConstant(_, pos)
-            | Self::CharConstant(_, pos)
-            | Self::StringConstant(_, pos)
-            | Self::Array(_, pos)
-            | Self::Map(_, pos)
-            | Self::Variable(_, _, _, _, pos)
-            | Self::Property(_, pos)
-            | Self::Stmt(_, pos)
-            | Self::FnCall(_, _, _, _, _, pos)
-            | Self::And(_, _, pos)
-            | Self::Or(_, _, pos)
-            | Self::In(_, _, pos)
-            | Self::True(pos)
-            | Self::False(pos)
-            | Self::Unit(pos) => *pos,
+            Self::IntegerConstant(x) => x.1,
+            Self::CharConstant(x) => x.1,
+            Self::StringConstant(x) => x.1,
+            Self::Array(x) => x.1,
+            Self::Map(x) => x.1,
+            Self::Property(x) => x.1,
+            Self::Stmt(x) => x.1,
+            Self::Variable(x) => x.4,
+            Self::FnCall(x) => x.5,
 
-            Self::Assignment(expr, _, _) | Self::Dot(expr, _, _) | Self::Index(expr, _, _) => {
-                expr.position()
-            }
+            Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
+
+            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
+
+            Self::Assignment(x) | Self::Dot(x) | Self::Index(x) => x.0.position(),
         }
     }
 
@@ -522,26 +508,26 @@ impl Expr {
     pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
         match &mut self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, pos) => *pos = new_pos,
+            Self::FloatConstant(x) => x.1 = new_pos,
 
-            Self::IntegerConstant(_, pos)
-            | Self::CharConstant(_, pos)
-            | Self::StringConstant(_, pos)
-            | Self::Array(_, pos)
-            | Self::Map(_, pos)
-            | Self::Variable(_, _, _, _, pos)
-            | Self::Property(_, pos)
-            | Self::Stmt(_, pos)
-            | Self::FnCall(_, _, _, _, _, pos)
-            | Self::And(_, _, pos)
-            | Self::Or(_, _, pos)
-            | Self::In(_, _, pos)
-            | Self::True(pos)
-            | Self::False(pos)
-            | Self::Unit(pos)
-            | Self::Assignment(_, _, pos)
-            | Self::Dot(_, _, pos)
-            | Self::Index(_, _, pos) => *pos = new_pos,
+            Self::IntegerConstant(x) => x.1 = new_pos,
+            Self::CharConstant(x) => x.1 = new_pos,
+            Self::StringConstant(x) => x.1 = new_pos,
+            Self::Array(x) => x.1 = new_pos,
+            Self::Map(x) => x.1 = new_pos,
+            Self::Variable(x) => x.4 = new_pos,
+            Self::Property(x) => x.1 = new_pos,
+            Self::Stmt(x) => x.1 = new_pos,
+            Self::FnCall(x) => x.5 = new_pos,
+            Self::And(x) => x.2 = new_pos,
+            Self::Or(x) => x.2 = new_pos,
+            Self::In(x) => x.2 = new_pos,
+            Self::True(pos) => *pos = new_pos,
+            Self::False(pos) => *pos = new_pos,
+            Self::Unit(pos) => *pos = new_pos,
+            Self::Assignment(x) => x.2 = new_pos,
+            Self::Dot(x) => x.2 = new_pos,
+            Self::Index(x) => x.2 = new_pos,
         }
 
         self
@@ -552,15 +538,15 @@ impl Expr {
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::Array(expressions, _) => expressions.iter().all(Self::is_pure),
+            Self::Array(x) => x.0.iter().all(Self::is_pure),
 
-            Self::Index(x, y, _) | Self::And(x, y, _) | Self::Or(x, y, _) | Self::In(x, y, _) => {
-                x.is_pure() && y.is_pure()
+            Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
+                x.0.is_pure() && x.1.is_pure()
             }
 
-            Self::Stmt(stmt, _) => stmt.is_pure(),
+            Self::Stmt(x) => x.0.is_pure(),
 
-            Self::Variable(_, _, _, _, _) => true,
+            Self::Variable(_) => true,
 
             expr => expr.is_constant(),
         }
@@ -570,25 +556,25 @@ impl Expr {
     pub fn is_constant(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, _) => true,
+            Self::FloatConstant(_) => true,
 
-            Self::IntegerConstant(_, _)
-            | Self::CharConstant(_, _)
-            | Self::StringConstant(_, _)
+            Self::IntegerConstant(_)
+            | Self::CharConstant(_)
+            | Self::StringConstant(_)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => true,
 
             // An array literal is constant if all items are constant
-            Self::Array(expressions, _) => expressions.iter().all(Self::is_constant),
+            Self::Array(x) => x.0.iter().all(Self::is_constant),
 
             // An map literal is constant if all items are constant
-            Self::Map(items, _) => items.iter().map(|(_, expr, _)| expr).all(Self::is_constant),
+            Self::Map(x) => x.0.iter().map(|(_, expr, _)| expr).all(Self::is_constant),
 
             // Check in expression
-            Self::In(lhs, rhs, _) => match (lhs.as_ref(), rhs.as_ref()) {
-                (Self::StringConstant(_, _), Self::StringConstant(_, _))
-                | (Self::CharConstant(_, _), Self::StringConstant(_, _)) => true,
+            Self::In(x) => match (&x.0, &x.1) {
+                (Self::StringConstant(_), Self::StringConstant(_))
+                | (Self::CharConstant(_), Self::StringConstant(_)) => true,
                 _ => false,
             },
 
@@ -600,37 +586,37 @@ impl Expr {
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, _) => false,
+            Self::FloatConstant(_) => false,
 
-            Self::IntegerConstant(_, _)
-            | Self::CharConstant(_, _)
-            | Self::In(_, _, _)
-            | Self::And(_, _, _)
-            | Self::Or(_, _, _)
+            Self::IntegerConstant(_)
+            | Self::CharConstant(_)
+            | Self::In(_)
+            | Self::And(_)
+            | Self::Or(_)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => false,
 
-            Self::StringConstant(_, _)
-            | Self::Stmt(_, _)
-            | Self::FnCall(_, _, _, _, _, _)
-            | Self::Assignment(_, _, _)
-            | Self::Dot(_, _, _)
-            | Self::Index(_, _, _)
-            | Self::Array(_, _)
-            | Self::Map(_, _) => match token {
+            Self::StringConstant(_)
+            | Self::Stmt(_)
+            | Self::FnCall(_)
+            | Self::Assignment(_)
+            | Self::Dot(_)
+            | Self::Index(_)
+            | Self::Array(_)
+            | Self::Map(_) => match token {
                 Token::LeftBracket => true,
                 _ => false,
             },
 
-            Self::Variable(_, _, _, _, _) => match token {
+            Self::Variable(_) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
                 #[cfg(not(feature = "no_module"))]
                 Token::DoubleColon => true,
                 _ => false,
             },
 
-            Self::Property(_, _) => match token {
+            Self::Property(_) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
                 _ => false,
             },
@@ -640,7 +626,7 @@ impl Expr {
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     pub(crate) fn into_property(self) -> Self {
         match self {
-            Self::Variable(id, None, _, _, pos) => Self::Property(*id, pos),
+            Self::Variable(x) if x.1.is_none() => Self::Property(Box::new((x.0.clone(), x.4))),
             _ => self,
         }
     }
@@ -748,14 +734,14 @@ fn parse_call_expr<'a>(
             #[cfg(feature = "no_module")]
             let hash1 = calc_fn_hash(empty(), &id, empty());
 
-            return Ok(Expr::FnCall(
-                Box::new(id.into()),
+            return Ok(Expr::FnCall(Box::new((
+                id.into(),
                 modules,
                 hash1,
-                Box::new(args),
+                args,
                 None,
                 begin,
-            ));
+            ))));
         }
         // id...
         _ => (),
@@ -795,14 +781,14 @@ fn parse_call_expr<'a>(
                 #[cfg(feature = "no_module")]
                 let hash1 = calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()));
 
-                return Ok(Expr::FnCall(
-                    Box::new(id.into()),
+                return Ok(Expr::FnCall(Box::new((
+                    id.into(),
                     modules,
                     hash1,
-                    Box::new(args),
+                    args,
                     None,
                     begin,
-                ));
+                ))));
             }
             // id(...args,
             (Token::Comma, _) => {
@@ -846,39 +832,44 @@ fn parse_index_chain<'a>(
     // Check type of indexing - must be integer or string
     match &idx_expr {
         // lhs[int]
-        Expr::IntegerConstant(i, pos) if *i < 0 => {
+        Expr::IntegerConstant(x) if x.0 < 0 => {
             return Err(PERR::MalformedIndexExpr(format!(
                 "Array access expects non-negative index: {} < 0",
-                i
+                x.0
             ))
-            .into_err(*pos))
+            .into_err(x.1))
         }
-        Expr::IntegerConstant(_, pos) => match lhs {
-            Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
+        Expr::IntegerConstant(x) => match lhs {
+            Expr::Array(_) | Expr::StringConstant(_) => (),
 
-            Expr::Map(_, _) => {
+            Expr::Map(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Object map access expects string index, not a number".into(),
                 )
-                .into_err(*pos))
+                .into_err(x.1))
             }
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(_, pos) => {
+            Expr::FloatConstant(x) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(pos))
+                .into_err(x.1))
             }
 
-            Expr::CharConstant(_, pos)
-            | Expr::Assignment(_, _, pos)
-            | Expr::And(_, _, pos)
-            | Expr::Or(_, _, pos)
-            | Expr::In(_, _, pos)
-            | Expr::True(pos)
-            | Expr::False(pos)
-            | Expr::Unit(pos) => {
+            Expr::CharConstant(x) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(x.1))
+            }
+            Expr::Assignment(x) | Expr::And(x) | Expr::Or(x) | Expr::In(x) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(x.2))
+            }
+            Expr::True(pos) | Expr::False(pos) | Expr::Unit(pos) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
@@ -889,32 +880,39 @@ fn parse_index_chain<'a>(
         },
 
         // lhs[string]
-        Expr::StringConstant(_, pos) => match lhs {
-            Expr::Map(_, _) => (),
+        Expr::StringConstant(x) => match lhs {
+            Expr::Map(_) => (),
 
-            Expr::Array(_, _) | Expr::StringConstant(_, _) => {
+            Expr::Array(_) | Expr::StringConstant(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Array or string expects numeric index, not a string".into(),
                 )
-                .into_err(*pos))
+                .into_err(x.1))
             }
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(_, pos) => {
+            Expr::FloatConstant(x) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(pos))
+                .into_err(x.1))
             }
 
-            Expr::CharConstant(_, pos)
-            | Expr::Assignment(_, _, pos)
-            | Expr::And(_, _, pos)
-            | Expr::Or(_, _, pos)
-            | Expr::In(_, _, pos)
-            | Expr::True(pos)
-            | Expr::False(pos)
-            | Expr::Unit(pos) => {
+            Expr::CharConstant(x) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(x.1))
+            }
+
+            Expr::Assignment(x) | Expr::And(x) | Expr::Or(x) | Expr::In(x) => {
+                return Err(PERR::MalformedIndexExpr(
+                    "Only arrays, object maps and strings can be indexed".into(),
+                )
+                .into_err(x.2))
+            }
+
+            Expr::True(pos) | Expr::False(pos) | Expr::Unit(pos) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
@@ -926,32 +924,42 @@ fn parse_index_chain<'a>(
 
         // lhs[float]
         #[cfg(not(feature = "no_float"))]
-        Expr::FloatConstant(_, pos) => {
+        Expr::FloatConstant(x) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a float".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
         // lhs[char]
-        Expr::CharConstant(_, pos) => {
+        Expr::CharConstant(x) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
-        // lhs[??? = ??? ], lhs[()]
-        Expr::Assignment(_, _, pos) | Expr::Unit(pos) => {
+        // lhs[??? = ??? ]
+        Expr::Assignment(x) => {
+            return Err(PERR::MalformedIndexExpr(
+                "Array access expects integer index, not ()".into(),
+            )
+            .into_err(x.2))
+        }
+        // lhs[()]
+        Expr::Unit(pos) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not ()".into(),
             )
             .into_err(*pos))
         }
-        // lhs[??? && ???], lhs[??? || ???], lhs[??? in ???], lhs[true], lhs[false]
-        Expr::And(_, _, pos)
-        | Expr::Or(_, _, pos)
-        | Expr::In(_, _, pos)
-        | Expr::True(pos)
-        | Expr::False(pos) => {
+        // lhs[??? && ???], lhs[??? || ???], lhs[??? in ???]
+        Expr::And(x) | Expr::Or(x) | Expr::In(x) => {
+            return Err(PERR::MalformedIndexExpr(
+                "Array access expects integer index, not a boolean".into(),
+            )
+            .into_err(x.2))
+        }
+        // lhs[true], lhs[false]
+        Expr::True(pos) | Expr::False(pos) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
@@ -975,10 +983,10 @@ fn parse_index_chain<'a>(
                     let follow =
                         parse_index_chain(input, stack, idx_expr, follow_pos, allow_stmt_expr)?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new(lhs), Box::new(follow), pos))
+                    Ok(Expr::Index(Box::new((lhs, follow, pos))))
                 }
                 // Otherwise terminate the indexing chain
-                _ => Ok(Expr::Index(Box::new(lhs), Box::new(idx_expr), pos)),
+                _ => Ok(Expr::Index(Box::new((lhs, idx_expr, pos)))),
             }
         }
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
@@ -1030,7 +1038,7 @@ fn parse_array_literal<'a>(
         }
     }
 
-    Ok(Expr::Array(arr, pos))
+    Ok(Expr::Array(Box::new((arr, pos))))
 }
 
 /// Parse a map literal.
@@ -1127,7 +1135,7 @@ fn parse_map_literal<'a>(
         })
         .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
 
-    Ok(Expr::Map(map, pos))
+    Ok(Expr::Map(Box::new((map, pos))))
 }
 
 /// Parse a primary expression.
@@ -1141,21 +1149,21 @@ fn parse_primary<'a>(
         (Token::LeftBrace, pos) if allow_stmt_expr => {
             let pos = *pos;
             return parse_block(input, stack, false, allow_stmt_expr)
-                .map(|block| Expr::Stmt(Box::new(block), pos));
+                .map(|block| Expr::Stmt(Box::new((block, pos))));
         }
         (Token::EOF, pos) => return Err(PERR::UnexpectedEOF.into_err(*pos)),
         _ => input.next().unwrap(),
     };
 
     let mut root_expr = match token {
-        Token::IntegerConstant(x) => Expr::IntegerConstant(x, pos),
+        Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, pos))),
         #[cfg(not(feature = "no_float"))]
-        Token::FloatConstant(x) => Expr::FloatConstant(x, pos),
-        Token::CharConstant(c) => Expr::CharConstant(c, pos),
-        Token::StringConst(s) => Expr::StringConstant(s, pos),
+        Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, pos))),
+        Token::CharConstant(c) => Expr::CharConstant(Box::new((c, pos))),
+        Token::StringConst(s) => Expr::StringConstant(Box::new((s, pos))),
         Token::Identifier(s) => {
             let index = stack.find(&s);
-            Expr::Variable(Box::new(s), None, 0, index, pos)
+            Expr::Variable(Box::new((s, None, 0, index, pos)))
         }
         Token::LeftParen => parse_paren_expr(input, stack, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
@@ -1182,30 +1190,28 @@ fn parse_primary<'a>(
 
         root_expr = match (root_expr, token) {
             // Function call
-            (Expr::Variable(id, modules, _, _, pos), Token::LeftParen) => {
-                parse_call_expr(input, stack, *id, modules, pos, allow_stmt_expr)?
+            (Expr::Variable(x), Token::LeftParen) => {
+                parse_call_expr(input, stack, x.0, x.1, x.4, allow_stmt_expr)?
             }
-            (Expr::Property(id, pos), Token::LeftParen) => {
-                parse_call_expr(input, stack, id, None, pos, allow_stmt_expr)?
+            (Expr::Property(x), Token::LeftParen) => {
+                parse_call_expr(input, stack, x.0, None, x.1, allow_stmt_expr)?
             }
             // module access
             #[cfg(not(feature = "no_module"))]
-            (Expr::Variable(id, mut modules, _, index, pos), Token::DoubleColon) => {
-                match input.next().unwrap() {
-                    (Token::Identifier(id2), pos2) => {
-                        if let Some(ref mut modules) = modules {
-                            modules.push((*id, pos));
-                        } else {
-                            let mut m: ModuleRef = Default::default();
-                            m.push((*id, pos));
-                            modules = Some(Box::new(m));
-                        }
-
-                        Expr::Variable(Box::new(id2), modules, 0, index, pos2)
+            (Expr::Variable(mut x), Token::DoubleColon) => match input.next().unwrap() {
+                (Token::Identifier(id2), pos2) => {
+                    if let Some(ref mut modules) = x.1 {
+                        modules.push((x.0, x.4));
+                    } else {
+                        let mut m: ModuleRef = Default::default();
+                        m.push((x.0, x.4));
+                        x.1 = Some(Box::new(m));
                     }
-                    (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
+
+                    Expr::Variable(Box::new((id2, x.1, 0, x.3, pos2)))
                 }
-            }
+                (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
+            },
             // Indexing
             #[cfg(not(feature = "no_index"))]
             (expr, Token::LeftBracket) => {
@@ -1219,9 +1225,11 @@ fn parse_primary<'a>(
     match &mut root_expr {
         // Cache the hash key for module-qualified variables
         #[cfg(not(feature = "no_module"))]
-        Expr::Variable(id, Some(modules), hash, _, _) => {
+        Expr::Variable(x) if x.1.is_some() => {
+            let modules = x.1.as_mut().unwrap();
+
             // Qualifiers + variable name
-            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), id, empty());
+            x.2 = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), &x.0, empty());
             modules.set_index(stack.find_module(&modules.get(0).0));
         }
         _ => (),
@@ -1240,10 +1248,10 @@ fn parse_unary<'a>(
         // If statement is allowed to act as expressions
         (Token::If, pos) => {
             let pos = *pos;
-            Ok(Expr::Stmt(
-                Box::new(parse_if(input, stack, false, allow_stmt_expr)?),
+            Ok(Expr::Stmt(Box::new((
+                parse_if(input, stack, false, allow_stmt_expr)?,
                 pos,
-            ))
+            ))))
         }
         // -expr
         (Token::UnaryMinus, _) => {
@@ -1251,41 +1259,46 @@ fn parse_unary<'a>(
 
             match parse_unary(input, stack, allow_stmt_expr)? {
                 // Negative integer
-                Expr::IntegerConstant(i, _) => i
-                    .checked_neg()
-                    .map(|x| Expr::IntegerConstant(x, pos))
-                    .or_else(|| {
-                        #[cfg(not(feature = "no_float"))]
-                        {
-                            Some(Expr::FloatConstant(-(i as FLOAT), pos))
-                        }
-                        #[cfg(feature = "no_float")]
-                        {
-                            None
-                        }
-                    })
-                    .ok_or_else(|| {
-                        PERR::BadInput(LexError::MalformedNumber(format!("-{}", i)).to_string())
+                Expr::IntegerConstant(x) => {
+                    let (num, pos) = *x;
+
+                    num.checked_neg()
+                        .map(|i| Expr::IntegerConstant(Box::new((i, pos))))
+                        .or_else(|| {
+                            #[cfg(not(feature = "no_float"))]
+                            {
+                                Some(Expr::FloatConstant(Box::new((-(x.0 as FLOAT), pos))))
+                            }
+                            #[cfg(feature = "no_float")]
+                            {
+                                None
+                            }
+                        })
+                        .ok_or_else(|| {
+                            PERR::BadInput(
+                                LexError::MalformedNumber(format!("-{}", x.0)).to_string(),
+                            )
                             .into_err(pos)
-                    }),
+                        })
+                }
 
                 // Negative float
                 #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(f, pos) => Ok(Expr::FloatConstant(-f, pos)),
+                Expr::FloatConstant(x) => Ok(Expr::FloatConstant(Box::new((-x.0, x.1)))),
 
                 // Call negative function
                 e => {
                     let op = "-";
                     let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
-                    Ok(Expr::FnCall(
-                        Box::new(op.into()),
+                    Ok(Expr::FnCall(Box::new((
+                        op.into(),
                         None,
                         hash,
-                        Box::new(vec![e]),
+                        vec![e],
                         None,
                         pos,
-                    ))
+                    ))))
                 }
             }
         }
@@ -1300,14 +1313,14 @@ fn parse_unary<'a>(
             let op = "!";
             let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
-            Ok(Expr::FnCall(
-                Box::new(op.into()),
+            Ok(Expr::FnCall(Box::new((
+                op.into(),
                 None,
                 hash,
-                Box::new(vec![parse_primary(input, stack, allow_stmt_expr)?]),
+                vec![parse_primary(input, stack, allow_stmt_expr)?],
                 Some(Box::new(false.into())), // NOT operator, when operating on invalid operand, defaults to false
                 pos,
-            ))
+            ))))
         }
         // <EOF>
         (Token::EOF, pos) => Err(PERR::UnexpectedEOF.into_err(*pos)),
@@ -1323,34 +1336,30 @@ fn make_assignment_stmt<'a>(
     pos: Position,
 ) -> Result<Expr, Box<ParseError>> {
     match &lhs {
-        Expr::Variable(_, _, _, None, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-        Expr::Variable(name, _, _, Some(index), var_pos) => {
-            match stack[(stack.len() - index.get())].1 {
-                ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+        Expr::Variable(x) if x.3.is_none() => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
+        Expr::Variable(x) => {
+            match stack[(stack.len() - x.3.unwrap().get())].1 {
+                ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
                 // Constant values cannot be assigned to
                 ScopeEntryType::Constant => {
-                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
+                    Err(PERR::AssignmentToConstant(x.0.to_string()).into_err(x.4))
                 }
                 ScopeEntryType::Module => unreachable!(),
             }
         }
-        Expr::Index(idx_lhs, _, _) | Expr::Dot(idx_lhs, _, _) => match idx_lhs.as_ref() {
-            Expr::Variable(_, _, _, None, _) => {
-                Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
-            }
-            Expr::Variable(name, _, _, Some(index), var_pos) => {
-                match stack[(stack.len() - index.get())].1 {
-                    ScopeEntryType::Normal => {
-                        Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
-                    }
+        Expr::Index(x) | Expr::Dot(x) => match &x.0 {
+            Expr::Variable(x) if x.3.is_none() => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
+            Expr::Variable(x) => {
+                match stack[(stack.len() - x.3.unwrap().get())].1 {
+                    ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
                     // Constant values cannot be assigned to
                     ScopeEntryType::Constant => {
-                        Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
+                        Err(PERR::AssignmentToConstant(x.0.to_string()).into_err(x.4))
                     }
                     ScopeEntryType::Module => unreachable!(),
                 }
             }
-            _ => Err(PERR::AssignmentToCopy.into_err(idx_lhs.position())),
+            _ => Err(PERR::AssignmentToCopy.into_err(x.0.position())),
         },
         expr if expr.is_constant() => {
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
@@ -1394,7 +1403,7 @@ fn parse_op_assignment_stmt<'a>(
     // lhs op= rhs -> lhs = op(lhs, rhs)
     let args = vec![lhs_copy, rhs];
     let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(args.len()));
-    let rhs_expr = Expr::FnCall(Box::new(op.into()), None, hash, Box::new(args), None, pos);
+    let rhs_expr = Expr::FnCall(Box::new((op.into(), None, hash, args, None, pos)));
     make_assignment_stmt(stack, lhs, rhs_expr, pos)
 }
 
@@ -1408,59 +1417,64 @@ fn make_dot_expr(
     Ok(match (lhs, rhs) {
         // idx_lhs[idx_rhs].rhs
         // Attach dot chain to the bottom level of indexing chain
-        (Expr::Index(idx_lhs, idx_rhs, idx_pos), rhs) => Expr::Index(
-            idx_lhs,
-            Box::new(make_dot_expr(*idx_rhs, rhs, op_pos, true)?),
-            idx_pos,
-        ),
+        (Expr::Index(x), rhs) => {
+            Expr::Index(Box::new((x.0, make_dot_expr(x.1, rhs, op_pos, true)?, x.2)))
+        }
         // lhs.id
-        (lhs, rhs @ Expr::Variable(_, None, _, _, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
+        (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let lhs = if is_index { lhs.into_property() } else { lhs };
-            Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos)
+            Expr::Dot(Box::new((
+                lhs,
+                Expr::Property(Box::new((x.0, x.4))),
+                op_pos,
+            )))
+        }
+        (lhs, Expr::Property(x)) => {
+            let lhs = if is_index { lhs.into_property() } else { lhs };
+            Expr::Dot(Box::new((lhs, Expr::Property(x), op_pos)))
         }
         // lhs.module::id - syntax error
-        (_, Expr::Variable(_, Some(modules), _, _, _)) => {
+        (_, Expr::Variable(x)) if x.1.is_some() => {
             #[cfg(feature = "no_module")]
             unreachable!();
             #[cfg(not(feature = "no_module"))]
-            return Err(PERR::PropertyExpected.into_err(modules.get(0).1));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
         }
         // lhs.dot_lhs.dot_rhs
-        (lhs, Expr::Dot(dot_lhs, dot_rhs, dot_pos)) => Expr::Dot(
-            Box::new(lhs),
-            Box::new(Expr::Dot(
-                Box::new(dot_lhs.into_property()),
-                Box::new(dot_rhs.into_property()),
-                dot_pos,
-            )),
+        (lhs, Expr::Dot(x)) => Expr::Dot(Box::new((
+            lhs,
+            Expr::Dot(Box::new((x.0.into_property(), x.1.into_property(), x.2))),
             op_pos,
-        ),
+        ))),
         // lhs.idx_lhs[idx_rhs]
-        (lhs, Expr::Index(idx_lhs, idx_rhs, idx_pos)) => Expr::Dot(
-            Box::new(lhs),
-            Box::new(Expr::Index(
-                Box::new(idx_lhs.into_property()),
-                Box::new(idx_rhs.into_property()),
-                idx_pos,
-            )),
+        (lhs, Expr::Index(x)) => Expr::Dot(Box::new((
+            lhs,
+            Expr::Index(Box::new((x.0.into_property(), x.1.into_property(), x.2))),
             op_pos,
-        ),
+        ))),
         // lhs.rhs
-        (lhs, rhs) => Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos),
+        (lhs, rhs) => Expr::Dot(Box::new((lhs, rhs.into_property(), op_pos))),
     })
 }
 
 /// Make an 'in' expression.
 fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<ParseError>> {
     match (&lhs, &rhs) {
-        (_, Expr::IntegerConstant(_, pos))
-        | (_, Expr::And(_, _, pos))
-        | (_, Expr::Or(_, _, pos))
-        | (_, Expr::In(_, _, pos))
-        | (_, Expr::True(pos))
-        | (_, Expr::False(pos))
-        | (_, Expr::Assignment(_, _, pos))
-        | (_, Expr::Unit(pos)) => {
+        (_, Expr::IntegerConstant(x)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression expects a string, array or object map".into(),
+            )
+            .into_err(x.1))
+        }
+
+        (_, Expr::And(x)) | (_, Expr::Or(x)) | (_, Expr::In(x)) | (_, Expr::Assignment(x)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression expects a string, array or object map".into(),
+            )
+            .into_err(x.2))
+        }
+
+        (_, Expr::True(pos)) | (_, Expr::False(pos)) | (_, Expr::Unit(pos)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression expects a string, array or object map".into(),
             )
@@ -1468,61 +1482,72 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
         }
 
         #[cfg(not(feature = "no_float"))]
-        (_, Expr::FloatConstant(_, pos)) => {
+        (_, Expr::FloatConstant(x)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression expects a string, array or object map".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
 
         // "xxx" in "xxxx", 'x' in "xxxx" - OK!
-        (Expr::StringConstant(_, _), Expr::StringConstant(_, _))
-        | (Expr::CharConstant(_, _), Expr::StringConstant(_, _)) => (),
+        (Expr::StringConstant(_), Expr::StringConstant(_))
+        | (Expr::CharConstant(_), Expr::StringConstant(_)) => (),
 
         // 123.456 in "xxxx"
         #[cfg(not(feature = "no_float"))]
-        (Expr::FloatConstant(_, pos), Expr::StringConstant(_, _)) => {
+        (Expr::FloatConstant(x), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a float".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
         // 123 in "xxxx"
-        (Expr::IntegerConstant(_, pos), Expr::StringConstant(_, _)) => {
+        (Expr::IntegerConstant(x), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a number".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
         // (??? && ???) in "xxxx", (??? || ???) in "xxxx", (??? in ???) in "xxxx",
+        (Expr::And(x), Expr::StringConstant(_))
+        | (Expr::Or(x), Expr::StringConstant(_))
+        | (Expr::In(x), Expr::StringConstant(_)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not a boolean".into(),
+            )
+            .into_err(x.2))
+        }
         //  true in "xxxx", false in "xxxx"
-        (Expr::And(_, _, pos), Expr::StringConstant(_, _))
-        | (Expr::Or(_, _, pos), Expr::StringConstant(_, _))
-        | (Expr::In(_, _, pos), Expr::StringConstant(_, _))
-        | (Expr::True(pos), Expr::StringConstant(_, _))
-        | (Expr::False(pos), Expr::StringConstant(_, _)) => {
+        (Expr::True(pos), Expr::StringConstant(_))
+        | (Expr::False(pos), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a boolean".into(),
             )
             .into_err(*pos))
         }
         // [???, ???, ???] in "xxxx"
-        (Expr::Array(_, pos), Expr::StringConstant(_, _)) => {
+        (Expr::Array(x), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an array".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
         // #{...} in "xxxx"
-        (Expr::Map(_, pos), Expr::StringConstant(_, _)) => {
+        (Expr::Map(x), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an object map".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
-        // (??? = ???) in "xxxx", () in "xxxx"
-        (Expr::Assignment(_, _, pos), Expr::StringConstant(_, _))
-        | (Expr::Unit(pos), Expr::StringConstant(_, _)) => {
+        // (??? = ???) in "xxxx"
+        (Expr::Assignment(x), Expr::StringConstant(_)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for a string expects a string, not ()".into(),
+            )
+            .into_err(x.2))
+        }
+        // () in "xxxx"
+        (Expr::Unit(pos), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not ()".into(),
             )
@@ -1530,52 +1555,62 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
         }
 
         // "xxx" in #{...}, 'x' in #{...} - OK!
-        (Expr::StringConstant(_, _), Expr::Map(_, _))
-        | (Expr::CharConstant(_, _), Expr::Map(_, _)) => (),
+        (Expr::StringConstant(_), Expr::Map(_)) | (Expr::CharConstant(_), Expr::Map(_)) => (),
 
         // 123.456 in #{...}
         #[cfg(not(feature = "no_float"))]
-        (Expr::FloatConstant(_, pos), Expr::Map(_, _)) => {
+        (Expr::FloatConstant(x), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a float".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
         // 123 in #{...}
-        (Expr::IntegerConstant(_, pos), Expr::Map(_, _)) => {
+        (Expr::IntegerConstant(x), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a number".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
         // (??? && ???) in #{...}, (??? || ???) in #{...}, (??? in ???) in #{...},
+        (Expr::And(x), Expr::Map(_))
+        | (Expr::Or(x), Expr::Map(_))
+        | (Expr::In(x), Expr::Map(_)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not a boolean".into(),
+            )
+            .into_err(x.2))
+        }
         // true in #{...}, false in #{...}
-        (Expr::And(_, _, pos), Expr::Map(_, _))
-        | (Expr::Or(_, _, pos), Expr::Map(_, _))
-        | (Expr::In(_, _, pos), Expr::Map(_, _))
-        | (Expr::True(pos), Expr::Map(_, _))
-        | (Expr::False(pos), Expr::Map(_, _)) => {
+        (Expr::True(pos), Expr::Map(_)) | (Expr::False(pos), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a boolean".into(),
             )
             .into_err(*pos))
         }
         // [???, ???, ???] in #{..}
-        (Expr::Array(_, pos), Expr::Map(_, _)) => {
+        (Expr::Array(x), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not an array".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
         // #{...} in #{..}
-        (Expr::Map(_, pos), Expr::Map(_, _)) => {
+        (Expr::Map(x), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not an object map".into(),
             )
-            .into_err(*pos))
+            .into_err(x.1))
         }
-        // (??? = ???) in #{...}, () in #{...}
-        (Expr::Assignment(_, _, pos), Expr::Map(_, _)) | (Expr::Unit(pos), Expr::Map(_, _)) => {
+        // (??? = ???) in #{...}
+        (Expr::Assignment(x), Expr::Map(_)) => {
+            return Err(PERR::MalformedInExpr(
+                "'in' expression for an object map expects a string, not ()".into(),
+            )
+            .into_err(x.2))
+        }
+        // () in #{...}
+        (Expr::Unit(pos), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not ()".into(),
             )
@@ -1585,7 +1620,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
         _ => (),
     }
 
-    Ok(Expr::In(Box::new(lhs), Box::new(rhs), op_pos))
+    Ok(Expr::In(Box::new((lhs, rhs, op_pos))))
 }
 
 /// Parse a binary expression.
@@ -1630,155 +1665,59 @@ fn parse_binary_op<'a>(
         };
 
         let cmp_default = Some(Box::new(false.into()));
+        let op = op_token.syntax();
+        let hash = calc_fn_hash(empty(), &op, repeat(EMPTY_TYPE_ID()).take(2));
+        let mut args = vec![current_lhs, rhs];
 
         current_lhs = match op_token {
-            Token::Plus => Expr::FnCall(
-                Box::new("+".into()),
-                None,
-                calc_fn_hash(empty(), "+", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::Minus => Expr::FnCall(
-                Box::new("-".into()),
-                None,
-                calc_fn_hash(empty(), "-", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::Multiply => Expr::FnCall(
-                Box::new("*".into()),
-                None,
-                calc_fn_hash(empty(), "*", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::Divide => Expr::FnCall(
-                Box::new("/".into()),
-                None,
-                calc_fn_hash(empty(), "/", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
+            Token::Plus => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::Minus => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::Multiply => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::Divide => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
 
-            Token::LeftShift => Expr::FnCall(
-                Box::new("<<".into()),
-                None,
-                calc_fn_hash(empty(), "<<", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::RightShift => Expr::FnCall(
-                Box::new(">>".into()),
-                None,
-                calc_fn_hash(empty(), ">>", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::Modulo => Expr::FnCall(
-                Box::new("%".into()),
-                None,
-                calc_fn_hash(empty(), "%", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::PowerOf => Expr::FnCall(
-                Box::new("~".into()),
-                None,
-                calc_fn_hash(empty(), "~", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
+            Token::LeftShift => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::RightShift => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::Modulo => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::PowerOf => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
 
             // Comparison operators default to false when passed invalid operands
-            Token::EqualsTo => Expr::FnCall(
-                Box::new("==".into()),
-                None,
-                calc_fn_hash(empty(), "==", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                cmp_default,
-                pos,
-            ),
-            Token::NotEqualsTo => Expr::FnCall(
-                Box::new("!=".into()),
-                None,
-                calc_fn_hash(empty(), "!=", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                cmp_default,
-                pos,
-            ),
-            Token::LessThan => Expr::FnCall(
-                Box::new("<".into()),
-                None,
-                calc_fn_hash(empty(), "<", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                cmp_default,
-                pos,
-            ),
-            Token::LessThanEqualsTo => Expr::FnCall(
-                Box::new("<=".into()),
-                None,
-                calc_fn_hash(empty(), "<=", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                cmp_default,
-                pos,
-            ),
-            Token::GreaterThan => Expr::FnCall(
-                Box::new(">".into()),
-                None,
-                calc_fn_hash(empty(), ">", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                cmp_default,
-                pos,
-            ),
-            Token::GreaterThanEqualsTo => Expr::FnCall(
-                Box::new(">=".into()),
-                None,
-                calc_fn_hash(empty(), ">=", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                cmp_default,
-                pos,
-            ),
+            Token::EqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
+            Token::NotEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
+            Token::LessThan => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
+            Token::LessThanEqualsTo => {
+                Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos)))
+            }
+            Token::GreaterThan => Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos))),
+            Token::GreaterThanEqualsTo => {
+                Expr::FnCall(Box::new((op, None, hash, args, cmp_default, pos)))
+            }
 
-            Token::Or => Expr::Or(Box::new(current_lhs), Box::new(rhs), pos),
-            Token::And => Expr::And(Box::new(current_lhs), Box::new(rhs), pos),
-            Token::Ampersand => Expr::FnCall(
-                Box::new("&".into()),
-                None,
-                calc_fn_hash(empty(), "&", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::Pipe => Expr::FnCall(
-                Box::new("|".into()),
-                None,
-                calc_fn_hash(empty(), "|", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
-            Token::XOr => Expr::FnCall(
-                Box::new("^".into()),
-                None,
-                calc_fn_hash(empty(), "^", repeat(EMPTY_TYPE_ID()).take(2)),
-                Box::new(vec![current_lhs, rhs]),
-                None,
-                pos,
-            ),
+            Token::Or => {
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
+                Expr::Or(Box::new((current_lhs, rhs, pos)))
+            }
+            Token::And => {
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
+                Expr::And(Box::new((current_lhs, rhs, pos)))
+            }
+            Token::Ampersand => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::Pipe => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
+            Token::XOr => Expr::FnCall(Box::new((op, None, hash, args, None, pos))),
 
-            Token::In => make_in_expr(current_lhs, rhs, pos)?,
+            Token::In => {
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
+                make_in_expr(current_lhs, rhs, pos)?
+            }
 
             #[cfg(not(feature = "no_object"))]
-            Token::Period => make_dot_expr(current_lhs, rhs, pos, false)?,
+            Token::Period => {
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
+                make_dot_expr(current_lhs, rhs, pos, false)?
+            }
 
             token => return Err(PERR::UnknownOperator(token.into()).into_err(pos)),
         };
@@ -1857,22 +1796,18 @@ fn parse_if<'a>(
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).unwrap_or(false) {
-        Some(Box::new(if let (Token::If, _) = input.peek().unwrap() {
+        Some(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
             parse_if(input, stack, breakable, allow_stmt_expr)?
         } else {
             // if guard { if_body } else { else-body }
             parse_block(input, stack, breakable, allow_stmt_expr)?
-        }))
+        })
     } else {
         None
     };
 
-    Ok(Stmt::IfThenElse(
-        Box::new(guard),
-        Box::new(if_body),
-        else_body,
-    ))
+    Ok(Stmt::IfThenElse(Box::new((guard, if_body, else_body))))
 }
 
 /// Parse a while loop.
@@ -1890,7 +1825,7 @@ fn parse_while<'a>(
     ensure_not_assignment(input)?;
     let body = parse_block(input, stack, true, allow_stmt_expr)?;
 
-    Ok(Stmt::While(Box::new(guard), Box::new(body)))
+    Ok(Stmt::While(Box::new((guard, body))))
 }
 
 /// Parse a loop statement.
@@ -1952,7 +1887,7 @@ fn parse_for<'a>(
 
     stack.truncate(prev_len);
 
-    Ok(Stmt::For(Box::new(name), Box::new(expr), Box::new(body)))
+    Ok(Stmt::For(Box::new((name, expr, body))))
 }
 
 /// Parse a variable definition statement.
@@ -1981,12 +1916,12 @@ fn parse_let<'a>(
             // let name = expr
             ScopeEntryType::Normal => {
                 stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(name), Some(Box::new(init_value)), pos))
+                Ok(Stmt::Let(Box::new((name, Some(init_value), pos))))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
                 stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(name), Box::new(init_value), pos))
+                Ok(Stmt::Const(Box::new((name, init_value, pos))))
             }
             // const name = expr - error
             ScopeEntryType::Constant => {
@@ -2000,11 +1935,11 @@ fn parse_let<'a>(
         match var_type {
             ScopeEntryType::Normal => {
                 stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(name), None, pos))
+                Ok(Stmt::Let(Box::new((name, None, pos))))
             }
             ScopeEntryType::Constant => {
                 stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(name), Box::new(Expr::Unit(pos)), pos))
+                Ok(Stmt::Const(Box::new((name, Expr::Unit(pos), pos))))
             }
             // Variable cannot be a module
             ScopeEntryType::Module => unreachable!(),
@@ -2043,7 +1978,7 @@ fn parse_import<'a>(
     };
 
     stack.push((name.clone(), ScopeEntryType::Module));
-    Ok(Stmt::Import(Box::new(expr), Box::new(name), pos))
+    Ok(Stmt::Import(Box::new((expr, name, pos))))
 }
 
 /// Parse an export statement.
@@ -2100,7 +2035,7 @@ fn parse_export<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Box
         })
         .map_err(|(p, pos)| PERR::DuplicatedExport(p.to_string()).into_err(pos))?;
 
-    Ok(Stmt::Export(exports))
+    Ok(Stmt::Export(Box::new(exports)))
 }
 
 /// Parse a statement block.
@@ -2167,7 +2102,7 @@ fn parse_block<'a>(
 
     stack.truncate(prev_len);
 
-    Ok(Stmt::Block(statements, pos))
+    Ok(Stmt::Block(Box::new((statements, pos))))
 }
 
 /// Parse an expression as a statement.
@@ -2230,14 +2165,21 @@ fn parse_stmt<'a>(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Stmt::ReturnWithVal(None, return_type, *pos)),
+                (Token::EOF, pos) => Ok(Stmt::ReturnWithVal(Box::new((None, return_type, *pos)))),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => Ok(Stmt::ReturnWithVal(None, return_type, pos)),
+                (Token::SemiColon, _) => {
+                    Ok(Stmt::ReturnWithVal(Box::new((None, return_type, pos))))
+                }
                 // `return` or `throw` with expression
                 (_, _) => {
                     let expr = parse_expr(input, stack, allow_stmt_expr)?;
                     let pos = expr.position();
-                    Ok(Stmt::ReturnWithVal(Some(Box::new(expr)), return_type, pos))
+
+                    Ok(Stmt::ReturnWithVal(Box::new((
+                        Some(expr),
+                        return_type,
+                        pos,
+                    ))))
                 }
             }
         }
@@ -2329,10 +2271,10 @@ fn parse_fn<'a>(
         })?;
 
     // Parse function body
-    let body = Box::new(match input.peek().unwrap() {
+    let body = match input.peek().unwrap() {
         (Token::LeftBrace, _) => parse_block(input, stack, false, allow_stmt_expr)?,
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
-    });
+    };
 
     let params = params.into_iter().map(|(p, _)| p).collect();
 
@@ -2477,10 +2419,13 @@ pub fn parse<'a>(
 /// Returns Some(expression) if conversion is successful.  Otherwise None.
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     match value.0 {
+        #[cfg(not(feature = "no_float"))]
+        Union::Float(value) => Some(Expr::FloatConstant(Box::new((value, pos)))),
+
         Union::Unit(_) => Some(Expr::Unit(pos)),
-        Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
-        Union::Char(value) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value) => Some(Expr::StringConstant((*value).clone(), pos)),
+        Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),
+        Union::Char(value) => Some(Expr::CharConstant(Box::new((value, pos)))),
+        Union::Str(value) => Some(Expr::StringConstant(Box::new(((*value).clone(), pos)))),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]
@@ -2491,10 +2436,10 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
                 .collect();
 
             if items.iter().all(Option::is_some) {
-                Some(Expr::Array(
+                Some(Expr::Array(Box::new((
                     items.into_iter().map(Option::unwrap).collect(),
                     pos,
-                ))
+                ))))
             } else {
                 None
             }
@@ -2506,19 +2451,17 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
                 .map(|(k, v)| (k, map_dynamic_to_expr(v, pos), pos))
                 .collect();
             if items.iter().all(|(_, expr, _)| expr.is_some()) {
-                Some(Expr::Map(
+                Some(Expr::Map(Box::new((
                     items
                         .into_iter()
                         .map(|(k, expr, pos)| (k, expr.unwrap(), pos))
                         .collect(),
                     pos,
-                ))
+                ))))
             } else {
                 None
             }
         }
-        #[cfg(not(feature = "no_float"))]
-        Union::Float(value) => Some(Expr::FloatConstant(value, pos)),
 
         _ => None,
     }
