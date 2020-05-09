@@ -268,6 +268,7 @@ let ast = engine.compile_file("hello_world.rhai".into())?;
 ### Calling Rhai functions from Rust
 
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `call_fn`.
+Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
 
 ```rust
 // Define functions in a script.
@@ -287,6 +288,11 @@ let ast = engine.compile(true,
         fn hello() {
             42
         }
+
+        // this one is private and cannot be called by 'call_fn'
+        private hidden() {
+            throw "you shouldn't see me!";
+        }
     ")?;
 
 // A custom scope can also contain any variables/constants available to the functions
@@ -300,11 +306,15 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", ( String::from("abc"
 //                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //                                                          put arguments in a tuple
 
-let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?;
 //                                                          ^^^^^^^^^^ tuple of one
 
-let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 //                                                          ^^ unit = tuple of zero
+
+// The following call will return a function-not-found error because
+// 'hidden' is declared with 'private'.
+let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
 ### Creating Rust anonymous functions from Rhai script
@@ -2052,13 +2062,17 @@ Modules can be disabled via the [`no_module`] feature.
 A module is a single script (or pre-compiled `AST`) containing global variables and functions.
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
 Variables not exported are private and invisible to the outside.
+All functions are automatically exported, unless it is prefixed with `private`.
+Functions declared `private` are invisible to the outside.
 
-All functions are automatically exported. Everything exported from a module is **constant** (**read-only**).
+Everything exported from a module is **constant** (**read-only**).
 
 ```rust
 // This is a module script.
 
-fn inc(x) { x + 1 }         // function
+fn inc(x) { x + 1 }         // public function
+
+private fn foo() {}         // private function - invisible to outside
 
 let private = 123;          // variable not exported - invisible to outside
 let x = 42;                 // this will be exported below

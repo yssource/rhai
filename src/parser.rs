@@ -178,11 +178,22 @@ impl Add<Self> for &AST {
     }
 }
 
-/// A script-function definition.
+/// A type representing the access mode of a scripted function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FnAccess {
+    /// Private function.
+    Private,
+    /// Public function.
+    Public,
+}
+
+/// A scripted function definition.
 #[derive(Debug, Clone)]
 pub struct FnDef {
     /// Function name.
     pub name: String,
+    /// Function access mode.
+    pub access: FnAccess,
     /// Names of function parameters.
     pub params: Vec<String>,
     /// Function body.
@@ -2208,6 +2219,7 @@ fn parse_stmt<'a>(
 fn parse_fn<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     stack: &mut Stack,
+    access: FnAccess,
     allow_stmt_expr: bool,
 ) -> Result<FnDef, Box<ParseError>> {
     let pos = eat_token(input, Token::Fn);
@@ -2283,6 +2295,7 @@ fn parse_fn<'a>(
 
     Ok(FnDef {
         name,
+        access,
         params,
         body,
         pos,
@@ -2330,19 +2343,37 @@ fn parse_global_level<'a>(
         // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
-            if let (Token::Fn, _) = input.peek().unwrap() {
-                let mut stack = Stack::new();
-                let func = parse_fn(input, &mut stack, true)?;
+            let mut access = FnAccess::Public;
+            let mut must_be_fn = false;
 
-                // Qualifiers (none) + function name + argument `TypeId`'s
-                let hash = calc_fn_hash(
-                    empty(),
-                    &func.name,
-                    repeat(EMPTY_TYPE_ID()).take(func.params.len()),
-                );
+            if match_token(input, Token::Private)? {
+                access = FnAccess::Private;
+                must_be_fn = true;
+            }
 
-                functions.insert(hash, func);
-                continue;
+            match input.peek().unwrap() {
+                (Token::Fn, _) => {
+                    let mut stack = Stack::new();
+                    let func = parse_fn(input, &mut stack, access, true)?;
+
+                    // Qualifiers (none) + function name + argument `TypeId`'s
+                    let hash = calc_fn_hash(
+                        empty(),
+                        &func.name,
+                        repeat(EMPTY_TYPE_ID()).take(func.params.len()),
+                    );
+
+                    functions.insert(hash, func);
+                    continue;
+                }
+                (_, pos) if must_be_fn => {
+                    return Err(PERR::MissingToken(
+                        Token::Fn.into(),
+                        format!("following '{}'", Token::Private.syntax()),
+                    )
+                    .into_err(*pos))
+                }
+                _ => (),
             }
         }
         // Actual statement

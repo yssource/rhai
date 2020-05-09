@@ -7,7 +7,7 @@ use crate::optimize::OptimizationLevel;
 use crate::packages::{
     CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
 };
-use crate::parser::{Expr, FnDef, ReturnType, Stmt, AST};
+use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -234,10 +234,22 @@ impl FunctionsLib {
         self.get(&hash).map(|fn_def| fn_def.as_ref())
     }
     /// Get a function definition from the `FunctionsLib`.
-    pub fn get_function_by_signature(&self, name: &str, params: usize) -> Option<&FnDef> {
+    pub fn get_function_by_signature(
+        &self,
+        name: &str,
+        params: usize,
+        public_only: bool,
+    ) -> Option<&FnDef> {
         // Qualifiers (none) + function name + placeholders (one for each parameter).
         let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
-        self.get_function(hash)
+        let fn_def = self.get_function(hash);
+
+        match fn_def.as_ref().map(|f| f.access) {
+            None => None,
+            Some(FnAccess::Private) if public_only => None,
+            Some(FnAccess::Private) => fn_def,
+            Some(FnAccess::Public) => fn_def,
+        }
     }
     /// Merge another `FunctionsLib` into this `FunctionsLib`.
     pub fn merge(&self, other: &Self) -> Self {

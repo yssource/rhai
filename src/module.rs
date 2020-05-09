@@ -4,7 +4,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib, NativeFunction, ScriptedFunction};
-use crate::parser::{FnDef, AST};
+use crate::parser::{FnAccess, FnDef, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token};
@@ -57,7 +57,7 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic>,
 
     /// External Rust functions.
-    functions: HashMap<u64, (String, Vec<TypeId>, NativeFunction)>,
+    functions: HashMap<u64, (String, FnAccess, Vec<TypeId>, NativeFunction)>,
 
     /// Flattened collection of all external Rust functions, including those in sub-modules.
     all_functions: HashMap<u64, NativeFunction>,
@@ -260,15 +260,21 @@ impl Module {
     /// Set a Rust function into the module, returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
-    pub fn set_fn(&mut self, fn_name: String, params: Vec<TypeId>, func: Box<FnAny>) -> u64 {
+    pub fn set_fn(
+        &mut self,
+        fn_name: String,
+        access: FnAccess,
+        params: Vec<TypeId>,
+        func: Box<FnAny>,
+    ) -> u64 {
         let hash = calc_fn_hash(empty(), &fn_name, params.iter().cloned());
 
         #[cfg(not(feature = "sync"))]
         self.functions
-            .insert(hash, (fn_name, params, Rc::new(func)));
+            .insert(hash, (fn_name, access, params, Rc::new(func)));
         #[cfg(feature = "sync")]
         self.functions
-            .insert(hash, (fn_name, params, Arc::new(func)));
+            .insert(hash, (fn_name, access, params, Arc::new(func)));
 
         hash
     }
@@ -283,7 +289,7 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_0("calc", || Ok(42_i64));
+    /// let hash = module.set_fn_0("calc", || Ok(42_i64), false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_0<K: Into<String>, T: Into<Dynamic>>(
@@ -291,6 +297,7 @@ impl Module {
         fn_name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn() -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn() -> FuncReturn<T> + Send + Sync + 'static,
+        is_private: bool,
     ) -> u64 {
         let f = move |_: &mut FnCallArgs, pos| {
             func()
@@ -298,7 +305,12 @@ impl Module {
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![];
-        self.set_fn(fn_name.into(), arg_types, Box::new(f))
+        let access = if is_private {
+            FnAccess::Private
+        } else {
+            FnAccess::Public
+        };
+        self.set_fn(fn_name.into(), access, arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -311,7 +323,7 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
+    /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1), false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_1<K: Into<String>, A: Variant + Clone, T: Into<Dynamic>>(
@@ -319,6 +331,7 @@ impl Module {
         fn_name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A) -> FuncReturn<T> + Send + Sync + 'static,
+        is_private: bool,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             func(mem::take(args[0]).cast::<A>())
@@ -326,7 +339,12 @@ impl Module {
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>()];
-        self.set_fn(fn_name.into(), arg_types, Box::new(f))
+        let access = if is_private {
+            FnAccess::Private
+        } else {
+            FnAccess::Public
+        };
+        self.set_fn(fn_name.into(), access, arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -339,7 +357,7 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
+    /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) }, false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_1_mut<K: Into<String>, A: Variant + Clone, T: Into<Dynamic>>(
@@ -347,6 +365,7 @@ impl Module {
         fn_name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
+        is_private: bool,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             func(args[0].downcast_mut::<A>().unwrap())
@@ -354,7 +373,12 @@ impl Module {
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>()];
-        self.set_fn(fn_name.into(), arg_types, Box::new(f))
+        let access = if is_private {
+            FnAccess::Private
+        } else {
+            FnAccess::Public
+        };
+        self.set_fn(fn_name.into(), access, arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -369,7 +393,7 @@ impl Module {
     /// let mut module = Module::new();
     /// let hash = module.set_fn_2("calc", |x: i64, y: String| {
     ///     Ok(x + y.len() as i64)
-    /// });
+    /// }, false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_2<K: Into<String>, A: Variant + Clone, B: Variant + Clone, T: Into<Dynamic>>(
@@ -377,6 +401,7 @@ impl Module {
         fn_name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        is_private: bool,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             let a = mem::take(args[0]).cast::<A>();
@@ -387,7 +412,12 @@ impl Module {
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(fn_name.into(), arg_types, Box::new(f))
+        let access = if is_private {
+            FnAccess::Private
+        } else {
+            FnAccess::Public
+        };
+        self.set_fn(fn_name.into(), access, arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
@@ -401,7 +431,7 @@ impl Module {
     /// let mut module = Module::new();
     /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: String| {
     ///     *x += y.len() as i64; Ok(*x)
-    /// });
+    /// }, false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_2_mut<
@@ -414,6 +444,7 @@ impl Module {
         fn_name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        is_private: bool,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             let b = mem::take(args[1]).cast::<B>();
@@ -424,7 +455,12 @@ impl Module {
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(fn_name.into(), arg_types, Box::new(f))
+        let access = if is_private {
+            FnAccess::Private
+        } else {
+            FnAccess::Public
+        };
+        self.set_fn(fn_name.into(), access, arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -439,7 +475,7 @@ impl Module {
     /// let mut module = Module::new();
     /// let hash = module.set_fn_3("calc", |x: i64, y: String, z: i64| {
     ///     Ok(x + y.len() as i64 + z)
-    /// });
+    /// }, false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_3<
@@ -453,6 +489,7 @@ impl Module {
         fn_name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
+        is_private: bool,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             let a = mem::take(args[0]).cast::<A>();
@@ -464,7 +501,12 @@ impl Module {
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(fn_name.into(), arg_types, Box::new(f))
+        let access = if is_private {
+            FnAccess::Private
+        } else {
+            FnAccess::Public
+        };
+        self.set_fn(fn_name.into(), access, arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -480,7 +522,7 @@ impl Module {
     /// let mut module = Module::new();
     /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: String, z: i64| {
     ///     *x += y.len() as i64 + z; Ok(*x)
-    /// });
+    /// }, false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_3_mut<
@@ -494,6 +536,7 @@ impl Module {
         fn_name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
+        is_private: bool,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             let b = mem::take(args[1]).cast::<B>();
@@ -505,7 +548,12 @@ impl Module {
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(fn_name.into(), arg_types, Box::new(f))
+        let access = if is_private {
+            FnAccess::Private
+        } else {
+            FnAccess::Public
+        };
+        self.set_fn(fn_name.into(), access, arg_types, Box::new(f))
     }
 
     /// Get a Rust function.
@@ -523,7 +571,7 @@ impl Module {
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn get_fn(&self, hash: u64) -> Option<&Box<FnAny>> {
-        self.functions.get(&hash).map(|(_, _, v)| v.as_ref())
+        self.functions.get(&hash).map(|(_, _, _, v)| v.as_ref())
     }
 
     /// Get a modules-qualified function.
@@ -588,11 +636,7 @@ impl Module {
 
         scope.into_iter().for_each(
             |ScopeEntry {
-                 name,
-                 typ,
-                 value,
-                 alias,
-                 ..
+                 typ, value, alias, ..
              }| {
                 match typ {
                     // Variables with an alias left in the scope become module variables
@@ -641,7 +685,12 @@ impl Module {
                 variables.push((hash, value.clone()));
             }
             // Index all Rust functions
-            for (fn_name, params, func) in module.functions.values() {
+            for (fn_name, access, params, func) in module.functions.values() {
+                match access {
+                    // Private functions are not exported
+                    FnAccess::Private => continue,
+                    FnAccess::Public => (),
+                }
                 // Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
                 //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
@@ -660,6 +709,11 @@ impl Module {
             }
             // Index all script-defined functions
             for fn_def in module.fn_lib.values() {
+                match fn_def.access {
+                    // Private functions are not exported
+                    FnAccess::Private => continue,
+                    FnAccess::Public => (),
+                }
                 // Qualifiers + function name + placeholders (one for each parameter)
                 let hash = calc_fn_hash(
                     qualifiers.iter().map(|v| *v),
