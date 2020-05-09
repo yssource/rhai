@@ -250,7 +250,7 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_0("calc", || Ok(42_i64));
+    /// let hash = module.set_fn_0("calc", || Ok(42_i64), false);
     /// assert!(module.contains_fn(hash));
     /// ```
     pub fn contains_fn(&self, hash: u64) -> bool {
@@ -567,7 +567,7 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
+    /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1), false);
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn get_fn(&self, hash: u64) -> Option<&Box<FnAny>> {
@@ -894,18 +894,14 @@ mod file {
 /// A `StaticVec` is used because most module-level access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
 #[derive(Clone, Hash, Default)]
-pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>, u64);
+pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
 
 impl fmt::Debug for ModuleRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)?;
 
-        if self.2 > 0 {
-            if let Some(index) = self.1 {
-                write!(f, " -> {},{:0>16x}", index, self.2)
-            } else {
-                write!(f, " -> {:0>16x}", self.2)
-            }
+        if let Some(index) = self.1 {
+            write!(f, " -> {}", index)
         } else {
             Ok(())
         }
@@ -937,17 +933,11 @@ impl fmt::Display for ModuleRef {
 
 impl From<StaticVec<(String, Position)>> for ModuleRef {
     fn from(modules: StaticVec<(String, Position)>) -> Self {
-        Self(modules, None, 0)
+        Self(modules, None)
     }
 }
 
 impl ModuleRef {
-    pub(crate) fn key(&self) -> u64 {
-        self.2
-    }
-    pub(crate) fn set_key(&mut self, key: u64) {
-        self.2 = key
-    }
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
         self.1
     }

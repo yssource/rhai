@@ -367,12 +367,17 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             //id = id2 = expr2
             Expr::Assignment(id2, expr2, pos2) => match (*id, *id2) {
                 // var = var = expr2 -> var = expr2
-                (Expr::Variable(var, None, sp, _), Expr::Variable(var2, None, sp2, _))
+                (Expr::Variable(var, None, index, sp, _), Expr::Variable(var2, None, _, sp2, _))
                     if var == var2 && sp == sp2 =>
                 {
                     // Assignment to the same variable - fold
                     state.set_dirty();
-                    Expr::Assignment(Box::new(Expr::Variable(var, None, sp, pos)), Box::new(optimize_expr(*expr2, state)), pos)
+
+                    Expr::Assignment(
+                        Box::new(Expr::Variable(var, None, index, sp, pos)),
+                        Box::new(optimize_expr(*expr2, state))
+                        , pos
+                    )
                 }
                 // id1 = id2 = expr2
                 (id1, id2) => Expr::Assignment(
@@ -544,18 +549,18 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         },
 
         // Do not call some special keywords
-        Expr::FnCall(id, None, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref().as_ref())=>
-            Expr::FnCall(id, None, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
+        Expr::FnCall(id, None, index, args, def_value, pos) if DONT_EVAL_KEYWORDS.contains(&id.as_ref().as_ref())=>
+            Expr::FnCall(id, None, index, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
 
         // Eagerly call functions
-        Expr::FnCall(id, None, args, def_value, pos)
+        Expr::FnCall(id, None, index, args, def_value, pos)
                 if state.optimization_level == OptimizationLevel::Full // full optimizations
                 && args.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
             // First search in script-defined functions (can override built-in)
             if state.fn_lib.iter().find(|(name, len)| name == id.as_ref() && *len == args.len()).is_some() {
                 // A script-defined function overrides the built-in function - do not make the call
-                return Expr::FnCall(id, None, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos);
+                return Expr::FnCall(id, None, index, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos);
             }
 
             let mut arg_values: Vec<_> = args.iter().map(Expr::get_constant_value).collect();
@@ -586,16 +591,16 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     })
                 ).unwrap_or_else(||
                     // Optimize function call arguments
-                    Expr::FnCall(id, None, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos)
+                    Expr::FnCall(id, None, index, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos)
                 )
         }
 
         // id(args ..) -> optimize function call arguments
-        Expr::FnCall(id, modules, args, def_value, pos) =>
-            Expr::FnCall(id, modules, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
+        Expr::FnCall(id, modules, index, args, def_value, pos) =>
+            Expr::FnCall(id, modules, index, Box::new(args.into_iter().map(|a| optimize_expr(a, state)).collect()), def_value, pos),
 
         // constant-name
-        Expr::Variable(name, None, _, pos) if state.contains_constant(&name) => {
+        Expr::Variable(name, None, _, _, pos) if state.contains_constant(&name) => {
             state.set_dirty();
 
             // Replace constant with value

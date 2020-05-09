@@ -159,15 +159,11 @@ impl<'a> State<'a> {
         }
     }
     /// Does a certain script-defined function exist in the `State`?
-    pub fn has_function(&self, name: &str, params: usize) -> bool {
-        // Qualifiers (none) + function name + placeholders (one for each parameter).
-        let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
+    pub fn has_function(&self, hash: u64) -> bool {
         self.fn_lib.contains_key(&hash)
     }
     /// Get a script-defined function definition from the `State`.
-    pub fn get_function(&self, name: &str, params: usize) -> Option<&FnDef> {
-        // Qualifiers (none) + function name + placeholders (one for each parameter).
-        let hash = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
+    pub fn get_function(&self, hash: u64) -> Option<&FnDef> {
         self.fn_lib.get(&hash).map(|f| f.as_ref())
     }
 }
@@ -442,14 +438,14 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    #[cfg(not(feature = "no_module"))] modules: &Option<Box<ModuleRef>>,
-    #[cfg(feature = "no_module")] _: &Option<ModuleRef>,
+    #[cfg(not(feature = "no_module"))] modules: Option<(&Box<ModuleRef>, u64)>,
+    #[cfg(feature = "no_module")] _: Option<(&ModuleRef, u64)>,
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_module"))]
     {
-        if let Some(modules) = modules {
+        if let Some((modules, hash)) = modules {
             let (id, root_pos) = modules.get(0);
 
             let module = if let Some(index) = modules.index() {
@@ -468,7 +464,7 @@ fn search_scope<'a>(
             };
 
             return Ok((
-                module.get_qualified_var_mut(name, modules.key(), pos)?,
+                module.get_qualified_var_mut(name, hash, pos)?,
                 // Module variables are constant
                 ScopeEntryType::Constant,
             ));
@@ -574,6 +570,8 @@ impl Engine {
         scope: Option<&mut Scope>,
         state: &State,
         fn_name: &str,
+        hash_fn_spec: u64,
+        hash_fn_def: u64,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
@@ -585,18 +583,17 @@ impl Engine {
         }
 
         // First search in script-defined functions (can override built-in)
-        if let Some(fn_def) = state.get_function(fn_name, args.len()) {
-            return self.call_script_fn(scope, state, fn_def, args, pos, level);
+        if hash_fn_def > 0 {
+            if let Some(fn_def) = state.get_function(hash_fn_def) {
+                return self.call_script_fn(scope, state, fn_def, args, pos, level);
+            }
         }
 
         // Search built-in's and external functions
-        // Qualifiers (none) + function name + argument `TypeId`'s.
-        let fn_spec = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
-
         if let Some(func) = self
             .base_package
-            .get_function(fn_spec)
-            .or_else(|| self.packages.get_function(fn_spec))
+            .get_function(hash_fn_spec)
+            .or_else(|| self.packages.get_function(hash_fn_spec))
         {
             // Run external function
             let result = func(args, pos)?;
@@ -739,16 +736,13 @@ impl Engine {
     }
 
     // Has a system function an override?
-    fn has_override(&self, state: &State, name: &str) -> bool {
-        // Qualifiers (none) + function name + argument `TypeId`'s.
-        let hash = calc_fn_hash(empty(), name, once(TypeId::of::<String>()));
-
+    fn has_override(&self, state: &State, hash_fn_spec: u64, hash_fn_def: u64) -> bool {
         // First check registered functions
-        self.base_package.contains_function(hash)
+        self.base_package.contains_function(hash_fn_spec)
             // Then check packages
-            || self.packages.contains_function(hash)
+            || self.packages.contains_function(hash_fn_spec)
             // Then check script-defined functions
-            || state.has_function(name, 1)
+            || state.has_function(hash_fn_def)
     }
 
     // Perform an actual function call, taking care of special functions
@@ -762,26 +756,45 @@ impl Engine {
         &self,
         state: &State,
         fn_name: &str,
+        hash_fn_def: u64,
         args: &mut FnCallArgs,
         def_val: Option<&Dynamic>,
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        // Qualifiers (none) + function name + argument `TypeId`'s.
+        let hash_fn_spec = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
+
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(state, KEYWORD_TYPE_OF) => {
+            KEYWORD_TYPE_OF
+                if args.len() == 1 && !self.has_override(state, hash_fn_spec, hash_fn_def) =>
+            {
                 Ok(self.map_type_name(args[0].type_name()).to_string().into())
             }
 
             // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL if args.len() == 1 && !self.has_override(state, KEYWORD_EVAL) => {
+            KEYWORD_EVAL
+                if args.len() == 1 && !self.has_override(state, hash_fn_spec, hash_fn_def) =>
+            {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     pos,
                 )))
             }
+
             // Normal method call
-            _ => self.call_fn_raw(None, state, fn_name, args, def_val, pos, level),
+            _ => self.call_fn_raw(
+                None,
+                state,
+                fn_name,
+                hash_fn_spec,
+                hash_fn_def,
+                args,
+                def_val,
+                pos,
+                level,
+            ),
         }
     }
 
@@ -869,17 +882,17 @@ impl Engine {
         } else {
             match rhs {
                 // xxx.fn_name(arg_expr_list)
-                Expr::FnCall(fn_name, None,_, def_val, pos) => {
+                Expr::FnCall(fn_name, None, hash, _, def_val, pos) => {
                     let mut args: Vec<_> = once(obj)
                         .chain(idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap().iter_mut())
                         .collect();
                     let def_val = def_val.as_deref();
                     // A function call is assumed to have side effects, so the value is changed
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
-                    self.exec_fn_call(state, fn_name, &mut args, def_val, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(state, fn_name, *hash, &mut args, def_val, *pos, 0).map(|v| (v, true))
                 }
                 // xxx.module::fn_name(...) - syntax error
-                Expr::FnCall(_,_,_,_,_) => unreachable!(),
+                Expr::FnCall(_, _, _, _, _, _) => unreachable!(),
                 // {xxx:map}.id = ???
                 #[cfg(not(feature = "no_object"))]
                 Expr::Property(id, pos) if obj.is::<Map>() && new_val.is_some() => {
@@ -899,13 +912,13 @@ impl Engine {
                 Expr::Property(id, pos) if new_val.is_some() => {
                     let fn_name = make_setter(id);
                     let mut args = [obj, new_val.as_mut().unwrap()];
-                    self.exec_fn_call(state, &fn_name, &mut args, None, *pos, 0).map(|v| (v, true))
+                    self.exec_fn_call(state, &fn_name, 0, &mut args, None, *pos, 0).map(|v| (v, true))
                 }
                 // xxx.id
                 Expr::Property(id, pos) => {
                     let fn_name = make_getter(id);
                     let mut args = [obj];
-                    self.exec_fn_call(state, &fn_name, &mut args, None, *pos, 0).map(|v| (v, false))
+                    self.exec_fn_call(state, &fn_name, 0, &mut args, None, *pos, 0).map(|v| (v, false))
                 }
                 #[cfg(not(feature = "no_object"))]
                 // {xxx:map}.idx_lhs[idx_expr]
@@ -936,7 +949,7 @@ impl Engine {
 
                     let indexed_val = &mut (if let Expr::Property(id, pos) = dot_lhs.as_ref() {
                         let fn_name = make_getter(id);
-                        self.exec_fn_call(state, &fn_name, &mut args[..1], None, *pos, 0)?
+                        self.exec_fn_call(state, &fn_name, 0, &mut args[..1], None, *pos, 0)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -954,7 +967,7 @@ impl Engine {
                             let fn_name = make_setter(id);
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = indexed_val;
-                            self.exec_fn_call(state, &fn_name, &mut args, None, *pos, 0).or_else(|err| match *err {
+                            self.exec_fn_call(state, &fn_name, 0, &mut args, None, *pos, 0).or_else(|err| match *err {
                                 // If there is no setter, no need to feed it back because the property is read-only
                                 EvalAltResult::ErrorDotExpr(_,_) => Ok(Default::default()),
                                 err => Err(Box::new(err))
@@ -991,9 +1004,10 @@ impl Engine {
 
         match dot_lhs {
             // id.??? or id[???]
-            Expr::Variable(id, modules, index, pos) => {
+            Expr::Variable(id, modules, hash, index, pos) => {
                 let index = if state.always_search { None } else { *index };
-                let (target, typ) = search_scope(scope, id, modules, index, *pos)?;
+                let (target, typ) =
+                    search_scope(scope, id, modules.as_ref().map(|m| (m, *hash)), index, *pos)?;
 
                 // Constants cannot be modified
                 match typ {
@@ -1046,7 +1060,7 @@ impl Engine {
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
         match expr {
-            Expr::FnCall(_, None, arg_exprs, _, _) => {
+            Expr::FnCall(_, None, _, arg_exprs, _, _) => {
                 let mut arg_values = StaticVec::<Dynamic>::new();
 
                 for arg_expr in arg_exprs.iter() {
@@ -1055,7 +1069,7 @@ impl Engine {
 
                 idx_values.push(Dynamic::from(arg_values));
             }
-            Expr::FnCall(_, _, _, _, _) => unreachable!(),
+            Expr::FnCall(_, _, _, _, _, _) => unreachable!(),
             Expr::Property(_, _) => idx_values.push(()), // Store a placeholder - no need to copy the property name
             Expr::Index(lhs, rhs, _) | Expr::Dot(lhs, rhs, _) => {
                 // Evaluate in left-to-right order
@@ -1158,7 +1172,7 @@ impl Engine {
 
             _ => {
                 let args = &mut [val, &mut idx];
-                self.exec_fn_call(state, FUNC_INDEXER, args, None, op_pos, 0)
+                self.exec_fn_call(state, FUNC_INDEXER, 0, args, None, op_pos, 0)
                     .map(|v| v.into())
                     .map_err(|_| {
                         Box::new(EvalAltResult::ErrorIndexingType(
@@ -1196,9 +1210,16 @@ impl Engine {
                     let args = &mut [&mut lhs_value.clone(), &mut value.clone()];
                     let def_value = Some(&def_value);
                     let pos = rhs.position();
+                    let op = "==";
+
+                    // Qualifiers (none) + function name + argument `TypeId`'s.
+                    let fn_spec = calc_fn_hash(empty(), op, args.iter().map(|a| a.type_id()));
+                    let fn_def = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
 
                     if self
-                        .call_fn_raw(None, state, "==", args, def_value, pos, level)?
+                        .call_fn_raw(
+                            None, state, op, fn_spec, fn_def, args, def_value, pos, level,
+                        )?
                         .as_bool()
                         .unwrap_or(false)
                     {
@@ -1239,9 +1260,10 @@ impl Engine {
             Expr::FloatConstant(f, _) => Ok((*f).into()),
             Expr::StringConstant(s, _) => Ok(s.to_string().into()),
             Expr::CharConstant(c, _) => Ok((*c).into()),
-            Expr::Variable(id, modules, index, pos) => {
+            Expr::Variable(id, modules, hash, index, pos) => {
                 let index = if state.always_search { None } else { *index };
-                let (val, _) = search_scope(scope, id, modules, index, *pos)?;
+                let mod_and_hash = modules.as_ref().map(|m| (m, *hash));
+                let (val, _) = search_scope(scope, id, mod_and_hash, index, *pos)?;
                 Ok(val.clone())
             }
             Expr::Property(_, _) => unreachable!(),
@@ -1255,9 +1277,10 @@ impl Engine {
 
                 match lhs.as_ref() {
                     // name = rhs
-                    Expr::Variable(id, modules, index, pos) => {
+                    Expr::Variable(id, modules, hash, index, pos) => {
                         let index = if state.always_search { None } else { *index };
-                        let (value_ptr, typ) = search_scope(scope, id, modules, index, *pos)?;
+                        let mod_and_hash = modules.as_ref().map(|m| (m, *hash));
+                        let (value_ptr, typ) = search_scope(scope, id, mod_and_hash, index, *pos)?;
                         match typ {
                             ScopeEntryType::Constant => Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant(id.to_string(), *pos),
@@ -1332,7 +1355,7 @@ impl Engine {
             )))),
 
             // Normal function call
-            Expr::FnCall(fn_name, None, arg_exprs, def_val, pos) => {
+            Expr::FnCall(fn_name, None, hash, arg_exprs, def_val, pos) => {
                 let mut arg_values = arg_exprs
                     .iter()
                     .map(|expr| self.eval_expr(scope, state, expr, level))
@@ -1340,9 +1363,12 @@ impl Engine {
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 
+                let hash_fn_spec =
+                    calc_fn_hash(empty(), KEYWORD_EVAL, once(TypeId::of::<String>()));
+
                 if fn_name.as_ref() == KEYWORD_EVAL
                     && args.len() == 1
-                    && !self.has_override(state, KEYWORD_EVAL)
+                    && !self.has_override(state, hash_fn_spec, *hash)
                 {
                     // eval - only in function call style
                     let prev_len = scope.len();
@@ -1361,13 +1387,13 @@ impl Engine {
                 } else {
                     // Normal function call - except for eval (handled above)
                     let def_value = def_val.as_deref();
-                    self.exec_fn_call(state, fn_name, &mut args, def_value, *pos, level)
+                    self.exec_fn_call(state, fn_name, *hash, &mut args, def_value, *pos, level)
                 }
             }
 
             // Module-qualified function call
             #[cfg(not(feature = "no_module"))]
-            Expr::FnCall(fn_name, Some(modules), arg_exprs, def_val, pos) => {
+            Expr::FnCall(fn_name, Some(modules), hash1, arg_exprs, def_val, pos) => {
                 let modules = modules.as_ref();
 
                 let mut arg_values = arg_exprs
@@ -1392,7 +1418,7 @@ impl Engine {
                 };
 
                 // First search in script-defined functions (can override built-in)
-                if let Some(fn_def) = module.get_qualified_scripted_fn(modules.key()) {
+                if let Some(fn_def) = module.get_qualified_scripted_fn(*hash1) {
                     self.call_script_fn(None, state, fn_def, &mut args, *pos, level)
                 } else {
                     // Then search in Rust functions
@@ -1400,12 +1426,11 @@ impl Engine {
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
                     //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                    let hash1 = modules.key();
                     // 2) Calculate a second hash with no qualifiers, empty function name, and
                     //    the actual list of parameter `TypeId`'.s
                     let hash2 = calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
                     // 3) The final hash is the XOR of the two hashes.
-                    let hash = hash1 ^ hash2;
+                    let hash = *hash1 ^ hash2;
 
                     match module.get_qualified_fn(fn_name, hash, *pos) {
                         Ok(func) => func(&mut args, *pos),

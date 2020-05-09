@@ -382,6 +382,7 @@ pub enum Expr {
         Box<String>,
         #[cfg(not(feature = "no_module"))] Option<Box<ModuleRef>>,
         #[cfg(feature = "no_module")] Option<ModuleRef>,
+        u64,
         Option<NonZeroUsize>,
         Position,
     ),
@@ -389,13 +390,14 @@ pub enum Expr {
     Property(String, Position),
     /// { stmt }
     Stmt(Box<Stmt>, Position),
-    /// func(expr, ... ) - (function name, optional modules, arguments, optional default value, position)
+    /// func(expr, ... ) - (function name, optional modules, hash, arguments, optional default value, position)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<Cow<'static, str>>,
         #[cfg(not(feature = "no_module"))] Option<Box<ModuleRef>>,
         #[cfg(feature = "no_module")] Option<ModuleRef>,
+        u64,
         Box<Vec<Expr>>,
         Option<Box<Dynamic>>,
         Position,
@@ -499,10 +501,10 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, _, _, pos)
+            | Self::Variable(_, _, _, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
-            | Self::FnCall(_, _, _, _, pos)
+            | Self::FnCall(_, _, _, _, _, pos)
             | Self::And(_, _, pos)
             | Self::Or(_, _, pos)
             | Self::In(_, _, pos)
@@ -527,10 +529,10 @@ impl Expr {
             | Self::StringConstant(_, pos)
             | Self::Array(_, pos)
             | Self::Map(_, pos)
-            | Self::Variable(_, _, _, pos)
+            | Self::Variable(_, _, _, _, pos)
             | Self::Property(_, pos)
             | Self::Stmt(_, pos)
-            | Self::FnCall(_, _, _, _, pos)
+            | Self::FnCall(_, _, _, _, _, pos)
             | Self::And(_, _, pos)
             | Self::Or(_, _, pos)
             | Self::In(_, _, pos)
@@ -558,7 +560,7 @@ impl Expr {
 
             Self::Stmt(stmt, _) => stmt.is_pure(),
 
-            Self::Variable(_, _, _, _) => true,
+            Self::Variable(_, _, _, _, _) => true,
 
             expr => expr.is_constant(),
         }
@@ -611,7 +613,7 @@ impl Expr {
 
             Self::StringConstant(_, _)
             | Self::Stmt(_, _)
-            | Self::FnCall(_, _, _, _, _)
+            | Self::FnCall(_, _, _, _, _, _)
             | Self::Assignment(_, _, _)
             | Self::Dot(_, _, _)
             | Self::Index(_, _, _)
@@ -621,7 +623,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Variable(_, _, _, _) => match token {
+            Self::Variable(_, _, _, _, _) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
                 #[cfg(not(feature = "no_module"))]
                 Token::DoubleColon => true,
@@ -638,7 +640,7 @@ impl Expr {
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     pub(crate) fn into_property(self) -> Self {
         match self {
-            Self::Variable(id, None, _, pos) => Self::Property(*id, pos),
+            Self::Variable(id, None, _, _, pos) => Self::Property(*id, pos),
             _ => self,
         }
     }
@@ -725,24 +727,31 @@ fn parse_call_expr<'a>(
             eat_token(input, Token::RightParen);
 
             #[cfg(not(feature = "no_module"))]
-            {
+            let hash1 = {
                 if let Some(modules) = modules.as_mut() {
+                    modules.set_index(stack.find_module(&modules.get(0).0));
+
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
+                    //    i.e. qualifiers + function name + no parameters.
                     let hash1 = calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty());
                     // 2) Calculate a second hash with no qualifiers, empty function name, and
                     //    the actual list of parameter `TypeId`'.s
                     // 3) The final hash is the XOR of the two hashes.
 
-                    // Cache the first hash
-                    modules.set_key(hash1);
-                    modules.set_index(stack.find_module(&modules.get(0).0));
+                    hash1
+                } else {
+                    calc_fn_hash(empty(), &id, empty())
                 }
-            }
+            };
+            // Qualifiers (none) + function name + no parameters.
+            #[cfg(feature = "no_module")]
+            let hash1 = calc_fn_hash(empty(), &id, empty());
+
             return Ok(Expr::FnCall(
                 Box::new(id.into()),
                 modules,
+                hash1,
                 Box::new(args),
                 None,
                 begin,
@@ -761,8 +770,10 @@ fn parse_call_expr<'a>(
                 eat_token(input, Token::RightParen);
 
                 #[cfg(not(feature = "no_module"))]
-                {
+                let hash1 = {
                     if let Some(modules) = modules.as_mut() {
+                        modules.set_index(stack.find_module(&modules.get(0).0));
+
                         // Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
                         //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
@@ -775,14 +786,19 @@ fn parse_call_expr<'a>(
                         //    the actual list of parameter `TypeId`'.s
                         // 3) The final hash is the XOR of the two hashes.
 
-                        // Cache the first hash
-                        modules.set_key(hash1);
-                        modules.set_index(stack.find_module(&modules.get(0).0));
+                        hash1
+                    } else {
+                        calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()))
                     }
-                }
+                };
+                // Qualifiers (none) + function name + dummy parameter types (one for each parameter).
+                #[cfg(feature = "no_module")]
+                let hash1 = calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()));
+
                 return Ok(Expr::FnCall(
                     Box::new(id.into()),
                     modules,
+                    hash1,
                     Box::new(args),
                     None,
                     begin,
@@ -1139,7 +1155,7 @@ fn parse_primary<'a>(
         Token::StringConst(s) => Expr::StringConstant(s, pos),
         Token::Identifier(s) => {
             let index = stack.find(&s);
-            Expr::Variable(Box::new(s), None, index, pos)
+            Expr::Variable(Box::new(s), None, 0, index, pos)
         }
         Token::LeftParen => parse_paren_expr(input, stack, pos, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
@@ -1166,7 +1182,7 @@ fn parse_primary<'a>(
 
         root_expr = match (root_expr, token) {
             // Function call
-            (Expr::Variable(id, modules, _, pos), Token::LeftParen) => {
+            (Expr::Variable(id, modules, _, _, pos), Token::LeftParen) => {
                 parse_call_expr(input, stack, *id, modules, pos, allow_stmt_expr)?
             }
             (Expr::Property(id, pos), Token::LeftParen) => {
@@ -1174,7 +1190,7 @@ fn parse_primary<'a>(
             }
             // module access
             #[cfg(not(feature = "no_module"))]
-            (Expr::Variable(id, mut modules, index, pos), Token::DoubleColon) => {
+            (Expr::Variable(id, mut modules, _, index, pos), Token::DoubleColon) => {
                 match input.next().unwrap() {
                     (Token::Identifier(id2), pos2) => {
                         if let Some(ref mut modules) = modules {
@@ -1185,7 +1201,7 @@ fn parse_primary<'a>(
                             modules = Some(Box::new(m));
                         }
 
-                        Expr::Variable(Box::new(id2), modules, index, pos2)
+                        Expr::Variable(Box::new(id2), modules, 0, index, pos2)
                     }
                     (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
                 }
@@ -1203,10 +1219,9 @@ fn parse_primary<'a>(
     match &mut root_expr {
         // Cache the hash key for module-qualified variables
         #[cfg(not(feature = "no_module"))]
-        Expr::Variable(id, Some(modules), _, _) => {
+        Expr::Variable(id, Some(modules), hash, _, _) => {
             // Qualifiers + variable name
-            let hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), id, empty());
-            modules.set_key(hash);
+            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), id, empty());
             modules.set_index(stack.find_module(&modules.get(0).0));
         }
         _ => (),
@@ -1259,13 +1274,19 @@ fn parse_unary<'a>(
                 Expr::FloatConstant(f, pos) => Ok(Expr::FloatConstant(-f, pos)),
 
                 // Call negative function
-                e => Ok(Expr::FnCall(
-                    Box::new("-".into()),
-                    None,
-                    Box::new(vec![e]),
-                    None,
-                    pos,
-                )),
+                e => {
+                    let op = "-";
+                    let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+
+                    Ok(Expr::FnCall(
+                        Box::new(op.into()),
+                        None,
+                        hash,
+                        Box::new(vec![e]),
+                        None,
+                        pos,
+                    ))
+                }
             }
         }
         // +expr
@@ -1276,9 +1297,13 @@ fn parse_unary<'a>(
         // !expr
         (Token::Bang, _) => {
             let pos = eat_token(input, Token::Bang);
+            let op = "!";
+            let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+
             Ok(Expr::FnCall(
-                Box::new("!".into()),
+                Box::new(op.into()),
                 None,
+                hash,
                 Box::new(vec![parse_primary(input, stack, allow_stmt_expr)?]),
                 Some(Box::new(false.into())), // NOT operator, when operating on invalid operand, defaults to false
                 pos,
@@ -1298,8 +1323,8 @@ fn make_assignment_stmt<'a>(
     pos: Position,
 ) -> Result<Expr, Box<ParseError>> {
     match &lhs {
-        Expr::Variable(_, _, None, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
-        Expr::Variable(name, _, Some(index), var_pos) => {
+        Expr::Variable(_, _, _, None, _) => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
+        Expr::Variable(name, _, _, Some(index), var_pos) => {
             match stack[(stack.len() - index.get())].1 {
                 ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos)),
                 // Constant values cannot be assigned to
@@ -1310,10 +1335,10 @@ fn make_assignment_stmt<'a>(
             }
         }
         Expr::Index(idx_lhs, _, _) | Expr::Dot(idx_lhs, _, _) => match idx_lhs.as_ref() {
-            Expr::Variable(_, _, None, _) => {
+            Expr::Variable(_, _, _, None, _) => {
                 Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
             }
-            Expr::Variable(name, _, Some(index), var_pos) => {
+            Expr::Variable(name, _, _, Some(index), var_pos) => {
                 match stack[(stack.len() - index.get())].1 {
                     ScopeEntryType::Normal => {
                         Ok(Expr::Assignment(Box::new(lhs), Box::new(rhs), pos))
@@ -1368,7 +1393,8 @@ fn parse_op_assignment_stmt<'a>(
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
     let args = vec![lhs_copy, rhs];
-    let rhs_expr = Expr::FnCall(Box::new(op.into()), None, Box::new(args), None, pos);
+    let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(args.len()));
+    let rhs_expr = Expr::FnCall(Box::new(op.into()), None, hash, Box::new(args), None, pos);
     make_assignment_stmt(stack, lhs, rhs_expr, pos)
 }
 
@@ -1388,12 +1414,12 @@ fn make_dot_expr(
             idx_pos,
         ),
         // lhs.id
-        (lhs, rhs @ Expr::Variable(_, None, _, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
+        (lhs, rhs @ Expr::Variable(_, None, _, _, _)) | (lhs, rhs @ Expr::Property(_, _)) => {
             let lhs = if is_index { lhs.into_property() } else { lhs };
             Expr::Dot(Box::new(lhs), Box::new(rhs.into_property()), op_pos)
         }
         // lhs.module::id - syntax error
-        (_, Expr::Variable(_, Some(modules), _, _)) => {
+        (_, Expr::Variable(_, Some(modules), _, _, _)) => {
             #[cfg(feature = "no_module")]
             unreachable!();
             #[cfg(not(feature = "no_module"))]
@@ -1609,6 +1635,7 @@ fn parse_binary_op<'a>(
             Token::Plus => Expr::FnCall(
                 Box::new("+".into()),
                 None,
+                calc_fn_hash(empty(), "+", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1616,6 +1643,7 @@ fn parse_binary_op<'a>(
             Token::Minus => Expr::FnCall(
                 Box::new("-".into()),
                 None,
+                calc_fn_hash(empty(), "-", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1623,6 +1651,7 @@ fn parse_binary_op<'a>(
             Token::Multiply => Expr::FnCall(
                 Box::new("*".into()),
                 None,
+                calc_fn_hash(empty(), "*", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1630,6 +1659,7 @@ fn parse_binary_op<'a>(
             Token::Divide => Expr::FnCall(
                 Box::new("/".into()),
                 None,
+                calc_fn_hash(empty(), "/", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1638,6 +1668,7 @@ fn parse_binary_op<'a>(
             Token::LeftShift => Expr::FnCall(
                 Box::new("<<".into()),
                 None,
+                calc_fn_hash(empty(), "<<", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1645,6 +1676,7 @@ fn parse_binary_op<'a>(
             Token::RightShift => Expr::FnCall(
                 Box::new(">>".into()),
                 None,
+                calc_fn_hash(empty(), ">>", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1652,6 +1684,7 @@ fn parse_binary_op<'a>(
             Token::Modulo => Expr::FnCall(
                 Box::new("%".into()),
                 None,
+                calc_fn_hash(empty(), "%", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1659,6 +1692,7 @@ fn parse_binary_op<'a>(
             Token::PowerOf => Expr::FnCall(
                 Box::new("~".into()),
                 None,
+                calc_fn_hash(empty(), "~", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1668,6 +1702,7 @@ fn parse_binary_op<'a>(
             Token::EqualsTo => Expr::FnCall(
                 Box::new("==".into()),
                 None,
+                calc_fn_hash(empty(), "==", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
@@ -1675,6 +1710,7 @@ fn parse_binary_op<'a>(
             Token::NotEqualsTo => Expr::FnCall(
                 Box::new("!=".into()),
                 None,
+                calc_fn_hash(empty(), "!=", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
@@ -1682,6 +1718,7 @@ fn parse_binary_op<'a>(
             Token::LessThan => Expr::FnCall(
                 Box::new("<".into()),
                 None,
+                calc_fn_hash(empty(), "<", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
@@ -1689,6 +1726,7 @@ fn parse_binary_op<'a>(
             Token::LessThanEqualsTo => Expr::FnCall(
                 Box::new("<=".into()),
                 None,
+                calc_fn_hash(empty(), "<=", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
@@ -1696,6 +1734,7 @@ fn parse_binary_op<'a>(
             Token::GreaterThan => Expr::FnCall(
                 Box::new(">".into()),
                 None,
+                calc_fn_hash(empty(), ">", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
@@ -1703,6 +1742,7 @@ fn parse_binary_op<'a>(
             Token::GreaterThanEqualsTo => Expr::FnCall(
                 Box::new(">=".into()),
                 None,
+                calc_fn_hash(empty(), ">=", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 cmp_default,
                 pos,
@@ -1713,6 +1753,7 @@ fn parse_binary_op<'a>(
             Token::Ampersand => Expr::FnCall(
                 Box::new("&".into()),
                 None,
+                calc_fn_hash(empty(), "&", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1720,6 +1761,7 @@ fn parse_binary_op<'a>(
             Token::Pipe => Expr::FnCall(
                 Box::new("|".into()),
                 None,
+                calc_fn_hash(empty(), "|", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
@@ -1727,6 +1769,7 @@ fn parse_binary_op<'a>(
             Token::XOr => Expr::FnCall(
                 Box::new("^".into()),
                 None,
+                calc_fn_hash(empty(), "^", repeat(EMPTY_TYPE_ID()).take(2)),
                 Box::new(vec![current_lhs, rhs]),
                 None,
                 pos,
