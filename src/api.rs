@@ -10,6 +10,7 @@ use crate::parser::{parse, parse_global_expr, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{lex, Position};
+use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
@@ -20,7 +21,6 @@ use crate::stdlib::{
     collections::HashMap,
     mem,
     string::{String, ToString},
-    vec::Vec,
 };
 #[cfg(not(feature = "no_std"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
@@ -994,7 +994,7 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let mut args: Vec<_> = arg_values.iter_mut().collect();
+        let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let fn_lib = ast.fn_lib();
         let pos = Position::none();
 
@@ -1004,7 +1004,7 @@ impl Engine {
 
         let state = State::new(fn_lib);
 
-        let result = self.call_script_fn(Some(scope), &state, fn_def, &mut args, pos, 0)?;
+        let result = self.call_script_fn(Some(scope), &state, fn_def, args.as_mut(), pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 

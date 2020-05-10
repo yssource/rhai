@@ -267,6 +267,9 @@ impl DerefMut for Stack {
 }
 
 /// A statement.
+///
+/// Each variant is at most one pointer in size (for speed),
+/// with everything being allocated together in one single tuple.
 #[derive(Debug, Clone)]
 pub enum Stmt {
     /// No-op.
@@ -368,6 +371,9 @@ type MRef = Option<Box<ModuleRef>>;
 type MRef = Option<ModuleRef>;
 
 /// An expression.
+///
+/// Each variant is at most one pointer in size (for speed),
+/// with everything being allocated together in one single tuple.
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// Integer constant.
@@ -718,7 +724,7 @@ fn parse_call_expr<'a>(
             #[cfg(not(feature = "no_module"))]
             let hash_fn_def = {
                 if let Some(modules) = modules.as_mut() {
-                    modules.set_index(stack.find_module(&modules.get(0).0));
+                    modules.set_index(stack.find_module(&modules.get_ref(0).0));
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -758,7 +764,7 @@ fn parse_call_expr<'a>(
                 #[cfg(not(feature = "no_module"))]
                 let hash_fn_def = {
                     if let Some(modules) = modules.as_mut() {
-                        modules.set_index(stack.find_module(&modules.get(0).0));
+                        modules.set_index(stack.find_module(&modules.get_ref(0).0));
 
                         // Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1232,7 +1238,7 @@ fn parse_primary<'a>(
 
             // Qualifiers + variable name
             *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, empty());
-            modules.set_index(stack.find_module(&modules.get(0).0));
+            modules.set_index(stack.find_module(&modules.get_ref(0).0));
         }
         _ => (),
     }
@@ -1440,7 +1446,7 @@ fn make_dot_expr(
             #[cfg(feature = "no_module")]
             unreachable!();
             #[cfg(not(feature = "no_module"))]
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get_ref(0).1));
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x)) => {
