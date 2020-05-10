@@ -890,7 +890,7 @@ impl Engine {
             match rhs {
                 // xxx.fn_name(arg_expr_list)
                 Expr::FnCall(x) if x.1.is_none() => {
-                    let ((name, pos), modules, hash, args, def_val) = x.as_ref();
+                    let ((name, pos), _, hash, _, def_val) = x.as_ref();
 
                     let mut args: Vec<_> = once(obj)
                         .chain(
@@ -1394,7 +1394,7 @@ impl Engine {
                 let mut arg_values = args_expr
                     .iter()
                     .map(|expr| self.eval_expr(scope, state, expr, level))
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<StaticVec<_>, _>>()?;
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 
@@ -1442,7 +1442,7 @@ impl Engine {
                 let mut arg_values = args_expr
                     .iter()
                     .map(|expr| self.eval_expr(scope, state, expr, level))
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<StaticVec<_>, _>>()?;
 
                 let mut args: Vec<_> = arg_values.iter_mut().collect();
 

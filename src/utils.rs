@@ -9,7 +9,7 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
-use crate::stdlib::collections::hash_map::DefaultHasher;
+use crate::stdlib::{collections::hash_map::DefaultHasher, iter::FromIterator};
 
 #[cfg(feature = "no_std")]
 use ahash::AHasher;
@@ -48,7 +48,7 @@ pub fn calc_fn_spec<'a>(
 /// This is essentially a knock-off of the [`staticvec`](https://crates.io/crates/staticvec) crate.
 /// This simplified implementation here is to avoid pulling in another crate.
 #[derive(Clone, Hash, Default)]
-pub struct StaticVec<T: Default + Clone> {
+pub struct StaticVec<T: Default> {
     /// Total number of values held.
     len: usize,
     /// Static storage. 4 slots should be enough for most cases - i.e. four levels of indirection.
@@ -57,7 +57,19 @@ pub struct StaticVec<T: Default + Clone> {
     more: Vec<T>,
 }
 
-impl<T: Default + Clone> StaticVec<T> {
+impl<T: Default> FromIterator<T> for StaticVec<T> {
+    fn from_iter<X: IntoIterator<Item = T>>(iter: X) -> Self {
+        let mut vec = StaticVec::new();
+
+        for x in iter {
+            vec.push(x);
+        }
+
+        vec
+    }
+}
+
+impl<T: Default> StaticVec<T> {
     /// Create a new `StaticVec`.
     pub fn new() -> Self {
         Default::default()
