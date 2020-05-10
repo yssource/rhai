@@ -332,6 +332,12 @@ fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, Box<X>> {
 impl Dynamic {
     /// Create a `Dynamic` from any type.  A `Dynamic` value is simply returned as is.
     ///
+    /// # Safety
+    ///
+    /// This type uses some unsafe code, mainly for type casting.
+    ///
+    /// # Notes
+    ///
     /// Beware that you need to pass in an `Array` type for it to be recognized as an `Array`.
     /// A `Vec<T>` does not get automatically converted to an `Array`, but will be a generic
     /// restricted trait object instead, because `Vec<T>` is not a supported standard type.

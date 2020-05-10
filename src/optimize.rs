@@ -704,40 +704,29 @@ pub fn optimize_into_ast(
     const fn_lib: &[(&str, usize)] = &[];
 
     #[cfg(not(feature = "no_function"))]
-    let lib = FunctionsLib::from_vec(
-        functions
-            .iter()
-            .cloned()
-            .map(|mut fn_def| {
-                if !level.is_none() {
-                    let pos = fn_def.body.position();
+    let lib = FunctionsLib::from_iter(functions.iter().cloned().map(|mut fn_def| {
+        if !level.is_none() {
+            let pos = fn_def.body.position();
 
-                    // Optimize the function body
-                    let mut body =
-                        optimize(vec![fn_def.body], engine, &Scope::new(), &fn_lib, level);
+            // Optimize the function body
+            let mut body = optimize(vec![fn_def.body], engine, &Scope::new(), &fn_lib, level);
 
-                    // {} -> Noop
-                    fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
-                        // { return val; } -> val
-                        Stmt::ReturnWithVal(x)
-                            if x.1.is_some() && (x.0).0 == ReturnType::Return =>
-                        {
-                            Stmt::Expr(Box::new(x.1.unwrap()))
-                        }
-                        // { return; } -> ()
-                        Stmt::ReturnWithVal(x)
-                            if x.1.is_none() && (x.0).0 == ReturnType::Return =>
-                        {
-                            Stmt::Expr(Box::new(Expr::Unit((x.0).1)))
-                        }
-                        // All others
-                        stmt => stmt,
-                    };
+            // {} -> Noop
+            fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                // { return val; } -> val
+                Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
+                    Stmt::Expr(Box::new(x.1.unwrap()))
                 }
-                fn_def
-            })
-            .collect(),
-    );
+                // { return; } -> ()
+                Stmt::ReturnWithVal(x) if x.1.is_none() && (x.0).0 == ReturnType::Return => {
+                    Stmt::Expr(Box::new(Expr::Unit((x.0).1)))
+                }
+                // All others
+                stmt => stmt,
+            };
+        }
+        fn_def
+    }));
 
     #[cfg(feature = "no_function")]
     let lib: FunctionsLib = Default::default();

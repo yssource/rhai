@@ -109,12 +109,12 @@ impl Target<'_> {
                         .as_char()
                         .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
 
-                    let mut chars: Vec<char> = s.chars().collect();
-                    let ch = chars[x.1];
+                    let mut chars: StaticVec<char> = s.chars().collect();
+                    let ch = *chars.get_ref(x.1);
 
                     // See if changed - if so, update the String
                     if ch != new_ch {
-                        chars[x.1] = new_ch;
+                        *chars.get_mut(x.1) = new_ch;
                         s.clear();
                         chars.iter().for_each(|&ch| s.push(ch));
                     }
@@ -194,7 +194,7 @@ pub struct FunctionsLib(HashMap<u64, ScriptedFunction>);
 
 impl FunctionsLib {
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
-    pub fn from_vec(vec: Vec<FnDef>) -> Self {
+    pub fn from_iter(vec: impl IntoIterator<Item = FnDef>) -> Self {
         FunctionsLib(
             vec.into_iter()
                 .map(|fn_def| {
@@ -446,7 +446,7 @@ fn search_scope<'a>(
     #[cfg(not(feature = "no_module"))]
     {
         if let Some((modules, hash)) = modules {
-            let (id, root_pos) = modules.get(0);
+            let (id, root_pos) = modules.get_ref(0);
 
             let module = if let Some(index) = modules.index() {
                 scope
@@ -666,7 +666,7 @@ impl Engine {
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
-    pub(crate) fn call_script_fn(
+    pub(crate) fn call_script_fn<'a>(
         &self,
         scope: Option<&mut Scope>,
         state: &State,
@@ -892,7 +892,7 @@ impl Engine {
                 Expr::FnCall(x) if x.1.is_none() => {
                     let ((name, pos), _, hash, _, def_val) = x.as_ref();
 
-                    let mut args: Vec<_> = once(obj)
+                    let mut args: StaticVec<_> = once(obj)
                         .chain(
                             idx_val
                                 .downcast_mut::<StaticVec<Dynamic>>()
@@ -902,7 +902,7 @@ impl Engine {
                         .collect();
                     // A function call is assumed to have side effects, so the value is changed
                     // TODO - Remove assumption of side effects by checking whether the first parameter is &mut
-                    self.exec_fn_call(state, name, *hash, &mut args, def_val.as_ref(), *pos, 0)
+                    self.exec_fn_call(state, name, *hash, args.as_mut(), def_val.as_ref(), *pos, 0)
                         .map(|v| (v, true))
                 }
                 // xxx.module::fn_name(...) - syntax error
@@ -1396,7 +1396,7 @@ impl Engine {
                     .map(|expr| self.eval_expr(scope, state, expr, level))
                     .collect::<Result<StaticVec<_>, _>>()?;
 
-                let mut args: Vec<_> = arg_values.iter_mut().collect();
+                let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
                 let hash_fn_spec =
                     calc_fn_hash(empty(), KEYWORD_EVAL, once(TypeId::of::<String>()));
@@ -1410,7 +1410,7 @@ impl Engine {
 
                     // Evaluate the text string as a script
                     let result =
-                        self.eval_script_expr(scope, state, args[0], args_expr[0].position());
+                        self.eval_script_expr(scope, state, args.pop(), args_expr[0].position());
 
                     if scope.len() != prev_len {
                         // IMPORTANT! If the eval defines new variables in the current scope,
@@ -1425,7 +1425,7 @@ impl Engine {
                         state,
                         name,
                         *hash_fn_def,
-                        &mut args,
+                        args.as_mut(),
                         def_val.as_ref(),
                         *pos,
                         level,
@@ -1444,9 +1444,9 @@ impl Engine {
                     .map(|expr| self.eval_expr(scope, state, expr, level))
                     .collect::<Result<StaticVec<_>, _>>()?;
 
-                let mut args: Vec<_> = arg_values.iter_mut().collect();
+                let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
-                let (id, root_pos) = modules.get(0); // First module
+                let (id, root_pos) = modules.get_ref(0); // First module
 
                 let module = if let Some(index) = modules.index() {
                     scope
@@ -1462,7 +1462,7 @@ impl Engine {
 
                 // First search in script-defined functions (can override built-in)
                 if let Some(fn_def) = module.get_qualified_scripted_fn(*hash_fn_def) {
-                    self.call_script_fn(None, state, fn_def, &mut args, *pos, level)
+                    self.call_script_fn(None, state, fn_def, args.as_mut(), *pos, level)
                 } else {
                     // Then search in Rust functions
 
@@ -1476,7 +1476,7 @@ impl Engine {
                     let hash = *hash_fn_def ^ hash_fn_args;
 
                     match module.get_qualified_fn(name, hash, *pos) {
-                        Ok(func) => func(&mut args, *pos),
+                        Ok(func) => func(args.as_mut(), *pos),
                         Err(_) if def_val.is_some() => Ok(def_val.clone().unwrap()),
                         Err(err) => Err(err),
                     }
