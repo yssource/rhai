@@ -63,25 +63,6 @@ macro_rules! def_package {
     };
 }
 
-/// Check whether the correct number of arguments is passed to the function.
-fn check_num_args(
-    name: &str,
-    num_args: usize,
-    args: &mut FnCallArgs,
-    pos: Position,
-) -> Result<(), Box<EvalAltResult>> {
-    if args.len() != num_args {
-        Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch(
-            name.to_string(),
-            num_args,
-            args.len(),
-            pos,
-        )))
-    } else {
-        Ok(())
-    }
-}
-
 /// Add a function with no parameters to the package.
 ///
 /// `map_result` is a function that maps the return type of the function to `Result<Dynamic, EvalAltResult>`.
@@ -121,8 +102,6 @@ pub fn reg_none<R>(
     let hash = calc_fn_hash(empty(), fn_name, ([] as [TypeId; 0]).iter().cloned());
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 0, args, pos)?;
-
         let r = func();
         map_result(r, pos)
     });
@@ -171,8 +150,6 @@ pub fn reg_unary<T: Variant + Clone, R>(
     let hash = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 1, args, pos)?;
-
         let mut drain = args.iter_mut();
         let x = mem::take(*drain.next().unwrap()).cast::<T>();
 
@@ -231,8 +208,6 @@ pub fn reg_unary_mut<T: Variant + Clone, R>(
     let hash = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 1, args, pos)?;
-
         let mut drain = args.iter_mut();
         let x: &mut T = drain.next().unwrap().downcast_mut().unwrap();
 
@@ -288,8 +263,6 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
     );
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 2, args, pos)?;
-
         let mut drain = args.iter_mut();
         let x = mem::take(*drain.next().unwrap()).cast::<A>();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();
@@ -353,8 +326,6 @@ pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
     );
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 2, args, pos)?;
-
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();
@@ -394,8 +365,6 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
     );
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 3, args, pos)?;
-
         let mut drain = args.iter_mut();
         let x = mem::take(*drain.next().unwrap()).cast::<A>();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();
@@ -436,8 +405,6 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
     );
 
     let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
-        check_num_args(fn_name, 3, args, pos)?;
-
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();

@@ -131,12 +131,6 @@ pub fn by_value<T: Clone + 'static>(data: &mut Dynamic) -> T {
     mem::take(data).cast::<T>()
 }
 
-/// This macro counts the number of arguments via recursion.
-macro_rules! count_args {
-    () => { 0_usize };
-    ( $head:ident $($tail:ident)* ) => { 1_usize + count_args!($($tail)*) };
-}
-
 /// This macro creates a closure wrapping a registered function.
 macro_rules! make_func {
 	($fn_name:ident : $fn:ident : $map:expr ; $($par:ident => $convert:expr),*) => {
@@ -147,12 +141,7 @@ macro_rules! make_func {
 //                                                            ^ dereferencing function
 
 		move |args: &mut FnCallArgs, pos: Position| {
-			// Check for length at the beginning to avoid per-element bound checks.
-			const NUM_ARGS: usize = count_args!($($par)*);
-
-			if args.len() != NUM_ARGS {
-				return Err(Box::new(EvalAltResult::ErrorFunctionArgsMismatch($fn_name.clone(), NUM_ARGS, args.len(), pos)));
-			}
+            // The arguments are assumed to be of the correct number and types!
 
 			#[allow(unused_variables, unused_mut)]
 			let mut drain = args.iter_mut();

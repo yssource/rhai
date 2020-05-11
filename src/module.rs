@@ -300,7 +300,7 @@ impl Module {
     ) -> u64 {
         let f = move |_: &mut FnCallArgs, pos| {
             func()
-                .map(|v| v.into())
+                .map(Into::<Dynamic>::into)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![];
@@ -328,7 +328,7 @@ impl Module {
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             func(mem::take(args[0]).cast::<A>())
-                .map(|v| v.into())
+                .map(Into::<Dynamic>::into)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>()];
@@ -356,7 +356,7 @@ impl Module {
     ) -> u64 {
         let f = move |args: &mut FnCallArgs, pos| {
             func(args[0].downcast_mut::<A>().unwrap())
-                .map(|v| v.into())
+                .map(Into::<Dynamic>::into)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>()];
@@ -389,7 +389,7 @@ impl Module {
             let b = mem::take(args[1]).cast::<B>();
 
             func(a, b)
-                .map(|v| v.into())
+                .map(Into::<Dynamic>::into)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>()];
@@ -426,7 +426,7 @@ impl Module {
             let a = args[0].downcast_mut::<A>().unwrap();
 
             func(a, b)
-                .map(|v| v.into())
+                .map(Into::<Dynamic>::into)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>()];
@@ -466,7 +466,7 @@ impl Module {
             let c = mem::take(args[2]).cast::<C>();
 
             func(a, b, c)
-                .map(|v| v.into())
+                .map(Into::<Dynamic>::into)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
@@ -507,7 +507,7 @@ impl Module {
             let a = args[0].downcast_mut::<A>().unwrap();
 
             func(a, b, c)
-                .map(|v| v.into())
+                .map(Into::<Dynamic>::into)
                 .map_err(|err| EvalAltResult::set_position(err, pos))
         };
         let arg_types = vec![TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
@@ -639,7 +639,7 @@ impl Module {
             // Index all variables
             for (var_name, value) in module.variables.iter() {
                 // Qualifiers + variable name
-                let hash = calc_fn_hash(qualifiers.iter().map(|v| *v), var_name, empty());
+                let hash = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
                 variables.push((hash, value.clone()));
             }
             // Index all Rust functions
@@ -653,7 +653,7 @@ impl Module {
                 // 1) Calculate a hash in a similar manner to script-defined functions,
                 //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
                 let hash_fn_def = calc_fn_hash(
-                    qualifiers.iter().map(|v| *v),
+                    qualifiers.iter().map(|&v| v),
                     fn_name,
                     repeat(EMPTY_TYPE_ID()).take(params.len()),
                 );
@@ -674,7 +674,7 @@ impl Module {
                 }
                 // Qualifiers + function name + placeholders (one for each parameter)
                 let hash = calc_fn_hash(
-                    qualifiers.iter().map(|v| *v),
+                    qualifiers.iter().map(|&v| v),
                     &fn_def.name,
                     repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
                 );
