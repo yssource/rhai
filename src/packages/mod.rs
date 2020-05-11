@@ -1,6 +1,6 @@
 //! This module contains all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-use crate::engine::{FnAny, IteratorFn};
+use crate::fn_native::{IteratorFn, NativeCallable};
 
 use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
 
@@ -48,7 +48,7 @@ pub trait Package {
 /// Type to store all functions in the package.
 pub struct PackageStore {
     /// All functions, keyed by a hash created from the function name and parameter types.
-    pub functions: HashMap<u64, Box<FnAny>>,
+    pub functions: HashMap<u64, Box<dyn NativeCallable>>,
 
     /// All iterator functions, keyed by the type producing the iterator.
     pub type_iterators: HashMap<TypeId, Box<IteratorFn>>,
@@ -64,7 +64,7 @@ impl PackageStore {
         self.functions.contains_key(&hash)
     }
     /// Get specified function via its hash key.
-    pub fn get_function(&self, hash: u64) -> Option<&Box<FnAny>> {
+    pub fn get_function(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
         self.functions.get(&hash)
     }
     /// Does the specified TypeId iterator exist in the `PackageStore`?
@@ -113,7 +113,7 @@ impl PackagesCollection {
         self.packages.iter().any(|p| p.contains_function(hash))
     }
     /// Get specified function via its hash key.
-    pub fn get_function(&self, hash: u64) -> Option<&Box<FnAny>> {
+    pub fn get_function(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
         self.packages
             .iter()
             .map(|p| p.get_function(hash))

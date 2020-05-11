@@ -1,9 +1,9 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, FnAny, FnCallArgs, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    Engine, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
+use crate::fn_native::FnCallArgs;
 use crate::packages::{PackageStore, PackagesCollection};
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
@@ -123,7 +123,7 @@ fn call_fn(
     base_package
         .get_function(hash)
         .or_else(|| packages.get_function(hash))
-        .map(|func| func(args, pos))
+        .map(|func| func.call(args, pos))
         .transpose()
 }
 

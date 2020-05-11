@@ -3,11 +3,12 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
+use crate::fn_native::{FnCallArgs, NativeFunction, SharedNativeFunction};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{
     CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
 };
-use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST};
+use crate::parser::{Expr, FnAccess, FnDef, ReturnType, SharedFnDef, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -45,19 +46,6 @@ pub type Array = Vec<Dynamic>;
 /// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<String, Dynamic>;
-
-pub type FnCallArgs<'a> = [&'a mut Dynamic];
-
-#[cfg(feature = "sync")]
-pub type FnAny =
-    dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
-#[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>>;
-
-#[cfg(feature = "sync")]
-pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
-#[cfg(not(feature = "sync"))]
-pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 #[cfg(debug_assertions)]
 pub const MAX_CALL_STACK_DEPTH: usize = 28;
@@ -168,20 +156,6 @@ impl<'a> State<'a> {
     }
 }
 
-/// An external native Rust function.
-#[cfg(not(feature = "sync"))]
-pub type NativeFunction = Rc<Box<FnAny>>;
-/// An external native Rust function.
-#[cfg(feature = "sync")]
-pub type NativeFunction = Arc<Box<FnAny>>;
-
-/// A sharable script-defined function.
-#[cfg(feature = "sync")]
-pub type ScriptedFunction = Arc<FnDef>;
-/// A sharable script-defined function.
-#[cfg(not(feature = "sync"))]
-pub type ScriptedFunction = Rc<FnDef>;
-
 /// A type that holds a library (`HashMap`) of script-defined functions.
 ///
 /// Since script-defined functions have `Dynamic` parameters, functions with the same name
@@ -190,7 +164,7 @@ pub type ScriptedFunction = Rc<FnDef>;
 /// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_hash`
 /// with dummy parameter types `EMPTY_TYPE_ID()` repeated the correct number of times.
 #[derive(Debug, Clone, Default)]
-pub struct FunctionsLib(HashMap<u64, ScriptedFunction>);
+pub struct FunctionsLib(HashMap<u64, SharedFnDef>);
 
 impl FunctionsLib {
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
@@ -261,8 +235,8 @@ impl FunctionsLib {
     }
 }
 
-impl From<Vec<(u64, ScriptedFunction)>> for FunctionsLib {
-    fn from(values: Vec<(u64, ScriptedFunction)>) -> Self {
+impl From<Vec<(u64, SharedFnDef)>> for FunctionsLib {
+    fn from(values: Vec<(u64, SharedFnDef)>) -> Self {
         FunctionsLib(values.into_iter().collect())
     }
 }
@@ -596,7 +570,7 @@ impl Engine {
             .or_else(|| self.packages.get_function(hash_fn_spec))
         {
             // Run external function
-            let result = func(args, pos)?;
+            let result = func.call(args, pos)?;
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
@@ -1476,7 +1450,7 @@ impl Engine {
                     let hash = *hash_fn_def ^ hash_fn_args;
 
                     match module.get_qualified_fn(name, hash, *pos) {
-                        Ok(func) => func(args.as_mut(), *pos),
+                        Ok(func) => func.call(args.as_mut(), *pos),
                         Err(_) if def_val.is_some() => Ok(def_val.clone().unwrap()),
                         Err(err) => Err(err),
                     }

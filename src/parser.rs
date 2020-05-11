@@ -202,6 +202,13 @@ pub struct FnDef {
     pub pos: Position,
 }
 
+/// A sharable script-defined function.
+#[cfg(feature = "sync")]
+pub type SharedFnDef = Arc<FnDef>;
+/// A sharable script-defined function.
+#[cfg(not(feature = "sync"))]
+pub type SharedFnDef = Rc<FnDef>;
+
 /// `return`/`throw` statement.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ReturnType {

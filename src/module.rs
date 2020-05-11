@@ -3,8 +3,9 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib, NativeFunction, ScriptedFunction};
-use crate::parser::{FnAccess, FnDef, AST};
+use crate::engine::{Engine, FunctionsLib};
+use crate::fn_native::{FnAny, FnCallArgs, NativeCallable, NativeFunction, SharedNativeFunction};
+use crate::parser::{FnAccess, FnDef, SharedFnDef, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token};
@@ -57,10 +58,10 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic>,
 
     /// External Rust functions.
-    functions: HashMap<u64, (String, FnAccess, Vec<TypeId>, NativeFunction)>,
+    functions: HashMap<u64, (String, FnAccess, Vec<TypeId>, SharedNativeFunction)>,
 
     /// Flattened collection of all external Rust functions, including those in sub-modules.
-    all_functions: HashMap<u64, NativeFunction>,
+    all_functions: HashMap<u64, SharedNativeFunction>,
 
     /// Script-defined functions.
     fn_lib: FunctionsLib,
@@ -269,12 +270,14 @@ impl Module {
     ) -> u64 {
         let hash = calc_fn_hash(empty(), &fn_name, params.iter().cloned());
 
+        let f = Box::new(NativeFunction::from(func)) as Box<dyn NativeCallable>;
+
         #[cfg(not(feature = "sync"))]
-        self.functions
-            .insert(hash, (fn_name, access, params, Rc::new(func)));
+        let func = Rc::new(f);
         #[cfg(feature = "sync")]
-        self.functions
-            .insert(hash, (fn_name, access, params, Arc::new(func)));
+        let func = Arc::new(f);
+
+        self.functions.insert(hash, (fn_name, access, params, func));
 
         hash
     }
@@ -528,7 +531,7 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn get_fn(&self, hash: u64) -> Option<&Box<FnAny>> {
+    pub fn get_fn(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
         self.functions.get(&hash).map(|(_, _, _, v)| v.as_ref())
     }
 
@@ -541,7 +544,7 @@ impl Module {
         name: &str,
         hash: u64,
         pos: Position,
-    ) -> Result<&Box<FnAny>, Box<EvalAltResult>> {
+    ) -> Result<&Box<dyn NativeCallable>, Box<EvalAltResult>> {
         self.all_functions
             .get(&hash)
             .map(|f| f.as_ref())
@@ -626,8 +629,8 @@ impl Module {
             module: &'a mut Module,
             qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
-            functions: &mut Vec<(u64, NativeFunction)>,
-            fn_lib: &mut Vec<(u64, ScriptedFunction)>,
+            functions: &mut Vec<(u64, SharedNativeFunction)>,
+            fn_lib: &mut Vec<(u64, SharedFnDef)>,
         ) {
             for (name, m) in module.modules.iter_mut() {
                 // Index all the sub-modules first.
