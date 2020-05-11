@@ -99,15 +99,15 @@ pub fn reg_none<R>(
         + Sync
         + 'static,
 ) {
-    let hash = calc_fn_hash(empty(), fn_name, ([] as [TypeId; 0]).iter().cloned());
+    let hash_fn_native = calc_fn_hash(empty(), fn_name, ([] as [TypeId; 0]).iter().cloned());
 
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
+    let f = Box::new(move |_: &mut FnCallArgs, pos| {
         let r = func();
         map_result(r, pos)
     });
 
     lib.functions
-        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
+        .insert(hash_fn_native, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with one parameter to the package.
@@ -148,9 +148,9 @@ pub fn reg_unary<T: Variant + Clone, R>(
 ) {
     //println!("register {}({})", fn_name, crate::std::any::type_name::<T>());
 
-    let hash = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
+    let hash_fn_native = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
 
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
+    let f = Box::new(move |args: &mut FnCallArgs, pos| {
         let mut drain = args.iter_mut();
         let x = mem::take(*drain.next().unwrap()).cast::<T>();
 
@@ -159,7 +159,7 @@ pub fn reg_unary<T: Variant + Clone, R>(
     });
 
     lib.functions
-        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
+        .insert(hash_fn_native, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with one mutable reference parameter to the package.
@@ -207,9 +207,9 @@ pub fn reg_unary_mut<T: Variant + Clone, R>(
 ) {
     //println!("register {}(&mut {})", fn_name, crate::std::any::type_name::<T>());
 
-    let hash = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
+    let hash_fn_native = calc_fn_hash(empty(), fn_name, [TypeId::of::<T>()].iter().cloned());
 
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
+    let f = Box::new(move |args: &mut FnCallArgs, pos| {
         let mut drain = args.iter_mut();
         let x: &mut T = drain.next().unwrap().downcast_mut().unwrap();
 
@@ -218,7 +218,7 @@ pub fn reg_unary_mut<T: Variant + Clone, R>(
     });
 
     lib.functions
-        .insert(hash, Box::new(NativeFunction::new(f, Method)));
+        .insert(hash_fn_native, Box::new(NativeFunction::new(f, Method)));
 }
 
 /// Add a function with two parameters to the package.
@@ -259,13 +259,13 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
 ) {
     //println!("register {}({}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>());
 
-    let hash = calc_fn_hash(
+    let hash_fn_native = calc_fn_hash(
         empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>()].iter().cloned(),
     );
 
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
+    let f = Box::new(move |args: &mut FnCallArgs, pos| {
         let mut drain = args.iter_mut();
         let x = mem::take(*drain.next().unwrap()).cast::<A>();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();
@@ -275,7 +275,7 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
     });
 
     lib.functions
-        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
+        .insert(hash_fn_native, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with two parameters (the first one being a mutable reference) to the package.
@@ -323,13 +323,13 @@ pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
 ) {
     //println!("register {}(&mut {}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>());
 
-    let hash = calc_fn_hash(
+    let hash_fn_native = calc_fn_hash(
         empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>()].iter().cloned(),
     );
 
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
+    let f = Box::new(move |args: &mut FnCallArgs, pos| {
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();
@@ -339,7 +339,7 @@ pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
     });
 
     lib.functions
-        .insert(hash, Box::new(NativeFunction::new(f, Method)));
+        .insert(hash_fn_native, Box::new(NativeFunction::new(f, Method)));
 }
 
 /// Add a function with three parameters to the package.
@@ -361,7 +361,7 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
 ) {
     //println!("register {}({}, {}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>(), crate::std::any::type_name::<C>());
 
-    let hash = calc_fn_hash(
+    let hash_fn_native = calc_fn_hash(
         empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
@@ -369,7 +369,7 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
             .cloned(),
     );
 
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
+    let f = Box::new(move |args: &mut FnCallArgs, pos| {
         let mut drain = args.iter_mut();
         let x = mem::take(*drain.next().unwrap()).cast::<A>();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();
@@ -380,7 +380,7 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
     });
 
     lib.functions
-        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
+        .insert(hash_fn_native, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with three parameters (the first one is a mutable reference) to the package.
@@ -402,7 +402,7 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
 ) {
     //println!("register {}(&mut {}, {}, {})", fn_name, crate::std::any::type_name::<A>(), crate::std::any::type_name::<B>(), crate::std::any::type_name::<C>());
 
-    let hash = calc_fn_hash(
+    let hash_fn_native = calc_fn_hash(
         empty(),
         fn_name,
         [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()]
@@ -410,7 +410,7 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
             .cloned(),
     );
 
-    let f = Box::new(move |args: &mut FnCallArgs, pos: Position| {
+    let f = Box::new(move |args: &mut FnCallArgs, pos| {
         let mut drain = args.iter_mut();
         let x: &mut A = drain.next().unwrap().downcast_mut().unwrap();
         let y = mem::take(*drain.next().unwrap()).cast::<B>();
@@ -421,5 +421,5 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
     });
 
     lib.functions
-        .insert(hash, Box::new(NativeFunction::new(f, Method)));
+        .insert(hash_fn_native, Box::new(NativeFunction::new(f, Method)));
 }

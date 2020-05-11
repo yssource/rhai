@@ -172,11 +172,11 @@ impl Module {
     pub(crate) fn get_qualified_var_mut(
         &mut self,
         name: &str,
-        hash: u64,
+        hash_var: u64,
         pos: Position,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
         self.all_variables
-            .get_mut(&hash)
+            .get_mut(&hash_var)
             .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.to_string(), pos)))
     }
 
@@ -260,8 +260,8 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
     /// ```
-    pub fn contains_fn(&self, hash: u64) -> bool {
-        self.functions.contains_key(&hash)
+    pub fn contains_fn(&self, hash_fn: u64) -> bool {
+        self.functions.contains_key(&hash_fn)
     }
 
     /// Set a Rust function into the module, returning a hash key.
@@ -275,7 +275,7 @@ impl Module {
         params: Vec<TypeId>,
         func: Box<FnAny>,
     ) -> u64 {
-        let hash = calc_fn_hash(empty(), &name, params.iter().cloned());
+        let hash_fn = calc_fn_hash(empty(), &name, params.iter().cloned());
 
         let f = Box::new(NativeFunction::from((func, abi))) as Box<dyn NativeCallable>;
 
@@ -284,9 +284,9 @@ impl Module {
         #[cfg(feature = "sync")]
         let func = Arc::new(f);
 
-        self.functions.insert(hash, (name, access, params, func));
+        self.functions.insert(hash_fn, (name, access, params, func));
 
-        hash
+        hash_fn
     }
 
     /// Set a Rust function taking no parameters into the module, returning a hash key.
@@ -538,8 +538,8 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn get_fn(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
-        self.functions.get(&hash).map(|(_, _, _, v)| v.as_ref())
+    pub fn get_fn(&self, hash_fn: u64) -> Option<&Box<dyn NativeCallable>> {
+        self.functions.get(&hash_fn).map(|(_, _, _, v)| v.as_ref())
     }
 
     /// Get a modules-qualified function.
@@ -549,11 +549,11 @@ impl Module {
     pub(crate) fn get_qualified_fn(
         &mut self,
         name: &str,
-        hash: u64,
+        hash_fn_native: u64,
         pos: Position,
     ) -> Result<&Box<dyn NativeCallable>, Box<EvalAltResult>> {
         self.all_functions
-            .get(&hash)
+            .get(&hash_fn_native)
             .map(|f| f.as_ref())
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))
     }
@@ -575,8 +575,8 @@ impl Module {
     /// Get a modules-qualified script-defined functions.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
-    pub(crate) fn get_qualified_scripted_fn(&mut self, hash: u64) -> Option<&FnDef> {
-        self.all_fn_lib.get_function(hash)
+    pub(crate) fn get_qualified_scripted_fn(&mut self, hash_fn_def: u64) -> Option<&FnDef> {
+        self.all_fn_lib.get_function(hash_fn_def)
     }
 
     /// Create a new `Module` by evaluating an `AST`.
@@ -649,8 +649,8 @@ impl Module {
             // Index all variables
             for (var_name, value) in module.variables.iter() {
                 // Qualifiers + variable name
-                let hash = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
-                variables.push((hash, value.clone()));
+                let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
+                variables.push((hash_var, value.clone()));
             }
             // Index all Rust functions
             for (name, access, params, func) in module.functions.values() {
@@ -671,9 +671,9 @@ impl Module {
                 //    the actual list of parameter `TypeId`'.s
                 let hash_fn_args = calc_fn_hash(empty(), "", params.iter().cloned());
                 // 3) The final hash is the XOR of the two hashes.
-                let hash = hash_fn_def ^ hash_fn_args;
+                let hash_fn_native = hash_fn_def ^ hash_fn_args;
 
-                functions.push((hash, func.clone()));
+                functions.push((hash_fn_native, func.clone()));
             }
             // Index all script-defined functions
             for fn_def in module.fn_lib.values() {
@@ -683,12 +683,12 @@ impl Module {
                     DEF_ACCESS => (),
                 }
                 // Qualifiers + function name + placeholders (one for each parameter)
-                let hash = calc_fn_hash(
+                let hash_fn_def = calc_fn_hash(
                     qualifiers.iter().map(|&v| v),
                     &fn_def.name,
                     repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
                 );
-                fn_lib.push((hash, fn_def.clone()));
+                fn_lib.push((hash_fn_def, fn_def.clone()));
             }
         }
 
@@ -984,7 +984,7 @@ mod stat {
             self.0
                 .get(path)
                 .cloned()
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos)))
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(path.into(), pos)))
         }
     }
 }

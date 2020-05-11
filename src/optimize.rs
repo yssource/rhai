@@ -95,7 +95,7 @@ impl<'a> State<'a> {
     }
     /// Add a new constant to the list.
     pub fn push_constant(&mut self, name: &str, value: Expr) {
-        self.constants.push((name.to_string(), value))
+        self.constants.push((name.into(), value))
     }
     /// Look up a constant from the list.
     pub fn find_constant(&self, name: &str) -> Option<&Expr> {

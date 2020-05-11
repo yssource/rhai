@@ -858,7 +858,7 @@ impl Engine {
 
         return result.try_cast::<T>().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.to_string(),
+                return_type.into(),
                 Position::none(),
             ))
         });
@@ -1000,7 +1000,7 @@ impl Engine {
 
         let fn_def = fn_lib
             .get_function_by_signature(name, args.len(), true)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))?;
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
 
         let state = State::new(fn_lib);
 

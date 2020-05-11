@@ -989,12 +989,11 @@ fn parse_index_chain<'a>(
             match input.peek().unwrap() {
                 // If another indexing level, right-bind it
                 (Token::LeftBracket, _) => {
-                    let follow_pos = eat_token(input, Token::LeftBracket);
+                    let idx_pos = eat_token(input, Token::LeftBracket);
                     // Recursively parse the indexing chain, right-binding each
-                    let follow =
-                        parse_index_chain(input, stack, idx_expr, follow_pos, allow_stmt_expr)?;
+                    let idx = parse_index_chain(input, stack, idx_expr, idx_pos, allow_stmt_expr)?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new((lhs, follow, pos))))
+                    Ok(Expr::Index(Box::new((lhs, idx, pos))))
                 }
                 // Otherwise terminate the indexing chain
                 _ => Ok(Expr::Index(Box::new((lhs, idx_expr, pos)))),
