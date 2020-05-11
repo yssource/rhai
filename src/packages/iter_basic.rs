@@ -18,7 +18,7 @@ where
 {
     lib.type_iterators.insert(
         TypeId::of::<Range<T>>(),
-        Box::new(|source: Dynamic| {
+        Box::new(|source| {
             Box::new(source.cast::<Range<T>>().map(|x| x.into_dynamic()))
                 as Box<dyn Iterator<Item = Dynamic>>
         }),
@@ -58,7 +58,7 @@ where
 {
     lib.type_iterators.insert(
         TypeId::of::<StepRange<T>>(),
-        Box::new(|source: Dynamic| {
+        Box::new(|source| {
             Box::new(source.cast::<StepRange<T>>().map(|x| x.into_dynamic()))
                 as Box<dyn Iterator<Item = Dynamic>>
         }),

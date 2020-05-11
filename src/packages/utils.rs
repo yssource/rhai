@@ -2,7 +2,7 @@ use super::PackageStore;
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::fn_native::{FnCallArgs, NativeFunction};
+use crate::fn_native::{FnCallArgs, NativeFunction, NativeFunctionABI::*};
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
@@ -106,7 +106,8 @@ pub fn reg_none<R>(
         map_result(r, pos)
     });
 
-    lib.functions.insert(hash, Box::new(NativeFunction::new(f)));
+    lib.functions
+        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with one parameter to the package.
@@ -157,7 +158,8 @@ pub fn reg_unary<T: Variant + Clone, R>(
         map_result(r, pos)
     });
 
-    lib.functions.insert(hash, Box::new(NativeFunction::new(f)));
+    lib.functions
+        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with one mutable reference parameter to the package.
@@ -215,7 +217,8 @@ pub fn reg_unary_mut<T: Variant + Clone, R>(
         map_result(r, pos)
     });
 
-    lib.functions.insert(hash, Box::new(NativeFunction::new(f)));
+    lib.functions
+        .insert(hash, Box::new(NativeFunction::new(f, Method)));
 }
 
 /// Add a function with two parameters to the package.
@@ -271,7 +274,8 @@ pub fn reg_binary<A: Variant + Clone, B: Variant + Clone, R>(
         map_result(r, pos)
     });
 
-    lib.functions.insert(hash, Box::new(NativeFunction::new(f)));
+    lib.functions
+        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with two parameters (the first one being a mutable reference) to the package.
@@ -334,7 +338,8 @@ pub fn reg_binary_mut<A: Variant + Clone, B: Variant + Clone, R>(
         map_result(r, pos)
     });
 
-    lib.functions.insert(hash, Box::new(NativeFunction::new(f)));
+    lib.functions
+        .insert(hash, Box::new(NativeFunction::new(f, Method)));
 }
 
 /// Add a function with three parameters to the package.
@@ -374,7 +379,8 @@ pub fn reg_trinary<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone, R
         map_result(r, pos)
     });
 
-    lib.functions.insert(hash, Box::new(NativeFunction::new(f)));
+    lib.functions
+        .insert(hash, Box::new(NativeFunction::new(f, Pure)));
 }
 
 /// Add a function with three parameters (the first one is a mutable reference) to the package.
@@ -414,5 +420,6 @@ pub fn reg_trinary_mut<A: Variant + Clone, B: Variant + Clone, C: Variant + Clon
         map_result(r, pos)
     });
 
-    lib.functions.insert(hash, Box::new(NativeFunction::new(f)));
+    lib.functions
+        .insert(hash, Box::new(NativeFunction::new(f, Method)));
 }
