@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{FnCallArgs, NativeFunctionABI};
+use crate::fn_native::{FnCallArgs, NativeFunctionABI, PrintCallback};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{
     CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
@@ -293,18 +293,9 @@ pub struct Engine {
     pub(crate) type_names: HashMap<String, String>,
 
     /// Closure for implementing the `print` command.
-    #[cfg(feature = "sync")]
-    pub(crate) print: Box<dyn Fn(&str) + Send + Sync + 'static>,
-    /// Closure for implementing the `print` command.
-    #[cfg(not(feature = "sync"))]
-    pub(crate) print: Box<dyn Fn(&str) + 'static>,
-
+    pub(crate) print: Box<PrintCallback>,
     /// Closure for implementing the `debug` command.
-    #[cfg(feature = "sync")]
-    pub(crate) debug: Box<dyn Fn(&str) + Send + Sync + 'static>,
-    /// Closure for implementing the `debug` command.
-    #[cfg(not(feature = "sync"))]
-    pub(crate) debug: Box<dyn Fn(&str) + 'static>,
+    pub(crate) debug: Box<PrintCallback>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,

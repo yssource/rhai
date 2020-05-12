@@ -31,7 +31,21 @@ use crate::stdlib::{
 };
 
 /// A trait that encapsulates a module resolution service.
+#[cfg(not(feature = "sync"))]
 pub trait ModuleResolver {
+    /// Resolve a module based on a path string.
+    fn resolve(
+        &self,
+        engine: &Engine,
+        scope: Scope,
+        path: &str,
+        pos: Position,
+    ) -> Result<Module, Box<EvalAltResult>>;
+}
+
+/// A trait that encapsulates a module resolution service.
+#[cfg(feature = "sync")]
+pub trait ModuleResolver: Send + Sync {
     /// Resolve a module based on a path string.
     fn resolve(
         &self,

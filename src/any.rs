@@ -93,7 +93,7 @@ pub trait Variant: Any + Send + Sync {
     fn as_mut_any(&mut self) -> &mut dyn Any;
 
     /// Convert this `Variant` trait object to an `Any` trait object.
-    fn as_box_any(self) -> Box<dyn Any>;
+    fn as_box_any(self: Box<Self>) -> Box<dyn Any>;
 
     /// Get the name of this type.
     fn type_name(&self) -> &'static str;

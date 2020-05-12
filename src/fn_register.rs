@@ -119,14 +119,14 @@ pub struct Mut<T>(T);
 
 /// Dereference into &mut.
 #[inline(always)]
-pub fn by_ref<T: Clone + 'static>(data: &mut Dynamic) -> &mut T {
+pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> &mut T {
     // Directly cast the &mut Dynamic into &mut T to access the underlying data.
     data.downcast_mut::<T>().unwrap()
 }
 
 /// Dereference into value.
 #[inline(always)]
-pub fn by_value<T: Clone + 'static>(data: &mut Dynamic) -> T {
+pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     // We consume the argument and then replace it with () - the argument is not supposed to be used again.
     // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
     mem::take(data).cast::<T>()

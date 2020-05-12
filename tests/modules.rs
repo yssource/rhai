@@ -83,6 +83,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_function"))]
 fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
@@ -100,7 +101,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
             x + 1
         }
         fn add_len(x, y) {
-            x + y.len()
+            x + len(y)
         }
         private fn hidden() {
             throw "you shouldn't see me!";

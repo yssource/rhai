@@ -17,6 +17,58 @@ pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Sen
 #[cfg(not(feature = "sync"))]
 pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
+#[cfg(feature = "sync")]
+pub type PrintCallback = dyn Fn(&str) + Send + Sync + 'static;
+#[cfg(not(feature = "sync"))]
+pub type PrintCallback = dyn Fn(&str) + 'static;
+
+// Define callback function types
+#[cfg(feature = "sync")]
+pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + Send + Sync + 'static {}
+#[cfg(feature = "sync")]
+impl<F: Fn(&mut T) -> U + Send + Sync + 'static, T, U> ObjectGetCallback<T, U> for F {}
+
+#[cfg(not(feature = "sync"))]
+pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(&mut T) -> U + 'static, T, U> ObjectGetCallback<T, U> for F {}
+
+#[cfg(feature = "sync")]
+pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + Send + Sync + 'static {}
+#[cfg(feature = "sync")]
+impl<F: Fn(&mut T, U) + Send + Sync + 'static, T, U> ObjectSetCallback<T, U> for F {}
+
+#[cfg(not(feature = "sync"))]
+pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
+
+#[cfg(feature = "sync")]
+pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + Send + Sync + 'static {}
+#[cfg(feature = "sync")]
+impl<F: Fn(&mut T, X) -> U + Send + Sync + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
+
+#[cfg(not(feature = "sync"))]
+pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(&mut T, X) -> U + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
+
+#[cfg(feature = "sync")]
+pub trait IteratorCallback:
+    Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
+{
+}
+#[cfg(feature = "sync")]
+impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
+    for F
+{
+}
+
+#[cfg(not(feature = "sync"))]
+pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
+#[cfg(not(feature = "sync"))]
+impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
+
 /// A type representing the type of ABI of a native Rust function.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum NativeFunctionABI {
@@ -28,7 +80,17 @@ pub enum NativeFunctionABI {
 }
 
 /// A trait implemented by all native Rust functions that are callable by Rhai.
+#[cfg(not(feature = "sync"))]
 pub trait NativeCallable {
+    /// Get the ABI type of a native Rust function.
+    fn abi(&self) -> NativeFunctionABI;
+    /// Call a native Rust function.
+    fn call(&self, args: &mut FnCallArgs, pos: Position) -> Result<Dynamic, Box<EvalAltResult>>;
+}
+
+/// A trait implemented by all native Rust functions that are callable by Rhai.
+#[cfg(feature = "sync")]
+pub trait NativeCallable: Send + Sync {
     /// Get the ABI type of a native Rust function.
     fn abi(&self) -> NativeFunctionABI;
     /// Call a native Rust function.

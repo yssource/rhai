@@ -4,6 +4,9 @@ use crate::any::{Dynamic, Variant};
 use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
+use crate::fn_native::{
+    IteratorCallback, ObjectGetCallback, ObjectIndexerCallback, ObjectSetCallback,
+};
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::{parse, parse_global_expr, AST};
@@ -22,55 +25,9 @@ use crate::stdlib::{
     mem,
     string::{String, ToString},
 };
+
 #[cfg(not(feature = "no_std"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
-
-// Define callback function types
-#[cfg(feature = "sync")]
-pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T) -> U + Send + Sync + 'static, T, U> ObjectGetCallback<T, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T) -> U + 'static, T, U> ObjectGetCallback<T, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T, U) + Send + Sync + 'static, T, U> ObjectSetCallback<T, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T, X) -> U + Send + Sync + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T, X) -> U + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait IteratorCallback:
-    Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
-{
-}
-#[cfg(feature = "sync")]
-impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
-    for F
-{
-}
-
-#[cfg(not(feature = "sync"))]
-pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
 
 /// Engine public API
 impl Engine {
