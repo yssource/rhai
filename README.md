@@ -1328,7 +1328,7 @@ The following standard methods (defined in the [`MoreStringPackage`](#packages) 
 | `index_of`   | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
 | `sub_string` | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
 | `crop`       | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`    | target sub-string, replacement string                        | replaces a sub-string with another                                                                |
+| `replace`    | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
 | `trim`       | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples

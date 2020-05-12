@@ -226,6 +226,36 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
         },
         map,
     );
+    reg_trinary_mut(
+        lib,
+        "replace",
+        |s: &mut String, find: String, sub: char| {
+            let new_str = s.replace(&find, &sub.to_string());
+            s.clear();
+            s.push_str(&new_str);
+        },
+        map,
+    );
+    reg_trinary_mut(
+        lib,
+        "replace",
+        |s: &mut String, find: char, sub: String| {
+            let new_str = s.replace(&find.to_string(), &sub);
+            s.clear();
+            s.push_str(&new_str);
+        },
+        map,
+    );
+    reg_trinary_mut(
+        lib,
+        "replace",
+        |s: &mut String, find: char, sub: char| {
+            let new_str = s.replace(&find.to_string(), &sub.to_string());
+            s.clear();
+            s.push_str(&new_str);
+        },
+        map,
+    );
     reg_unary_mut(
         lib,
         "trim",
