@@ -757,7 +757,7 @@ mod file {
     /// let mut engine = Engine::new();
     /// engine.set_module_resolver(Some(resolver));
     /// ```
-    #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Hash)]
     pub struct FileModuleResolver {
         path: PathBuf,
         extension: String,
@@ -875,7 +875,7 @@ mod file {
 ///
 /// A `StaticVec` is used because most module-level access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
-#[derive(Clone, Hash, Default)]
+#[derive(Clone, Eq, PartialEq, Hash, Default)]
 pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
 
 impl fmt::Debug for ModuleRef {

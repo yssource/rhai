@@ -70,7 +70,7 @@ pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + '
 impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
 
 /// A type representing the type of ABI of a native Rust function.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 pub enum NativeFunctionABI {
     /// A pure function where all arguments are passed by value.
     Pure,

@@ -64,6 +64,14 @@ pub struct StaticVec<T> {
     more: Vec<T>,
 }
 
+impl<T: PartialEq> PartialEq for StaticVec<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len == other.len && self.list == other.list && self.more == other.more
+    }
+}
+
+impl<T: Eq> Eq for StaticVec<T> {}
+
 impl<T> Default for StaticVec<T> {
     fn default() -> Self {
         Self {

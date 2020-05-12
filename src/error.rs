@@ -122,7 +122,7 @@ impl ParseErrorType {
 }
 
 /// Error when parsing a script.
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct ParseError(pub(crate) ParseErrorType, pub(crate) Position);
 
 impl ParseError {

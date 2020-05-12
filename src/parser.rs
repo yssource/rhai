@@ -13,7 +13,7 @@ use crate::utils::EMPTY_TYPE_ID;
 use crate::module::ModuleRef;
 
 #[cfg(feature = "no_module")]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, Default)]
 pub struct ModuleRef;
 
 use crate::stdlib::{
@@ -179,7 +179,7 @@ impl Add<Self> for &AST {
 }
 
 /// A type representing the access mode of a scripted function.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnAccess {
     /// Private function.
     Private,
@@ -210,7 +210,7 @@ pub type SharedFnDef = Arc<FnDef>;
 pub type SharedFnDef = Rc<FnDef>;
 
 /// `return`/`throw` statement.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum ReturnType {
     /// `return` statement.
     Return,

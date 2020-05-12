@@ -22,7 +22,7 @@ pub enum EntryType {
 }
 
 /// An entry in the Scope.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entry<'a> {
     /// Name of the entry.
     pub name: Cow<'a, str>,
@@ -64,7 +64,7 @@ pub struct Entry<'a> {
 /// allowing for automatic _shadowing_.
 ///
 /// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Scope<'a>(Vec<Entry<'a>>);
 
 impl<'a> Scope<'a> {

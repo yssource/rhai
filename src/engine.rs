@@ -173,11 +173,8 @@ impl FunctionsLib {
             vec.into_iter()
                 .map(|fn_def| {
                     // Qualifiers (none) + function name + placeholders (one for each parameter).
-                    let hash = calc_fn_hash(
-                        empty(),
-                        &fn_def.name,
-                        repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
-                    );
+                    let args_iter = repeat(EMPTY_TYPE_ID()).take(fn_def.params.len());
+                    let hash = calc_fn_hash(empty(), &fn_def.name, args_iter);
 
                     #[cfg(feature = "sync")]
                     {
@@ -284,11 +281,9 @@ pub struct Engine {
     pub(crate) packages: PackagesCollection,
     /// A collection of all library packages loaded into the engine.
     pub(crate) base_package: PackageStore,
-
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
-
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: HashMap<String, String>,
 
@@ -299,7 +294,6 @@ pub struct Engine {
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
-
     /// Maximum levels of call-stack to prevent infinite recursion.
     ///
     /// Defaults to 28 for debug builds and 256 for non-debug builds.
