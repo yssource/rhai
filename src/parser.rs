@@ -767,6 +767,7 @@ fn parse_call_expr<'a>(
             // id(...args)
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
+                let args_iter = repeat(EMPTY_TYPE_ID()).take(args.len());
 
                 #[cfg(not(feature = "no_module"))]
                 let hash_fn_def = {
@@ -779,19 +780,14 @@ fn parse_call_expr<'a>(
                         // 2) Calculate a second hash with no qualifiers, empty function name, and
                         //    the actual list of parameter `TypeId`'.s
                         // 3) The final hash is the XOR of the two hashes.
-                        calc_fn_hash(
-                            modules.iter().map(|(m, _)| m.as_str()),
-                            &id,
-                            repeat(EMPTY_TYPE_ID()).take(args.len()),
-                        )
+                        calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, args_iter)
                     } else {
-                        calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()))
+                        calc_fn_hash(empty(), &id, args_iter)
                     }
                 };
                 // Qualifiers (none) + function name + dummy parameter types (one for each parameter).
                 #[cfg(feature = "no_module")]
-                let hash_fn_def =
-                    calc_fn_hash(empty(), &id, repeat(EMPTY_TYPE_ID()).take(args.len()));
+                let hash_fn_def = calc_fn_hash(empty(), &id, args_iter);
 
                 return Ok(Expr::FnCall(Box::new((
                     (id.into(), begin),
@@ -1204,10 +1200,7 @@ fn parse_primary<'a>(
                 let ((name, pos), modules, _, _) = *x;
                 parse_call_expr(input, stack, name, modules, pos, allow_stmt_expr)?
             }
-            (Expr::Property(x), Token::LeftParen) => {
-                let (name, pos) = *x;
-                parse_call_expr(input, stack, name, None, pos, allow_stmt_expr)?
-            }
+            (Expr::Property(_), _) => unreachable!(),
             // module access
             #[cfg(not(feature = "no_module"))]
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
@@ -1742,8 +1735,20 @@ fn parse_binary_op<'a>(
 
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
-                let rhs = args.pop().unwrap();
+                let mut rhs = args.pop().unwrap();
                 let current_lhs = args.pop().unwrap();
+
+                match &mut rhs {
+                    // current_lhs.rhs(...) - method call
+                    Expr::FnCall(x) => {
+                        let ((id, _), _, hash, args, _) = x.as_mut();
+                        // Recalculate function call hash because there is an additional argument
+                        let args_iter = repeat(EMPTY_TYPE_ID()).take(args.len() + 1);
+                        *hash = calc_fn_hash(empty(), id, args_iter);
+                    }
+                    _ => (),
+                }
+
                 make_dot_expr(current_lhs, rhs, pos, false)?
             }
 

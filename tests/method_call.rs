@@ -10,8 +10,8 @@ fn test_method_call() -> Result<(), Box<EvalAltResult>> {
     }
 
     impl TestStruct {
-        fn update(&mut self) {
-            self.x += 1000;
+        fn update(&mut self, n: INT) {
+            self.x += n;
         }
 
         fn new() -> Self {
@@ -27,12 +27,12 @@ fn test_method_call() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("new_ts", TestStruct::new);
 
     assert_eq!(
-        engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?,
+        engine.eval::<TestStruct>("let x = new_ts(); x.update(1000); x")?,
         TestStruct { x: 1001 }
     );
 
     assert_eq!(
-        engine.eval::<TestStruct>("let x = new_ts(); update(x); x")?,
+        engine.eval::<TestStruct>("let x = new_ts(); update(x, 1000); x")?,
         TestStruct { x: 1 }
     );
 
