@@ -92,7 +92,6 @@ macro_rules! def_anonymous_fn {
         {
             #[cfg(feature = "sync")]
             type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>> + Send + Sync>;
-
             #[cfg(not(feature = "sync"))]
             type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>>>;
 

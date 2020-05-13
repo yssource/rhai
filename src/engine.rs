@@ -552,7 +552,7 @@ impl Engine {
         if let Some(func) = self
             .global_module
             .get_fn(hashes.0)
-            .or_else(|| self.packages.get_function(hashes.0))
+            .or_else(|| self.packages.get_fn(hashes.0))
         {
             let mut backup: Dynamic = Default::default();
 
@@ -728,7 +728,7 @@ impl Engine {
         // First check registered functions
         self.global_module.contains_fn(hashes.0)
             // Then check packages
-            || self.packages.contains_function(hashes.0)
+            || self.packages.contains_fn(hashes.0)
             // Then check script-defined functions
             || state.has_function(hashes.1)
     }
@@ -1573,8 +1573,8 @@ impl Engine {
 
                 if let Some(iter_fn) = self
                     .global_module
-                    .get_iterator(tid)
-                    .or_else(|| self.packages.get_iterator(tid))
+                    .get_iter(tid)
+                    .or_else(|| self.packages.get_iter(tid))
                 {
                     // Add the loop variable
                     let name = x.0.clone();

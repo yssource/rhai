@@ -64,11 +64,11 @@ impl PackagesCollection {
         self.packages.insert(0, package);
     }
     /// Does the specified function hash key exist in the `PackagesCollection`?
-    pub fn contains_function(&self, hash: u64) -> bool {
+    pub fn contains_fn(&self, hash: u64) -> bool {
         self.packages.iter().any(|p| p.contains_fn(hash))
     }
     /// Get specified function via its hash key.
-    pub fn get_function(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
+    pub fn get_fn(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
         self.packages
             .iter()
             .map(|p| p.get_fn(hash))
@@ -76,14 +76,14 @@ impl PackagesCollection {
             .flatten()
     }
     /// Does the specified TypeId iterator exist in the `PackagesCollection`?
-    pub fn contains_iterator(&self, id: TypeId) -> bool {
-        self.packages.iter().any(|p| p.contains_iterator(id))
+    pub fn contains_iter(&self, id: TypeId) -> bool {
+        self.packages.iter().any(|p| p.contains_iter(id))
     }
     /// Get the specified TypeId iterator.
-    pub fn get_iterator(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
+    pub fn get_iter(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
         self.packages
             .iter()
-            .map(|p| p.get_iterator(id))
+            .map(|p| p.get_iter(id))
             .find(|f| f.is_some())
             .flatten()
     }

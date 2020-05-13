@@ -567,20 +567,6 @@ impl Module {
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))
     }
 
-    /// Get the script-defined functions.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// assert_eq!(module.get_fn_lib().len(), 0);
-    /// ```
-    pub fn get_fn_lib(&self) -> &FunctionsLib {
-        &self.fn_lib
-    }
-
     /// Get a modules-qualified script-defined functions.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
@@ -720,12 +706,12 @@ impl Module {
     }
 
     /// Does a type iterator exist in the module?
-    pub fn contains_iterator(&self, id: TypeId) -> bool {
+    pub fn contains_iter(&self, id: TypeId) -> bool {
         self.type_iterators.contains_key(&id)
     }
 
     /// Set a type iterator into the module.
-    pub fn set_iterator(&mut self, typ: TypeId, func: Box<IteratorFn>) {
+    pub fn set_iter(&mut self, typ: TypeId, func: Box<IteratorFn>) {
         #[cfg(not(feature = "sync"))]
         self.type_iterators.insert(typ, Rc::new(func));
         #[cfg(feature = "sync")]
@@ -733,7 +719,7 @@ impl Module {
     }
 
     /// Get the specified type iterator.
-    pub fn get_iterator(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
+    pub fn get_iter(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
         self.type_iterators.get(&id)
     }
 }

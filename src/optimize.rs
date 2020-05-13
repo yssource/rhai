@@ -123,7 +123,7 @@ fn call_fn(
 
     global_module
         .get_fn(hash)
-        .or_else(|| packages.get_function(hash))
+        .or_else(|| packages.get_fn(hash))
         .map(|func| func.call(args, pos))
         .transpose()
 }

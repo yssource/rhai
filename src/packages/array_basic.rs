@@ -118,7 +118,7 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     );
 
     // Register array iterator
-    lib.set_iterator(
+    lib.set_iter(
         TypeId::of::<Array>(),
         Box::new(|arr| Box::new(
             arr.cast::<Array>().into_iter()) as Box<dyn Iterator<Item = Dynamic>>

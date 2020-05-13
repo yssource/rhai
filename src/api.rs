@@ -125,8 +125,7 @@ impl Engine {
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
     pub fn register_iterator<T: Variant + Clone, F: IteratorCallback>(&mut self, f: F) {
-        self.global_module
-            .set_iterator(TypeId::of::<T>(), Box::new(f));
+        self.global_module.set_iter(TypeId::of::<T>(), Box::new(f));
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
