@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, FunctionsLib};
+use crate::engine::{make_getter, make_setter, Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -395,7 +395,7 @@ pub enum Expr {
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
     Variable(Box<((String, Position), MRef, u64, Option<NonZeroUsize>)>),
     /// Property access.
-    Property(Box<(String, Position)>),
+    Property(Box<((String, String, String), Position)>),
     /// { stmt }
     Stmt(Box<(Stmt, Position)>),
     /// func(expr, ... ) - ((function name, position), optional modules, hash, arguments, optional default value)
@@ -641,7 +641,9 @@ impl Expr {
         match self {
             Self::Variable(x) if x.1.is_none() => {
                 let (name, pos) = x.0;
-                Self::Property(Box::new((name.clone(), pos)))
+                let getter = make_getter(&name);
+                let setter = make_setter(&name);
+                Self::Property(Box::new(((name.clone(), getter, setter), pos)))
             }
             _ => self,
         }
@@ -1431,8 +1433,13 @@ fn make_dot_expr(
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
+            let (name, pos) = x.0;
             let lhs = if is_index { lhs.into_property() } else { lhs };
-            let rhs = Expr::Property(Box::new(x.0));
+
+            let getter = make_getter(&name);
+            let setter = make_setter(&name);
+            let rhs = Expr::Property(Box::new(((name, getter, setter), pos)));
+
             Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }
         (lhs, Expr::Property(x)) => {

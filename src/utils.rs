@@ -17,6 +17,7 @@ use crate::stdlib::collections::hash_map::DefaultHasher;
 #[cfg(feature = "no_std")]
 use ahash::AHasher;
 
+#[inline(always)]
 pub fn EMPTY_TYPE_ID() -> TypeId {
     TypeId::of::<()>()
 }

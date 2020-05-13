@@ -392,11 +392,12 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         Expr::Dot(x) => match (x.0, x.1) {
             // map.string
             (Expr::Map(m), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
+                let ((prop, _, _), _) = p.as_ref();
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name == &p.0)
+                m.0.into_iter().find(|((name, _), _)| name == prop)
                     .map(|(_, expr)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }

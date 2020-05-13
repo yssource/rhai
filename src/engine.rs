@@ -884,9 +884,10 @@ impl Engine {
                 // {xxx:map}.id = ???
                 #[cfg(not(feature = "no_object"))]
                 Expr::Property(x) if obj.is::<Map>() && new_val.is_some() => {
-                    let index = x.0.clone().into();
+                    let ((prop, _, _), pos) = x.as_ref();
+                    let index = prop.clone().into();
                     let mut val =
-                        self.get_indexed_mut(state, obj, is_ref, index, x.1, op_pos, true)?;
+                        self.get_indexed_mut(state, obj, is_ref, index, *pos, op_pos, true)?;
 
                     val.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
@@ -894,24 +895,25 @@ impl Engine {
                 // {xxx:map}.id
                 #[cfg(not(feature = "no_object"))]
                 Expr::Property(x) if obj.is::<Map>() => {
-                    let index = x.0.clone().into();
+                    let ((prop, _, _), pos) = x.as_ref();
+                    let index = prop.clone().into();
                     let val =
-                        self.get_indexed_mut(state, obj, is_ref, index, x.1, op_pos, false)?;
+                        self.get_indexed_mut(state, obj, is_ref, index, *pos, op_pos, false)?;
 
                     Ok((val.clone_into_dynamic(), false))
                 }
                 // xxx.id = ???
                 Expr::Property(x) if new_val.is_some() => {
-                    let fn_name = make_setter(&x.0);
+                    let ((_, _, setter), pos) = x.as_ref();
                     let mut args = [obj, new_val.as_mut().unwrap()];
-                    self.exec_fn_call(state, &fn_name, 0, &mut args, is_ref, None, x.1, 0)
+                    self.exec_fn_call(state, setter, 0, &mut args, is_ref, None, *pos, 0)
                         .map(|(v, _)| (v, true))
                 }
                 // xxx.id
                 Expr::Property(x) => {
-                    let fn_name = make_getter(&x.0);
+                    let ((_, getter, _), pos) = x.as_ref();
                     let mut args = [obj];
-                    self.exec_fn_call(state, &fn_name, 0, &mut args, is_ref, None, x.1, 0)
+                    self.exec_fn_call(state, getter, 0, &mut args, is_ref, None, *pos, 0)
                         .map(|(v, _)| (v, false))
                 }
                 #[cfg(not(feature = "no_object"))]
@@ -920,7 +922,8 @@ impl Engine {
                     let is_idx = matches!(rhs, Expr::Index(_));
 
                     let val = if let Expr::Property(p) = &x.0 {
-                        let index = p.0.clone().into();
+                        let ((prop, _, _), _) = p.as_ref();
+                        let index = prop.clone().into();
                         self.get_indexed_mut(state, obj, is_ref, index, x.2, op_pos, false)?
                     } else {
                         // Syntax error
@@ -940,8 +943,8 @@ impl Engine {
                     let args = &mut [obj, &mut Default::default()];
 
                     let (mut val, updated) = if let Expr::Property(p) = &x.0 {
-                        let fn_name = make_getter(&p.0);
-                        self.exec_fn_call(state, &fn_name, 0, &mut args[..1], is_ref, None, x.2, 0)?
+                        let ((_, getter, _), _) = p.as_ref();
+                        self.exec_fn_call(state, getter, 0, &mut args[..1], is_ref, None, x.2, 0)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -965,10 +968,10 @@ impl Engine {
                     // Feed the value back via a setter just in case it has been updated
                     if updated || may_be_changed {
                         if let Expr::Property(p) = &x.0 {
-                            let fn_name = make_setter(&p.0);
+                            let ((_, _, setter), _) = p.as_ref();
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = val;
-                            self.exec_fn_call(state, &fn_name, 0, args, is_ref, None, x.2, 0)
+                            self.exec_fn_call(state, setter, 0, args, is_ref, None, x.2, 0)
                                 .or_else(|err| match *err {
                                     // If there is no setter, no need to feed it back because the property is read-only
                                     EvalAltResult::ErrorDotExpr(_, _) => Ok(Default::default()),
