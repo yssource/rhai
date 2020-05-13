@@ -94,6 +94,24 @@ impl Module {
         Default::default()
     }
 
+    /// Create a new module with a specified capacity for native Rust functions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_var("answer", 42_i64);
+    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// ```
+    pub fn new_with_capacity(capacity: usize) -> Self {
+        Self {
+            functions: HashMap::with_capacity(capacity),
+            ..Default::default()
+        }
+    }
+
     /// Does a variable exist in the module?
     ///
     /// # Examples

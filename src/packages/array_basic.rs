@@ -17,7 +17,7 @@ fn ins<T: Variant + Clone>(list: &mut Array, position: INT, item: T) -> FuncRetu
     if position <= 0 {
         list.insert(0, Dynamic::from(item));
     } else if (position as usize) >= list.len() - 1 {
-        push(list, item);
+        push(list, item)?;
     } else {
         list.insert(position as usize, Dynamic::from(item));
     }
@@ -26,7 +26,7 @@ fn ins<T: Variant + Clone>(list: &mut Array, position: INT, item: T) -> FuncRetu
 fn pad<T: Variant + Clone>(list: &mut Array, len: INT, item: T) -> FuncReturn<()> {
     if len >= 0 {
         while list.len() < len as usize {
-            push(list, item.clone());
+            push(list, item.clone())?;
         }
     }
     Ok(())
