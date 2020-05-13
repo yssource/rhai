@@ -21,9 +21,9 @@ Rhai's current features set:
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
 * [`no-std`](#optional-features) support
-* Support for [function overloading](#function-overloading)
-* Support for [operator overloading](#operator-overloading)
-* Support for loading external [modules]
+* [Function overloading](#function-overloading)
+* [Operator overloading](#operator-overloading)
+* [Modules]
 * Compiled script is [optimized](#script-optimization) for repeat evaluations
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
@@ -126,7 +126,8 @@ Disable script-defined functions (`no_function`) only when the feature is not ne
 
 [`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
 This makes the scripting language quite useless as even basic arithmetic operators are not supported.
-Selectively include the necessary operators by loading specific [packages](#packages) while minimizing the code footprint.
+Selectively include the necessary functionalities by loading specific [packages](#packages) to minimize the footprint.
+Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
 Related
 -------
@@ -371,7 +372,7 @@ Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, n
 ### Packages
 
 Rhai functional features are provided in different _packages_ that can be loaded via a call to `load_package`.
-Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be imported in order for
+Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be loaded in order for
 packages to be used.
 
 ```rust
@@ -382,7 +383,7 @@ use rhai::packages::CorePackage;                // the 'core' package contains b
 let mut engine = Engine::new_raw();             // create a 'raw' Engine
 let package = CorePackage::new();               // create a package - can be shared among multiple `Engine` instances
 
-engine.load_package(package.get());             // load the package manually
+engine.load_package(package.get());             // load the package manually. 'get' returns a reference to the shared package
 ```
 
 The follow packages are available:
@@ -400,6 +401,20 @@ The follow packages are available:
 | `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
 | `CorePackage`          | Basic essentials                                |                  |                      |
 | `StandardPackage`      | Standard library                                |                  |                      |
+
+Packages typically contain Rust functions that are callable within a Rhai script.
+All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).
+Once a package is created (e.g. via `new`), it can be _shared_ (via `get`) among multiple instances of [`Engine`],
+even across threads (if the [`sync`] feature is turned on).
+Therefore, a package only has to be created _once_.
+
+Packages are actually implemented as [modules], so they share a lot of behavior and characteristics.
+The main difference is that a package loads under the _global_ namespace, while a module loads under its own
+namespace alias specified in an `import` statement (see also [modules]).
+A package is _static_ (i.e. pre-loaded into an [`Engine`]), while a module is _dynamic_ (i.e. loaded with
+the `import` statement).
+
+Custom packages can also be created.  See the macro [`def_package!`](https://docs.rs/rhai/0.13.0/rhai/macro.def_package.html).
 
 Evaluate expressions only
 -------------------------
@@ -762,11 +777,17 @@ println!("result: {}", result);                     // prints 42
 let result: f64 = engine.eval("1.0 + 0.0");         // '+' operator for two floats not overloaded
 
 println!("result: {}", result);                     // prints 1.0
+
+fn mixed_add(a: i64, b: f64) -> f64 { (a as f64) + b }
+
+engine.register_fn("+", mixed_add);                 // register '+' operator for an integer and a float
+
+let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an error)
 ```
 
-Use operator overloading for custom types (described below) only.  Be very careful when overloading built-in operators because
-script writers expect standard operators to behave in a consistent and predictable manner, and will be annoyed if a calculation
-for '+' turns into a subtraction, for example.
+Use operator overloading for custom types (described below) only.
+Be very careful when overloading built-in operators because script writers expect standard operators to behave in a
+consistent and predictable manner, and will be annoyed if a calculation for '`+`' turns into a subtraction, for example.
 
 Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
 See the [relevant section](#script-optimization) for more details.
@@ -2048,21 +2069,21 @@ for entry in logbook.read().unwrap().iter() {
 }
 ```
 
-Using external modules
-----------------------
+Modules
+-------
 
-[module]: #using-external-modules
-[modules]: #using-external-modules
+[module]: #modules
+[modules]: #modules
 
-Rhai allows organizing code (functions and variables) into _modules_.
+Rhai allows organizing code (functions, both Rust-based or script-based, and variables) into _modules_.
 Modules can be disabled via the [`no_module`] feature.
 
-### Exporting variables and functions
+### Exporting variables and functions from modules
 
-A module is a single script (or pre-compiled `AST`) containing global variables and functions.
+A _module_ is a single script (or pre-compiled `AST`) containing global variables and functions.
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
-Variables not exported are private and invisible to the outside.
-All functions are automatically exported, unless it is prefixed with `private`.
+Variables not exported are _private_ and invisible to the outside.
+On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the `private` prefix.
 Functions declared `private` are invisible to the outside.
 
 Everything exported from a module is **constant** (**read-only**).
@@ -2070,11 +2091,11 @@ Everything exported from a module is **constant** (**read-only**).
 ```rust
 // This is a module script.
 
-fn inc(x) { x + 1 }         // public function
+fn inc(x) { x + 1 }         // script-defined function - default public
 
 private fn foo() {}         // private function - invisible to outside
 
-let private = 123;          // variable not exported - invisible to outside
+let private = 123;          // variable not exported - default invisible to outside
 let x = 42;                 // this will be exported below
 
 export x;                   // the variable 'x' is exported under its own name
@@ -2085,19 +2106,25 @@ export x as answer;         // the variable 'x' is exported under the alias 'ans
 
 ### Importing modules
 
-A module can be _imported_ via the `import` statement, and its members accessed via '`::`' similar to C++.
+A module can be _imported_ via the `import` statement, and its members are accessed via '`::`' similar to C++.
 
 ```rust
 import "crypto" as crypto;  // import the script file 'crypto.rhai' as a module
 
 crypto::encrypt(secret);    // use functions defined under the module via '::'
 
+crypto::hash::sha256(key);  // sub-modules are also supported
+
 print(crypto::status);      // module variables are constants
 
-crypto::hash::sha256(key);  // sub-modules are also supported
+crypto::status = "off";     // <- runtime error - cannot modify a constant
 ```
 
 `import` statements are _scoped_, meaning that they are only accessible inside the scope that they're imported.
+They can appear anywhere a normal statement can be, but in the vast majority of cases `import` statements are
+group at the beginning of a script.  It is not advised to deviate from this common practice unless there is
+a _Very Good Reason™_. Especially, do not place an `import` statement within a loop; doing so will repeatedly
+re-load the same module during every iteration of the loop!
 
 ```rust
 let mod = "crypto";
@@ -2110,9 +2137,15 @@ if secured {                // new block scope
 
 crypto::encrypt(others);    // <- this causes a run-time error because the 'crypto' module
                             //    is no longer available!
+
+for x in range(0, 1000) {
+    import "crypto" as c;   // <- importing a module inside a loop is a Very Bad Idea™
+
+    c.encrypt(something);
+}
 ```
 
-### Creating custom modules from Rust
+### Creating custom modules with Rust
 
 To load a custom module (written in Rust) into an [`Engine`], first create a `Module` type, add variables/functions into it,
 then finally push it into a custom [`Scope`].  This has the equivalent effect of putting an `import` statement
@@ -2141,8 +2174,9 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer
 
 ### Creating a module from an `AST`
 
-It is easy to convert a pre-compiled `AST` into a module, just use `Module::eval_ast_as_new`.
-Don't forget the `export` statement, otherwise there will be nothing inside the module!
+It is easy to convert a pre-compiled `AST` into a module: just use `Module::eval_ast_as_new`.
+Don't forget the `export` statement, otherwise there will be no variables exposed by the module
+other than non-`private` functions (unless that's intentional).
 
 ```rust
 use rhai::{Engine, Module};
