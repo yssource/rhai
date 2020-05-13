@@ -543,7 +543,7 @@ impl Engine {
         if hashes.1 > 0 {
             if let Some(fn_def) = state.get_function(hashes.1) {
                 return self
-                    .call_script_fn(scope, state, fn_def, args, pos, level)
+                    .call_script_fn(scope, state, fn_name, fn_def, args, pos, level)
                     .map(|v| (v, false));
             }
         }
@@ -569,7 +569,7 @@ impl Engine {
             };
 
             // Run external function
-            let result = match func.call(args, pos) {
+            let result = match func.call(args) {
                 Ok(r) => {
                     // Restore the backup value for the first argument since it has been consumed!
                     if restore {
@@ -577,7 +577,9 @@ impl Engine {
                     }
                     r
                 }
-                Err(err) => return Err(err),
+                Err(err) => {
+                    return Err(err.new_position(pos));
+                }
             };
 
             // See if the function match print/debug (which requires special processing)
@@ -658,6 +660,7 @@ impl Engine {
         &self,
         scope: Option<&mut Scope>,
         state: &State,
+        fn_name: &str,
         fn_def: &FnDef,
         args: &mut FnCallArgs,
         pos: Position,
@@ -687,7 +690,18 @@ impl Engine {
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
-                        _ => Err(EvalAltResult::set_position(err, pos)),
+                        EvalAltResult::ErrorInFunctionCall(name, err, _) => {
+                            Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                                format!("{} > {}", fn_name, name),
+                                err,
+                                pos,
+                            )))
+                        }
+                        _ => Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                            fn_name.to_string(),
+                            err,
+                            pos,
+                        ))),
                     });
 
                 scope.rewind(scope_len);
@@ -717,7 +731,18 @@ impl Engine {
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
-                        _ => Err(EvalAltResult::set_position(err, pos)),
+                        EvalAltResult::ErrorInFunctionCall(name, err, _) => {
+                            Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                                format!("{} > {}", fn_name, name),
+                                err,
+                                pos,
+                            )))
+                        }
+                        _ => Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                            fn_name.to_string(),
+                            err,
+                            pos,
+                        ))),
                     });
             }
         }
@@ -809,7 +834,7 @@ impl Engine {
 
         // Evaluate the AST
         self.eval_ast_with_scope_raw(scope, &ast)
-            .map_err(|err| EvalAltResult::set_position(err, pos))
+            .map_err(|err| err.new_position(pos))
     }
 
     /// Chain-evaluate a dot/index chain.
@@ -1415,7 +1440,7 @@ impl Engine {
 
                 // First search in script-defined functions (can override built-in)
                 if let Some(fn_def) = module.get_qualified_scripted_fn(*hash_fn_def) {
-                    self.call_script_fn(None, state, fn_def, args.as_mut(), *pos, level)
+                    self.call_script_fn(None, state, name, fn_def, args.as_mut(), *pos, level)
                 } else {
                     // Then search in Rust functions
 
@@ -1428,8 +1453,10 @@ impl Engine {
                     // 3) The final hash is the XOR of the two hashes.
                     let hash_fn_native = *hash_fn_def ^ hash_fn_args;
 
-                    match module.get_qualified_fn(name, hash_fn_native, *pos) {
-                        Ok(func) => func.call(args.as_mut(), *pos),
+                    match module.get_qualified_fn(name, hash_fn_native) {
+                        Ok(func) => func
+                            .call(args.as_mut())
+                            .map_err(|err| err.new_position(*pos)),
                         Err(_) if def_val.is_some() => Ok(def_val.clone().unwrap()),
                         Err(err) => Err(err),
                     }

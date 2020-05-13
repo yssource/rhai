@@ -1017,7 +1017,8 @@ impl Engine {
 
         let state = State::new(fn_lib);
 
-        let result = self.call_script_fn(Some(scope), &state, fn_def, args.as_mut(), pos, 0)?;
+        let result =
+            self.call_script_fn(Some(scope), &state, name, fn_def, args.as_mut(), pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 

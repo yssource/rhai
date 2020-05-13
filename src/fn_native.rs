@@ -1,16 +1,14 @@
 use crate::any::Dynamic;
 use crate::result::EvalAltResult;
-use crate::token::Position;
 
 use crate::stdlib::{boxed::Box, rc::Rc, sync::Arc};
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 #[cfg(feature = "sync")]
-pub type FnAny =
-    dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&mut FnCallArgs, Position) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 
 #[cfg(feature = "sync")]
 pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
@@ -85,7 +83,7 @@ pub trait NativeCallable {
     /// Get the ABI type of a native Rust function.
     fn abi(&self) -> NativeFunctionABI;
     /// Call a native Rust function.
-    fn call(&self, args: &mut FnCallArgs, pos: Position) -> Result<Dynamic, Box<EvalAltResult>>;
+    fn call(&self, args: &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 }
 
 /// A trait implemented by all native Rust functions that are callable by Rhai.
@@ -94,7 +92,7 @@ pub trait NativeCallable: Send + Sync {
     /// Get the ABI type of a native Rust function.
     fn abi(&self) -> NativeFunctionABI;
     /// Call a native Rust function.
-    fn call(&self, args: &mut FnCallArgs, pos: Position) -> Result<Dynamic, Box<EvalAltResult>>;
+    fn call(&self, args: &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 }
 
 /// A type encapsulating a native Rust function callable by Rhai.
@@ -104,8 +102,8 @@ impl NativeCallable for NativeFunction {
     fn abi(&self) -> NativeFunctionABI {
         self.1
     }
-    fn call(&self, args: &mut FnCallArgs, pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
-        (self.0)(args, pos)
+    fn call(&self, args: &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> {
+        (self.0)(args)
     }
 }
 

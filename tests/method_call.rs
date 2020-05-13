@@ -41,7 +41,7 @@ fn test_method_call() -> Result<(), Box<EvalAltResult>> {
 
 #[test]
 fn test_method_call_style() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("let x = -123; x.abs(); x")?, -123);
 

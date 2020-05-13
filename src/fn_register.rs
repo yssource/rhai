@@ -7,9 +7,8 @@ use crate::engine::Engine;
 use crate::fn_native::{FnCallArgs, NativeFunctionABI::*};
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
-use crate::token::Position;
 
-use crate::stdlib::{any::TypeId, boxed::Box, iter::empty, mem, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, mem, string::ToString};
 
 /// A trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {
@@ -140,7 +139,7 @@ macro_rules! make_func {
 //                           ^ function parameter generic type name (A, B, C etc.)
 //                                           ^ dereferencing function
 
-		Box::new(move |args: &mut FnCallArgs, pos: Position| {
+		Box::new(move |args: &mut FnCallArgs| {
             // The arguments are assumed to be of the correct number and types!
 
 			#[allow(unused_variables, unused_mut)]
@@ -155,23 +154,20 @@ macro_rules! make_func {
 			let r = $fn($($par),*);
 
             // Map the result
-            $map(r, pos)
+            $map(r)
 		})
 	};
 }
 
 /// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_dynamic<T: Variant + Clone>(
-    data: T,
-    _pos: Position,
-) -> Result<Dynamic, Box<EvalAltResult>> {
+pub fn map_dynamic<T: Variant + Clone>(data: T) -> Result<Dynamic, Box<EvalAltResult>> {
     Ok(data.into_dynamic())
 }
 
 /// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_identity(data: Dynamic, _pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
+pub fn map_identity(data: Dynamic) -> Result<Dynamic, Box<EvalAltResult>> {
     Ok(data)
 }
 
@@ -179,10 +175,8 @@ pub fn map_identity(data: Dynamic, _pos: Position) -> Result<Dynamic, Box<EvalAl
 #[inline(always)]
 pub fn map_result<T: Variant + Clone>(
     data: Result<T, Box<EvalAltResult>>,
-    pos: Position,
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     data.map(|v| v.into_dynamic())
-        .map_err(|err| EvalAltResult::set_position(err, pos))
 }
 
 macro_rules! def_register {

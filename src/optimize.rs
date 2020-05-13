@@ -124,8 +124,9 @@ fn call_fn(
     global_module
         .get_fn(hash)
         .or_else(|| packages.get_fn(hash))
-        .map(|func| func.call(args, pos))
+        .map(|func| func.call(args))
         .transpose()
+        .map_err(|err| err.new_position(pos))
 }
 
 /// Optimize a statement.

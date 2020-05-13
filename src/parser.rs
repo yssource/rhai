@@ -516,7 +516,7 @@ impl Expr {
         }
     }
 
-    /// Get the `Position` of the expression.
+    /// Override the `Position` of the expression.
     pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
         match &mut self {
             #[cfg(not(feature = "no_float"))]

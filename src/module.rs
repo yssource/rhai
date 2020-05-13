@@ -317,11 +317,7 @@ impl Module {
         #[cfg(not(feature = "sync"))] func: impl Fn() -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn() -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |_: &mut FnCallArgs, pos| {
-            func()
-                .map(Dynamic::from)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
-        };
+        let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
         let arg_types = [];
         self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
     }
@@ -345,11 +341,8 @@ impl Module {
         #[cfg(not(feature = "sync"))] func: impl Fn(A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
-            func(mem::take(args[0]).cast::<A>())
-                .map(Dynamic::from)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
-        };
+        let f =
+            move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
     }
@@ -373,10 +366,8 @@ impl Module {
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
-            func(args[0].downcast_mut::<A>().unwrap())
-                .map(Dynamic::from)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+        let f = move |args: &mut FnCallArgs| {
+            func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
@@ -403,13 +394,11 @@ impl Module {
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
 
-            func(a, b)
-                .map(Dynamic::from)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
@@ -440,13 +429,11 @@ impl Module {
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
-            func(a, b)
-                .map(Dynamic::from)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
@@ -479,14 +466,12 @@ impl Module {
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
 
-            func(a, b, c)
-                .map(Dynamic::from)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
@@ -520,14 +505,12 @@ impl Module {
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
-            func(a, b, c)
-                .map(Dynamic::from)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
@@ -559,12 +542,16 @@ impl Module {
         &mut self,
         name: &str,
         hash_fn_native: u64,
-        pos: Position,
     ) -> Result<&Box<dyn NativeCallable>, Box<EvalAltResult>> {
         self.all_functions
             .get(&hash_fn_native)
             .map(|f| f.as_ref())
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))
+            .ok_or_else(|| {
+                Box::new(EvalAltResult::ErrorFunctionNotFound(
+                    name.to_string(),
+                    Position::none(),
+                ))
+            })
     }
 
     /// Get a modules-qualified script-defined functions.
@@ -950,10 +937,9 @@ mod file {
             // Compile it
             let ast = engine
                 .compile_file(file_path)
-                .map_err(|err| EvalAltResult::set_position(err, pos))?;
+                .map_err(|err| err.new_position(pos))?;
 
-            Module::eval_ast_as_new(scope, &ast, engine)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| err.new_position(pos))
         }
     }
 }

@@ -1,5 +1,4 @@
 use crate::def_package;
-use crate::module::FuncReturn;
 use crate::parser::INT;
 use crate::result::EvalAltResult;
 use crate::token::Position;
