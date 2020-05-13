@@ -1,44 +1,44 @@
-use super::{reg_binary, reg_binary_mut, reg_unary};
-
 use crate::def_package;
-use crate::fn_register::map_dynamic as map;
+use crate::module::FuncReturn;
 use crate::parser::INT;
 
 use crate::stdlib::string::String;
 
 // Comparison operators
-pub fn lt<T: PartialOrd>(x: T, y: T) -> bool {
-    x < y
+pub fn lt<T: PartialOrd>(x: T, y: T) -> FuncReturn<bool> {
+    Ok(x < y)
 }
-pub fn lte<T: PartialOrd>(x: T, y: T) -> bool {
-    x <= y
+pub fn lte<T: PartialOrd>(x: T, y: T) -> FuncReturn<bool> {
+    Ok(x <= y)
 }
-pub fn gt<T: PartialOrd>(x: T, y: T) -> bool {
-    x > y
+pub fn gt<T: PartialOrd>(x: T, y: T) -> FuncReturn<bool> {
+    Ok(x > y)
 }
-pub fn gte<T: PartialOrd>(x: T, y: T) -> bool {
-    x >= y
+pub fn gte<T: PartialOrd>(x: T, y: T) -> FuncReturn<bool> {
+    Ok(x >= y)
 }
-pub fn eq<T: PartialEq>(x: T, y: T) -> bool {
-    x == y
+pub fn eq<T: PartialEq>(x: T, y: T) -> FuncReturn<bool> {
+    Ok(x == y)
 }
-pub fn ne<T: PartialEq>(x: T, y: T) -> bool {
-    x != y
+pub fn ne<T: PartialEq>(x: T, y: T) -> FuncReturn<bool> {
+    Ok(x != y)
 }
 
 // Logic operators
-fn and(x: bool, y: bool) -> bool {
-    x && y
+fn and(x: bool, y: bool) -> FuncReturn<bool> {
+    Ok(x && y)
 }
-fn or(x: bool, y: bool) -> bool {
-    x || y
+fn or(x: bool, y: bool) -> FuncReturn<bool> {
+    Ok(x || y)
 }
-fn not(x: bool) -> bool {
-    !x
+fn not(x: bool) -> FuncReturn<bool> {
+    Ok(!x)
 }
 
-macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
-    $(reg_binary($lib, $op, $func::<$par>, map);)* };
+macro_rules! reg_op {
+    ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
+        $( $lib.set_fn_2($op, $func::<$par>); )*
+    };
 }
 
 def_package!(crate:LogicPackage:"Logical operators.", lib, {
@@ -50,14 +50,12 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     reg_op!(lib, "!=", ne, INT, char, bool, ());
 
     // Special versions for strings - at least avoid copying the first string
-    // use super::utils::reg_test;
-    // reg_test(lib, "<", |x: &mut String, y: String| *x < y, |v| v, map);
-    reg_binary_mut(lib, "<", |x: &mut String, y: String| *x < y, map);
-    reg_binary_mut(lib, "<=", |x: &mut String, y: String| *x <= y, map);
-    reg_binary_mut(lib, ">", |x: &mut String, y: String| *x > y, map);
-    reg_binary_mut(lib, ">=", |x: &mut String, y: String| *x >= y, map);
-    reg_binary_mut(lib, "==", |x: &mut String, y: String| *x == y, map);
-    reg_binary_mut(lib, "!=", |x: &mut String, y: String| *x != y, map);
+    lib.set_fn_2_mut("<", |x: &mut String, y: String| Ok(*x < y));
+    lib.set_fn_2_mut("<=", |x: &mut String, y: String| Ok(*x <= y));
+    lib.set_fn_2_mut(">", |x: &mut String, y: String| Ok(*x > y));
+    lib.set_fn_2_mut(">=", |x: &mut String, y: String| Ok(*x >= y));
+    lib.set_fn_2_mut("==", |x: &mut String, y: String| Ok(*x == y));
+    lib.set_fn_2_mut("!=", |x: &mut String, y: String| Ok(*x != y));
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
@@ -85,7 +83,7 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     //reg_op!(lib, "||", or, bool);
     //reg_op!(lib, "&&", and, bool);
 
-    reg_binary(lib, "|", or, map);
-    reg_binary(lib, "&", and, map);
-    reg_unary(lib, "!", not, map);
+    lib.set_fn_2("|", or);
+    lib.set_fn_2("&", and);
+    lib.set_fn_1("!", not);
 });

@@ -4,10 +4,9 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, NativeFunctionABI, PrintCallback};
+use crate::module::Module;
 use crate::optimize::OptimizationLevel;
-use crate::packages::{
-    CorePackage, Package, PackageLibrary, PackageStore, PackagesCollection, StandardPackage,
-};
+use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, FnDef, ReturnType, SharedFnDef, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -15,7 +14,7 @@ use crate::token::Position;
 use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 #[cfg(not(feature = "no_module"))]
-use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
+use crate::module::{resolvers, ModuleRef, ModuleResolver};
 
 #[cfg(feature = "no_module")]
 use crate::parser::ModuleRef;
@@ -277,13 +276,15 @@ impl DerefMut for FunctionsLib {
 ///
 /// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
-    /// A collection of all library packages loaded into the engine.
+    /// A module containing all functions directly loaded into the Engine.
+    pub(crate) global_module: Module,
+    /// A collection of all library packages loaded into the Engine.
     pub(crate) packages: PackagesCollection,
-    /// A collection of all library packages loaded into the engine.
-    pub(crate) base_package: PackageStore,
+
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
+
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: HashMap<String, String>,
 
@@ -305,7 +306,7 @@ impl Default for Engine {
         // Create the new scripting Engine
         let mut engine = Self {
             packages: Default::default(),
-            base_package: Default::default(),
+            global_module: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
@@ -450,7 +451,7 @@ impl Engine {
     pub fn new_raw() -> Self {
         Self {
             packages: Default::default(),
-            base_package: Default::default(),
+            global_module: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
@@ -549,8 +550,8 @@ impl Engine {
 
         // Search built-in's and external functions
         if let Some(func) = self
-            .base_package
-            .get_function(hashes.0)
+            .global_module
+            .get_fn(hashes.0)
             .or_else(|| self.packages.get_function(hashes.0))
         {
             let mut backup: Dynamic = Default::default();
@@ -725,7 +726,7 @@ impl Engine {
     // Has a system function an override?
     fn has_override(&self, state: &State, hashes: (u64, u64)) -> bool {
         // First check registered functions
-        self.base_package.contains_function(hashes.0)
+        self.global_module.contains_fn(hashes.0)
             // Then check packages
             || self.packages.contains_function(hashes.0)
             // Then check script-defined functions
@@ -1571,7 +1572,7 @@ impl Engine {
                 let tid = iter_type.type_id();
 
                 if let Some(iter_fn) = self
-                    .base_package
+                    .global_module
                     .get_iterator(tid)
                     .or_else(|| self.packages.get_iterator(tid))
                 {

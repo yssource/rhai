@@ -1,8 +1,6 @@
-use super::{reg_binary, reg_binary_mut, reg_none, reg_unary, reg_unary_mut};
-
 use crate::def_package;
 use crate::engine::{FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
-use crate::fn_register::map_dynamic as map;
+use crate::module::FuncReturn;
 use crate::parser::INT;
 
 #[cfg(not(feature = "no_index"))]
@@ -18,31 +16,33 @@ use crate::stdlib::{
 };
 
 // Register print and debug
-fn to_debug<T: Debug>(x: &mut T) -> String {
-    format!("{:?}", x)
+fn to_debug<T: Debug>(x: &mut T) -> FuncReturn<String> {
+    Ok(format!("{:?}", x))
 }
-fn to_string<T: Display>(x: &mut T) -> String {
-    format!("{}", x)
+fn to_string<T: Display>(x: &mut T) -> FuncReturn<String> {
+    Ok(format!("{}", x))
 }
 #[cfg(not(feature = "no_object"))]
-fn format_map(x: &mut Map) -> String {
-    format!("#{:?}", x)
+fn format_map(x: &mut Map) -> FuncReturn<String> {
+    Ok(format!("#{:?}", x))
 }
 
-macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
-    $(reg_unary_mut($lib, $op, $func::<$par>, map);)* };
+macro_rules! reg_op {
+    ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
+        $( $lib.set_fn_1_mut($op, $func::<$par>); )*
+    };
 }
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
     reg_op!(lib, KEYWORD_PRINT, to_string, INT, bool, char);
     reg_op!(lib, FUNC_TO_STRING, to_string, INT, bool, char);
 
-    reg_none(lib, KEYWORD_PRINT, || "".to_string(), map);
-    reg_unary(lib, KEYWORD_PRINT, |_: ()| "".to_string(), map);
-    reg_unary(lib, FUNC_TO_STRING, |_: ()| "".to_string(), map);
+    lib.set_fn_0(KEYWORD_PRINT, || Ok("".to_string()));
+    lib.set_fn_1(KEYWORD_PRINT, |_: ()| Ok("".to_string()));
+    lib.set_fn_1(FUNC_TO_STRING, |_: ()| Ok("".to_string()));
 
-    reg_unary_mut(lib, KEYWORD_PRINT, |s: &mut String| s.clone(), map);
-    reg_unary_mut(lib, FUNC_TO_STRING, |s: &mut String| s.clone(), map);
+    lib.set_fn_1_mut(KEYWORD_PRINT, |s: &mut String| Ok(s.clone()));
+    lib.set_fn_1_mut(FUNC_TO_STRING, |s: &mut String| Ok(s.clone()));
 
     reg_op!(lib, KEYWORD_DEBUG, to_debug, INT, bool, (), char, String);
 
@@ -73,34 +73,34 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
     #[cfg(not(feature = "no_object"))]
     {
-        reg_unary_mut(lib, KEYWORD_PRINT, format_map, map);
-        reg_unary_mut(lib, FUNC_TO_STRING, format_map, map);
-        reg_unary_mut(lib, KEYWORD_DEBUG, format_map, map);
+        lib.set_fn_1_mut(KEYWORD_PRINT, format_map);
+        lib.set_fn_1_mut(FUNC_TO_STRING, format_map);
+        lib.set_fn_1_mut(KEYWORD_DEBUG, format_map);
     }
 
-    reg_binary(
-        lib,
+    lib.set_fn_2(
         "+",
         |mut s: String, ch: char| {
             s.push(ch);
-            s
+            Ok(s)
         },
-        map,
     );
-    reg_binary(
-        lib,
+    lib.set_fn_2(
         "+",
         |mut s: String, s2: String| {
             s.push_str(&s2);
-            s
+            Ok(s)
         },
-        map,
     );
-    reg_binary_mut(lib, "append", |s: &mut String, ch: char| s.push(ch), map);
-    reg_binary_mut(
-        lib,
+    lib.set_fn_2_mut("append", |s: &mut String, ch: char| {
+        s.push(ch);
+        Ok(())
+    });
+    lib.set_fn_2_mut(
         "append",
-        |s: &mut String, s2: String| s.push_str(&s2),
-        map,
+        |s: &mut String, s2: String| {
+            s.push_str(&s2);
+            Ok(())
+        }
     );
 });

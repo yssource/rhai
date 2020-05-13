@@ -125,9 +125,8 @@ impl Engine {
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
     pub fn register_iterator<T: Variant + Clone, F: IteratorCallback>(&mut self, f: F) {
-        self.base_package
-            .type_iterators
-            .insert(TypeId::of::<T>(), Box::new(f));
+        self.global_module
+            .set_iterator(TypeId::of::<T>(), Box::new(f));
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
@@ -419,7 +418,7 @@ impl Engine {
     /// // into function calls and operators.
     /// let ast = engine.compile_scripts_with_scope(&mut scope, &[
     ///             "if x > 40",            // all 'x' are replaced with 42
-    ///             "{ x } el"
+    ///             "{ x } el",
     ///             "se { 0 }"              // segments do not need to be valid scripts!
     /// ])?;
     ///

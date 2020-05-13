@@ -1,9 +1,8 @@
 use super::logic::{eq, gt, gte, lt, lte, ne};
 use super::math_basic::MAX_INT;
-use super::{reg_binary, reg_none, reg_unary};
 
 use crate::def_package;
-use crate::fn_register::{map_dynamic as map, map_result as result};
+use crate::module::FuncReturn;
 use crate::parser::INT;
 use crate::result::EvalAltResult;
 use crate::token::Position;
@@ -14,10 +13,9 @@ use crate::stdlib::time::Instant;
 #[cfg(not(feature = "no_std"))]
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     // Register date/time functions
-    reg_none(lib, "timestamp", || Instant::now(), map);
+    lib.set_fn_0("timestamp", || Ok(Instant::now()));
 
-    reg_binary(
-        lib,
+    lib.set_fn_2(
         "-",
         |ts1: Instant, ts2: Instant| {
             if ts2 > ts1 {
@@ -63,18 +61,16 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
                 }
             }
         },
-        result,
     );
 
-    reg_binary(lib, "<", lt::<Instant>, map);
-    reg_binary(lib, "<=", lte::<Instant>, map);
-    reg_binary(lib, ">", gt::<Instant>, map);
-    reg_binary(lib, ">=", gte::<Instant>, map);
-    reg_binary(lib, "==", eq::<Instant>, map);
-    reg_binary(lib, "!=", ne::<Instant>, map);
+    lib.set_fn_2("<", lt::<Instant>);
+    lib.set_fn_2("<=", lte::<Instant>);
+    lib.set_fn_2(">", gt::<Instant>);
+    lib.set_fn_2(">=", gte::<Instant>);
+    lib.set_fn_2("==", eq::<Instant>);
+    lib.set_fn_2("!=", ne::<Instant>);
 
-    reg_unary(
-        lib,
+    lib.set_fn_1(
         "elapsed",
         |timestamp: Instant| {
             #[cfg(not(feature = "no_float"))]
@@ -96,6 +92,5 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
                 return Ok(seconds as INT);
             }
         },
-        result,
     );
 });

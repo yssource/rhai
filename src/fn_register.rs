@@ -4,10 +4,10 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
-use crate::fn_native::{FnCallArgs, NativeFunction, NativeFunctionABI::*};
+use crate::fn_native::{FnCallArgs, NativeFunctionABI::*};
+use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::token::Position;
-use crate::utils::calc_fn_spec;
 
 use crate::stdlib::{any::TypeId, boxed::Box, iter::empty, mem, string::ToString};
 
@@ -134,14 +134,13 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
 
 /// This macro creates a closure wrapping a registered function.
 macro_rules! make_func {
-	($fn:ident : $abi:expr ; $map:expr ; $($par:ident => $convert:expr),*) => {
+	($fn:ident : $map:expr ; $($par:ident => $convert:expr),*) => {
 //   ^ function pointer
-//               ^ function ABI type
-//                           ^ result mapping function
-//                                       ^ function parameter generic type name (A, B, C etc.)
-//                                                       ^ dereferencing function
+//               ^ result mapping function
+//                           ^ function parameter generic type name (A, B, C etc.)
+//                                           ^ dereferencing function
 
-		NativeFunction::new(Box::new(move |args: &mut FnCallArgs, pos: Position| {
+		Box::new(move |args: &mut FnCallArgs, pos: Position| {
             // The arguments are assumed to be of the correct number and types!
 
 			#[allow(unused_variables, unused_mut)]
@@ -157,7 +156,7 @@ macro_rules! make_func {
 
             // Map the result
             $map(r, pos)
-		}), $abi);
+		})
 	};
 }
 
@@ -209,9 +208,10 @@ macro_rules! def_register {
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
-                let func = make_func!(f : $abi ; map_dynamic ; $($par => $clone),*);
-                let hash = calc_fn_spec(empty(), name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.base_package.functions.insert(hash, Box::new(func));
+                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                    &[$(TypeId::of::<$par>()),*],
+                    make_func!(f : map_dynamic ; $($par => $clone),*)
+                );
             }
         }
 
@@ -226,9 +226,10 @@ macro_rules! def_register {
         > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
         {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
-                let func = make_func!(f : $abi ; map_identity ; $($par => $clone),*);
-                let hash = calc_fn_spec(empty(), name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.base_package.functions.insert(hash, Box::new(func));
+                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                    &[$(TypeId::of::<$par>()),*],
+                    make_func!(f : map_identity ; $($par => $clone),*)
+                );
             }
         }
 
@@ -244,9 +245,10 @@ macro_rules! def_register {
         > RegisterResultFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
-                let func = make_func!(f : $abi ; map_result ; $($par => $clone),*);
-                let hash = calc_fn_spec(empty(), name, [$(TypeId::of::<$par>()),*].iter().cloned());
-                self.base_package.functions.insert(hash, Box::new(func));
+                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                    &[$(TypeId::of::<$par>()),*],
+                    make_func!(f : map_result ; $($par => $clone),*)
+                );
             }
         }
 

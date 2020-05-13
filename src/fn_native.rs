@@ -127,3 +127,10 @@ pub type SharedNativeFunction = Rc<Box<dyn NativeCallable>>;
 /// An external native Rust function.
 #[cfg(feature = "sync")]
 pub type SharedNativeFunction = Arc<Box<dyn NativeCallable>>;
+
+/// A type iterator function.
+#[cfg(not(feature = "sync"))]
+pub type SharedIteratorFunction = Rc<Box<IteratorFn>>;
+/// An external native Rust function.
+#[cfg(feature = "sync")]
+pub type SharedIteratorFunction = Arc<Box<IteratorFn>>;

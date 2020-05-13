@@ -1,6 +1,7 @@
 //! This module contains all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-use crate::fn_native::{IteratorFn, NativeCallable};
+use crate::fn_native::{NativeCallable, SharedIteratorFunction};
+use crate::module::Module;
 
 use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
 
@@ -15,7 +16,6 @@ mod pkg_std;
 mod string_basic;
 mod string_more;
 mod time_basic;
-mod utils;
 
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
@@ -32,67 +32,22 @@ pub use string_more::MoreStringPackage;
 #[cfg(not(feature = "no_std"))]
 pub use time_basic::BasicTimePackage;
 
-pub use utils::*;
-
-const NUM_NATIVE_FUNCTIONS: usize = 512;
-
 /// Trait that all packages must implement.
 pub trait Package {
     /// Register all the functions in a package into a store.
-    fn init(lib: &mut PackageStore);
+    fn init(lib: &mut Module);
 
     /// Retrieve the generic package library from this package.
     fn get(&self) -> PackageLibrary;
 }
 
-/// Type to store all functions in the package.
-pub struct PackageStore {
-    /// All functions, keyed by a hash created from the function name and parameter types.
-    pub functions: HashMap<u64, Box<dyn NativeCallable>>,
-
-    /// All iterator functions, keyed by the type producing the iterator.
-    pub type_iterators: HashMap<TypeId, Box<IteratorFn>>,
-}
-
-impl PackageStore {
-    /// Create a new `PackageStore`.
-    pub fn new() -> Self {
-        Default::default()
-    }
-    /// Does the specified function hash key exist in the `PackageStore`?
-    pub fn contains_function(&self, hash: u64) -> bool {
-        self.functions.contains_key(&hash)
-    }
-    /// Get specified function via its hash key.
-    pub fn get_function(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
-        self.functions.get(&hash)
-    }
-    /// Does the specified TypeId iterator exist in the `PackageStore`?
-    pub fn contains_iterator(&self, id: TypeId) -> bool {
-        self.type_iterators.contains_key(&id)
-    }
-    /// Get the specified TypeId iterator.
-    pub fn get_iterator(&self, id: TypeId) -> Option<&Box<IteratorFn>> {
-        self.type_iterators.get(&id)
-    }
-}
-
-impl Default for PackageStore {
-    fn default() -> Self {
-        Self {
-            functions: HashMap::with_capacity(NUM_NATIVE_FUNCTIONS),
-            type_iterators: HashMap::with_capacity(4),
-        }
-    }
-}
-
-/// Type which `Rc`-wraps a `PackageStore` to facilitate sharing library instances.
+/// Type which `Rc`-wraps a `Module` to facilitate sharing library instances.
 #[cfg(not(feature = "sync"))]
-pub type PackageLibrary = Rc<PackageStore>;
+pub type PackageLibrary = Rc<Module>;
 
-/// Type which `Arc`-wraps a `PackageStore` to facilitate sharing library instances.
+/// Type which `Arc`-wraps a `Module` to facilitate sharing library instances.
 #[cfg(feature = "sync")]
-pub type PackageLibrary = Arc<PackageStore>;
+pub type PackageLibrary = Arc<Module>;
 
 /// Type containing a collection of `PackageLibrary` instances.
 /// All function and type iterator keys in the loaded packages are indexed for fast access.
@@ -110,13 +65,13 @@ impl PackagesCollection {
     }
     /// Does the specified function hash key exist in the `PackagesCollection`?
     pub fn contains_function(&self, hash: u64) -> bool {
-        self.packages.iter().any(|p| p.contains_function(hash))
+        self.packages.iter().any(|p| p.contains_fn(hash))
     }
     /// Get specified function via its hash key.
     pub fn get_function(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
         self.packages
             .iter()
-            .map(|p| p.get_function(hash))
+            .map(|p| p.get_fn(hash))
             .find(|f| f.is_some())
             .flatten()
     }
@@ -125,11 +80,59 @@ impl PackagesCollection {
         self.packages.iter().any(|p| p.contains_iterator(id))
     }
     /// Get the specified TypeId iterator.
-    pub fn get_iterator(&self, id: TypeId) -> Option<&Box<IteratorFn>> {
+    pub fn get_iterator(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
         self.packages
             .iter()
             .map(|p| p.get_iterator(id))
             .find(|f| f.is_some())
             .flatten()
     }
+}
+
+/// This macro makes it easy to define a _package_ (which is basically a shared module)
+/// and register functions into it.
+///
+/// Functions can be added to the package using the standard module methods such as
+/// `set_fn_2`, `set_fn_3_mut`, `set_fn_0` etc.
+///
+/// # Examples
+///
+/// ```
+/// use rhai::{Dynamic, EvalAltResult};
+/// use rhai::def_package;
+///
+/// fn add(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> { Ok(x + y) }
+///
+/// def_package!(rhai:MyPackage:"My super-duper package", lib,
+/// {
+///     // Load a binary function with all value parameters.
+///     lib.set_fn_2("my_add", add);
+/// });
+/// ```
+///
+/// The above defines a package named 'MyPackage' with a single function named 'my_add'.
+#[macro_export]
+macro_rules! def_package {
+    ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
+        #[doc=$comment]
+        pub struct $package($root::packages::PackageLibrary);
+
+        impl $root::packages::Package for $package {
+            fn get(&self) -> $root::packages::PackageLibrary {
+                self.0.clone()
+            }
+
+            fn init($lib: &mut $root::Module) {
+                $block
+            }
+        }
+
+        impl $package {
+            pub fn new() -> Self {
+                let mut module = $root::Module::new();
+                <Self as $root::packages::Package>::init(&mut module);
+                Self(module.into())
+            }
+        }
+    };
 }
