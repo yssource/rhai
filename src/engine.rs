@@ -792,7 +792,7 @@ impl Engine {
         // No optimizations because we only run it once
         let mut ast = self.compile_with_scope_and_optimization_level(
             &Scope::new(),
-            script,
+            &[script],
             OptimizationLevel::None,
         )?;
 

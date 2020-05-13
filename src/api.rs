@@ -344,6 +344,7 @@ impl Engine {
     }
 
     /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
+    ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
     ///
@@ -381,18 +382,71 @@ impl Engine {
     /// # }
     /// ```
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, Box<ParseError>> {
-        self.compile_with_scope_and_optimization_level(scope, script, self.optimization_level)
+        self.compile_scripts_with_scope(scope, &[script])
     }
 
-    /// Compile a string into an `AST` using own scope at a specific optimization level.
+    /// When passed a list of strings, first join the strings into one large script,
+    /// and then compile them into an `AST` using own scope, which can be used later for evaluation.
+    ///
+    /// The scope is useful for passing constants into the script for optimization
+    /// when using `OptimizationLevel::Full`.
+    ///
+    /// ## Note
+    ///
+    /// All strings are simply parsed one after another with nothing inserted in between, not even
+    /// a newline or space.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// # {
+    /// use rhai::{Engine, Scope, OptimizationLevel};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Set optimization level to 'Full' so the Engine can fold constants
+    /// // into function calls and operators.
+    /// engine.set_optimization_level(OptimizationLevel::Full);
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push_constant("x", 42_i64);   // 'x' is a constant
+    ///
+    /// // Compile a script made up of script segments to an AST and store it for later evaluation.
+    /// // Notice that `Full` optimization is on, so constants are folded
+    /// // into function calls and operators.
+    /// let ast = engine.compile_scripts_with_scope(&mut scope, &[
+    ///             "if x > 40",            // all 'x' are replaced with 42
+    ///             "{ x } el"
+    ///             "se { 0 }"              // segments do not need to be valid scripts!
+    /// ])?;
+    ///
+    /// // Normally this would have failed because no scope is passed into the 'eval_ast'
+    /// // call and so the variable 'x' does not exist.  Here, it passes because the script
+    /// // has been optimized and all references to 'x' are already gone.
+    /// assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn compile_scripts_with_scope(
+        &self,
+        scope: &Scope,
+        scripts: &[&str],
+    ) -> Result<AST, Box<ParseError>> {
+        self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
+    }
+
+    /// Join a list of strings and compile into an `AST` using own scope at a specific optimization level.
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
-        script: &str,
+        scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, Box<ParseError>> {
-        let scripts = [script];
-        let stream = lex(&scripts);
+        let stream = lex(scripts);
         parse(&mut stream.peekable(), self, scope, optimization_level)
     }
 
@@ -446,6 +500,7 @@ impl Engine {
     }
 
     /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
+    ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
     ///
@@ -697,8 +752,11 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         // Since the AST will be thrown away afterwards, don't bother to optimize it
-        let ast =
-            self.compile_with_scope_and_optimization_level(scope, script, OptimizationLevel::None)?;
+        let ast = self.compile_with_scope_and_optimization_level(
+            scope,
+            &[script],
+            OptimizationLevel::None,
+        )?;
         self.eval_ast_with_scope(scope, &ast)
     }
 
