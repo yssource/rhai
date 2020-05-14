@@ -1,6 +1,4 @@
 //! Module containing various utility types and functions.
-//
-// TODO - remove unsafe code
 
 use crate::stdlib::{
     any::TypeId,
@@ -55,6 +53,8 @@ pub fn calc_fn_spec<'a>(
 /// # Safety
 ///
 /// This type uses some unsafe code (mainly to zero out unused array slots) for efficiency.
+//
+// TODO - remove unsafe code
 #[derive(Clone, Hash)]
 pub struct StaticVec<T> {
     /// Total number of values held.

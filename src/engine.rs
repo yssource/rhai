@@ -21,6 +21,7 @@ use crate::parser::ModuleRef;
 
 use crate::stdlib::{
     any::TypeId,
+    borrow::Cow,
     boxed::Box,
     collections::HashMap,
     format,
@@ -135,6 +136,10 @@ pub struct State<'a> {
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
     pub always_search: bool,
+
+    /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
+    /// is one level higher, and so on.
+    pub scope_level: usize,
 }
 
 impl<'a> State<'a> {
@@ -143,6 +148,7 @@ impl<'a> State<'a> {
         Self {
             always_search: false,
             fn_lib,
+            scope_level: 0,
         }
     }
     /// Does a certain script-defined function exist in the `State`?
@@ -256,6 +262,24 @@ impl DerefMut for FunctionsLib {
     #[cfg(not(feature = "sync"))]
     fn deref_mut(&mut self) -> &mut HashMap<u64, Rc<FnDef>> {
         &mut self.0
+    }
+}
+
+/// A dangerous function that blindly casts a `&str` from one lifetime to a `Cow<str>` of
+/// another lifetime.  This is mainly used to let us push a block-local variable into the
+/// current `Scope` without cloning the variable name.  Doing this is safe because all local
+/// variables in the `Scope` are cleared out before existing the block.
+///
+/// Force-casting a local variable lifetime to the current `Scope`'s larger lifetime saves
+/// on allocations and string cloning, thus avoids us having to maintain a chain of `Scope`'s.
+fn unsafe_cast_var_name<'s>(name: &str, state: &State) -> Cow<'s, str> {
+    // If not at global level, we can force-cast
+    if state.scope_level > 0 {
+        // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
+        //           this is safe because all local variables are cleared at the end of the block
+        unsafe { mem::transmute::<_, &'s str>(name) }.into()
+    } else {
+        name.to_string().into()
     }
 }
 
@@ -656,9 +680,9 @@ impl Engine {
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
-    pub(crate) fn call_script_fn<'a>(
+    pub(crate) fn call_script_fn<'s>(
         &self,
-        scope: Option<&mut Scope>,
+        scope: Option<&mut Scope<'s>>,
         state: &State,
         fn_name: &str,
         fn_def: &FnDef,
@@ -672,7 +696,9 @@ impl Engine {
                 let scope_len = scope.len();
                 let mut state = State::new(state.fn_lib);
 
-                // Put arguments into scope as variables - variable name is copied
+                state.scope_level += 1;
+
+                // Put arguments into scope as variables
                 scope.extend(
                     fn_def
                         .params
@@ -681,7 +707,10 @@ impl Engine {
                             // Actually consume the arguments instead of cloning them
                             args.into_iter().map(|v| mem::take(*v)),
                         )
-                        .map(|(name, value)| (name.clone(), ScopeEntryType::Normal, value)),
+                        .map(|(name, value)| {
+                            let var_name = unsafe_cast_var_name(name.as_str(), &state);
+                            (var_name, ScopeEntryType::Normal, value)
+                        }),
                 );
 
                 // Evaluate the function at one higher level of call depth
@@ -704,6 +733,8 @@ impl Engine {
                         ))),
                     });
 
+                // Remove all local variables
+                // No need to reset `state.scope_level` because it is thrown away
                 scope.rewind(scope_len);
 
                 return result;
@@ -712,6 +743,7 @@ impl Engine {
             _ => {
                 let mut scope = Scope::new();
                 let mut state = State::new(state.fn_lib);
+                state.scope_level += 1;
 
                 // Put arguments into scope as variables
                 scope.extend(
@@ -726,6 +758,7 @@ impl Engine {
                 );
 
                 // Evaluate the function at one higher level of call depth
+                // No need to reset `state.scope_level` because it is thrown away
                 return self
                     .eval_stmt(&mut scope, &mut state, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
@@ -1510,9 +1543,9 @@ impl Engine {
     }
 
     /// Evaluate a statement
-    pub(crate) fn eval_stmt(
+    pub(crate) fn eval_stmt<'s>(
         &self,
-        scope: &mut Scope,
+        scope: &mut Scope<'s>,
         state: &mut State,
         stmt: &Stmt,
         level: usize,
@@ -1536,12 +1569,14 @@ impl Engine {
             // Block scope
             Stmt::Block(x) => {
                 let prev_len = scope.len();
+                state.scope_level += 1;
 
                 let result = x.0.iter().try_fold(Default::default(), |_, stmt| {
                     self.eval_stmt(scope, state, stmt, level)
                 });
 
                 scope.rewind(prev_len);
+                state.scope_level -= 1;
 
                 // The impact of an eval statement goes away at the end of a block
                 // because any new variables introduced will go out of scope
@@ -1604,9 +1639,10 @@ impl Engine {
                     .or_else(|| self.packages.get_iter(tid))
                 {
                     // Add the loop variable
-                    let name = x.0.clone();
-                    scope.push(name, ());
+                    let var_name = unsafe_cast_var_name(&x.0, &state);
+                    scope.push(var_name, ());
                     let index = scope.len() - 1;
+                    state.scope_level += 1;
 
                     for loop_var in iter_fn(iter_type) {
                         *scope.get_mut(index).0 = loop_var;
@@ -1622,6 +1658,7 @@ impl Engine {
                     }
 
                     scope.rewind(scope.len() - 1);
+                    state.scope_level -= 1;
                     Ok(Default::default())
                 } else {
                     Err(Box::new(EvalAltResult::ErrorFor(x.1.position())))
@@ -1667,15 +1704,15 @@ impl Engine {
             Stmt::Let(x) if x.1.is_some() => {
                 let ((var_name, _), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, expr.as_ref().unwrap(), level)?;
-                // TODO - avoid copying variable name in inner block?
-                scope.push_dynamic_value(var_name.clone(), ScopeEntryType::Normal, val, false);
+                let var_name = unsafe_cast_var_name(var_name, &state);
+                scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
                 Ok(Default::default())
             }
 
             Stmt::Let(x) => {
                 let ((var_name, _), _) = x.as_ref();
-                // TODO - avoid copying variable name in inner block?
-                scope.push(var_name.clone(), ());
+                let var_name = unsafe_cast_var_name(var_name, &state);
+                scope.push(var_name, ());
                 Ok(Default::default())
             }
 
@@ -1683,8 +1720,8 @@ impl Engine {
             Stmt::Const(x) if x.1.is_constant() => {
                 let ((var_name, _), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, &expr, level)?;
-                // TODO - avoid copying variable name in inner block?
-                scope.push_dynamic_value(var_name.clone(), ScopeEntryType::Constant, val, true);
+                let var_name = unsafe_cast_var_name(var_name, &state);
+                scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
                 Ok(Default::default())
             }
 
@@ -1709,8 +1746,8 @@ impl Engine {
                             let module =
                                 resolver.resolve(self, Scope::new(), &path, expr.position())?;
 
-                            // TODO - avoid copying module name in inner block?
-                            scope.push_module(name.clone(), module);
+                            let mod_name = unsafe_cast_var_name(name, &state);
+                            scope.push_module(mod_name, module);
                             Ok(Default::default())
                         } else {
                             Err(Box::new(EvalAltResult::ErrorModuleNotFound(

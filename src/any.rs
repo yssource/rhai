@@ -299,7 +299,7 @@ impl Default for Dynamic {
 }
 
 /// Cast a type into another type.
-fn try_cast<A: Any, B: Any>(a: A) -> Option<B> {
+fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
     if TypeId::of::<B>() == a.type_id() {
         // SAFETY: Just checked we have the right type. We explicitly forget the
         // value immediately after moving out, removing any chance of a destructor
@@ -315,7 +315,7 @@ fn try_cast<A: Any, B: Any>(a: A) -> Option<B> {
 }
 
 /// Cast a Boxed type into another type.
-fn cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, Box<X>> {
+fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, Box<X>> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {
         // SAFETY: just checked whether we are pointing to the correct type
@@ -383,17 +383,17 @@ impl Dynamic {
 
         let mut var = Box::new(value);
 
-        var = match cast_box::<_, Dynamic>(var) {
+        var = match unsafe_cast_box::<_, Dynamic>(var) {
             Ok(d) => return *d,
             Err(var) => var,
         };
-        var = match cast_box::<_, String>(var) {
+        var = match unsafe_cast_box::<_, String>(var) {
             Ok(s) => return Self(Union::Str(s)),
             Err(var) => var,
         };
         #[cfg(not(feature = "no_index"))]
         {
-            var = match cast_box::<_, Array>(var) {
+            var = match unsafe_cast_box::<_, Array>(var) {
                 Ok(array) => return Self(Union::Array(array)),
                 Err(var) => var,
             };
@@ -401,7 +401,7 @@ impl Dynamic {
 
         #[cfg(not(feature = "no_object"))]
         {
-            var = match cast_box::<_, Map>(var) {
+            var = match unsafe_cast_box::<_, Map>(var) {
                 Ok(map) => return Self(Union::Map(map)),
                 Err(var) => var,
             }
@@ -426,23 +426,23 @@ impl Dynamic {
     /// ```
     pub fn try_cast<T: Variant>(self) -> Option<T> {
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return cast_box::<_, T>(Box::new(self)).ok().map(|v| *v);
+            return unsafe_cast_box::<_, T>(Box::new(self)).ok().map(|v| *v);
         }
 
         match self.0 {
-            Union::Unit(value) => try_cast(value),
-            Union::Bool(value) => try_cast(value),
-            Union::Str(value) => cast_box::<_, T>(value).ok().map(|v| *v),
-            Union::Char(value) => try_cast(value),
-            Union::Int(value) => try_cast(value),
+            Union::Unit(value) => unsafe_try_cast(value),
+            Union::Bool(value) => unsafe_try_cast(value),
+            Union::Str(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+            Union::Char(value) => unsafe_try_cast(value),
+            Union::Int(value) => unsafe_try_cast(value),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value) => try_cast(value),
+            Union::Float(value) => unsafe_try_cast(value),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value) => cast_box::<_, T>(value).ok().map(|v| *v),
+            Union::Array(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(value) => cast_box::<_, T>(value).ok().map(|v| *v),
+            Union::Map(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
             #[cfg(not(feature = "no_module"))]
-            Union::Module(value) => cast_box::<_, T>(value).ok().map(|v| *v),
+            Union::Module(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).ok(),
         }
     }
@@ -467,23 +467,23 @@ impl Dynamic {
         //self.try_cast::<T>().unwrap()
 
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return *cast_box::<_, T>(Box::new(self)).unwrap();
+            return *unsafe_cast_box::<_, T>(Box::new(self)).unwrap();
         }
 
         match self.0 {
-            Union::Unit(value) => try_cast(value).unwrap(),
-            Union::Bool(value) => try_cast(value).unwrap(),
-            Union::Str(value) => *cast_box::<_, T>(value).unwrap(),
-            Union::Char(value) => try_cast(value).unwrap(),
-            Union::Int(value) => try_cast(value).unwrap(),
+            Union::Unit(value) => unsafe_try_cast(value).unwrap(),
+            Union::Bool(value) => unsafe_try_cast(value).unwrap(),
+            Union::Str(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
+            Union::Char(value) => unsafe_try_cast(value).unwrap(),
+            Union::Int(value) => unsafe_try_cast(value).unwrap(),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value) => try_cast(value).unwrap(),
+            Union::Float(value) => unsafe_try_cast(value).unwrap(),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value) => *cast_box::<_, T>(value).unwrap(),
+            Union::Array(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(value) => *cast_box::<_, T>(value).unwrap(),
+            Union::Map(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
             #[cfg(not(feature = "no_module"))]
-            Union::Module(value) => *cast_box::<_, T>(value).unwrap(),
+            Union::Module(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).unwrap(),
         }
     }

@@ -20,6 +20,7 @@ Rhai's current features set:
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
+* Relatively little `unsafe` code (yes there are some for performance reasons)
 * [`no-std`](#optional-features) support
 * [Function overloading](#function-overloading)
 * [Operator overloading](#operator-overloading)
