@@ -85,6 +85,7 @@ mod result;
 mod scope;
 mod stdlib;
 mod token;
+mod r#unsafe;
 mod utils;
 
 pub use any::Dynamic;

@@ -1,9 +1,10 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
+use crate::parser::INT;
+use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
+
 #[cfg(not(feature = "no_module"))]
 use crate::module::Module;
-
-use crate::parser::INT;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -295,37 +296,6 @@ impl Clone for Dynamic {
 impl Default for Dynamic {
     fn default() -> Self {
         Self(Union::Unit(()))
-    }
-}
-
-/// Cast a type into another type.
-fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
-    if TypeId::of::<B>() == a.type_id() {
-        // SAFETY: Just checked we have the right type. We explicitly forget the
-        // value immediately after moving out, removing any chance of a destructor
-        // running or value otherwise being used again.
-        unsafe {
-            let ret: B = ptr::read(&a as *const _ as *const B);
-            mem::forget(a);
-            Some(ret)
-        }
-    } else {
-        None
-    }
-}
-
-/// Cast a Boxed type into another type.
-fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, Box<X>> {
-    // Only allow casting to the exact same type
-    if TypeId::of::<X>() == TypeId::of::<T>() {
-        // SAFETY: just checked whether we are pointing to the correct type
-        unsafe {
-            let raw: *mut dyn Any = Box::into_raw(item as Box<dyn Any>);
-            Ok(Box::from_raw(raw as *mut T))
-        }
-    } else {
-        // Return the consumed item for chaining.
-        Err(item)
     }
 }
 

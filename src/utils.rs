@@ -1,5 +1,7 @@
 //! Module containing various utility types and functions.
 
+use crate::r#unsafe::unsafe_zeroed;
+
 use crate::stdlib::{
     any::TypeId,
     fmt,
@@ -73,16 +75,6 @@ impl<T: PartialEq> PartialEq for StaticVec<T> {
 
 impl<T: Eq> Eq for StaticVec<T> {}
 
-impl<T> Default for StaticVec<T> {
-    fn default() -> Self {
-        Self {
-            len: 0,
-            list: unsafe { mem::MaybeUninit::zeroed().assume_init() },
-            more: Vec::new(),
-        }
-    }
-}
-
 impl<T> FromIterator<T> for StaticVec<T> {
     fn from_iter<X: IntoIterator<Item = T>>(iter: X) -> Self {
         let mut vec = StaticVec::new();
@@ -92,6 +84,16 @@ impl<T> FromIterator<T> for StaticVec<T> {
         }
 
         vec
+    }
+}
+
+impl<T> Default for StaticVec<T> {
+    fn default() -> Self {
+        Self {
+            len: 0,
+            list: unsafe_zeroed(),
+            more: Vec::new(),
+        }
     }
 }
 
@@ -105,7 +107,7 @@ impl<T> StaticVec<T> {
         if self.len == self.list.len() {
             // Move the fixed list to the Vec
             for x in 0..self.list.len() {
-                let def_val: T = unsafe { mem::MaybeUninit::zeroed().assume_init() };
+                let def_val: T = unsafe_zeroed();
                 self.more
                     .push(mem::replace(self.list.get_mut(x).unwrap(), def_val));
             }
@@ -126,7 +128,7 @@ impl<T> StaticVec<T> {
         let result = if self.len <= 0 {
             panic!("nothing to pop!")
         } else if self.len <= self.list.len() {
-            let def_val: T = unsafe { mem::MaybeUninit::zeroed().assume_init() };
+            let def_val: T = unsafe_zeroed();
             mem::replace(self.list.get_mut(self.len - 1).unwrap(), def_val)
         } else {
             let r = self.more.pop().unwrap();

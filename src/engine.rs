@@ -8,6 +8,7 @@ use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, FnDef, ReturnType, SharedFnDef, Stmt, AST};
+use crate::r#unsafe::unsafe_cast_var_name;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -127,6 +128,11 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 }
 
 /// A type that holds all the current states of the Engine.
+///
+/// # Safety
+///
+/// This type uses some unsafe code, mainly for avoiding cloning of local variable names via
+/// direct lifetime casting.
 #[derive(Debug, Clone, Copy)]
 pub struct State<'a> {
     /// Global script-defined functions.
@@ -262,24 +268,6 @@ impl DerefMut for FunctionsLib {
     #[cfg(not(feature = "sync"))]
     fn deref_mut(&mut self) -> &mut HashMap<u64, Rc<FnDef>> {
         &mut self.0
-    }
-}
-
-/// A dangerous function that blindly casts a `&str` from one lifetime to a `Cow<str>` of
-/// another lifetime.  This is mainly used to let us push a block-local variable into the
-/// current `Scope` without cloning the variable name.  Doing this is safe because all local
-/// variables in the `Scope` are cleared out before existing the block.
-///
-/// Force-casting a local variable lifetime to the current `Scope`'s larger lifetime saves
-/// on allocations and string cloning, thus avoids us having to maintain a chain of `Scope`'s.
-fn unsafe_cast_var_name<'s>(name: &str, state: &State) -> Cow<'s, str> {
-    // If not at global level, we can force-cast
-    if state.scope_level > 0 {
-        // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
-        //           this is safe because all local variables are cleared at the end of the block
-        unsafe { mem::transmute::<_, &'s str>(name) }.into()
-    } else {
-        name.to_string().into()
     }
 }
 
