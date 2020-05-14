@@ -18,7 +18,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
 
     let mut sub_module2 = Module::new();
     sub_module2.set_var("answer", 41 as INT);
-    let hash = sub_module2.set_fn_1("inc", |x: INT| Ok(x + 1));
+    let hash_inc = sub_module2.set_fn_1("inc", |x: INT| Ok(x + 1));
 
     sub_module.set_sub_module("universe", sub_module2);
     module.set_sub_module("life", sub_module);
@@ -30,11 +30,11 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     let m2 = m.get_sub_module("universe").unwrap();
 
     assert!(m2.contains_var("answer"));
-    assert!(m2.contains_fn(hash));
+    assert!(m2.contains_fn(hash_inc));
 
     assert_eq!(m2.get_var_value::<INT>("answer").unwrap(), 41);
 
-    let mut engine = Engine::new();
+    let engine = Engine::new();
     let mut scope = Scope::new();
 
     scope.push_module("question", module);
@@ -78,6 +78,90 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         )?,
         42
     );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_function"))]
+fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    let mut resolver = rhai::module_resolvers::StaticModuleResolver::new();
+    let mut sub_module = Module::new();
+    sub_module.set_var("foo", true);
+    resolver.insert("another module".to_string(), sub_module);
+
+    engine.set_module_resolver(Some(resolver));
+
+    let ast = engine.compile(
+        r#"
+        // Functions become module functions
+        fn calc(x) {
+            x + 1
+        }
+        fn add_len(x, y) {
+            x + len(y)
+        }
+        private fn hidden() {
+            throw "you shouldn't see me!";
+        }
+    
+        // Imported modules become sub-modules
+        import "another module" as extra;
+    
+        // Variables defined at global level become module variables
+        const x = 123;
+        let foo = 41;
+        let hello;
+    
+        // Final variable values become constant module variable values
+        foo = calc(foo);
+        hello = "hello, " + foo + " worlds!";
+
+        export
+            x as abc,
+            foo,
+            hello,
+            extra as foobar;
+    "#,
+    )?;
+
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+
+    let mut scope = Scope::new();
+    scope.push_module("testing", module);
+
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::abc")?,
+        123
+    );
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::foo")?,
+        42
+    );
+    assert!(engine.eval_expression_with_scope::<bool>(&mut scope, "testing::foobar::foo")?);
+    assert_eq!(
+        engine.eval_expression_with_scope::<String>(&mut scope, "testing::hello")?,
+        "hello, 42 worlds!"
+    );
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(&mut scope, "testing::calc(999)")?,
+        1000
+    );
+    assert_eq!(
+        engine.eval_expression_with_scope::<INT>(
+            &mut scope,
+            "testing::add_len(testing::foo, testing::hello)"
+        )?,
+        59
+    );
+    assert!(matches!(
+        *engine
+            .eval_expression_with_scope::<()>(&mut scope, "testing::hidden()")
+            .expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "hidden"
+    ));
 
     Ok(())
 }

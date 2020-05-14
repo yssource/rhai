@@ -196,6 +196,7 @@ pub enum Token {
     XOrAssign,
     ModuloAssign,
     PowerOfAssign,
+    Private,
     Import,
     Export,
     As,
@@ -205,14 +206,14 @@ pub enum Token {
 
 impl Token {
     /// Get the syntax of the token.
-    pub fn syntax(&self) -> Cow<str> {
+    pub fn syntax(&self) -> Cow<'static, str> {
         use Token::*;
 
         match self {
             IntegerConstant(i) => i.to_string().into(),
             #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
-            Identifier(s) => s.into(),
+            Identifier(s) => s.clone().into(),
             CharConstant(c) => c.to_string().into(),
             LexError(err) => err.to_string().into(),
 
@@ -279,6 +280,7 @@ impl Token {
                 ModuloAssign => "%=",
                 PowerOf => "~",
                 PowerOfAssign => "~=",
+                Private => "private",
                 Import => "import",
                 Export => "export",
                 As => "as",
@@ -750,6 +752,7 @@ impl<'a> TokenIterator<'a> {
                             "throw" => Token::Throw,
                             "for" => Token::For,
                             "in" => Token::In,
+                            "private" => Token::Private,
 
                             #[cfg(not(feature = "no_module"))]
                             "import" => Token::Import,

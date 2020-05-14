@@ -1,7 +1,5 @@
-use super::{reg_binary, reg_binary_mut, reg_trinary_mut, reg_unary_mut};
-
 use crate::def_package;
-use crate::fn_register::map_dynamic as map;
+use crate::module::FuncReturn;
 use crate::parser::INT;
 
 #[cfg(not(feature = "no_index"))]
@@ -14,19 +12,19 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-fn prepend<T: Display>(x: T, y: String) -> String {
-    format!("{}{}", x, y)
+fn prepend<T: Display>(x: T, y: String) -> FuncReturn<String> {
+    Ok(format!("{}{}", x, y))
 }
-fn append<T: Display>(x: String, y: T) -> String {
-    format!("{}{}", x, y)
+fn append<T: Display>(x: String, y: T) -> FuncReturn<String> {
+    Ok(format!("{}{}", x, y))
 }
-fn sub_string(s: &mut String, start: INT, len: INT) -> String {
+fn sub_string(s: &mut String, start: INT, len: INT) -> FuncReturn<String> {
     let offset = if s.is_empty() || len <= 0 {
-        return "".to_string();
+        return Ok("".to_string());
     } else if start < 0 {
         0
     } else if (start as usize) >= s.chars().count() {
-        return "".to_string();
+        return Ok("".to_string());
     } else {
         start as usize
     };
@@ -39,17 +37,17 @@ fn sub_string(s: &mut String, start: INT, len: INT) -> String {
         len as usize
     };
 
-    chars[offset..][..len].into_iter().collect()
+    Ok(chars[offset..][..len].into_iter().collect())
 }
-fn crop_string(s: &mut String, start: INT, len: INT) {
+fn crop_string(s: &mut String, start: INT, len: INT) -> FuncReturn<()> {
     let offset = if s.is_empty() || len <= 0 {
         s.clear();
-        return;
+        return Ok(());
     } else if start < 0 {
         0
     } else if (start as usize) >= s.chars().count() {
         s.clear();
-        return;
+        return Ok(());
     } else {
         start as usize
     };
@@ -67,18 +65,22 @@ fn crop_string(s: &mut String, start: INT, len: INT) {
     chars[offset..][..len]
         .into_iter()
         .for_each(|&ch| s.push(ch));
+
+    Ok(())
 }
 
-macro_rules! reg_op { ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
-    $(reg_binary($lib, $op, $func::<$par>, map);)* };
+macro_rules! reg_op {
+    ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
+        $( $lib.set_fn_2($op, $func::<$par>); )*
+    };
 }
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
     reg_op!(lib, "+", append, INT, bool, char);
-    reg_binary_mut(lib, "+", |x: &mut String, _: ()| x.clone(), map);
+    lib.set_fn_2_mut( "+", |x: &mut String, _: ()| Ok(x.clone()));
 
     reg_op!(lib, "+", prepend, INT, bool, char);
-    reg_binary(lib, "+", |_: (), y: String| y, map);
+    lib.set_fn_2("+", |_: (), y: String| Ok(y));
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
@@ -95,105 +97,95 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
     #[cfg(not(feature = "no_index"))]
     {
-        reg_binary(lib, "+", |x: String, y: Array| format!("{}{:?}", x, y), map);
-        reg_binary(lib, "+", |x: Array, y: String| format!("{:?}{}", x, y), map);
+        lib.set_fn_2("+", |x: String, y: Array| Ok(format!("{}{:?}", x, y)));
+        lib.set_fn_2("+", |x: Array, y: String| Ok(format!("{:?}{}", x, y)));
     }
 
-    reg_unary_mut(lib, "len", |s: &mut String| s.chars().count() as INT, map);
-    reg_binary_mut(
-        lib,
+    lib.set_fn_1_mut("len", |s: &mut String| Ok(s.chars().count() as INT));
+    lib.set_fn_2_mut(
         "contains",
-        |s: &mut String, ch: char| s.contains(ch),
-        map,
+        |s: &mut String, ch: char| Ok(s.contains(ch)),
     );
-    reg_binary_mut(
-        lib,
+    lib.set_fn_2_mut(
         "contains",
-        |s: &mut String, find: String| s.contains(&find),
-        map,
+        |s: &mut String, find: String| Ok(s.contains(&find)),
     );
-    reg_trinary_mut(
-        lib,
+    lib.set_fn_3_mut(
         "index_of",
         |s: &mut String, ch: char, start: INT| {
             let start = if start < 0 {
                 0
             } else if (start as usize) >= s.chars().count() {
-                return -1 as INT;
+                return Ok(-1 as INT);
             } else {
                 s.chars().take(start as usize).collect::<String>().len()
             };
 
-            s[start..]
+            Ok(s[start..]
                 .find(ch)
                 .map(|index| s[0..start + index].chars().count() as INT)
-                .unwrap_or(-1 as INT)
+                .unwrap_or(-1 as INT))
         },
-        map,
     );
-    reg_binary_mut(
-        lib,
+    lib.set_fn_2_mut(
         "index_of",
         |s: &mut String, ch: char| {
-            s.find(ch)
+            Ok(s.find(ch)
                 .map(|index| s[0..index].chars().count() as INT)
-                .unwrap_or(-1 as INT)
+                .unwrap_or(-1 as INT))
         },
-        map,
     );
-    reg_trinary_mut(
-        lib,
+    lib.set_fn_3_mut(
         "index_of",
         |s: &mut String, find: String, start: INT| {
             let start = if start < 0 {
                 0
             } else if (start as usize) >= s.chars().count() {
-                return -1 as INT;
+                return Ok(-1 as INT);
             } else {
                 s.chars().take(start as usize).collect::<String>().len()
             };
 
-            s[start..]
+            Ok(s[start..]
                 .find(&find)
                 .map(|index| s[0..start + index].chars().count() as INT)
-                .unwrap_or(-1 as INT)
+                .unwrap_or(-1 as INT))
         },
-        map,
     );
-    reg_binary_mut(
-        lib,
+    lib.set_fn_2_mut(
         "index_of",
         |s: &mut String, find: String| {
-            s.find(&find)
+            Ok(s.find(&find)
                 .map(|index| s[0..index].chars().count() as INT)
-                .unwrap_or(-1 as INT)
+                .unwrap_or(-1 as INT))
         },
-        map,
     );
-    reg_unary_mut(lib, "clear", |s: &mut String| s.clear(), map);
-    reg_binary_mut(lib, "append", |s: &mut String, ch: char| s.push(ch), map);
-    reg_binary_mut(
-        lib,
+    lib.set_fn_1_mut("clear", |s: &mut String| {
+        s.clear();
+        Ok(())
+    });
+    lib.set_fn_2_mut( "append", |s: &mut String, ch: char| {
+        s.push(ch);
+        Ok(())
+    });
+    lib.set_fn_2_mut(
         "append",
-        |s: &mut String, add: String| s.push_str(&add),
-        map,
+        |s: &mut String, add: String| {
+            s.push_str(&add);
+            Ok(())
+        }
     );
-    reg_trinary_mut(lib, "sub_string", sub_string, map);
-    reg_binary_mut(
-        lib,
+    lib.set_fn_3_mut( "sub_string", sub_string);
+    lib.set_fn_2_mut(
         "sub_string",
         |s: &mut String, start: INT| sub_string(s, start, s.len() as INT),
-        map,
     );
-    reg_trinary_mut(lib, "crop", crop_string, map);
-    reg_binary_mut(
-        lib,
+    lib.set_fn_3_mut( "crop", crop_string);
+    lib.set_fn_2_mut(
         "crop",
         |s: &mut String, start: INT| crop_string(s, start, s.len() as INT),
-        map,
     );
-    reg_binary_mut(
-        lib,
+    lib.set_fn_2_mut(
         "truncate",
         |s: &mut String, len: INT| {
             if len >= 0 {
@@ -203,31 +195,55 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             } else {
                 s.clear();
             }
+            Ok(())
         },
-        map,
     );
-    reg_trinary_mut(
-        lib,
+    lib.set_fn_3_mut(
         "pad",
         |s: &mut String, len: INT, ch: char| {
             for _ in 0..s.chars().count() - len as usize {
                 s.push(ch);
             }
+            Ok(())
         },
-        map,
     );
-    reg_trinary_mut(
-        lib,
+    lib.set_fn_3_mut(
         "replace",
         |s: &mut String, find: String, sub: String| {
             let new_str = s.replace(&find, &sub);
             s.clear();
             s.push_str(&new_str);
+            Ok(())
         },
-        map,
     );
-    reg_unary_mut(
-        lib,
+    lib.set_fn_3_mut(
+        "replace",
+        |s: &mut String, find: String, sub: char| {
+            let new_str = s.replace(&find, &sub.to_string());
+            s.clear();
+            s.push_str(&new_str);
+            Ok(())
+        },
+    );
+    lib.set_fn_3_mut(
+        "replace",
+        |s: &mut String, find: char, sub: String| {
+            let new_str = s.replace(&find.to_string(), &sub);
+            s.clear();
+            s.push_str(&new_str);
+            Ok(())
+        },
+    );
+    lib.set_fn_3_mut(
+        "replace",
+        |s: &mut String, find: char, sub: char| {
+            let new_str = s.replace(&find.to_string(), &sub.to_string());
+            s.clear();
+            s.push_str(&new_str);
+            Ok(())
+        },
+    );
+    lib.set_fn_1_mut(
         "trim",
         |s: &mut String| {
             let trimmed = s.trim();
@@ -235,7 +251,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             if trimmed.len() < s.len() {
                 *s = trimmed.to_string();
             }
+            Ok(())
         },
-        map,
     );
 });

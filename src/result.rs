@@ -33,6 +33,9 @@ pub enum EvalAltResult {
 
     /// Call to an unknown function. Wrapped value is the name of the function.
     ErrorFunctionNotFound(String, Position),
+    /// An error has occurred inside a called function.
+    /// Wrapped values re the name of the function and the interior error.
+    ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
     /// Function call has incorrect number of arguments.
     /// Wrapped values are the name of the function, the number of parameters required
     /// and the actual number of arguments passed.
@@ -97,6 +100,7 @@ impl EvalAltResult {
             Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
 
             Self::ErrorParsing(p) => p.desc(),
+            Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorFunctionArgsMismatch(_, _, _, _) => {
                 "Function call with wrong number of arguments"
@@ -159,6 +163,10 @@ impl fmt::Display for EvalAltResult {
             }
 
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
+
+            Self::ErrorInFunctionCall(s, err, pos) => {
+                write!(f, "Error in call to function '{}' ({}): {}", s, pos, err)
+            }
 
             Self::ErrorFunctionNotFound(s, pos)
             | Self::ErrorVariableNotFound(s, pos)
@@ -262,6 +270,7 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
 }
 
 impl EvalAltResult {
+    /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_std"))]
@@ -270,6 +279,7 @@ impl EvalAltResult {
             Self::ErrorParsing(err) => err.position(),
 
             Self::ErrorFunctionNotFound(_, pos)
+            | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
@@ -296,16 +306,16 @@ impl EvalAltResult {
         }
     }
 
-    /// Consume the current `EvalAltResult` and return a new one
-    /// with the specified `Position`.
-    pub(crate) fn set_position(mut err: Box<Self>, new_position: Position) -> Box<Self> {
-        match err.as_mut() {
+    /// Override the `Position` of this error.
+    pub fn set_position(&mut self, new_position: Position) {
+        match self {
             #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, pos, _) => *pos = new_position,
 
             Self::ErrorParsing(err) => err.1 = new_position,
 
             Self::ErrorFunctionNotFound(_, pos)
+            | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
@@ -330,7 +340,12 @@ impl EvalAltResult {
             | Self::ErrorLoopBreak(_, pos)
             | Self::Return(_, pos) => *pos = new_position,
         }
+    }
 
-        err
+    /// Consume the current `EvalAltResult` and return a new one
+    /// with the specified `Position`.
+    pub(crate) fn new_position(mut self: Box<Self>, new_position: Position) -> Box<Self> {
+        self.set_position(new_position);
+        self
     }
 }

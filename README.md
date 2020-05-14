@@ -20,10 +20,11 @@ Rhai's current features set:
 * Freely pass variables/constants into a script via an external [`Scope`]
 * Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
+* Relatively little `unsafe` code (yes there are some for performance reasons)
 * [`no-std`](#optional-features) support
-* Support for [function overloading](#function-overloading)
-* Support for [operator overloading](#operator-overloading)
-* Support for loading external [modules]
+* [Function overloading](#function-overloading)
+* [Operator overloading](#operator-overloading)
+* [Modules]
 * Compiled script is [optimized](#script-optimization) for repeat evaluations
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
@@ -126,7 +127,8 @@ Disable script-defined functions (`no_function`) only when the feature is not ne
 
 [`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
 This makes the scripting language quite useless as even basic arithmetic operators are not supported.
-Selectively include the necessary operators by loading specific [packages](#packages) while minimizing the code footprint.
+Selectively include the necessary functionalities by loading specific [packages](#packages) to minimize the footprint.
+Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
 Related
 -------
@@ -268,6 +270,7 @@ let ast = engine.compile_file("hello_world.rhai".into())?;
 ### Calling Rhai functions from Rust
 
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `call_fn`.
+Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
 
 ```rust
 // Define functions in a script.
@@ -287,6 +290,11 @@ let ast = engine.compile(true,
         fn hello() {
             42
         }
+
+        // this one is private and cannot be called by 'call_fn'
+        private hidden() {
+            throw "you shouldn't see me!";
+        }
     ")?;
 
 // A custom scope can also contain any variables/constants available to the functions
@@ -300,11 +308,15 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", ( String::from("abc"
 //                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //                                                          put arguments in a tuple
 
-let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?;
 //                                                          ^^^^^^^^^^ tuple of one
 
-let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?
+let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 //                                                          ^^ unit = tuple of zero
+
+// The following call will return a function-not-found error because
+// 'hidden' is declared with 'private'.
+let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
 ### Creating Rust anonymous functions from Rhai script
@@ -361,7 +373,7 @@ Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, n
 ### Packages
 
 Rhai functional features are provided in different _packages_ that can be loaded via a call to `load_package`.
-Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be imported in order for
+Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be loaded in order for
 packages to be used.
 
 ```rust
@@ -372,7 +384,7 @@ use rhai::packages::CorePackage;                // the 'core' package contains b
 let mut engine = Engine::new_raw();             // create a 'raw' Engine
 let package = CorePackage::new();               // create a package - can be shared among multiple `Engine` instances
 
-engine.load_package(package.get());             // load the package manually
+engine.load_package(package.get());             // load the package manually. 'get' returns a reference to the shared package
 ```
 
 The follow packages are available:
@@ -390,6 +402,20 @@ The follow packages are available:
 | `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
 | `CorePackage`          | Basic essentials                                |                  |                      |
 | `StandardPackage`      | Standard library                                |                  |                      |
+
+Packages typically contain Rust functions that are callable within a Rhai script.
+All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).
+Once a package is created (e.g. via `new`), it can be _shared_ (via `get`) among multiple instances of [`Engine`],
+even across threads (if the [`sync`] feature is turned on).
+Therefore, a package only has to be created _once_.
+
+Packages are actually implemented as [modules], so they share a lot of behavior and characteristics.
+The main difference is that a package loads under the _global_ namespace, while a module loads under its own
+namespace alias specified in an `import` statement (see also [modules]).
+A package is _static_ (i.e. pre-loaded into an [`Engine`]), while a module is _dynamic_ (i.e. loaded with
+the `import` statement).
+
+Custom packages can also be created.  See the macro [`def_package!`](https://docs.rs/rhai/0.13.0/rhai/macro.def_package.html).
 
 Evaluate expressions only
 -------------------------
@@ -752,11 +778,17 @@ println!("result: {}", result);                     // prints 42
 let result: f64 = engine.eval("1.0 + 0.0");         // '+' operator for two floats not overloaded
 
 println!("result: {}", result);                     // prints 1.0
+
+fn mixed_add(a: i64, b: f64) -> f64 { (a as f64) + b }
+
+engine.register_fn("+", mixed_add);                 // register '+' operator for an integer and a float
+
+let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an error)
 ```
 
-Use operator overloading for custom types (described below) only.  Be very careful when overloading built-in operators because
-script writers expect standard operators to behave in a consistent and predictable manner, and will be annoyed if a calculation
-for '+' turns into a subtraction, for example.
+Use operator overloading for custom types (described below) only.
+Be very careful when overloading built-in operators because script writers expect standard operators to behave in a
+consistent and predictable manner, and will be annoyed if a calculation for '`+`' turns into a subtraction, for example.
 
 Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
 See the [relevant section](#script-optimization) for more details.
@@ -1318,7 +1350,7 @@ The following standard methods (defined in the [`MoreStringPackage`](#packages) 
 | `index_of`   | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
 | `sub_string` | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
 | `crop`       | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`    | target sub-string, replacement string                        | replaces a sub-string with another                                                                |
+| `replace`    | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
 | `trim`       | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples
@@ -2038,32 +2070,62 @@ for entry in logbook.read().unwrap().iter() {
 }
 ```
 
-Using external modules
-----------------------
+Modules
+-------
 
-[module]: #using-external-modules
-[modules]: #using-external-modules
+[module]: #modules
+[modules]: #modules
 
-Rhai allows organizing code (functions and variables) into _modules_.  A module is a single script file
-with `export` statements that _exports_ certain global variables and functions as contents of the module.
+Rhai allows organizing code (functions, both Rust-based or script-based, and variables) into _modules_.
+Modules can be disabled via the [`no_module`] feature.
 
-Everything exported as part of a module is constant and read-only.
+### Exporting variables and functions from modules
+
+A _module_ is a single script (or pre-compiled `AST`) containing global variables and functions.
+The `export` statement, which can only be at global level, exposes selected variables as members of a module.
+Variables not exported are _private_ and invisible to the outside.
+On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the `private` prefix.
+Functions declared `private` are invisible to the outside.
+
+Everything exported from a module is **constant** (**read-only**).
+
+```rust
+// This is a module script.
+
+fn inc(x) { x + 1 }         // script-defined function - default public
+
+private fn foo() {}         // private function - invisible to outside
+
+let private = 123;          // variable not exported - default invisible to outside
+let x = 42;                 // this will be exported below
+
+export x;                   // the variable 'x' is exported under its own name
+
+export x as answer;         // the variable 'x' is exported under the alias 'answer'
+                            // another script can load this module and access 'x' as 'module::answer'
+```
 
 ### Importing modules
 
-A module can be _imported_ via the `import` statement, and its members accessed via '`::`' similar to C++.
+A module can be _imported_ via the `import` statement, and its members are accessed via '`::`' similar to C++.
 
 ```rust
 import "crypto" as crypto;  // import the script file 'crypto.rhai' as a module
 
 crypto::encrypt(secret);    // use functions defined under the module via '::'
 
+crypto::hash::sha256(key);  // sub-modules are also supported
+
 print(crypto::status);      // module variables are constants
 
-crypto::hash::sha256(key);  // sub-modules are also supported
+crypto::status = "off";     // <- runtime error - cannot modify a constant
 ```
 
 `import` statements are _scoped_, meaning that they are only accessible inside the scope that they're imported.
+They can appear anywhere a normal statement can be, but in the vast majority of cases `import` statements are
+group at the beginning of a script.  It is not advised to deviate from this common practice unless there is
+a _Very Good Reason™_. Especially, do not place an `import` statement within a loop; doing so will repeatedly
+re-load the same module during every iteration of the loop!
 
 ```rust
 let mod = "crypto";
@@ -2076,11 +2138,17 @@ if secured {                // new block scope
 
 crypto::encrypt(others);    // <- this causes a run-time error because the 'crypto' module
                             //    is no longer available!
+
+for x in range(0, 1000) {
+    import "crypto" as c;   // <- importing a module inside a loop is a Very Bad Idea™
+
+    c.encrypt(something);
+}
 ```
 
-### Creating custom modules from Rust
+### Creating custom modules with Rust
 
-To load a custom module into an [`Engine`], first create a `Module` type, add variables/functions into it,
+To load a custom module (written in Rust) into an [`Engine`], first create a `Module` type, add variables/functions into it,
 then finally push it into a custom [`Scope`].  This has the equivalent effect of putting an `import` statement
 at the beginning of any script run.
 
@@ -2105,6 +2173,56 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::answer + 1")? == 42;
 engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer)")? == 42;
 ```
 
+### Creating a module from an `AST`
+
+It is easy to convert a pre-compiled `AST` into a module: just use `Module::eval_ast_as_new`.
+Don't forget the `export` statement, otherwise there will be no variables exposed by the module
+other than non-`private` functions (unless that's intentional).
+
+```rust
+use rhai::{Engine, Module};
+
+let engine = Engine::new();
+
+// Compile a script into an 'AST'
+let ast = engine.compile(r#"
+    // Functions become module functions
+    fn calc(x) {
+        x + 1
+    }
+    fn add_len(x, y) {
+        x + y.len()
+    }
+
+    // Imported modules can become sub-modules
+    import "another module" as extra;
+
+    // Variables defined at global level can become module variables
+    const x = 123;
+    let foo = 41;
+    let hello;
+
+    // Variable values become constant module variable values
+    foo = calc(foo);
+    hello = "hello, " + foo + " worlds!";
+
+    // Finally, export the variables and modules
+    export
+        x as abc,           // aliased variable name
+        foo,
+        hello,
+        extra as foobar;    // export sub-module
+"#)?;
+
+// Convert the 'AST' into a module, using the 'Engine' to evaluate it first
+let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+
+// 'module' now can be loaded into a custom 'Scope' for future use.  It contains:
+//   - sub-module: 'foobar' (renamed from 'extra')
+//   - functions: 'calc', 'add_len'
+//   - variables: 'abc' (renamed from 'x'), 'foo', 'hello'
+```
+
 ### Module resolvers
 
 When encountering an `import` statement, Rhai attempts to _resolve_ the module based on the path string.
@@ -2114,10 +2232,10 @@ which simply loads a script file based on the path (with `.rhai` extension attac
 
 Built-in module resolvers are grouped under the `rhai::module_resolvers` module namespace.
 
-| Module Resolver        | Description                                                                                                                                                                                                                                                                |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function. |
-| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                        |
+| Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                                                                                                            |
 
 An [`Engine`]'s module resolver is set via a call to `set_module_resolver`:
 

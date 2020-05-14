@@ -1,12 +1,9 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
 
-use std::{
-    io::{stdin, stdout, Write},
-    iter,
-};
+use std::io::{stdin, stdout, Write};
 
 fn print_error(input: &str, err: EvalAltResult) {
     let lines: Vec<_> = input.trim().split('\n').collect();

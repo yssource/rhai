@@ -1,7 +1,4 @@
-use super::{reg_binary, reg_unary};
-
 use crate::def_package;
-use crate::fn_register::{map_dynamic as map, map_result as result};
 use crate::parser::INT;
 use crate::result::EvalAltResult;
 use crate::token::Position;
@@ -20,78 +17,77 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     #[cfg(not(feature = "no_float"))]
     {
         // Advanced math functions
-        reg_unary(lib, "sin", |x: FLOAT| x.to_radians().sin(), map);
-        reg_unary(lib, "cos", |x: FLOAT| x.to_radians().cos(), map);
-        reg_unary(lib, "tan", |x: FLOAT| x.to_radians().tan(), map);
-        reg_unary(lib, "sinh", |x: FLOAT| x.to_radians().sinh(), map);
-        reg_unary(lib, "cosh", |x: FLOAT| x.to_radians().cosh(), map);
-        reg_unary(lib, "tanh", |x: FLOAT| x.to_radians().tanh(), map);
-        reg_unary(lib, "asin", |x: FLOAT| x.asin().to_degrees(), map);
-        reg_unary(lib, "acos", |x: FLOAT| x.acos().to_degrees(), map);
-        reg_unary(lib, "atan", |x: FLOAT| x.atan().to_degrees(), map);
-        reg_unary(lib, "asinh", |x: FLOAT| x.asinh().to_degrees(), map);
-        reg_unary(lib, "acosh", |x: FLOAT| x.acosh().to_degrees(), map);
-        reg_unary(lib, "atanh", |x: FLOAT| x.atanh().to_degrees(), map);
-        reg_unary(lib, "sqrt", |x: FLOAT| x.sqrt(), map);
-        reg_unary(lib, "exp", |x: FLOAT| x.exp(), map);
-        reg_unary(lib, "ln", |x: FLOAT| x.ln(), map);
-        reg_binary(lib, "log", |x: FLOAT, base: FLOAT| x.log(base), map);
-        reg_unary(lib, "log10", |x: FLOAT| x.log10(), map);
-        reg_unary(lib, "floor", |x: FLOAT| x.floor(), map);
-        reg_unary(lib, "ceiling", |x: FLOAT| x.ceil(), map);
-        reg_unary(lib, "round", |x: FLOAT| x.ceil(), map);
-        reg_unary(lib, "int", |x: FLOAT| x.trunc(), map);
-        reg_unary(lib, "fraction", |x: FLOAT| x.fract(), map);
-        reg_unary(lib, "is_nan", |x: FLOAT| x.is_nan(), map);
-        reg_unary(lib, "is_finite", |x: FLOAT| x.is_finite(), map);
-        reg_unary(lib, "is_infinite", |x: FLOAT| x.is_infinite(), map);
+        lib.set_fn_1("sin", |x: FLOAT| Ok(x.to_radians().sin()));
+        lib.set_fn_1("cos", |x: FLOAT| Ok(x.to_radians().cos()));
+        lib.set_fn_1("tan", |x: FLOAT| Ok(x.to_radians().tan()));
+        lib.set_fn_1("sinh", |x: FLOAT| Ok(x.to_radians().sinh()));
+        lib.set_fn_1("cosh", |x: FLOAT| Ok(x.to_radians().cosh()));
+        lib.set_fn_1("tanh", |x: FLOAT| Ok(x.to_radians().tanh()));
+        lib.set_fn_1("asin", |x: FLOAT| Ok(x.asin().to_degrees()));
+        lib.set_fn_1("acos", |x: FLOAT| Ok(x.acos().to_degrees()));
+        lib.set_fn_1("atan", |x: FLOAT| Ok(x.atan().to_degrees()));
+        lib.set_fn_1("asinh", |x: FLOAT| Ok(x.asinh().to_degrees()));
+        lib.set_fn_1("acosh", |x: FLOAT| Ok(x.acosh().to_degrees()));
+        lib.set_fn_1("atanh", |x: FLOAT| Ok(x.atanh().to_degrees()));
+        lib.set_fn_1("sqrt", |x: FLOAT| Ok(x.sqrt()));
+        lib.set_fn_1("exp", |x: FLOAT| Ok(x.exp()));
+        lib.set_fn_1("ln", |x: FLOAT| Ok(x.ln()));
+        lib.set_fn_2("log", |x: FLOAT, base: FLOAT| Ok(x.log(base)));
+        lib.set_fn_1("log10", |x: FLOAT| Ok(x.log10()));
+        lib.set_fn_1("floor", |x: FLOAT| Ok(x.floor()));
+        lib.set_fn_1("ceiling", |x: FLOAT| Ok(x.ceil()));
+        lib.set_fn_1("round", |x: FLOAT| Ok(x.ceil()));
+        lib.set_fn_1("int", |x: FLOAT| Ok(x.trunc()));
+        lib.set_fn_1("fraction", |x: FLOAT| Ok(x.fract()));
+        lib.set_fn_1("is_nan", |x: FLOAT| Ok(x.is_nan()));
+        lib.set_fn_1("is_finite", |x: FLOAT| Ok(x.is_finite()));
+        lib.set_fn_1("is_infinite", |x: FLOAT| Ok(x.is_infinite()));
 
         // Register conversion functions
-        reg_unary(lib, "to_float", |x: INT| x as FLOAT, map);
-        reg_unary(lib, "to_float", |x: f32| x as FLOAT, map);
+        lib.set_fn_1("to_float", |x: INT| Ok(x as FLOAT));
+        lib.set_fn_1("to_float", |x: f32| Ok(x as FLOAT));
 
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_unary(lib, "to_float", |x: i8| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: u8| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: i16| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: u16| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: i32| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: u32| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: i64| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: u64| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: i128| x as FLOAT, map);
-            reg_unary(lib, "to_float", |x: u128| x as FLOAT, map);
+            lib.set_fn_1("to_float", |x: i8| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: u8| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: i16| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: u16| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: i32| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: u32| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: i64| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: u64| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: i128| Ok(x as FLOAT));
+            lib.set_fn_1("to_float", |x: u128| Ok(x as FLOAT));
         }
     }
 
-    reg_unary(lib, "to_int", |ch: char| ch as INT, map);
+    lib.set_fn_1("to_int", |ch: char| Ok(ch as INT));
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_unary(lib, "to_int", |x: i8| x as INT, map);
-        reg_unary(lib, "to_int", |x: u8| x as INT, map);
-        reg_unary(lib, "to_int", |x: i16| x as INT, map);
-        reg_unary(lib, "to_int", |x: u16| x as INT, map);
+        lib.set_fn_1("to_int", |x: i8| Ok(x as INT));
+        lib.set_fn_1("to_int", |x: u8| Ok(x as INT));
+        lib.set_fn_1("to_int", |x: i16| Ok(x as INT));
+        lib.set_fn_1("to_int", |x: u16| Ok(x as INT));
     }
 
     #[cfg(not(feature = "only_i32"))]
     {
-        reg_unary(lib, "to_int", |x: i32| x as INT, map);
-        reg_unary(lib, "to_int", |x: u64| x as INT, map);
+        lib.set_fn_1("to_int", |x: i32| Ok(x as INT));
+        lib.set_fn_1("to_int", |x: u64| Ok(x as INT));
 
         #[cfg(feature = "only_i64")]
-        reg_unary(lib, "to_int", |x: u32| x as INT, map);
+        lib.set_fn_1("to_int", |x: u32| Ok(x as INT));
     }
 
     #[cfg(not(feature = "no_float"))]
     {
         #[cfg(not(feature = "unchecked"))]
         {
-            reg_unary(
-                lib,
+            lib.set_fn_1(
                 "to_int",
                 |x: f32| {
                     if x > (MAX_INT as f32) {
@@ -103,10 +99,8 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 
                     Ok(x.trunc() as INT)
                 },
-                result,
             );
-            reg_unary(
-                lib,
+            lib.set_fn_1(
                 "to_int",
                 |x: FLOAT| {
                     if x > (MAX_INT as FLOAT) {
@@ -118,14 +112,13 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 
                     Ok(x.trunc() as INT)
                 },
-                result,
             );
         }
 
         #[cfg(feature = "unchecked")]
         {
-            reg_unary(lib, "to_int", |x: f32| x as INT, map);
-            reg_unary(lib, "to_int", |x: f64| x as INT, map);
+            lib.set_fn_1("to_int", |x: f32| Ok(x as INT));
+            lib.set_fn_1("to_int", |x: f64| Ok(x as INT));
         }
     }
 });

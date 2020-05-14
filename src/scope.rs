@@ -7,7 +7,7 @@ use crate::token::Position;
 #[cfg(not(feature = "no_module"))]
 use crate::module::Module;
 
-use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec, vec::Vec};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -22,7 +22,7 @@ pub enum EntryType {
 }
 
 /// An entry in the Scope.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entry<'a> {
     /// Name of the entry.
     pub name: Cow<'a, str>,
@@ -30,6 +30,8 @@ pub struct Entry<'a> {
     pub typ: EntryType,
     /// Current value of the entry.
     pub value: Dynamic,
+    /// Alias of the entry.
+    pub alias: Option<Box<String>>,
     /// A constant expression if the initial value matches one of the recognized types.
     pub expr: Option<Box<Expr>>,
 }
@@ -62,7 +64,7 @@ pub struct Entry<'a> {
 /// allowing for automatic _shadowing_.
 ///
 /// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Scope<'a>(Vec<Entry<'a>>);
 
 impl<'a> Scope<'a> {
@@ -175,7 +177,9 @@ impl<'a> Scope<'a> {
     ///
     /// Modules are used for accessing member variables, functions and plugins under a namespace.
     #[cfg(not(feature = "no_module"))]
-    pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Module) {
+    pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, mut value: Module) {
+        value.index_all_sub_modules();
+
         self.push_dynamic_value(
             name,
             EntryType::Module,
@@ -246,6 +250,7 @@ impl<'a> Scope<'a> {
         self.0.push(Entry {
             name: name.into(),
             typ: entry_type,
+            alias: None,
             value: value.into(),
             expr,
         });
@@ -410,14 +415,13 @@ impl<'a> Scope<'a> {
     /// Get a mutable reference to an entry in the Scope.
     pub(crate) fn get_mut(&mut self, index: usize) -> (&mut Dynamic, EntryType) {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
-
-        // assert_ne!(
-        //     entry.typ,
-        //     EntryType::Constant,
-        //     "get mut of constant entry"
-        // );
-
         (&mut entry.value, entry.typ)
+    }
+
+    /// Update the access type of an entry in the Scope.
+    pub(crate) fn set_entry_alias(&mut self, index: usize, alias: String) {
+        let entry = self.0.get_mut(index).expect("invalid index in Scope");
+        entry.alias = Some(Box::new(alias));
     }
 
     /// Get an iterator to entries in the Scope.
@@ -437,6 +441,7 @@ impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, EntryType, Dynamic)> for Scope<
             .extend(iter.into_iter().map(|(name, typ, value)| Entry {
                 name: name.into(),
                 typ,
+                alias: None,
                 value: value.into(),
                 expr: None,
             }));

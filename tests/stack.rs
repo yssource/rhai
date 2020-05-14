@@ -23,7 +23,8 @@ fn test_stack_overflow() -> Result<(), Box<EvalAltResult>> {
     ) {
         Ok(_) => panic!("should be stack overflow"),
         Err(err) => match *err {
-            EvalAltResult::ErrorStackOverflow(_) => (),
+            EvalAltResult::ErrorInFunctionCall(name, _, _)
+                if name.starts_with("foo > foo > foo") => {}
             _ => panic!("should be stack overflow"),
         },
     }

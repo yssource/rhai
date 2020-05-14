@@ -5,7 +5,7 @@ use crate::token::Position;
 use crate::stdlib::{boxed::Box, char, error::Error, fmt, string::String};
 
 /// Error when tokenizing the script text.
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum LexError {
     /// An unexpected character is encountered when tokenizing the script text.
     UnexpectedChar(char),
@@ -44,7 +44,7 @@ impl fmt::Display for LexError {
 /// Some errors never appear when certain features are turned on.
 /// They still exist so that the application can turn features on and off without going through
 /// massive code changes to remove/add back enum variants in match statements.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ParseErrorType {
     /// Error in the script text. Wrapped value is the error message.
     BadInput(String),
@@ -98,8 +98,16 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_function` feature.
     FnMissingBody(String),
-    /// Assignment to an inappropriate LHS (left-hand-side) expression.
-    AssignmentToInvalidLHS,
+    /// An export statement has duplicated names.
+    ///
+    /// Never appears under the `no_module` feature.
+    DuplicatedExport(String),
+    /// Export statement not at global level.
+    ///
+    /// Never appears under the `no_module` feature.
+    WrongExport,
+    /// Assignment to a copy of a value.
+    AssignmentToCopy,
     /// Assignment to an a constant variable.
     AssignmentToConstant(String),
     /// Break statement not inside a loop.
@@ -114,7 +122,7 @@ impl ParseErrorType {
 }
 
 /// Error when parsing a script.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct ParseError(pub(crate) ParseErrorType, pub(crate) Position);
 
 impl ParseError {
@@ -147,8 +155,10 @@ impl ParseError {
             ParseErrorType::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
             ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
             ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
-            ParseErrorType::AssignmentToInvalidLHS => "Cannot assign to this expression",
-            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant variable.",
+            ParseErrorType::DuplicatedExport(_) => "Duplicated variable/function in export statement",
+            ParseErrorType::WrongExport => "Export statement can only appear at global level",
+            ParseErrorType::AssignmentToCopy => "Only a copy of the value is change with this assignment",
+            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant value.",
             ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
         }
     }
@@ -192,6 +202,12 @@ impl fmt::Display for ParseError {
             ParseErrorType::FnDuplicatedParam(s, arg) => {
                 write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
             }
+
+            ParseErrorType::DuplicatedExport(s) => write!(
+                f,
+                "Duplicated variable/function '{}' in export statement",
+                s
+            )?,
 
             ParseErrorType::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s)?,
 

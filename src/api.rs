@@ -4,12 +4,16 @@ use crate::any::{Dynamic, Variant};
 use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
+use crate::fn_native::{
+    IteratorCallback, ObjectGetCallback, ObjectIndexerCallback, ObjectSetCallback,
+};
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::{parse, parse_global_expr, AST};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{lex, Position};
+use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
@@ -20,57 +24,10 @@ use crate::stdlib::{
     collections::HashMap,
     mem,
     string::{String, ToString},
-    vec::Vec,
 };
+
 #[cfg(not(feature = "no_std"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
-
-// Define callback function types
-#[cfg(feature = "sync")]
-pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T) -> U + Send + Sync + 'static, T, U> ObjectGetCallback<T, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T) -> U + 'static, T, U> ObjectGetCallback<T, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T, U) + Send + Sync + 'static, T, U> ObjectSetCallback<T, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T, X) -> U + Send + Sync + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T, X) -> U + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait IteratorCallback:
-    Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
-{
-}
-#[cfg(feature = "sync")]
-impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
-    for F
-{
-}
-
-#[cfg(not(feature = "sync"))]
-pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
 
 /// Engine public API
 impl Engine {
@@ -168,7 +125,7 @@ impl Engine {
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
     pub fn register_iterator<T: Variant + Clone, F: IteratorCallback>(&mut self, f: F) {
-        self.type_iterators.insert(TypeId::of::<T>(), Box::new(f));
+        self.global_module.set_iter(TypeId::of::<T>(), Box::new(f));
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
@@ -385,6 +342,7 @@ impl Engine {
     }
 
     /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
+    ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
     ///
@@ -422,18 +380,71 @@ impl Engine {
     /// # }
     /// ```
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, Box<ParseError>> {
-        self.compile_with_scope_and_optimization_level(scope, script, self.optimization_level)
+        self.compile_scripts_with_scope(scope, &[script])
     }
 
-    /// Compile a string into an `AST` using own scope at a specific optimization level.
+    /// When passed a list of strings, first join the strings into one large script,
+    /// and then compile them into an `AST` using own scope, which can be used later for evaluation.
+    ///
+    /// The scope is useful for passing constants into the script for optimization
+    /// when using `OptimizationLevel::Full`.
+    ///
+    /// ## Note
+    ///
+    /// All strings are simply parsed one after another with nothing inserted in between, not even
+    /// a newline or space.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// # {
+    /// use rhai::{Engine, Scope, OptimizationLevel};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Set optimization level to 'Full' so the Engine can fold constants
+    /// // into function calls and operators.
+    /// engine.set_optimization_level(OptimizationLevel::Full);
+    ///
+    /// // Create initialized scope
+    /// let mut scope = Scope::new();
+    /// scope.push_constant("x", 42_i64);   // 'x' is a constant
+    ///
+    /// // Compile a script made up of script segments to an AST and store it for later evaluation.
+    /// // Notice that `Full` optimization is on, so constants are folded
+    /// // into function calls and operators.
+    /// let ast = engine.compile_scripts_with_scope(&mut scope, &[
+    ///             "if x > 40",            // all 'x' are replaced with 42
+    ///             "{ x } el",
+    ///             "se { 0 }"              // segments do not need to be valid scripts!
+    /// ])?;
+    ///
+    /// // Normally this would have failed because no scope is passed into the 'eval_ast'
+    /// // call and so the variable 'x' does not exist.  Here, it passes because the script
+    /// // has been optimized and all references to 'x' are already gone.
+    /// assert_eq!(engine.eval_ast::<i64>(&ast)?, 42);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn compile_scripts_with_scope(
+        &self,
+        scope: &Scope,
+        scripts: &[&str],
+    ) -> Result<AST, Box<ParseError>> {
+        self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
+    }
+
+    /// Join a list of strings and compile into an `AST` using own scope at a specific optimization level.
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
-        script: &str,
+        scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, Box<ParseError>> {
-        let scripts = [script];
-        let stream = lex(&scripts);
+        let stream = lex(scripts);
         parse(&mut stream.peekable(), self, scope, optimization_level)
     }
 
@@ -487,6 +498,7 @@ impl Engine {
     }
 
     /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
+    ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
     ///
@@ -738,8 +750,11 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         // Since the AST will be thrown away afterwards, don't bother to optimize it
-        let ast =
-            self.compile_with_scope_and_optimization_level(scope, script, OptimizationLevel::None)?;
+        let ast = self.compile_with_scope_and_optimization_level(
+            scope,
+            &[script],
+            OptimizationLevel::None,
+        )?;
         self.eval_ast_with_scope(scope, &ast)
     }
 
@@ -856,7 +871,7 @@ impl Engine {
 
         return result.try_cast::<T>().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.to_string(),
+                return_type.into(),
                 Position::none(),
             ))
         });
@@ -867,12 +882,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut state = State::new();
+        let mut state = State::new(ast.fn_lib());
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
+                self.eval_stmt(scope, &mut state, stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -932,12 +947,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut state = State::new();
+        let mut state = State::new(ast.fn_lib());
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.fn_lib(), stmt, 0)
+                self.eval_stmt(scope, &mut state, stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -992,15 +1007,18 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let mut args: Vec<_> = arg_values.iter_mut().collect();
+        let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let fn_lib = ast.fn_lib();
         let pos = Position::none();
 
         let fn_def = fn_lib
-            .get_function(name, args.len())
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.to_string(), pos)))?;
+            .get_function_by_signature(name, args.len(), true)
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
 
-        let result = self.call_fn_from_lib(Some(scope), fn_lib, fn_def, &mut args, pos, 0)?;
+        let state = State::new(fn_lib);
+
+        let result =
+            self.call_script_fn(Some(scope), &state, name, fn_def, args.as_mut(), pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 

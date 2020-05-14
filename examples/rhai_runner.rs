@@ -3,7 +3,7 @@ use rhai::{Engine, EvalAltResult};
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
 
-use std::{env, fs::File, io::Read, iter, process::exit};
+use std::{env, fs::File, io::Read, process::exit};
 
 fn eprint_error(input: &str, err: EvalAltResult) {
     fn eprint_line(lines: &[&str], line: usize, pos: usize, err: &str) {

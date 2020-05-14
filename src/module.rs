@@ -1,61 +1,69 @@
 //! Module defining external-loaded modules for Rhai.
-#![cfg(not(feature = "no_module"))]
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, FnAny, FnCallArgs, FunctionsLib};
-use crate::parser::{FnDef, AST};
+use crate::engine::{Engine, FunctionsLib};
+use crate::fn_native::{
+    FnAny, FnCallArgs, IteratorFn, NativeCallable, NativeFunction, NativeFunctionABI,
+    NativeFunctionABI::*, SharedIteratorFunction, SharedNativeFunction,
+};
+use crate::parser::{FnAccess, FnDef, SharedFnDef, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
-use crate::token::Position;
-use crate::token::Token;
-use crate::utils::StaticVec;
+use crate::token::{Position, Token};
+use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     collections::HashMap,
-    fmt, mem,
+    fmt,
+    iter::{empty, repeat},
+    mem,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
+    vec,
+    vec::Vec,
 };
 
-/// A trait that encapsulates a module resolution service.
-pub trait ModuleResolver {
-    /// Resolve a module based on a path string.
-    fn resolve(
-        &self,
-        engine: &Engine,
-        path: &str,
-        pos: Position,
-    ) -> Result<Module, Box<EvalAltResult>>;
-}
+/// Default function access mode.
+const DEF_ACCESS: FnAccess = FnAccess::Public;
 
 /// Return type of module-level Rust function.
-type FuncReturn<T> = Result<T, Box<EvalAltResult>>;
+pub type FuncReturn<T> = Result<T, Box<EvalAltResult>>;
 
 /// An imported module, which may contain variables, sub-modules,
 /// external Rust functions, and script-defined functions.
 ///
 /// Not available under the `no_module` feature.
-#[derive(Default, Clone)]
+#[derive(Clone, Default)]
 pub struct Module {
     /// Sub-modules.
     modules: HashMap<String, Module>,
-    /// Module variables, including sub-modules.
+
+    /// Module variables.
     variables: HashMap<String, Dynamic>,
 
+    /// Flattened collection of all module variables, including those in sub-modules.
+    all_variables: HashMap<u64, Dynamic>,
+
     /// External Rust functions.
-    #[cfg(not(feature = "sync"))]
-    functions: HashMap<u64, Rc<Box<FnAny>>>,
-    /// External Rust functions.
-    #[cfg(feature = "sync")]
-    functions: HashMap<u64, Arc<Box<FnAny>>>,
+    functions: HashMap<u64, (String, FnAccess, Vec<TypeId>, SharedNativeFunction)>,
+
+    /// Flattened collection of all external Rust functions, including those in sub-modules.
+    all_functions: HashMap<u64, SharedNativeFunction>,
 
     /// Script-defined functions.
     fn_lib: FunctionsLib,
+
+    /// Flattened collection of all script-defined functions, including those in sub-modules.
+    all_fn_lib: FunctionsLib,
+
+    /// Iterator functions, keyed by the type producing the iterator.
+    type_iterators: HashMap<TypeId, SharedIteratorFunction>,
 }
 
 impl fmt::Debug for Module {
@@ -86,6 +94,24 @@ impl Module {
         Default::default()
     }
 
+    /// Create a new module with a specified capacity for native Rust functions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_var("answer", 42_i64);
+    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// ```
+    pub fn new_with_capacity(capacity: usize) -> Self {
+        Self {
+            functions: HashMap::with_capacity(capacity),
+            ..Default::default()
+        }
+    }
+
     /// Does a variable exist in the module?
     ///
     /// # Examples
@@ -113,7 +139,7 @@ impl Module {
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
     pub fn get_var_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
-        self.get_var(name).and_then(|v| v.try_cast::<T>())
+        self.get_var(name).and_then(Dynamic::try_cast::<T>)
     }
 
     /// Get a module variable as a `Dynamic`.
@@ -131,11 +157,6 @@ impl Module {
         self.variables.get(name).cloned()
     }
 
-    /// Get a mutable reference to a module variable.
-    pub fn get_var_mut(&mut self, name: &str) -> Option<&mut Dynamic> {
-        self.variables.get_mut(name)
-    }
-
     /// Set a variable into the module.
     ///
     /// If there is an existing variable of the same name, it is replaced.
@@ -149,21 +170,22 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
-    pub fn set_var<K: Into<String>, T: Into<Dynamic>>(&mut self, name: K, value: T) {
-        self.variables.insert(name.into(), value.into());
+    pub fn set_var<K: Into<String>, T: Variant + Clone>(&mut self, name: K, value: T) {
+        self.variables.insert(name.into(), Dynamic::from(value));
     }
 
     /// Get a mutable reference to a modules-qualified variable.
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     pub(crate) fn get_qualified_var_mut(
         &mut self,
         name: &str,
-        modules: &StaticVec<(String, Position)>,
+        hash_var: u64,
         pos: Position,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
-        Ok(self
-            .get_qualified_module_mut(modules)?
-            .get_var_mut(name)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?)
+        self.all_variables
+            .get_mut(&hash_var)
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.to_string(), pos)))
     }
 
     /// Does a sub-module exist in the module?
@@ -232,26 +254,6 @@ impl Module {
         self.modules.insert(name.into(), sub_module.into());
     }
 
-    /// Get a mutable reference to a modules chain.
-    /// The first module is always skipped and assumed to be the same as `self`.
-    pub(crate) fn get_qualified_module_mut(
-        &mut self,
-        modules: &StaticVec<(String, Position)>,
-    ) -> Result<&mut Module, Box<EvalAltResult>> {
-        let mut drain = modules.iter();
-        drain.next().unwrap(); // Skip first module
-
-        let mut module = self;
-
-        for (id, id_pos) in drain {
-            module = module
-                .get_sub_module_mut(id)
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *id_pos)))?;
-        }
-
-        Ok(module)
-    }
-
     /// Does the particular Rust function exist in the module?
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
@@ -266,22 +268,34 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
     /// ```
-    pub fn contains_fn(&self, hash: u64) -> bool {
-        self.functions.contains_key(&hash)
+    pub fn contains_fn(&self, hash_fn: u64) -> bool {
+        self.functions.contains_key(&hash_fn)
     }
 
     /// Set a Rust function into the module, returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
-    pub fn set_fn(&mut self, fn_name: &str, params: &[TypeId], func: Box<FnAny>) -> u64 {
-        let hash = calc_fn_hash(fn_name, params.iter().cloned());
+    pub fn set_fn(
+        &mut self,
+        name: String,
+        abi: NativeFunctionABI,
+        access: FnAccess,
+        params: &[TypeId],
+        func: Box<FnAny>,
+    ) -> u64 {
+        let hash_fn = calc_fn_hash(empty(), &name, params.iter().cloned());
+
+        let f = Box::new(NativeFunction::from((func, abi))) as Box<dyn NativeCallable>;
 
         #[cfg(not(feature = "sync"))]
-        self.functions.insert(hash, Rc::new(func));
+        let func = Rc::new(f);
         #[cfg(feature = "sync")]
-        self.functions.insert(hash, Arc::new(func));
+        let func = Arc::new(f);
 
-        hash
+        self.functions
+            .insert(hash_fn, (name, access, params.to_vec(), func));
+
+        hash_fn
     }
 
     /// Set a Rust function taking no parameters into the module, returning a hash key.
@@ -297,19 +311,15 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_0<T: Into<Dynamic>>(
+    pub fn set_fn_0<K: Into<String>, T: Variant + Clone>(
         &mut self,
-        fn_name: &str,
+        name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn() -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn() -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |_: &mut FnCallArgs, pos| {
-            func()
-                .map(|v| v.into())
-                .map_err(|err| EvalAltResult::set_position(err, pos))
-        };
-        let arg_types = &[];
-        self.set_fn(fn_name, arg_types, Box::new(f))
+        let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
+        let arg_types = [];
+        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -325,19 +335,16 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_1<A: Variant + Clone, T: Into<Dynamic>>(
+    pub fn set_fn_1<K: Into<String>, A: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        fn_name: &str,
+        name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
-            func(mem::take(args[0]).cast::<A>())
-                .map(|v| v.into())
-                .map_err(|err| EvalAltResult::set_position(err, pos))
-        };
-        let arg_types = &[TypeId::of::<A>()];
-        self.set_fn(fn_name, arg_types, Box::new(f))
+        let f =
+            move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
+        let arg_types = [TypeId::of::<A>()];
+        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -353,19 +360,17 @@ impl Module {
     /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_1_mut<A: Variant + Clone, T: Into<Dynamic>>(
+    pub fn set_fn_1_mut<K: Into<String>, A: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        fn_name: &str,
+        name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
-            func(args[0].downcast_mut::<A>().unwrap())
-                .map(|v| v.into())
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+        let f = move |args: &mut FnCallArgs| {
+            func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
-        let arg_types = &[TypeId::of::<A>()];
-        self.set_fn(fn_name, arg_types, Box::new(f))
+        let arg_types = [TypeId::of::<A>()];
+        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -383,22 +388,20 @@ impl Module {
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Into<Dynamic>>(
+    pub fn set_fn_2<K: Into<String>, A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        fn_name: &str,
+        name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
 
-            func(a, b)
-                .map(|v| v.into())
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b).map(Dynamic::from)
         };
-        let arg_types = &[TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(fn_name, arg_types, Box::new(f))
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
+        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
@@ -415,22 +418,25 @@ impl Module {
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Into<Dynamic>>(
+    pub fn set_fn_2_mut<
+        K: Into<String>,
+        A: Variant + Clone,
+        B: Variant + Clone,
+        T: Variant + Clone,
+    >(
         &mut self,
-        fn_name: &str,
+        name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
-            func(a, b)
-                .map(|v| v.into())
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b).map(Dynamic::from)
         };
-        let arg_types = &[TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(fn_name, arg_types, Box::new(f))
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
+        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -449,27 +455,26 @@ impl Module {
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_3<
+        K: Into<String>,
         A: Variant + Clone,
         B: Variant + Clone,
         C: Variant + Clone,
-        T: Into<Dynamic>,
+        T: Variant + Clone,
     >(
         &mut self,
-        fn_name: &str,
+        name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
 
-            func(a, b, c)
-                .map(|v| v.into())
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b, c).map(Dynamic::from)
         };
-        let arg_types = &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(fn_name, arg_types, Box::new(f))
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
+        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -489,27 +494,26 @@ impl Module {
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_3_mut<
+        K: Into<String>,
         A: Variant + Clone,
         B: Variant + Clone,
         C: Variant + Clone,
-        T: Into<Dynamic>,
+        T: Variant + Clone,
     >(
         &mut self,
-        fn_name: &str,
+        name: K,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs, pos| {
+        let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
-            func(a, b, c)
-                .map(|v| v.into())
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            func(a, b, c).map(Dynamic::from)
         };
-        let arg_types = &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(fn_name, arg_types, Box::new(f))
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
+        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
     }
 
     /// Get a Rust function.
@@ -526,8 +530,8 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn get_fn(&self, hash: u64) -> Option<&Box<FnAny>> {
-        self.functions.get(&hash).map(|v| v.as_ref())
+    pub fn get_fn(&self, hash_fn: u64) -> Option<&Box<dyn NativeCallable>> {
+        self.functions.get(&hash_fn).map(|(_, _, _, v)| v.as_ref())
     }
 
     /// Get a modules-qualified function.
@@ -537,52 +541,24 @@ impl Module {
     pub(crate) fn get_qualified_fn(
         &mut self,
         name: &str,
-        hash: u64,
-        modules: &StaticVec<(String, Position)>,
-        pos: Position,
-    ) -> Result<&Box<FnAny>, Box<EvalAltResult>> {
-        Ok(self
-            .get_qualified_module_mut(modules)?
-            .get_fn(hash)
+        hash_fn_native: u64,
+    ) -> Result<&Box<dyn NativeCallable>, Box<EvalAltResult>> {
+        self.all_functions
+            .get(&hash_fn_native)
+            .map(|f| f.as_ref())
             .ok_or_else(|| {
-                let mut fn_name: String = Default::default();
-
-                modules.iter().for_each(|(n, _)| {
-                    fn_name.push_str(n);
-                    fn_name.push_str(Token::DoubleColon.syntax().as_ref());
-                });
-
-                fn_name.push_str(name);
-
-                Box::new(EvalAltResult::ErrorFunctionNotFound(fn_name, pos))
-            })?)
+                Box::new(EvalAltResult::ErrorFunctionNotFound(
+                    name.to_string(),
+                    Position::none(),
+                ))
+            })
     }
 
-    /// Get the script-defined functions.
+    /// Get a modules-qualified script-defined functions.
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// assert_eq!(module.get_fn_lib().len(), 0);
-    /// ```
-    pub fn get_fn_lib(&self) -> &FunctionsLib {
-        &self.fn_lib
-    }
-
-    /// Get a modules-qualified functions library.
-    pub(crate) fn get_qualified_fn_lib(
-        &mut self,
-        name: &str,
-        args: usize,
-        modules: &StaticVec<(String, Position)>,
-    ) -> Result<Option<&FnDef>, Box<EvalAltResult>> {
-        Ok(self
-            .get_qualified_module_mut(modules)?
-            .fn_lib
-            .get_function(name, args))
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    pub(crate) fn get_qualified_scripted_fn(&mut self, hash_fn_def: u64) -> Option<&FnDef> {
+        self.all_fn_lib.get_function(hash_fn_def)
     }
 
     /// Create a new `Module` by evaluating an `AST`.
@@ -591,20 +567,18 @@ impl Module {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Module};
+    /// use rhai::{Engine, Module, Scope};
     ///
     /// let engine = Engine::new();
-    /// let ast = engine.compile("let answer = 42;")?;
-    /// let module = Module::eval_ast_as_new(&ast, &engine)?;
+    /// let ast = engine.compile("let answer = 42; export answer;")?;
+    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
     /// assert!(module.contains_var("answer"));
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn eval_ast_as_new(ast: &AST, engine: &Engine) -> FuncReturn<Self> {
-        // Use new scope
-        let mut scope = Scope::new();
-
+    #[cfg(not(feature = "no_module"))]
+    pub fn eval_ast_as_new(mut scope: Scope, ast: &AST, engine: &Engine) -> FuncReturn<Self> {
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &ast)?;
 
@@ -613,19 +587,21 @@ impl Module {
 
         scope.into_iter().for_each(
             |ScopeEntry {
-                 name, typ, value, ..
+                 typ, value, alias, ..
              }| {
                 match typ {
-                    // Variables left in the scope become module variables
-                    ScopeEntryType::Normal | ScopeEntryType::Constant => {
-                        module.variables.insert(name.into_owned(), value);
+                    // Variables with an alias left in the scope become module variables
+                    ScopeEntryType::Normal | ScopeEntryType::Constant if alias.is_some() => {
+                        module.variables.insert(*alias.unwrap(), value);
                     }
                     // Modules left in the scope become sub-modules
-                    ScopeEntryType::Module => {
+                    ScopeEntryType::Module if alias.is_some() => {
                         module
                             .modules
-                            .insert(name.into_owned(), value.cast::<Module>());
+                            .insert(*alias.unwrap(), value.cast::<Module>());
                     }
+                    // Variables and modules with no alias are private and not exported
+                    _ => (),
                 }
             },
         );
@@ -634,9 +610,195 @@ impl Module {
 
         Ok(module)
     }
+
+    /// Scan through all the sub-modules in the `Module` build an index of all
+    /// variables and external Rust functions via hashing.
+    pub(crate) fn index_all_sub_modules(&mut self) {
+        // Collect a particular module.
+        fn index_module<'a>(
+            module: &'a mut Module,
+            qualifiers: &mut Vec<&'a str>,
+            variables: &mut Vec<(u64, Dynamic)>,
+            functions: &mut Vec<(u64, SharedNativeFunction)>,
+            fn_lib: &mut Vec<(u64, SharedFnDef)>,
+        ) {
+            for (name, m) in module.modules.iter_mut() {
+                // Index all the sub-modules first.
+                qualifiers.push(name);
+                index_module(m, qualifiers, variables, functions, fn_lib);
+                qualifiers.pop();
+            }
+
+            // Index all variables
+            for (var_name, value) in module.variables.iter() {
+                // Qualifiers + variable name
+                let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
+                variables.push((hash_var, value.clone()));
+            }
+            // Index all Rust functions
+            for (name, access, params, func) in module.functions.values() {
+                match access {
+                    // Private functions are not exported
+                    FnAccess::Private => continue,
+                    FnAccess::Public => (),
+                }
+                // Rust functions are indexed in two steps:
+                // 1) Calculate a hash in a similar manner to script-defined functions,
+                //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
+                let hash_fn_def = calc_fn_hash(
+                    qualifiers.iter().map(|&v| v),
+                    name,
+                    repeat(EMPTY_TYPE_ID()).take(params.len()),
+                );
+                // 2) Calculate a second hash with no qualifiers, empty function name, and
+                //    the actual list of parameter `TypeId`'.s
+                let hash_fn_args = calc_fn_hash(empty(), "", params.iter().cloned());
+                // 3) The final hash is the XOR of the two hashes.
+                let hash_fn_native = hash_fn_def ^ hash_fn_args;
+
+                functions.push((hash_fn_native, func.clone()));
+            }
+            // Index all script-defined functions
+            for fn_def in module.fn_lib.values() {
+                match fn_def.access {
+                    // Private functions are not exported
+                    FnAccess::Private => continue,
+                    DEF_ACCESS => (),
+                }
+                // Qualifiers + function name + placeholders (one for each parameter)
+                let hash_fn_def = calc_fn_hash(
+                    qualifiers.iter().map(|&v| v),
+                    &fn_def.name,
+                    repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
+                );
+                fn_lib.push((hash_fn_def, fn_def.clone()));
+            }
+        }
+
+        let mut variables = Vec::new();
+        let mut functions = Vec::new();
+        let mut fn_lib = Vec::new();
+
+        index_module(
+            self,
+            &mut vec!["root"],
+            &mut variables,
+            &mut functions,
+            &mut fn_lib,
+        );
+
+        self.all_variables = variables.into_iter().collect();
+        self.all_functions = functions.into_iter().collect();
+        self.all_fn_lib = fn_lib.into();
+    }
+
+    /// Does a type iterator exist in the module?
+    pub fn contains_iter(&self, id: TypeId) -> bool {
+        self.type_iterators.contains_key(&id)
+    }
+
+    /// Set a type iterator into the module.
+    pub fn set_iter(&mut self, typ: TypeId, func: Box<IteratorFn>) {
+        #[cfg(not(feature = "sync"))]
+        self.type_iterators.insert(typ, Rc::new(func));
+        #[cfg(feature = "sync")]
+        self.type_iterators.insert(typ, Arc::new(func));
+    }
+
+    /// Get the specified type iterator.
+    pub fn get_iter(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
+        self.type_iterators.get(&id)
+    }
+}
+
+/// A chain of module names to qualify a variable or function call.
+/// A `u64` hash key is kept for quick search purposes.
+///
+/// A `StaticVec` is used because most module-level access contains only one level,
+/// and it is wasteful to always allocate a `Vec` with one element.
+#[derive(Clone, Eq, PartialEq, Hash, Default)]
+pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
+
+impl fmt::Debug for ModuleRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)?;
+
+        if let Some(index) = self.1 {
+            write!(f, " -> {}", index)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Deref for ModuleRef {
+    type Target = StaticVec<(String, Position)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ModuleRef {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl fmt::Display for ModuleRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (m, _) in self.0.iter() {
+            write!(f, "{}{}", m, Token::DoubleColon.syntax())?;
+        }
+        Ok(())
+    }
+}
+
+impl From<StaticVec<(String, Position)>> for ModuleRef {
+    fn from(modules: StaticVec<(String, Position)>) -> Self {
+        Self(modules, None)
+    }
+}
+
+impl ModuleRef {
+    pub(crate) fn index(&self) -> Option<NonZeroUsize> {
+        self.1
+    }
+    pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
+        self.1 = index
+    }
+}
+
+/// A trait that encapsulates a module resolution service.
+#[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "sync"))]
+pub trait ModuleResolver {
+    /// Resolve a module based on a path string.
+    fn resolve(
+        &self,
+        engine: &Engine,
+        scope: Scope,
+        path: &str,
+        pos: Position,
+    ) -> Result<Module, Box<EvalAltResult>>;
+}
+
+/// A trait that encapsulates a module resolution service.
+#[cfg(not(feature = "no_module"))]
+#[cfg(feature = "sync")]
+pub trait ModuleResolver: Send + Sync {
+    /// Resolve a module based on a path string.
+    fn resolve(
+        &self,
+        engine: &Engine,
+        scope: Scope,
+        path: &str,
+        pos: Position,
+    ) -> Result<Module, Box<EvalAltResult>>;
 }
 
 /// Re-export module resolvers.
+#[cfg(not(feature = "no_module"))]
 pub mod resolvers {
     #[cfg(not(feature = "no_std"))]
     pub use super::file::FileModuleResolver;
@@ -644,6 +806,7 @@ pub mod resolvers {
 }
 
 /// Script file-based module resolver.
+#[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_std"))]
 mod file {
     use super::*;
@@ -669,10 +832,16 @@ mod file {
     /// let mut engine = Engine::new();
     /// engine.set_module_resolver(Some(resolver));
     /// ```
-    #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
+    #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Hash)]
     pub struct FileModuleResolver {
         path: PathBuf,
         extension: String,
+    }
+
+    impl Default for FileModuleResolver {
+        fn default() -> Self {
+            Self::new_with_path(PathBuf::default())
+        }
     }
 
     impl FileModuleResolver {
@@ -740,12 +909,23 @@ mod file {
         pub fn new() -> Self {
             Default::default()
         }
+
+        /// Create a `Module` from a file path.
+        pub fn create_module<P: Into<PathBuf>>(
+            &self,
+            engine: &Engine,
+            scope: Scope,
+            path: &str,
+        ) -> Result<Module, Box<EvalAltResult>> {
+            self.resolve(engine, scope, path, Default::default())
+        }
     }
 
     impl ModuleResolver for FileModuleResolver {
         fn resolve(
             &self,
             engine: &Engine,
+            scope: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {
@@ -757,15 +937,15 @@ mod file {
             // Compile it
             let ast = engine
                 .compile_file(file_path)
-                .map_err(|err| EvalAltResult::set_position(err, pos))?;
+                .map_err(|err| err.new_position(pos))?;
 
-            Module::eval_ast_as_new(&ast, engine)
-                .map_err(|err| EvalAltResult::set_position(err, pos))
+            Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| err.new_position(pos))
         }
     }
 }
 
 /// Static module resolver.
+#[cfg(not(feature = "no_module"))]
 mod stat {
     use super::*;
 
@@ -828,13 +1008,14 @@ mod stat {
         fn resolve(
             &self,
             _: &Engine,
+            _: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {
             self.0
                 .get(path)
                 .cloned()
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos)))
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(path.into(), pos)))
         }
     }
 }
