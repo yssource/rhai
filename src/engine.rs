@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{FnCallArgs, NativeFunctionABI, PrintCallback};
+use crate::fn_native::{FnCallArgs, NativeFunctionABI, PrintCallback, ProgressCallback};
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
@@ -28,7 +28,7 @@ use crate::stdlib::{
     format,
     iter::{empty, once, repeat},
     mem,
-    num::NonZeroUsize,
+    num::{NonZeroU64, NonZeroUsize},
     ops::{Deref, DerefMut},
     rc::Rc,
     string::{String, ToString},
@@ -48,11 +48,16 @@ pub type Array = Vec<Dynamic>;
 #[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<String, Dynamic>;
 
+#[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
 pub const MAX_CALL_STACK_DEPTH: usize = 28;
 
+#[cfg(not(feature = "unchecked"))]
 #[cfg(not(debug_assertions))]
 pub const MAX_CALL_STACK_DEPTH: usize = 256;
+
+#[cfg(feature = "unchecked")]
+pub const MAX_CALL_STACK_DEPTH: usize = usize::MAX;
 
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
@@ -146,6 +151,9 @@ pub struct State<'a> {
     /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
     /// is one level higher, and so on.
     pub scope_level: usize,
+
+    /// Number of operations performed.
+    pub operations: u64,
 }
 
 impl<'a> State<'a> {
@@ -155,6 +163,7 @@ impl<'a> State<'a> {
             always_search: false,
             fn_lib,
             scope_level: 0,
+            operations: 0,
         }
     }
     /// Does a certain script-defined function exist in the `State`?
@@ -304,6 +313,8 @@ pub struct Engine {
     pub(crate) print: Box<PrintCallback>,
     /// Closure for implementing the `debug` command.
     pub(crate) debug: Box<PrintCallback>,
+    /// Closure for progress reporting.
+    pub(crate) progress: Option<Box<ProgressCallback>>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -311,6 +322,8 @@ pub struct Engine {
     ///
     /// Defaults to 28 for debug builds and 256 for non-debug builds.
     pub(crate) max_call_stack_depth: usize,
+    /// Maximum number of operations to run.
+    pub(crate) max_operations: Option<NonZeroU64>,
 }
 
 impl Default for Engine {
@@ -333,6 +346,9 @@ impl Default for Engine {
             print: Box::new(default_print),
             debug: Box::new(default_print),
 
+            // progress callback
+            progress: None,
+
             // optimization level
             #[cfg(feature = "no_optimize")]
             optimization_level: OptimizationLevel::None,
@@ -346,6 +362,7 @@ impl Default for Engine {
             optimization_level: OptimizationLevel::Full,
 
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+            max_operations: None,
         };
 
         #[cfg(feature = "no_stdlib")]
@@ -471,6 +488,7 @@ impl Engine {
             type_names: Default::default(),
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
+            progress: None,
 
             #[cfg(feature = "no_optimize")]
             optimization_level: OptimizationLevel::None,
@@ -484,6 +502,7 @@ impl Engine {
             optimization_level: OptimizationLevel::Full,
 
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+            max_operations: None,
         }
     }
 
@@ -515,10 +534,17 @@ impl Engine {
 
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
+    #[cfg(not(feature = "unchecked"))]
     pub fn set_max_call_levels(&mut self, levels: usize) {
         self.max_call_stack_depth = levels
     }
 
+    /// Set the maximum number of operations allowed for a script to run to avoid
+    /// consuming too much resources (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    pub fn set_max_operations(&mut self, operations: u64) {
+        self.max_operations = NonZeroU64::new(operations);
+    }
     /// Set the module resolution service used by the `Engine`.
     ///
     /// Not available under the `no_module` feature.
@@ -537,7 +563,7 @@ impl Engine {
     pub(crate) fn call_fn_raw(
         &self,
         scope: Option<&mut Scope>,
-        state: &State,
+        state: &mut State,
         fn_name: &str,
         hashes: (u64, u64),
         args: &mut FnCallArgs,
@@ -546,6 +572,8 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        self.inc_operations(state, pos)?;
+
         // Check for stack overflow
         if level > self.max_call_stack_depth {
             return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
@@ -554,9 +582,12 @@ impl Engine {
         // First search in script-defined functions (can override built-in)
         if hashes.1 > 0 {
             if let Some(fn_def) = state.get_function(hashes.1) {
-                return self
-                    .call_script_fn(scope, state, fn_name, fn_def, args, pos, level)
-                    .map(|v| (v, false));
+                let ops = state.operations;
+                let (result, operations) =
+                    self.call_script_fn(scope, &state, fn_name, fn_def, args, pos, level, ops)?;
+                state.operations = operations;
+                self.inc_operations(state, pos)?;
+                return Ok((result, false));
             }
         }
 
@@ -677,14 +708,17 @@ impl Engine {
         args: &mut FnCallArgs,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        operations: u64,
+    ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
         match scope {
             // Extern scope passed in which is not empty
             Some(scope) if scope.len() > 0 => {
                 let scope_len = scope.len();
-                let mut state = State::new(state.fn_lib);
+                let mut local_state = State::new(state.fn_lib);
 
-                state.scope_level += 1;
+                local_state.operations = operations;
+                self.inc_operations(&mut local_state, pos)?;
+                local_state.scope_level += 1;
 
                 // Put arguments into scope as variables
                 scope.extend(
@@ -696,14 +730,14 @@ impl Engine {
                             args.into_iter().map(|v| mem::take(*v)),
                         )
                         .map(|(name, value)| {
-                            let var_name = unsafe_cast_var_name(name.as_str(), &state);
+                            let var_name = unsafe_cast_var_name(name.as_str(), &local_state);
                             (var_name, ScopeEntryType::Normal, value)
                         }),
                 );
 
                 // Evaluate the function at one higher level of call depth
                 let result = self
-                    .eval_stmt(scope, &mut state, &fn_def.body, level + 1)
+                    .eval_stmt(scope, &mut local_state, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -725,13 +759,16 @@ impl Engine {
                 // No need to reset `state.scope_level` because it is thrown away
                 scope.rewind(scope_len);
 
-                return result;
+                return result.map(|v| (v, local_state.operations));
             }
             // No new scope - create internal scope
             _ => {
                 let mut scope = Scope::new();
-                let mut state = State::new(state.fn_lib);
-                state.scope_level += 1;
+                let mut local_state = State::new(state.fn_lib);
+
+                local_state.operations = operations;
+                self.inc_operations(&mut local_state, pos)?;
+                local_state.scope_level += 1;
 
                 // Put arguments into scope as variables
                 scope.extend(
@@ -748,7 +785,7 @@ impl Engine {
                 // Evaluate the function at one higher level of call depth
                 // No need to reset `state.scope_level` because it is thrown away
                 return self
-                    .eval_stmt(&mut scope, &mut state, &fn_def.body, level + 1)
+                    .eval_stmt(&mut scope, &mut local_state, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -764,7 +801,8 @@ impl Engine {
                             err,
                             pos,
                         ))),
-                    });
+                    })
+                    .map(|v| (v, local_state.operations));
             }
         }
     }
@@ -788,7 +826,7 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     fn exec_fn_call(
         &self,
-        state: &State,
+        state: &mut State,
         fn_name: &str,
         hash_fn_def: u64,
         args: &mut FnCallArgs,
@@ -827,7 +865,7 @@ impl Engine {
     fn eval_script_expr(
         &self,
         scope: &mut Scope,
-        state: &State,
+        state: &mut State,
         script: &Dynamic,
         pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -854,14 +892,20 @@ impl Engine {
         let ast = AST::new(statements, state.fn_lib.clone());
 
         // Evaluate the AST
-        self.eval_ast_with_scope_raw(scope, &ast)
-            .map_err(|err| err.new_position(pos))
+        let (result, operations) = self
+            .eval_ast_with_scope_raw(scope, &ast)
+            .map_err(|err| err.new_position(pos))?;
+
+        state.operations += operations;
+        self.inc_operations(state, pos)?;
+
+        return Ok(result);
     }
 
     /// Chain-evaluate a dot/index chain.
     fn eval_dot_index_chain_helper(
         &self,
-        state: &State,
+        state: &mut State,
         mut target: Target,
         rhs: &Expr,
         idx_values: &mut StaticVec<Dynamic>,
@@ -1145,7 +1189,7 @@ impl Engine {
     /// Get the value at the indexed position of a base type
     fn get_indexed_mut<'a>(
         &self,
-        state: &State,
+        state: &mut State,
         val: &'a mut Dynamic,
         is_ref: bool,
         mut idx: Dynamic,
@@ -1153,6 +1197,8 @@ impl Engine {
         op_pos: Position,
         create: bool,
     ) -> Result<Target<'a>, Box<EvalAltResult>> {
+        self.inc_operations(state, op_pos)?;
+
         match val {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr)) => {
@@ -1234,6 +1280,8 @@ impl Engine {
         rhs: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.inc_operations(state, rhs.position())?;
+
         let mut lhs_value = self.eval_expr(scope, state, lhs, level)?;
         let rhs_value = self.eval_expr(scope, state, rhs, level)?;
 
@@ -1288,6 +1336,8 @@ impl Engine {
         expr: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.inc_operations(state, expr.position())?;
+
         match expr {
             Expr::IntegerConstant(x) => Ok(x.0.into()),
             #[cfg(not(feature = "no_float"))]
@@ -1461,9 +1511,16 @@ impl Engine {
 
                 // First search in script-defined functions (can override built-in)
                 if let Some(fn_def) = module.get_qualified_scripted_fn(*hash_fn_def) {
-                    self.call_script_fn(None, state, name, fn_def, args.as_mut(), *pos, level)
+                    let args = args.as_mut();
+                    let ops = state.operations;
+                    let (result, operations) =
+                        self.call_script_fn(None, state, name, fn_def, args, *pos, level, ops)?;
+                    state.operations = operations;
+                    self.inc_operations(state, *pos)?;
+                    Ok(result)
                 } else {
                     // Then search in Rust functions
+                    self.inc_operations(state, *pos)?;
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1538,6 +1595,8 @@ impl Engine {
         stmt: &Stmt,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.inc_operations(state, stmt.position())?;
+
         match stmt {
             // No-op
             Stmt::Noop(_) => Ok(Default::default()),
@@ -1546,11 +1605,10 @@ impl Engine {
             Stmt::Expr(expr) => {
                 let result = self.eval_expr(scope, state, expr, level)?;
 
-                Ok(if let Expr::Assignment(_) = *expr.as_ref() {
+                Ok(match expr.as_ref() {
                     // If it is an assignment, erase the result at the root
-                    Default::default()
-                } else {
-                    result
+                    Expr::Assignment(_) => Default::default(),
+                    _ => result,
                 })
             }
 
@@ -1574,25 +1632,32 @@ impl Engine {
             }
 
             // If-else statement
-            Stmt::IfThenElse(x) => self
-                .eval_expr(scope, state, &x.0, level)?
-                .as_bool()
-                .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(x.0.position())))
-                .and_then(|guard_val| {
-                    if guard_val {
-                        self.eval_stmt(scope, state, &x.1, level)
-                    } else if let Some(stmt) = &x.2 {
-                        self.eval_stmt(scope, state, stmt, level)
-                    } else {
-                        Ok(Default::default())
-                    }
-                }),
+            Stmt::IfThenElse(x) => {
+                let (expr, if_block, else_block) = x.as_ref();
+
+                self.eval_expr(scope, state, expr, level)?
+                    .as_bool()
+                    .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(expr.position())))
+                    .and_then(|guard_val| {
+                        if guard_val {
+                            self.eval_stmt(scope, state, if_block, level)
+                        } else if let Some(stmt) = else_block {
+                            self.eval_stmt(scope, state, stmt, level)
+                        } else {
+                            Ok(Default::default())
+                        }
+                    })
+            }
 
             // While loop
             Stmt::While(x) => loop {
-                match self.eval_expr(scope, state, &x.0, level)?.as_bool() {
-                    Ok(true) => match self.eval_stmt(scope, state, &x.1, level) {
-                        Ok(_) => (),
+                let (expr, body) = x.as_ref();
+
+                match self.eval_expr(scope, state, expr, level)?.as_bool() {
+                    Ok(true) => match self.eval_stmt(scope, state, body, level) {
+                        Ok(_) => {
+                            self.inc_operations(state, body.position())?;
+                        }
                         Err(err) => match *err {
                             EvalAltResult::ErrorLoopBreak(false, _) => (),
                             EvalAltResult::ErrorLoopBreak(true, _) => return Ok(Default::default()),
@@ -1600,14 +1665,18 @@ impl Engine {
                         },
                     },
                     Ok(false) => return Ok(Default::default()),
-                    Err(_) => return Err(Box::new(EvalAltResult::ErrorLogicGuard(x.0.position()))),
+                    Err(_) => {
+                        return Err(Box::new(EvalAltResult::ErrorLogicGuard(expr.position())))
+                    }
                 }
             },
 
             // Loop statement
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, state, body, level) {
-                    Ok(_) => (),
+                    Ok(_) => {
+                        self.inc_operations(state, body.position())?;
+                    }
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
                         EvalAltResult::ErrorLoopBreak(true, _) => return Ok(Default::default()),
@@ -1618,7 +1687,8 @@ impl Engine {
 
             // For loop
             Stmt::For(x) => {
-                let iter_type = self.eval_expr(scope, state, &x.1, level)?;
+                let (name, expr, stmt) = x.as_ref();
+                let iter_type = self.eval_expr(scope, state, expr, level)?;
                 let tid = iter_type.type_id();
 
                 if let Some(iter_fn) = self
@@ -1627,15 +1697,16 @@ impl Engine {
                     .or_else(|| self.packages.get_iter(tid))
                 {
                     // Add the loop variable
-                    let var_name = unsafe_cast_var_name(&x.0, &state);
+                    let var_name = unsafe_cast_var_name(name, &state);
                     scope.push(var_name, ());
                     let index = scope.len() - 1;
                     state.scope_level += 1;
 
                     for loop_var in iter_fn(iter_type) {
                         *scope.get_mut(index).0 = loop_var;
+                        self.inc_operations(state, stmt.position())?;
 
-                        match self.eval_stmt(scope, state, &x.2, level) {
+                        match self.eval_stmt(scope, state, stmt, level) {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1690,26 +1761,29 @@ impl Engine {
 
             // Let statement
             Stmt::Let(x) if x.1.is_some() => {
-                let ((var_name, _), expr) = x.as_ref();
+                let ((var_name, pos), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, expr.as_ref().unwrap(), level)?;
                 let var_name = unsafe_cast_var_name(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
+                self.inc_operations(state, *pos)?;
                 Ok(Default::default())
             }
 
             Stmt::Let(x) => {
-                let ((var_name, _), _) = x.as_ref();
+                let ((var_name, pos), _) = x.as_ref();
                 let var_name = unsafe_cast_var_name(var_name, &state);
                 scope.push(var_name, ());
+                self.inc_operations(state, *pos)?;
                 Ok(Default::default())
             }
 
             // Const statement
             Stmt::Const(x) if x.1.is_constant() => {
-                let ((var_name, _), expr) = x.as_ref();
+                let ((var_name, pos), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, &expr, level)?;
                 let var_name = unsafe_cast_var_name(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
+                self.inc_operations(state, *pos)?;
                 Ok(Default::default())
             }
 
@@ -1718,7 +1792,7 @@ impl Engine {
 
             // Import statement
             Stmt::Import(x) => {
-                let (expr, (name, _)) = x.as_ref();
+                let (expr, (name, pos)) = x.as_ref();
 
                 #[cfg(feature = "no_module")]
                 unreachable!();
@@ -1736,6 +1810,7 @@ impl Engine {
 
                             let mod_name = unsafe_cast_var_name(name, &state);
                             scope.push_module(mod_name, module);
+                            self.inc_operations(state, *pos)?;
                             Ok(Default::default())
                         } else {
                             Err(Box::new(EvalAltResult::ErrorModuleNotFound(
@@ -1774,6 +1849,31 @@ impl Engine {
                 Ok(Default::default())
             }
         }
+    }
+
+    /// Check if the number of operations stay within limit.
+    fn inc_operations(&self, state: &mut State, pos: Position) -> Result<(), Box<EvalAltResult>> {
+        state.operations += 1;
+
+        #[cfg(not(feature = "unchecked"))]
+        {
+            // Guard against too many operations
+            if let Some(max) = self.max_operations {
+                if state.operations > max.get() {
+                    return Err(Box::new(EvalAltResult::ErrorTooManyOperations(pos)));
+                }
+            }
+        }
+
+        // Report progress - only in steps
+        if let Some(progress) = self.progress.as_ref() {
+            if !progress(state.operations) {
+                // Terminate script if progress returns false
+                return Err(Box::new(EvalAltResult::ErrorTerminated(pos)));
+            }
+        }
+
+        Ok(())
     }
 
     /// Map a type_name into a pretty-print name

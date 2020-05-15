@@ -20,6 +20,11 @@ pub type PrintCallback = dyn Fn(&str) + Send + Sync + 'static;
 #[cfg(not(feature = "sync"))]
 pub type PrintCallback = dyn Fn(&str) + 'static;
 
+#[cfg(feature = "sync")]
+pub type ProgressCallback = dyn Fn(u64) -> bool + Send + Sync + 'static;
+#[cfg(not(feature = "sync"))]
+pub type ProgressCallback = dyn Fn(u64) -> bool + 'static;
+
 // Define callback function types
 #[cfg(feature = "sync")]
 pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + Send + Sync + 'static {}

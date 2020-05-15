@@ -79,8 +79,12 @@ pub enum EvalAltResult {
     ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
     ErrorArithmetic(String, Position),
+    /// Number of operations over maximum limit.
+    ErrorTooManyOperations(Position),
     /// Call stack over maximum limit.
     ErrorStackOverflow(Position),
+    /// The script is prematurely terminated.
+    ErrorTerminated(Position),
     /// Run-time error encountered. Wrapped value is the error message.
     ErrorRuntime(String, Position),
 
@@ -137,7 +141,9 @@ impl EvalAltResult {
             Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
+            Self::ErrorTooManyOperations(_) => "Too many operations",
             Self::ErrorStackOverflow(_) => "Stack overflow",
+            Self::ErrorTerminated(_) => "Script terminated.",
             Self::ErrorRuntime(_, _) => "Runtime error",
             Self::ErrorLoopBreak(true, _) => "Break statement not inside a loop",
             Self::ErrorLoopBreak(false, _) => "Continue statement not inside a loop",
@@ -183,7 +189,9 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
-            | Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
+            | Self::ErrorTooManyOperations(pos)
+            | Self::ErrorStackOverflow(pos)
+            | Self::ErrorTerminated(pos) => write!(f, "{} ({})", desc, pos),
 
             Self::ErrorRuntime(s, pos) => {
                 write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
@@ -299,7 +307,9 @@ impl EvalAltResult {
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorTooManyOperations(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)
             | Self::Return(_, pos) => *pos,
@@ -335,7 +345,9 @@ impl EvalAltResult {
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorTooManyOperations(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)
             | Self::Return(_, pos) => *pos = new_position,
