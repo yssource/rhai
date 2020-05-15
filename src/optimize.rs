@@ -13,7 +13,6 @@ use crate::token::Position;
 
 use crate::stdlib::{
     boxed::Box,
-    collections::HashMap,
     iter::empty,
     string::{String, ToString},
     vec,

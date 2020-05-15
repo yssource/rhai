@@ -10,7 +10,7 @@ use crate::result::EvalAltResult;
 
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::ToString};
 
-/// A trait to register custom functions with the `Engine`.
+/// Trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {
     /// Register a custom function with the `Engine`.
     ///
@@ -42,7 +42,7 @@ pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN);
 }
 
-/// A trait to register custom functions that return `Dynamic` values with the `Engine`.
+/// Trait to register custom functions that return `Dynamic` values with the `Engine`.
 pub trait RegisterDynamicFn<FN, ARGS> {
     /// Register a custom function returning `Dynamic` values with the `Engine`.
     ///
@@ -69,7 +69,7 @@ pub trait RegisterDynamicFn<FN, ARGS> {
     fn register_dynamic_fn(&mut self, name: &str, f: FN);
 }
 
-/// A trait to register fallible custom functions returning `Result<_, Box<EvalAltResult>>` with the `Engine`.
+/// Trait to register fallible custom functions returning `Result<_, Box<EvalAltResult>>` with the `Engine`.
 pub trait RegisterResultFn<FN, ARGS, RET> {
     /// Register a custom fallible function with the `Engine`.
     ///

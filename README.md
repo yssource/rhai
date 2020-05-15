@@ -23,8 +23,8 @@ Rhai's current features set:
 * Relatively little `unsafe` code (yes there are some for performance reasons)
 * Sand-boxed (the scripting [`Engine`] can be declared immutable which cannot mutate the containing environment
   unless explicitly allowed via `RefCell` etc.)
-* Rugged (protection against [stack-overflow](#maximum-stack-depth) and [runaway scripts](#maximum-number-of-operations))
-* Able to set limits on script resource usage (e.g. see [tracking progress](#tracking-progress))
+* Rugged (protection against [stack-overflow](#maximum-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.)
+* Able to track script evaluation [progress](#tracking-progress) and manually terminate a script run
 * [`no-std`](#optional-features) support
 * [Function overloading](#function-overloading)
 * [Operator overloading](#operator-overloading)
@@ -2268,6 +2268,7 @@ The most important resources to watch out for are:
   floating-point representations, in order to crash the system.
 * **Files**: A malignant script may continuously `import` an external module within an infinite loop,
   thereby putting heavy load on the file-system (or even the network if the file is not local).
+  Even when modules are not created from files, they still typically consume a lot of resources to load.
 * **Data**: A malignant script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
 
@@ -2318,6 +2319,19 @@ engine.on_progress(|count| {                // 'count' is the number of operatio
 
 The closure passed to `Engine::on_progress` will be called once every operation.
 Return `false` to terminate the script immediately.
+
+### Maximum number of modules
+
+Rhai by default does not limit how many [modules] are loaded via the `import` statement.
+This can be changed via the `Engine::set_max_modules` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_modules(5);                  // allow loading only up to 5 modules
+
+engine.set_max_modules(0);                  // allow unlimited modules
+```
 
 ### Maximum stack depth
 
@@ -2646,7 +2660,7 @@ let x = eval("40 + 2");     // 'eval' here throws "eval is evil! I refuse to run
 Or override it from Rust:
 
 ```rust
-fn alt_eval(script: String) -> Result<(), EvalAltResult> {
+fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
     Err(format!("eval is evil! I refuse to run {}", script).into())
 }
 

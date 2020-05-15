@@ -116,6 +116,7 @@ pub use parser::FLOAT;
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;
 
+/// Module containing all built-in _module resolvers_ available to Rhai.
 #[cfg(not(feature = "no_module"))]
 pub mod module_resolvers {
     pub use crate::module::resolvers::*;

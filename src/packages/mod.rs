@@ -1,4 +1,4 @@
-//! This module contains all built-in _packages_ available to Rhai, plus facilities to define custom packages.
+//! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
 use crate::fn_native::{NativeCallable, SharedIteratorFunction};
 use crate::module::Module;
@@ -89,7 +89,7 @@ impl PackagesCollection {
     }
 }
 
-/// This macro makes it easy to define a _package_ (which is basically a shared module)
+/// Macro that makes it easy to define a _package_ (which is basically a shared module)
 /// and register functions into it.
 ///
 /// Functions can be added to the package using the standard module methods such as

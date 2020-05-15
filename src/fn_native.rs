@@ -82,7 +82,7 @@ pub enum NativeFunctionABI {
     Method,
 }
 
-/// A trait implemented by all native Rust functions that are callable by Rhai.
+/// Trait implemented by all native Rust functions that are callable by Rhai.
 #[cfg(not(feature = "sync"))]
 pub trait NativeCallable {
     /// Get the ABI type of a native Rust function.
@@ -91,7 +91,7 @@ pub trait NativeCallable {
     fn call(&self, args: &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 }
 
-/// A trait implemented by all native Rust functions that are callable by Rhai.
+/// Trait implemented by all native Rust functions that are callable by Rhai.
 #[cfg(feature = "sync")]
 pub trait NativeCallable: Send + Sync {
     /// Get the ABI type of a native Rust function.

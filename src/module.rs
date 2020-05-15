@@ -769,7 +769,7 @@ impl ModuleRef {
     }
 }
 
-/// A trait that encapsulates a module resolution service.
+/// Trait that encapsulates a module resolution service.
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "sync"))]
 pub trait ModuleResolver {
@@ -783,7 +783,7 @@ pub trait ModuleResolver {
     ) -> Result<Module, Box<EvalAltResult>>;
 }
 
-/// A trait that encapsulates a module resolution service.
+/// Trait that encapsulates a module resolution service.
 #[cfg(not(feature = "no_module"))]
 #[cfg(feature = "sync")]
 pub trait ModuleResolver: Send + Sync {
@@ -812,7 +812,7 @@ mod file {
     use super::*;
     use crate::stdlib::path::PathBuf;
 
-    /// A module resolution service that loads module script files from the file system.
+    /// Module resolution service that loads module script files from the file system.
     ///
     /// The `new_with_path` and `new_with_path_and_extension` constructor functions
     /// allow specification of a base directory with module path used as a relative path offset
@@ -949,7 +949,7 @@ mod file {
 mod stat {
     use super::*;
 
-    /// A module resolution service that serves modules added into it.
+    /// Module resolution service that serves modules added into it.
     ///
     /// # Examples
     ///

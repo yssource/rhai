@@ -2,7 +2,6 @@
 
 use crate::any::Variant;
 use crate::engine::State;
-use crate::utils::StaticVec;
 
 use crate::stdlib::{
     any::{Any, TypeId},
@@ -10,7 +9,6 @@ use crate::stdlib::{
     boxed::Box,
     mem, ptr,
     string::ToString,
-    vec::Vec,
 };
 
 /// Cast a type into another type.

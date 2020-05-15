@@ -21,7 +21,6 @@ use crate::engine::Map;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    collections::HashMap,
     mem,
     string::{String, ToString},
 };
@@ -1016,11 +1015,10 @@ impl Engine {
             .get_function_by_signature(name, args.len(), true)
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
 
-        let mut state = State::new(fn_lib);
+        let state = State::new(fn_lib);
         let args = args.as_mut();
 
-        let (result, _) =
-            self.call_script_fn(Some(scope), &mut state, name, fn_def, args, pos, 0, 0)?;
+        let (result, _) = self.call_script_fn(Some(scope), state, name, fn_def, args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 

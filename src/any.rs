@@ -19,7 +19,7 @@ use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
     collections::HashMap,
-    fmt, mem, ptr,
+    fmt,
     string::String,
     vec::Vec,
 };
@@ -27,7 +27,7 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_std"))]
 use crate::stdlib::time::Instant;
 
-/// A trait to represent any type.
+/// Trait to represent any type.
 ///
 /// Currently, `Variant` is not `Send` nor `Sync`, so it can practically be any type.
 /// Turn on the `sync` feature to restrict it to only types that implement `Send + Sync`.
@@ -81,7 +81,7 @@ impl<T: Any + Clone> Variant for T {
     }
 }
 
-/// A trait to represent any type.
+/// Trait to represent any type.
 ///
 /// `From<_>` is implemented for `i64` (`i32` if `only_i32`), `f64` (if not `no_float`),
 /// `bool`, `String`, `char`, `Vec<T>` (into `Array`) and `HashMap<String, T>` (into `Map`).
@@ -142,7 +142,7 @@ impl dyn Variant {
     }
 }
 
-/// A dynamic type containing any value.
+/// Dynamic type containing any value.
 pub struct Dynamic(pub(crate) Union);
 
 /// Internal `Dynamic` representation.

@@ -36,7 +36,7 @@ pub struct Entry<'a> {
     pub expr: Option<Box<Expr>>,
 }
 
-/// A type containing information about the current scope.
+/// Type containing information about the current scope.
 /// Useful for keeping state between `Engine` evaluation runs.
 ///
 /// # Example
