@@ -7,7 +7,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
-use crate::utils::EMPTY_TYPE_ID;
+use crate::utils::{StaticVec, EMPTY_TYPE_ID};
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleRef;
@@ -195,7 +195,7 @@ pub struct FnDef {
     /// Function access mode.
     pub access: FnAccess,
     /// Names of function parameters.
-    pub params: Vec<String>,
+    pub params: StaticVec<String>,
     /// Function body.
     pub body: Stmt,
     /// Position of the function definition.
@@ -294,7 +294,7 @@ pub enum Stmt {
     /// const id = expr
     Const(Box<((String, Position), Expr)>),
     /// { stmt; ... }
-    Block(Box<(Vec<Stmt>, Position)>),
+    Block(Box<(StaticVec<Stmt>, Position)>),
     /// { stmt }
     Expr(Box<Expr>),
     /// continue
@@ -306,7 +306,13 @@ pub enum Stmt {
     /// import expr as module
     Import(Box<(Expr, (String, Position))>),
     /// expr id as name, ...
-    Export(Box<Vec<((String, Position), Option<(String, Position)>)>>),
+    Export(Box<StaticVec<((String, Position), Option<(String, Position)>)>>),
+}
+
+impl Default for Stmt {
+    fn default() -> Self {
+        Self::Noop(Default::default())
+    }
 }
 
 impl Stmt {
@@ -324,7 +330,7 @@ impl Stmt {
             Stmt::Loop(x) => x.position(),
             Stmt::For(x) => x.2.position(),
             Stmt::Import(x) => (x.1).1,
-            Stmt::Export(x) => (x.get(0).unwrap().0).1,
+            Stmt::Export(x) => (x.get_ref(0).0).1,
         }
     }
 
@@ -406,7 +412,7 @@ pub enum Expr {
             (Cow<'static, str>, Position),
             MRef,
             u64,
-            Vec<Expr>,
+            StaticVec<Expr>,
             Option<Dynamic>,
         )>,
     ),
@@ -417,9 +423,9 @@ pub enum Expr {
     /// expr[expr]
     Index(Box<(Expr, Expr, Position)>),
     /// [ expr, ... ]
-    Array(Box<(Vec<Expr>, Position)>),
+    Array(Box<(StaticVec<Expr>, Position)>),
     /// #{ name:expr, ... }
-    Map(Box<(Vec<((String, Position), Expr)>, Position)>),
+    Map(Box<(StaticVec<((String, Position), Expr)>, Position)>),
     /// lhs in rhs
     In(Box<(Expr, Expr, Position)>),
     /// lhs && rhs
@@ -432,6 +438,12 @@ pub enum Expr {
     False(Position),
     /// ()
     Unit(Position),
+}
+
+impl Default for Expr {
+    fn default() -> Self {
+        Self::Unit(Default::default())
+    }
 }
 
 impl Expr {
@@ -713,7 +725,7 @@ fn parse_call_expr<'a>(
     begin: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
-    let mut args = Vec::new();
+    let mut args = StaticVec::new();
 
     match input.peek().unwrap() {
         // id <EOF>
@@ -1013,7 +1025,7 @@ fn parse_array_literal<'a>(
     pos: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
-    let mut arr = Vec::new();
+    let mut arr = StaticVec::new();
 
     if !match_token(input, Token::RightBracket)? {
         while !input.peek().unwrap().0.is_eof() {
@@ -1056,7 +1068,7 @@ fn parse_map_literal<'a>(
     pos: Position,
     allow_stmt_expr: bool,
 ) -> Result<Expr, Box<ParseError>> {
-    let mut map = Vec::new();
+    let mut map = StaticVec::new();
 
     if !match_token(input, Token::RightBrace)? {
         while !input.peek().unwrap().0.is_eof() {
@@ -1296,15 +1308,17 @@ fn parse_unary<'a>(
                 Expr::FloatConstant(x) => Ok(Expr::FloatConstant(Box::new((-x.0, x.1)))),
 
                 // Call negative function
-                e => {
+                expr => {
                     let op = "-";
                     let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+                    let mut args = StaticVec::new();
+                    args.push(expr);
 
                     Ok(Expr::FnCall(Box::new((
                         (op.into(), pos),
                         None,
                         hash,
-                        vec![e],
+                        args,
                         None,
                     ))))
                 }
@@ -1318,7 +1332,8 @@ fn parse_unary<'a>(
         // !expr
         (Token::Bang, _) => {
             let pos = eat_token(input, Token::Bang);
-            let expr = vec![parse_primary(input, stack, allow_stmt_expr)?];
+            let mut args = StaticVec::new();
+            args.push(parse_primary(input, stack, allow_stmt_expr)?);
 
             let op = "!";
             let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
@@ -1327,7 +1342,7 @@ fn parse_unary<'a>(
                 (op.into(), pos),
                 None,
                 hash,
-                expr,
+                args,
                 Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
             ))))
         }
@@ -1412,9 +1427,13 @@ fn parse_op_assignment_stmt<'a>(
     let rhs = parse_expr(input, stack, allow_stmt_expr)?;
 
     // lhs op= rhs -> lhs = op(lhs, rhs)
-    let args = vec![lhs_copy, rhs];
+    let mut args = StaticVec::new();
+    args.push(lhs_copy);
+    args.push(rhs);
+
     let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(args.len()));
     let rhs_expr = Expr::FnCall(Box::new(((op.into(), pos), None, hash, args, None)));
+
     make_assignment_stmt(stack, lhs, rhs_expr, pos)
 }
 
@@ -1695,7 +1714,10 @@ fn parse_binary_op<'a>(
         let cmp_def = Some(false.into());
         let op = op_token.syntax();
         let hash = calc_fn_hash(empty(), &op, repeat(EMPTY_TYPE_ID()).take(2));
-        let mut args = vec![current_lhs, rhs];
+
+        let mut args = StaticVec::new();
+        args.push(current_lhs);
+        args.push(rhs);
 
         current_lhs = match op_token {
             Token::Plus => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
@@ -1721,13 +1743,13 @@ fn parse_binary_op<'a>(
             }
 
             Token::Or => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
+                let rhs = args.pop();
+                let current_lhs = args.pop();
                 Expr::Or(Box::new((current_lhs, rhs, pos)))
             }
             Token::And => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
+                let rhs = args.pop();
+                let current_lhs = args.pop();
                 Expr::And(Box::new((current_lhs, rhs, pos)))
             }
             Token::Ampersand => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
@@ -1735,15 +1757,15 @@ fn parse_binary_op<'a>(
             Token::XOr => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
 
             Token::In => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
+                let rhs = args.pop();
+                let current_lhs = args.pop();
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
-                let mut rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
+                let mut rhs = args.pop();
+                let current_lhs = args.pop();
 
                 match &mut rhs {
                     // current_lhs.rhs(...) - method call
@@ -2025,7 +2047,7 @@ fn parse_import<'a>(
 fn parse_export<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Box<ParseError>> {
     eat_token(input, Token::Export);
 
-    let mut exports = Vec::new();
+    let mut exports = StaticVec::new();
 
     loop {
         let (id, id_pos) = match input.next().unwrap() {
@@ -2098,7 +2120,7 @@ fn parse_block<'a>(
         }
     };
 
-    let mut statements = Vec::new();
+    let mut statements = StaticVec::new();
     let prev_len = stack.len();
 
     while !match_token(input, Token::RightBrace)? {

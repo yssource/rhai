@@ -9,7 +9,7 @@ use crate::utils::StaticVec;
 /// Any data type that can be converted into a `Vec<Dynamic>` can be used
 /// as arguments to a function call.
 pub trait FuncArgs {
-    /// Convert to a `Vec<Dynamic>` of the function call arguments.
+    /// Convert to a `StaticVec<Dynamic>` of the function call arguments.
     fn into_vec(self) -> StaticVec<Dynamic>;
 }
 

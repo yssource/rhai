@@ -2,6 +2,7 @@
 
 use crate::fn_native::{NativeCallable, SharedIteratorFunction};
 use crate::module::Module;
+use crate::utils::StaticVec;
 
 use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
 
@@ -54,7 +55,7 @@ pub type PackageLibrary = Arc<Module>;
 #[derive(Clone, Default)]
 pub(crate) struct PackagesCollection {
     /// Collection of `PackageLibrary` instances.
-    packages: Vec<PackageLibrary>,
+    packages: StaticVec<PackageLibrary>,
 }
 
 impl PackagesCollection {

@@ -8,7 +8,7 @@ use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, FnDef, ReturnType, SharedFnDef, Stmt, AST};
-use crate::r#unsafe::unsafe_cast_var_name;
+use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -756,7 +756,8 @@ impl Engine {
                             args.into_iter().map(|v| mem::take(*v)),
                         )
                         .map(|(name, value)| {
-                            let var_name = unsafe_cast_var_name(name.as_str(), &mut state);
+                            let var_name =
+                                unsafe_cast_var_name_to_lifetime(name.as_str(), &mut state);
                             (var_name, ScopeEntryType::Normal, value)
                         }),
                 );
@@ -1172,11 +1173,10 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         match expr {
             Expr::FnCall(x) if x.1.is_none() => {
-                let mut arg_values = StaticVec::<Dynamic>::new();
-
-                for arg_expr in x.3.iter() {
-                    arg_values.push(self.eval_expr(scope, state, arg_expr, level)?);
-                }
+                let arg_values =
+                    x.3.iter()
+                        .map(|arg_expr| self.eval_expr(scope, state, arg_expr, level))
+                        .collect::<Result<StaticVec<Dynamic>, _>>()?;
 
                 idx_values.push(Dynamic::from(arg_values));
             }
@@ -1471,14 +1471,10 @@ impl Engine {
                     if !self.has_override(state, (hash_fn, *hash_fn_def)) {
                         // eval - only in function call style
                         let prev_len = scope.len();
+                        let pos = args_expr.get_ref(0).position();
 
                         // Evaluate the text string as a script
-                        let result = self.eval_script_expr(
-                            scope,
-                            state,
-                            args.pop(),
-                            args_expr[0].position(),
-                        );
+                        let result = self.eval_script_expr(scope, state, args.pop(), pos);
 
                         if scope.len() != prev_len {
                             // IMPORTANT! If the eval defines new variables in the current scope,
@@ -1709,7 +1705,7 @@ impl Engine {
                     .or_else(|| self.packages.get_iter(tid))
                 {
                     // Add the loop variable
-                    let var_name = unsafe_cast_var_name(name, &state);
+                    let var_name = unsafe_cast_var_name_to_lifetime(name, &state);
                     scope.push(var_name, ());
                     let index = scope.len() - 1;
                     state.scope_level += 1;
@@ -1775,7 +1771,7 @@ impl Engine {
             Stmt::Let(x) if x.1.is_some() => {
                 let ((var_name, pos), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, expr.as_ref().unwrap(), level)?;
-                let var_name = unsafe_cast_var_name(var_name, &state);
+                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
                 self.inc_operations(state, *pos)?;
                 Ok(Default::default())
@@ -1783,7 +1779,7 @@ impl Engine {
 
             Stmt::Let(x) => {
                 let ((var_name, pos), _) = x.as_ref();
-                let var_name = unsafe_cast_var_name(var_name, &state);
+                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push(var_name, ());
                 self.inc_operations(state, *pos)?;
                 Ok(Default::default())
@@ -1793,7 +1789,7 @@ impl Engine {
             Stmt::Const(x) if x.1.is_constant() => {
                 let ((var_name, pos), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, &expr, level)?;
-                let var_name = unsafe_cast_var_name(var_name, &state);
+                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
                 self.inc_operations(state, *pos)?;
                 Ok(Default::default())
@@ -1827,7 +1823,7 @@ impl Engine {
                             let module =
                                 resolver.resolve(self, Scope::new(), &path, expr.position())?;
 
-                            let mod_name = unsafe_cast_var_name(name, &state);
+                            let mod_name = unsafe_cast_var_name_to_lifetime(name, &state);
                             scope.push_module(mod_name, module);
 
                             state.modules += 1;
@@ -1848,7 +1844,7 @@ impl Engine {
 
             // Export statement
             Stmt::Export(list) => {
-                for ((id, id_pos), rename) in list.as_ref() {
+                for ((id, id_pos), rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope
                         .get_index(id)

@@ -1,6 +1,7 @@
 use crate::def_package;
 use crate::module::FuncReturn;
 use crate::parser::INT;
+use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
@@ -29,7 +30,7 @@ fn sub_string(s: &mut String, start: INT, len: INT) -> FuncReturn<String> {
         start as usize
     };
 
-    let chars: Vec<_> = s.chars().collect();
+    let chars: StaticVec<_> = s.chars().collect();
 
     let len = if offset + (len as usize) > chars.len() {
         chars.len() - offset
@@ -37,7 +38,7 @@ fn sub_string(s: &mut String, start: INT, len: INT) -> FuncReturn<String> {
         len as usize
     };
 
-    Ok(chars[offset..][..len].into_iter().collect())
+    Ok(chars.iter().skip(offset).take(len).cloned().collect())
 }
 fn crop_string(s: &mut String, start: INT, len: INT) -> FuncReturn<()> {
     let offset = if s.is_empty() || len <= 0 {
@@ -52,7 +53,7 @@ fn crop_string(s: &mut String, start: INT, len: INT) -> FuncReturn<()> {
         start as usize
     };
 
-    let chars: Vec<_> = s.chars().collect();
+    let chars: StaticVec<_> = s.chars().collect();
 
     let len = if offset + (len as usize) > chars.len() {
         chars.len() - offset
@@ -62,8 +63,10 @@ fn crop_string(s: &mut String, start: INT, len: INT) -> FuncReturn<()> {
 
     s.clear();
 
-    chars[offset..][..len]
-        .into_iter()
+    chars
+        .iter()
+        .skip(offset)
+        .take(len)
         .for_each(|&ch| s.push(ch));
 
     Ok(())
@@ -189,9 +192,9 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
         "truncate",
         |s: &mut String, len: INT| {
             if len >= 0 {
-                let chars: Vec<_> = s.chars().take(len as usize).collect();
+                let chars: StaticVec<_> = s.chars().take(len as usize).collect();
                 s.clear();
-                chars.into_iter().for_each(|ch| s.push(ch));
+                chars.iter().for_each(|&ch| s.push(ch));
             } else {
                 s.clear();
             }

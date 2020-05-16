@@ -10,10 +10,12 @@ use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
+use crate::utils::StaticVec;
 
 use crate::stdlib::{
     boxed::Box,
     iter::empty,
+    mem,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -140,7 +142,11 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
 
             if preserve_result {
                 // -> { expr, Noop }
-                Stmt::Block(Box::new((vec![Stmt::Expr(Box::new(expr)), x.1], pos)))
+                let mut statements = StaticVec::new();
+                statements.push(Stmt::Expr(Box::new(expr)));
+                statements.push(x.1);
+
+                Stmt::Block(Box::new((statements, pos)))
             } else {
                 // -> expr
                 Stmt::Expr(Box::new(expr))
@@ -193,7 +199,8 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                 Stmt::Break(pos) => {
                     // Only a single break statement - turn into running the guard expression once
                     state.set_dirty();
-                    let mut statements = vec![Stmt::Expr(Box::new(optimize_expr(expr, state)))];
+                    let mut statements = StaticVec::new();
+                    statements.push(Stmt::Expr(Box::new(optimize_expr(expr, state))));
                     if preserve_result {
                         statements.push(Stmt::Noop(pos))
                     }
@@ -229,24 +236,24 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
         // import expr as id;
         Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1))),
         // { block }
-        Stmt::Block(x) => {
+        Stmt::Block(mut x) => {
             let orig_len = x.0.len(); // Original number of statements in the block, for change detection
             let orig_constants_len = state.constants.len(); // Original number of constants in the state, for restore later
             let pos = x.1;
 
             // Optimize each statement in the block
             let mut result: Vec<_> =
-                x.0.into_iter()
+                x.0.iter_mut()
                     .map(|stmt| match stmt {
                         // Add constant into the state
                         Stmt::Const(v) => {
-                            let ((name, pos), expr) = *v;
-                            state.push_constant(&name, expr);
+                            let ((name, pos), expr) = v.as_mut();
+                            state.push_constant(name, mem::take(expr));
                             state.set_dirty();
-                            Stmt::Noop(pos) // No need to keep constants
+                            Stmt::Noop(*pos) // No need to keep constants
                         }
                         // Optimize the statement
-                        _ => optimize_stmt(stmt, state, preserve_result),
+                        _ => optimize_stmt(mem::take(stmt), state, preserve_result),
                     })
                     .collect();
 
@@ -324,13 +331,13 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
                     Stmt::Noop(pos)
                 }
                 // Only one let/import statement - leave it alone
-                [Stmt::Let(_)] | [Stmt::Import(_)] => Stmt::Block(Box::new((result, pos))),
+                [Stmt::Let(_)] | [Stmt::Import(_)] => Stmt::Block(Box::new((result.into(), pos))),
                 // Only one statement - promote
                 [_] => {
                     state.set_dirty();
                     result.remove(0)
                 }
-                _ => Stmt::Block(Box::new((result, pos))),
+                _ => Stmt::Block(Box::new((result.into(), pos))),
             }
         }
         // expr;
@@ -392,14 +399,14 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(x) => match (x.0, x.1) {
             // map.string
-            (Expr::Map(m), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
+            (Expr::Map(mut m), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
                 let ((prop, _, _), _) = p.as_ref();
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name == prop)
-                    .map(|(_, expr)| expr.set_position(pos))
+                m.0.iter_mut().find(|((name, _), _)| name == prop)
+                    .map(|(_, expr)| mem::take(expr).set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // lhs.rhs
@@ -416,16 +423,16 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                a.0.remove(i.0 as usize).set_position(a.1)
+                a.0.get(i.0 as usize).set_position(a.1)
             }
             // map[string]
-            (Expr::Map(m), Expr::StringConstant(s)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
+            (Expr::Map(mut m), Expr::StringConstant(s)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name == &s.0)
-                    .map(|(_, expr)| expr.set_position(pos))
+                m.0.iter_mut().find(|((name, _), _)| name == &s.0)
+                    .map(|(_, expr)| mem::take(expr).set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
@@ -439,15 +446,13 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
         },
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
-        Expr::Array(a) => Expr::Array(Box::new((a.0
-                            .into_iter()
-                            .map(|expr| optimize_expr(expr, state))
-                            .collect(), a.1))),
+        Expr::Array(mut a) => Expr::Array(Box::new((a.0
+                                .iter_mut().map(|expr| optimize_expr(mem::take(expr), state))
+                                .collect(), a.1))),
         // [ items .. ]
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(m) => Expr::Map(Box::new((m.0
-                            .into_iter()
-                            .map(|((key, pos), expr)| ((key, pos), optimize_expr(expr, state)))
+        Expr::Map(mut m) => Expr::Map(Box::new((m.0
+                            .iter_mut().map(|((key, pos), expr)| ((mem::take(key), *pos), optimize_expr(mem::take(expr), state)))
                             .collect(), m.1))),
         // lhs in rhs
         Expr::In(x) => match (x.0, x.1) {
@@ -527,7 +532,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
 
         // Do not call some special keywords
         Expr::FnCall(mut x) if DONT_EVAL_KEYWORDS.contains(&(x.0).0.as_ref())=> {
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+            x.3 = x.3.iter_mut().map(|a| optimize_expr(mem::take(a), state)).collect();
             Expr::FnCall(x)
         }
 
@@ -542,7 +547,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             // First search in script-defined functions (can override built-in)
             if state.fn_lib.iter().find(|(id, len)| *id == name && *len == args.len()).is_some() {
                 // A script-defined function overrides the built-in function - do not make the call
-                x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+                x.3 = x.3.iter_mut().map(|a| optimize_expr(mem::take(a), state)).collect();
                 return Expr::FnCall(x);
             }
 
@@ -574,14 +579,14 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                     })
                 ).unwrap_or_else(|| {
                     // Optimize function call arguments
-                    x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+                    x.3 = x.3.iter_mut().map(|a| optimize_expr(mem::take(a), state)).collect();
                     Expr::FnCall(x)
                 })
         }
 
         // id(args ..) -> optimize function call arguments
         Expr::FnCall(mut x) => {
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+            x.3 = x.3.iter_mut().map(|a| optimize_expr(mem::take(a), state)).collect();
             Expr::FnCall(x)
         }
 

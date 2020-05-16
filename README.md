@@ -20,7 +20,7 @@ Rhai's current features set:
 * Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
 * Low compile-time overhead (~0.6 sec debug/~3 sec release for `rhai_runner` sample app)
 * Fairly efficient evaluation (1 million iterations in 0.75 sec on my 5 year old laptop)
-* Relatively little `unsafe` code (yes there are some for performance reasons, and all `unsafe` code is limited to
+* Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
   one single source file, all with names starting with `"unsafe_"`)
 * Sand-boxed (the scripting [`Engine`] can be declared immutable which cannot mutate the containing environment
   unless explicitly allowed via `RefCell` etc.)
