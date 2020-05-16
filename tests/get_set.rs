@@ -43,20 +43,20 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("new_ts", TestStruct::new);
 
     #[cfg(not(feature = "no_index"))]
-    engine.register_indexer(|value: &mut TestStruct, index: INT| value.array[index as usize]);
+    engine.register_indexer(|value: &mut TestStruct, index: String| value.array[index.len()]);
 
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x = 500; a.x")?, 500);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x.add(); a.x")?, 42);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.y.add(); a.y")?, 0);
 
     #[cfg(not(feature = "no_index"))]
-    assert_eq!(engine.eval::<INT>("let a = new_ts(); a[3]")?, 4);
+    assert_eq!(engine.eval::<INT>(r#"let a = new_ts(); a["abc"]"#)?, 4);
 
     Ok(())
 }
 
 #[test]
-fn test_big_get_set() -> Result<(), Box<EvalAltResult>> {
+fn test_get_set_chain() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestChild {
         x: INT,

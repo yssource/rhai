@@ -13,14 +13,15 @@ to add scripting to any application.
 
 Rhai's current features set:
 
-* Easy-to-use language similar to JS+Rust
-* Easy integration with Rust [native functions](#working-with-functions) and [types](#custom-types-and-methods),
+* Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector
+* Tight integration with native Rust [functions](#working-with-functions) and [types](#custom-types-and-methods),
   including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers)
+* Freely pass Rust variables/constants into a script via an external [`Scope`]
 * Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
-* Freely pass variables/constants into a script via an external [`Scope`]
-* Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
-* Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
-* Relatively little `unsafe` code (yes there are some for performance reasons)
+* Low compile-time overhead (~0.6 sec debug/~3 sec release for `rhai_runner` sample app)
+* Fairly efficient evaluation (1 million iterations in 0.75 sec on my 5 year old laptop)
+* Relatively little `unsafe` code (yes there are some for performance reasons, and all `unsafe` code is limited to
+  one single source file, all with names starting with `"unsafe_"`)
 * Sand-boxed (the scripting [`Engine`] can be declared immutable which cannot mutate the containing environment
   unless explicitly allowed via `RefCell` etc.)
 * Rugged (protection against [stack-overflow](#maximum-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.)
@@ -70,20 +71,21 @@ Optional features
 | Feature       | Description                                                                                                                                                                |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `unchecked`   | Exclude arithmetic checking (such as over-flows and division by zero), stack depth limit and operations count limit. Beware that a bad script may panic the entire system! |
-| `no_function` | Disable script-defined functions if not needed.                                                                                                                            |
-| `no_index`    | Disable [arrays] and indexing features if not needed.                                                                                                                      |
-| `no_object`   | Disable support for custom types and objects.                                                                                                                              |
-| `no_float`    | Disable floating-point numbers and math if not needed.                                                                                                                     |
+| `no_function` | Disable script-defined functions.                                                                                                                                          |
+| `no_index`    | Disable [arrays] and indexing features.                                                                                                                                    |
+| `no_object`   | Disable support for custom types and object maps.                                                                                                                          |
+| `no_float`    | Disable floating-point numbers and math.                                                                                                                                   |
 | `no_optimize` | Disable the script optimizer.                                                                                                                                              |
 | `no_module`   | Disable modules.                                                                                                                                                           |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                                           |
 | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                                           |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                       |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`.                                      |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and `AST`, are all `Send + Sync`.           |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
 Most features are here to opt-**out** of certain functionalities that are not needed.
-Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
+Excluding unneeded functionalities can result in smaller, faster builds
+as well as more control over what a script can (or cannot) do.
 
 [`unchecked`]: #optional-features
 [`no_index`]: #optional-features
@@ -967,7 +969,7 @@ Indexers
 --------
 
 Custom types can also expose an _indexer_ by registering an indexer function.
-A custom with an indexer function defined can use the bracket '`[]`' notation to get a property value
+A custom type with an indexer function defined can use the bracket '`[]`' notation to get a property value
 (but not update it - indexers are read-only).
 
 ```rust

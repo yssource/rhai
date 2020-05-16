@@ -56,6 +56,8 @@ pub fn unsafe_cast_var_name<'s>(name: &str, state: &State) -> Cow<'s, str> {
         //           this is safe because all local variables are cleared at the end of the block
         unsafe { mem::transmute::<_, &'s str>(name) }.into()
     } else {
+        // The variable is introduced at global (top) level and may persist after the script run.
+        // Therefore, clone the variable name.
         name.to_string().into()
     }
 }

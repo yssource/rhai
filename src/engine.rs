@@ -72,19 +72,36 @@ enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
     Ref(&'a mut Dynamic),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
-    Value(Box<Dynamic>),
+    Value(Dynamic),
     /// The target is a character inside a String.
     /// This is necessary because directly pointing to a char inside a String is impossible.
-    StringChar(Box<(&'a mut Dynamic, usize, Dynamic)>),
+    StringChar(&'a mut Dynamic, usize, Dynamic),
 }
 
 impl Target<'_> {
-    /// Get the value of the `Target` as a `Dynamic`.
+    /// Is the `Target` a reference pointing to other data?
+    pub fn is_ref(&self) -> bool {
+        match self {
+            Target::Ref(_) => true,
+            Target::Value(_) | Target::StringChar(_, _, _) => false,
+        }
+    }
+
+    /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
-            Target::Ref(r) => r.clone(),
-            Target::Value(v) => *v,
-            Target::StringChar(s) => s.2,
+            Target::Ref(r) => r.clone(),        // Referenced value is cloned
+            Target::Value(v) => v,              // Owned value is simply taken
+            Target::StringChar(_, _, ch) => ch, // Character is taken
+        }
+    }
+
+    /// Get a mutable reference from the `Target`.
+    pub fn as_mut(&mut self) -> &mut Dynamic {
+        match self {
+            Target::Ref(r) => *r,
+            Target::Value(ref mut r) => r,
+            Target::StringChar(_, _, ref mut r) => r,
         }
     }
 
@@ -95,25 +112,23 @@ impl Target<'_> {
             Target::Value(_) => {
                 return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(pos)))
             }
-            Target::StringChar(x) => match x.0 {
-                Dynamic(Union::Str(s)) => {
-                    // Replace the character at the specified index position
-                    let new_ch = new_val
-                        .as_char()
-                        .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
+            Target::StringChar(Dynamic(Union::Str(s)), index, _) => {
+                // Replace the character at the specified index position
+                let new_ch = new_val
+                    .as_char()
+                    .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
 
-                    let mut chars: StaticVec<char> = s.chars().collect();
-                    let ch = *chars.get_ref(x.1);
+                let mut chars: StaticVec<char> = s.chars().collect();
+                let ch = *chars.get_ref(*index);
 
-                    // See if changed - if so, update the String
-                    if ch != new_ch {
-                        *chars.get_mut(x.1) = new_ch;
-                        s.clear();
-                        chars.iter().for_each(|&ch| s.push(ch));
-                    }
+                // See if changed - if so, update the String
+                if ch != new_ch {
+                    *chars.get_mut(*index) = new_ch;
+                    s.clear();
+                    chars.iter().for_each(|&ch| s.push(ch));
                 }
-                _ => unreachable!(),
-            },
+            }
+            _ => unreachable!(),
         }
 
         Ok(())
@@ -127,7 +142,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
 }
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     fn from(value: T) -> Self {
-        Self::Value(Box::new(value.into()))
+        Self::Value(value.into())
     }
 }
 
@@ -913,7 +928,7 @@ impl Engine {
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
-        mut target: Target,
+        target: &mut Target,
         rhs: &Expr,
         idx_values: &mut StaticVec<Dynamic>,
         is_index: bool,
@@ -921,12 +936,10 @@ impl Engine {
         level: usize,
         mut new_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        let is_ref = target.is_ref();
+
         // Get a reference to the mutation target Dynamic
-        let (obj, is_ref) = match target {
-            Target::Ref(r) => (r, true),
-            Target::Value(ref mut r) => (r.as_mut(), false),
-            Target::StringChar(ref mut x) => (&mut x.2, false),
-        };
+        let obj = target.as_mut();
 
         // Pop the last index value
         let mut idx_val = idx_values.pop();
@@ -937,20 +950,20 @@ impl Engine {
                 Expr::Dot(x) | Expr::Index(x) => {
                     let is_idx = matches!(rhs, Expr::Index(_));
                     let pos = x.0.position();
-                    let val =
-                        self.get_indexed_mut(state, obj, is_ref, idx_val, pos, op_pos, false)?;
+                    let this_ptr = &mut self
+                        .get_indexed_mut(state, obj, is_ref, idx_val, pos, op_pos, false)?;
 
                     self.eval_dot_index_chain_helper(
-                        state, val, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, this_ptr, &x.1, idx_values, is_idx, x.2, level, new_val,
                     )
                 }
                 // xxx[rhs] = new_val
                 _ if new_val.is_some() => {
                     let pos = rhs.position();
-                    let mut val =
-                        self.get_indexed_mut(state, obj, is_ref, idx_val, pos, op_pos, true)?;
+                    let this_ptr = &mut self
+                        .get_indexed_mut(state, obj, is_ref, idx_val, pos, op_pos, true)?;
 
-                    val.set_value(new_val.unwrap(), rhs.position())?;
+                    this_ptr.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
                 }
                 // xxx[rhs]
@@ -1019,7 +1032,7 @@ impl Engine {
                 Expr::Index(x) | Expr::Dot(x) if obj.is::<Map>() => {
                     let is_idx = matches!(rhs, Expr::Index(_));
 
-                    let val = if let Expr::Property(p) = &x.0 {
+                    let mut val = if let Expr::Property(p) = &x.0 {
                         let ((prop, _, _), _) = p.as_ref();
                         let index = prop.clone().into();
                         self.get_indexed_mut(state, obj, is_ref, index, x.2, op_pos, false)?
@@ -1032,7 +1045,7 @@ impl Engine {
                     };
 
                     self.eval_dot_index_chain_helper(
-                        state, val, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, &mut val, &x.1, idx_values, is_idx, x.2, level, new_val,
                     )
                 }
                 // xxx.idx_lhs[idx_expr] | xxx.dot_lhs.rhs
@@ -1051,16 +1064,10 @@ impl Engine {
                         )));
                     };
                     let val = &mut val;
+                    let target = &mut val.into();
 
                     let (result, may_be_changed) = self.eval_dot_index_chain_helper(
-                        state,
-                        val.into(),
-                        &x.1,
-                        idx_values,
-                        is_idx,
-                        x.2,
-                        level,
-                        new_val,
+                        state, target, &x.1, idx_values, is_idx, x.2, level, new_val,
                     )?;
 
                     // Feed the value back via a setter just in case it has been updated
@@ -1125,7 +1132,7 @@ impl Engine {
                     ScopeEntryType::Constant | ScopeEntryType::Normal => (),
                 }
 
-                let this_ptr = target.into();
+                let this_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
                     state, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
                 )
@@ -1140,7 +1147,7 @@ impl Engine {
             // {expr}.??? or {expr}[???]
             expr => {
                 let val = self.eval_expr(scope, state, expr, level)?;
-                let this_ptr = val.into();
+                let this_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
                     state, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
                 )
@@ -1258,7 +1265,7 @@ impl Engine {
                     let ch = s.chars().nth(offset).ok_or_else(|| {
                         Box::new(EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos))
                     })?;
-                    Ok(Target::StringChar(Box::new((val, offset, ch.into()))))
+                    Ok(Target::StringChar(val, offset, ch.into()))
                 } else {
                     Err(Box::new(EvalAltResult::ErrorStringBounds(
                         chars_len, index, idx_pos,
