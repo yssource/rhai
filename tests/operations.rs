@@ -43,20 +43,40 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
 
     engine.eval::<()>(
         r#"
+                print("Test1");
+                let x = 0;
+
+                while x < 28 {
+                    print(x);
+                    x += 1;
+                }
+            "#,
+    )?;
+
+    #[cfg(not(feature = "no_function"))]
+    engine.eval::<()>(
+        r#"
+                print("Test2");
                 fn inc(x) { x + 1 }
                 let x = 0;
                 while x < 20 { x = inc(x); }
             "#,
     )?;
 
+    #[cfg(not(feature = "no_function"))]
     assert!(matches!(
         *engine
             .eval::<()>(
                 r#"
+                    print("Test3");
                     fn inc(x) { x + 1 }
                     let x = 0;
-                    while x < 1000 { x = inc(x); }
-        "#
+
+                    while x < 28 {
+                        print(x);
+                        x = inc(x);
+                    }
+            "#,
             )
             .expect_err("should error"),
         EvalAltResult::ErrorTooManyOperations(_)

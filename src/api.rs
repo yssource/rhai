@@ -652,7 +652,10 @@ impl Engine {
         let scripts = [script];
         let stream = lex(&scripts);
 
-        parse_global_expr(&mut stream.peekable(), self, scope, self.optimization_level)
+        {
+            let mut peekable = stream.peekable();
+            parse_global_expr(&mut peekable, self, scope, self.optimization_level)
+        }
     }
 
     /// Evaluate a script file.
@@ -748,11 +751,10 @@ impl Engine {
         scope: &mut Scope,
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
-        // Since the AST will be thrown away afterwards, don't bother to optimize it
         let ast = self.compile_with_scope_and_optimization_level(
             scope,
             &[script],
-            OptimizationLevel::None,
+            self.optimization_level,
         )?;
         self.eval_ast_with_scope(scope, &ast)
     }

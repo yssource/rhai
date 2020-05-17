@@ -51,7 +51,7 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic>,
 
     /// External Rust functions.
-    functions: HashMap<u64, (String, FnAccess, Vec<TypeId>, SharedNativeFunction)>,
+    functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, SharedNativeFunction)>,
 
     /// Flattened collection of all external Rust functions, including those in sub-modules.
     all_functions: HashMap<u64, SharedNativeFunction>,
@@ -292,8 +292,9 @@ impl Module {
         #[cfg(feature = "sync")]
         let func = Arc::new(f);
 
-        self.functions
-            .insert(hash_fn, (name, access, params.to_vec(), func));
+        let params = params.into_iter().cloned().collect();
+
+        self.functions.insert(hash_fn, (name, access, params, func));
 
         hash_fn
     }
@@ -616,13 +617,13 @@ impl Module {
     pub(crate) fn index_all_sub_modules(&mut self) {
         // Collect a particular module.
         fn index_module<'a>(
-            module: &'a mut Module,
+            module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
             functions: &mut Vec<(u64, SharedNativeFunction)>,
             fn_lib: &mut Vec<(u64, SharedFnDef)>,
         ) {
-            for (name, m) in module.modules.iter_mut() {
+            for (name, m) in &module.modules {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
                 index_module(m, qualifiers, variables, functions, fn_lib);
@@ -630,7 +631,7 @@ impl Module {
             }
 
             // Index all variables
-            for (var_name, value) in module.variables.iter() {
+            for (var_name, value) in &module.variables {
                 // Qualifiers + variable name
                 let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
                 variables.push((hash_var, value.clone()));

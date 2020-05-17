@@ -84,28 +84,39 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<()>(
+            .eval::<INT>(
                 r#"
+                    let x = 0;
+
                     for x in range(0, 10) {
                         import "hello" as h;
+                        x += h::answer;
                     }
+
+                    x
             "#
             )
             .expect_err("should error"),
         EvalAltResult::ErrorTooManyModules(_)
     ));
 
+    #[cfg(not(feature = "no_function"))]
     assert!(matches!(
         *engine
-            .eval::<()>(
+            .eval::<INT>(
                 r#"
+                    let x = 0;
+
                     fn foo() {
                         import "hello" as h;
+                        x += h::answer;
                     }
 
                     for x in range(0, 10) {
                         foo();
                     }
+
+                    x
             "#
             )
             .expect_err("should error"),
@@ -114,6 +125,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
 
     engine.set_max_modules(0);
 
+    #[cfg(not(feature = "no_function"))]
     engine.eval::<()>(
         r#"
             fn foo() {

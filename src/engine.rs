@@ -119,11 +119,11 @@ impl Target<'_> {
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(pos))?;
 
                 let mut chars: StaticVec<char> = s.chars().collect();
-                let ch = *chars.get_ref(*index);
+                let ch = chars[*index];
 
                 // See if changed - if so, update the String
                 if ch != new_ch {
-                    *chars.get_mut(*index) = new_ch;
+                    chars[*index] = new_ch;
                     s.clear();
                     chars.iter().for_each(|&ch| s.push(ch));
                 }
@@ -190,7 +190,7 @@ impl<'a> State<'a> {
     }
     /// Get a script-defined function definition from the `State`.
     pub fn get_function(&self, hash: u64) -> Option<&FnDef> {
-        self.fn_lib.get(&hash).map(|f| f.as_ref())
+        self.fn_lib.get(&hash).map(|fn_def| fn_def.as_ref())
     }
 }
 
@@ -463,7 +463,7 @@ fn search_scope<'a>(
                     .downcast_mut::<Module>()
                     .unwrap()
             } else {
-                let (id, root_pos) = modules.get_ref(0);
+                let (id, root_pos) = modules.get(0);
 
                 scope.find_module(id).ok_or_else(|| {
                     Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
@@ -736,8 +736,6 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, State<'s>), Box<EvalAltResult>> {
-        self.inc_operations(&mut state, pos)?;
-
         let orig_scope_level = state.scope_level;
         state.scope_level += 1;
 
@@ -1120,6 +1118,7 @@ impl Engine {
                 let index = if state.always_search { None } else { *index };
                 let mod_and_hash = modules.as_ref().map(|m| (m, *hash_var));
                 let (target, typ) = search_scope(scope, &name, mod_and_hash, index, *pos)?;
+                self.inc_operations(state, *pos)?;
 
                 // Constants cannot be modified
                 match typ {
@@ -1171,6 +1170,8 @@ impl Engine {
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
+        self.inc_operations(state, expr.position())?;
+
         match expr {
             Expr::FnCall(x) if x.1.is_none() => {
                 let arg_values =
@@ -1328,13 +1329,13 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
                 // Only allows String or char
-                Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(s.as_ref()).into()),
+                Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(s.as_str()).into()),
                 Dynamic(Union::Char(c)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
                 _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
             },
             Dynamic(Union::Str(rhs_value)) => match lhs_value {
                 // Only allows String or char
-                Dynamic(Union::Str(s)) => Ok(rhs_value.contains(s.as_ref()).into()),
+                Dynamic(Union::Str(s)) => Ok(rhs_value.contains(s.as_str()).into()),
                 Dynamic(Union::Char(c)) => Ok(rhs_value.contains(c).into()),
                 _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
             },
@@ -1382,6 +1383,8 @@ impl Engine {
                         let index = if state.always_search { None } else { *index };
                         let mod_and_hash = modules.as_ref().map(|m| (m, *hash_var));
                         let (lhs_ptr, typ) = search_scope(scope, name, mod_and_hash, index, *pos)?;
+                        self.inc_operations(state, *pos)?;
+
                         match typ {
                             ScopeEntryType::Constant => Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant(name.clone(), *pos),
@@ -1465,13 +1468,13 @@ impl Engine {
 
                 let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
-                if name == KEYWORD_EVAL && args.len() == 1 && args.get_ref(0).is::<String>() {
+                if name == KEYWORD_EVAL && args.len() == 1 && args.get(0).is::<String>() {
                     let hash_fn = calc_fn_hash(empty(), name, once(TypeId::of::<String>()));
 
                     if !self.has_override(state, (hash_fn, *hash_fn_def)) {
                         // eval - only in function call style
                         let prev_len = scope.len();
-                        let pos = args_expr.get_ref(0).position();
+                        let pos = args_expr.get(0).position();
 
                         // Evaluate the text string as a script
                         let result = self.eval_script_expr(scope, state, args.pop(), pos);
@@ -1505,7 +1508,7 @@ impl Engine {
 
                 let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
-                let (id, root_pos) = modules.get_ref(0); // First module
+                let (id, root_pos) = modules.get(0); // First module
 
                 let module = if let Some(index) = modules.index() {
                     scope
@@ -1663,9 +1666,7 @@ impl Engine {
 
                 match self.eval_expr(scope, state, expr, level)?.as_bool() {
                     Ok(true) => match self.eval_stmt(scope, state, body, level) {
-                        Ok(_) => {
-                            self.inc_operations(state, body.position())?;
-                        }
+                        Ok(_) => (),
                         Err(err) => match *err {
                             EvalAltResult::ErrorLoopBreak(false, _) => (),
                             EvalAltResult::ErrorLoopBreak(true, _) => return Ok(Default::default()),
@@ -1682,9 +1683,7 @@ impl Engine {
             // Loop statement
             Stmt::Loop(body) => loop {
                 match self.eval_stmt(scope, state, body, level) {
-                    Ok(_) => {
-                        self.inc_operations(state, body.position())?;
-                    }
+                    Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
                         EvalAltResult::ErrorLoopBreak(true, _) => return Ok(Default::default()),
@@ -1773,7 +1772,6 @@ impl Engine {
                 let val = self.eval_expr(scope, state, expr.as_ref().unwrap(), level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
-                self.inc_operations(state, *pos)?;
                 Ok(Default::default())
             }
 
@@ -1781,7 +1779,6 @@ impl Engine {
                 let ((var_name, pos), _) = x.as_ref();
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push(var_name, ());
-                self.inc_operations(state, *pos)?;
                 Ok(Default::default())
             }
 
@@ -1791,7 +1788,6 @@ impl Engine {
                 let val = self.eval_expr(scope, state, &expr, level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
-                self.inc_operations(state, *pos)?;
                 Ok(Default::default())
             }
 
@@ -1818,7 +1814,7 @@ impl Engine {
                         .eval_expr(scope, state, &expr, level)?
                         .try_cast::<String>()
                     {
-                        if let Some(resolver) = self.module_resolver.as_ref() {
+                        if let Some(resolver) = &self.module_resolver {
                             // Use an empty scope to create a module
                             let module =
                                 resolver.resolve(self, Scope::new(), &path, expr.position())?;
@@ -1827,7 +1823,6 @@ impl Engine {
                             scope.push_module(mod_name, module);
 
                             state.modules += 1;
-                            self.inc_operations(state, *pos)?;
 
                             Ok(Default::default())
                         } else {
@@ -1884,7 +1879,7 @@ impl Engine {
         }
 
         // Report progress - only in steps
-        if let Some(progress) = self.progress.as_ref() {
+        if let Some(progress) = &self.progress {
             if !progress(state.operations) {
                 // Terminate script if progress returns false
                 return Err(Box::new(EvalAltResult::ErrorTerminated(pos)));

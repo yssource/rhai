@@ -2288,8 +2288,9 @@ engine.set_max_operations(0);               // allow unlimited operations
 ```
 
 The concept of one single _operation_ in Rhai is volatile - it roughly equals one expression node,
-one statement, one iteration of a loop, or one function call etc. with sub-expressions and statement
-blocks executed inside these contexts accumulated on top.
+loading a variable/constant, one operator call, one complete statement, one iteration of a loop,
+or one function call etc. with sub-expressions and statement blocks executed inside these contexts accumulated on top.
+A good rule-of-thumb is that one simple non-trivial expression consumes on average 5-10 operations.
 
 One _operation_ can take an unspecified amount of time and CPU cycles, depending on the particular operation
 involved.  For example, loading a constant consumes very few CPU cycles, while calling an external Rust function,

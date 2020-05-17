@@ -61,8 +61,3 @@ pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str, state: &State) -> Cow<'s
         name.to_string().into()
     }
 }
-
-/// Provide a type instance that is uninitialized.
-pub fn unsafe_uninit<T>() -> T {
-    unsafe { mem::MaybeUninit::uninit().assume_init() }
-}
