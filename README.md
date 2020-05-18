@@ -24,7 +24,7 @@ Rhai's current features set:
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
 * Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment without explicit permission.
-* Rugged (protection against [stack-overflow](#maximum-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
+* Rugged (protection against [stack-overflow](#maximum-call-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
 * Track script evaluation [progress](#tracking-progress) and manually terminate a script run.
 * [`no-std`](#optional-features) support.
 * [Function overloading](#function-overloading).
@@ -1066,12 +1066,13 @@ fn main() -> Result<(), Box<EvalAltResult>>
 Engine configuration options
 ---------------------------
 
-| Method                   | Description                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [`script optimization`].         |
-| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. |
-
-[`script optimization`]: #script-optimization
+| Method                   | Description                                                                                                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [script optimization].                                                                      |
+| `set_max_expr_depths`    | Set the maximum nesting levels of an expression/statement. See [maximum statement depth](#maximum-statement-depth).                                 |
+| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. See [maximum call stack depth](#maximum-call-stack-depth). |
+| `set_max_operations`     | Set the maximum number of _operations_ that a script is allowed to consume. See [maximum number of operations](#maximum-number-of-operations).      |
+| `set_max_modules`        | Set the maximum number of [modules] that a script is allowed to load. See [maximum number of modules](#maximum-number-of-modules).                  |
 
 -------
 
@@ -2267,9 +2268,12 @@ so that it does not consume more resources that it is allowed to.
 The most important resources to watch out for are:
 
 * **Memory**: A malignant script may continuously grow an [array] or [object map] until all memory is consumed.
+  It may also create a large [array] or [objecct map] literal that exhausts all memory during parsing.
 * **CPU**: A malignant script may run an infinite tight loop that consumes all CPU cycles.
 * **Time**: A malignant script may run indefinitely, thereby blocking the calling system which is waiting for a result.
 * **Stack**: A malignant script may attempt an infinite recursive call that exhausts the call stack.
+  Alternatively, it may create a degenerated deep expression with so many levels that the parser exhausts the call stack
+  when parsing the expression; or even deeply-nested statement blocks, if nested deep enough.
 * **Overflows**: A malignant script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
   create bad floating-point representations, in order to crash the system.
 * **Files**: A malignant script may continuously [`import`] an external module within an infinite loop,
@@ -2341,10 +2345,15 @@ engine.set_max_modules(5);                  // allow loading only up to 5 module
 engine.set_max_modules(0);                  // allow unlimited modules
 ```
 
-### Maximum stack depth
+### Maximum call stack depth
 
-Rhai by default limits function calls to a maximum depth of 256 levels (28 levels in debug build).
+Rhai by default limits function calls to a maximum depth of 128 levels (8 levels in debug build).
 This limit may be changed via the `Engine::set_max_call_levels` method.
+
+When setting this limit, care must be also taken to the evaluation depth of each _statement_
+within the function. It is entirely possible for a malignant script to embed an recursive call deep
+inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
+
 The limit can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
 
@@ -2358,12 +2367,57 @@ engine.set_max_call_levels(0);              // allow no function calls at all (m
 
 A script exceeding the maximum call stack depth will terminate with an error result.
 
+### Maximum statement depth
+
+Rhai by default limits statements and expressions nesting to a maximum depth of 128
+(which should be plenty) when they are at _global_ level, but only a depth of 32
+when they are within function bodies.  For debug builds, these limits are set further
+downwards to 32 and 16 respectively.
+
+That is because it is possible to overflow the [`Engine`]'s stack when it tries to
+recursively parse an extremely deeply-nested code stream.
+
+```rust
+// The following, if long enough, can easily cause stack overflow during parsing.
+let a = (1+(1+(1+(1+(1+(1+(1+(1+(1+(1+(...)+1)))))))))));
+```
+
+This limit may be changed via the `Engine::set_max_expr_depths` method.  There are two limits to set,
+one for the maximum depth at global level, and the other for function bodies.
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_expr_depths(50, 5);          // allow nesting up to 50 layers of expressions/statements
+                                            // at global level, but only 5 inside functions
+```
+
+Beware that there may be multiple layers for a simple language construct, even though it may correspond
+to only one AST node. That is because the Rhai _parser_ internally runs a recursive chain of function calls
+and it is important that a malignant script does not panic the parser in the first place.
+
+Functions are placed under stricter limits because of the multiplicative effect of recursion.
+A script can effectively call itself while deep inside an expression chain within the function body,
+thereby overflowing the stack even when the level of recursion is within limit.
+
+Make sure that `C x ( 5 + F ) + S` layered calls do not cause a stack overflow, where:
+
+* `C` = maximum call stack depth,
+* `F` = maximum statement depth for functions,
+* `S` = maximum statement depth at global level.
+
+A script exceeding the maximum nesting depths will terminate with a parsing error.
+The malignant `AST` will not be able to get past parsing in the first place.
+
+The limits can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
 ### Checked arithmetic
 
-All arithmetic calculations in Rhai are _checked_, meaning that the script terminates with an error whenever
-it detects a numeric over-flow/under-flow condition or an invalid floating-point operation, instead of
-crashing the entire system.  This checking can be turned off via the [`unchecked`] feature for higher performance
-(but higher risks as well).
+By default, all arithmetic calculations in Rhai are _checked_, meaning that the script terminates
+with an error whenever it detects a numeric over-flow/under-flow condition or an invalid
+floating-point operation, instead of crashing the entire system.  This checking can be turned off
+via the [`unchecked`] feature for higher performance (but higher risks as well).
 
 ### Blocking access to external data
 
@@ -2382,6 +2436,8 @@ let engine = engine;                        // shadow the variable so that 'engi
 
 Script optimization
 ===================
+
+[script optimization]: #script-optimization
 
 Rhai includes an _optimizer_ that tries to optimize a script after parsing.
 This can reduce resource utilization and increase execution speed.

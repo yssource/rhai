@@ -49,14 +49,30 @@ pub type Map = HashMap<String, Dynamic>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
-pub const MAX_CALL_STACK_DEPTH: usize = 28;
+pub const MAX_CALL_STACK_DEPTH: usize = 8;
+#[cfg(not(feature = "unchecked"))]
+#[cfg(debug_assertions)]
+pub const MAX_EXPR_DEPTH: usize = 32;
+#[cfg(not(feature = "unchecked"))]
+#[cfg(debug_assertions)]
+pub const MAX_FUNCTION_EXPR_DEPTH: usize = 16;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(debug_assertions))]
-pub const MAX_CALL_STACK_DEPTH: usize = 256;
+pub const MAX_CALL_STACK_DEPTH: usize = 128;
+#[cfg(not(feature = "unchecked"))]
+#[cfg(not(debug_assertions))]
+pub const MAX_EXPR_DEPTH: usize = 128;
+#[cfg(not(feature = "unchecked"))]
+#[cfg(not(debug_assertions))]
+pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
 
 #[cfg(feature = "unchecked")]
 pub const MAX_CALL_STACK_DEPTH: usize = usize::MAX;
+#[cfg(feature = "unchecked")]
+pub const MAX_EXPR_DEPTH: usize = usize::MAX;
+#[cfg(feature = "unchecked")]
+pub const MAX_FUNCTION_EXPR_DEPTH: usize = usize::MAX;
 
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
@@ -338,8 +354,12 @@ pub struct Engine {
     pub(crate) optimization_level: OptimizationLevel,
     /// Maximum levels of call-stack to prevent infinite recursion.
     ///
-    /// Defaults to 28 for debug builds and 256 for non-debug builds.
+    /// Defaults to 8 for debug builds and 128 for non-debug builds.
     pub(crate) max_call_stack_depth: usize,
+    /// Maximum depth of statements/expressions at global level.
+    pub(crate) max_expr_depth: usize,
+    /// Maximum depth of statements/expressions in functions.
+    pub(crate) max_function_expr_depth: usize,
     /// Maximum number of operations allowed to run.
     pub(crate) max_operations: Option<NonZeroU64>,
     /// Maximum number of modules allowed to load.
@@ -382,6 +402,8 @@ impl Default for Engine {
             optimization_level: OptimizationLevel::Full,
 
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+            max_expr_depth: MAX_EXPR_DEPTH,
+            max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
             max_operations: None,
             max_modules: None,
         };
@@ -523,6 +545,8 @@ impl Engine {
             optimization_level: OptimizationLevel::Full,
 
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+            max_expr_depth: MAX_EXPR_DEPTH,
+            max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
             max_operations: None,
             max_modules: None,
         }
@@ -572,6 +596,13 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_modules(&mut self, modules: u64) {
         self.max_modules = NonZeroU64::new(modules);
+    }
+
+    /// Set the depth limits for expressions/statements.
+    #[cfg(not(feature = "unchecked"))]
+    pub fn set_max_expr_depths(&mut self, max_expr_depth: usize, max_function_expr_depth: usize) {
+        self.max_expr_depth = max_expr_depth;
+        self.max_function_expr_depth = max_function_expr_depth;
     }
 
     /// Set the module resolution service used by the `Engine`.

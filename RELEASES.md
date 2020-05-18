@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 0.15.0
+==============
+
+New features
+------------
+
+* Set limits on maximum level of nesting expressions and statements to avoid panics during parsing.
+
+
 Version 0.14.1
 ==============
 

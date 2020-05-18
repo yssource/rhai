@@ -110,6 +110,10 @@ pub enum ParseErrorType {
     AssignmentToCopy,
     /// Assignment to an a constant variable.
     AssignmentToConstant(String),
+    /// Expression exceeding the maximum levels of complexity.
+    ///
+    /// Never appears under the `unchecked` feature.
+    ExprTooDeep,
     /// Break statement not inside a loop.
     LoopBreak,
 }
@@ -158,7 +162,8 @@ impl ParseError {
             ParseErrorType::DuplicatedExport(_) => "Duplicated variable/function in export statement",
             ParseErrorType::WrongExport => "Export statement can only appear at global level",
             ParseErrorType::AssignmentToCopy => "Only a copy of the value is change with this assignment",
-            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant value.",
+            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant value",
+            ParseErrorType::ExprTooDeep => "Expression exceeds maximum complexity",
             ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
         }
     }
