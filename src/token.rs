@@ -2,6 +2,7 @@
 
 use crate::error::LexError;
 use crate::parser::INT;
+use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -425,7 +426,7 @@ pub struct TokenIterator<'a> {
     /// Current position.
     pos: Position,
     /// The input character streams.
-    streams: Vec<Peekable<Chars<'a>>>,
+    streams: StaticVec<Peekable<Chars<'a>>>,
 }
 
 impl<'a> TokenIterator<'a> {

@@ -2,7 +2,6 @@
 
 use crate::any::Variant;
 use crate::engine::State;
-use crate::utils::StaticVec;
 
 use crate::stdlib::{
     any::{Any, TypeId},
@@ -10,7 +9,6 @@ use crate::stdlib::{
     boxed::Box,
     mem, ptr,
     string::ToString,
-    vec::Vec,
 };
 
 /// Cast a type into another type.
@@ -49,20 +47,17 @@ pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, B
 /// current `Scope` without cloning the variable name.  Doing this is safe because all local
 /// variables in the `Scope` are cleared out before existing the block.
 ///
-/// Force-casting a local variable lifetime to the current `Scope`'s larger lifetime saves
+/// Force-casting a local variable's lifetime to the current `Scope`'s larger lifetime saves
 /// on allocations and string cloning, thus avoids us having to maintain a chain of `Scope`'s.
-pub fn unsafe_cast_var_name<'s>(name: &str, state: &State) -> Cow<'s, str> {
+pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str, state: &State) -> Cow<'s, str> {
     // If not at global level, we can force-cast
     if state.scope_level > 0 {
         // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
         //           this is safe because all local variables are cleared at the end of the block
         unsafe { mem::transmute::<_, &'s str>(name) }.into()
     } else {
+        // The variable is introduced at global (top) level and may persist after the script run.
+        // Therefore, clone the variable name.
         name.to_string().into()
     }
-}
-
-/// Provide a type instance that is memory-zeroed.
-pub fn unsafe_zeroed<T>() -> T {
-    unsafe { mem::MaybeUninit::zeroed().assume_init() }
 }

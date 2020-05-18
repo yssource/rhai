@@ -15,6 +15,7 @@ fn test_stack_overflow() -> Result<(), Box<EvalAltResult>> {
         325
     );
 
+    #[cfg(not(feature = "unchecked"))]
     match engine.eval::<()>(
         r"
             fn foo(n) { if n == 0 { 0 } else { n + foo(n-1) } }

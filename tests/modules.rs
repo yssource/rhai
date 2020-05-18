@@ -72,12 +72,71 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             r#"
-                import "hello" as h;
-                h::answer
+                import "hello" as h1;
+                import "hello" as h2;
+                h2::answer
     "#
         )?,
         42
     );
+
+    engine.set_max_modules(5);
+
+    assert!(matches!(
+        *engine
+            .eval::<INT>(
+                r#"
+                    let x = 0;
+
+                    for x in range(0, 10) {
+                        import "hello" as h;
+                        x += h::answer;
+                    }
+
+                    x
+            "#
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorTooManyModules(_)
+    ));
+
+    #[cfg(not(feature = "no_function"))]
+    assert!(matches!(
+        *engine
+            .eval::<INT>(
+                r#"
+                    let x = 0;
+
+                    fn foo() {
+                        import "hello" as h;
+                        x += h::answer;
+                    }
+
+                    for x in range(0, 10) {
+                        foo();
+                    }
+
+                    x
+            "#
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
+    ));
+
+    engine.set_max_modules(0);
+
+    #[cfg(not(feature = "no_function"))]
+    engine.eval::<()>(
+        r#"
+            fn foo() {
+                import "hello" as h;
+            }
+
+            for x in range(0, 10) {
+                foo();
+            }
+    "#,
+    )?;
 
     Ok(())
 }

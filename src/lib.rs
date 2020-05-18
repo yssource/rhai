@@ -91,7 +91,6 @@ mod utils;
 pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
-pub use fn_call::FuncArgs;
 pub use fn_native::NativeCallable;
 pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 pub use module::Module;
@@ -116,6 +115,7 @@ pub use parser::FLOAT;
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;
 
+/// Module containing all built-in _module resolvers_ available to Rhai.
 #[cfg(not(feature = "no_module"))]
 pub mod module_resolvers {
     pub use crate::module::resolvers::*;

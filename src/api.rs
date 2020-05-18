@@ -21,7 +21,6 @@ use crate::engine::Map;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    collections::HashMap,
     mem,
     string::{String, ToString},
 };
@@ -653,7 +652,10 @@ impl Engine {
         let scripts = [script];
         let stream = lex(&scripts);
 
-        parse_global_expr(&mut stream.peekable(), self, scope, self.optimization_level)
+        {
+            let mut peekable = stream.peekable();
+            parse_global_expr(&mut peekable, self, scope, self.optimization_level)
+        }
     }
 
     /// Evaluate a script file.
@@ -749,11 +751,10 @@ impl Engine {
         scope: &mut Scope,
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
-        // Since the AST will be thrown away afterwards, don't bother to optimize it
         let ast = self.compile_with_scope_and_optimization_level(
             scope,
             &[script],
-            OptimizationLevel::None,
+            self.optimization_level,
         )?;
         self.eval_ast_with_scope(scope, &ast)
     }
@@ -865,7 +866,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let result = self.eval_ast_with_scope_raw(scope, ast)?;
+        let (result, _) = self.eval_ast_with_scope_raw(scope, ast)?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -881,7 +882,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
         let mut state = State::new(ast.fn_lib());
 
         ast.statements()
@@ -893,6 +894,7 @@ impl Engine {
                 EvalAltResult::Return(out, _) => Ok(out),
                 _ => Err(err),
             })
+            .map(|v| (v, state.operations))
     }
 
     /// Evaluate a file, but throw away the result and only return error (if any).
@@ -1016,9 +1018,9 @@ impl Engine {
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
 
         let state = State::new(fn_lib);
+        let args = args.as_mut();
 
-        let result =
-            self.call_script_fn(Some(scope), &state, name, fn_def, args.as_mut(), pos, 0)?;
+        let (result, _) = self.call_script_fn(Some(scope), state, name, fn_def, args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -1058,6 +1060,84 @@ impl Engine {
         optimize_into_ast(self, scope, stmt, fn_lib, optimization_level)
     }
 
+    /// Register a callback for script evaluation progress.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # use std::sync::RwLock;
+    /// # use std::sync::Arc;
+    /// use rhai::Engine;
+    ///
+    /// let result = Arc::new(RwLock::new(0_u64));
+    /// let logger = result.clone();
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// engine.on_progress(move |ops| {
+    ///     if ops > 10000 {
+    ///         false
+    ///     } else if ops % 800 == 0 {
+    ///         *logger.write().unwrap() = ops;
+    ///         true
+    ///     } else {
+    ///         true
+    ///     }
+    /// });
+    ///
+    /// engine.consume("for x in range(0, 50000) {}")
+    ///     .expect_err("should error");
+    ///
+    /// assert_eq!(*result.read().unwrap(), 9600);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "sync")]
+    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + Send + Sync + 'static) {
+        self.progress = Some(Box::new(callback));
+    }
+
+    /// Register a callback for script evaluation progress.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # use std::cell::Cell;
+    /// # use std::rc::Rc;
+    /// use rhai::Engine;
+    ///
+    /// let result = Rc::new(Cell::new(0_u64));
+    /// let logger = result.clone();
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// engine.on_progress(move |ops| {
+    ///     if ops > 10000 {
+    ///         false
+    ///     } else if ops % 800 == 0 {
+    ///         logger.set(ops);
+    ///         true
+    ///     } else {
+    ///         true
+    ///     }
+    /// });
+    ///
+    /// engine.consume("for x in range(0, 50000) {}")
+    ///     .expect_err("should error");
+    ///
+    /// assert_eq!(result.get(), 9600);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "sync"))]
+    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + 'static) {
+        self.progress = Some(Box::new(callback));
+    }
+
     /// Override default action of `print` (print to stdout using `println!`)
     ///
     /// # Example
@@ -1092,21 +1172,21 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::sync::RwLock;
-    /// # use std::sync::Arc;
+    /// # use std::cell::RefCell;
+    /// # use std::rc::Rc;
     /// use rhai::Engine;
     ///
-    /// let result = Arc::new(RwLock::new(String::from("")));
+    /// let result = Rc::new(RefCell::new(String::from("")));
     ///
     /// let mut engine = Engine::new();
     ///
     /// // Override action of 'print' function
     /// let logger = result.clone();
-    /// engine.on_print(move |s| logger.write().unwrap().push_str(s));
+    /// engine.on_print(move |s| logger.borrow_mut().push_str(s));
     ///
     /// engine.consume("print(40 + 2);")?;
     ///
-    /// assert_eq!(*result.read().unwrap(), "42");
+    /// assert_eq!(*result.borrow(), "42");
     /// # Ok(())
     /// # }
     /// ```
@@ -1149,21 +1229,21 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::sync::RwLock;
-    /// # use std::sync::Arc;
+    /// # use std::cell::RefCell;
+    /// # use std::rc::Rc;
     /// use rhai::Engine;
     ///
-    /// let result = Arc::new(RwLock::new(String::from("")));
+    /// let result = Rc::new(RefCell::new(String::from("")));
     ///
     /// let mut engine = Engine::new();
     ///
     /// // Override action of 'print' function
     /// let logger = result.clone();
-    /// engine.on_debug(move |s| logger.write().unwrap().push_str(s));
+    /// engine.on_debug(move |s| logger.borrow_mut().push_str(s));
     ///
     /// engine.consume(r#"debug("hello");"#)?;
     ///
-    /// assert_eq!(*result.read().unwrap(), r#""hello""#);
+    /// assert_eq!(*result.borrow(), r#""hello""#);
     /// # Ok(())
     /// # }
     /// ```

@@ -11,7 +11,7 @@ use crate::scope::Scope;
 
 use crate::stdlib::{boxed::Box, string::ToString};
 
-/// A trait to create a Rust anonymous function from a script.
+/// Trait to create a Rust anonymous function from a script.
 pub trait Func<ARGS, RET> {
     type Output;
 

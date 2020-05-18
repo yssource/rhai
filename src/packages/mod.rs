@@ -1,7 +1,8 @@
-//! This module contains all built-in _packages_ available to Rhai, plus facilities to define custom packages.
+//! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
 use crate::fn_native::{NativeCallable, SharedIteratorFunction};
 use crate::module::Module;
+use crate::utils::StaticVec;
 
 use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
 
@@ -54,7 +55,7 @@ pub type PackageLibrary = Arc<Module>;
 #[derive(Clone, Default)]
 pub(crate) struct PackagesCollection {
     /// Collection of `PackageLibrary` instances.
-    packages: Vec<PackageLibrary>,
+    packages: StaticVec<PackageLibrary>,
 }
 
 impl PackagesCollection {
@@ -89,7 +90,7 @@ impl PackagesCollection {
     }
 }
 
-/// This macro makes it easy to define a _package_ (which is basically a shared module)
+/// Macro that makes it easy to define a _package_ (which is basically a shared module)
 /// and register functions into it.
 ///
 /// Functions can be added to the package using the standard module methods such as

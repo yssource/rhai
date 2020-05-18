@@ -51,7 +51,7 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic>,
 
     /// External Rust functions.
-    functions: HashMap<u64, (String, FnAccess, Vec<TypeId>, SharedNativeFunction)>,
+    functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, SharedNativeFunction)>,
 
     /// Flattened collection of all external Rust functions, including those in sub-modules.
     all_functions: HashMap<u64, SharedNativeFunction>,
@@ -292,8 +292,9 @@ impl Module {
         #[cfg(feature = "sync")]
         let func = Arc::new(f);
 
-        self.functions
-            .insert(hash_fn, (name, access, params.to_vec(), func));
+        let params = params.into_iter().cloned().collect();
+
+        self.functions.insert(hash_fn, (name, access, params, func));
 
         hash_fn
     }
@@ -616,13 +617,13 @@ impl Module {
     pub(crate) fn index_all_sub_modules(&mut self) {
         // Collect a particular module.
         fn index_module<'a>(
-            module: &'a mut Module,
+            module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
             functions: &mut Vec<(u64, SharedNativeFunction)>,
             fn_lib: &mut Vec<(u64, SharedFnDef)>,
         ) {
-            for (name, m) in module.modules.iter_mut() {
+            for (name, m) in &module.modules {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
                 index_module(m, qualifiers, variables, functions, fn_lib);
@@ -630,7 +631,7 @@ impl Module {
             }
 
             // Index all variables
-            for (var_name, value) in module.variables.iter() {
+            for (var_name, value) in &module.variables {
                 // Qualifiers + variable name
                 let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
                 variables.push((hash_var, value.clone()));
@@ -716,7 +717,7 @@ impl Module {
 ///
 /// A `StaticVec` is used because most module-level access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
-#[derive(Clone, Eq, PartialEq, Hash, Default)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
 
 impl fmt::Debug for ModuleRef {
@@ -769,7 +770,7 @@ impl ModuleRef {
     }
 }
 
-/// A trait that encapsulates a module resolution service.
+/// Trait that encapsulates a module resolution service.
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "sync"))]
 pub trait ModuleResolver {
@@ -783,7 +784,7 @@ pub trait ModuleResolver {
     ) -> Result<Module, Box<EvalAltResult>>;
 }
 
-/// A trait that encapsulates a module resolution service.
+/// Trait that encapsulates a module resolution service.
 #[cfg(not(feature = "no_module"))]
 #[cfg(feature = "sync")]
 pub trait ModuleResolver: Send + Sync {
@@ -812,7 +813,7 @@ mod file {
     use super::*;
     use crate::stdlib::path::PathBuf;
 
-    /// A module resolution service that loads module script files from the file system.
+    /// Module resolution service that loads module script files from the file system.
     ///
     /// The `new_with_path` and `new_with_path_and_extension` constructor functions
     /// allow specification of a base directory with module path used as a relative path offset
@@ -949,7 +950,7 @@ mod file {
 mod stat {
     use super::*;
 
-    /// A module resolution service that serves modules added into it.
+    /// Module resolution service that serves modules added into it.
     ///
     /// # Examples
     ///
