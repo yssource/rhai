@@ -1768,7 +1768,7 @@ impl Engine {
 
             // Let statement
             Stmt::Let(x) if x.1.is_some() => {
-                let ((var_name, pos), expr) = x.as_ref();
+                let ((var_name, _), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, expr.as_ref().unwrap(), level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
@@ -1776,7 +1776,7 @@ impl Engine {
             }
 
             Stmt::Let(x) => {
-                let ((var_name, pos), _) = x.as_ref();
+                let ((var_name, _), _) = x.as_ref();
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push(var_name, ());
                 Ok(Default::default())
@@ -1784,7 +1784,7 @@ impl Engine {
 
             // Const statement
             Stmt::Const(x) if x.1.is_constant() => {
-                let ((var_name, pos), expr) = x.as_ref();
+                let ((var_name, _), expr) = x.as_ref();
                 let val = self.eval_expr(scope, state, &expr, level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);

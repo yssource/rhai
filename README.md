@@ -13,25 +13,25 @@ to add scripting to any application.
 
 Rhai's current features set:
 
-* Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector
+* Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector.
 * Tight integration with native Rust [functions](#working-with-functions) and [types](#custom-types-and-methods),
-  including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers)
-* Freely pass Rust variables/constants into a script via an external [`Scope`]
-* Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
-* Low compile-time overhead (~0.6 sec debug/~3 sec release for `rhai_runner` sample app)
-* Fairly efficient evaluation (1 million iterations in 0.75 sec on my 5 year old laptop)
+  including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers).
+* Freely pass Rust variables/constants into a script via an external [`Scope`].
+* Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust.
+* Low compile-time overhead (~0.6 sec debug/~3 sec release for `rhai_runner` sample app).
+* Fairly efficient evaluation (1 million iterations in 0.75 sec on my 5 year old laptop).
 * Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
-  one single source file, all with names starting with `"unsafe_"`)
-* Sand-boxed (the scripting [`Engine`] can be declared immutable which cannot mutate the containing environment
-  unless explicitly allowed via `RefCell` etc.)
-* Rugged (protection against [stack-overflow](#maximum-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.)
-* Able to track script evaluation [progress](#tracking-progress) and manually terminate a script run
-* [`no-std`](#optional-features) support
-* [Function overloading](#function-overloading)
-* [Operator overloading](#operator-overloading)
-* [Modules]
-* Compiled script is [optimized](#script-optimization) for repeated evaluations
-* Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
+  one single source file, all with names starting with `"unsafe_"`).
+* Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
+* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment without explicit permission.
+* Rugged (protection against [stack-overflow](#maximum-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
+* Track script evaluation [progress](#tracking-progress) and manually terminate a script run.
+* [`no-std`](#optional-features) support.
+* [Function overloading](#function-overloading).
+* [Operator overloading](#operator-overloading).
+* Organize code base with dynamically-loadable [Modules].
+* Compiled script is [optimized](#script-optimization) for repeated evaluations.
+* Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features).
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
@@ -111,7 +111,7 @@ requiring more CPU cycles to complete.
 
 Also, turning on `no_float`, and `only_i32` makes the key [`Dynamic`] data type only 8 bytes small on 32-bit targets
 while normally it can be up to 16 bytes (e.g. on x86/x64 CPU's) in order to hold an `i64` or `f64`.
-Making [`Dynamic`] small helps performance due to more caching efficiency.
+Making [`Dynamic`] small helps performance due to better cache efficiency.
 
 ### Minimal builds
 
@@ -120,6 +120,8 @@ the correct linker flags are used in `cargo.toml`:
 
 ```toml
 [profile.release]
+lto = "fat"         # turn on Link-Time Optimizations
+codegen-units = 1   # trade compile time with maximum optimization
 opt-level = "z"     # optimize for size
 ```
 
@@ -417,7 +419,7 @@ Therefore, a package only has to be created _once_.
 
 Packages are actually implemented as [modules], so they share a lot of behavior and characteristics.
 The main difference is that a package loads under the _global_ namespace, while a module loads under its own
-namespace alias specified in an `import` statement (see also [modules]).
+namespace alias specified in an [`import`] statement (see also [modules]).
 A package is _static_ (i.e. pre-loaded into an [`Engine`]), while a module is _dynamic_ (i.e. loaded with
 the `import` statement).
 
@@ -2113,6 +2115,8 @@ export x as answer;         // the variable 'x' is exported under the alias 'ans
 
 ### Importing modules
 
+[`import`]: #importing-modules
+
 A module can be _imported_ via the `import` statement, and its members are accessed via '`::`' similar to C++.
 
 ```rust
@@ -2258,17 +2262,17 @@ Ruggedization - protect against DoS attacks
 ------------------------------------------
 
 For scripting systems open to user-land scripts, it is always best to limit the amount of resources used by a script
-so that it does not crash the system by consuming all resources.
+so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
 * **Memory**: A malignant script may continuously grow an [array] or [object map] until all memory is consumed.
 * **CPU**: A malignant script may run an infinite tight loop that consumes all CPU cycles.
-* **Time**: A malignant script may run indefinitely, thereby blocking the calling system waiting for a result.
-* **Stack**: A malignant script may consume attempt an infinite recursive call that exhausts the call stack.
-* **Overflows**: A malignant script may deliberately cause numeric over-flows and/or under-flows, and/or bad
-  floating-point representations, in order to crash the system.
-* **Files**: A malignant script may continuously `import` an external module within an infinite loop,
+* **Time**: A malignant script may run indefinitely, thereby blocking the calling system which is waiting for a result.
+* **Stack**: A malignant script may attempt an infinite recursive call that exhausts the call stack.
+* **Overflows**: A malignant script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
+  create bad floating-point representations, in order to crash the system.
+* **Files**: A malignant script may continuously [`import`] an external module within an infinite loop,
   thereby putting heavy load on the file-system (or even the network if the file is not local).
   Even when modules are not created from files, they still typically consume a lot of resources to load.
 * **Data**: A malignant script may attempt to read from and/or write to data that it does not own. If this happens,
@@ -2288,13 +2292,14 @@ engine.set_max_operations(0);               // allow unlimited operations
 ```
 
 The concept of one single _operation_ in Rhai is volatile - it roughly equals one expression node,
-loading a variable/constant, one operator call, one complete statement, one iteration of a loop,
-or one function call etc. with sub-expressions and statement blocks executed inside these contexts accumulated on top.
+loading one variable/constant, one operator call, one iteration of a loop, or one function call etc.
+with sub-expressions, statements and function calls executed inside these contexts accumulated on top.
 A good rule-of-thumb is that one simple non-trivial expression consumes on average 5-10 operations.
 
-One _operation_ can take an unspecified amount of time and CPU cycles, depending on the particular operation
-involved.  For example, loading a constant consumes very few CPU cycles, while calling an external Rust function,
-though also counted as only one operation, may consume much more resources.
+One _operation_ can take an unspecified amount of time and real CPU cycles, depending on the particulars.
+For example, loading a constant consumes very few CPU cycles, while calling an external Rust function,
+though also counted as only one operation, may consume much more computing resources.
+If it helps to visualize, think of an _operation_ as roughly equals to one _instruction_ of a hypothetical CPU.
 
 The _operation count_ is intended to be a very course-grained measurement of the amount of CPU that a script
 is consuming, and allows the system to impose a hard upper limit.
@@ -2325,7 +2330,7 @@ Return `false` to terminate the script immediately.
 
 ### Maximum number of modules
 
-Rhai by default does not limit how many [modules] are loaded via the `import` statement.
+Rhai by default does not limit how many [modules] are loaded via the [`import`] statement.
 This can be changed via the `Engine::set_max_modules` method, with zero being unlimited (the default).
 
 ```rust
@@ -2360,7 +2365,7 @@ it detects a numeric over-flow/under-flow condition or an invalid floating-point
 crashing the entire system.  This checking can be turned off via the [`unchecked`] feature for higher performance
 (but higher risks as well).
 
-### Access to external data
+### Blocking access to external data
 
 Rhai is _sand-boxed_ so a script can never read from outside its own environment.
 Furthermore, an [`Engine`] created non-`mut` cannot mutate any state outside of itself;
