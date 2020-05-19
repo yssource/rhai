@@ -86,14 +86,14 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         *engine
             .eval::<INT>(
                 r#"
-                    let x = 0;
+                    let sum = 0;
 
                     for x in range(0, 10) {
                         import "hello" as h;
-                        x += h::answer;
+                        sum += h::answer;
                     }
 
-                    x
+                    sum
             "#
             )
             .expect_err("should error"),
@@ -105,18 +105,18 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         *engine
             .eval::<INT>(
                 r#"
-                    let x = 0;
+                    let sum = 0;
 
                     fn foo() {
                         import "hello" as h;
-                        x += h::answer;
+                        sum += h::answer;
                     }
 
                     for x in range(0, 10) {
                         foo();
                     }
 
-                    x
+                    sum
             "#
             )
             .expect_err("should error"),

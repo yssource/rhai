@@ -27,7 +27,7 @@ use crate::stdlib::{
     format,
     iter::{empty, once, repeat},
     mem,
-    num::{NonZeroU64, NonZeroUsize},
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     rc::Rc,
     string::{String, ToString},
@@ -49,7 +49,7 @@ pub type Map = HashMap<String, Dynamic>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
-pub const MAX_CALL_STACK_DEPTH: usize = 8;
+pub const MAX_CALL_STACK_DEPTH: usize = 16;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
 pub const MAX_EXPR_DEPTH: usize = 32;
@@ -354,16 +354,16 @@ pub struct Engine {
     pub(crate) optimization_level: OptimizationLevel,
     /// Maximum levels of call-stack to prevent infinite recursion.
     ///
-    /// Defaults to 8 for debug builds and 128 for non-debug builds.
+    /// Defaults to 16 for debug builds and 128 for non-debug builds.
     pub(crate) max_call_stack_depth: usize,
     /// Maximum depth of statements/expressions at global level.
     pub(crate) max_expr_depth: usize,
     /// Maximum depth of statements/expressions in functions.
     pub(crate) max_function_expr_depth: usize,
     /// Maximum number of operations allowed to run.
-    pub(crate) max_operations: Option<NonZeroU64>,
+    pub(crate) max_operations: u64,
     /// Maximum number of modules allowed to load.
-    pub(crate) max_modules: Option<NonZeroU64>,
+    pub(crate) max_modules: u64,
 }
 
 impl Default for Engine {
@@ -404,8 +404,8 @@ impl Default for Engine {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: None,
-            max_modules: None,
+            max_operations: u64::MAX,
+            max_modules: u64::MAX,
         };
 
         #[cfg(feature = "no_stdlib")]
@@ -547,8 +547,8 @@ impl Engine {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: None,
-            max_modules: None,
+            max_operations: u64::MAX,
+            max_modules: u64::MAX,
         }
     }
 
@@ -589,13 +589,17 @@ impl Engine {
     /// consuming too much resources (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_operations(&mut self, operations: u64) {
-        self.max_operations = NonZeroU64::new(operations);
+        self.max_operations = if operations == 0 {
+            u64::MAX
+        } else {
+            operations
+        };
     }
 
     /// Set the maximum number of imported modules allowed for a script (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_modules(&mut self, modules: u64) {
-        self.max_modules = NonZeroU64::new(modules);
+        self.max_modules = if modules == 0 { u64::MAX } else { modules };
     }
 
     /// Set the depth limits for expressions/statements.
@@ -1835,10 +1839,8 @@ impl Engine {
                     let (expr, (name, pos)) = x.as_ref();
 
                     // Guard against too many modules
-                    if let Some(max) = self.max_modules {
-                        if state.modules >= max.get() {
-                            return Err(Box::new(EvalAltResult::ErrorTooManyModules(*pos)));
-                        }
+                    if state.modules >= self.max_modules {
+                        return Err(Box::new(EvalAltResult::ErrorTooManyModules(*pos)));
                     }
 
                     if let Some(path) = self
@@ -1902,10 +1904,8 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         {
             // Guard against too many operations
-            if let Some(max) = self.max_operations {
-                if state.operations > max.get() {
-                    return Err(Box::new(EvalAltResult::ErrorTooManyOperations(pos)));
-                }
+            if state.operations > self.max_operations {
+                return Err(Box::new(EvalAltResult::ErrorTooManyOperations(pos)));
             }
         }
 

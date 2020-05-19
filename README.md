@@ -2347,7 +2347,7 @@ engine.set_max_modules(0);                  // allow unlimited modules
 
 ### Maximum call stack depth
 
-Rhai by default limits function calls to a maximum depth of 128 levels (8 levels in debug build).
+Rhai by default limits function calls to a maximum depth of 128 levels (16 levels in debug build).
 This limit may be changed via the `Engine::set_max_call_levels` method.
 
 When setting this limit, care must be also taken to the evaluation depth of each _statement_

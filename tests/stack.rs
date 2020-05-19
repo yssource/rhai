@@ -16,19 +16,14 @@ fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
     );
 
     #[cfg(not(feature = "unchecked"))]
-    match engine.eval::<()>(
+    assert!(matches!(
+        *engine.eval::<()>(
         r"
             fn foo(n) { if n == 0 { 0 } else { n + foo(n-1) } }
             foo(1000)
-    ",
-    ) {
-        Ok(_) => panic!("should be stack overflow"),
-        Err(err) => match *err {
-            EvalAltResult::ErrorInFunctionCall(name, _, _)
-                if name.starts_with("foo > foo > foo") => {}
-            _ => panic!("should be stack overflow"),
-        },
-    }
+    ").expect_err("should error"),
+        EvalAltResult::ErrorInFunctionCall(name, _, _) if name.starts_with("foo > foo > foo")
+    ));
 
     Ok(())
 }
