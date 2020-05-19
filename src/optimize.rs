@@ -15,7 +15,6 @@ use crate::utils::StaticVec;
 use crate::stdlib::{
     boxed::Box,
     iter::empty,
-    mem,
     string::{String, ToString},
     vec,
     vec::Vec,

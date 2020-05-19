@@ -82,6 +82,7 @@ pub enum NativeFunctionABI {
     Method,
 }
 
+/*
 /// Trait implemented by all native Rust functions that are callable by Rhai.
 #[cfg(not(feature = "sync"))]
 pub trait NativeCallable {
@@ -99,15 +100,16 @@ pub trait NativeCallable: Send + Sync {
     /// Call a native Rust function.
     fn call(&self, args: &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 }
+*/
 
 /// A type encapsulating a native Rust function callable by Rhai.
 pub struct NativeFunction(Box<FnAny>, NativeFunctionABI);
 
-impl NativeCallable for NativeFunction {
-    fn abi(&self) -> NativeFunctionABI {
+impl NativeFunction {
+    pub fn abi(&self) -> NativeFunctionABI {
         self.1
     }
-    fn call(&self, args: &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn call(&self, args: &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> {
         (self.0)(args)
     }
 }
@@ -126,10 +128,10 @@ impl NativeFunction {
 
 /// An external native Rust function.
 #[cfg(not(feature = "sync"))]
-pub type SharedNativeFunction = Rc<Box<dyn NativeCallable>>;
+pub type SharedNativeFunction = Rc<NativeFunction>;
 /// An external native Rust function.
 #[cfg(feature = "sync")]
-pub type SharedNativeFunction = Arc<Box<dyn NativeCallable>>;
+pub type SharedNativeFunction = Arc<NativeFunction>;
 
 /// A type iterator function.
 #[cfg(not(feature = "sync"))]

@@ -4,8 +4,8 @@ use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{Engine, FunctionsLib};
 use crate::fn_native::{
-    FnAny, FnCallArgs, IteratorFn, NativeCallable, NativeFunction, NativeFunctionABI,
-    NativeFunctionABI::*, SharedIteratorFunction, SharedNativeFunction,
+    FnAny, FnCallArgs, IteratorFn, NativeFunction, NativeFunctionABI, NativeFunctionABI::*,
+    SharedIteratorFunction, SharedNativeFunction,
 };
 use crate::parser::{FnAccess, FnDef, SharedFnDef, AST};
 use crate::result::EvalAltResult;
@@ -285,7 +285,7 @@ impl Module {
     ) -> u64 {
         let hash_fn = calc_fn_hash(empty(), &name, params.iter().cloned());
 
-        let f = Box::new(NativeFunction::from((func, abi))) as Box<dyn NativeCallable>;
+        let f = NativeFunction::from((func, abi));
 
         #[cfg(not(feature = "sync"))]
         let func = Rc::new(f);
@@ -531,7 +531,7 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn get_fn(&self, hash_fn: u64) -> Option<&Box<dyn NativeCallable>> {
+    pub fn get_fn(&self, hash_fn: u64) -> Option<&NativeFunction> {
         self.functions.get(&hash_fn).map(|(_, _, _, v)| v.as_ref())
     }
 
@@ -543,7 +543,7 @@ impl Module {
         &mut self,
         name: &str,
         hash_fn_native: u64,
-    ) -> Result<&Box<dyn NativeCallable>, Box<EvalAltResult>> {
+    ) -> Result<&NativeFunction, Box<EvalAltResult>> {
         self.all_functions
             .get(&hash_fn_native)
             .map(|f| f.as_ref())

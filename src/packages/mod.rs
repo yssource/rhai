@@ -1,6 +1,6 @@
 //! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-use crate::fn_native::{NativeCallable, SharedIteratorFunction};
+use crate::fn_native::{NativeFunction, SharedIteratorFunction};
 use crate::module::Module;
 use crate::utils::StaticVec;
 
@@ -69,7 +69,7 @@ impl PackagesCollection {
         self.packages.iter().any(|p| p.contains_fn(hash))
     }
     /// Get specified function via its hash key.
-    pub fn get_fn(&self, hash: u64) -> Option<&Box<dyn NativeCallable>> {
+    pub fn get_fn(&self, hash: u64) -> Option<&NativeFunction> {
         self.packages
             .iter()
             .map(|p| p.get_fn(hash))
