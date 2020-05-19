@@ -824,9 +824,10 @@ impl Engine {
             &mut stream.peekable(),
             self,
             scope,
-            self.optimization_level,
+            OptimizationLevel::None, // No need to optimize a lone expression
             self.max_expr_depth,
         )?;
+
         self.eval_ast_with_scope(scope, &ast)
     }
 
