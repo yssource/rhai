@@ -119,7 +119,12 @@ fn call_fn(
     pos: Position,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     // Search built-in's and external functions
-    let hash_fn = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
+    let hash_fn = calc_fn_hash(
+        empty(),
+        fn_name,
+        args.len(),
+        args.iter().map(|a| a.type_id()),
+    );
 
     global_module
         .get_fn(hash_fn)

@@ -12,7 +12,7 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
-use crate::utils::{StaticVec, EMPTY_TYPE_ID};
+use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::{resolvers, ModuleRef, ModuleResolver};
@@ -25,7 +25,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     format,
-    iter::{empty, once, repeat},
+    iter::{empty, once},
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
@@ -215,8 +215,7 @@ impl<'a> State<'a> {
 /// Since script-defined functions have `Dynamic` parameters, functions with the same name
 /// and number of parameters are considered equivalent.
 ///
-/// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_hash`
-/// with dummy parameter types `EMPTY_TYPE_ID()` repeated the correct number of times.
+/// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_hash`.
 #[derive(Debug, Clone, Default)]
 pub struct FunctionsLib(HashMap<u64, SharedFnDef>);
 
@@ -226,9 +225,8 @@ impl FunctionsLib {
         FunctionsLib(
             vec.into_iter()
                 .map(|fn_def| {
-                    // Qualifiers (none) + function name + placeholders (one for each parameter).
-                    let args_iter = repeat(EMPTY_TYPE_ID()).take(fn_def.params.len());
-                    let hash = calc_fn_hash(empty(), &fn_def.name, args_iter);
+                    // Qualifiers (none) + function name + number of arguments.
+                    let hash = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
                     (hash, fn_def.into())
                 })
                 .collect(),
@@ -253,8 +251,8 @@ impl FunctionsLib {
         params: usize,
         public_only: bool,
     ) -> Option<&FnDef> {
-        // Qualifiers (none) + function name + placeholders (one for each parameter).
-        let hash_fn_def = calc_fn_hash(empty(), name, repeat(EMPTY_TYPE_ID()).take(params));
+        // Qualifiers (none) + function name + number of arguments.
+        let hash_fn_def = calc_fn_hash(empty(), name, params, empty());
         let fn_def = self.get_function(hash_fn_def);
 
         match fn_def.as_ref().map(|f| f.access) {
@@ -873,8 +871,13 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        // Qualifiers (none) + function name + argument `TypeId`'s.
-        let hash_fn = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
+        // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
+        let hash_fn = calc_fn_hash(
+            empty(),
+            fn_name,
+            args.len(),
+            args.iter().map(|a| a.type_id()),
+        );
         let hashes = (hash_fn, hash_fn_def);
 
         match fn_name {
@@ -1322,7 +1325,7 @@ impl Engine {
             Dynamic(Union::Array(mut rhs_value)) => {
                 let op = "==";
                 let def_value = false.into();
-                let hash_fn_def = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+                let hash_fn_def = calc_fn_hash(empty(), op, 2, empty());
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter_mut() {
@@ -1331,7 +1334,8 @@ impl Engine {
                     let pos = rhs.position();
 
                     // Qualifiers (none) + function name + argument `TypeId`'s.
-                    let hash_fn = calc_fn_hash(empty(), op, args.iter().map(|a| a.type_id()));
+                    let hash_fn =
+                        calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
                     let hashes = (hash_fn, hash_fn_def);
 
                     let (r, _) = self
@@ -1486,7 +1490,7 @@ impl Engine {
                 let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
                 if name == KEYWORD_EVAL && args.len() == 1 && args.get(0).is::<String>() {
-                    let hash_fn = calc_fn_hash(empty(), name, once(TypeId::of::<String>()));
+                    let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<String>()));
 
                     if !self.has_override(state, (hash_fn, *hash_fn_def)) {
                         // eval - only in function call style
@@ -1547,11 +1551,11 @@ impl Engine {
 
                         // Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
-                        //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                        // 2) Calculate a second hash with no qualifiers, empty function name, and
-                        //    the actual list of parameter `TypeId`'.s
+                        //    i.e. qualifiers + function name + number of arguments.
+                        // 2) Calculate a second hash with no qualifiers, empty function name,
+                        //    zero number of arguments, and the actual list of argument `TypeId`'.s
                         let hash_fn_args =
-                            calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
+                            calc_fn_hash(empty(), "", 0, args.iter().map(|a| a.type_id()));
                         // 3) The final hash is the XOR of the two hashes.
                         let hash_fn_native = *hash_fn_def ^ hash_fn_args;
 

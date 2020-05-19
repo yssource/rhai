@@ -21,11 +21,6 @@ use crate::stdlib::collections::hash_map::DefaultHasher;
 #[cfg(feature = "no_std")]
 use ahash::AHasher;
 
-#[inline(always)]
-pub fn EMPTY_TYPE_ID() -> TypeId {
-    TypeId::of::<()>()
-}
-
 /// Calculate a `u64` hash key from a module-qualified function name and parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -37,6 +32,7 @@ pub fn EMPTY_TYPE_ID() -> TypeId {
 pub fn calc_fn_spec<'a>(
     modules: impl Iterator<Item = &'a str>,
     fn_name: &str,
+    num: usize,
     params: impl Iterator<Item = TypeId>,
 ) -> u64 {
     #[cfg(feature = "no_std")]
@@ -47,6 +43,7 @@ pub fn calc_fn_spec<'a>(
     // We always skip the first module
     modules.skip(1).for_each(|m| m.hash(&mut s));
     s.write(fn_name.as_bytes());
+    s.write_usize(num);
     params.for_each(|t| t.hash(&mut s));
     s.finish()
 }

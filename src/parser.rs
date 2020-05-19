@@ -7,7 +7,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
-use crate::utils::{StaticVec, EMPTY_TYPE_ID};
+use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleRef;
@@ -22,7 +22,7 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     format,
-    iter::{empty, repeat, Peekable},
+    iter::{empty, Peekable},
     num::NonZeroUsize,
     ops::{Add, Deref, DerefMut},
     rc::Rc,
@@ -767,13 +767,14 @@ fn parse_call_expr<'a>(
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + no parameters.
-                    // 2) Calculate a second hash with no qualifiers, empty function name, and
-                    //    the actual list of parameter `TypeId`'.s
+                    //    i.e. qualifiers + function name + number of arguments.
+                    // 2) Calculate a second hash with no qualifiers, empty function name,
+                    //    zero number of arguments, and the actual list of argument `TypeId`'s.
                     // 3) The final hash is the XOR of the two hashes.
-                    calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty())
+                    let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                    calc_fn_hash(qualifiers, &id, 0, empty())
                 } else {
-                    calc_fn_hash(empty(), &id, empty())
+                    calc_fn_hash(empty(), &id, 0, empty())
                 }
             };
             // Qualifiers (none) + function name + no parameters.
@@ -799,7 +800,6 @@ fn parse_call_expr<'a>(
             // id(...args)
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
-                let args_iter = repeat(EMPTY_TYPE_ID()).take(args.len());
 
                 #[cfg(not(feature = "no_module"))]
                 let hash_fn_def = {
@@ -808,13 +808,14 @@ fn parse_call_expr<'a>(
 
                         // Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
-                        //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                        // 2) Calculate a second hash with no qualifiers, empty function name, and
-                        //    the actual list of parameter `TypeId`'.s
+                        //    i.e. qualifiers + function name + number of arguments.
+                        // 2) Calculate a second hash with no qualifiers, empty function name,
+                        //    zero number of arguments, and the actual list of argument `TypeId`'s.
                         // 3) The final hash is the XOR of the two hashes.
-                        calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, args_iter)
+                        let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                        calc_fn_hash(qualifiers, &id, args.len(), empty())
                     } else {
-                        calc_fn_hash(empty(), &id, args_iter)
+                        calc_fn_hash(empty(), &id, args.len(), empty())
                     }
                 };
                 // Qualifiers (none) + function name + dummy parameter types (one for each parameter).
@@ -1297,7 +1298,7 @@ fn parse_primary<'a>(
             let modules = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
-            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, empty());
+            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
             modules.set_index(state.find_module(&modules.get(0).0));
         }
         _ => (),
@@ -1362,7 +1363,7 @@ fn parse_unary<'a>(
                 // Call negative function
                 expr => {
                     let op = "-";
-                    let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+                    let hash = calc_fn_hash(empty(), op, 2, empty());
                     let mut args = StaticVec::new();
                     args.push(expr);
 
@@ -1388,7 +1389,7 @@ fn parse_unary<'a>(
             args.push(parse_primary(input, state, level + 1, allow_stmt_expr)?);
 
             let op = "!";
-            let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+            let hash = calc_fn_hash(empty(), op, 2, empty());
 
             Ok(Expr::FnCall(Box::new((
                 (op.into(), pos),
@@ -1492,7 +1493,7 @@ fn parse_op_assignment_stmt<'a>(
     args.push(lhs_copy);
     args.push(rhs);
 
-    let hash = calc_fn_hash(empty(), &op, repeat(EMPTY_TYPE_ID()).take(args.len()));
+    let hash = calc_fn_hash(empty(), &op, args.len(), empty());
     let rhs_expr = Expr::FnCall(Box::new(((op, pos), None, hash, args, None)));
 
     make_assignment_stmt(state, lhs, rhs_expr, pos)
@@ -1780,7 +1781,7 @@ fn parse_binary_op<'a>(
 
         let cmp_def = Some(false.into());
         let op = op_token.syntax();
-        let hash = calc_fn_hash(empty(), &op, repeat(EMPTY_TYPE_ID()).take(2));
+        let hash = calc_fn_hash(empty(), &op, 2, empty());
 
         let mut args = StaticVec::new();
         args.push(root);
@@ -1839,8 +1840,7 @@ fn parse_binary_op<'a>(
                     Expr::FnCall(x) => {
                         let ((id, _), _, hash, args, _) = x.as_mut();
                         // Recalculate function call hash because there is an additional argument
-                        let args_iter = repeat(EMPTY_TYPE_ID()).take(args.len() + 1);
-                        *hash = calc_fn_hash(empty(), id, args_iter);
+                        *hash = calc_fn_hash(empty(), id, args.len() + 1, empty());
                     }
                     _ => (),
                 }
@@ -2540,12 +2540,8 @@ fn parse_global_level<'a>(
                     let mut state = ParseState::new(max_expr_depth.1);
                     let func = parse_fn(input, &mut state, access, 0, true)?;
 
-                    // Qualifiers (none) + function name + argument `TypeId`'s
-                    let hash = calc_fn_hash(
-                        empty(),
-                        &func.name,
-                        repeat(EMPTY_TYPE_ID()).take(func.params.len()),
-                    );
+                    // Qualifiers (none) + function name + number of arguments.
+                    let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
 
                     functions.insert(hash, func);
                     continue;

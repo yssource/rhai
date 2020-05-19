@@ -8,18 +8,22 @@ use crate::fn_native::{
     CallableFunction::{Method, Pure},
     FnCallArgs, IteratorFn, SharedFunction,
 };
-use crate::parser::{FnAccess, AST};
+use crate::parser::{
+    FnAccess,
+    FnAccess::{Private, Public},
+    AST,
+};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token};
-use crate::utils::{StaticVec, EMPTY_TYPE_ID};
+use crate::utils::StaticVec;
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     collections::HashMap,
     fmt,
-    iter::{empty, repeat},
+    iter::empty,
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
@@ -29,9 +33,6 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
-
-/// Default function access mode.
-const DEF_ACCESS: FnAccess = FnAccess::Public;
 
 /// Return type of module-level Rust function.
 pub type FuncReturn<T> = Result<T, Box<EvalAltResult>>;
@@ -281,7 +282,7 @@ impl Module {
         params: &[TypeId],
         func: CallableFunction,
     ) -> u64 {
-        let hash_fn = calc_fn_hash(empty(), &name, params.iter().cloned());
+        let hash_fn = calc_fn_hash(empty(), &name, params.len(), params.iter().cloned());
 
         let params = params.into_iter().cloned().collect();
 
@@ -312,7 +313,7 @@ impl Module {
     ) -> u64 {
         let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
         let arg_types = [];
-        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
+        self.set_fn(name.into(), Public, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -337,7 +338,7 @@ impl Module {
         let f =
             move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
         let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
+        self.set_fn(name.into(), Public, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -363,7 +364,7 @@ impl Module {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Method(Box::new(f)))
+        self.set_fn(name.into(), Public, &arg_types, Method(Box::new(f)))
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -394,7 +395,7 @@ impl Module {
             func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
+        self.set_fn(name.into(), Public, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
@@ -429,7 +430,7 @@ impl Module {
             func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Method(Box::new(f)))
+        self.set_fn(name.into(), Public, &arg_types, Method(Box::new(f)))
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -467,7 +468,7 @@ impl Module {
             func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
+        self.set_fn(name.into(), Public, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -506,7 +507,7 @@ impl Module {
             func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Method(Box::new(f)))
+        self.set_fn(name.into(), Public, &arg_types, Method(Box::new(f)))
     }
 
     /// Get a Rust function.
@@ -617,27 +618,24 @@ impl Module {
             // Index all variables
             for (var_name, value) in &module.variables {
                 // Qualifiers + variable name
-                let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
+                let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0, empty());
                 variables.push((hash_var, value.clone()));
             }
             // Index all Rust functions
             for (name, access, params, func) in module.functions.values() {
                 match access {
                     // Private functions are not exported
-                    FnAccess::Private => continue,
-                    FnAccess::Public => (),
+                    Private => continue,
+                    Public => (),
                 }
                 // Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
-                //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                let hash_fn_def = calc_fn_hash(
-                    qualifiers.iter().map(|&v| v),
-                    name,
-                    repeat(EMPTY_TYPE_ID()).take(params.len()),
-                );
-                // 2) Calculate a second hash with no qualifiers, empty function name, and
-                //    the actual list of parameter `TypeId`'.s
-                let hash_fn_args = calc_fn_hash(empty(), "", params.iter().cloned());
+                //    i.e. qualifiers + function name + number of arguments.
+                let hash_fn_def =
+                    calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
+                // 2) Calculate a second hash with no qualifiers, empty function name,
+                //    zero number of arguments, and the actual list of argument `TypeId`'.s
+                let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
                 // 3) The final hash is the XOR of the two hashes.
                 let hash_fn_native = hash_fn_def ^ hash_fn_args;
 
@@ -647,14 +645,15 @@ impl Module {
             for fn_def in module.fn_lib.values() {
                 match fn_def.access {
                     // Private functions are not exported
-                    FnAccess::Private => continue,
-                    DEF_ACCESS => (),
+                    Private => continue,
+                    Public => (),
                 }
-                // Qualifiers + function name + placeholders (one for each parameter)
+                // Qualifiers + function name + number of arguments.
                 let hash_fn_def = calc_fn_hash(
                     qualifiers.iter().map(|&v| v),
                     &fn_def.name,
-                    repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
+                    fn_def.params.len(),
+                    empty(),
                 );
                 functions.push((hash_fn_def, CallableFunction::Script(fn_def.clone()).into()));
             }
