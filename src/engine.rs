@@ -3,11 +3,11 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{FnCallArgs, PrintCallback, ProgressCallback};
+use crate::fn_native::{FnCallArgs, PrintCallback, ProgressCallback, SharedFnDef};
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, FnAccess, FnDef, ReturnType, SharedFnDef, Stmt, AST};
+use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -1741,7 +1741,7 @@ impl Engine {
                     let index = scope.len() - 1;
                     state.scope_level += 1;
 
-                    for loop_var in func.get_iter_fn()(iter_type) {
+                    for loop_var in func(iter_type) {
                         *scope.get_mut(index).0 = loop_var;
                         self.inc_operations(state, stmt.position())?;
 

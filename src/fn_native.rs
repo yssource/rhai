@@ -1,5 +1,5 @@
 use crate::any::Dynamic;
-use crate::parser::{FnDef, SharedFnDef};
+use crate::parser::FnDef;
 use crate::result::EvalAltResult;
 
 use crate::stdlib::{boxed::Box, rc::Rc, sync::Arc};
@@ -73,15 +73,31 @@ pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + '
 #[cfg(not(feature = "sync"))]
 impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
 
+#[cfg(not(feature = "sync"))]
+pub type SharedNativeFunction = Rc<FnAny>;
+#[cfg(feature = "sync")]
+pub type SharedNativeFunction = Arc<FnAny>;
+
+#[cfg(not(feature = "sync"))]
+pub type SharedIteratorFn = Rc<IteratorFn>;
+#[cfg(feature = "sync")]
+pub type SharedIteratorFn = Arc<IteratorFn>;
+
+#[cfg(feature = "sync")]
+pub type SharedFnDef = Arc<FnDef>;
+#[cfg(not(feature = "sync"))]
+pub type SharedFnDef = Rc<FnDef>;
+
 /// A type encapsulating a function callable by Rhai.
+#[derive(Clone)]
 pub enum CallableFunction {
     /// A pure native Rust function with all arguments passed by value.
-    Pure(Box<FnAny>),
+    Pure(SharedNativeFunction),
     /// A native Rust object method with the first argument passed by reference,
     /// and the rest passed by value.
-    Method(Box<FnAny>),
+    Method(SharedNativeFunction),
     /// An iterator function.
-    Iterator(Box<IteratorFn>),
+    Iterator(SharedIteratorFn),
     /// A script-defined function.
     Script(SharedFnDef),
 }
@@ -90,37 +106,29 @@ impl CallableFunction {
     /// Is this a pure native Rust function?
     pub fn is_pure(&self) -> bool {
         match self {
-            CallableFunction::Pure(_) => true,
-            CallableFunction::Method(_)
-            | CallableFunction::Iterator(_)
-            | CallableFunction::Script(_) => false,
+            Self::Pure(_) => true,
+            Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
         }
     }
     /// Is this a pure native Rust method-call?
     pub fn is_method(&self) -> bool {
         match self {
-            CallableFunction::Method(_) => true,
-            CallableFunction::Pure(_)
-            | CallableFunction::Iterator(_)
-            | CallableFunction::Script(_) => false,
+            Self::Method(_) => true,
+            Self::Pure(_) | Self::Iterator(_) | Self::Script(_) => false,
         }
     }
     /// Is this an iterator function?
     pub fn is_iter(&self) -> bool {
         match self {
-            CallableFunction::Iterator(_) => true,
-            CallableFunction::Pure(_)
-            | CallableFunction::Method(_)
-            | CallableFunction::Script(_) => false,
+            Self::Iterator(_) => true,
+            Self::Pure(_) | Self::Method(_) | Self::Script(_) => false,
         }
     }
     /// Is this a Rhai-scripted function?
     pub fn is_script(&self) -> bool {
         match self {
-            CallableFunction::Script(_) => true,
-            CallableFunction::Pure(_)
-            | CallableFunction::Method(_)
-            | CallableFunction::Iterator(_) => false,
+            Self::Script(_) => true,
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
         }
     }
     /// Get a reference to a native Rust function.
@@ -128,10 +136,10 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Pure` or `Method`.
-    pub fn get_native_fn(&self) -> &Box<FnAny> {
+    pub fn get_native_fn(&self) -> &FnAny {
         match self {
-            CallableFunction::Pure(f) | CallableFunction::Method(f) => f,
-            CallableFunction::Iterator(_) | CallableFunction::Script(_) => panic!(),
+            Self::Pure(f) | Self::Method(f) => f.as_ref(),
+            Self::Iterator(_) | Self::Script(_) => panic!(),
         }
     }
     /// Get a reference to a script-defined function definition.
@@ -141,10 +149,8 @@ impl CallableFunction {
     /// Panics if the `CallableFunction` is not `Script`.
     pub fn get_fn_def(&self) -> &FnDef {
         match self {
-            CallableFunction::Pure(_)
-            | CallableFunction::Method(_)
-            | CallableFunction::Iterator(_) => panic!(),
-            CallableFunction::Script(f) => f,
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
+            Self::Script(f) => f,
         }
     }
     /// Get a reference to an iterator function.
@@ -152,19 +158,18 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Iterator`.
-    pub fn get_iter_fn(&self) -> &Box<IteratorFn> {
+    pub fn get_iter_fn(&self) -> &IteratorFn {
         match self {
-            CallableFunction::Pure(_)
-            | CallableFunction::Method(_)
-            | CallableFunction::Script(_) => panic!(),
-            CallableFunction::Iterator(f) => f,
+            Self::Iterator(f) => f.as_ref(),
+            Self::Pure(_) | Self::Method(_) | Self::Script(_) => panic!(),
         }
     }
+    /// Create a new `CallableFunction::Pure`.
+    pub fn from_pure(func: Box<FnAny>) -> Self {
+        Self::Pure(func.into())
+    }
+    /// Create a new `CallableFunction::Method`.
+    pub fn from_method(func: Box<FnAny>) -> Self {
+        Self::Method(func.into())
+    }
 }
-
-/// A callable function.
-#[cfg(not(feature = "sync"))]
-pub type SharedFunction = Rc<CallableFunction>;
-/// A callable function.
-#[cfg(feature = "sync")]
-pub type SharedFunction = Arc<CallableFunction>;

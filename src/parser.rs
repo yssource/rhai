@@ -25,9 +25,7 @@ use crate::stdlib::{
     iter::{empty, Peekable},
     num::NonZeroUsize,
     ops::{Add, Deref, DerefMut},
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
     vec,
     vec::Vec,
 };
@@ -59,21 +57,14 @@ type PERR = ParseErrorType;
 pub struct AST(
     /// Global statements.
     Vec<Stmt>,
-    /// Script-defined functions, wrapped in an `Arc` for shared access.
-    #[cfg(feature = "sync")]
-    Arc<FunctionsLib>,
-    /// Script-defined functions, wrapped in an `Rc` for shared access.
-    #[cfg(not(feature = "sync"))]
-    Rc<FunctionsLib>,
+    /// Script-defined functions.
+    FunctionsLib,
 );
 
 impl AST {
     /// Create a new `AST`.
     pub fn new(statements: Vec<Stmt>, fn_lib: FunctionsLib) -> Self {
-        #[cfg(feature = "sync")]
-        return Self(statements, Arc::new(fn_lib));
-        #[cfg(not(feature = "sync"))]
-        return Self(statements, Rc::new(fn_lib));
+        Self(statements, fn_lib)
     }
 
     /// Get the statements.
@@ -88,7 +79,7 @@ impl AST {
 
     /// Get the script-defined functions.
     pub(crate) fn fn_lib(&self) -> &FunctionsLib {
-        self.1.as_ref()
+        &self.1
     }
 
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
@@ -147,20 +138,13 @@ impl AST {
             (true, true) => vec![],
         };
 
-        Self::new(ast, functions.merge(other.1.as_ref()))
+        Self::new(ast, functions.merge(&other.1))
     }
 
     /// Clear all function definitions in the `AST`.
     #[cfg(not(feature = "no_function"))]
     pub fn clear_functions(&mut self) {
-        #[cfg(feature = "sync")]
-        {
-            self.1 = Arc::new(Default::default());
-        }
-        #[cfg(not(feature = "sync"))]
-        {
-            self.1 = Rc::new(Default::default());
-        }
+        self.1 = Default::default();
     }
 
     /// Clear all statements in the `AST`, leaving only function definitions.
@@ -201,13 +185,6 @@ pub struct FnDef {
     /// Position of the function definition.
     pub pos: Position,
 }
-
-/// A sharable script-defined function.
-#[cfg(feature = "sync")]
-pub type SharedFnDef = Arc<FnDef>;
-/// A sharable script-defined function.
-#[cfg(not(feature = "sync"))]
-pub type SharedFnDef = Rc<FnDef>;
 
 /// `return`/`throw` statement.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]

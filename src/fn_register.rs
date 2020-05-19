@@ -4,10 +4,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
-use crate::fn_native::{
-    CallableFunction::{Method, Pure},
-    FnCallArgs,
-};
+use crate::fn_native::{CallableFunction, FnAny, FnCallArgs};
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 
@@ -158,7 +155,7 @@ macro_rules! make_func {
 
             // Map the result
             $map(r)
-		})
+		}) as Box<FnAny>
 	};
 }
 
@@ -184,7 +181,7 @@ pub fn map_result<T: Variant + Clone>(
 
 macro_rules! def_register {
     () => {
-        def_register!(imp Pure :);
+        def_register!(imp from_pure :);
     };
     (imp $abi:ident : $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
     //   ^ function ABI type
@@ -207,7 +204,7 @@ macro_rules! def_register {
             fn register_fn(&mut self, name: &str, f: FN) {
                 self.global_module.set_fn(name.to_string(), FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    $abi(make_func!(f : map_dynamic ; $($par => $clone),*))
+                    CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $clone),*))
                 );
             }
         }
@@ -225,7 +222,7 @@ macro_rules! def_register {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
                 self.global_module.set_fn(name.to_string(), FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    $abi(make_func!(f : map_identity ; $($par => $clone),*))
+                    CallableFunction::$abi(make_func!(f : map_identity ; $($par => $clone),*))
                 );
             }
         }
@@ -244,7 +241,7 @@ macro_rules! def_register {
             fn register_result_fn(&mut self, name: &str, f: FN) {
                 self.global_module.set_fn(name.to_string(), FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    $abi(make_func!(f : map_result ; $($par => $clone),*))
+                    CallableFunction::$abi(make_func!(f : map_result ; $($par => $clone),*))
                 );
             }
         }
@@ -252,11 +249,11 @@ macro_rules! def_register {
         //def_register!(imp_pop $($par => $mark => $param),*);
     };
     ($p0:ident $(, $p:ident)*) => {
-        def_register!(imp Pure   : $p0 => $p0      => $p0      => by_value $(, $p => $p => $p => by_value)*);
-        def_register!(imp Method : $p0 => Mut<$p0> => &mut $p0 => by_ref   $(, $p => $p => $p => by_value)*);
+        def_register!(imp from_pure   : $p0 => $p0      => $p0      => by_value $(, $p => $p => $p => by_value)*);
+        def_register!(imp from_method : $p0 => Mut<$p0> => &mut $p0 => by_ref   $(, $p => $p => $p => by_value)*);
         //                ^ CallableFunction
-        // handle the first parameter                             ^ first parameter passed through
-        //                                                                                       ^ others passed by value (by_value)
+        // handle the first parameter                                  ^ first parameter passed through
+        //                                                                                            ^ others passed by value (by_value)
 
         // Currently does not support first argument which is a reference, as there will be
         // conflicting implementations since &T: Any and T: Any cannot be distinguished

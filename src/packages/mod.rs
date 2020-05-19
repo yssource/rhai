@@ -1,6 +1,6 @@
 //! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-use crate::fn_native::CallableFunction;
+use crate::fn_native::{CallableFunction, IteratorFn};
 use crate::module::Module;
 use crate::utils::StaticVec;
 
@@ -81,7 +81,7 @@ impl PackagesCollection {
         self.packages.iter().any(|p| p.contains_iter(id))
     }
     /// Get the specified TypeId iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<&CallableFunction> {
+    pub fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
         self.packages
             .iter()
             .map(|p| p.get_iter(id))
