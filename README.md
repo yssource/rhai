@@ -36,7 +36,7 @@ Rhai's current features set:
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.14.1, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.14.2, so the language and API's may change before they stabilize.
 
 Installation
 ------------
@@ -45,7 +45,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.14.1"
+rhai = "0.14.2"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):

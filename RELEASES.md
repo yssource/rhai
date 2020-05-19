@@ -1,8 +1,13 @@
 Rhai Release Notes
 ==================
 
-Version 0.15.0
+Version 0.14.2
 ==============
+
+Regression
+----------
+
+* Do not optimize script with `eval_expression` - it is assumed to be one-off and short.
 
 New features
 ------------
