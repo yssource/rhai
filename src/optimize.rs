@@ -119,12 +119,12 @@ fn call_fn(
     pos: Position,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     // Search built-in's and external functions
-    let hash = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
+    let hash_fn = calc_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id()));
 
     global_module
-        .get_fn(hash)
-        .or_else(|| packages.get_fn(hash))
-        .map(|func| func.call(args))
+        .get_fn(hash_fn)
+        .or_else(|| packages.get_fn(hash_fn))
+        .map(|func| func.get_native_fn()(args))
         .transpose()
         .map_err(|err| err.new_position(pos))
 }

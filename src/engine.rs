@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{FnCallArgs, NativeFunctionABI, PrintCallback, ProgressCallback};
+use crate::fn_native::{FnCallArgs, PrintCallback, ProgressCallback};
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
@@ -229,15 +229,7 @@ impl FunctionsLib {
                     // Qualifiers (none) + function name + placeholders (one for each parameter).
                     let args_iter = repeat(EMPTY_TYPE_ID()).take(fn_def.params.len());
                     let hash = calc_fn_hash(empty(), &fn_def.name, args_iter);
-
-                    #[cfg(feature = "sync")]
-                    {
-                        (hash, Arc::new(fn_def))
-                    }
-                    #[cfg(not(feature = "sync"))]
-                    {
-                        (hash, Rc::new(fn_def))
-                    }
+                    (hash, fn_def.into())
                 })
                 .collect(),
         )
@@ -268,8 +260,7 @@ impl FunctionsLib {
         match fn_def.as_ref().map(|f| f.access) {
             None => None,
             Some(FnAccess::Private) if public_only => None,
-            Some(FnAccess::Private) => fn_def,
-            Some(FnAccess::Public) => fn_def,
+            Some(FnAccess::Private) | Some(FnAccess::Public) => fn_def,
         }
     }
     /// Merge another `FunctionsLib` into this `FunctionsLib`.
@@ -659,25 +650,20 @@ impl Engine {
             .get_fn(hashes.0)
             .or_else(|| self.packages.get_fn(hashes.0))
         {
-            let mut backup: Dynamic = Default::default();
-
-            let (updated, restore) = match func.abi() {
-                // Calling pure function in method-call
-                NativeFunctionABI::Pure if is_ref && args.len() > 0 => {
-                    // Backup the original value.  It'll be consumed because the function
-                    // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
-                    backup = args[0].clone();
-                    (false, true)
-                }
-                NativeFunctionABI::Pure => (false, false),
-                NativeFunctionABI::Method => (true, false),
+            // Calling pure function in method-call?
+            let backup: Option<Dynamic> = if func.is_pure() && is_ref && args.len() > 0 {
+                // Backup the original value.  It'll be consumed because the function
+                // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
+                Some(args[0].clone())
+            } else {
+                None
             };
 
             // Run external function
-            let result = match func.call(args) {
+            let result = match func.get_native_fn()(args) {
                 Ok(r) => {
                     // Restore the backup value for the first argument since it has been consumed!
-                    if restore {
+                    if let Some(backup) = backup {
                         *args[0] = backup;
                     }
                     r
@@ -709,7 +695,7 @@ impl Engine {
                     .into(),
                     false,
                 ),
-                _ => (result, updated),
+                _ => (result, func.is_method()),
             });
         }
 
@@ -780,14 +766,12 @@ impl Engine {
                 let scope_len = scope.len();
 
                 // Put arguments into scope as variables
+                // Actually consume the arguments instead of cloning them
                 scope.extend(
                     fn_def
                         .params
                         .iter()
-                        .zip(
-                            // Actually consume the arguments instead of cloning them
-                            args.into_iter().map(|v| mem::take(*v)),
-                        )
+                        .zip(args.iter_mut().map(|v| mem::take(*v)))
                         .map(|(name, value)| {
                             let var_name =
                                 unsafe_cast_var_name_to_lifetime(name.as_str(), &mut state);
@@ -826,14 +810,12 @@ impl Engine {
                 let mut scope = Scope::new();
 
                 // Put arguments into scope as variables
+                // Actually consume the arguments instead of cloning them
                 scope.extend(
                     fn_def
                         .params
                         .iter()
-                        .zip(
-                            // Actually consume the arguments instead of cloning them
-                            args.into_iter().map(|v| mem::take(*v)),
-                        )
+                        .zip(args.iter_mut().map(|v| mem::take(*v)))
                         .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
                 );
 
@@ -1558,32 +1540,43 @@ impl Engine {
                 };
 
                 // First search in script-defined functions (can override built-in)
-                if let Some(fn_def) = module.get_qualified_scripted_fn(*hash_fn_def) {
-                    let args = args.as_mut();
-                    let (result, state2) =
-                        self.call_script_fn(None, *state, name, fn_def, args, *pos, level)?;
-                    *state = state2;
-                    Ok(result)
-                } else {
-                    // Then search in Rust functions
-                    self.inc_operations(state, *pos)?;
+                let func = match module.get_qualified_fn(name, *hash_fn_def) {
+                    Err(err) if matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) => {
+                        // Then search in Rust functions
+                        self.inc_operations(state, *pos)?;
 
-                    // Rust functions are indexed in two steps:
-                    // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                    // 2) Calculate a second hash with no qualifiers, empty function name, and
-                    //    the actual list of parameter `TypeId`'.s
-                    let hash_fn_args = calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
-                    // 3) The final hash is the XOR of the two hashes.
-                    let hash_fn_native = *hash_fn_def ^ hash_fn_args;
+                        // Rust functions are indexed in two steps:
+                        // 1) Calculate a hash in a similar manner to script-defined functions,
+                        //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
+                        // 2) Calculate a second hash with no qualifiers, empty function name, and
+                        //    the actual list of parameter `TypeId`'.s
+                        let hash_fn_args =
+                            calc_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
+                        // 3) The final hash is the XOR of the two hashes.
+                        let hash_fn_native = *hash_fn_def ^ hash_fn_args;
 
-                    match module.get_qualified_fn(name, hash_fn_native) {
-                        Ok(func) => func
-                            .call(args.as_mut())
-                            .map_err(|err| err.new_position(*pos)),
-                        Err(_) if def_val.is_some() => Ok(def_val.clone().unwrap()),
-                        Err(err) => Err(err),
+                        module.get_qualified_fn(name, hash_fn_native)
                     }
+                    r => r,
+                };
+
+                match func {
+                    Ok(x) if x.is_script() => {
+                        let args = args.as_mut();
+                        let fn_def = x.get_fn_def();
+                        let (result, state2) =
+                            self.call_script_fn(None, *state, name, fn_def, args, *pos, level)?;
+                        *state = state2;
+                        Ok(result)
+                    }
+                    Ok(x) => x.get_native_fn()(args.as_mut()).map_err(|err| err.new_position(*pos)),
+                    Err(err)
+                        if def_val.is_some()
+                            && matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) =>
+                    {
+                        Ok(def_val.clone().unwrap())
+                    }
+                    Err(err) => Err(err),
                 }
             }
 
@@ -1733,7 +1726,7 @@ impl Engine {
                 let iter_type = self.eval_expr(scope, state, expr, level)?;
                 let tid = iter_type.type_id();
 
-                if let Some(iter_fn) = self
+                if let Some(func) = self
                     .global_module
                     .get_iter(tid)
                     .or_else(|| self.packages.get_iter(tid))
@@ -1744,7 +1737,7 @@ impl Engine {
                     let index = scope.len() - 1;
                     state.scope_level += 1;
 
-                    for loop_var in iter_fn(iter_type) {
+                    for loop_var in func.get_iter_fn()(iter_type) {
                         *scope.get_mut(index).0 = loop_var;
                         self.inc_operations(state, stmt.position())?;
 

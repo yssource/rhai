@@ -36,10 +36,6 @@ pub enum EvalAltResult {
     /// An error has occurred inside a called function.
     /// Wrapped values re the name of the function and the interior error.
     ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
-    /// Function call has incorrect number of arguments.
-    /// Wrapped values are the name of the function, the number of parameters required
-    /// and the actual number of arguments passed.
-    ErrorFunctionArgsMismatch(String, usize, usize, Position),
     /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
     ErrorBooleanArgMismatch(String, Position),
     /// Non-character value encountered where a character is required.
@@ -108,9 +104,6 @@ impl EvalAltResult {
             Self::ErrorParsing(p) => p.desc(),
             Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
-            Self::ErrorFunctionArgsMismatch(_, _, _, _) => {
-                "Function call with wrong number of arguments"
-            }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorCharMismatch(_) => "Character expected",
             Self::ErrorNumericIndexExpr(_) => {
@@ -208,21 +201,6 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorLoopBreak(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
 
-            Self::ErrorFunctionArgsMismatch(fn_name, 0, n, pos) => write!(
-                f,
-                "Function '{}' expects no argument but {} found ({})",
-                fn_name, n, pos
-            ),
-            Self::ErrorFunctionArgsMismatch(fn_name, 1, n, pos) => write!(
-                f,
-                "Function '{}' expects one argument but {} found ({})",
-                fn_name, n, pos
-            ),
-            Self::ErrorFunctionArgsMismatch(fn_name, need, n, pos) => write!(
-                f,
-                "Function '{}' expects {} argument(s) but {} found ({})",
-                fn_name, need, n, pos
-            ),
             Self::ErrorBooleanArgMismatch(op, pos) => {
                 write!(f, "{} operator expects boolean operands ({})", op, pos)
             }
@@ -292,7 +270,6 @@ impl EvalAltResult {
 
             Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
-            | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)
@@ -331,7 +308,6 @@ impl EvalAltResult {
 
             Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
-            | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)

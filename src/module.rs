@@ -4,10 +4,11 @@ use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{Engine, FunctionsLib};
 use crate::fn_native::{
-    FnAny, FnCallArgs, IteratorFn, NativeFunction, NativeFunctionABI, NativeFunctionABI::*,
-    SharedIteratorFunction, SharedNativeFunction,
+    CallableFunction,
+    CallableFunction::{Method, Pure},
+    FnCallArgs, IteratorFn, SharedFunction,
 };
-use crate::parser::{FnAccess, FnDef, SharedFnDef, AST};
+use crate::parser::{FnAccess, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token};
@@ -51,19 +52,17 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic>,
 
     /// External Rust functions.
-    functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, SharedNativeFunction)>,
-
-    /// Flattened collection of all external Rust functions, including those in sub-modules.
-    all_functions: HashMap<u64, SharedNativeFunction>,
+    functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, SharedFunction)>,
 
     /// Script-defined functions.
     fn_lib: FunctionsLib,
 
-    /// Flattened collection of all script-defined functions, including those in sub-modules.
-    all_fn_lib: FunctionsLib,
-
     /// Iterator functions, keyed by the type producing the iterator.
-    type_iterators: HashMap<TypeId, SharedIteratorFunction>,
+    type_iterators: HashMap<TypeId, SharedFunction>,
+
+    /// Flattened collection of all external Rust functions, native or scripted,
+    /// including those in sub-modules.
+    all_functions: HashMap<u64, SharedFunction>,
 }
 
 impl fmt::Debug for Module {
@@ -278,23 +277,16 @@ impl Module {
     pub fn set_fn(
         &mut self,
         name: String,
-        abi: NativeFunctionABI,
         access: FnAccess,
         params: &[TypeId],
-        func: Box<FnAny>,
+        func: CallableFunction,
     ) -> u64 {
         let hash_fn = calc_fn_hash(empty(), &name, params.iter().cloned());
 
-        let f = NativeFunction::from((func, abi));
-
-        #[cfg(not(feature = "sync"))]
-        let func = Rc::new(f);
-        #[cfg(feature = "sync")]
-        let func = Arc::new(f);
-
         let params = params.into_iter().cloned().collect();
 
-        self.functions.insert(hash_fn, (name, access, params, func));
+        self.functions
+            .insert(hash_fn, (name, access, params, func.into()));
 
         hash_fn
     }
@@ -320,7 +312,7 @@ impl Module {
     ) -> u64 {
         let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
         let arg_types = [];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -345,7 +337,7 @@ impl Module {
         let f =
             move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
         let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -371,7 +363,7 @@ impl Module {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
+        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Method(Box::new(f)))
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -402,7 +394,7 @@ impl Module {
             func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
@@ -437,7 +429,7 @@ impl Module {
             func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
+        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Method(Box::new(f)))
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -475,7 +467,7 @@ impl Module {
             func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Pure(Box::new(f)))
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -514,7 +506,7 @@ impl Module {
             func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
+        self.set_fn(name.into(), DEF_ACCESS, &arg_types, Method(Box::new(f)))
     }
 
     /// Get a Rust function.
@@ -531,7 +523,7 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn get_fn(&self, hash_fn: u64) -> Option<&NativeFunction> {
+    pub fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
         self.functions.get(&hash_fn).map(|(_, _, _, v)| v.as_ref())
     }
 
@@ -543,7 +535,7 @@ impl Module {
         &mut self,
         name: &str,
         hash_fn_native: u64,
-    ) -> Result<&NativeFunction, Box<EvalAltResult>> {
+    ) -> Result<&CallableFunction, Box<EvalAltResult>> {
         self.all_functions
             .get(&hash_fn_native)
             .map(|f| f.as_ref())
@@ -553,13 +545,6 @@ impl Module {
                     Position::none(),
                 ))
             })
-    }
-
-    /// Get a modules-qualified script-defined functions.
-    ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
-    pub(crate) fn get_qualified_scripted_fn(&mut self, hash_fn_def: u64) -> Option<&FnDef> {
-        self.all_fn_lib.get_function(hash_fn_def)
     }
 
     /// Create a new `Module` by evaluating an `AST`.
@@ -620,13 +605,12 @@ impl Module {
             module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
-            functions: &mut Vec<(u64, SharedNativeFunction)>,
-            fn_lib: &mut Vec<(u64, SharedFnDef)>,
+            functions: &mut Vec<(u64, SharedFunction)>,
         ) {
             for (name, m) in &module.modules {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
-                index_module(m, qualifiers, variables, functions, fn_lib);
+                index_module(m, qualifiers, variables, functions);
                 qualifiers.pop();
             }
 
@@ -672,25 +656,17 @@ impl Module {
                     &fn_def.name,
                     repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
                 );
-                fn_lib.push((hash_fn_def, fn_def.clone()));
+                functions.push((hash_fn_def, CallableFunction::Script(fn_def.clone()).into()));
             }
         }
 
         let mut variables = Vec::new();
         let mut functions = Vec::new();
-        let mut fn_lib = Vec::new();
 
-        index_module(
-            self,
-            &mut vec!["root"],
-            &mut variables,
-            &mut functions,
-            &mut fn_lib,
-        );
+        index_module(self, &mut vec!["root"], &mut variables, &mut functions);
 
         self.all_variables = variables.into_iter().collect();
         self.all_functions = functions.into_iter().collect();
-        self.all_fn_lib = fn_lib.into();
     }
 
     /// Does a type iterator exist in the module?
@@ -701,14 +677,16 @@ impl Module {
     /// Set a type iterator into the module.
     pub fn set_iter(&mut self, typ: TypeId, func: Box<IteratorFn>) {
         #[cfg(not(feature = "sync"))]
-        self.type_iterators.insert(typ, Rc::new(func));
+        self.type_iterators
+            .insert(typ, Rc::new(CallableFunction::Iterator(func)));
         #[cfg(feature = "sync")]
-        self.type_iterators.insert(typ, Arc::new(func));
+        self.type_iterators
+            .insert(typ, Arc::new(CallableFunction::Iterator(func)));
     }
 
     /// Get the specified type iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
-        self.type_iterators.get(&id)
+    pub fn get_iter(&self, id: TypeId) -> Option<&CallableFunction> {
+        self.type_iterators.get(&id).map(|v| v.as_ref())
     }
 }
 

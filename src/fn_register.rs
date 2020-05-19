@@ -4,7 +4,10 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
-use crate::fn_native::{FnCallArgs, NativeFunctionABI::*};
+use crate::fn_native::{
+    CallableFunction::{Method, Pure},
+    FnCallArgs,
+};
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 
@@ -181,9 +184,9 @@ pub fn map_result<T: Variant + Clone>(
 
 macro_rules! def_register {
     () => {
-        def_register!(imp Pure;);
+        def_register!(imp Pure :);
     };
-    (imp $abi:expr ; $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
+    (imp $abi:ident : $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
     //   ^ function ABI type
     //                 ^ function parameter generic type name (A, B, C etc.)
     //                               ^ function parameter marker type (T, Ref<T> or Mut<T>)
@@ -202,9 +205,9 @@ macro_rules! def_register {
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                self.global_module.set_fn(name.to_string(), FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    make_func!(f : map_dynamic ; $($par => $clone),*)
+                    $abi(make_func!(f : map_dynamic ; $($par => $clone),*))
                 );
             }
         }
@@ -220,9 +223,9 @@ macro_rules! def_register {
         > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
         {
             fn register_dynamic_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                self.global_module.set_fn(name.to_string(), FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    make_func!(f : map_identity ; $($par => $clone),*)
+                    $abi(make_func!(f : map_identity ; $($par => $clone),*))
                 );
             }
         }
@@ -239,9 +242,9 @@ macro_rules! def_register {
         > RegisterResultFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                self.global_module.set_fn(name.to_string(), FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    make_func!(f : map_result ; $($par => $clone),*)
+                    $abi(make_func!(f : map_result ; $($par => $clone),*))
                 );
             }
         }
@@ -249,8 +252,9 @@ macro_rules! def_register {
         //def_register!(imp_pop $($par => $mark => $param),*);
     };
     ($p0:ident $(, $p:ident)*) => {
-        def_register!(imp Pure   ; $p0 => $p0      => $p0      => by_value $(, $p => $p => $p => by_value)*);
-        def_register!(imp Method ; $p0 => Mut<$p0> => &mut $p0 => by_ref   $(, $p => $p => $p => by_value)*);
+        def_register!(imp Pure   : $p0 => $p0      => $p0      => by_value $(, $p => $p => $p => by_value)*);
+        def_register!(imp Method : $p0 => Mut<$p0> => &mut $p0 => by_ref   $(, $p => $p => $p => by_value)*);
+        //                ^ CallableFunction
         // handle the first parameter                             ^ first parameter passed through
         //                                                                                       ^ others passed by value (by_value)
 
