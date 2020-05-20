@@ -8,6 +8,7 @@ use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync:
 
 mod arithmetic;
 mod array_basic;
+mod eval;
 mod iter_basic;
 mod logic;
 mod map_basic;
@@ -21,6 +22,7 @@ mod time_basic;
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
+pub use eval::EvalPackage;
 pub use iter_basic::BasicIteratorPackage;
 pub use logic::LogicPackage;
 #[cfg(not(feature = "no_object"))]

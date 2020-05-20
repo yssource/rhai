@@ -135,7 +135,7 @@ Disable script-defined functions (`no_function`) only when the feature is not ne
 
 [`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
 This makes the scripting language quite useless as even basic arithmetic operators are not supported.
-Selectively include the necessary functionalities by loading specific [packages](#packages) to minimize the footprint.
+Selectively include the necessary functionalities by loading specific [packages] to minimize the footprint.
 Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
 Related
@@ -380,6 +380,9 @@ Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, n
 
 ### Packages
 
+[package]: #packages
+[packages]: #packages
+
 Rhai functional features are provided in different _packages_ that can be loaded via a call to `Engine::load_package`.
 Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be loaded in order for
 packages to be used.
@@ -408,6 +411,7 @@ The follow packages are available:
 | `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
 | `BasicArrayPackage`    | Basic [array] functions                         |        No        |         Yes          |
 | `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
+| `EvalPackage`          | Disable [`eval`]                                |        No        |          No          |
 | `CorePackage`          | Basic essentials                                |                  |                      |
 | `StandardPackage`      | Standard library                                |                  |                      |
 
@@ -2669,6 +2673,8 @@ engine.set_optimization_level(rhai::OptimizationLevel::None);
 `eval` - or "How to Shoot Yourself in the Foot even Easier"
 ---------------------------------------------------------
 
+[`eval`]: #eval---or-how-to-shoot-yourself-in-the-foot-even-easier
+
 Saving the best for last: in addition to script optimizations, there is the ever-dreaded... `eval` function!
 
 ```rust
@@ -2730,3 +2736,5 @@ fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
 
 engine.register_result_fn("eval", alt_eval);
 ```
+
+There is even a [package] named `EvalPackage` which implements the disabling override.
