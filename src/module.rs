@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{Engine, FunctionsLib};
-use crate::fn_native::{CallableFunction as CF, FnCallArgs, IteratorFn, SharedIteratorFn};
+use crate::fn_native::{CallableFunction as CF, FnCallArgs, IteratorFn};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
@@ -53,7 +53,7 @@ pub struct Module {
     fn_lib: FunctionsLib,
 
     /// Iterator functions, keyed by the type producing the iterator.
-    type_iterators: HashMap<TypeId, SharedIteratorFn>,
+    type_iterators: HashMap<TypeId, IteratorFn>,
 
     /// Flattened collection of all external Rust functions, native or scripted,
     /// including those in sub-modules.
@@ -659,13 +659,13 @@ impl Module {
     }
 
     /// Set a type iterator into the module.
-    pub fn set_iter(&mut self, typ: TypeId, func: Box<IteratorFn>) {
-        self.type_iterators.insert(typ, func.into());
+    pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) {
+        self.type_iterators.insert(typ, func);
     }
 
     /// Get the specified type iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
-        self.type_iterators.get(&id).map(|v| v.as_ref())
+    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
+        self.type_iterators.get(&id).cloned()
     }
 }
 

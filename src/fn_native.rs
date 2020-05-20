@@ -11,10 +11,7 @@ pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> 
 #[cfg(not(feature = "sync"))]
 pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 
-#[cfg(feature = "sync")]
-pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
-#[cfg(not(feature = "sync"))]
-pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
+pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
 #[cfg(feature = "sync")]
 pub type PrintCallback = dyn Fn(&str) + Send + Sync + 'static;
@@ -57,31 +54,10 @@ pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + 'static {}
 #[cfg(not(feature = "sync"))]
 impl<F: Fn(&mut T, X) -> U + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
 
-#[cfg(feature = "sync")]
-pub trait IteratorCallback:
-    Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static
-{
-}
-#[cfg(feature = "sync")]
-impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync + 'static> IteratorCallback
-    for F
-{
-}
-
-#[cfg(not(feature = "sync"))]
-pub trait IteratorCallback: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static> IteratorCallback for F {}
-
 #[cfg(not(feature = "sync"))]
 pub type SharedNativeFunction = Rc<FnAny>;
 #[cfg(feature = "sync")]
 pub type SharedNativeFunction = Arc<FnAny>;
-
-#[cfg(not(feature = "sync"))]
-pub type SharedIteratorFn = Rc<IteratorFn>;
-#[cfg(feature = "sync")]
-pub type SharedIteratorFn = Arc<IteratorFn>;
 
 #[cfg(feature = "sync")]
 pub type SharedFnDef = Arc<FnDef>;
@@ -97,7 +73,7 @@ pub enum CallableFunction {
     /// and the rest passed by value.
     Method(SharedNativeFunction),
     /// An iterator function.
-    Iterator(SharedIteratorFn),
+    Iterator(IteratorFn),
     /// A script-defined function.
     Script(SharedFnDef),
 }
@@ -158,9 +134,9 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Iterator`.
-    pub fn get_iter_fn(&self) -> &IteratorFn {
+    pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
-            Self::Iterator(f) => f.as_ref(),
+            Self::Iterator(f) => *f,
             Self::Pure(_) | Self::Method(_) | Self::Script(_) => panic!(),
         }
     }

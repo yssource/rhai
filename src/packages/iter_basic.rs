@@ -14,13 +14,10 @@ fn reg_range<T: Variant + Clone>(lib: &mut Module)
 where
     Range<T>: Iterator<Item = T>,
 {
-    lib.set_iter(
-        TypeId::of::<Range<T>>(),
-        Box::new(|source| {
-            Box::new(source.cast::<Range<T>>().map(|x| x.into_dynamic()))
-                as Box<dyn Iterator<Item = Dynamic>>
-        }),
-    );
+    lib.set_iter(TypeId::of::<Range<T>>(), |source| {
+        Box::new(source.cast::<Range<T>>().map(|x| x.into_dynamic()))
+            as Box<dyn Iterator<Item = Dynamic>>
+    });
 }
 
 fn get_range<T: Variant + Clone>(from: T, to: T) -> FuncReturn<Range<T>> {
@@ -58,13 +55,10 @@ where
     T: Variant + Clone + PartialOrd,
     StepRange<T>: Iterator<Item = T>,
 {
-    lib.set_iter(
-        TypeId::of::<StepRange<T>>(),
-        Box::new(|source| {
-            Box::new(source.cast::<StepRange<T>>().map(|x| x.into_dynamic()))
-                as Box<dyn Iterator<Item = Dynamic>>
-        }),
-    );
+    lib.set_iter(TypeId::of::<StepRange<T>>(), |source| {
+        Box::new(source.cast::<StepRange<T>>().map(|x| x.into_dynamic()))
+            as Box<dyn Iterator<Item = Dynamic>>
+    });
 }
 
 fn get_step_range<T>(from: T, to: T, step: T) -> FuncReturn<StepRange<T>>

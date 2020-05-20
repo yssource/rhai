@@ -83,7 +83,7 @@ impl PackagesCollection {
         self.packages.iter().any(|p| p.contains_iter(id))
     }
     /// Get the specified TypeId iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
+    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.packages
             .iter()
             .map(|p| p.get_iter(id))

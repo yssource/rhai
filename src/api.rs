@@ -4,9 +4,7 @@ use crate::any::{Dynamic, Variant};
 use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
-use crate::fn_native::{
-    IteratorCallback, ObjectGetCallback, ObjectIndexerCallback, ObjectSetCallback,
-};
+use crate::fn_native::{IteratorFn, ObjectGetCallback, ObjectIndexerCallback, ObjectSetCallback};
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::{parse, parse_global_expr, AST};
@@ -123,8 +121,8 @@ impl Engine {
 
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
-    pub fn register_iterator<T: Variant + Clone, F: IteratorCallback>(&mut self, f: F) {
-        self.global_module.set_iter(TypeId::of::<T>(), Box::new(f));
+    pub fn register_iterator<T: Variant + Clone>(&mut self, f: IteratorFn) {
+        self.global_module.set_iter(TypeId::of::<T>(), f);
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
