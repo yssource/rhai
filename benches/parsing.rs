@@ -102,3 +102,35 @@ fn bench_parse_primes(bench: &mut Bencher) {
 
     bench.iter(|| engine.compile(script).unwrap());
 }
+
+#[bench]
+fn bench_parse_optimize_simple(bench: &mut Bencher) {
+    let script = r#"
+            2 > 1 &&
+            "something" != "nothing" ||
+            "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
+            [array, with, spaces].len() <= #{prop:name}.len() &&
+            modifierTest + 1000 / 2 > (80 * 100 % 2)
+        "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::Simple);
+
+    bench.iter(|| engine.compile_expression(script).unwrap());
+}
+
+#[bench]
+fn bench_parse_optimize_full(bench: &mut Bencher) {
+    let script = r#"
+            2 > 1 &&
+            "something" != "nothing" ||
+            "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
+            [array, with, spaces].len() <= #{prop:name}.len() &&
+            modifierTest + 1000 / 2 > (80 * 100 % 2)
+        "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::Full);
+
+    bench.iter(|| engine.compile_expression(script).unwrap());
+}
