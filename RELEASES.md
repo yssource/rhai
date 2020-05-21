@@ -13,6 +13,8 @@ New features
 ------------
 
 * Set limits on maximum level of nesting expressions and statements to avoid panics during parsing.
+* New `EvalPackage` to disable `eval`.
+* More benchmarks.
 
 
 Version 0.14.1

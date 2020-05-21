@@ -4,78 +4,42 @@ use crate::result::EvalAltResult;
 
 use crate::stdlib::{boxed::Box, rc::Rc, sync::Arc};
 
+#[cfg(feature = "sync")]
+pub trait SendSync: Send + Sync {}
+#[cfg(feature = "sync")]
+impl<T: Send + Sync> SendSync for T {}
+
+#[cfg(not(feature = "sync"))]
+pub trait SendSync {}
+#[cfg(not(feature = "sync"))]
+impl<T> SendSync for T {}
+
+#[cfg(not(feature = "sync"))]
+pub type Shared<T> = Rc<T>;
+#[cfg(feature = "sync")]
+pub type Shared<T> = Arc<T>;
+
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
-#[cfg(feature = "sync")]
-pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 #[cfg(not(feature = "sync"))]
 pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+#[cfg(feature = "sync")]
+pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
-
-#[cfg(feature = "sync")]
-pub type PrintCallback = dyn Fn(&str) + Send + Sync + 'static;
-#[cfg(not(feature = "sync"))]
-pub type PrintCallback = dyn Fn(&str) + 'static;
-
-#[cfg(feature = "sync")]
-pub type ProgressCallback = dyn Fn(u64) -> bool + Send + Sync + 'static;
-#[cfg(not(feature = "sync"))]
-pub type ProgressCallback = dyn Fn(u64) -> bool + 'static;
-
-// Define callback function types
-#[cfg(feature = "sync")]
-pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T) -> U + Send + Sync + 'static, T, U> ObjectGetCallback<T, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectGetCallback<T, U>: Fn(&mut T) -> U + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T) -> U + 'static, T, U> ObjectGetCallback<T, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T, U) + Send + Sync + 'static, T, U> ObjectSetCallback<T, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectSetCallback<T, U>: Fn(&mut T, U) + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T, U) + 'static, T, U> ObjectSetCallback<T, U> for F {}
-
-#[cfg(feature = "sync")]
-pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + Send + Sync + 'static {}
-#[cfg(feature = "sync")]
-impl<F: Fn(&mut T, X) -> U + Send + Sync + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub trait ObjectIndexerCallback<T, X, U>: Fn(&mut T, X) -> U + 'static {}
-#[cfg(not(feature = "sync"))]
-impl<F: Fn(&mut T, X) -> U + 'static, T, X, U> ObjectIndexerCallback<T, X, U> for F {}
-
-#[cfg(not(feature = "sync"))]
-pub type SharedNativeFunction = Rc<FnAny>;
-#[cfg(feature = "sync")]
-pub type SharedNativeFunction = Arc<FnAny>;
-
-#[cfg(feature = "sync")]
-pub type SharedFnDef = Arc<FnDef>;
-#[cfg(not(feature = "sync"))]
-pub type SharedFnDef = Rc<FnDef>;
 
 /// A type encapsulating a function callable by Rhai.
 #[derive(Clone)]
 pub enum CallableFunction {
     /// A pure native Rust function with all arguments passed by value.
-    Pure(SharedNativeFunction),
+    Pure(Shared<FnAny>),
     /// A native Rust object method with the first argument passed by reference,
     /// and the rest passed by value.
-    Method(SharedNativeFunction),
+    Method(Shared<FnAny>),
     /// An iterator function.
     Iterator(IteratorFn),
     /// A script-defined function.
-    Script(SharedFnDef),
+    Script(Shared<FnDef>),
 }
 
 impl CallableFunction {

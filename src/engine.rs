@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{FnCallArgs, PrintCallback, ProgressCallback, SharedFnDef};
+use crate::fn_native::{FnCallArgs, Shared};
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
@@ -217,7 +217,7 @@ impl<'a> State<'a> {
 ///
 /// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_hash`.
 #[derive(Debug, Clone, Default)]
-pub struct FunctionsLib(HashMap<u64, SharedFnDef>);
+pub struct FunctionsLib(HashMap<u64, Shared<FnDef>>);
 
 impl FunctionsLib {
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
@@ -275,17 +275,14 @@ impl FunctionsLib {
     }
 }
 
-impl From<Vec<(u64, SharedFnDef)>> for FunctionsLib {
-    fn from(values: Vec<(u64, SharedFnDef)>) -> Self {
+impl From<Vec<(u64, Shared<FnDef>)>> for FunctionsLib {
+    fn from(values: Vec<(u64, Shared<FnDef>)>) -> Self {
         FunctionsLib(values.into_iter().collect())
     }
 }
 
 impl Deref for FunctionsLib {
-    #[cfg(feature = "sync")]
-    type Target = HashMap<u64, Arc<FnDef>>;
-    #[cfg(not(feature = "sync"))]
-    type Target = HashMap<u64, Rc<FnDef>>;
+    type Target = HashMap<u64, Shared<FnDef>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -293,12 +290,7 @@ impl Deref for FunctionsLib {
 }
 
 impl DerefMut for FunctionsLib {
-    #[cfg(feature = "sync")]
-    fn deref_mut(&mut self) -> &mut HashMap<u64, Arc<FnDef>> {
-        &mut self.0
-    }
-    #[cfg(not(feature = "sync"))]
-    fn deref_mut(&mut self) -> &mut HashMap<u64, Rc<FnDef>> {
+    fn deref_mut(&mut self) -> &mut HashMap<u64, Shared<FnDef>> {
         &mut self.0
     }
 }
@@ -333,11 +325,25 @@ pub struct Engine {
     pub(crate) type_names: HashMap<String, String>,
 
     /// Closure for implementing the `print` command.
-    pub(crate) print: Box<PrintCallback>,
+    #[cfg(not(feature = "sync"))]
+    pub(crate) print: Box<dyn Fn(&str) + 'static>,
+    /// Closure for implementing the `print` command.
+    #[cfg(feature = "sync")]
+    pub(crate) print: Box<dyn Fn(&str) + Send + Sync + 'static>,
+
     /// Closure for implementing the `debug` command.
-    pub(crate) debug: Box<PrintCallback>,
+    #[cfg(not(feature = "sync"))]
+    pub(crate) debug: Box<dyn Fn(&str) + 'static>,
+    /// Closure for implementing the `debug` command.
+    #[cfg(feature = "sync")]
+    pub(crate) debug: Box<dyn Fn(&str) + Send + Sync + 'static>,
+
     /// Closure for progress reporting.
-    pub(crate) progress: Option<Box<ProgressCallback>>,
+    #[cfg(not(feature = "sync"))]
+    pub(crate) progress: Option<Box<dyn Fn(u64) -> bool + 'static>>,
+    /// Closure for progress reporting.
+    #[cfg(feature = "sync")]
+    pub(crate) progress: Option<Box<dyn Fn(u64) -> bool + Send + Sync + 'static>>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,

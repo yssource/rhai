@@ -4,7 +4,7 @@ use crate::any::{Dynamic, Variant};
 use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
-use crate::fn_native::{IteratorFn, ObjectGetCallback, ObjectIndexerCallback, ObjectSetCallback};
+use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::{parse, parse_global_expr, AST};
@@ -162,11 +162,13 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_get<T, U, F>(&mut self, name: &str, callback: F)
-    where
+    pub fn register_get<T, U>(
+        &mut self,
+        name: &str,
+        callback: impl Fn(&mut T) -> U + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
-        F: ObjectGetCallback<T, U>,
     {
         self.register_fn(&make_getter(name), callback);
     }
@@ -208,11 +210,13 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_set<T, U, F>(&mut self, name: &str, callback: F)
-    where
+    pub fn register_set<T, U>(
+        &mut self,
+        name: &str,
+        callback: impl Fn(&mut T, U) + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
-        F: ObjectSetCallback<T, U>,
     {
         self.register_fn(&make_setter(name), callback);
     }
@@ -256,12 +260,14 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_get_set<T, U, G, S>(&mut self, name: &str, get_fn: G, set_fn: S)
-    where
+    pub fn register_get_set<T, U>(
+        &mut self,
+        name: &str,
+        get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
+        set_fn: impl Fn(&mut T, U) + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
-        G: ObjectGetCallback<T, U>,
-        S: ObjectSetCallback<T, U>,
     {
         self.register_get(name, get_fn);
         self.register_set(name, set_fn);
@@ -305,12 +311,13 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
-    pub fn register_indexer<T, X, U, F>(&mut self, callback: F)
-    where
+    pub fn register_indexer<T, X, U>(
+        &mut self,
+        callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
-        F: ObjectIndexerCallback<T, X, U>,
     {
         self.register_fn(FUNC_INDEXER, callback);
     }
@@ -1118,47 +1125,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "sync")]
-    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + Send + Sync + 'static) {
-        self.progress = Some(Box::new(callback));
-    }
-
-    /// Register a callback for script evaluation progress.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::cell::Cell;
-    /// # use std::rc::Rc;
-    /// use rhai::Engine;
-    ///
-    /// let result = Rc::new(Cell::new(0_u64));
-    /// let logger = result.clone();
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// engine.on_progress(move |ops| {
-    ///     if ops > 10000 {
-    ///         false
-    ///     } else if ops % 800 == 0 {
-    ///         logger.set(ops);
-    ///         true
-    ///     } else {
-    ///         true
-    ///     }
-    /// });
-    ///
-    /// engine.consume("for x in range(0, 50000) {}")
-    ///     .expect_err("should error");
-    ///
-    /// assert_eq!(result.get(), 9600);
-    ///
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "sync"))]
-    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + 'static) {
+    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + SendSync + 'static) {
         self.progress = Some(Box::new(callback));
     }
 
@@ -1186,36 +1153,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "sync")]
-    pub fn on_print(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.print = Box::new(callback);
-    }
-    /// Override default action of `print` (print to stdout using `println!`)
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::cell::RefCell;
-    /// # use std::rc::Rc;
-    /// use rhai::Engine;
-    ///
-    /// let result = Rc::new(RefCell::new(String::from("")));
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // Override action of 'print' function
-    /// let logger = result.clone();
-    /// engine.on_print(move |s| logger.borrow_mut().push_str(s));
-    ///
-    /// engine.consume("print(40 + 2);")?;
-    ///
-    /// assert_eq!(*result.borrow(), "42");
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "sync"))]
-    pub fn on_print(&mut self, callback: impl Fn(&str) + 'static) {
+    pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
         self.print = Box::new(callback);
     }
 
@@ -1243,36 +1181,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "sync")]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.debug = Box::new(callback);
-    }
-    /// Override default action of `debug` (print to stdout using `println!`)
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::cell::RefCell;
-    /// # use std::rc::Rc;
-    /// use rhai::Engine;
-    ///
-    /// let result = Rc::new(RefCell::new(String::from("")));
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // Override action of 'print' function
-    /// let logger = result.clone();
-    /// engine.on_debug(move |s| logger.borrow_mut().push_str(s));
-    ///
-    /// engine.consume(r#"debug("hello");"#)?;
-    ///
-    /// assert_eq!(*result.borrow(), r#""hello""#);
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "sync"))]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + 'static) {
+    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
         self.debug = Box::new(callback);
     }
 }
