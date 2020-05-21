@@ -1,8 +1,6 @@
-use super::{reg_binary, reg_trinary, PackageStore};
-
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
-use crate::fn_register::map_dynamic as map;
+use crate::module::{FuncReturn, Module};
 use crate::parser::INT;
 
 use crate::stdlib::{
@@ -12,17 +10,18 @@ use crate::stdlib::{
 };
 
 // Register range function
-fn reg_range<T: Variant + Clone>(lib: &mut PackageStore)
+fn reg_range<T: Variant + Clone>(lib: &mut Module)
 where
     Range<T>: Iterator<Item = T>,
 {
-    lib.type_iterators.insert(
-        TypeId::of::<Range<T>>(),
-        Box::new(|source: Dynamic| {
-            Box::new(source.cast::<Range<T>>().map(|x| x.into_dynamic()))
-                as Box<dyn Iterator<Item = Dynamic>>
-        }),
-    );
+    lib.set_iter(TypeId::of::<Range<T>>(), |source| {
+        Box::new(source.cast::<Range<T>>().map(|x| x.into_dynamic()))
+            as Box<dyn Iterator<Item = Dynamic>>
+    });
+}
+
+fn get_range<T: Variant + Clone>(from: T, to: T) -> FuncReturn<Range<T>> {
+    Ok(from..to)
 }
 
 // Register range function with step
@@ -50,37 +49,38 @@ where
     }
 }
 
-fn reg_step<T>(lib: &mut PackageStore)
+fn reg_step<T>(lib: &mut Module)
 where
     for<'a> &'a T: Add<&'a T, Output = T>,
     T: Variant + Clone + PartialOrd,
     StepRange<T>: Iterator<Item = T>,
 {
-    lib.type_iterators.insert(
-        TypeId::of::<StepRange<T>>(),
-        Box::new(|source: Dynamic| {
-            Box::new(source.cast::<StepRange<T>>().map(|x| x.into_dynamic()))
-                as Box<dyn Iterator<Item = Dynamic>>
-        }),
-    );
+    lib.set_iter(TypeId::of::<StepRange<T>>(), |source| {
+        Box::new(source.cast::<StepRange<T>>().map(|x| x.into_dynamic()))
+            as Box<dyn Iterator<Item = Dynamic>>
+    });
+}
+
+fn get_step_range<T>(from: T, to: T, step: T) -> FuncReturn<StepRange<T>>
+where
+    for<'a> &'a T: Add<&'a T, Output = T>,
+    T: Variant + Clone + PartialOrd,
+{
+    Ok(StepRange::<T>(from, to, step))
 }
 
 def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
-    fn get_range<T>(from: T, to: T) -> Range<T> {
-        from..to
-    }
-
     reg_range::<INT>(lib);
-    reg_binary(lib, "range", get_range::<INT>, map);
+    lib.set_fn_2("range", get_range::<INT>);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
         macro_rules! reg_range {
-            ($self:expr, $x:expr, $( $y:ty ),*) => (
+            ($lib:expr, $x:expr, $( $y:ty ),*) => (
                 $(
-                    reg_range::<$y>($self);
-                    reg_binary($self, $x, get_range::<$y>, map);
+                    reg_range::<$y>($lib);
+                    $lib.set_fn_2($x, get_range::<$y>);
                 )*
             )
         }
@@ -89,16 +89,16 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     }
 
     reg_step::<INT>(lib);
-    reg_trinary(lib, "range", StepRange::<INT>, map);
+    lib.set_fn_3("range", get_step_range::<INT>);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
         macro_rules! reg_step {
-            ($self:expr, $x:expr, $( $y:ty ),*) => (
+            ($lib:expr, $x:expr, $( $y:ty ),*) => (
                 $(
-                    reg_step::<$y>($self);
-                    reg_trinary($self, $x, StepRange::<$y>, map);
+                    reg_step::<$y>($lib);
+                    $lib.set_fn_3($x, get_step_range::<$y>);
                 )*
             )
         }

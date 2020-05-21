@@ -72,17 +72,77 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             r#"
-                import "hello" as h;
-                h::answer
+                import "hello" as h1;
+                import "hello" as h2;
+                h2::answer
     "#
         )?,
         42
     );
 
+    engine.set_max_modules(5);
+
+    assert!(matches!(
+        *engine
+            .eval::<INT>(
+                r#"
+                    let sum = 0;
+
+                    for x in range(0, 10) {
+                        import "hello" as h;
+                        sum += h::answer;
+                    }
+
+                    sum
+            "#
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorTooManyModules(_)
+    ));
+
+    #[cfg(not(feature = "no_function"))]
+    assert!(matches!(
+        *engine
+            .eval::<INT>(
+                r#"
+                    let sum = 0;
+
+                    fn foo() {
+                        import "hello" as h;
+                        sum += h::answer;
+                    }
+
+                    for x in range(0, 10) {
+                        foo();
+                    }
+
+                    sum
+            "#
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
+    ));
+
+    engine.set_max_modules(0);
+
+    #[cfg(not(feature = "no_function"))]
+    engine.eval::<()>(
+        r#"
+            fn foo() {
+                import "hello" as h;
+            }
+
+            for x in range(0, 10) {
+                foo();
+            }
+    "#,
+    )?;
+
     Ok(())
 }
 
 #[test]
+#[cfg(not(feature = "no_function"))]
 fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
@@ -100,7 +160,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
             x + 1
         }
         fn add_len(x, y) {
-            x + y.len()
+            x + len(y)
         }
         private fn hidden() {
             throw "you shouldn't see me!";

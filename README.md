@@ -13,24 +13,30 @@ to add scripting to any application.
 
 Rhai's current features set:
 
-* Easy-to-use language similar to JS+Rust
-* Easy integration with Rust [native functions](#working-with-functions) and [types](#custom-types-and-methods),
-  including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers)
-* Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust
-* Freely pass variables/constants into a script via an external [`Scope`]
-* Fairly efficient (1 million iterations in 0.75 sec on my 5 year old laptop)
-* Low compile-time overhead (~0.6 sec debug/~3 sec release for script runner app)
-* [`no-std`](#optional-features) support
-* Support for [function overloading](#function-overloading)
-* Support for [operator overloading](#operator-overloading)
-* Support for loading external [modules]
-* Compiled script is [optimized](#script-optimization) for repeat evaluations
-* Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features)
+* Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector.
+* Tight integration with native Rust [functions](#working-with-functions) and [types](#custom-types-and-methods),
+  including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers).
+* Freely pass Rust variables/constants into a script via an external [`Scope`].
+* Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust.
+* Low compile-time overhead (~0.6 sec debug/~3 sec release for `rhai_runner` sample app).
+* Fairly efficient evaluation (1 million iterations in 0.75 sec on my 5 year old laptop).
+* Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
+  one single source file, all with names starting with `"unsafe_"`).
+* Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
+* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment without explicit permission.
+* Rugged (protection against [stack-overflow](#maximum-call-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
+* Track script evaluation [progress](#tracking-progress) and manually terminate a script run.
+* [`no-std`](#optional-features) support.
+* [Function overloading](#function-overloading).
+* [Operator overloading](#operator-overloading).
+* Organize code base with dynamically-loadable [Modules].
+* Compiled script is [optimized](#script-optimization) for repeated evaluations.
+* Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features).
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.14.1, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.14.2, so the language and API's may change before they stabilize.
 
 Installation
 ------------
@@ -39,7 +45,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.14.1"
+rhai = "0.14.2"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -62,23 +68,24 @@ Beware that in order to use pre-releases (e.g. alpha and beta), the exact versio
 Optional features
 -----------------
 
-| Feature       | Description                                                                                                                           |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!           |
-| `no_function` | Disable script-defined functions if not needed.                                                                                       |
-| `no_index`    | Disable [arrays] and indexing features if not needed.                                                                                 |
-| `no_object`   | Disable support for custom types and objects.                                                                                         |
-| `no_float`    | Disable floating-point numbers and math if not needed.                                                                                |
-| `no_optimize` | Disable the script optimizer.                                                                                                         |
-| `no_module`   | Disable modules.                                                                                                                      |
-| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                      |
-| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                      |
-| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                  |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, [`Engine`], [`Scope`] and `AST` are all `Send + Sync`. |
+| Feature       | Description                                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unchecked`   | Exclude arithmetic checking (such as over-flows and division by zero), stack depth limit and operations count limit. Beware that a bad script may panic the entire system! |
+| `no_function` | Disable script-defined functions.                                                                                                                                          |
+| `no_index`    | Disable [arrays] and indexing features.                                                                                                                                    |
+| `no_object`   | Disable support for custom types and object maps.                                                                                                                          |
+| `no_float`    | Disable floating-point numbers and math.                                                                                                                                   |
+| `no_optimize` | Disable the script optimizer.                                                                                                                                              |
+| `no_module`   | Disable modules.                                                                                                                                                           |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                                           |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                                           |
+| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                       |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and `AST`, are all `Send + Sync`.           |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
 Most features are here to opt-**out** of certain functionalities that are not needed.
-Excluding unneeded functionalities can result in smaller, faster builds as well as less bugs due to a more restricted language.
+Excluding unneeded functionalities can result in smaller, faster builds
+as well as more control over what a script can (or cannot) do.
 
 [`unchecked`]: #optional-features
 [`no_index`]: #optional-features
@@ -104,7 +111,7 @@ requiring more CPU cycles to complete.
 
 Also, turning on `no_float`, and `only_i32` makes the key [`Dynamic`] data type only 8 bytes small on 32-bit targets
 while normally it can be up to 16 bytes (e.g. on x86/x64 CPU's) in order to hold an `i64` or `f64`.
-Making [`Dynamic`] small helps performance due to more caching efficiency.
+Making [`Dynamic`] small helps performance due to better cache efficiency.
 
 ### Minimal builds
 
@@ -113,6 +120,8 @@ the correct linker flags are used in `cargo.toml`:
 
 ```toml
 [profile.release]
+lto = "fat"         # turn on Link-Time Optimizations
+codegen-units = 1   # trade compile time with maximum optimization
 opt-level = "z"     # optimize for size
 ```
 
@@ -126,7 +135,8 @@ Disable script-defined functions (`no_function`) only when the feature is not ne
 
 [`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
 This makes the scripting language quite useless as even basic arithmetic operators are not supported.
-Selectively include the necessary operators by loading specific [packages](#packages) while minimizing the code footprint.
+Selectively include the necessary functionalities by loading specific [packages] to minimize the footprint.
+Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
 Related
 -------
@@ -267,7 +277,7 @@ let ast = engine.compile_file("hello_world.rhai".into())?;
 
 ### Calling Rhai functions from Rust
 
-Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `call_fn`.
+Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `Engine::call_fn`.
 Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
 
 ```rust
@@ -370,8 +380,11 @@ Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, n
 
 ### Packages
 
-Rhai functional features are provided in different _packages_ that can be loaded via a call to `load_package`.
-Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be imported in order for
+[package]: #packages
+[packages]: #packages
+
+Rhai functional features are provided in different _packages_ that can be loaded via a call to `Engine::load_package`.
+Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be loaded in order for
 packages to be used.
 
 ```rust
@@ -382,7 +395,7 @@ use rhai::packages::CorePackage;                // the 'core' package contains b
 let mut engine = Engine::new_raw();             // create a 'raw' Engine
 let package = CorePackage::new();               // create a package - can be shared among multiple `Engine` instances
 
-engine.load_package(package.get());             // load the package manually
+engine.load_package(package.get());             // load the package manually. 'get' returns a reference to the shared package
 ```
 
 The follow packages are available:
@@ -398,8 +411,23 @@ The follow packages are available:
 | `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
 | `BasicArrayPackage`    | Basic [array] functions                         |        No        |         Yes          |
 | `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
+| `EvalPackage`          | Disable [`eval`]                                |        No        |          No          |
 | `CorePackage`          | Basic essentials                                |                  |                      |
 | `StandardPackage`      | Standard library                                |                  |                      |
+
+Packages typically contain Rust functions that are callable within a Rhai script.
+All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).
+Once a package is created (e.g. via `new`), it can be _shared_ (via `get`) among multiple instances of [`Engine`],
+even across threads (if the [`sync`] feature is turned on).
+Therefore, a package only has to be created _once_.
+
+Packages are actually implemented as [modules], so they share a lot of behavior and characteristics.
+The main difference is that a package loads under the _global_ namespace, while a module loads under its own
+namespace alias specified in an [`import`] statement (see also [modules]).
+A package is _static_ (i.e. pre-loaded into an [`Engine`]), while a module is _dynamic_ (i.e. loaded with
+the `import` statement).
+
+Custom packages can also be created.  See the macro [`def_package!`](https://docs.rs/rhai/0.13.0/rhai/macro.def_package.html).
 
 Evaluate expressions only
 -------------------------
@@ -743,7 +771,7 @@ Because they [_short-circuit_](#boolean-operators), `&&` and `||` are handled sp
 overriding them has no effect at all.
 
 Operator functions cannot be defined as a script function (because operators syntax are not valid function names).
-However, operator functions _can_ be registered to the [`Engine`] via `register_fn`, `register_result_fn` etc.
+However, operator functions _can_ be registered to the [`Engine`] via the methods `Engine::register_fn`, `Engine::register_result_fn` etc.
 When a custom operator function is registered with the same name as an operator, it _overloads_ (or overrides) the built-in version.
 
 ```rust
@@ -762,11 +790,17 @@ println!("result: {}", result);                     // prints 42
 let result: f64 = engine.eval("1.0 + 0.0");         // '+' operator for two floats not overloaded
 
 println!("result: {}", result);                     // prints 1.0
+
+fn mixed_add(a: i64, b: f64) -> f64 { (a as f64) + b }
+
+engine.register_fn("+", mixed_add);                 // register '+' operator for an integer and a float
+
+let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an error)
 ```
 
-Use operator overloading for custom types (described below) only.  Be very careful when overloading built-in operators because
-script writers expect standard operators to behave in a consistent and predictable manner, and will be annoyed if a calculation
-for '+' turns into a subtraction, for example.
+Use operator overloading for custom types (described below) only.
+Be very careful when overloading built-in operators because script writers expect standard operators to behave in a
+consistent and predictable manner, and will be annoyed if a calculation for '`+`' turns into a subtraction, for example.
 
 Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
 See the [relevant section](#script-optimization) for more details.
@@ -941,7 +975,7 @@ Indexers
 --------
 
 Custom types can also expose an _indexer_ by registering an indexer function.
-A custom with an indexer function defined can use the bracket '`[]`' notation to get a property value
+A custom type with an indexer function defined can use the bracket '`[]`' notation to get a property value
 (but not update it - indexers are read-only).
 
 ```rust
@@ -1036,12 +1070,13 @@ fn main() -> Result<(), Box<EvalAltResult>>
 Engine configuration options
 ---------------------------
 
-| Method                   | Description                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [`script optimization`].         |
-| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. |
-
-[`script optimization`]: #script-optimization
+| Method                   | Description                                                                                                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [script optimization].                                                                      |
+| `set_max_expr_depths`    | Set the maximum nesting levels of an expression/statement. See [maximum statement depth](#maximum-statement-depth).                                 |
+| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. See [maximum call stack depth](#maximum-call-stack-depth). |
+| `set_max_operations`     | Set the maximum number of _operations_ that a script is allowed to consume. See [maximum number of operations](#maximum-number-of-operations).      |
+| `set_max_modules`        | Set the maximum number of [modules] that a script is allowed to load. See [maximum number of modules](#maximum-number-of-modules).                  |
 
 -------
 
@@ -1328,7 +1363,7 @@ The following standard methods (defined in the [`MoreStringPackage`](#packages) 
 | `index_of`   | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
 | `sub_string` | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
 | `crop`       | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`    | target sub-string, replacement string                        | replaces a sub-string with another                                                                |
+| `replace`    | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
 | `trim`       | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples
@@ -2021,7 +2056,7 @@ debug("world!");            // prints "world!" to stdout using debug formatting
 ### Overriding `print` and `debug` with callback functions
 
 When embedding Rhai into an application, it is usually necessary to trap `print` and `debug` output
-(for logging into a tracking log, for example).
+(for logging into a tracking log, for example) with the `Engine::on_print` and `Engine::on_debug` methods:
 
 ```rust
 // Any function or closure that takes an '&str' argument can be used to override
@@ -2048,21 +2083,21 @@ for entry in logbook.read().unwrap().iter() {
 }
 ```
 
-Using external modules
-----------------------
+Modules
+-------
 
-[module]: #using-external-modules
-[modules]: #using-external-modules
+[module]: #modules
+[modules]: #modules
 
-Rhai allows organizing code (functions and variables) into _modules_.
+Rhai allows organizing code (functions, both Rust-based or script-based, and variables) into _modules_.
 Modules can be disabled via the [`no_module`] feature.
 
-### Exporting variables and functions
+### Exporting variables and functions from modules
 
-A module is a single script (or pre-compiled `AST`) containing global variables and functions.
+A _module_ is a single script (or pre-compiled `AST`) containing global variables and functions.
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
-Variables not exported are private and invisible to the outside.
-All functions are automatically exported, unless it is prefixed with `private`.
+Variables not exported are _private_ and invisible to the outside.
+On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the `private` prefix.
 Functions declared `private` are invisible to the outside.
 
 Everything exported from a module is **constant** (**read-only**).
@@ -2070,11 +2105,11 @@ Everything exported from a module is **constant** (**read-only**).
 ```rust
 // This is a module script.
 
-fn inc(x) { x + 1 }         // public function
+fn inc(x) { x + 1 }         // script-defined function - default public
 
 private fn foo() {}         // private function - invisible to outside
 
-let private = 123;          // variable not exported - invisible to outside
+let private = 123;          // variable not exported - default invisible to outside
 let x = 42;                 // this will be exported below
 
 export x;                   // the variable 'x' is exported under its own name
@@ -2085,19 +2120,27 @@ export x as answer;         // the variable 'x' is exported under the alias 'ans
 
 ### Importing modules
 
-A module can be _imported_ via the `import` statement, and its members accessed via '`::`' similar to C++.
+[`import`]: #importing-modules
+
+A module can be _imported_ via the `import` statement, and its members are accessed via '`::`' similar to C++.
 
 ```rust
 import "crypto" as crypto;  // import the script file 'crypto.rhai' as a module
 
 crypto::encrypt(secret);    // use functions defined under the module via '::'
 
+crypto::hash::sha256(key);  // sub-modules are also supported
+
 print(crypto::status);      // module variables are constants
 
-crypto::hash::sha256(key);  // sub-modules are also supported
+crypto::status = "off";     // <- runtime error - cannot modify a constant
 ```
 
 `import` statements are _scoped_, meaning that they are only accessible inside the scope that they're imported.
+They can appear anywhere a normal statement can be, but in the vast majority of cases `import` statements are
+group at the beginning of a script.  It is not advised to deviate from this common practice unless there is
+a _Very Good Reason™_. Especially, do not place an `import` statement within a loop; doing so will repeatedly
+re-load the same module during every iteration of the loop!
 
 ```rust
 let mod = "crypto";
@@ -2110,9 +2153,15 @@ if secured {                // new block scope
 
 crypto::encrypt(others);    // <- this causes a run-time error because the 'crypto' module
                             //    is no longer available!
+
+for x in range(0, 1000) {
+    import "crypto" as c;   // <- importing a module inside a loop is a Very Bad Idea™
+
+    c.encrypt(something);
+}
 ```
 
-### Creating custom modules from Rust
+### Creating custom modules with Rust
 
 To load a custom module (written in Rust) into an [`Engine`], first create a `Module` type, add variables/functions into it,
 then finally push it into a custom [`Scope`].  This has the equivalent effect of putting an `import` statement
@@ -2141,8 +2190,9 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer
 
 ### Creating a module from an `AST`
 
-It is easy to convert a pre-compiled `AST` into a module, just use `Module::eval_ast_as_new`.
-Don't forget the `export` statement, otherwise there will be nothing inside the module!
+It is easy to convert a pre-compiled `AST` into a module: just use `Module::eval_ast_as_new`.
+Don't forget the `export` statement, otherwise there will be no variables exposed by the module
+other than non-`private` functions (unless that's intentional).
 
 ```rust
 use rhai::{Engine, Module};
@@ -2202,7 +2252,7 @@ Built-in module resolvers are grouped under the `rhai::module_resolvers` module 
 | `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
 | `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                                                                                                            |
 
-An [`Engine`]'s module resolver is set via a call to `set_module_resolver`:
+An [`Engine`]'s module resolver is set via a call to `Engine::set_module_resolver`:
 
 ```rust
 // Use the 'StaticModuleResolver'
@@ -2213,8 +2263,185 @@ engine.set_module_resolver(Some(resolver));
 engine.set_module_resolver(None);
 ```
 
+Ruggedization - protect against DoS attacks
+------------------------------------------
+
+For scripting systems open to user-land scripts, it is always best to limit the amount of resources used by a script
+so that it does not consume more resources that it is allowed to.
+
+The most important resources to watch out for are:
+
+* **Memory**: A malignant script may continuously grow an [array] or [object map] until all memory is consumed.
+  It may also create a large [array] or [objecct map] literal that exhausts all memory during parsing.
+* **CPU**: A malignant script may run an infinite tight loop that consumes all CPU cycles.
+* **Time**: A malignant script may run indefinitely, thereby blocking the calling system which is waiting for a result.
+* **Stack**: A malignant script may attempt an infinite recursive call that exhausts the call stack.
+  Alternatively, it may create a degenerated deep expression with so many levels that the parser exhausts the call stack
+  when parsing the expression; or even deeply-nested statement blocks, if nested deep enough.
+* **Overflows**: A malignant script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
+  create bad floating-point representations, in order to crash the system.
+* **Files**: A malignant script may continuously [`import`] an external module within an infinite loop,
+  thereby putting heavy load on the file-system (or even the network if the file is not local).
+  Even when modules are not created from files, they still typically consume a lot of resources to load.
+* **Data**: A malignant script may attempt to read from and/or write to data that it does not own. If this happens,
+  it is a severe security breach and may put the entire system at risk.
+
+### Maximum number of operations
+
+Rhai by default does not limit how much time or CPU a script consumes.
+This can be changed via the `Engine::set_max_operations` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_operations(500);             // allow only up to 500 operations for this script
+
+engine.set_max_operations(0);               // allow unlimited operations
+```
+
+The concept of one single _operation_ in Rhai is volatile - it roughly equals one expression node,
+loading one variable/constant, one operator call, one iteration of a loop, or one function call etc.
+with sub-expressions, statements and function calls executed inside these contexts accumulated on top.
+A good rule-of-thumb is that one simple non-trivial expression consumes on average 5-10 operations.
+
+One _operation_ can take an unspecified amount of time and real CPU cycles, depending on the particulars.
+For example, loading a constant consumes very few CPU cycles, while calling an external Rust function,
+though also counted as only one operation, may consume much more computing resources.
+If it helps to visualize, think of an _operation_ as roughly equals to one _instruction_ of a hypothetical CPU.
+
+The _operation count_ is intended to be a very course-grained measurement of the amount of CPU that a script
+is consuming, and allows the system to impose a hard upper limit.
+
+A script exceeding the maximum operations count will terminate with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+### Tracking progress
+
+To track script evaluation progress and to force-terminate a script prematurely (for any reason),
+provide a closure to the `Engine::on_progress` method:
+
+```rust
+let mut engine = Engine::new();
+
+engine.on_progress(|count| {                // 'count' is the number of operations performed
+    if count % 1000 == 0 {
+        println!("{}", count);              // print out a progress log every 1,000 operations
+    }
+    true                                    // return 'true' to continue the script
+                                            // returning 'false' will terminate the script
+});
+```
+
+The closure passed to `Engine::on_progress` will be called once every operation.
+Return `false` to terminate the script immediately.
+
+### Maximum number of modules
+
+Rhai by default does not limit how many [modules] are loaded via the [`import`] statement.
+This can be changed via the `Engine::set_max_modules` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_modules(5);                  // allow loading only up to 5 modules
+
+engine.set_max_modules(0);                  // allow unlimited modules
+```
+
+### Maximum call stack depth
+
+Rhai by default limits function calls to a maximum depth of 128 levels (16 levels in debug build).
+This limit may be changed via the `Engine::set_max_call_levels` method.
+
+When setting this limit, care must be also taken to the evaluation depth of each _statement_
+within the function. It is entirely possible for a malignant script to embed an recursive call deep
+inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
+
+The limit can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_call_levels(10);             // allow only up to 10 levels of function calls
+
+engine.set_max_call_levels(0);              // allow no function calls at all (max depth = zero)
+```
+
+A script exceeding the maximum call stack depth will terminate with an error result.
+
+### Maximum statement depth
+
+Rhai by default limits statements and expressions nesting to a maximum depth of 128
+(which should be plenty) when they are at _global_ level, but only a depth of 32
+when they are within function bodies.  For debug builds, these limits are set further
+downwards to 32 and 16 respectively.
+
+That is because it is possible to overflow the [`Engine`]'s stack when it tries to
+recursively parse an extremely deeply-nested code stream.
+
+```rust
+// The following, if long enough, can easily cause stack overflow during parsing.
+let a = (1+(1+(1+(1+(1+(1+(1+(1+(1+(1+(...)+1)))))))))));
+```
+
+This limit may be changed via the `Engine::set_max_expr_depths` method.  There are two limits to set,
+one for the maximum depth at global level, and the other for function bodies.
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_expr_depths(50, 5);          // allow nesting up to 50 layers of expressions/statements
+                                            // at global level, but only 5 inside functions
+```
+
+Beware that there may be multiple layers for a simple language construct, even though it may correspond
+to only one AST node. That is because the Rhai _parser_ internally runs a recursive chain of function calls
+and it is important that a malignant script does not panic the parser in the first place.
+
+Functions are placed under stricter limits because of the multiplicative effect of recursion.
+A script can effectively call itself while deep inside an expression chain within the function body,
+thereby overflowing the stack even when the level of recursion is within limit.
+
+Make sure that `C x ( 5 + F ) + S` layered calls do not cause a stack overflow, where:
+
+* `C` = maximum call stack depth,
+* `F` = maximum statement depth for functions,
+* `S` = maximum statement depth at global level.
+
+A script exceeding the maximum nesting depths will terminate with a parsing error.
+The malignant `AST` will not be able to get past parsing in the first place.
+
+The limits can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+### Checked arithmetic
+
+By default, all arithmetic calculations in Rhai are _checked_, meaning that the script terminates
+with an error whenever it detects a numeric over-flow/under-flow condition or an invalid
+floating-point operation, instead of crashing the entire system.  This checking can be turned off
+via the [`unchecked`] feature for higher performance (but higher risks as well).
+
+### Blocking access to external data
+
+Rhai is _sand-boxed_ so a script can never read from outside its own environment.
+Furthermore, an [`Engine`] created non-`mut` cannot mutate any state outside of itself;
+so it is highly recommended that [`Engine`]'s are created immutable as much as possible.
+
+```rust
+let mut engine = Engine::new();             // create mutable 'Engine'
+
+engine.register_get("add", add);            // configure 'engine'
+
+let engine = engine;                        // shadow the variable so that 'engine' is now immutable
+```
+
+
 Script optimization
 ===================
+
+[script optimization]: #script-optimization
 
 Rhai includes an _optimizer_ that tries to optimize a script after parsing.
 This can reduce resource utilization and increase execution speed.
@@ -2323,7 +2550,7 @@ There are actually three levels of optimizations: `None`, `Simple` and `Full`.
 * `Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.
   One benefit to this is that many more optimization opportunities arise, especially with regards to comparison operators.
 
-An [`Engine`]'s optimization level is set via a call to `set_optimization_level`:
+An [`Engine`]'s optimization level is set via a call to `Engine::set_optimization_level`:
 
 ```rust
 // Turn on aggressive optimizations
@@ -2446,6 +2673,8 @@ engine.set_optimization_level(rhai::OptimizationLevel::None);
 `eval` - or "How to Shoot Yourself in the Foot even Easier"
 ---------------------------------------------------------
 
+[`eval`]: #eval---or-how-to-shoot-yourself-in-the-foot-even-easier
+
 Saving the best for last: in addition to script optimizations, there is the ever-dreaded... `eval` function!
 
 ```rust
@@ -2501,9 +2730,11 @@ let x = eval("40 + 2");     // 'eval' here throws "eval is evil! I refuse to run
 Or override it from Rust:
 
 ```rust
-fn alt_eval(script: String) -> Result<(), EvalAltResult> {
+fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
     Err(format!("eval is evil! I refuse to run {}", script).into())
 }
 
 engine.register_result_fn("eval", alt_eval);
 ```
+
+There is even a [package] named `EvalPackage` which implements the disabling override.

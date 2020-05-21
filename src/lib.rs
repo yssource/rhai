@@ -75,6 +75,7 @@ mod engine;
 mod error;
 mod fn_call;
 mod fn_func;
+mod fn_native;
 mod fn_register;
 mod module;
 mod optimize;
@@ -84,15 +85,16 @@ mod result;
 mod scope;
 mod stdlib;
 mod token;
+mod r#unsafe;
 mod utils;
 
 pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
-pub use fn_call::FuncArgs;
-pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
 #[cfg(feature = "plugins")]
 pub use fn_register::{Plugin, RegisterPlugin};
+pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
+pub use module::Module;
 pub use parser::{AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
@@ -112,8 +114,9 @@ pub use engine::Map;
 pub use parser::FLOAT;
 
 #[cfg(not(feature = "no_module"))]
-pub use module::{Module, ModuleResolver};
+pub use module::ModuleResolver;
 
+/// Module containing all built-in _module resolvers_ available to Rhai.
 #[cfg(not(feature = "no_module"))]
 pub mod module_resolvers {
     pub use crate::module::resolvers::*;

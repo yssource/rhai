@@ -33,10 +33,9 @@ pub enum EvalAltResult {
 
     /// Call to an unknown function. Wrapped value is the name of the function.
     ErrorFunctionNotFound(String, Position),
-    /// Function call has incorrect number of arguments.
-    /// Wrapped values are the name of the function, the number of parameters required
-    /// and the actual number of arguments passed.
-    ErrorFunctionArgsMismatch(String, usize, usize, Position),
+    /// An error has occurred inside a called function.
+    /// Wrapped values re the name of the function and the interior error.
+    ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
     /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
     ErrorBooleanArgMismatch(String, Position),
     /// Non-character value encountered where a character is required.
@@ -76,8 +75,14 @@ pub enum EvalAltResult {
     ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
     ErrorArithmetic(String, Position),
+    /// Number of operations over maximum limit.
+    ErrorTooManyOperations(Position),
+    /// Modules over maximum limit.
+    ErrorTooManyModules(Position),
     /// Call stack over maximum limit.
     ErrorStackOverflow(Position),
+    /// The script is prematurely terminated.
+    ErrorTerminated(Position),
     /// Run-time error encountered. Wrapped value is the error message.
     ErrorRuntime(String, Position),
 
@@ -97,10 +102,8 @@ impl EvalAltResult {
             Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
 
             Self::ErrorParsing(p) => p.desc(),
+            Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
-            Self::ErrorFunctionArgsMismatch(_, _, _, _) => {
-                "Function call with wrong number of arguments"
-            }
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorCharMismatch(_) => "Character expected",
             Self::ErrorNumericIndexExpr(_) => {
@@ -133,7 +136,10 @@ impl EvalAltResult {
             Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
+            Self::ErrorTooManyOperations(_) => "Too many operations",
+            Self::ErrorTooManyModules(_) => "Too many modules imported",
             Self::ErrorStackOverflow(_) => "Stack overflow",
+            Self::ErrorTerminated(_) => "Script terminated.",
             Self::ErrorRuntime(_, _) => "Runtime error",
             Self::ErrorLoopBreak(true, _) => "Break statement not inside a loop",
             Self::ErrorLoopBreak(false, _) => "Continue statement not inside a loop",
@@ -160,6 +166,10 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
 
+            Self::ErrorInFunctionCall(s, err, pos) => {
+                write!(f, "Error in call to function '{}' ({}): {}", s, pos, err)
+            }
+
             Self::ErrorFunctionNotFound(s, pos)
             | Self::ErrorVariableNotFound(s, pos)
             | Self::ErrorModuleNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
@@ -175,7 +185,10 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
-            | Self::ErrorStackOverflow(pos) => write!(f, "{} ({})", desc, pos),
+            | Self::ErrorTooManyOperations(pos)
+            | Self::ErrorTooManyModules(pos)
+            | Self::ErrorStackOverflow(pos)
+            | Self::ErrorTerminated(pos) => write!(f, "{} ({})", desc, pos),
 
             Self::ErrorRuntime(s, pos) => {
                 write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
@@ -188,21 +201,6 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorLoopBreak(_, pos) => write!(f, "{} ({})", desc, pos),
             Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
 
-            Self::ErrorFunctionArgsMismatch(fn_name, 0, n, pos) => write!(
-                f,
-                "Function '{}' expects no argument but {} found ({})",
-                fn_name, n, pos
-            ),
-            Self::ErrorFunctionArgsMismatch(fn_name, 1, n, pos) => write!(
-                f,
-                "Function '{}' expects one argument but {} found ({})",
-                fn_name, n, pos
-            ),
-            Self::ErrorFunctionArgsMismatch(fn_name, need, n, pos) => write!(
-                f,
-                "Function '{}' expects {} argument(s) but {} found ({})",
-                fn_name, need, n, pos
-            ),
             Self::ErrorBooleanArgMismatch(op, pos) => {
                 write!(f, "{} operator expects boolean operands ({})", op, pos)
             }
@@ -262,6 +260,7 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
 }
 
 impl EvalAltResult {
+    /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_std"))]
@@ -270,7 +269,7 @@ impl EvalAltResult {
             Self::ErrorParsing(err) => err.position(),
 
             Self::ErrorFunctionNotFound(_, pos)
-            | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
+            | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)
@@ -289,24 +288,26 @@ impl EvalAltResult {
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorTooManyOperations(pos)
+            | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)
             | Self::Return(_, pos) => *pos,
         }
     }
 
-    /// Consume the current `EvalAltResult` and return a new one
-    /// with the specified `Position`.
-    pub(crate) fn set_position(mut err: Box<Self>, new_position: Position) -> Box<Self> {
-        match err.as_mut() {
+    /// Override the `Position` of this error.
+    pub fn set_position(&mut self, new_position: Position) {
+        match self {
             #[cfg(not(feature = "no_std"))]
             Self::ErrorReadingScriptFile(_, pos, _) => *pos = new_position,
 
             Self::ErrorParsing(err) => err.1 = new_position,
 
             Self::ErrorFunctionNotFound(_, pos)
-            | Self::ErrorFunctionArgsMismatch(_, _, _, pos)
+            | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)
@@ -325,12 +326,20 @@ impl EvalAltResult {
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorTooManyOperations(pos)
+            | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)
             | Self::Return(_, pos) => *pos = new_position,
         }
+    }
 
-        err
+    /// Consume the current `EvalAltResult` and return a new one
+    /// with the specified `Position`.
+    pub(crate) fn new_position(mut self: Box<Self>, new_position: Position) -> Box<Self> {
+        self.set_position(new_position);
+        self
     }
 }

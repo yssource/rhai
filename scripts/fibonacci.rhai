@@ -3,8 +3,6 @@
 
 const target = 30;
 
-let now = timestamp();
-
 fn fib(n) {
     if n < 2 {
          n
@@ -15,8 +13,14 @@ fn fib(n) {
 
 print("Ready... Go!");
 
+let now = timestamp();
+
 let result = fib(target);
+
+print("Finished. Run time = " + now.elapsed() + " seconds.");
 
 print("Fibonacci number #" + target + " = " + result);
 
-print("Finished. Run time = " + now.elapsed() + " seconds.");
+if result != 832_040 {
+    print("The answer is WRONG! Should be 832,040!");
+}

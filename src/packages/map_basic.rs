@@ -1,11 +1,9 @@
 #![cfg(not(feature = "no_object"))]
 
-use super::{reg_binary, reg_binary_mut, reg_unary_mut};
-
 use crate::any::Dynamic;
 use crate::def_package;
 use crate::engine::Map;
-use crate::fn_register::map_dynamic as map;
+use crate::module::FuncReturn;
 use crate::parser::INT;
 
 use crate::stdlib::{
@@ -13,55 +11,51 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-fn map_get_keys(map: &mut Map) -> Vec<Dynamic> {
-    map.iter().map(|(k, _)| k.to_string().into()).collect()
+fn map_get_keys(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
+    Ok(map.iter().map(|(k, _)| k.to_string().into()).collect())
 }
-fn map_get_values(map: &mut Map) -> Vec<Dynamic> {
-    map.iter().map(|(_, v)| v.clone()).collect()
+fn map_get_values(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
+    Ok(map.iter().map(|(_, v)| v.clone()).collect())
 }
 
 #[cfg(not(feature = "no_object"))]
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
-    reg_binary_mut(
-        lib,
+    lib.set_fn_2_mut(
         "has",
-        |map: &mut Map, prop: String| map.contains_key(&prop),
-        map,
+        |map: &mut Map, prop: String| Ok(map.contains_key(&prop)),
     );
-    reg_unary_mut(lib, "len", |map: &mut Map| map.len() as INT, map);
-    reg_unary_mut(lib, "clear", |map: &mut Map| map.clear(), map);
-    reg_binary_mut(
-        lib,
+    lib.set_fn_1_mut("len", |map: &mut Map| Ok(map.len() as INT));
+    lib.set_fn_1_mut("clear", |map: &mut Map| {
+        map.clear();
+        Ok(())
+    });
+    lib.set_fn_2_mut(
         "remove",
-        |x: &mut Map, name: String| x.remove(&name).unwrap_or_else(|| ().into()),
-        map,
+        |x: &mut Map, name: String| Ok(x.remove(&name).unwrap_or_else(|| ().into())),
     );
-    reg_binary_mut(
-        lib,
+    lib.set_fn_2_mut(
         "mixin",
         |map1: &mut Map, map2: Map| {
             map2.into_iter().for_each(|(key, value)| {
                 map1.insert(key, value);
             });
+            Ok(())
         },
-        map,
     );
-    reg_binary(
-        lib,
+    lib.set_fn_2(
         "+",
         |mut map1: Map, map2: Map| {
             map2.into_iter().for_each(|(key, value)| {
                 map1.insert(key, value);
             });
-            map1
+            Ok(map1)
         },
-        map,
     );
 
     // Register map access functions
     #[cfg(not(feature = "no_index"))]
-    reg_unary_mut(lib, "keys", map_get_keys, map);
+    lib.set_fn_1_mut("keys", map_get_keys);
 
     #[cfg(not(feature = "no_index"))]
-    reg_unary_mut(lib, "values", map_get_values, map);
+    lib.set_fn_1_mut("values", map_get_values);
 });

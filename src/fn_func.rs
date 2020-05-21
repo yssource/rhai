@@ -11,7 +11,7 @@ use crate::scope::Scope;
 
 use crate::stdlib::{boxed::Box, string::ToString};
 
-/// A trait to create a Rust anonymous function from a script.
+/// Trait to create a Rust anonymous function from a script.
 pub trait Func<ARGS, RET> {
     type Output;
 
@@ -92,15 +92,14 @@ macro_rules! def_anonymous_fn {
         {
             #[cfg(feature = "sync")]
             type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>> + Send + Sync>;
-
             #[cfg(not(feature = "sync"))]
             type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>>>;
 
             fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output {
-                let name = entry_point.to_string();
+                let fn_name = entry_point.to_string();
 
                 Box::new(move |$($par: $par),*| {
-                    self.call_fn(&mut Scope::new(), &ast, &name, ($($par,)*))
+                    self.call_fn(&mut Scope::new(), &ast, &fn_name, ($($par,)*))
                 })
             }
 
