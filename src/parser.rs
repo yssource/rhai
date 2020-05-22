@@ -361,11 +361,6 @@ impl Stmt {
     }
 }
 
-#[cfg(not(feature = "no_module"))]
-type MRef = Option<Box<ModuleRef>>;
-#[cfg(feature = "no_module")]
-type MRef = Option<ModuleRef>;
-
 /// An expression.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -382,7 +377,14 @@ pub enum Expr {
     /// String constant.
     StringConstant(Box<(String, Position)>),
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
-    Variable(Box<((String, Position), MRef, u64, Option<NonZeroUsize>)>),
+    Variable(
+        Box<(
+            (String, Position),
+            Option<Box<ModuleRef>>,
+            u64,
+            Option<NonZeroUsize>,
+        )>,
+    ),
     /// Property access.
     Property(Box<((String, String, String), Position)>),
     /// { stmt }
@@ -393,7 +395,7 @@ pub enum Expr {
     FnCall(
         Box<(
             (Cow<'static, str>, Position),
-            MRef,
+            Option<Box<ModuleRef>>,
             u64,
             StaticVec<Expr>,
             Option<Dynamic>,
@@ -661,7 +663,7 @@ fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
 }
 
 /// Match a particular token, consuming it if matched.
-fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, Box<ParseError>> {
+fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, ParseError> {
     let (t, _) = input.peek().unwrap();
     if *t == token {
         eat_token(input, token);
@@ -678,7 +680,7 @@ fn parse_paren_expr<'a>(
     pos: Position,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     if level > state.max_expr_depth {
         return Err(PERR::ExprTooDeep.into_err(pos));
     }
@@ -713,7 +715,7 @@ fn parse_call_expr<'a>(
     begin: Position,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     let (token, pos) = input.peek().unwrap();
 
     if level > state.max_expr_depth {
@@ -844,7 +846,7 @@ fn parse_index_chain<'a>(
     pos: Position,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     if level > state.max_expr_depth {
         return Err(PERR::ExprTooDeep.into_err(pos));
     }
@@ -1033,7 +1035,7 @@ fn parse_array_literal<'a>(
     pos: Position,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     if level > state.max_expr_depth {
         return Err(PERR::ExprTooDeep.into_err(pos));
     }
@@ -1081,7 +1083,7 @@ fn parse_map_literal<'a>(
     pos: Position,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     if level > state.max_expr_depth {
         return Err(PERR::ExprTooDeep.into_err(pos));
     }
@@ -1182,7 +1184,7 @@ fn parse_primary<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     let (token, pos) = input.peek().unwrap();
     let pos = *pos;
 
@@ -1290,7 +1292,7 @@ fn parse_unary<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     let (token, pos) = input.peek().unwrap();
     let pos = *pos;
 
@@ -1388,7 +1390,7 @@ fn make_assignment_stmt<'a>(
     lhs: Expr,
     rhs: Expr,
     pos: Position,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     match &lhs {
         Expr::Variable(x) if x.3.is_none() => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
         Expr::Variable(x) => {
@@ -1431,7 +1433,7 @@ fn parse_op_assignment_stmt<'a>(
     lhs: Expr,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     let (token, pos) = input.peek().unwrap();
     let pos = *pos;
 
@@ -1482,7 +1484,7 @@ fn make_dot_expr(
     rhs: Expr,
     op_pos: Position,
     is_index: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
         // idx_lhs[idx_rhs].rhs
         // Attach dot chain to the bottom level of indexing chain
@@ -1544,7 +1546,7 @@ fn make_dot_expr(
 }
 
 /// Make an 'in' expression.
-fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<ParseError>> {
+fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     match (&lhs, &rhs) {
         (_, Expr::IntegerConstant(x)) => {
             return Err(PERR::MalformedInExpr(
@@ -1717,7 +1719,7 @@ fn parse_binary_op<'a>(
     lhs: Expr,
     mut level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     if level > state.max_expr_depth {
         return Err(PERR::ExprTooDeep.into_err(lhs.position()));
     }
@@ -1836,7 +1838,7 @@ fn parse_expr<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     let (_, pos) = input.peek().unwrap();
 
     if level > state.max_expr_depth {
@@ -1851,7 +1853,7 @@ fn parse_expr<'a>(
 fn ensure_not_statement_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     type_name: &str,
-) -> Result<(), Box<ParseError>> {
+) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         // Disallow statement expressions
         (Token::LeftBrace, pos) | (Token::EOF, pos) => {
@@ -1863,9 +1865,7 @@ fn ensure_not_statement_expr<'a>(
 }
 
 /// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
-fn ensure_not_assignment<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
-) -> Result<(), Box<ParseError>> {
+fn ensure_not_assignment<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         (Token::Equals, pos) => {
             return Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
@@ -1898,7 +1898,7 @@ fn parse_if<'a>(
     breakable: bool,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // if ...
     let pos = eat_token(input, Token::If);
 
@@ -1934,7 +1934,7 @@ fn parse_while<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // while ...
     let pos = eat_token(input, Token::While);
 
@@ -1957,7 +1957,7 @@ fn parse_loop<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // loop ...
     let pos = eat_token(input, Token::Loop);
 
@@ -1977,7 +1977,7 @@ fn parse_for<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // for ...
     let pos = eat_token(input, Token::For);
 
@@ -2030,7 +2030,7 @@ fn parse_let<'a>(
     var_type: ScopeEntryType,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
     let (_, pos) = input.next().unwrap();
 
@@ -2091,7 +2091,7 @@ fn parse_import<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // import ...
     let pos = eat_token(input, Token::Import);
 
@@ -2129,7 +2129,7 @@ fn parse_export<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     state: &mut ParseState,
     level: usize,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     let pos = eat_token(input, Token::Export);
 
     if level > state.max_expr_depth {
@@ -2196,7 +2196,7 @@ fn parse_block<'a>(
     breakable: bool,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // Must start with {
     let pos = match input.next().unwrap() {
         (Token::LeftBrace, pos) => pos,
@@ -2267,7 +2267,7 @@ fn parse_expr_stmt<'a>(
     state: &mut ParseState,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     let (_, pos) = input.peek().unwrap();
 
     if level > state.max_expr_depth {
@@ -2287,7 +2287,7 @@ fn parse_stmt<'a>(
     is_global: bool,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     use ScopeEntryType::{Constant, Normal};
 
     let (token, pos) = match input.peek().unwrap() {
@@ -2376,7 +2376,7 @@ fn parse_fn<'a>(
     access: FnAccess,
     level: usize,
     allow_stmt_expr: bool,
-) -> Result<FnDef, Box<ParseError>> {
+) -> Result<FnDef, ParseError> {
     let pos = eat_token(input, Token::Fn);
 
     if level > state.max_expr_depth {
@@ -2467,7 +2467,7 @@ pub fn parse_global_expr<'a>(
     scope: &Scope,
     optimization_level: OptimizationLevel,
     max_expr_depth: usize,
-) -> Result<AST, Box<ParseError>> {
+) -> Result<AST, ParseError> {
     let mut state = ParseState::new(max_expr_depth);
     let expr = parse_expr(input, &mut state, 0, false)?;
 
@@ -2495,7 +2495,7 @@ pub fn parse_global_expr<'a>(
 fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     max_expr_depth: (usize, usize),
-) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), Box<ParseError>> {
+) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
     let mut functions = HashMap::<u64, FnDef>::new();
     let mut state = ParseState::new(max_expr_depth.0);
@@ -2577,7 +2577,7 @@ pub fn parse<'a>(
     scope: &Scope,
     optimization_level: OptimizationLevel,
     max_expr_depth: (usize, usize),
-) -> Result<AST, Box<ParseError>> {
+) -> Result<AST, ParseError> {
     let (statements, functions) = parse_global_level(input, max_expr_depth)?;
 
     let fn_lib = functions.into_iter().map(|(_, v)| v).collect();

@@ -465,8 +465,7 @@ fn default_print(s: &str) {
 fn search_scope<'a>(
     scope: &'a mut Scope,
     name: &str,
-    #[cfg(not(feature = "no_module"))] modules: Option<(&Box<ModuleRef>, u64)>,
-    #[cfg(feature = "no_module")] _: Option<(&ModuleRef, u64)>,
+    modules: Option<(&ModuleRef, u64)>,
     index: Option<NonZeroUsize>,
     pos: Position,
 ) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
@@ -1146,7 +1145,7 @@ impl Engine {
             Expr::Variable(x) => {
                 let ((name, pos), modules, hash_var, index) = x.as_ref();
                 let index = if state.always_search { None } else { *index };
-                let mod_and_hash = modules.as_ref().map(|m| (m, *hash_var));
+                let mod_and_hash = modules.as_ref().map(|m| (m.as_ref(), *hash_var));
                 let (target, typ) = search_scope(scope, &name, mod_and_hash, index, *pos)?;
                 self.inc_operations(state, *pos)?;
 
@@ -1393,7 +1392,7 @@ impl Engine {
             Expr::Variable(x) => {
                 let ((name, pos), modules, hash_var, index) = x.as_ref();
                 let index = if state.always_search { None } else { *index };
-                let mod_and_hash = modules.as_ref().map(|m| (m, *hash_var));
+                let mod_and_hash = modules.as_ref().map(|m| (m.as_ref(), *hash_var));
                 let (val, _) = search_scope(scope, name, mod_and_hash, index, *pos)?;
                 Ok(val.clone())
             }
@@ -1412,7 +1411,7 @@ impl Engine {
                     Expr::Variable(x) => {
                         let ((name, pos), modules, hash_var, index) = x.as_ref();
                         let index = if state.always_search { None } else { *index };
-                        let mod_and_hash = modules.as_ref().map(|m| (m, *hash_var));
+                        let mod_and_hash = modules.as_ref().map(|m| (m.as_ref(), *hash_var));
                         let (lhs_ptr, typ) = search_scope(scope, name, mod_and_hash, index, *pos)?;
                         self.inc_operations(state, *pos)?;
 

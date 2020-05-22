@@ -341,7 +341,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile(&self, script: &str) -> Result<AST, Box<ParseError>> {
+    pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_with_scope(&Scope::new(), script)
     }
 
@@ -383,7 +383,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, Box<ParseError>> {
+    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
 
@@ -437,7 +437,7 @@ impl Engine {
         &self,
         scope: &Scope,
         scripts: &[&str],
-    ) -> Result<AST, Box<ParseError>> {
+    ) -> Result<AST, ParseError> {
         self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
 
@@ -447,7 +447,7 @@ impl Engine {
         scope: &Scope,
         scripts: &[&str],
         optimization_level: OptimizationLevel,
-    ) -> Result<AST, Box<ParseError>> {
+    ) -> Result<AST, ParseError> {
         let stream = lex(scripts);
 
         parse(
@@ -614,7 +614,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_expression(&self, script: &str) -> Result<AST, Box<ParseError>> {
+    pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
 
@@ -661,7 +661,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: &str,
-    ) -> Result<AST, Box<ParseError>> {
+    ) -> Result<AST, ParseError> {
         let scripts = [script];
         let stream = lex(&scripts);
 
