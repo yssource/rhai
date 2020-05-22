@@ -8,7 +8,7 @@ use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST};
-use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
+use crate::r#unsafe::{unsafe_cast_var_name_to_lifetime, unsafe_mut_cast_to_lifetime};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
@@ -655,27 +655,31 @@ impl Engine {
             .or_else(|| self.packages.get_fn(hashes.0))
         {
             // Calling pure function in method-call?
-            let backup: Option<Dynamic> = if func.is_pure() && is_ref && args.len() > 0 {
-                // Backup the original value.  It'll be consumed because the function
+            let mut this_copy: Option<Dynamic>;
+            let mut this_pointer: Option<&mut Dynamic> = None;
+
+            if func.is_pure() && is_ref && args.len() > 0 {
+                // Clone the original value.  It'll be consumed because the function
                 // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
-                Some(args[0].clone())
-            } else {
-                None
-            };
+                this_copy = Some(args[0].clone());
+
+                // Replace the first reference with a reference to the clone, force-casting the lifetime.
+                // Keep the original reference.  Must remember to restore it before existing this function.
+                this_pointer = Some(mem::replace(
+                    args.get_mut(0).unwrap(),
+                    unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
+                ));
+            }
 
             // Run external function
-            let result = match func.get_native_fn()(args) {
-                Ok(r) => {
-                    // Restore the backup value for the first argument since it has been consumed!
-                    if let Some(backup) = backup {
-                        *args[0] = backup;
-                    }
-                    r
-                }
-                Err(err) => {
-                    return Err(err.new_position(pos));
-                }
-            };
+            let result = func.get_native_fn()(args);
+
+            // Restore the original reference
+            if let Some(this_pointer) = this_pointer {
+                mem::replace(args.get_mut(0).unwrap(), this_pointer);
+            }
+
+            let result = result.map_err(|err| err.new_position(pos))?;
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
