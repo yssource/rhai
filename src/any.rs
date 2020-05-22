@@ -519,6 +519,16 @@ impl Dynamic {
         }
     }
 
+    /// Cast the `Dynamic` as the system floating-point type `FLOAT` and return it.
+    /// Returns the name of the actual type if the cast fails.
+    #[cfg(not(feature = "no_float"))]
+    pub fn as_float(&self) -> Result<FLOAT, &'static str> {
+        match self.0 {
+            Union::Float(n) => Ok(n),
+            _ => Err(self.type_name()),
+        }
+    }
+
     /// Cast the `Dynamic` as a `bool` and return it.
     /// Returns the name of the actual type if the cast fails.
     pub fn as_bool(&self) -> Result<bool, &'static str> {
