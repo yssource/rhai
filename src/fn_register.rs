@@ -175,7 +175,7 @@ macro_rules! def_register {
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), FnAccess::Public,
+                self.global_module.set_fn(name, FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $clone),*))
                 );
@@ -192,7 +192,7 @@ macro_rules! def_register {
         > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), FnAccess::Public,
+                self.global_module.set_fn(name, FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $clone),*))
                 );
