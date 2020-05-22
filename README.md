@@ -611,13 +611,12 @@ Traits
 
 A number of traits, under the `rhai::` module namespace, provide additional functionalities.
 
-| Trait               | Description                                                                            | Methods                                 |
-| ------------------- | -------------------------------------------------------------------------------------- | --------------------------------------- |
-| `RegisterFn`        | Trait for registering functions                                                        | `register_fn`                           |
-| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                                  | `register_dynamic_fn`                   |
-| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
-| `Func`              | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
-| `ModuleResolver`    | Trait implemented by module resolution services                                        | `resolve`                               |
+| Trait              | Description                                                                            | Methods                                 |
+| ------------------ | -------------------------------------------------------------------------------------- | --------------------------------------- |
+| `RegisterFn`       | Trait for registering functions                                                        | `register_fn`                           |
+| `RegisterResultFn` | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
+| `Func`             | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
+| `ModuleResolver`   | Trait implemented by module resolution services                                        | `resolve`                               |
 
 Working with functions
 ----------------------
@@ -628,16 +627,16 @@ To call these functions, they need to be registered with the [`Engine`].
 ```rust
 use rhai::{Dynamic, Engine, EvalAltResult};
 use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
-use rhai::{Dynamic, RegisterDynamicFn};         // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
+use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
-// Normal function
+// Normal function that returns any value type
 fn add(x: i64, y: i64) -> i64 {
     x + y
 }
 
-// Function that returns a Dynamic value
-fn get_an_any() -> Dynamic {
-    Dynamic::from(42_i64)
+// Function that returns a 'Dynamic' value - must return a 'Result'
+fn get_any_value() -> Result<Dynamic, Box<EvalAltResult>> {
+    Ok((42_i64).into())                         // standard supported types can use 'into()'
 }
 
 fn main() -> Result<(), Box<EvalAltResult>>
@@ -650,10 +649,10 @@ fn main() -> Result<(), Box<EvalAltResult>>
 
     println!("Answer: {}", result);             // prints 42
 
-    // Functions that return Dynamic values must use register_dynamic_fn()
-    engine.register_dynamic_fn("get_an_any", get_an_any);
+    // Functions that return Dynamic values must use register_result_fn()
+    engine.register_result_fn("get_any_value", get_any_value);
 
-    let result = engine.eval::<i64>("get_an_any()")?;
+    let result = engine.eval::<i64>("get_any_value()")?;
 
     println!("Answer: {}", result);             // prints 42
 
@@ -661,18 +660,15 @@ fn main() -> Result<(), Box<EvalAltResult>>
 }
 ```
 
-To return a [`Dynamic`] value from a Rust function, use the `Dynamic::from` method.
+To create a [`Dynamic`] value, use the `Dynamic::from` method.
+Standard supported types in Rhai can also use `into()`.
 
 ```rust
 use rhai::Dynamic;
 
-fn decide(yes_no: bool) -> Dynamic {
-    if yes_no {
-        Dynamic::from(42_i64)
-    } else {
-        Dynamic::from(String::from("hello!"))   // remember &str is not supported by Rhai
-    }
-}
+let x = (42_i64).into();                        // 'into()' works for standard supported types
+
+let y = Dynamic::from(String::from("hello!"));  // remember &str is not supported by Rhai
 ```
 
 Generic functions
@@ -709,7 +705,7 @@ Fallible functions
 If a function is _fallible_ (i.e. it returns a `Result<_, Error>`), it can be registered with `register_result_fn`
 (using the `RegisterResultFn` trait).
 
-The function must return `Result<_, Box<EvalAltResult>>`. `Box<EvalAltResult>` implements `From<&str>` and `From<String>` etc.
+The function must return `Result<Dynamic, Box<EvalAltResult>>`. `Box<EvalAltResult>` implements `From<&str>` and `From<String>` etc.
 and the error text gets converted into `Box<EvalAltResult::ErrorRuntime>`.
 
 The error values are `Box`-ed in order to reduce memory footprint of the error path, which should be hit rarely.
@@ -718,13 +714,13 @@ The error values are `Box`-ed in order to reduce memory footprint of the error p
 use rhai::{Engine, EvalAltResult, Position};
 use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
-// Function that may fail
-fn safe_divide(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
+// Function that may fail - the result type must be 'Dynamic'
+fn safe_divide(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     if y == 0 {
         // Return an error if y is zero
         Err("Division by zero!".into())         // short-cut to create Box<EvalAltResult::ErrorRuntime>
     } else {
-        Ok(x / y)
+        Ok((x / y).into())                      // convert result into 'Dynamic'
     }
 }
 

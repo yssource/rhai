@@ -91,7 +91,7 @@ mod utils;
 pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
-pub use fn_register::{RegisterDynamicFn, RegisterFn, RegisterResultFn};
+pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
 pub use parser::{AST, INT};
 pub use result::EvalAltResult;

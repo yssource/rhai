@@ -42,49 +42,22 @@ pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN);
 }
 
-/// Trait to register custom functions that return `Dynamic` values with the `Engine`.
-pub trait RegisterDynamicFn<FN, ARGS> {
-    /// Register a custom function returning `Dynamic` values with the `Engine`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Dynamic, RegisterDynamicFn};
-    ///
-    /// // Function that returns a Dynamic value
-    /// fn return_the_same_as_dynamic(x: i64) -> Dynamic {
-    ///     Dynamic::from(x)
-    /// }
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // You must use the trait rhai::RegisterDynamicFn to get this method.
-    /// engine.register_dynamic_fn("get_any_number", return_the_same_as_dynamic);
-    ///
-    /// assert_eq!(engine.eval::<i64>("get_any_number(42)")?, 42);
-    /// # Ok(())
-    /// # }
-    /// ```
-    fn register_dynamic_fn(&mut self, name: &str, f: FN);
-}
-
-/// Trait to register fallible custom functions returning `Result<_, Box<EvalAltResult>>` with the `Engine`.
-pub trait RegisterResultFn<FN, ARGS, RET> {
+/// Trait to register fallible custom functions returning `Result<Dynamic, Box<EvalAltResult>>` with the `Engine`.
+pub trait RegisterResultFn<FN, ARGS> {
     /// Register a custom fallible function with the `Engine`.
     ///
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, RegisterResultFn, EvalAltResult};
+    /// use rhai::{Engine, Dynamic, RegisterResultFn, EvalAltResult};
     ///
     /// // Normal function
-    /// fn div(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
+    /// fn div(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///     if y == 0 {
     ///         // '.into()' automatically converts to 'Box<EvalAltResult::ErrorRuntime>'
     ///         Err("division by zero!".into())
     ///     } else {
-    ///         Ok(x / y)
+    ///         Ok((x / y).into())
     ///     }
     /// }
     ///
@@ -171,12 +144,12 @@ pub fn map_identity(data: Dynamic) -> Result<Dynamic, Box<EvalAltResult>> {
     Ok(data)
 }
 
-/// To `Result<Dynamic, Box<EvalAltResult>>` mapping function.
+/// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_result<T: Variant + Clone>(
-    data: Result<T, Box<EvalAltResult>>,
+pub fn map_result(
+    data: Result<Dynamic, Box<EvalAltResult>>,
 ) -> Result<Dynamic, Box<EvalAltResult>> {
-    data.map(|v| v.into_dynamic())
+    data
 }
 
 macro_rules! def_register {
@@ -185,10 +158,10 @@ macro_rules! def_register {
     };
     (imp $abi:ident : $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
     //   ^ function ABI type
-    //                 ^ function parameter generic type name (A, B, C etc.)
-    //                               ^ function parameter marker type (T, Ref<T> or Mut<T>)
-    //                                           ^ function parameter actual type (T, &T or &mut T)
-    //                                                        ^ dereferencing function
+    //                  ^ function parameter generic type name (A, B, C etc.)
+    //                                ^ function parameter marker type (T, Ref<T> or Mut<T>)
+    //                                            ^ function parameter actual type (T, &T or &mut T)
+    //                                                         ^ dereferencing function
         impl<
             $($par: Variant + Clone,)*
 
@@ -213,30 +186,10 @@ macro_rules! def_register {
             $($par: Variant + Clone,)*
 
             #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> Dynamic + Send + Sync + 'static,
-
+            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync + 'static,
             #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> Dynamic + 'static,
-        > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
-        {
-            fn register_dynamic_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), FnAccess::Public,
-                    &[$(TypeId::of::<$par>()),*],
-                    CallableFunction::$abi(make_func!(f : map_identity ; $($par => $clone),*))
-                );
-            }
-        }
-
-        impl<
-            $($par: Variant + Clone,)*
-
-            #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> Result<RET, Box<EvalAltResult>> + Send + Sync + 'static,
-            #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> Result<RET, Box<EvalAltResult>> + 'static,
-
-            RET: Variant + Clone
-        > RegisterResultFn<FN, ($($mark,)*), RET> for Engine
+            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + 'static,
+        > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
                 self.global_module.set_fn(name.to_string(), FnAccess::Public,
