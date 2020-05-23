@@ -6,7 +6,7 @@ use crate::utils::StaticVec;
 
 use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
 
-mod arithmetic;
+pub(crate) mod arithmetic;
 mod array_basic;
 mod eval;
 mod iter_basic;

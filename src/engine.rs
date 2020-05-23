@@ -7,12 +7,15 @@ use crate::fn_native::{FnCallArgs, Shared};
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST};
+use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST, INT};
 use crate::r#unsafe::{unsafe_cast_var_name_to_lifetime, unsafe_mut_cast_to_lifetime};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
 use crate::utils::StaticVec;
+
+#[cfg(not(feature = "no_float"))]
+use crate::parser::FLOAT;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::{resolvers, ModuleRef, ModuleResolver};
@@ -706,6 +709,14 @@ impl Engine {
             });
         }
 
+        // If it is a 2-operand operator, see if it is built in
+        if args.len() == 2 && args[0].type_id() == args[1].type_id() {
+            match run_builtin_op(fn_name, args[0], args[1])? {
+                Some(v) => return Ok((v, false)),
+                None => (),
+            }
+        }
+
         // Return default value (if any)
         if let Some(val) = def_val {
             return Ok((val.clone(), false));
@@ -873,6 +884,7 @@ impl Engine {
         &self,
         state: &mut State,
         fn_name: &str,
+        native_only: bool,
         hash_fn_def: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
@@ -887,7 +899,7 @@ impl Engine {
             args.len(),
             args.iter().map(|a| a.type_id()),
         );
-        let hashes = (hash_fn, hash_fn_def);
+        let hashes = (hash_fn, if native_only { 0 } else { hash_fn_def });
 
         match fn_name {
             // type_of
@@ -1003,7 +1015,7 @@ impl Engine {
             match rhs {
                 // xxx.fn_name(arg_expr_list)
                 Expr::FnCall(x) if x.1.is_none() => {
-                    let ((name, pos), _, hash_fn_def, _, def_val) = x.as_ref();
+                    let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
                     let def_val = def_val.as_ref();
 
                     let mut arg_values: StaticVec<_> = once(obj)
@@ -1016,7 +1028,7 @@ impl Engine {
                         .collect();
                     let args = arg_values.as_mut();
 
-                    self.exec_fn_call(state, name, *hash_fn_def, args, is_ref, def_val, *pos, 0)
+                    self.exec_fn_call(state, name, *native, *hash, args, is_ref, def_val, *pos, 0)
                 }
                 // xxx.module::fn_name(...) - syntax error
                 Expr::FnCall(_) => unreachable!(),
@@ -1045,14 +1057,14 @@ impl Engine {
                 Expr::Property(x) if new_val.is_some() => {
                     let ((_, _, setter), pos) = x.as_ref();
                     let mut args = [obj, new_val.as_mut().unwrap()];
-                    self.exec_fn_call(state, setter, 0, &mut args, is_ref, None, *pos, 0)
+                    self.exec_fn_call(state, setter, true, 0, &mut args, is_ref, None, *pos, 0)
                         .map(|(v, _)| (v, true))
                 }
                 // xxx.id
                 Expr::Property(x) => {
                     let ((_, getter, _), pos) = x.as_ref();
                     let mut args = [obj];
-                    self.exec_fn_call(state, getter, 0, &mut args, is_ref, None, *pos, 0)
+                    self.exec_fn_call(state, getter, true, 0, &mut args, is_ref, None, *pos, 0)
                         .map(|(v, _)| (v, false))
                 }
                 #[cfg(not(feature = "no_object"))]
@@ -1083,7 +1095,8 @@ impl Engine {
 
                     let (mut val, updated) = if let Expr::Property(p) = &x.0 {
                         let ((_, getter, _), _) = p.as_ref();
-                        self.exec_fn_call(state, getter, 0, &mut args[..1], is_ref, None, x.2, 0)?
+                        let args = &mut args[..1];
+                        self.exec_fn_call(state, getter, true, 0, args, is_ref, None, x.2, 0)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -1104,7 +1117,7 @@ impl Engine {
                             let ((_, _, setter), _) = p.as_ref();
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = val;
-                            self.exec_fn_call(state, setter, 0, args, is_ref, None, x.2, 0)
+                            self.exec_fn_call(state, setter, true, 0, args, is_ref, None, x.2, 0)
                                 .or_else(|err| match *err {
                                     // If there is no setter, no need to feed it back because the property is read-only
                                     EvalAltResult::ErrorDotExpr(_, _) => Ok(Default::default()),
@@ -1306,7 +1319,7 @@ impl Engine {
             _ => {
                 let type_name = self.map_type_name(val.type_name());
                 let args = &mut [val, &mut idx];
-                self.exec_fn_call(state, FUNC_INDEXER, 0, args, is_ref, None, op_pos, 0)
+                self.exec_fn_call(state, FUNC_INDEXER, true, 0, args, is_ref, None, op_pos, 0)
                     .map(|(v, _)| v.into())
                     .map_err(|_| {
                         Box::new(EvalAltResult::ErrorIndexingType(type_name.into(), op_pos))
@@ -1334,7 +1347,6 @@ impl Engine {
             Dynamic(Union::Array(mut rhs_value)) => {
                 let op = "==";
                 let def_value = false.into();
-                let hash_fn_def = calc_fn_hash(empty(), op, 2, empty());
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter_mut() {
@@ -1345,7 +1357,7 @@ impl Engine {
                     // Qualifiers (none) + function name + argument `TypeId`'s.
                     let hash_fn =
                         calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
-                    let hashes = (hash_fn, hash_fn_def);
+                    let hashes = (hash_fn, 0);
 
                     let (r, _) = self
                         .call_fn_raw(None, state, op, hashes, args, true, def_value, pos, level)?;
@@ -1488,7 +1500,7 @@ impl Engine {
 
             // Normal function call
             Expr::FnCall(x) if x.1.is_none() => {
-                let ((name, pos), _, hash_fn_def, args_expr, def_val) = x.as_ref();
+                let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
                 let def_val = def_val.as_ref();
 
                 let mut arg_values = args_expr
@@ -1501,7 +1513,7 @@ impl Engine {
                 if name == KEYWORD_EVAL && args.len() == 1 && args.get(0).is::<String>() {
                     let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<String>()));
 
-                    if !self.has_override(state, (hash_fn, *hash_fn_def)) {
+                    if !self.has_override(state, (hash_fn, *hash)) {
                         // eval - only in function call style
                         let prev_len = scope.len();
                         let pos = args_expr.get(0).position();
@@ -1521,14 +1533,16 @@ impl Engine {
 
                 // Normal function call - except for eval (handled above)
                 let args = args.as_mut();
-                self.exec_fn_call(state, name, *hash_fn_def, args, false, def_val, *pos, level)
-                    .map(|(v, _)| v)
+                self.exec_fn_call(
+                    state, name, *native, *hash, args, false, def_val, *pos, level,
+                )
+                .map(|(v, _)| v)
             }
 
             // Module-qualified function call
             #[cfg(not(feature = "no_module"))]
             Expr::FnCall(x) if x.1.is_some() => {
-                let ((name, pos), modules, hash_fn_def, args_expr, def_val) = x.as_ref();
+                let ((name, _, pos), modules, hash_fn_def, args_expr, def_val) = x.as_ref();
                 let modules = modules.as_ref().unwrap();
 
                 let mut arg_values = args_expr
@@ -1933,4 +1947,126 @@ impl Engine {
             .map(String::as_str)
             .unwrap_or(name)
     }
+}
+
+/// Build in certain common operator implementations to avoid the cost of searching through the functions space.
+fn run_builtin_op(
+    op: &str,
+    x: &Dynamic,
+    y: &Dynamic,
+) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
+    use crate::packages::arithmetic::*;
+
+    if x.type_id() == TypeId::of::<INT>() {
+        let x = x.downcast_ref::<INT>().unwrap().clone();
+        let y = y.downcast_ref::<INT>().unwrap().clone();
+
+        #[cfg(not(feature = "unchecked"))]
+        match op {
+            "+" => return add(x, y).map(Into::<Dynamic>::into).map(Some),
+            "-" => return sub(x, y).map(Into::<Dynamic>::into).map(Some),
+            "*" => return mul(x, y).map(Into::<Dynamic>::into).map(Some),
+            "/" => return div(x, y).map(Into::<Dynamic>::into).map(Some),
+            "%" => return modulo(x, y).map(Into::<Dynamic>::into).map(Some),
+            "~" => return pow_i_i(x, y).map(Into::<Dynamic>::into).map(Some),
+            ">>" => return shr(x, y).map(Into::<Dynamic>::into).map(Some),
+            "<<" => return shl(x, y).map(Into::<Dynamic>::into).map(Some),
+            _ => (),
+        }
+
+        #[cfg(feature = "unchecked")]
+        match op {
+            "+" => return Ok(Some((x + y).into())),
+            "-" => return Ok(Some((x - y).into())),
+            "*" => return Ok(Some((x * y).into())),
+            "/" => return Ok(Some((x / y).into())),
+            "%" => return Ok(Some((x % y).into())),
+            "~" => return pow_i_i_u(x, y).map(Into::<Dynamic>::into).map(Some),
+            ">>" => return shr_u(x, y).map(Into::<Dynamic>::into).map(Some),
+            "<<" => return shl_u(x, y).map(Into::<Dynamic>::into).map(Some),
+            _ => (),
+        }
+
+        match op {
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            "&" => return Ok(Some((x & y).into())),
+            "|" => return Ok(Some((x | y).into())),
+            "^" => return Ok(Some((x ^ y).into())),
+            _ => (),
+        }
+    } else if x.type_id() == TypeId::of::<bool>() {
+        let x = x.downcast_ref::<bool>().unwrap().clone();
+        let y = y.downcast_ref::<bool>().unwrap().clone();
+
+        match op {
+            "&" => return Ok(Some((x && y).into())),
+            "|" => return Ok(Some((x || y).into())),
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            _ => (),
+        }
+    } else if x.type_id() == TypeId::of::<String>() {
+        let x = x.downcast_ref::<String>().unwrap();
+        let y = y.downcast_ref::<String>().unwrap();
+
+        match op {
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            _ => (),
+        }
+    } else if x.type_id() == TypeId::of::<char>() {
+        let x = x.downcast_ref::<char>().unwrap().clone();
+        let y = y.downcast_ref::<char>().unwrap().clone();
+
+        match op {
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            _ => (),
+        }
+    } else if x.type_id() == TypeId::of::<()>() {
+        match op {
+            "==" => return Ok(Some(true.into())),
+            "!=" | ">" | ">=" | "<" | "<=" => return Ok(Some(false.into())),
+            _ => (),
+        }
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    {
+        if x.type_id() == TypeId::of::<FLOAT>() {
+            let x = x.downcast_ref::<FLOAT>().unwrap().clone();
+            let y = y.downcast_ref::<FLOAT>().unwrap().clone();
+
+            match op {
+                "+" => return Ok(Some((x + y).into())),
+                "-" => return Ok(Some((x - y).into())),
+                "*" => return Ok(Some((x * y).into())),
+                "/" => return Ok(Some((x / y).into())),
+                "%" => return Ok(Some((x % y).into())),
+                "~" => return pow_f_f(x, y).map(Into::<Dynamic>::into).map(Some),
+                "==" => return Ok(Some((x == y).into())),
+                "!=" => return Ok(Some((x != y).into())),
+                ">" => return Ok(Some((x > y).into())),
+                ">=" => return Ok(Some((x >= y).into())),
+                "<" => return Ok(Some((x < y).into())),
+                "<=" => return Ok(Some((x <= y).into())),
+                _ => (),
+            }
+        }
+    }
+
+    Ok(None)
 }

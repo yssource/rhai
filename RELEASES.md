@@ -9,10 +9,18 @@ Regression
 
 * Do not optimize script with `eval_expression` - it is assumed to be one-off and short.
 
+Breaking changes
+----------------
+
+* `Engine::compile_XXX` functions now return `ParseError` instead of `Box<ParseError>`.
+* The `RegisterDynamicFn` trait is merged into the `RegisterResutlFn` trait which now always returns
+  `Result<Dynamic, Box<EvalAltResult>>`.
+* Default maximum limit on levels of nested function calls is fine-tuned and set to a different value.
+
 New features
 ------------
 
-* Set limits on maximum level of nesting expressions and statements to avoid panics during parsing.
+* Set limit on maximum level of nesting expressions and statements to avoid panics during parsing.
 * New `EvalPackage` to disable `eval`.
 * More benchmarks.
 

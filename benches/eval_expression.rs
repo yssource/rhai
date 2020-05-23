@@ -86,7 +86,7 @@ fn bench_eval_call_expression(bench: &mut Bencher) {
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     bench.iter(|| engine.eval_expression::<bool>(script).unwrap());
 }
@@ -101,7 +101,7 @@ fn bench_eval_call(bench: &mut Bencher) {
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     bench.iter(|| engine.eval::<bool>(script).unwrap());
 }

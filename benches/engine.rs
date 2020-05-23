@@ -29,7 +29,7 @@ fn bench_engine_new_raw_core(bench: &mut Bencher) {
 
 #[bench]
 fn bench_engine_register_fn(bench: &mut Bencher) {
-    fn hello(a: INT, b: Array, c: Map) -> bool {
+    fn hello(_a: INT, _b: Array, _c: Map) -> bool {
         true
     }
 

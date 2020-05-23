@@ -42,40 +42,52 @@ macro_rules! reg_op {
 }
 
 def_package!(crate:LogicPackage:"Logical operators.", lib, {
-    reg_op!(lib, "<", lt, INT, char);
-    reg_op!(lib, "<=", lte, INT, char);
-    reg_op!(lib, ">", gt, INT, char);
-    reg_op!(lib, ">=", gte, INT, char);
-    reg_op!(lib, "==", eq, INT, char, bool, ());
-    reg_op!(lib, "!=", ne, INT, char, bool, ());
+    // reg_op!(lib, "<", lt, INT, char);
+    // reg_op!(lib, "<=", lte, INT, char);
+    // reg_op!(lib, ">", gt, INT, char);
+    // reg_op!(lib, ">=", gte, INT, char);
+    // reg_op!(lib, "==", eq, INT, char, bool, ());
+    // reg_op!(lib, "!=", ne, INT, char, bool, ());
 
     // Special versions for strings - at least avoid copying the first string
-    lib.set_fn_2_mut("<", |x: &mut String, y: String| Ok(*x < y));
-    lib.set_fn_2_mut("<=", |x: &mut String, y: String| Ok(*x <= y));
-    lib.set_fn_2_mut(">", |x: &mut String, y: String| Ok(*x > y));
-    lib.set_fn_2_mut(">=", |x: &mut String, y: String| Ok(*x >= y));
-    lib.set_fn_2_mut("==", |x: &mut String, y: String| Ok(*x == y));
-    lib.set_fn_2_mut("!=", |x: &mut String, y: String| Ok(*x != y));
+    // lib.set_fn_2_mut("<", |x: &mut String, y: String| Ok(*x < y));
+    // lib.set_fn_2_mut("<=", |x: &mut String, y: String| Ok(*x <= y));
+    // lib.set_fn_2_mut(">", |x: &mut String, y: String| Ok(*x > y));
+    // lib.set_fn_2_mut(">=", |x: &mut String, y: String| Ok(*x >= y));
+    // lib.set_fn_2_mut("==", |x: &mut String, y: String| Ok(*x == y));
+    // lib.set_fn_2_mut("!=", |x: &mut String, y: String| Ok(*x != y));
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_op!(lib, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        // reg_op!(lib, "<", lt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        // reg_op!(lib, "<=", lte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        // reg_op!(lib, ">", gt, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        // reg_op!(lib, ">=", gte, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        // reg_op!(lib, "==", eq, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        // reg_op!(lib, "!=", ne, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_op!(lib, "<", lt, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, "<=", lte, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, ">", gt, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, ">=", gte, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, "==", eq, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, "!=", ne, i8, u8, i16, u16, i32, u32, u64, i128, u128);
     }
 
     #[cfg(not(feature = "no_float"))]
     {
-        reg_op!(lib, "<", lt, f32, f64);
-        reg_op!(lib, "<=", lte, f32, f64);
-        reg_op!(lib, ">", gt, f32, f64);
-        reg_op!(lib, ">=", gte, f32, f64);
-        reg_op!(lib, "==", eq, f32, f64);
-        reg_op!(lib, "!=", ne, f32, f64);
+        // reg_op!(lib, "<", lt, f32, f64);
+        // reg_op!(lib, "<=", lte, f32, f64);
+        // reg_op!(lib, ">", gt, f32, f64);
+        // reg_op!(lib, ">=", gte, f32, f64);
+        // reg_op!(lib, "==", eq, f32, f64);
+        // reg_op!(lib, "!=", ne, f32, f64);
+        reg_op!(lib, "<", lt, f32);
+        reg_op!(lib, "<=", lte, f32);
+        reg_op!(lib, ">", gt, f32);
+        reg_op!(lib, ">=", gte, f32);
+        reg_op!(lib, "==", eq, f32);
+        reg_op!(lib, "!=", ne, f32);
     }
 
     // `&&` and `||` are treated specially as they short-circuit.
@@ -83,7 +95,7 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     //reg_op!(lib, "||", or, bool);
     //reg_op!(lib, "&&", and, bool);
 
-    lib.set_fn_2("|", or);
-    lib.set_fn_2("&", and);
+    // lib.set_fn_2("|", or);
+    // lib.set_fn_2("&", and);
     lib.set_fn_1("!", not);
 });

@@ -1,11 +1,10 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, FunctionsLib, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, FunctionsLib, State as EngineState, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::fn_native::FnCallArgs;
-use crate::module::Module;
-use crate::packages::PackagesCollection;
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
@@ -112,8 +111,7 @@ impl<'a> State<'a> {
 
 /// Call a registered function
 fn call_fn(
-    packages: &PackagesCollection,
-    global_module: &Module,
+    state: &State,
     fn_name: &str,
     args: &mut FnCallArgs,
     pos: Position,
@@ -126,12 +124,21 @@ fn call_fn(
         args.iter().map(|a| a.type_id()),
     );
 
-    global_module
-        .get_fn(hash_fn)
-        .or_else(|| packages.get_fn(hash_fn))
-        .map(|func| func.get_native_fn()(args))
-        .transpose()
-        .map_err(|err| err.new_position(pos))
+    state
+        .engine
+        .call_fn_raw(
+            None,
+            &mut EngineState::new(&Default::default()),
+            fn_name,
+            (hash_fn, 0),
+            args,
+            true,
+            None,
+            pos,
+            0,
+        )
+        .map(|(v, _)| Some(v))
+        .or_else(|_| Ok(None))
 }
 
 /// Optimize a statement.
@@ -546,10 +553,10 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.3.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
-            let ((name, pos), _, _, args, def_value) = x.as_mut();
+            let ((name, native_only, pos), _, _, args, def_value) = x.as_mut();
 
             // First search in script-defined functions (can override built-in)
-            if state.fn_lib.iter().find(|(id, len)| *id == name && *len == args.len()).is_some() {
+            if !*native_only && state.fn_lib.iter().find(|(id, len)| *id == name && *len == args.len()).is_some() {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);
@@ -566,7 +573,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 ""
             };
 
-            call_fn(&state.engine.packages, &state.engine.global_module, name, call_args.as_mut(), *pos).ok()
+            call_fn(&state, name, call_args.as_mut(), *pos).ok()
                 .and_then(|result|
                     result.or_else(|| {
                         if !arg_for_type_of.is_empty() {
