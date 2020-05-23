@@ -1,7 +1,8 @@
-#![cfg(not(feature = "no_function"))]
+#![cfg(not(feature = "unchecked"))]
 use rhai::{Engine, EvalAltResult, ParseErrorType};
 
 #[test]
+#[cfg(not(feature = "no_function"))]
 fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
@@ -73,6 +74,7 @@ fn test_stack_overflow_parsing() -> Result<(), Box<EvalAltResult>> {
         err if err.error_type() == &ParseErrorType::ExprTooDeep
     ));
 
+    #[cfg(not(feature = "no_function"))]
     engine.compile("fn abc(x) { x + 1 }")?;
 
     Ok(())

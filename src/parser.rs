@@ -710,8 +710,7 @@ fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     state: &mut ParseState,
     id: String,
-    #[cfg(not(feature = "no_module"))] mut modules: Option<Box<ModuleRef>>,
-    #[cfg(feature = "no_module")] modules: Option<ModuleRef>,
+    mut modules: Option<Box<ModuleRef>>,
     begin: Position,
     level: usize,
     allow_stmt_expr: bool,
@@ -753,12 +752,13 @@ fn parse_call_expr<'a>(
                     let qualifiers = modules.iter().map(|(m, _)| m.as_str());
                     calc_fn_hash(qualifiers, &id, 0, empty())
                 } else {
+                    // Qualifiers (none) + function name + no parameters.
                     calc_fn_hash(empty(), &id, 0, empty())
                 }
             };
             // Qualifiers (none) + function name + no parameters.
             #[cfg(feature = "no_module")]
-            let hash_fn_def = calc_fn_hash(empty(), &id, empty());
+            let hash_fn_def = calc_fn_hash(empty(), &id, 0, empty());
 
             return Ok(Expr::FnCall(Box::new((
                 (id.into(), false, begin),
@@ -794,12 +794,13 @@ fn parse_call_expr<'a>(
                         let qualifiers = modules.iter().map(|(m, _)| m.as_str());
                         calc_fn_hash(qualifiers, &id, args.len(), empty())
                     } else {
+                        // Qualifiers (none) + function name + number of arguments.
                         calc_fn_hash(empty(), &id, args.len(), empty())
                     }
                 };
-                // Qualifiers (none) + function name + dummy parameter types (one for each parameter).
+                // Qualifiers (none) + function name + number of arguments.
                 #[cfg(feature = "no_module")]
-                let hash_fn_def = calc_fn_hash(empty(), &id, args_iter);
+                let hash_fn_def = calc_fn_hash(empty(), &id, args.len(), empty());
 
                 return Ok(Expr::FnCall(Box::new((
                     (id.into(), false, begin),

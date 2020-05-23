@@ -68,19 +68,19 @@ Beware that in order to use pre-releases (e.g. alpha and beta), the exact versio
 Optional features
 -----------------
 
-| Feature       | Description                                                                                                                                                                |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `unchecked`   | Exclude arithmetic checking (such as over-flows and division by zero), stack depth limit and operations count limit. Beware that a bad script may panic the entire system! |
-| `no_function` | Disable script-defined functions.                                                                                                                                          |
-| `no_index`    | Disable [arrays] and indexing features.                                                                                                                                    |
-| `no_object`   | Disable support for custom types and object maps.                                                                                                                          |
-| `no_float`    | Disable floating-point numbers and math.                                                                                                                                   |
-| `no_optimize` | Disable the script optimizer.                                                                                                                                              |
-| `no_module`   | Disable modules.                                                                                                                                                           |
-| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                                           |
-| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                                           |
-| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                       |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and `AST`, are all `Send + Sync`.           |
+| Feature       | Description                                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unchecked`   | Disable arithmetic checking (such as over-flows and division by zero), call stack depth limit, operations count limit and modules loading limit. Beware that a bad script may panic the entire system! |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and `AST`, are all `Send + Sync`.                                       |
+| `no_optimize` | Disable the script optimizer.                                                                                                                                                                          |
+| `no_float`    | Disable floating-point numbers and math.                                                                                                                                                               |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                                                                       |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                                                                       |
+| `no_index`    | Disable [arrays] and indexing features.                                                                                                                                                                |
+| `no_object`   | Disable support for custom types and [object maps].                                                                                                                                                    |
+| `no_function` | Disable script-defined functions.                                                                                                                                                                      |
+| `no_module`   | Disable loading modules.                                                                                                                                                                               |
+| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                                                   |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
 Most features are here to opt-**out** of certain functionalities that are not needed.
@@ -88,16 +88,16 @@ Excluding unneeded functionalities can result in smaller, faster builds
 as well as more control over what a script can (or cannot) do.
 
 [`unchecked`]: #optional-features
-[`no_index`]: #optional-features
-[`no_float`]: #optional-features
-[`no_function`]: #optional-features
-[`no_object`]: #optional-features
+[`sync`]: #optional-features
 [`no_optimize`]: #optional-features
-[`no_module`]: #optional-features
+[`no_float`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
+[`no_index`]: #optional-features
+[`no_object`]: #optional-features
+[`no_function`]: #optional-features
+[`no_module`]: #optional-features
 [`no_std`]: #optional-features
-[`sync`]: #optional-features
 
 ### Performance builds
 
@@ -133,9 +133,9 @@ Omitting arrays (`no_index`) yields the most code-size savings, followed by floa
 (`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).
 Disable script-defined functions (`no_function`) only when the feature is not needed because code size savings is minimal.
 
-[`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
-This makes the scripting language quite useless as even basic arithmetic operators are not supported.
-Selectively include the necessary functionalities by loading specific [packages] to minimize the footprint.
+[`Engine::new_raw`](#raw-engine) creates a _raw_ engine.
+A _raw_ engine supports, out of the box, only a very restricted set of basic arithmetic and logical operators.
+Selectively include other necessary functionalities by loading specific [packages] to minimize the footprint.
 Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
 Related
@@ -376,7 +376,8 @@ Raw `Engine`
 `Engine::new` creates a scripting [`Engine`] with common functionalities (e.g. printing to the console via `print`).
 In many controlled embedded environments, however, these are not needed.
 
-Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, not even basic arithmetic and logic operators!
+Use `Engine::new_raw` to create a _raw_ `Engine`, in which only a minimal set of basic arithmetic and logical operators
+are supported.
 
 ### Packages
 
@@ -400,20 +401,20 @@ engine.load_package(package.get());             // load the package manually. 'g
 
 The follow packages are available:
 
-| Package                | Description                                     | In `CorePackage` | In `StandardPackage` |
-| ---------------------- | ----------------------------------------------- | :--------------: | :------------------: |
-| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
-| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
-| `LogicPackage`         | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
-| `BasicStringPackage`   | Basic string functions                          |       Yes        |         Yes          |
-| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
-| `MoreStringPackage`    | Additional string functions                     |        No        |         Yes          |
-| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
-| `BasicArrayPackage`    | Basic [array] functions                         |        No        |         Yes          |
-| `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
-| `EvalPackage`          | Disable [`eval`]                                |        No        |          No          |
-| `CorePackage`          | Basic essentials                                |                  |                      |
-| `StandardPackage`      | Standard library                                |                  |                      |
+| Package                | Description                                                                | In `CorePackage` | In `StandardPackage` |
+| ---------------------- | -------------------------------------------------------------------------- | :--------------: | :------------------: |
+| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`) for different numeric types |       Yes        |         Yes          |
+| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)                                       |       Yes        |         Yes          |
+| `LogicPackage`         | Logical and comparison operators (e.g. `==`, `>`)                          |       Yes        |         Yes          |
+| `BasicStringPackage`   | Basic string functions                                                     |       Yes        |         Yes          |
+| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])                                   |       Yes        |         Yes          |
+| `MoreStringPackage`    | Additional string functions                                                |        No        |         Yes          |
+| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)                                  |        No        |         Yes          |
+| `BasicArrayPackage`    | Basic [array] functions                                                    |        No        |         Yes          |
+| `BasicMapPackage`      | Basic [object map] functions                                               |        No        |         Yes          |
+| `EvalPackage`          | Disable [`eval`]                                                           |        No        |          No          |
+| `CorePackage`          | Basic essentials                                                           |                  |                      |
+| `StandardPackage`      | Standard library                                                           |                  |                      |
 
 Packages typically contain Rust functions that are callable within a Rhai script.
 All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).
@@ -795,7 +796,7 @@ let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an e
 ```
 
 Use operator overloading for custom types (described below) only.
-Be very careful when overloading built-in operators because script writers expect standard operators to behave in a
+Be very careful when overloading built-in operators because script authors expect standard operators to behave in a
 consistent and predictable manner, and will be annoyed if a calculation for '`+`' turns into a subtraction, for example.
 
 Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
@@ -2345,6 +2346,10 @@ engine.set_max_modules(5);                  // allow loading only up to 5 module
 engine.set_max_modules(0);                  // allow unlimited modules
 ```
 
+A script attempting to load more than the maximum number of modules will terminate with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
 ### Maximum call stack depth
 
 Rhai by default limits function calls to a maximum depth of 128 levels (16 levels in debug build).
@@ -2366,6 +2371,8 @@ engine.set_max_call_levels(0);              // allow no function calls at all (m
 ```
 
 A script exceeding the maximum call stack depth will terminate with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
 
 ### Maximum statement depth
 
@@ -2409,15 +2416,17 @@ Make sure that `C x ( 5 + F ) + S` layered calls do not cause a stack overflow, 
 A script exceeding the maximum nesting depths will terminate with a parsing error.
 The malignant `AST` will not be able to get past parsing in the first place.
 
-The limits can be disabled via the [`unchecked`] feature for higher performance
+This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
 
 ### Checked arithmetic
 
 By default, all arithmetic calculations in Rhai are _checked_, meaning that the script terminates
 with an error whenever it detects a numeric over-flow/under-flow condition or an invalid
-floating-point operation, instead of crashing the entire system.  This checking can be turned off
-via the [`unchecked`] feature for higher performance (but higher risks as well).
+floating-point operation, instead of crashing the entire system.
+
+This checking can be turned off via the [`unchecked`] feature for higher performance
+(but higher risks as well).
 
 ### Blocking access to external data
 
@@ -2432,7 +2441,6 @@ engine.register_get("add", add);            // configure 'engine'
 
 let engine = engine;                        // shadow the variable so that 'engine' is now immutable
 ```
-
 
 Script optimization
 ===================

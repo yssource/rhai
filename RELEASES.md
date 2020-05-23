@@ -16,6 +16,8 @@ Breaking changes
 * The `RegisterDynamicFn` trait is merged into the `RegisterResutlFn` trait which now always returns
   `Result<Dynamic, Box<EvalAltResult>>`.
 * Default maximum limit on levels of nested function calls is fine-tuned and set to a different value.
+* Some operator functions are now built in (see _Speed enhancements_ below), so they are available even
+  when under `Engine::new_raw`.
 
 New features
 ------------
@@ -23,6 +25,15 @@ New features
 * Set limit on maximum level of nesting expressions and statements to avoid panics during parsing.
 * New `EvalPackage` to disable `eval`.
 * More benchmarks.
+
+Speed enhancements
+------------------
+
+* Common operators (e.g. `+`, `>`, `==`) now call into highly efficient built-in implementations for standard types
+  (i.e. `INT`, `FLOAT`, `bool`, `char`, `()` and some `String`) if not overridden by a registered function.
+  This yields a 5-10% speed benefit depending on script operator usage.
+* Implementations of common operators for standard types are removed from the `ArithmeticPackage` and `LogicPackage`
+  (and therefore the `CorePackage`) because they are now always available, even under `Engine::new_raw`.
 
 
 Version 0.14.1

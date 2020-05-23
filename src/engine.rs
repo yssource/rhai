@@ -392,12 +392,7 @@ impl Default for Engine {
             optimization_level: OptimizationLevel::None,
 
             #[cfg(not(feature = "no_optimize"))]
-            #[cfg(not(feature = "optimize_full"))]
             optimization_level: OptimizationLevel::Simple,
-
-            #[cfg(not(feature = "no_optimize"))]
-            #[cfg(feature = "optimize_full")]
-            optimization_level: OptimizationLevel::Full,
 
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
@@ -406,10 +401,6 @@ impl Default for Engine {
             max_modules: u64::MAX,
         };
 
-        #[cfg(feature = "no_stdlib")]
-        engine.load_package(CorePackage::new().get());
-
-        #[cfg(not(feature = "no_stdlib"))]
         engine.load_package(StandardPackage::new().get());
 
         engine
@@ -534,12 +525,7 @@ impl Engine {
             optimization_level: OptimizationLevel::None,
 
             #[cfg(not(feature = "no_optimize"))]
-            #[cfg(not(feature = "optimize_full"))]
             optimization_level: OptimizationLevel::Simple,
-
-            #[cfg(not(feature = "no_optimize"))]
-            #[cfg(feature = "optimize_full")]
-            optimization_level: OptimizationLevel::Full,
 
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
@@ -635,13 +621,15 @@ impl Engine {
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
 
+        let native_only = hashes.1 == 0;
+
         // Check for stack overflow
         if level > self.max_call_stack_depth {
             return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
         }
 
         // First search in script-defined functions (can override built-in)
-        if hashes.1 > 0 {
+        if !native_only {
             if let Some(fn_def) = state.get_function(hashes.1) {
                 let (result, state2) =
                     self.call_script_fn(scope, *state, fn_name, fn_def, args, pos, level)?;
@@ -710,8 +698,8 @@ impl Engine {
         }
 
         // If it is a 2-operand operator, see if it is built in
-        if args.len() == 2 && args[0].type_id() == args[1].type_id() {
-            match run_builtin_op(fn_name, args[0], args[1])? {
+        if native_only && args.len() == 2 && args[0].type_id() == args[1].type_id() {
+            match run_builtin_binary_op(fn_name, args[0], args[1])? {
                 Some(v) => return Ok((v, false)),
                 None => (),
             }
@@ -1949,8 +1937,8 @@ impl Engine {
     }
 }
 
-/// Build in certain common operator implementations to avoid the cost of searching through the functions space.
-fn run_builtin_op(
+/// Build in common binary operator implementations to avoid the cost of calling a registered function.
+fn run_builtin_binary_op(
     op: &str,
     x: &Dynamic,
     y: &Dynamic,
