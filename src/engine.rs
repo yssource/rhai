@@ -172,7 +172,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
-    /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
+    /// In some situation, e.g. after running an `eval` statement, subsequent offsets become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
     pub always_search: bool,
 
@@ -185,39 +185,12 @@ pub struct State {
 
     /// Number of modules loaded.
     pub modules: u64,
-
-    /// Times built-in function used.
-    pub use_builtin_counter: usize,
-
-    /// Number of modules loaded.
-    pub use_builtin_binary_op: HashMap<String, TypeId>,
 }
 
 impl State {
     /// Create a new `State`.
     pub fn new() -> Self {
         Default::default()
-    }
-    /// Cache a built-in binary op function.
-    pub fn set_builtin_binary_op(&mut self, fn_name: impl Into<String>, typ: TypeId) {
-        // Only cache when exceeding a certain number of calls
-        if self.use_builtin_counter < 10 {
-            self.use_builtin_counter += 1;
-        } else {
-            self.use_builtin_binary_op.insert(fn_name.into(), typ);
-        }
-    }
-    /// Is a binary op known to be built-in?
-    pub fn use_builtin_binary_op(&self, fn_name: impl AsRef<str>, args: &[&mut Dynamic]) -> bool {
-        if self.use_builtin_counter < 10 {
-            false
-        } else if args.len() != 2 {
-            false
-        } else if args[0].type_id() != args[1].type_id() {
-            false
-        } else {
-            self.use_builtin_binary_op.get(fn_name.as_ref()) == Some(&args[0].type_id())
-        }
     }
 }
 
@@ -514,8 +487,8 @@ impl Engine {
         Default::default()
     }
 
-    /// Create a new `Engine` with _no_ built-in functions.
-    /// Use the `load_package` method to load packages of functions.
+    /// Create a new `Engine` with minimal built-in functions.
+    /// Use the `load_package` method to load additional packages of functions.
     pub fn new_raw() -> Self {
         Self {
             packages: Default::default(),
@@ -612,7 +585,7 @@ impl Engine {
     ///
     /// ## WARNING
     ///
-    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
+    /// Function call arguments be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_fn_raw(
@@ -646,87 +619,72 @@ impl Engine {
             }
         }
 
-        let builtin = state.use_builtin_binary_op(fn_name, args);
+        // Search built-in's and external functions
+        if let Some(func) = self
+            .global_module
+            .get_fn(hashes.0)
+            .or_else(|| self.packages.get_fn(hashes.0))
+        {
+            // Calling pure function in method-call?
+            let mut this_copy: Option<Dynamic>;
+            let mut this_pointer: Option<&mut Dynamic> = None;
 
-        if is_ref || !native_only || !builtin {
-            // Search built-in's and external functions
-            if let Some(func) = self
-                .global_module
-                .get_fn(hashes.0)
-                .or_else(|| self.packages.get_fn(hashes.0))
-            {
-                // Calling pure function in method-call?
-                let mut this_copy: Option<Dynamic>;
-                let mut this_pointer: Option<&mut Dynamic> = None;
+            if func.is_pure() && is_ref && !args.is_empty() {
+                // Clone the original value.  It'll be consumed because the function
+                // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
+                this_copy = Some(args[0].clone());
 
-                if func.is_pure() && is_ref && args.len() > 0 {
-                    // Clone the original value.  It'll be consumed because the function
-                    // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
-                    this_copy = Some(args[0].clone());
-
-                    // Replace the first reference with a reference to the clone, force-casting the lifetime.
-                    // Keep the original reference.  Must remember to restore it before existing this function.
-                    this_pointer = Some(mem::replace(
-                        args.get_mut(0).unwrap(),
-                        unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
-                    ));
-                }
-
-                // Run external function
-                let result = func.get_native_fn()(args);
-
-                // Restore the original reference
-                if let Some(this_pointer) = this_pointer {
-                    mem::replace(args.get_mut(0).unwrap(), this_pointer);
-                }
-
-                let result = result.map_err(|err| err.new_position(pos))?;
-
-                // See if the function match print/debug (which requires special processing)
-                return Ok(match fn_name {
-                    KEYWORD_PRINT => (
-                        (self.print)(result.as_str().map_err(|type_name| {
-                            Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                type_name.into(),
-                                pos,
-                            ))
-                        })?)
-                        .into(),
-                        false,
-                    ),
-                    KEYWORD_DEBUG => (
-                        (self.debug)(result.as_str().map_err(|type_name| {
-                            Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                type_name.into(),
-                                pos,
-                            ))
-                        })?)
-                        .into(),
-                        false,
-                    ),
-                    _ => (result, func.is_method()),
-                });
+                // Replace the first reference with a reference to the clone, force-casting the lifetime.
+                // Keep the original reference.  Must remember to restore it before existing this function.
+                this_pointer = Some(mem::replace(
+                    args.get_mut(0).unwrap(),
+                    unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
+                ));
             }
+
+            // Run external function
+            let result = func.get_native_fn()(args);
+
+            // Restore the original reference
+            if let Some(this_pointer) = this_pointer {
+                mem::replace(args.get_mut(0).unwrap(), this_pointer);
+            }
+
+            let result = result.map_err(|err| err.new_position(pos))?;
+
+            // See if the function match print/debug (which requires special processing)
+            return Ok(match fn_name {
+                KEYWORD_PRINT => (
+                    (self.print)(result.as_str().map_err(|type_name| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            type_name.into(),
+                            pos,
+                        ))
+                    })?)
+                    .into(),
+                    false,
+                ),
+                KEYWORD_DEBUG => (
+                    (self.debug)(result.as_str().map_err(|type_name| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            type_name.into(),
+                            pos,
+                        ))
+                    })?)
+                    .into(),
+                    false,
+                ),
+                _ => (result, func.is_method()),
+            });
         }
 
-        // If it is a 2-operand operator, see if it is built in.
-        // Only consider situations where:
+        // See if it is built in. Only consider situations where:
         // 1) It is not a method call,
-        // 2) the call explicitly specifies `native_only` because, remember, an `eval` may create a new function, so you
-        //    can never predict what functions lie in `lib`!
-        // 3) It is already a built-in run once before, or both parameter types are the same
-        if !is_ref
-            && native_only
-            && (builtin || (args.len() == 2 && args[0].type_id() == args[1].type_id()))
-        {
+        // 2) the call explicitly specifies `native_only`,
+        // 3) there are two parameters.
+        if !is_ref && native_only && args.len() == 2 {
             match run_builtin_binary_op(fn_name, args[0], args[1])? {
-                Some(v) => {
-                    // Mark the function call as built-in
-                    if !builtin {
-                        state.set_builtin_binary_op(fn_name, args[0].type_id());
-                    }
-                    return Ok((v, false));
-                }
+                Some(v) => return Ok((v, false)),
                 None => (),
             }
         }
@@ -795,7 +753,7 @@ impl Engine {
 
         match scope {
             // Extern scope passed in which is not empty
-            Some(scope) if scope.len() > 0 => {
+            Some(scope) if !scope.is_empty() => {
                 let scope_len = scope.len();
 
                 // Put arguments into scope as variables
@@ -960,7 +918,7 @@ impl Engine {
         )?;
 
         // If new functions are defined within the eval string, it is an error
-        if ast.lib().len() > 0 {
+        if !ast.lib().is_empty() {
             return Err(Box::new(EvalAltResult::ErrorParsing(
                 ParseErrorType::WrongFnDefinition.into_err(pos),
             )));
@@ -2000,7 +1958,9 @@ fn run_builtin_binary_op(
 
     let args_type = x.type_id();
 
-    assert_eq!(y.type_id(), args_type);
+    if y.type_id() != args_type {
+        return Ok(None);
+    }
 
     if args_type == TypeId::of::<INT>() {
         let x = x.downcast_ref::<INT>().unwrap().clone();
