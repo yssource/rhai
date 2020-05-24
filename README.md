@@ -23,14 +23,14 @@ Rhai's current features set:
 * Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
-* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment without explicit permission.
+* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 * Rugged (protection against [stack-overflow](#maximum-call-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
 * Track script evaluation [progress](#tracking-progress) and manually terminate a script run.
 * [`no-std`](#optional-features) support.
 * [Function overloading](#function-overloading).
 * [Operator overloading](#operator-overloading).
 * Organize code base with dynamically-loadable [Modules].
-* Compiled script is [optimized](#script-optimization) for repeated evaluations.
+* Scripts are [optimized](#script-optimization) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features).
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
@@ -55,7 +55,7 @@ Use the latest released crate version on [`crates.io`](https::/crates.io/crates/
 rhai = "*"
 ```
 
-Crate versions are released on [`crates.io`](https::/crates.io/crates/rhai/) infrequently, so if you want to track the
+Crate versions are released on [`crates.io`](https::/crates.io/crates/rhai/) infrequently, so to track the
 latest features, enhancements and bug fixes, pull directly from GitHub:
 
 ```toml
@@ -134,7 +134,7 @@ Omitting arrays (`no_index`) yields the most code-size savings, followed by floa
 Disable script-defined functions (`no_function`) only when the feature is not needed because code size savings is minimal.
 
 [`Engine::new_raw`](#raw-engine) creates a _raw_ engine.
-A _raw_ engine supports, out of the box, only a very restricted set of basic arithmetic and logical operators.
+A _raw_ engine supports, out of the box, only a very [restricted set](#built-in-operators) of basic arithmetic and logical operators.
 Selectively include other necessary functionalities by loading specific [packages] to minimize the footprint.
 Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
@@ -168,7 +168,7 @@ Examples can be run with the following command:
 cargo run --example name
 ```
 
-The `repl` example is a particularly good one as it allows you to interactively try out Rhai's
+The `repl` example is a particularly good one as it allows one to interactively try out Rhai's
 language features in a standard REPL (**R**ead-**E**val-**P**rint **L**oop).
 
 Example Scripts
@@ -379,6 +379,17 @@ In many controlled embedded environments, however, these are not needed.
 Use `Engine::new_raw` to create a _raw_ `Engine`, in which only a minimal set of basic arithmetic and logical operators
 are supported.
 
+### Built-in operators
+
+| Operator                     | Supported for type (see [standard types])                            |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `+`, `-`, `*`, `/`, `%`, `~` | `INT`, `FLOAT` (if not [`no_float`])                                 |
+| `<<`, `>>`, `^`              | `INT`                                                                |
+| `&`, `\|`                    | `INT`, `bool`                                                        |
+| `&&`, `\|\|`                 | `bool`                                                               |
+| `==`, `!=`                   | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `String` |
+| `>`, `>=`, `<`, `<=`         | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `String`         |
+
 ### Packages
 
 [package]: #packages
@@ -459,6 +470,7 @@ Values and types
 [`type_of()`]: #values-and-types
 [`to_string()`]: #values-and-types
 [`()`]: #values-and-types
+[standard types]: #values-and-types
 
 The following primitive types are supported natively:
 
@@ -475,7 +487,7 @@ The following primitive types are supported natively:
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
 | **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
-| **Nothing/void/nil/null** (or whatever you want to call it)                   | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
+| **Nothing/void/nil/null** (or whatever it is called)                          | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
 
 All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different -
 they even cannot be added together. This is very similar to Rust.
@@ -563,7 +575,7 @@ let value: i64 = item.cast();                   // type can also be inferred
 let value = item.try_cast::<i64>().unwrap();    // 'try_cast' does not panic when the cast fails, but returns 'None'
 ```
 
-The `type_name` method gets the name of the actual type as a static string slice, which you may match against.
+The `type_name` method gets the name of the actual type as a static string slice, which can be `match`-ed against.
 
 ```rust
 let list: Array = engine.eval("...")?;          // return type is 'Array'
@@ -637,7 +649,7 @@ fn add(x: i64, y: i64) -> i64 {
 
 // Function that returns a 'Dynamic' value - must return a 'Result'
 fn get_any_value() -> Result<Dynamic, Box<EvalAltResult>> {
-    Ok((42_i64).into())                         // standard supported types can use 'into()'
+    Ok((42_i64).into())                         // standard types can use 'into()'
 }
 
 fn main() -> Result<(), Box<EvalAltResult>>
@@ -662,12 +674,12 @@ fn main() -> Result<(), Box<EvalAltResult>>
 ```
 
 To create a [`Dynamic`] value, use the `Dynamic::from` method.
-Standard supported types in Rhai can also use `into()`.
+[Standard types] in Rhai can also use `into()`.
 
 ```rust
 use rhai::Dynamic;
 
-let x = (42_i64).into();                        // 'into()' works for standard supported types
+let x = (42_i64).into();                        // 'into()' works for standard types
 
 let y = Dynamic::from(String::from("hello!"));  // remember &str is not supported by Rhai
 ```
@@ -805,7 +817,7 @@ See the [relevant section](#script-optimization) for more details.
 Custom types and methods
 -----------------------
 
-Here's an more complete example of working with Rust.  First the example, then we'll break it into parts:
+A more complete example of working with Rust:
 
 ```rust
 use rhai::{Engine, EvalAltResult};
@@ -843,8 +855,8 @@ fn main() -> Result<(), Box<EvalAltResult>>
 }
 ```
 
-All custom types must implement `Clone`.  This allows the [`Engine`] to pass by value.
-You can turn off support for custom types via the [`no_object`] feature.
+All custom types must implement `Clone` as this allows the [`Engine`] to pass by value.
+Support for custom types can be turned off via the [`no_object`] feature.
 
 ```rust
 #[derive(Clone)]
@@ -853,11 +865,12 @@ struct TestStruct {
 }
 ```
 
-Next, we create a few methods that we'll later use in our scripts.  Notice that we register our custom type with the [`Engine`].
+Next, create a few methods for later use in scripts.
+Notice that the custom type needs to be _registered_ with the [`Engine`].
 
 ```rust
 impl TestStruct {
-    fn update(&mut self) {
+    fn update(&mut self) {                          // methods take &mut as first parameter
         self.field += 41;
     }
 
@@ -871,19 +884,19 @@ let engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-To use native types, methods and functions with the [`Engine`], we need to register them.
-There are some convenience functions to help with these. Below, the `update` and `new` methods are registered with the [`Engine`].
+To use native types, methods and functions with the [`Engine`], simply register them using one of the `Engine::register_XXX` API.
+Below, the `update` and `new` methods are registered using `Engine::register_fn`.
 
-*Note: [`Engine`] follows the convention that methods use a `&mut` first parameter so that invoking methods
-can update the value in memory.*
+***Note**: Rhai follows the convention that methods of custom types take a `&mut` first parameter so that invoking methods
+can update the custom types. All other parameters in Rhai are passed by value (i.e. clones).*
 
 ```rust
 engine.register_fn("update", TestStruct::update);   // registers 'update(&mut TestStruct)'
 engine.register_fn("new_ts", TestStruct::new);      // registers 'new()'
 ```
 
-Finally, we call our script.  The script can see the function and method we registered earlier.
-We need to get the result back out from script land just as before, this time casting to our custom struct type.
+The custom type is then ready for us in scripts.  Scripts can see the functions and methods registered earlier.
+Get the evaluation result back out from script-land just as before, this time casting to the custom type:
 
 ```rust
 let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
@@ -891,18 +904,19 @@ let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 println!("result: {}", result.field);               // prints 42
 ```
 
-In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method call
-on that type because internally they are the same thing:
-methods on a type is implemented as a functions taking a `&mut` first argument.
+In fact, any function with a first argument that is a `&mut` reference can be used as method calls because
+internally they are the same thing: methods on a type is implemented as a functions taking a `&mut` first argument.
 
 ```rust
 fn foo(ts: &mut TestStruct) -> i64 {
     ts.field
 }
 
-engine.register_fn("foo", foo);
+engine.register_fn("foo", foo);                     // register ad hoc function with correct signature
 
-let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
+let result = engine.eval::<i64>(
+    "let x = new_ts(); x.foo()"                     // 'foo' can be called like a method on 'x'
+)?;
 
 println!("result: {}", result);                     // prints 1
 ```
@@ -916,7 +930,7 @@ let result = engine.eval::<i64>("let x = [1, 2, 3]; x.len()")?;
 ```
 
 [`type_of()`] works fine with custom types and returns the name of the type.
-If `register_type_with_name` is used to register the custom type
+If `Engine::register_type_with_name` is used to register the custom type
 with a special "pretty-print" name, [`type_of()`] will return that name instead.
 
 ```rust
@@ -1238,7 +1252,7 @@ number = -5 - +5;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the [`BasicMathPackage`] but excluded if using a [raw `Engine`]) operate on
+The following standard functions (defined in the [`BasicMathPackage`](#packages) but excluded if using a [raw `Engine`]) operate on
 `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                       |
@@ -1701,10 +1715,10 @@ if now.elapsed() > 30.0 {
 Comparison operators
 --------------------
 
-Comparing most values of the same data type work out-of-the-box for standard types supported by the system.
+Comparing most values of the same data type work out-of-the-box for all [standard types] supported by the system.
 
-However, if using a [raw `Engine`], comparisons can only be made between restricted system types -
-`INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), [string], [array], `bool`, `char`.
+However, if using a [raw `Engine`] without loading any [packages], comparisons can only be made between a limited
+set of types (see [built-in operators](#built-in-operators)).
 
 ```rust
 42 == 42;               // true
@@ -2269,7 +2283,7 @@ so that it does not consume more resources that it is allowed to.
 The most important resources to watch out for are:
 
 * **Memory**: A malignant script may continuously grow an [array] or [object map] until all memory is consumed.
-  It may also create a large [array] or [objecct map] literal that exhausts all memory during parsing.
+  It may also create a large [array] or [object map] literal that exhausts all memory during parsing.
 * **CPU**: A malignant script may run an infinite tight loop that consumes all CPU cycles.
 * **Time**: A malignant script may run indefinitely, thereby blocking the calling system which is waiting for a result.
 * **Stack**: A malignant script may attempt an infinite recursive call that exhausts the call stack.
@@ -2459,7 +2473,7 @@ For example, in the following:
     123;                    // eliminated: no effect
     "hello";                // eliminated: no effect
     [1, 2, x, x*2, 5];      // eliminated: no effect
-    foo(42);                // NOT eliminated: the function 'foo' may have side effects
+    foo(42);                // NOT eliminated: the function 'foo' may have side-effects
     666                     // NOT eliminated: this is the return value of the block,
                             // and the block is the last one so this is the return value of the whole script
 }
@@ -2510,7 +2524,7 @@ if DECISION == 1 {          // NOT optimized away because you can define
 }
 ```
 
-because no operator functions will be run (in order not to trigger side effects) during the optimization process
+because no operator functions will be run (in order not to trigger side-effects) during the optimization process
 (unless the optimization level is set to [`OptimizationLevel::Full`]). So, instead, do this:
 
 ```rust
@@ -2532,7 +2546,7 @@ if DECISION_1 {
 In general, boolean constants are most effective for the optimizer to automatically prune
 large `if`-`else` branches because they do not depend on operators.
 
-Alternatively, turn the optimizer to [`OptimizationLevel::Full`]
+Alternatively, turn the optimizer to [`OptimizationLevel::Full`].
 
 Here be dragons!
 ================
@@ -2548,7 +2562,7 @@ There are actually three levels of optimizations: `None`, `Simple` and `Full`.
 
 * `None` is obvious - no optimization on the AST is performed.
 
-* `Simple` (default) performs relatively _safe_ optimizations without causing side effects
+* `Simple` (default) performs only relatively _safe_ optimizations without causing side-effects
   (i.e. it only relies on static analysis and will not actually perform any function calls).
 
 * `Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.
@@ -2603,28 +2617,32 @@ let x = (1+2)*3-4/5%6;      // <- will be replaced by 'let x = 9'
 let y = (1>2) || (3<=4);    // <- will be replaced by 'let y = true'
 ```
 
-Function side effect considerations
-----------------------------------
+Side-effect considerations
+--------------------------
 
 All of Rhai's built-in functions (and operators which are implemented as functions) are _pure_ (i.e. they do not mutate state
-nor cause side any effects, with the exception of `print` and `debug` which are handled specially) so using
-[`OptimizationLevel::Full`] is usually quite safe _unless_ you register your own types and functions.
+nor cause any side-effects, with the exception of `print` and `debug` which are handled specially) so using
+[`OptimizationLevel::Full`] is usually quite safe _unless_ custom types and functions are registered.
 
 If custom functions are registered, they _may_ be called (or maybe not, if the calls happen to lie within a pruned code block).
-If custom functions are registered to replace built-in operators, they will also be called when the operators are used
-(in an `if` statement, for example) and cause side-effects.
+If custom functions are registered to overload built-in operators, they will also be called when the operators are used
+(in an `if` statement, for example) causing side-effects.
 
-Function volatility considerations
----------------------------------
+Therefore, the rule-of-thumb is: _always_ register custom types and functions _after_ compiling scripts if
+ [`OptimizationLevel::Full`] is used.  _DO NOT_ depend on knowledge that the functions have no side-effects,
+ because those functions can change later on and, when that happens, existing scripts may break in subtle ways.
 
-Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_
-on the external environment and is not _pure_. A perfect example is a function that gets the current time -
-obviously each run will return a different value! The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that
-all functions are _pure_, so when it finds constant arguments it will eagerly execute the function call.
-This causes the script to behave differently from the intended semantics because essentially the result of the function call
-will always be the same value.
+Volatility considerations
+-------------------------
 
-Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.
+Even if a custom function does not mutate state nor cause side-effects, it may still be _volatile_,
+i.e. it _depends_ on the external environment and is not _pure_.
+A perfect example is a function that gets the current time - obviously each run will return a different value!
+The optimizer, when using [`OptimizationLevel::Full`], will _merrily assume_ that all functions are _pure_,
+so when it finds constant arguments (or none) it eagerly executes the function call and replaces it with the result.
+This causes the script to behave differently from the intended semantics.
+
+Therefore, **avoid using [`OptimizationLevel::Full`]** if non-_pure_ custom types and/or functions are involved.
 
 Subtle semantic changes
 -----------------------
@@ -2659,7 +2677,7 @@ print("end!");
 
 In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to
 a type error. However, after optimization, the entire `if` statement is removed (because an access to `my_decision` produces
-no side effects), thus the script silently runs to completion without errors.
+no side-effects), thus the script silently runs to completion without errors.
 
 Turning off optimizations
 -------------------------
@@ -2673,6 +2691,8 @@ let engine = rhai::Engine::new();
 // Turn off the optimizer
 engine.set_optimization_level(rhai::OptimizationLevel::None);
 ```
+
+Alternatively, turn off optimizations via the [`no_optimize`] feature.
 
 `eval` - or "How to Shoot Yourself in the Foot even Easier"
 ---------------------------------------------------------
@@ -2722,8 +2742,8 @@ x += 32;
 print(x);
 ```
 
-For those who subscribe to the (very sensible) motto of ["`eval` is **evil**"](http://linterrors.com/js/eval-is-evil),
-disable `eval` by overriding it, probably with something that throws.
+For those who subscribe to the (very sensible) motto of ["`eval` is evil"](http://linterrors.com/js/eval-is-evil),
+disable `eval` by overloading it, probably with something that throws.
 
 ```rust
 fn eval(script) { throw "eval is evil! I refuse to run " + script }
@@ -2731,7 +2751,7 @@ fn eval(script) { throw "eval is evil! I refuse to run " + script }
 let x = eval("40 + 2");     // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
 ```
 
-Or override it from Rust:
+Or overload it from Rust:
 
 ```rust
 fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
@@ -2741,4 +2761,15 @@ fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
 engine.register_result_fn("eval", alt_eval);
 ```
 
-There is even a [package] named `EvalPackage` which implements the disabling override.
+There is even a package named [`EvalPackage`](#packages) which implements the disabling override:
+
+```rust
+use rhai::Engine;
+use rhai::packages::Package                     // load the 'Package' trait to use packages
+use rhai::packages::EvalPackage;                // the 'eval' package disables 'eval'
+
+let mut engine = Engine::new();
+let package = EvalPackage::new();               // create the package
+
+engine.load_package(package.get());             // load the package
+```
