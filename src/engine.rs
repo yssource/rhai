@@ -698,7 +698,7 @@ impl Engine {
         }
 
         // If it is a 2-operand operator, see if it is built in
-        if native_only && args.len() == 2 && args[0].type_id() == args[1].type_id() {
+        if !is_ref && native_only && args.len() == 2 && args[0].type_id() == args[1].type_id() {
             match run_builtin_binary_op(fn_name, args[0], args[1])? {
                 Some(v) => return Ok((v, false)),
                 None => (),
@@ -1327,7 +1327,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state, rhs.position())?;
 
-        let mut lhs_value = self.eval_expr(scope, state, lhs, level)?;
+        let lhs_value = self.eval_expr(scope, state, lhs, level)?;
         let rhs_value = self.eval_expr(scope, state, rhs, level)?;
 
         match rhs_value {
@@ -1338,17 +1338,17 @@ impl Engine {
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter_mut() {
-                    let args = &mut [&mut lhs_value, value];
+                    let args = &mut [&mut lhs_value.clone(), value];
                     let def_value = Some(&def_value);
                     let pos = rhs.position();
 
-                    // Qualifiers (none) + function name + argument `TypeId`'s.
+                    // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash_fn =
                         calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
                     let hashes = (hash_fn, 0);
 
                     let (r, _) = self
-                        .call_fn_raw(None, state, op, hashes, args, true, def_value, pos, level)?;
+                        .call_fn_raw(None, state, op, hashes, args, false, def_value, pos, level)?;
                     if r.as_bool().unwrap_or(false) {
                         return Ok(true.into());
                     }

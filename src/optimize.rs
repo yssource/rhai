@@ -110,18 +110,18 @@ impl<'a> State<'a> {
 }
 
 /// Call a registered function
-fn call_fn(
+fn call_fn_with_constant_arguments(
     state: &State,
     fn_name: &str,
-    args: &mut FnCallArgs,
+    arg_values: &mut [Dynamic],
     pos: Position,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     // Search built-in's and external functions
     let hash_fn = calc_fn_hash(
         empty(),
         fn_name,
-        args.len(),
-        args.iter().map(|a| a.type_id()),
+        arg_values.len(),
+        arg_values.iter().map(|a| a.type_id()),
     );
 
     state
@@ -131,8 +131,8 @@ fn call_fn(
             &mut EngineState::new(&Default::default()),
             fn_name,
             (hash_fn, 0),
-            args,
-            true,
+            arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
+            false,
             None,
             pos,
             0,
@@ -556,24 +556,24 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             let ((name, native_only, pos), _, _, args, def_value) = x.as_mut();
 
             // First search in script-defined functions (can override built-in)
-            if !*native_only && state.fn_lib.iter().find(|(id, len)| *id == name && *len == args.len()).is_some() {
+            // Cater for both normal function call style and method call style (one additional arguments)
+            if !*native_only && state.fn_lib.iter().find(|(id, len)| *id == name && (*len == args.len() || *len == args.len() + 1)).is_some() {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);
             }
 
             let mut arg_values: StaticVec<_> = args.iter().map(Expr::get_constant_value).collect();
-            let mut call_args: StaticVec<_> = arg_values.iter_mut().collect();
 
             // Save the typename of the first argument if it is `type_of()`
             // This is to avoid `call_args` being passed into the closure
-            let arg_for_type_of = if name == KEYWORD_TYPE_OF && call_args.len() == 1 {
-                state.engine.map_type_name(call_args[0].type_name())
+            let arg_for_type_of = if name == KEYWORD_TYPE_OF && arg_values.len() == 1 {
+                state.engine.map_type_name(arg_values[0].type_name())
             } else {
                 ""
             };
 
-            call_fn(&state, name, call_args.as_mut(), *pos).ok()
+            call_fn_with_constant_arguments(&state, name, arg_values.as_mut(), *pos).ok()
                 .and_then(|result|
                     result.or_else(|| {
                         if !arg_for_type_of.is_empty() {
