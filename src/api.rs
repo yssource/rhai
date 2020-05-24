@@ -909,12 +909,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        let mut state = State::new(ast.fn_lib());
+        let mut state = State::new();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -980,12 +980,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut state = State::new(ast.fn_lib());
+        let mut state = State::new();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -1041,17 +1041,18 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
-        let fn_lib = ast.fn_lib();
+        let lib = ast.lib();
         let pos = Position::none();
 
-        let fn_def = fn_lib
+        let fn_def = lib
             .get_function_by_signature(name, args.len(), true)
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
 
-        let state = State::new(fn_lib);
+        let mut state = State::new();
         let args = args.as_mut();
 
-        let (result, _) = self.call_script_fn(Some(scope), state, name, fn_def, args, pos, 0)?;
+        let result =
+            self.call_script_fn(Some(scope), &mut state, &lib, name, fn_def, args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -1081,14 +1082,14 @@ impl Engine {
         mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
-        let fn_lib = ast
-            .fn_lib()
+        let lib = ast
+            .lib()
             .iter()
             .map(|(_, fn_def)| fn_def.as_ref().clone())
             .collect();
 
         let stmt = mem::take(ast.statements_mut());
-        optimize_into_ast(self, scope, stmt, fn_lib, optimization_level)
+        optimize_into_ast(self, scope, stmt, lib, optimization_level)
     }
 
     /// Register a callback for script evaluation progress.

@@ -63,8 +63,8 @@ pub struct AST(
 
 impl AST {
     /// Create a new `AST`.
-    pub fn new(statements: Vec<Stmt>, fn_lib: FunctionsLib) -> Self {
-        Self(statements, fn_lib)
+    pub fn new(statements: Vec<Stmt>, lib: FunctionsLib) -> Self {
+        Self(statements, lib)
     }
 
     /// Get the statements.
@@ -78,7 +78,7 @@ impl AST {
     }
 
     /// Get the script-defined functions.
-    pub(crate) fn fn_lib(&self) -> &FunctionsLib {
+    pub(crate) fn lib(&self) -> &FunctionsLib {
         &self.1
     }
 
@@ -2585,10 +2585,10 @@ pub fn parse<'a>(
 ) -> Result<AST, ParseError> {
     let (statements, functions) = parse_global_level(input, max_expr_depth)?;
 
-    let fn_lib = functions.into_iter().map(|(_, v)| v).collect();
+    let lib = functions.into_iter().map(|(_, v)| v).collect();
     Ok(
         // Optimize AST
-        optimize_into_ast(engine, scope, statements, fn_lib, optimization_level),
+        optimize_into_ast(engine, scope, statements, lib, optimization_level),
     )
 }
 

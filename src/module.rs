@@ -50,7 +50,7 @@ pub struct Module {
     functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, CallableFunction)>,
 
     /// Script-defined functions.
-    fn_lib: FunctionsLib,
+    lib: FunctionsLib,
 
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: HashMap<TypeId, IteratorFn>,
@@ -67,7 +67,7 @@ impl fmt::Debug for Module {
             "<module {:?}, functions={}, lib={}>",
             self.variables,
             self.functions.len(),
-            self.fn_lib.len()
+            self.lib.len()
         )
     }
 }
@@ -614,7 +614,7 @@ impl Module {
             },
         );
 
-        module.fn_lib = module.fn_lib.merge(ast.fn_lib());
+        module.lib = module.lib.merge(ast.lib());
 
         Ok(module)
     }
@@ -663,7 +663,7 @@ impl Module {
                 functions.push((hash_fn_native, func.clone()));
             }
             // Index all script-defined functions
-            for fn_def in module.fn_lib.values() {
+            for fn_def in module.lib.values() {
                 match fn_def.access {
                     // Private functions are not exported
                     Private => continue,

@@ -32,9 +32,7 @@ use crate::stdlib::{
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
     vec::Vec,
 };
 
@@ -171,11 +169,8 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 ///
 /// This type uses some unsafe code, mainly for avoiding cloning of local variable names via
 /// direct lifetime casting.
-#[derive(Debug, Clone, Copy)]
-pub struct State<'a> {
-    /// Global script-defined functions.
-    pub fn_lib: &'a FunctionsLib,
-
+#[derive(Debug, Clone, Default)]
+pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
@@ -190,26 +185,39 @@ pub struct State<'a> {
 
     /// Number of modules loaded.
     pub modules: u64,
+
+    /// Times built-in function used.
+    pub use_builtin_counter: usize,
+
+    /// Number of modules loaded.
+    pub use_builtin_binary_op: HashMap<String, TypeId>,
 }
 
-impl<'a> State<'a> {
+impl State {
     /// Create a new `State`.
-    pub fn new(fn_lib: &'a FunctionsLib) -> Self {
-        Self {
-            fn_lib,
-            always_search: false,
-            scope_level: 0,
-            operations: 0,
-            modules: 0,
+    pub fn new() -> Self {
+        Default::default()
+    }
+    /// Cache a built-in binary op function.
+    pub fn set_builtin_binary_op(&mut self, fn_name: impl Into<String>, typ: TypeId) {
+        // Only cache when exceeding a certain number of calls
+        if self.use_builtin_counter < 10 {
+            self.use_builtin_counter += 1;
+        } else {
+            self.use_builtin_binary_op.insert(fn_name.into(), typ);
         }
     }
-    /// Does a certain script-defined function exist in the `State`?
-    pub fn has_function(&self, hash: u64) -> bool {
-        self.fn_lib.contains_key(&hash)
-    }
-    /// Get a script-defined function definition from the `State`.
-    pub fn get_function(&self, hash: u64) -> Option<&FnDef> {
-        self.fn_lib.get(&hash).map(|fn_def| fn_def.as_ref())
+    /// Is a binary op known to be built-in?
+    pub fn use_builtin_binary_op(&self, fn_name: impl AsRef<str>, args: &[&mut Dynamic]) -> bool {
+        if self.use_builtin_counter < 10 {
+            false
+        } else if args.len() != 2 {
+            false
+        } else if args[0].type_id() != args[1].type_id() {
+            false
+        } else {
+            self.use_builtin_binary_op.get(fn_name.as_ref()) == Some(&args[0].type_id())
+        }
     }
 }
 
@@ -378,7 +386,7 @@ impl Default for Engine {
             #[cfg(feature = "no_std")]
             module_resolver: None,
 
-            type_names: Default::default(),
+            type_names: HashMap::new(),
 
             // default print/debug implementations
             print: Box::new(default_print),
@@ -516,7 +524,7 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: Default::default(),
+            type_names: HashMap::new(),
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
             progress: None,
@@ -611,6 +619,7 @@ impl Engine {
         &self,
         scope: Option<&mut Scope>,
         state: &mut State,
+        lib: &FunctionsLib,
         fn_name: &str,
         hashes: (u64, u64),
         args: &mut FnCallArgs,
@@ -630,77 +639,94 @@ impl Engine {
 
         // First search in script-defined functions (can override built-in)
         if !native_only {
-            if let Some(fn_def) = state.get_function(hashes.1) {
-                let (result, state2) =
-                    self.call_script_fn(scope, *state, fn_name, fn_def, args, pos, level)?;
-                *state = state2;
+            if let Some(fn_def) = lib.get(&hashes.1) {
+                let result =
+                    self.call_script_fn(scope, state, lib, fn_name, fn_def, args, pos, level)?;
                 return Ok((result, false));
             }
         }
 
-        // Search built-in's and external functions
-        if let Some(func) = self
-            .global_module
-            .get_fn(hashes.0)
-            .or_else(|| self.packages.get_fn(hashes.0))
-        {
-            // Calling pure function in method-call?
-            let mut this_copy: Option<Dynamic>;
-            let mut this_pointer: Option<&mut Dynamic> = None;
+        let builtin = state.use_builtin_binary_op(fn_name, args);
 
-            if func.is_pure() && is_ref && args.len() > 0 {
-                // Clone the original value.  It'll be consumed because the function
-                // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
-                this_copy = Some(args[0].clone());
+        if is_ref || !native_only || !builtin {
+            // Search built-in's and external functions
+            if let Some(func) = self
+                .global_module
+                .get_fn(hashes.0)
+                .or_else(|| self.packages.get_fn(hashes.0))
+            {
+                // Calling pure function in method-call?
+                let mut this_copy: Option<Dynamic>;
+                let mut this_pointer: Option<&mut Dynamic> = None;
 
-                // Replace the first reference with a reference to the clone, force-casting the lifetime.
-                // Keep the original reference.  Must remember to restore it before existing this function.
-                this_pointer = Some(mem::replace(
-                    args.get_mut(0).unwrap(),
-                    unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
-                ));
+                if func.is_pure() && is_ref && args.len() > 0 {
+                    // Clone the original value.  It'll be consumed because the function
+                    // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
+                    this_copy = Some(args[0].clone());
+
+                    // Replace the first reference with a reference to the clone, force-casting the lifetime.
+                    // Keep the original reference.  Must remember to restore it before existing this function.
+                    this_pointer = Some(mem::replace(
+                        args.get_mut(0).unwrap(),
+                        unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
+                    ));
+                }
+
+                // Run external function
+                let result = func.get_native_fn()(args);
+
+                // Restore the original reference
+                if let Some(this_pointer) = this_pointer {
+                    mem::replace(args.get_mut(0).unwrap(), this_pointer);
+                }
+
+                let result = result.map_err(|err| err.new_position(pos))?;
+
+                // See if the function match print/debug (which requires special processing)
+                return Ok(match fn_name {
+                    KEYWORD_PRINT => (
+                        (self.print)(result.as_str().map_err(|type_name| {
+                            Box::new(EvalAltResult::ErrorMismatchOutputType(
+                                type_name.into(),
+                                pos,
+                            ))
+                        })?)
+                        .into(),
+                        false,
+                    ),
+                    KEYWORD_DEBUG => (
+                        (self.debug)(result.as_str().map_err(|type_name| {
+                            Box::new(EvalAltResult::ErrorMismatchOutputType(
+                                type_name.into(),
+                                pos,
+                            ))
+                        })?)
+                        .into(),
+                        false,
+                    ),
+                    _ => (result, func.is_method()),
+                });
             }
-
-            // Run external function
-            let result = func.get_native_fn()(args);
-
-            // Restore the original reference
-            if let Some(this_pointer) = this_pointer {
-                mem::replace(args.get_mut(0).unwrap(), this_pointer);
-            }
-
-            let result = result.map_err(|err| err.new_position(pos))?;
-
-            // See if the function match print/debug (which requires special processing)
-            return Ok(match fn_name {
-                KEYWORD_PRINT => (
-                    (self.print)(result.as_str().map_err(|type_name| {
-                        Box::new(EvalAltResult::ErrorMismatchOutputType(
-                            type_name.into(),
-                            pos,
-                        ))
-                    })?)
-                    .into(),
-                    false,
-                ),
-                KEYWORD_DEBUG => (
-                    (self.debug)(result.as_str().map_err(|type_name| {
-                        Box::new(EvalAltResult::ErrorMismatchOutputType(
-                            type_name.into(),
-                            pos,
-                        ))
-                    })?)
-                    .into(),
-                    false,
-                ),
-                _ => (result, func.is_method()),
-            });
         }
 
-        // If it is a 2-operand operator, see if it is built in
-        if !is_ref && native_only && args.len() == 2 && args[0].type_id() == args[1].type_id() {
+        // If it is a 2-operand operator, see if it is built in.
+        // Only consider situations where:
+        // 1) It is not a method call,
+        // 2) the call explicitly specifies `native_only` because, remember, an `eval` may create a new function, so you
+        //    can never predict what functions lie in `lib`!
+        // 3) It is already a built-in run once before, or both parameter types are the same
+        if !is_ref
+            && native_only
+            && (builtin || (args.len() == 2 && args[0].type_id() == args[1].type_id()))
+        {
             match run_builtin_binary_op(fn_name, args[0], args[1])? {
-                Some(v) => return Ok((v, false)),
+                Some(v) => {
+                    // Mark the function call as built-in
+                    if !builtin {
+                        state.set_builtin_binary_op(fn_name, args[0].type_id());
+                    }
+                    return Ok((v, false));
+                }
                 None => (),
             }
         }
@@ -753,16 +779,17 @@ impl Engine {
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
-    pub(crate) fn call_script_fn<'s>(
+    pub(crate) fn call_script_fn(
         &self,
         scope: Option<&mut Scope>,
-        mut state: State<'s>,
+        state: &mut State,
+        lib: &FunctionsLib,
         fn_name: &str,
         fn_def: &FnDef,
         args: &mut FnCallArgs,
         pos: Position,
         level: usize,
-    ) -> Result<(Dynamic, State<'s>), Box<EvalAltResult>> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         let orig_scope_level = state.scope_level;
         state.scope_level += 1;
 
@@ -779,15 +806,14 @@ impl Engine {
                         .iter()
                         .zip(args.iter_mut().map(|v| mem::take(*v)))
                         .map(|(name, value)| {
-                            let var_name =
-                                unsafe_cast_var_name_to_lifetime(name.as_str(), &mut state);
+                            let var_name = unsafe_cast_var_name_to_lifetime(name.as_str(), state);
                             (var_name, ScopeEntryType::Normal, value)
                         }),
                 );
 
                 // Evaluate the function at one higher level of call depth
                 let result = self
-                    .eval_stmt(scope, &mut state, &fn_def.body, level + 1)
+                    .eval_stmt(scope, state, lib, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -809,7 +835,7 @@ impl Engine {
                 scope.rewind(scope_len);
                 state.scope_level = orig_scope_level;
 
-                return result.map(|v| (v, state));
+                return result;
             }
             // No new scope - create internal scope
             _ => {
@@ -827,7 +853,7 @@ impl Engine {
 
                 // Evaluate the function at one higher level of call depth
                 let result = self
-                    .eval_stmt(&mut scope, &mut state, &fn_def.body, level + 1)
+                    .eval_stmt(&mut scope, state, lib, &fn_def.body, level + 1)
                     .or_else(|err| match *err {
                         // Convert return statement to return value
                         EvalAltResult::Return(x, _) => Ok(x),
@@ -846,19 +872,19 @@ impl Engine {
                     });
 
                 state.scope_level = orig_scope_level;
-                return result.map(|v| (v, state));
+                return result;
             }
         }
     }
 
     // Has a system function an override?
-    fn has_override(&self, state: &State, hashes: (u64, u64)) -> bool {
+    fn has_override(&self, lib: &FunctionsLib, hashes: (u64, u64)) -> bool {
         // First check registered functions
         self.global_module.contains_fn(hashes.0)
             // Then check packages
             || self.packages.contains_fn(hashes.0)
             // Then check script-defined functions
-            || state.has_function(hashes.1)
+            || lib.contains_key(&hashes.1)
     }
 
     // Perform an actual function call, taking care of special functions
@@ -871,6 +897,7 @@ impl Engine {
     fn exec_fn_call(
         &self,
         state: &mut State,
+        lib: &FunctionsLib,
         fn_name: &str,
         native_only: bool,
         hash_fn_def: u64,
@@ -891,13 +918,13 @@ impl Engine {
 
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(state, hashes) => Ok((
+            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(lib, hashes) => Ok((
                 self.map_type_name(args[0].type_name()).to_string().into(),
                 false,
             )),
 
             // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL if args.len() == 1 && !self.has_override(state, hashes) => {
+            KEYWORD_EVAL if args.len() == 1 && !self.has_override(lib, hashes) => {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     pos,
@@ -906,7 +933,7 @@ impl Engine {
 
             // Normal function call
             _ => self.call_fn_raw(
-                None, state, fn_name, hashes, args, is_ref, def_val, pos, level,
+                None, state, lib, fn_name, hashes, args, is_ref, def_val, pos, level,
             ),
         }
     }
@@ -916,6 +943,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
+        lib: &FunctionsLib,
         script: &Dynamic,
         pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -932,14 +960,14 @@ impl Engine {
         )?;
 
         // If new functions are defined within the eval string, it is an error
-        if ast.fn_lib().len() > 0 {
+        if ast.lib().len() > 0 {
             return Err(Box::new(EvalAltResult::ErrorParsing(
                 ParseErrorType::WrongFnDefinition.into_err(pos),
             )));
         }
 
         let statements = mem::take(ast.statements_mut());
-        let ast = AST::new(statements, state.fn_lib.clone());
+        let ast = AST::new(statements, lib.clone());
 
         // Evaluate the AST
         let (result, operations) = self
@@ -956,6 +984,7 @@ impl Engine {
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
+        lib: &FunctionsLib,
         target: &mut Target,
         rhs: &Expr,
         idx_values: &mut StaticVec<Dynamic>,
@@ -979,24 +1008,33 @@ impl Engine {
                     let is_idx = matches!(rhs, Expr::Index(_));
                     let pos = x.0.position();
                     let this_ptr = &mut self
-                        .get_indexed_mut(state, obj, is_ref, idx_val, pos, op_pos, false)?;
+                        .get_indexed_mut(state, lib, obj, is_ref, idx_val, pos, op_pos, false)?;
 
                     self.eval_dot_index_chain_helper(
-                        state, this_ptr, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, lib, this_ptr, &x.1, idx_values, is_idx, x.2, level, new_val,
                     )
                 }
                 // xxx[rhs] = new_val
                 _ if new_val.is_some() => {
                     let pos = rhs.position();
                     let this_ptr = &mut self
-                        .get_indexed_mut(state, obj, is_ref, idx_val, pos, op_pos, true)?;
+                        .get_indexed_mut(state, lib, obj, is_ref, idx_val, pos, op_pos, true)?;
 
                     this_ptr.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
                 }
                 // xxx[rhs]
                 _ => self
-                    .get_indexed_mut(state, obj, is_ref, idx_val, rhs.position(), op_pos, false)
+                    .get_indexed_mut(
+                        state,
+                        lib,
+                        obj,
+                        is_ref,
+                        idx_val,
+                        rhs.position(),
+                        op_pos,
+                        false,
+                    )
                     .map(|v| (v.clone_into_dynamic(), false)),
             }
         } else {
@@ -1016,7 +1054,9 @@ impl Engine {
                         .collect();
                     let args = arg_values.as_mut();
 
-                    self.exec_fn_call(state, name, *native, *hash, args, is_ref, def_val, *pos, 0)
+                    self.exec_fn_call(
+                        state, lib, name, *native, *hash, args, is_ref, def_val, *pos, 0,
+                    )
                 }
                 // xxx.module::fn_name(...) - syntax error
                 Expr::FnCall(_) => unreachable!(),
@@ -1026,7 +1066,7 @@ impl Engine {
                     let ((prop, _, _), pos) = x.as_ref();
                     let index = prop.clone().into();
                     let mut val =
-                        self.get_indexed_mut(state, obj, is_ref, index, *pos, op_pos, true)?;
+                        self.get_indexed_mut(state, lib, obj, is_ref, index, *pos, op_pos, true)?;
 
                     val.set_value(new_val.unwrap(), rhs.position())?;
                     Ok((Default::default(), true))
@@ -1037,7 +1077,7 @@ impl Engine {
                     let ((prop, _, _), pos) = x.as_ref();
                     let index = prop.clone().into();
                     let val =
-                        self.get_indexed_mut(state, obj, is_ref, index, *pos, op_pos, false)?;
+                        self.get_indexed_mut(state, lib, obj, is_ref, index, *pos, op_pos, false)?;
 
                     Ok((val.clone_into_dynamic(), false))
                 }
@@ -1045,15 +1085,19 @@ impl Engine {
                 Expr::Property(x) if new_val.is_some() => {
                     let ((_, _, setter), pos) = x.as_ref();
                     let mut args = [obj, new_val.as_mut().unwrap()];
-                    self.exec_fn_call(state, setter, true, 0, &mut args, is_ref, None, *pos, 0)
-                        .map(|(v, _)| (v, true))
+                    self.exec_fn_call(
+                        state, lib, setter, true, 0, &mut args, is_ref, None, *pos, 0,
+                    )
+                    .map(|(v, _)| (v, true))
                 }
                 // xxx.id
                 Expr::Property(x) => {
                     let ((_, getter, _), pos) = x.as_ref();
                     let mut args = [obj];
-                    self.exec_fn_call(state, getter, true, 0, &mut args, is_ref, None, *pos, 0)
-                        .map(|(v, _)| (v, false))
+                    self.exec_fn_call(
+                        state, lib, getter, true, 0, &mut args, is_ref, None, *pos, 0,
+                    )
+                    .map(|(v, _)| (v, false))
                 }
                 #[cfg(not(feature = "no_object"))]
                 // {xxx:map}.idx_lhs[idx_expr] | {xxx:map}.dot_lhs.rhs
@@ -1063,7 +1107,7 @@ impl Engine {
                     let mut val = if let Expr::Property(p) = &x.0 {
                         let ((prop, _, _), _) = p.as_ref();
                         let index = prop.clone().into();
-                        self.get_indexed_mut(state, obj, is_ref, index, x.2, op_pos, false)?
+                        self.get_indexed_mut(state, lib, obj, is_ref, index, x.2, op_pos, false)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -1073,7 +1117,7 @@ impl Engine {
                     };
 
                     self.eval_dot_index_chain_helper(
-                        state, &mut val, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, lib, &mut val, &x.1, idx_values, is_idx, x.2, level, new_val,
                     )
                 }
                 // xxx.idx_lhs[idx_expr] | xxx.dot_lhs.rhs
@@ -1084,7 +1128,7 @@ impl Engine {
                     let (mut val, updated) = if let Expr::Property(p) = &x.0 {
                         let ((_, getter, _), _) = p.as_ref();
                         let args = &mut args[..1];
-                        self.exec_fn_call(state, getter, true, 0, args, is_ref, None, x.2, 0)?
+                        self.exec_fn_call(state, lib, getter, true, 0, args, is_ref, None, x.2, 0)?
                     } else {
                         // Syntax error
                         return Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -1096,7 +1140,7 @@ impl Engine {
                     let target = &mut val.into();
 
                     let (result, may_be_changed) = self.eval_dot_index_chain_helper(
-                        state, target, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, lib, target, &x.1, idx_values, is_idx, x.2, level, new_val,
                     )?;
 
                     // Feed the value back via a setter just in case it has been updated
@@ -1105,12 +1149,14 @@ impl Engine {
                             let ((_, _, setter), _) = p.as_ref();
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = val;
-                            self.exec_fn_call(state, setter, true, 0, args, is_ref, None, x.2, 0)
-                                .or_else(|err| match *err {
-                                    // If there is no setter, no need to feed it back because the property is read-only
-                                    EvalAltResult::ErrorDotExpr(_, _) => Ok(Default::default()),
-                                    err => Err(Box::new(err)),
-                                })?;
+                            self.exec_fn_call(
+                                state, lib, setter, true, 0, args, is_ref, None, x.2, 0,
+                            )
+                            .or_else(|err| match *err {
+                                // If there is no setter, no need to feed it back because the property is read-only
+                                EvalAltResult::ErrorDotExpr(_, _) => Ok(Default::default()),
+                                err => Err(Box::new(err)),
+                            })?;
                         }
                     }
 
@@ -1130,6 +1176,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
+        lib: &FunctionsLib,
         dot_lhs: &Expr,
         dot_rhs: &Expr,
         is_index: bool,
@@ -1139,7 +1186,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let idx_values = &mut StaticVec::new();
 
-        self.eval_indexed_chain(scope, state, dot_rhs, idx_values, 0, level)?;
+        self.eval_indexed_chain(scope, state, lib, dot_rhs, idx_values, 0, level)?;
 
         match dot_lhs {
             // id.??? or id[???]
@@ -1164,7 +1211,7 @@ impl Engine {
 
                 let this_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
-                    state, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
+                    state, lib, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
                 )
                 .map(|(v, _)| v)
             }
@@ -1176,10 +1223,10 @@ impl Engine {
             }
             // {expr}.??? or {expr}[???]
             expr => {
-                let val = self.eval_expr(scope, state, expr, level)?;
+                let val = self.eval_expr(scope, state, lib, expr, level)?;
                 let this_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
-                    state, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
+                    state, lib, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
                 )
                 .map(|(v, _)| v)
             }
@@ -1195,6 +1242,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
+        lib: &FunctionsLib,
         expr: &Expr,
         idx_values: &mut StaticVec<Dynamic>,
         size: usize,
@@ -1206,7 +1254,7 @@ impl Engine {
             Expr::FnCall(x) if x.1.is_none() => {
                 let arg_values =
                     x.3.iter()
-                        .map(|arg_expr| self.eval_expr(scope, state, arg_expr, level))
+                        .map(|arg_expr| self.eval_expr(scope, state, lib, arg_expr, level))
                         .collect::<Result<StaticVec<Dynamic>, _>>()?;
 
                 idx_values.push(Dynamic::from(arg_values));
@@ -1217,15 +1265,15 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_val = match x.0 {
                     Expr::Property(_) => Default::default(), // Store a placeholder in case of a property
-                    _ => self.eval_expr(scope, state, &x.0, level)?,
+                    _ => self.eval_expr(scope, state, lib, &x.0, level)?,
                 };
 
                 // Push in reverse order
-                self.eval_indexed_chain(scope, state, &x.1, idx_values, size, level)?;
+                self.eval_indexed_chain(scope, state, lib, &x.1, idx_values, size, level)?;
 
                 idx_values.push(lhs_val);
             }
-            _ => idx_values.push(self.eval_expr(scope, state, expr, level)?),
+            _ => idx_values.push(self.eval_expr(scope, state, lib, expr, level)?),
         }
 
         Ok(())
@@ -1235,6 +1283,7 @@ impl Engine {
     fn get_indexed_mut<'a>(
         &self,
         state: &mut State,
+        lib: &FunctionsLib,
         val: &'a mut Dynamic,
         is_ref: bool,
         mut idx: Dynamic,
@@ -1305,9 +1354,10 @@ impl Engine {
             }
 
             _ => {
+                let fn_name = FUNC_INDEXER;
                 let type_name = self.map_type_name(val.type_name());
                 let args = &mut [val, &mut idx];
-                self.exec_fn_call(state, FUNC_INDEXER, true, 0, args, is_ref, None, op_pos, 0)
+                self.exec_fn_call(state, lib, fn_name, true, 0, args, is_ref, None, op_pos, 0)
                     .map(|(v, _)| v.into())
                     .map_err(|_| {
                         Box::new(EvalAltResult::ErrorIndexingType(type_name.into(), op_pos))
@@ -1321,14 +1371,15 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
+        lib: &FunctionsLib,
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state, rhs.position())?;
 
-        let lhs_value = self.eval_expr(scope, state, lhs, level)?;
-        let rhs_value = self.eval_expr(scope, state, rhs, level)?;
+        let lhs_value = self.eval_expr(scope, state, lib, lhs, level)?;
+        let rhs_value = self.eval_expr(scope, state, lib, rhs, level)?;
 
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
@@ -1347,8 +1398,9 @@ impl Engine {
                         calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
                     let hashes = (hash_fn, 0);
 
-                    let (r, _) = self
-                        .call_fn_raw(None, state, op, hashes, args, false, def_value, pos, level)?;
+                    let (r, _) = self.call_fn_raw(
+                        None, state, lib, op, hashes, args, false, def_value, pos, level,
+                    )?;
                     if r.as_bool().unwrap_or(false) {
                         return Ok(true.into());
                     }
@@ -1378,6 +1430,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         state: &mut State,
+        lib: &FunctionsLib,
         expr: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1399,12 +1452,12 @@ impl Engine {
             Expr::Property(_) => unreachable!(),
 
             // Statement block
-            Expr::Stmt(stmt) => self.eval_stmt(scope, state, &stmt.0, level),
+            Expr::Stmt(stmt) => self.eval_stmt(scope, state, lib, &stmt.0, level),
 
             // lhs = rhs
             Expr::Assignment(x) => {
                 let op_pos = x.2;
-                let rhs_val = self.eval_expr(scope, state, &x.1, level)?;
+                let rhs_val = self.eval_expr(scope, state, lib, &x.1, level)?;
 
                 match &x.0 {
                     // name = rhs
@@ -1432,7 +1485,7 @@ impl Engine {
                     Expr::Index(x) => {
                         let new_val = Some(rhs_val);
                         self.eval_dot_index_chain(
-                            scope, state, &x.0, &x.1, true, x.2, level, new_val,
+                            scope, state, lib, &x.0, &x.1, true, x.2, level, new_val,
                         )
                     }
                     // dot_lhs.dot_rhs = rhs
@@ -1440,7 +1493,7 @@ impl Engine {
                     Expr::Dot(x) => {
                         let new_val = Some(rhs_val);
                         self.eval_dot_index_chain(
-                            scope, state, &x.0, &x.1, false, op_pos, level, new_val,
+                            scope, state, lib, &x.0, &x.1, false, op_pos, level, new_val,
                         )
                     }
                     // Error assignment to constant
@@ -1460,19 +1513,19 @@ impl Engine {
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(x) => {
-                self.eval_dot_index_chain(scope, state, &x.0, &x.1, true, x.2, level, None)
+                self.eval_dot_index_chain(scope, state, lib, &x.0, &x.1, true, x.2, level, None)
             }
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
             Expr::Dot(x) => {
-                self.eval_dot_index_chain(scope, state, &x.0, &x.1, false, x.2, level, None)
+                self.eval_dot_index_chain(scope, state, lib, &x.0, &x.1, false, x.2, level, None)
             }
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(
                 x.0.iter()
-                    .map(|item| self.eval_expr(scope, state, item, level))
+                    .map(|item| self.eval_expr(scope, state, lib, item, level))
                     .collect::<Result<Vec<_>, _>>()?,
             )))),
 
@@ -1480,7 +1533,7 @@ impl Engine {
             Expr::Map(x) => Ok(Dynamic(Union::Map(Box::new(
                 x.0.iter()
                     .map(|((key, _), expr)| {
-                        self.eval_expr(scope, state, expr, level)
+                        self.eval_expr(scope, state, lib, expr, level)
                             .map(|val| (key.clone(), val))
                     })
                     .collect::<Result<HashMap<_, _>, _>>()?,
@@ -1493,7 +1546,7 @@ impl Engine {
 
                 let mut arg_values = args_expr
                     .iter()
-                    .map(|expr| self.eval_expr(scope, state, expr, level))
+                    .map(|expr| self.eval_expr(scope, state, lib, expr, level))
                     .collect::<Result<StaticVec<_>, _>>()?;
 
                 let mut args: StaticVec<_> = arg_values.iter_mut().collect();
@@ -1501,13 +1554,13 @@ impl Engine {
                 if name == KEYWORD_EVAL && args.len() == 1 && args.get(0).is::<String>() {
                     let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<String>()));
 
-                    if !self.has_override(state, (hash_fn, *hash)) {
+                    if !self.has_override(lib, (hash_fn, *hash)) {
                         // eval - only in function call style
                         let prev_len = scope.len();
                         let pos = args_expr.get(0).position();
 
                         // Evaluate the text string as a script
-                        let result = self.eval_script_expr(scope, state, args.pop(), pos);
+                        let result = self.eval_script_expr(scope, state, lib, args.pop(), pos);
 
                         if scope.len() != prev_len {
                             // IMPORTANT! If the eval defines new variables in the current scope,
@@ -1522,7 +1575,7 @@ impl Engine {
                 // Normal function call - except for eval (handled above)
                 let args = args.as_mut();
                 self.exec_fn_call(
-                    state, name, *native, *hash, args, false, def_val, *pos, level,
+                    state, lib, name, *native, *hash, args, false, def_val, *pos, level,
                 )
                 .map(|(v, _)| v)
             }
@@ -1535,7 +1588,7 @@ impl Engine {
 
                 let mut arg_values = args_expr
                     .iter()
-                    .map(|expr| self.eval_expr(scope, state, expr, level))
+                    .map(|expr| self.eval_expr(scope, state, lib, expr, level))
                     .collect::<Result<StaticVec<_>, _>>()?;
 
                 let mut args: StaticVec<_> = arg_values.iter_mut().collect();
@@ -1579,9 +1632,8 @@ impl Engine {
                     Ok(x) if x.is_script() => {
                         let args = args.as_mut();
                         let fn_def = x.get_fn_def();
-                        let (result, state2) =
-                            self.call_script_fn(None, *state, name, fn_def, args, *pos, level)?;
-                        *state = state2;
+                        let result =
+                            self.call_script_fn(None, state, lib, name, fn_def, args, *pos, level)?;
                         Ok(result)
                     }
                     Ok(x) => x.get_native_fn()(args.as_mut()).map_err(|err| err.new_position(*pos)),
@@ -1595,19 +1647,19 @@ impl Engine {
                 }
             }
 
-            Expr::In(x) => self.eval_in_expr(scope, state, &x.0, &x.1, level),
+            Expr::In(x) => self.eval_in_expr(scope, state, lib, &x.0, &x.1, level),
 
             Expr::And(x) => {
                 let (lhs, rhs, _) = x.as_ref();
                 Ok((self
-                    .eval_expr(scope, state, lhs, level)?
+                    .eval_expr(scope, state, lib, lhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
                     })?
                     && // Short-circuit using &&
                 self
-                    .eval_expr(scope, state, rhs, level)?
+                    .eval_expr(scope, state, lib, rhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
@@ -1618,14 +1670,14 @@ impl Engine {
             Expr::Or(x) => {
                 let (lhs, rhs, _) = x.as_ref();
                 Ok((self
-                    .eval_expr(scope, state, lhs, level)?
+                    .eval_expr(scope, state, lib, lhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
                     })?
                     || // Short-circuit using ||
                 self
-                    .eval_expr(scope, state, rhs, level)?
+                    .eval_expr(scope, state, lib, rhs, level)?
                     .as_bool()
                     .map_err(|_| {
                         EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
@@ -1646,6 +1698,7 @@ impl Engine {
         &self,
         scope: &mut Scope<'s>,
         state: &mut State,
+        lib: &FunctionsLib,
         stmt: &Stmt,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1657,7 +1710,7 @@ impl Engine {
 
             // Expression as statement
             Stmt::Expr(expr) => {
-                let result = self.eval_expr(scope, state, expr, level)?;
+                let result = self.eval_expr(scope, state, lib, expr, level)?;
 
                 Ok(match expr.as_ref() {
                     // If it is an assignment, erase the result at the root
@@ -1672,7 +1725,7 @@ impl Engine {
                 state.scope_level += 1;
 
                 let result = x.0.iter().try_fold(Default::default(), |_, stmt| {
-                    self.eval_stmt(scope, state, stmt, level)
+                    self.eval_stmt(scope, state, lib, stmt, level)
                 });
 
                 scope.rewind(prev_len);
@@ -1689,14 +1742,14 @@ impl Engine {
             Stmt::IfThenElse(x) => {
                 let (expr, if_block, else_block) = x.as_ref();
 
-                self.eval_expr(scope, state, expr, level)?
+                self.eval_expr(scope, state, lib, expr, level)?
                     .as_bool()
                     .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(expr.position())))
                     .and_then(|guard_val| {
                         if guard_val {
-                            self.eval_stmt(scope, state, if_block, level)
+                            self.eval_stmt(scope, state, lib, if_block, level)
                         } else if let Some(stmt) = else_block {
-                            self.eval_stmt(scope, state, stmt, level)
+                            self.eval_stmt(scope, state, lib, stmt, level)
                         } else {
                             Ok(Default::default())
                         }
@@ -1707,8 +1760,8 @@ impl Engine {
             Stmt::While(x) => loop {
                 let (expr, body) = x.as_ref();
 
-                match self.eval_expr(scope, state, expr, level)?.as_bool() {
-                    Ok(true) => match self.eval_stmt(scope, state, body, level) {
+                match self.eval_expr(scope, state, lib, expr, level)?.as_bool() {
+                    Ok(true) => match self.eval_stmt(scope, state, lib, body, level) {
                         Ok(_) => (),
                         Err(err) => match *err {
                             EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1725,7 +1778,7 @@ impl Engine {
 
             // Loop statement
             Stmt::Loop(body) => loop {
-                match self.eval_stmt(scope, state, body, level) {
+                match self.eval_stmt(scope, state, lib, body, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1738,7 +1791,7 @@ impl Engine {
             // For loop
             Stmt::For(x) => {
                 let (name, expr, stmt) = x.as_ref();
-                let iter_type = self.eval_expr(scope, state, expr, level)?;
+                let iter_type = self.eval_expr(scope, state, lib, expr, level)?;
                 let tid = iter_type.type_id();
 
                 if let Some(func) = self
@@ -1756,7 +1809,7 @@ impl Engine {
                         *scope.get_mut(index).0 = loop_var;
                         self.inc_operations(state, stmt.position())?;
 
-                        match self.eval_stmt(scope, state, stmt, level) {
+                        match self.eval_stmt(scope, state, lib, stmt, level) {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1783,7 +1836,7 @@ impl Engine {
             // Return value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
                 Err(Box::new(EvalAltResult::Return(
-                    self.eval_expr(scope, state, x.1.as_ref().unwrap(), level)?,
+                    self.eval_expr(scope, state, lib, x.1.as_ref().unwrap(), level)?,
                     (x.0).1,
                 )))
             }
@@ -1795,7 +1848,7 @@ impl Engine {
 
             // Throw value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
-                let val = self.eval_expr(scope, state, x.1.as_ref().unwrap(), level)?;
+                let val = self.eval_expr(scope, state, lib, x.1.as_ref().unwrap(), level)?;
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     val.take_string().unwrap_or_else(|_| "".into()),
                     (x.0).1,
@@ -1812,7 +1865,7 @@ impl Engine {
             // Let statement
             Stmt::Let(x) if x.1.is_some() => {
                 let ((var_name, _), expr) = x.as_ref();
-                let val = self.eval_expr(scope, state, expr.as_ref().unwrap(), level)?;
+                let val = self.eval_expr(scope, state, lib, expr.as_ref().unwrap(), level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
                 Ok(Default::default())
@@ -1828,7 +1881,7 @@ impl Engine {
             // Const statement
             Stmt::Const(x) if x.1.is_constant() => {
                 let ((var_name, _), expr) = x.as_ref();
-                let val = self.eval_expr(scope, state, &expr, level)?;
+                let val = self.eval_expr(scope, state, lib, &expr, level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
                 Ok(Default::default())
@@ -1852,7 +1905,7 @@ impl Engine {
                     }
 
                     if let Some(path) = self
-                        .eval_expr(scope, state, &expr, level)?
+                        .eval_expr(scope, state, lib, &expr, level)?
                         .try_cast::<String>()
                     {
                         if let Some(resolver) = &self.module_resolver {
@@ -1945,7 +1998,11 @@ fn run_builtin_binary_op(
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
     use crate::packages::arithmetic::*;
 
-    if x.type_id() == TypeId::of::<INT>() {
+    let args_type = x.type_id();
+
+    assert_eq!(y.type_id(), args_type);
+
+    if args_type == TypeId::of::<INT>() {
         let x = x.downcast_ref::<INT>().unwrap().clone();
         let y = y.downcast_ref::<INT>().unwrap().clone();
 
@@ -1987,7 +2044,7 @@ fn run_builtin_binary_op(
             "^" => return Ok(Some((x ^ y).into())),
             _ => (),
         }
-    } else if x.type_id() == TypeId::of::<bool>() {
+    } else if args_type == TypeId::of::<bool>() {
         let x = x.downcast_ref::<bool>().unwrap().clone();
         let y = y.downcast_ref::<bool>().unwrap().clone();
 
@@ -1998,7 +2055,7 @@ fn run_builtin_binary_op(
             "!=" => return Ok(Some((x != y).into())),
             _ => (),
         }
-    } else if x.type_id() == TypeId::of::<String>() {
+    } else if args_type == TypeId::of::<String>() {
         let x = x.downcast_ref::<String>().unwrap();
         let y = y.downcast_ref::<String>().unwrap();
 
@@ -2011,7 +2068,7 @@ fn run_builtin_binary_op(
             "<=" => return Ok(Some((x <= y).into())),
             _ => (),
         }
-    } else if x.type_id() == TypeId::of::<char>() {
+    } else if args_type == TypeId::of::<char>() {
         let x = x.downcast_ref::<char>().unwrap().clone();
         let y = y.downcast_ref::<char>().unwrap().clone();
 
@@ -2024,7 +2081,7 @@ fn run_builtin_binary_op(
             "<=" => return Ok(Some((x <= y).into())),
             _ => (),
         }
-    } else if x.type_id() == TypeId::of::<()>() {
+    } else if args_type == TypeId::of::<()>() {
         match op {
             "==" => return Ok(Some(true.into())),
             "!=" | ">" | ">=" | "<" | "<=" => return Ok(Some(false.into())),
@@ -2034,7 +2091,7 @@ fn run_builtin_binary_op(
 
     #[cfg(not(feature = "no_float"))]
     {
-        if x.type_id() == TypeId::of::<FLOAT>() {
+        if args_type == TypeId::of::<FLOAT>() {
             let x = x.downcast_ref::<FLOAT>().unwrap().clone();
             let y = y.downcast_ref::<FLOAT>().unwrap().clone();
 

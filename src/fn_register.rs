@@ -140,12 +140,6 @@ pub fn map_dynamic<T: Variant + Clone>(data: T) -> Result<Dynamic, Box<EvalAltRe
 
 /// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_identity(data: Dynamic) -> Result<Dynamic, Box<EvalAltResult>> {
-    Ok(data)
-}
-
-/// To Dynamic mapping function.
-#[inline(always)]
 pub fn map_result(
     data: Result<Dynamic, Box<EvalAltResult>>,
 ) -> Result<Dynamic, Box<EvalAltResult>> {
