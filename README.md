@@ -11,7 +11,8 @@ Rhai - Embedded Scripting for Rust
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
 to add scripting to any application.
 
-Rhai's current features set:
+Features
+--------
 
 * Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector.
 * Tight integration with native Rust [functions](#working-with-functions) and [types](#custom-types-and-methods),
@@ -37,6 +38,19 @@ Rhai's current features set:
   pulled in to provide for functionalities that used to be in `std`.
 
 **Note:** Currently, the version is 0.14.2, so the language and API's may change before they stabilize.
+
+What Rhai doesn't do
+--------------------
+
+Rhai's purpose is to provide a dynamic layer over Rust code, in the same spirit of _zero cost abstractions_.
+It doesn't attempt to be a new language. For example:
+
+* No classes.  Well, Rust doesn't either. On the other hand...
+* No traits...  so it is also not Rust. Do your Rusty stuff in Rust.
+* No structures - definte your types in Rust instead; Rhai can seamless work with _any Rust type_.
+* No first-class functions - Code your functions in Rust instead, and register them with Rhai.
+* No closures - do your closure magic in Rust instead; [turn a Rhai scripted function into a Rust closure](#calling-rhai-functions-from-rust).
+* It is best to expose an API in Rhai for scripts to call.  All your core functionalities should be in Rust.
 
 Installation
 ------------

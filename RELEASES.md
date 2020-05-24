@@ -17,7 +17,7 @@ Breaking changes
   `Result<Dynamic, Box<EvalAltResult>>`.
 * Default maximum limit on levels of nested function calls is fine-tuned and set to a different value.
 * Some operator functions are now built in (see _Speed enhancements_ below), so they are available even
-  when under `Engine::new_raw`.
+  under `Engine::new_raw`.
 
 New features
 ------------
@@ -31,7 +31,8 @@ Speed enhancements
 
 * Common operators (e.g. `+`, `>`, `==`) now call into highly efficient built-in implementations for standard types
   (i.e. `INT`, `FLOAT`, `bool`, `char`, `()` and some `String`) if not overridden by a registered function.
-  This yields a 5-10% speed benefit depending on script operator usage.
+  This yields a 5-10% speed benefit depending on script operator usage. Scripts running tight loops will see
+  significant speed-up.
 * Implementations of common operators for standard types are removed from the `ArithmeticPackage` and `LogicPackage`
   (and therefore the `CorePackage`) because they are now always available, even under `Engine::new_raw`.
 
