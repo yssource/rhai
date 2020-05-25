@@ -1,8 +1,6 @@
 use crate::def_package;
 use crate::module::FuncReturn;
-use crate::parser::INT;
-
-use crate::stdlib::string::String;
+use crate::parser::{ImmutableString, INT};
 
 // Comparison operators
 pub fn lt<T: PartialOrd>(x: T, y: T) -> FuncReturn<bool> {
@@ -50,12 +48,12 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     // reg_op!(lib, "!=", ne, INT, char, bool, ());
 
     // Special versions for strings - at least avoid copying the first string
-    // lib.set_fn_2_mut("<", |x: &mut String, y: String| Ok(*x < y));
-    // lib.set_fn_2_mut("<=", |x: &mut String, y: String| Ok(*x <= y));
-    // lib.set_fn_2_mut(">", |x: &mut String, y: String| Ok(*x > y));
-    // lib.set_fn_2_mut(">=", |x: &mut String, y: String| Ok(*x >= y));
-    // lib.set_fn_2_mut("==", |x: &mut String, y: String| Ok(*x == y));
-    // lib.set_fn_2_mut("!=", |x: &mut String, y: String| Ok(*x != y));
+    // lib.set_fn_2("<", |x: ImmutableString, y: ImmutableString| Ok(*x < y));
+    // lib.set_fn_2("<=", |x: ImmutableString, y: ImmutableString| Ok(*x <= y));
+    // lib.set_fn_2(">", |x: ImmutableString, y: ImmutableString| Ok(*x > y));
+    // lib.set_fn_2(">=", |x: ImmutableString, y: ImmutableString| Ok(*x >= y));
+    // lib.set_fn_2("==", |x: ImmutableString, y: ImmutableString| Ok(*x == y));
+    // lib.set_fn_2("!=", |x: ImmutableString, y: ImmutableString| Ok(*x != y));
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]

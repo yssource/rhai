@@ -1,11 +1,11 @@
 use crate::def_package;
 use crate::module::FuncReturn;
-use crate::stdlib::string::String;
+use crate::parser::ImmutableString;
 
 def_package!(crate:EvalPackage:"Disable 'eval'.", lib, {
-    lib.set_fn_1_mut(
+    lib.set_fn_1(
         "eval",
-        |_: &mut String| -> FuncReturn<()> {
+        |_: ImmutableString| -> FuncReturn<()> {
             Err("eval is evil!".into())
         },
     );

@@ -438,7 +438,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name == &s.0)
+                m.0.into_iter().find(|((name, _), _)| name == s.0.as_ref())
                     .map(|(_, expr)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -466,7 +466,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             // "xxx" in "xxxxx"
             (Expr::StringConstant(a), Expr::StringConstant(b)) => {
                 state.set_dirty();
-                if b.0.contains(&a.0) { Expr::True(a.1) } else { Expr::False(a.1) }
+                if b.0.contains(a.0.as_ref()) { Expr::True(a.1) } else { Expr::False(a.1) }
             }
             // 'x' in "xxxxx"
             (Expr::CharConstant(a), Expr::StringConstant(b)) => {
@@ -476,7 +476,7 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             // "xxx" in #{...}
             (Expr::StringConstant(a), Expr::Map(b)) => {
                 state.set_dirty();
-                if b.0.iter().find(|((name, _), _)| name == &a.0).is_some() {
+                if b.0.iter().find(|((name, _), _)| name == a.0.as_ref()).is_some() {
                     Expr::True(a.1)
                 } else {
                     Expr::False(a.1)

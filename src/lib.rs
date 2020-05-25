@@ -93,7 +93,7 @@ pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
-pub use parser::{AST, INT};
+pub use parser::{ImmutableString, AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use token::Position;

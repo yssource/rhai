@@ -4,6 +4,7 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::engine::{make_getter, make_setter, Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
+use crate::fn_native::Shared;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
@@ -47,6 +48,9 @@ pub type INT = i32;
 /// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
+
+/// The system immutable string type.
+pub type ImmutableString = Shared<String>;
 
 type PERR = ParseErrorType;
 
@@ -375,7 +379,7 @@ pub enum Expr {
     /// Character constant.
     CharConstant(Box<(char, Position)>),
     /// String constant.
-    StringConstant(Box<(String, Position)>),
+    StringConstant(Box<(ImmutableString, Position)>),
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
     Variable(
         Box<(
@@ -1208,7 +1212,7 @@ fn parse_primary<'a>(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, pos))),
-        Token::StringConst(s) => Expr::StringConstant(Box::new((s, pos))),
+        Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), pos))),
         Token::Identifier(s) => {
             let index = state.find(&s);
             Expr::Variable(Box::new(((s, pos), None, 0, index)))
@@ -2603,7 +2607,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),
         Union::Char(value) => Some(Expr::CharConstant(Box::new((value, pos)))),
-        Union::Str(value) => Some(Expr::StringConstant(Box::new(((*value).clone(), pos)))),
+        Union::Str(value) => Some(Expr::StringConstant(Box::new((value.clone(), pos)))),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]

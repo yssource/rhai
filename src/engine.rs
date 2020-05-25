@@ -7,7 +7,7 @@ use crate::fn_native::{FnCallArgs, Shared};
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, FnAccess, FnDef, ReturnType, Stmt, AST, INT};
+use crate::parser::{Expr, FnAccess, FnDef, ImmutableString, ReturnType, Stmt, AST, INT};
 use crate::r#unsafe::{unsafe_cast_var_name_to_lifetime, unsafe_mut_cast_to_lifetime};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -129,7 +129,7 @@ impl Target<'_> {
             Target::Value(_) => {
                 return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(pos)))
             }
-            Target::StringChar(Dynamic(Union::Str(s)), index, _) => {
+            Target::StringChar(Dynamic(Union::Str(ref mut s)), index, _) => {
                 // Replace the character at the specified index position
                 let new_ch = new_val
                     .as_char()
@@ -141,8 +141,7 @@ impl Target<'_> {
                 // See if changed - if so, update the String
                 if ch != new_ch {
                     chars[*index] = new_ch;
-                    s.clear();
-                    chars.iter().for_each(|&ch| s.push(ch));
+                    *s = chars.iter().collect::<String>().into();
                 }
             }
             _ => unreachable!(),
@@ -1277,14 +1276,18 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map)) => {
                 // val_map[idx]
-                let index = idx
-                    .take_string()
-                    .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
-
                 Ok(if create {
+                    let index = idx
+                        .take_string()
+                        .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
+
                     map.entry(index).or_insert(Default::default()).into()
                 } else {
-                    map.get_mut(&index)
+                    let index = idx
+                        .downcast_ref::<String>()
+                        .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
+
+                    map.get_mut(index)
                         .map(Target::from)
                         .unwrap_or_else(|| Target::from(()))
                 })
@@ -1864,7 +1867,7 @@ impl Engine {
 
                     if let Some(path) = self
                         .eval_expr(scope, state, lib, &expr, level)?
-                        .try_cast::<String>()
+                        .try_cast::<ImmutableString>()
                     {
                         if let Some(resolver) = &self.module_resolver {
                             // Use an empty scope to create a module
@@ -1879,7 +1882,7 @@ impl Engine {
                             Ok(Default::default())
                         } else {
                             Err(Box::new(EvalAltResult::ErrorModuleNotFound(
-                                path,
+                                path.to_string(),
                                 expr.position(),
                             )))
                         }
@@ -2015,9 +2018,9 @@ fn run_builtin_binary_op(
             "!=" => return Ok(Some((x != y).into())),
             _ => (),
         }
-    } else if args_type == TypeId::of::<String>() {
-        let x = x.downcast_ref::<String>().unwrap();
-        let y = y.downcast_ref::<String>().unwrap();
+    } else if args_type == TypeId::of::<ImmutableString>() {
+        let x = x.downcast_ref::<ImmutableString>().unwrap();
+        let y = y.downcast_ref::<ImmutableString>().unwrap();
 
         match op {
             "==" => return Ok(Some((x == y).into())),

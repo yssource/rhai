@@ -37,7 +37,7 @@ Features
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.14.2, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is 0.15.0, so the language and API's may change before they stabilize.
 
 What Rhai doesn't do
 --------------------
@@ -59,7 +59,7 @@ Install the Rhai crate by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.14.2"
+rhai = "0.15.0"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -395,14 +395,14 @@ are supported.
 
 ### Built-in operators
 
-| Operator                     | Supported for type (see [standard types])                            |
-| ---------------------------- | -------------------------------------------------------------------- |
-| `+`, `-`, `*`, `/`, `%`, `~` | `INT`, `FLOAT` (if not [`no_float`])                                 |
-| `<<`, `>>`, `^`              | `INT`                                                                |
-| `&`, `\|`                    | `INT`, `bool`                                                        |
-| `&&`, `\|\|`                 | `bool`                                                               |
-| `==`, `!=`                   | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `String` |
-| `>`, `>=`, `<`, `<=`         | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `String`         |
+| Operator                     | Supported for type (see [standard types])                                     |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| `+`, `-`, `*`, `/`, `%`, `~` | `INT`, `FLOAT` (if not [`no_float`])                                          |
+| `<<`, `>>`, `^`              | `INT`                                                                         |
+| `&`, `\|`                    | `INT`, `bool`                                                                 |
+| `&&`, `\|\|`                 | `bool`                                                                        |
+| `==`, `!=`                   | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `ImmutableString` |
+| `>`, `>=`, `<`, `<=`         | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `ImmutableString`         |
 
 ### Packages
 
@@ -494,7 +494,7 @@ The following primitive types are supported natively:
 | **Floating-point number** (disabled with [`no_float`])                        | `f32`, `f64` _(default)_                                                                             | `"f32"` or `"f64"`    | `"123.4567"` etc.     |
 | **Boolean value**                                                             | `bool`                                                                                               | `"bool"`              | `"true"` or `"false"` |
 | **Unicode character**                                                         | `char`                                                                                               | `"char"`              | `"A"`, `"x"` etc.     |
-| **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
+| **Immutable Unicode string**                                                  | `rhai::ImmutableString` (implemented as `Rc<String>` or `Arc<String>`, _not_ `&str`)                 | `"string"`            | `"hello"` etc.        |
 | **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ?, ?, ? ]"`       |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
 | **Timestamp** (implemented in the [`BasicTimePackage`](#packages))            | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
@@ -513,6 +513,10 @@ If only 32-bit integers are needed, enabling the [`only_i32`] feature will remov
 This is useful on some 32-bit targets where using 64-bit integers incur a performance penalty.
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
+
+Strings in Rhai are _immutable_, meaning that they can be shared but not modified.  In actual, the `ImmutableString` type
+is implemented as an `Rc`- or `Arc`-wrapped `String`.  Any modification done to a Rhai string will cause the string to be cloned
+and the modifications made to the copy.
 
 The `to_string` function converts a standard type into a [string] for display purposes.
 
@@ -638,12 +642,12 @@ Traits
 
 A number of traits, under the `rhai::` module namespace, provide additional functionalities.
 
-| Trait              | Description                                                                            | Methods                                 |
-| ------------------ | -------------------------------------------------------------------------------------- | --------------------------------------- |
-| `RegisterFn`       | Trait for registering functions                                                        | `register_fn`                           |
-| `RegisterResultFn` | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
-| `Func`             | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
-| `ModuleResolver`   | Trait implemented by module resolution services                                        | `resolve`                               |
+| Trait              | Description                                                                              | Methods                                 |
+| ------------------ | ---------------------------------------------------------------------------------------- | --------------------------------------- |
+| `RegisterFn`       | Trait for registering functions                                                          | `register_fn`                           |
+| `RegisterResultFn` | Trait for registering fallible functions returning `Result<Dynamic, Box<EvalAltResult>>` | `register_result_fn`                    |
+| `Func`             | Trait for creating anonymous functions from script                                       | `create_from_ast`, `create_from_script` |
+| `ModuleResolver`   | Trait implemented by module resolution services                                          | `resolve`                               |
 
 Working with functions
 ----------------------
@@ -967,20 +971,23 @@ Similarly, custom types can expose members by registering a `get` and/or `set` f
 ```rust
 #[derive(Clone)]
 struct TestStruct {
-    field: i64
+    field: String
 }
 
+// Remember Rhai uses 'ImmutableString' instead of 'String'
 impl TestStruct {
-    fn get_field(&mut self) -> i64 {
-        self.field
+    fn get_field(&mut self) -> ImmutableString {
+        // Make an 'ImmutableString' from a 'String'
+        self.field.into(0)
     }
 
-    fn set_field(&mut self, new_val: i64) {
-        self.field = new_val;
+    fn set_field(&mut self, new_val: ImmutableString) {
+        // Get a 'String' from an 'ImmutableString'
+        self.field = (*new_val).clone();
     }
 
     fn new() -> Self {
-        TestStruct { field: 1 }
+        TestStruct { field: "hello" }
     }
 }
 
@@ -991,7 +998,8 @@ engine.register_type::<TestStruct>();
 engine.register_get_set("xyz", TestStruct::get_field, TestStruct::set_field);
 engine.register_fn("new_ts", TestStruct::new);
 
-let result = engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?;
+// Return result can be 'String' - Rhai will automatically convert it from 'ImmutableString'
+let result = engine.eval::<String>(r#"let a = new_ts(); a.xyz = "42"; a.xyz"#)?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
@@ -1033,7 +1041,7 @@ println!("Answer: {}", result);                     // prints 42
 
 Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set`, `register_get_set`
 and `register_indexer` are not available when the [`no_object`] feature is turned on.
-`register_indexer` is also not available when the [`no_index`] feature is turned on. 
+`register_indexer` is also not available when the [`no_index`] feature is turned on.
 
 `Scope` - Initializing and maintaining state
 -------------------------------------------
@@ -1323,6 +1331,9 @@ This is similar to most other languages where strings are internally represented
 Unicode characters.
 Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
 In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
+
+Rhai strings are _immutable_ and can be shared.
+Modifying a Rhai string actually causes it first to be cloned, and then the modification made to the copy.
 
 Strings can be built up from other strings and types via the `+` operator (provided by the [`MoreStringPackage`](#packages)
 but excluded if using a [raw `Engine`]). This is particularly useful when printing output.
