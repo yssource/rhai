@@ -105,10 +105,24 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
             Ok(s.into())
         },
     );
+    lib.set_fn_2_mut("+=", |s: &mut ImmutableString, ch: char| {
+        shared_make_mut(s).push(ch);
+        Ok(())
+    });
     lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| {
         shared_make_mut(s).push(ch);
         Ok(())
     });
+    lib.set_fn_2_mut(
+        "+=",
+        |s: &mut ImmutableString, s2: ImmutableString| {
+            if !s2.is_empty() {
+                shared_make_mut(s).push_str(s2.as_str());
+            }
+
+            Ok(())
+        }
+    );
     lib.set_fn_2_mut(
         "append",
         |s: &mut ImmutableString, s2: ImmutableString| {

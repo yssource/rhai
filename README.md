@@ -1388,19 +1388,19 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 The following standard methods (defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
 
-| Function     | Parameter(s)                                                 | Description                                                                                       |
-| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `len`        | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
-| `pad`        | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
-| `append`     | character/string to append                                   | Adds a character or a string to the end of another string                                         |
-| `clear`      | _none_                                                       | empties the string                                                                                |
-| `truncate`   | target length                                                | cuts off the string at exactly a specified number of characters                                   |
-| `contains`   | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
-| `index_of`   | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
-| `sub_string` | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
-| `crop`       | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`    | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
-| `trim`       | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
+| Function                | Parameter(s)                                                 | Description                                                                                       |
+| ----------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `len`                   | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
+| `pad`                   | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
+| `+=` operator, `append` | character/string to append                                   | Adds a character or a string to the end of another string                                         |
+| `clear`                 | _none_                                                       | empties the string                                                                                |
+| `truncate`              | target length                                                | cuts off the string at exactly a specified number of characters                                   |
+| `contains`              | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
+| `index_of`              | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
+| `sub_string`            | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
+| `crop`                  | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
+| `replace`               | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
+| `trim`                  | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples
 
@@ -1463,19 +1463,19 @@ Arrays are disabled via the [`no_index`] feature.
 
 The following methods (defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
 
-| Function     | Parameter(s)                                                          | Description                                                                                          |
-| ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `push`       | element to insert                                                     | inserts an element at the end                                                                        |
-| `append`     | array to append                                                       | concatenates the second array to the end of the first                                                |
-| `+` operator | first array, second array                                             | concatenates the first array with the second                                                         |
-| `insert`     | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
-| `pop`        | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
-| `shift`      | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
-| `remove`     | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
-| `len`        | _none_                                                                | returns the number of elements                                                                       |
-| `pad`        | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
-| `clear`      | _none_                                                                | empties the array                                                                                    |
-| `truncate`   | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
+| Function                | Parameter(s)                                                          | Description                                                                                          |
+| ----------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `push`                  | element to insert                                                     | inserts an element at the end                                                                        |
+| `+=` operator, `append` | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+` operator            | first array, second array                                             | concatenates the first array with the second                                                         |
+| `insert`                | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
+| `pop`                   | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
+| `shift`                 | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
+| `remove`                | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `len`                   | _none_                                                                | returns the number of elements                                                                       |
+| `pad`                   | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
+| `clear`                 | _none_                                                                | empties the array                                                                                    |
+| `truncate`              | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
 ### Examples
 
@@ -1585,16 +1585,16 @@ Object maps are disabled via the [`no_object`] feature.
 
 The following methods (defined in the [`BasicMapPackage`](#packages) but excluded if using a [raw `Engine`]) operate on object maps:
 
-| Function     | Parameter(s)                        | Description                                                                                                                              |
-| ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `has`        | property name                       | does the object map contain a property of a particular name?                                                                             |
-| `len`        | _none_                              | returns the number of properties                                                                                                         |
-| `clear`      | _none_                              | empties the object map                                                                                                                   |
-| `remove`     | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
-| `mixin`      | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
-| `+` operator | first object map, second object map | merges the first object map with the second                                                                                              |
-| `keys`       | _none_                              | returns an [array] of all the property names (in random order), not available under [`no_index`]                                         |
-| `values`     | _none_                              | returns an [array] of all the property values (in random order), not available under [`no_index`]                                        |
+| Function               | Parameter(s)                        | Description                                                                                                                              |
+| ---------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `has`                  | property name                       | does the object map contain a property of a particular name?                                                                             |
+| `len`                  | _none_                              | returns the number of properties                                                                                                         |
+| `clear`                | _none_                              | empties the object map                                                                                                                   |
+| `remove`               | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
+| `+=` operator, `mixin` | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
+| `+` operator           | first object map, second object map | merges the first object map with the second                                                                                              |
+| `keys`                 | _none_                              | returns an [array] of all the property names (in random order), not available under [`no_index`]                                         |
+| `values`               | _none_                              | returns an [array] of all the property values (in random order), not available under [`no_index`]                                        |
 
 ### Examples
 

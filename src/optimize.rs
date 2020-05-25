@@ -380,26 +380,26 @@ fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
             stmt => Expr::Stmt(Box::new((stmt, x.1))),
         },
         // id = expr
-        Expr::Assignment(x) => match x.1 {
-            //id = id2 = expr2
-            Expr::Assignment(x2) => match (x.0, x2.0) {
-                // var = var = expr2 -> var = expr2
+        Expr::Assignment(x) => match x.2 {
+            //id = id2 op= expr2
+            Expr::Assignment(x2) if x.1 == "=" => match (x.0, x2.0) {
+                // var = var op= expr2 -> var op= expr2
                 (Expr::Variable(a), Expr::Variable(b))
                     if a.1.is_none() && b.1.is_none() && a.0 == b.0 && a.3 == b.3 =>
                 {
                     // Assignment to the same variable - fold
                     state.set_dirty();
-                    Expr::Assignment(Box::new((Expr::Variable(a), optimize_expr(x2.1, state), x.2)))
+                    Expr::Assignment(Box::new((Expr::Variable(a), x2.1, optimize_expr(x2.2, state), x.3)))
                 }
-                // id1 = id2 = expr2
+                // id1 = id2 op= expr2
                 (id1, id2) => {
                     Expr::Assignment(Box::new((
-                        id1, Expr::Assignment(Box::new((id2, optimize_expr(x2.1, state), x2.2))), x.2,
+                        id1, x.1, Expr::Assignment(Box::new((id2, x2.1, optimize_expr(x2.2, state), x2.3))), x.3,
                     )))
                 }
             },
-            // id = expr
-            expr => Expr::Assignment(Box::new((x.0, optimize_expr(expr, state), x.2))),
+            // id op= expr
+            expr => Expr::Assignment(Box::new((x.0, x.1, optimize_expr(expr, state), x.3))),
         },
 
         // lhs.rhs

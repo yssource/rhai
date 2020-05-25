@@ -53,6 +53,10 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
         x.extend(y);
         Ok(())
     });
+    lib.set_fn_2_mut("+=", |x: &mut Array, y: Array| {
+        x.extend(y);
+        Ok(())
+    });
     lib.set_fn_2(
         "+",
         |mut x: Array, y: Array| {

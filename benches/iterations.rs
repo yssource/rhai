@@ -12,7 +12,7 @@ fn bench_iterations_1000(bench: &mut Bencher) {
             let x = 1_000;
             
             while x > 0 {
-                x = x - 1;
+                x -= 1;
             }
         "#;
 
