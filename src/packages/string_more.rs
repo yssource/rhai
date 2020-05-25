@@ -1,4 +1,5 @@
 use crate::def_package;
+use crate::fn_native::shared_make_mut;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 use crate::utils::StaticVec;
@@ -46,23 +47,19 @@ fn sub_string(s: ImmutableString, start: INT, len: INT) -> FuncReturn<ImmutableS
         .into())
 }
 fn crop_string(s: &mut ImmutableString, start: INT, len: INT) -> FuncReturn<()> {
-    let mut copy = (**s).clone();
-
-    let offset = if copy.is_empty() || len <= 0 {
-        copy.clear();
-        *s = copy.into();
+    let offset = if s.is_empty() || len <= 0 {
+        shared_make_mut(s).clear();
         return Ok(());
     } else if start < 0 {
         0
-    } else if (start as usize) >= copy.chars().count() {
-        copy.clear();
-        *s = copy.into();
+    } else if (start as usize) >= s.chars().count() {
+        shared_make_mut(s).clear();
         return Ok(());
     } else {
         start as usize
     };
 
-    let chars: StaticVec<_> = copy.chars().collect();
+    let chars: StaticVec<_> = s.chars().collect();
 
     let len = if offset + (len as usize) > chars.len() {
         chars.len() - offset
@@ -70,12 +67,10 @@ fn crop_string(s: &mut ImmutableString, start: INT, len: INT) -> FuncReturn<()> 
         len as usize
     };
 
-    *s = chars
-        .iter()
-        .skip(offset)
-        .take(len)
-        .collect::<String>()
-        .into();
+    let copy = shared_make_mut(s);
+    copy.clear();
+    copy.extend(chars.iter().skip(offset).take(len));
+
     Ok(())
 }
 
@@ -171,21 +166,17 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
         },
     );
     lib.set_fn_1_mut("clear", |s: &mut ImmutableString| {
-        *s = "".to_string().into();
+        shared_make_mut(s).clear();
         Ok(())
     });
     lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| {
-        let mut copy = (**s).clone();
-        copy.push(ch);
-        *s = copy.into();
+        shared_make_mut(s).push(ch);
         Ok(())
     });
     lib.set_fn_2_mut(
         "append",
         |s: &mut ImmutableString, add: ImmutableString| {
-            let mut copy = (**s).clone();
-            copy.push_str(add.as_str());
-            *s = copy.into();
+            shared_make_mut(s).push_str(add.as_str());
             Ok(())
         }
     );
@@ -205,10 +196,13 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     lib.set_fn_2_mut(
         "truncate",
         |s: &mut ImmutableString, len: INT| {
-            if len >= 0 {
-                *s = (**s).clone().chars().take(len as usize).collect::<String>().into();
+            if len > 0 {
+                let chars: StaticVec<_> = s.chars().collect();
+                let copy = shared_make_mut(s);
+                copy.clear();
+                copy.extend(chars.into_iter().take(len as usize));
             } else {
-                *s = "".to_string().into();
+                shared_make_mut(s).clear();
             }
             Ok(())
         },
@@ -216,11 +210,10 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     lib.set_fn_3_mut(
         "pad",
         |s: &mut ImmutableString, len: INT, ch: char| {
-            let mut copy = (**s).clone();
+            let copy = shared_make_mut(s);
             for _ in 0..copy.chars().count() - len as usize {
                 copy.push(ch);
             }
-            *s = copy.into();
             Ok(())
         },
     );

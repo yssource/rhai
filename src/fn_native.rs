@@ -19,6 +19,28 @@ pub type Shared<T> = Rc<T>;
 #[cfg(feature = "sync")]
 pub type Shared<T> = Arc<T>;
 
+pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
+    #[cfg(not(feature = "sync"))]
+    {
+        Rc::make_mut(value)
+    }
+    #[cfg(feature = "sync")]
+    {
+        Arc::make_mut(value)
+    }
+}
+
+pub fn shared_unwrap<T: Clone>(value: Shared<T>) -> Result<T, Shared<T>> {
+    #[cfg(not(feature = "sync"))]
+    {
+        Rc::try_unwrap(value)
+    }
+    #[cfg(feature = "sync")]
+    {
+        Arc::try_unwrap(value)
+    }
+}
+
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 #[cfg(not(feature = "sync"))]

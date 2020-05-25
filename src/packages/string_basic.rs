@@ -1,5 +1,6 @@
 use crate::def_package;
 use crate::engine::{FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
+use crate::fn_native::shared_make_mut;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 
@@ -41,8 +42,8 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
     lib.set_fn_1(KEYWORD_PRINT, |_: ()| Ok("".to_string()));
     lib.set_fn_1(FUNC_TO_STRING, |_: ()| Ok("".to_string()));
 
-    lib.set_fn_1(KEYWORD_PRINT, |s: ImmutableString| Ok(s.clone()));
-    lib.set_fn_1(FUNC_TO_STRING, |s: ImmutableString| Ok(s.clone()));
+    lib.set_fn_1(KEYWORD_PRINT, |s: ImmutableString| Ok(s));
+    lib.set_fn_1(FUNC_TO_STRING, |s: ImmutableString| Ok(s));
 
     reg_op!(lib, KEYWORD_DEBUG, to_debug, INT, bool, (), char, ImmutableString);
 
@@ -81,6 +82,10 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
     lib.set_fn_2(
         "+",
         |s: ImmutableString, ch: char| {
+            if s.is_empty() {
+                return Ok(ch.to_string().into());
+            }
+
             let mut s = (*s).clone();
             s.push(ch);
             Ok(s)
@@ -89,23 +94,28 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
     lib.set_fn_2(
         "+",
         |s:ImmutableString, s2:ImmutableString| {
+            if s.is_empty() {
+                return Ok(s2);
+            } else if s2.is_empty() {
+                return Ok(s);
+            }
+
             let mut s = (*s).clone();
             s.push_str(s2.as_str());
-            Ok(s)
+            Ok(s.into())
         },
     );
     lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| {
-        let mut copy = (**s).clone();
-        copy.push(ch);
-        *s = copy.into();
+        shared_make_mut(s).push(ch);
         Ok(())
     });
     lib.set_fn_2_mut(
         "append",
         |s: &mut ImmutableString, s2: ImmutableString| {
-            let mut copy = (**s).clone();
-            copy.push_str(s2.as_str());
-            *s = copy.into();
+            if !s2.is_empty() {
+                shared_make_mut(s).push_str(s2.as_str());
+            }
+
             Ok(())
         }
     );

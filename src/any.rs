@@ -1,5 +1,6 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
+use crate::fn_native::shared_unwrap;
 use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 
@@ -20,7 +21,9 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     fmt,
+    rc::Rc,
     string::String,
+    sync::Arc,
     vec::Vec,
 };
 
@@ -585,7 +588,7 @@ impl Dynamic {
     /// Returns the name of the actual type if the cast fails.
     pub fn take_string(self) -> Result<String, &'static str> {
         match self.0 {
-            Union::Str(s) => Ok((*s).clone()),
+            Union::Str(s) => Ok(shared_unwrap(s).unwrap_or_else(|s| (*s).clone())),
             _ => Err(self.type_name()),
         }
     }

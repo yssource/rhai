@@ -1512,8 +1512,9 @@ impl Engine {
 
                 let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
-                if name == KEYWORD_EVAL && args.len() == 1 && args.get(0).is::<String>() {
-                    let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<String>()));
+                if name == KEYWORD_EVAL && args.len() == 1 && args.get(0).is::<ImmutableString>() {
+                    let hash_fn =
+                        calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
                     if !self.has_override(lib, (hash_fn, *hash)) {
                         // eval - only in function call style
