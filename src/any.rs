@@ -1,6 +1,5 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::fn_native::shared_unwrap;
 use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 
@@ -21,9 +20,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     fmt,
-    rc::Rc,
     string::String,
-    sync::Arc,
     vec::Vec,
 };
 
@@ -417,13 +414,10 @@ impl Dynamic {
         match self.0 {
             Union::Unit(value) => unsafe_try_cast(value),
             Union::Bool(value) => unsafe_try_cast(value),
-            Union::Str(value) => {
-                if type_id == TypeId::of::<ImmutableString>() {
-                    unsafe_try_cast(value)
-                } else {
-                    unsafe_try_cast((*value).clone())
-                }
+            Union::Str(value) if type_id == TypeId::of::<ImmutableString>() => {
+                unsafe_try_cast(value)
             }
+            Union::Str(value) => unsafe_try_cast(value.into_owned()),
             Union::Char(value) => unsafe_try_cast(value),
             Union::Int(value) => unsafe_try_cast(value),
             #[cfg(not(feature = "no_float"))]
@@ -464,12 +458,10 @@ impl Dynamic {
         match self.0 {
             Union::Unit(value) => unsafe_try_cast(value).unwrap(),
             Union::Bool(value) => unsafe_try_cast(value).unwrap(),
-            Union::Str(value) => if type_id == TypeId::of::<ImmutableString>() {
-                unsafe_try_cast(value)
-            } else {
-                unsafe_try_cast((*value).clone())
+            Union::Str(value) if type_id == TypeId::of::<ImmutableString>() => {
+                unsafe_try_cast(value).unwrap()
             }
-            .unwrap(),
+            Union::Str(value) => unsafe_try_cast(value.into_owned()).unwrap(),
             Union::Char(value) => unsafe_try_cast(value).unwrap(),
             Union::Int(value) => unsafe_try_cast(value).unwrap(),
             #[cfg(not(feature = "no_float"))]
@@ -588,7 +580,7 @@ impl Dynamic {
     /// Returns the name of the actual type if the cast fails.
     pub fn take_string(self) -> Result<String, &'static str> {
         match self.0 {
-            Union::Str(s) => Ok(shared_unwrap(s).unwrap_or_else(|s| (*s).clone())),
+            Union::Str(s) => Ok(s.into_owned()),
             _ => Err(self.type_name()),
         }
     }

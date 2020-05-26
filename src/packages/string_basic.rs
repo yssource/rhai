@@ -1,6 +1,5 @@
 use crate::def_package;
 use crate::engine::{FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
-use crate::fn_native::shared_make_mut;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 
@@ -13,7 +12,7 @@ use crate::engine::Map;
 use crate::stdlib::{
     fmt::{Debug, Display},
     format,
-    string::{String, ToString},
+    string::ToString,
 };
 
 // Register print and debug
@@ -79,58 +78,9 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
         lib.set_fn_1_mut(KEYWORD_DEBUG, format_map);
     }
 
-    lib.set_fn_2(
-        "+",
-        |s: ImmutableString, ch: char| {
-            if s.is_empty() {
-                return Ok(ch.to_string().into());
-            }
-
-            let mut s = (*s).clone();
-            s.push(ch);
-            Ok(s)
-        },
-    );
-    lib.set_fn_2(
-        "+",
-        |s:ImmutableString, s2:ImmutableString| {
-            if s.is_empty() {
-                return Ok(s2);
-            } else if s2.is_empty() {
-                return Ok(s);
-            }
-
-            let mut s = (*s).clone();
-            s.push_str(s2.as_str());
-            Ok(s.into())
-        },
-    );
-    lib.set_fn_2_mut("+=", |s: &mut ImmutableString, ch: char| {
-        shared_make_mut(s).push(ch);
-        Ok(())
-    });
-    lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| {
-        shared_make_mut(s).push(ch);
-        Ok(())
-    });
-    lib.set_fn_2_mut(
-        "+=",
-        |s: &mut ImmutableString, s2: ImmutableString| {
-            if !s2.is_empty() {
-                shared_make_mut(s).push_str(s2.as_str());
-            }
-
-            Ok(())
-        }
-    );
-    lib.set_fn_2_mut(
-        "append",
-        |s: &mut ImmutableString, s2: ImmutableString| {
-            if !s2.is_empty() {
-                shared_make_mut(s).push_str(s2.as_str());
-            }
-
-            Ok(())
-        }
-    );
+    lib.set_fn_2("+", |s: ImmutableString, ch: char| Ok(s + ch));
+    lib.set_fn_2_mut("+=", |s: &mut ImmutableString, ch: char| { *s += ch; Ok(()) });
+    lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| { *s += ch; Ok(()) });
+    lib.set_fn_2_mut("+=", |s: &mut ImmutableString, s2: ImmutableString| { *s += &s2; Ok(()) });
+    lib.set_fn_2_mut("append", |s: &mut ImmutableString, s2: ImmutableString| { *s += &s2; Ok(()) });
 });

@@ -4,7 +4,7 @@ use crate::fn_native::{CallableFunction, IteratorFn, Shared};
 use crate::module::Module;
 use crate::utils::StaticVec;
 
-use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
+use crate::stdlib::any::TypeId;
 
 pub(crate) mod arithmetic;
 mod array_basic;

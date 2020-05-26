@@ -19,6 +19,8 @@ pub type Shared<T> = Rc<T>;
 #[cfg(feature = "sync")]
 pub type Shared<T> = Arc<T>;
 
+/// Consume a `Shared` resource and return a mutable reference to the wrapped value.
+/// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     #[cfg(not(feature = "sync"))]
     {
@@ -30,14 +32,19 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     }
 }
 
-pub fn shared_unwrap<T: Clone>(value: Shared<T>) -> Result<T, Shared<T>> {
+/// Consume a `Shared` resource, assuming that it is unique (i.e. not shared).
+///
+/// # Panics
+///
+/// Panics if the resource is shared (i.e. has other outstanding references).
+pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
     #[cfg(not(feature = "sync"))]
     {
-        Rc::try_unwrap(value)
+        Rc::try_unwrap(value).map_err(|_| ()).unwrap()
     }
     #[cfg(feature = "sync")]
     {
-        Arc::try_unwrap(value)
+        Arc::try_unwrap(value).map_err(|_| ()).unwrap()
     }
 }
 

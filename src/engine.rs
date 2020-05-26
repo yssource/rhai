@@ -2055,6 +2055,7 @@ fn run_builtin_binary_op(
         let y = y.downcast_ref::<ImmutableString>().unwrap();
 
         match op {
+            "+" => return Ok(Some((x + y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             ">" => return Ok(Some((x > y).into())),

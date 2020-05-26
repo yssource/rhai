@@ -1,5 +1,4 @@
 use crate::def_package;
-use crate::fn_native::shared_make_mut;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 use crate::utils::StaticVec;
@@ -48,12 +47,12 @@ fn sub_string(s: ImmutableString, start: INT, len: INT) -> FuncReturn<ImmutableS
 }
 fn crop_string(s: &mut ImmutableString, start: INT, len: INT) -> FuncReturn<()> {
     let offset = if s.is_empty() || len <= 0 {
-        shared_make_mut(s).clear();
+        s.make_mut().clear();
         return Ok(());
     } else if start < 0 {
         0
     } else if (start as usize) >= s.chars().count() {
-        shared_make_mut(s).clear();
+        s.make_mut().clear();
         return Ok(());
     } else {
         start as usize
@@ -67,7 +66,7 @@ fn crop_string(s: &mut ImmutableString, start: INT, len: INT) -> FuncReturn<()> 
         len as usize
     };
 
-    let copy = shared_make_mut(s);
+    let copy = s.make_mut();
     copy.clear();
     copy.extend(chars.iter().skip(offset).take(len));
 
@@ -166,17 +165,17 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
         },
     );
     lib.set_fn_1_mut("clear", |s: &mut ImmutableString| {
-        shared_make_mut(s).clear();
+        s.make_mut().clear();
         Ok(())
     });
     lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| {
-        shared_make_mut(s).push(ch);
+        s.make_mut().push(ch);
         Ok(())
     });
     lib.set_fn_2_mut(
         "append",
         |s: &mut ImmutableString, add: ImmutableString| {
-            shared_make_mut(s).push_str(add.as_str());
+            s.make_mut().push_str(add.as_str());
             Ok(())
         }
     );
@@ -198,11 +197,11 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
         |s: &mut ImmutableString, len: INT| {
             if len > 0 {
                 let chars: StaticVec<_> = s.chars().collect();
-                let copy = shared_make_mut(s);
+                let copy = s.make_mut();
                 copy.clear();
                 copy.extend(chars.into_iter().take(len as usize));
             } else {
-                shared_make_mut(s).clear();
+                s.make_mut().clear();
             }
             Ok(())
         },
@@ -210,7 +209,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     lib.set_fn_3_mut(
         "pad",
         |s: &mut ImmutableString, len: INT, ch: char| {
-            let copy = shared_make_mut(s);
+            let copy = s.make_mut();
             for _ in 0..copy.chars().count() - len as usize {
                 copy.push(ch);
             }

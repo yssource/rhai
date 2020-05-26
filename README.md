@@ -514,9 +514,9 @@ This is useful on some 32-bit targets where using 64-bit integers incur a perfor
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
 
-Strings in Rhai are _immutable_, meaning that they can be shared but not modified.  In actual, the `ImmutableString` type
-is implemented as an `Rc`- or `Arc`-wrapped `String`.  Any modification done to a Rhai string will cause the string to be cloned
-and the modifications made to the copy.
+[Strings] in Rhai are _immutable_, meaning that they can be shared but not modified.  In actual, the `ImmutableString` type
+is an alias to `Rc<String>` or `Arc<String>` (depending on the [`sync`] feature).
+Any modification done to a Rhai string will cause the string to be cloned and the modifications made to the copy.
 
 The `to_string` function converts a standard type into a [string] for display purposes.
 
@@ -612,6 +612,7 @@ The following conversion traits are implemented for `Dynamic`:
 * `From<i64>` (`i32` if [`only_i32`])
 * `From<f64>` (if not [`no_float`])
 * `From<bool>`
+* `From<rhai::ImmutableString>`
 * `From<String>`
 * `From<char>`
 * `From<Vec<T>>` (into an [array])

@@ -8,7 +8,7 @@ use crate::fn_native::{CallableFunction, FnAny, FnCallArgs};
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 
-use crate::stdlib::{any::TypeId, boxed::Box, mem, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, mem};
 
 /// Trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {

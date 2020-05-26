@@ -4,14 +4,18 @@
 //!
 //! The `StaticVec` type has some `unsafe` blocks to handle conversions between `MaybeUninit` and regular types.
 
+use crate::fn_native::{shared_make_mut, shared_take, Shared};
+
 use crate::stdlib::{
     any::TypeId,
+    borrow::Borrow,
     fmt,
     hash::{Hash, Hasher},
     iter::FromIterator,
     mem,
     mem::MaybeUninit,
-    ops::{Drop, Index, IndexMut},
+    ops::{Add, AddAssign, Deref, Drop, Index, IndexMut},
+    str::FromStr,
     vec::Vec,
 };
 
@@ -558,5 +562,275 @@ impl<T> From<Vec<T>> for StaticVec<T> {
         }
 
         arr
+    }
+}
+
+/// The system immutable string type.
+///
+/// An `ImmutableString` wraps an `Rc<String>` (or `Arc<String>` under the `sync` feature)
+/// so that it can be simply shared and not cloned.
+///
+/// # Examples
+///
+/// ```
+/// use rhai::ImmutableString;
+///
+/// let s1: ImmutableString = "hello".into();
+///
+/// // No actual cloning of the string is involved below.
+/// let s2 = s1.clone();
+/// let s3 = s2.clone();
+///
+/// assert_eq!(s1, s2);
+///
+/// // Clones the underlying string (because it is already shared) and extracts it.
+/// let mut s: String = s1.into_owned();
+///
+/// // Changing the clone has no impact on the previously shared version.
+/// s.push_str(", world!");
+///
+/// // The old version still exists.
+/// assert_eq!(s2, s3);
+/// assert_eq!(s2.as_str(), "hello");
+///
+/// // Not equals!
+/// assert_ne!(s2.as_str(), s.as_str());
+/// assert_eq!(s, "hello, world!");
+/// ```
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
+pub struct ImmutableString(Shared<String>);
+
+impl Deref for ImmutableString {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<String> for ImmutableString {
+    fn as_ref(&self) -> &String {
+        &self.0
+    }
+}
+
+impl Borrow<str> for ImmutableString {
+    fn borrow(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<&str> for ImmutableString {
+    fn from(value: &str) -> Self {
+        Self(value.to_string().into())
+    }
+}
+impl From<String> for ImmutableString {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<Box<String>> for ImmutableString {
+    fn from(value: Box<String>) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<ImmutableString> for String {
+    fn from(value: ImmutableString) -> Self {
+        value.into_owned()
+    }
+}
+
+impl FromStr for ImmutableString {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_string().into()))
+    }
+}
+
+impl FromIterator<char> for ImmutableString {
+    fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
+        Self(iter.into_iter().collect::<String>().into())
+    }
+}
+
+impl<'a> FromIterator<&'a char> for ImmutableString {
+    fn from_iter<T: IntoIterator<Item = &'a char>>(iter: T) -> Self {
+        Self(iter.into_iter().cloned().collect::<String>().into())
+    }
+}
+
+impl<'a> FromIterator<&'a str> for ImmutableString {
+    fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
+        Self(iter.into_iter().collect::<String>().into())
+    }
+}
+
+impl<'a> FromIterator<String> for ImmutableString {
+    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
+        Self(iter.into_iter().collect::<String>().into())
+    }
+}
+
+impl fmt::Display for ImmutableString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.0.as_str(), f)
+    }
+}
+
+impl fmt::Debug for ImmutableString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self.0.as_str(), f)
+    }
+}
+
+impl Add for ImmutableString {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        if rhs.is_empty() {
+            self
+        } else if self.is_empty() {
+            rhs
+        } else {
+            self.make_mut().push_str(rhs.0.as_str());
+            self
+        }
+    }
+}
+
+impl Add for &ImmutableString {
+    type Output = ImmutableString;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if rhs.is_empty() {
+            self.clone()
+        } else if self.is_empty() {
+            rhs.clone()
+        } else {
+            let mut s = self.clone();
+            s.make_mut().push_str(rhs.0.as_str());
+            s
+        }
+    }
+}
+
+impl AddAssign<&ImmutableString> for ImmutableString {
+    fn add_assign(&mut self, rhs: &ImmutableString) {
+        if !rhs.is_empty() {
+            if self.is_empty() {
+                self.0 = rhs.0.clone();
+            } else {
+                self.make_mut().push_str(rhs.0.as_str());
+            }
+        }
+    }
+}
+
+impl Add<&str> for ImmutableString {
+    type Output = Self;
+
+    fn add(mut self, rhs: &str) -> Self::Output {
+        if rhs.is_empty() {
+            self
+        } else {
+            self.make_mut().push_str(rhs);
+            self
+        }
+    }
+}
+
+impl Add<&str> for &ImmutableString {
+    type Output = ImmutableString;
+
+    fn add(self, rhs: &str) -> Self::Output {
+        if rhs.is_empty() {
+            self.clone()
+        } else {
+            let mut s = self.clone();
+            s.make_mut().push_str(rhs);
+            s
+        }
+    }
+}
+
+impl AddAssign<&str> for ImmutableString {
+    fn add_assign(&mut self, rhs: &str) {
+        if !rhs.is_empty() {
+            self.make_mut().push_str(rhs);
+        }
+    }
+}
+
+impl Add<String> for ImmutableString {
+    type Output = Self;
+
+    fn add(mut self, rhs: String) -> Self::Output {
+        if rhs.is_empty() {
+            self
+        } else if self.is_empty() {
+            rhs.into()
+        } else {
+            self.make_mut().push_str(&rhs);
+            self
+        }
+    }
+}
+
+impl Add<String> for &ImmutableString {
+    type Output = ImmutableString;
+
+    fn add(self, rhs: String) -> Self::Output {
+        if rhs.is_empty() {
+            self.clone()
+        } else if self.is_empty() {
+            rhs.into()
+        } else {
+            let mut s = self.clone();
+            s.make_mut().push_str(&rhs);
+            s
+        }
+    }
+}
+
+impl Add<char> for ImmutableString {
+    type Output = Self;
+
+    fn add(mut self, rhs: char) -> Self::Output {
+        self.make_mut().push(rhs);
+        self
+    }
+}
+
+impl Add<char> for &ImmutableString {
+    type Output = ImmutableString;
+
+    fn add(self, rhs: char) -> Self::Output {
+        let mut s = self.clone();
+        s.make_mut().push(rhs);
+        s
+    }
+}
+
+impl AddAssign<char> for ImmutableString {
+    fn add_assign(&mut self, rhs: char) {
+        self.make_mut().push(rhs);
+    }
+}
+
+impl ImmutableString {
+    /// Consume the `ImmutableString` and convert it into a `String`.
+    /// If there are other references to the same string, a cloned copy is returned.
+    pub fn into_owned(mut self) -> String {
+        self.make_mut(); // Make sure it is unique reference
+        shared_take(self.0) // Should succeed
+    }
+    /// Make sure that the `ImmutableString` is unique (i.e. no other outstanding references).
+    /// Then return a mutable reference to the `String`.
+    pub fn make_mut(&mut self) -> &mut String {
+        shared_make_mut(&mut self.0)
     }
 }

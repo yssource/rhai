@@ -6,10 +6,7 @@ use crate::engine::Map;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 
-use crate::stdlib::{
-    string::{String, ToString},
-    vec::Vec,
-};
+use crate::stdlib::{string::ToString, vec::Vec};
 
 fn map_get_keys(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
     Ok(map.iter().map(|(k, _)| k.to_string().into()).collect())

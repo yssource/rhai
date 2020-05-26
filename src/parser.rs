@@ -4,7 +4,6 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::engine::{make_getter, make_setter, Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::fn_native::Shared;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
@@ -49,10 +48,9 @@ pub type INT = i32;
 #[cfg(not(feature = "no_float"))]
 pub type FLOAT = f64;
 
-/// The system immutable string type.
-pub type ImmutableString = Shared<String>;
-
 type PERR = ParseErrorType;
+
+pub use crate::utils::ImmutableString;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
