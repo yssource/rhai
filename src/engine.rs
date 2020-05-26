@@ -2150,9 +2150,9 @@ fn run_builtin_op_assignment(
             "*" => return Ok(Some(*x *= y)),
             "/" => return Ok(Some(*x /= y)),
             "%" => return Ok(Some(*x %= y)),
-            "~" => return Ok(Some(*x = pow_i_i_u(x, y))),
-            ">>" => return Ok(Some(*x = shr_u(x, y))),
-            "<<" => return Ok(Some(*x = shl_u(x, y))),
+            "~" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
+            ">>" => return Ok(Some(*x = shr_u(*x, y)?)),
+            "<<" => return Ok(Some(*x = shl_u(*x, y)?)),
             _ => (),
         }
 
