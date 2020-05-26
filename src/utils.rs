@@ -9,6 +9,7 @@ use crate::fn_native::{shared_make_mut, shared_take, Shared};
 use crate::stdlib::{
     any::TypeId,
     borrow::Borrow,
+    boxed::Box,
     fmt,
     hash::{Hash, Hasher},
     iter::FromIterator,
@@ -16,6 +17,7 @@ use crate::stdlib::{
     mem::MaybeUninit,
     ops::{Add, AddAssign, Deref, Drop, Index, IndexMut},
     str::FromStr,
+    string::{String, ToString},
     vec::Vec,
 };
 
