@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{FnCallArgs, Shared};
+use crate::fn_native::{CallableFunction, FnCallArgs, Shared};
 use crate::module::Module;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
@@ -438,14 +438,18 @@ fn default_print(s: &str) {
 /// Search for a variable within the scope
 fn search_scope<'a>(
     scope: &'a mut Scope,
-    name: &str,
-    modules: Option<(&ModuleRef, u64)>,
-    index: Option<NonZeroUsize>,
-    pos: Position,
-) -> Result<(&'a mut Dynamic, ScopeEntryType), Box<EvalAltResult>> {
+    state: &mut State,
+    expr: &'a Expr,
+) -> Result<(&'a mut Dynamic, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
+    let ((name, pos), modules, hash_var, index) = match expr {
+        Expr::Variable(x) => x.as_ref(),
+        _ => unreachable!(),
+    };
+    let index = if state.always_search { None } else { *index };
+
     #[cfg(not(feature = "no_module"))]
     {
-        if let Some((modules, hash_var)) = modules {
+        if let Some(modules) = modules.as_ref() {
             let module = if let Some(index) = modules.index() {
                 scope
                     .get_mut(scope.len() - index.get())
@@ -461,9 +465,11 @@ fn search_scope<'a>(
             };
 
             return Ok((
-                module.get_qualified_var_mut(name, hash_var, pos)?,
+                module.get_qualified_var_mut(name, *hash_var, *pos)?,
+                name,
                 // Module variables are constant
                 ScopeEntryType::Constant,
+                *pos,
             ));
         }
     }
@@ -473,11 +479,12 @@ fn search_scope<'a>(
     } else {
         scope
             .get_index(name)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), pos)))?
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), *pos)))?
             .0
     };
 
-    Ok(scope.get_mut(index))
+    let (val, typ) = scope.get_mut(index);
+    Ok((val, name, typ, *pos))
 }
 
 impl Engine {
@@ -677,11 +684,8 @@ impl Engine {
             });
         }
 
-        // See if it is built in. Only consider situations where:
-        // 1) It is not a method call,
-        // 2) the call explicitly specifies `native_only`,
-        // 3) there are two parameters.
-        if !is_ref && native_only && args.len() == 2 {
+        // See if it is built in.
+        if args.len() == 2 {
             match run_builtin_binary_op(fn_name, args[0], args[1])? {
                 Some(v) => return Ok((v, false)),
                 None => (),
@@ -1147,20 +1151,17 @@ impl Engine {
 
         match dot_lhs {
             // id.??? or id[???]
-            Expr::Variable(x) => {
-                let ((name, pos), modules, hash_var, index) = x.as_ref();
-                let index = if state.always_search { None } else { *index };
-                let mod_and_hash = modules.as_ref().map(|m| (m.as_ref(), *hash_var));
-                let (target, typ) = search_scope(scope, &name, mod_and_hash, index, *pos)?;
-                self.inc_operations(state, *pos)?;
+            Expr::Variable(_) => {
+                let (target, name, typ, pos) = search_scope(scope, state, dot_lhs)?;
+                self.inc_operations(state, pos)?;
 
                 // Constants cannot be modified
                 match typ {
                     ScopeEntryType::Module => unreachable!(),
                     ScopeEntryType::Constant if new_val.is_some() => {
                         return Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                            name.clone(),
-                            *pos,
+                            name.to_string(),
+                            pos,
                         )));
                     }
                     ScopeEntryType::Constant | ScopeEntryType::Normal => (),
@@ -1404,11 +1405,8 @@ impl Engine {
             Expr::FloatConstant(x) => Ok(x.0.into()),
             Expr::StringConstant(x) => Ok(x.0.to_string().into()),
             Expr::CharConstant(x) => Ok(x.0.into()),
-            Expr::Variable(x) => {
-                let ((name, pos), modules, hash_var, index) = x.as_ref();
-                let index = if state.always_search { None } else { *index };
-                let mod_and_hash = modules.as_ref().map(|m| (m.as_ref(), *hash_var));
-                let (val, _) = search_scope(scope, name, mod_and_hash, index, *pos)?;
+            Expr::Variable(_) => {
+                let (val, _, _, _) = search_scope(scope, state, expr)?;
                 Ok(val.clone())
             }
             Expr::Property(_) => unreachable!(),
@@ -1416,89 +1414,106 @@ impl Engine {
             // Statement block
             Expr::Stmt(stmt) => self.eval_stmt(scope, state, lib, &stmt.0, level),
 
-            // lhs = rhs
+            // var op= rhs
+            Expr::Assignment(x) if matches!(x.0, Expr::Variable(_)) => {
+                let (lhs_expr, op, rhs_expr, op_pos) = x.as_ref();
+                let mut rhs_val = self.eval_expr(scope, state, lib, rhs_expr, level)?;
+                let (lhs_ptr, name, typ, pos) = search_scope(scope, state, lhs_expr)?;
+                self.inc_operations(state, pos)?;
+
+                match typ {
+                    // Assignment to constant variable
+                    ScopeEntryType::Constant => Err(Box::new(
+                        EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos),
+                    )),
+                    // Normal assignment
+                    ScopeEntryType::Normal if op.is_empty() => {
+                        *lhs_ptr = rhs_val;
+                        Ok(Default::default())
+                    }
+                    // Op-assignment - in order of precedence:
+                    ScopeEntryType::Normal => {
+                        // 1) Native registered overriding function
+                        // 2) Built-in implementation
+                        // 3) Map to `var = var op rhs`
+
+                        // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
+                        let arg_types = once(lhs_ptr.type_id()).chain(once(rhs_val.type_id()));
+                        let hash_fn = calc_fn_hash(empty(), op, 2, arg_types);
+
+                        if let Some(CallableFunction::Method(func)) = self
+                            .global_module
+                            .get_fn(hash_fn)
+                            .or_else(|| self.packages.get_fn(hash_fn))
+                        {
+                            // Overriding exact implementation
+                            func(&mut [lhs_ptr, &mut rhs_val])?;
+                        } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
+                            // Not built in, map to `var = var op rhs`
+                            let op = &op[..op.len() - 1]; // extract operator without =
+                            let hash = calc_fn_hash(empty(), op, 2, empty());
+                            let args = &mut [&mut lhs_ptr.clone(), &mut rhs_val];
+
+                            // Set variable value
+                            *lhs_ptr = self
+                                .exec_fn_call(
+                                    state, lib, op, true, hash, args, false, None, *op_pos, level,
+                                )
+                                .map(|(v, _)| v)?;
+                        }
+                        Ok(Default::default())
+                    }
+                    // A module cannot be assigned to
+                    ScopeEntryType::Module => unreachable!(),
+                }
+            }
+
+            // lhs op= rhs
             Expr::Assignment(x) => {
-                let lhs_expr = &x.0;
-                let op = x.1.as_ref();
-                let op_pos = x.3;
-                let mut rhs_val = self.eval_expr(scope, state, lib, &x.2, level)?;
+                let (lhs_expr, op, rhs_expr, op_pos) = x.as_ref();
+                let mut rhs_val = self.eval_expr(scope, state, lib, rhs_expr, level)?;
 
-                // name op= rhs
-                if let Expr::Variable(x) = &x.0 {
-                    let ((name, pos), modules, hash_var, index) = x.as_ref();
-                    let index = if state.always_search { None } else { *index };
-                    let mod_and_hash = modules.as_ref().map(|m| (m.as_ref(), *hash_var));
-                    let (lhs_ptr, typ) = search_scope(scope, name, mod_and_hash, index, *pos)?;
-                    self.inc_operations(state, *pos)?;
-
-                    match typ {
-                        ScopeEntryType::Constant => Err(Box::new(
-                            EvalAltResult::ErrorAssignmentToConstant(name.clone(), *pos),
-                        )),
-                        ScopeEntryType::Normal if !op.is_empty() => {
-                            // Complex op-assignment
-                            if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
-                                // Not built in, do function call
-                                let mut lhs_val = lhs_ptr.clone();
-                                let args = &mut [&mut lhs_val, &mut rhs_val];
-                                let hash = calc_fn_hash(empty(), op, 2, empty());
-                                *lhs_ptr = self
-                                    .exec_fn_call(
-                                        state, lib, op, true, hash, args, false, None, op_pos,
-                                        level,
-                                    )
-                                    .map(|(v, _)| v)?;
-                            }
-                            Ok(Default::default())
-                        }
-                        ScopeEntryType::Normal => {
-                            *lhs_ptr = rhs_val;
-                            Ok(Default::default())
-                        }
-                        // End variable cannot be a module
-                        ScopeEntryType::Module => unreachable!(),
-                    }
+                let new_val = Some(if op.is_empty() {
+                    // Normal assignment
+                    rhs_val
                 } else {
-                    let new_val = Some(if op.is_empty() {
-                        rhs_val
-                    } else {
-                        // Complex op-assignment - always do function call
-                        let args = &mut [
-                            &mut self.eval_expr(scope, state, lib, lhs_expr, level)?,
-                            &mut rhs_val,
-                        ];
-                        let hash = calc_fn_hash(empty(), op, 2, empty());
-                        self.exec_fn_call(
-                            state, lib, op, true, hash, args, false, None, op_pos, level,
-                        )
-                        .map(|(v, _)| v)?
-                    });
+                    // Op-assignment - always map to `lhs = lhs op rhs`
+                    let op = &op[..op.len() - 1]; // extract operator without =
+                    let hash = calc_fn_hash(empty(), op, 2, empty());
+                    let args = &mut [
+                        &mut self.eval_expr(scope, state, lib, lhs_expr, level)?,
+                        &mut rhs_val,
+                    ];
+                    self.exec_fn_call(
+                        state, lib, op, true, hash, args, false, None, *op_pos, level,
+                    )
+                    .map(|(v, _)| v)?
+                });
 
-                    match &x.0 {
-                        // name op= rhs
-                        Expr::Variable(_) => unreachable!(),
-                        // idx_lhs[idx_expr] op= rhs
-                        #[cfg(not(feature = "no_index"))]
-                        Expr::Index(x) => self.eval_dot_index_chain(
-                            scope, state, lib, &x.0, &x.1, true, x.2, level, new_val,
-                        ),
-                        // dot_lhs.dot_rhs op= rhs
-                        #[cfg(not(feature = "no_object"))]
-                        Expr::Dot(x) => self.eval_dot_index_chain(
-                            scope, state, lib, &x.0, &x.1, false, op_pos, level, new_val,
-                        ),
-                        // Error assignment to constant
-                        expr if expr.is_constant() => {
-                            Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                                expr.get_constant_str(),
-                                expr.position(),
-                            )))
-                        }
-                        // Syntax error
-                        expr => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                match lhs_expr {
+                    // name op= rhs
+                    Expr::Variable(_) => unreachable!(),
+                    // idx_lhs[idx_expr] op= rhs
+                    #[cfg(not(feature = "no_index"))]
+                    Expr::Index(x) => self.eval_dot_index_chain(
+                        scope, state, lib, &x.0, &x.1, true, x.2, level, new_val,
+                    ),
+                    // dot_lhs.dot_rhs op= rhs
+                    #[cfg(not(feature = "no_object"))]
+                    Expr::Dot(x) => self.eval_dot_index_chain(
+                        scope, state, lib, &x.0, &x.1, false, *op_pos, level, new_val,
+                    ),
+                    // Error assignment to constant
+                    expr if expr.is_constant() => {
+                        Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
+                            expr.get_constant_str(),
                             expr.position(),
-                        ))),
+                        )))
                     }
+                    // Syntax error
+                    expr => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                        expr.position(),
+                    ))),
                 }
             }
 
@@ -2132,34 +2147,34 @@ fn run_builtin_op_assignment(
 
         #[cfg(not(feature = "unchecked"))]
         match op {
-            "+" => return Ok(Some(*x = add(*x, y)?)),
-            "-" => return Ok(Some(*x = sub(*x, y)?)),
-            "*" => return Ok(Some(*x = mul(*x, y)?)),
-            "/" => return Ok(Some(*x = div(*x, y)?)),
-            "%" => return Ok(Some(*x = modulo(*x, y)?)),
-            "~" => return Ok(Some(*x = pow_i_i(*x, y)?)),
-            ">>" => return Ok(Some(*x = shr(*x, y)?)),
-            "<<" => return Ok(Some(*x = shl(*x, y)?)),
+            "+=" => return Ok(Some(*x = add(*x, y)?)),
+            "-=" => return Ok(Some(*x = sub(*x, y)?)),
+            "*=" => return Ok(Some(*x = mul(*x, y)?)),
+            "/=" => return Ok(Some(*x = div(*x, y)?)),
+            "%=" => return Ok(Some(*x = modulo(*x, y)?)),
+            "~=" => return Ok(Some(*x = pow_i_i(*x, y)?)),
+            ">>=" => return Ok(Some(*x = shr(*x, y)?)),
+            "<<=" => return Ok(Some(*x = shl(*x, y)?)),
             _ => (),
         }
 
         #[cfg(feature = "unchecked")]
         match op {
-            "+" => return Ok(Some(*x += y)),
-            "-" => return Ok(Some(*x -= y)),
-            "*" => return Ok(Some(*x *= y)),
-            "/" => return Ok(Some(*x /= y)),
-            "%" => return Ok(Some(*x %= y)),
-            "~" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
-            ">>" => return Ok(Some(*x = shr_u(*x, y)?)),
-            "<<" => return Ok(Some(*x = shl_u(*x, y)?)),
+            "+=" => return Ok(Some(*x += y)),
+            "-=" => return Ok(Some(*x -= y)),
+            "*=" => return Ok(Some(*x *= y)),
+            "/=" => return Ok(Some(*x /= y)),
+            "%=" => return Ok(Some(*x %= y)),
+            "~=" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
+            ">>=" => return Ok(Some(*x = shr_u(*x, y)?)),
+            "<<=" => return Ok(Some(*x = shl_u(*x, y)?)),
             _ => (),
         }
 
         match op {
-            "&" => return Ok(Some(*x &= y)),
-            "|" => return Ok(Some(*x |= y)),
-            "^" => return Ok(Some(*x ^= y)),
+            "&=" => return Ok(Some(*x &= y)),
+            "|=" => return Ok(Some(*x |= y)),
+            "^=" => return Ok(Some(*x ^= y)),
             _ => (),
         }
     } else if args_type == TypeId::of::<bool>() {
@@ -2167,8 +2182,8 @@ fn run_builtin_op_assignment(
         let y = y.downcast_ref::<bool>().unwrap().clone();
 
         match op {
-            "&" => return Ok(Some(*x = *x && y)),
-            "|" => return Ok(Some(*x = *x || y)),
+            "&=" => return Ok(Some(*x = *x && y)),
+            "|=" => return Ok(Some(*x = *x || y)),
             _ => (),
         }
     }
@@ -2180,12 +2195,12 @@ fn run_builtin_op_assignment(
             let y = y.downcast_ref::<FLOAT>().unwrap().clone();
 
             match op {
-                "+" => return Ok(Some(*x += y)),
-                "-" => return Ok(Some(*x -= y)),
-                "*" => return Ok(Some(*x *= y)),
-                "/" => return Ok(Some(*x /= y)),
-                "%" => return Ok(Some(*x %= y)),
-                "~" => return Ok(Some(*x = pow_f_f(*x, y)?)),
+                "+=" => return Ok(Some(*x += y)),
+                "-=" => return Ok(Some(*x -= y)),
+                "*=" => return Ok(Some(*x *= y)),
+                "/=" => return Ok(Some(*x /= y)),
+                "%=" => return Ok(Some(*x %= y)),
+                "~=" => return Ok(Some(*x = pow_f_f(*x, y)?)),
                 _ => (),
             }
         }

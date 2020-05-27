@@ -395,14 +395,15 @@ are supported.
 
 ### Built-in operators
 
-| Operator                     | Supported for type (see [standard types])                                     |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `+`, `-`, `*`, `/`, `%`, `~` | `INT`, `FLOAT` (if not [`no_float`])                                          |
-| `<<`, `>>`, `^`              | `INT`                                                                         |
-| `&`, `\|`                    | `INT`, `bool`                                                                 |
-| `&&`, `\|\|`                 | `bool`                                                                        |
-| `==`, `!=`                   | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `ImmutableString` |
-| `>`, `>=`, `<`, `<=`         | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `ImmutableString`         |
+| Operators                | Assignment operators         | Supported for type (see [standard types])                                     |
+| ------------------------ | ---------------------------- | ----------------------------------------------------------------------------- |
+| `+`,                     | `+=`                         | `INT`, `FLOAT` (if not [`no_float`]), `ImmutableString`                       |
+| `-`, `*`, `/`, `%`, `~`, | `-=`, `*=`, `/=`, `%=`, `~=` | `INT`, `FLOAT` (if not [`no_float`])                                          |
+| `<<`, `>>`, `^`,         | `<<=`, `>>=`, `^=`           | `INT`                                                                         |
+| `&`, `\|`,               | `&=`, `|=`                   | `INT`, `bool`                                                                 |
+| `&&`, `\|\|`             |                              | `bool`                                                                        |
+| `==`, `!=`               |                              | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `ImmutableString` |
+| `>`, `>=`, `<`, `<=`     |                              | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `ImmutableString`         |
 
 ### Packages
 
@@ -426,20 +427,20 @@ engine.load_package(package.get());             // load the package manually. 'g
 
 The follow packages are available:
 
-| Package                | Description                                                                | In `CorePackage` | In `StandardPackage` |
-| ---------------------- | -------------------------------------------------------------------------- | :--------------: | :------------------: |
-| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`) for different numeric types |       Yes        |         Yes          |
-| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)                                       |       Yes        |         Yes          |
-| `LogicPackage`         | Logical and comparison operators (e.g. `==`, `>`)                          |       Yes        |         Yes          |
-| `BasicStringPackage`   | Basic string functions                                                     |       Yes        |         Yes          |
-| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])                                   |       Yes        |         Yes          |
-| `MoreStringPackage`    | Additional string functions                                                |        No        |         Yes          |
-| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)                                  |        No        |         Yes          |
-| `BasicArrayPackage`    | Basic [array] functions                                                    |        No        |         Yes          |
-| `BasicMapPackage`      | Basic [object map] functions                                               |        No        |         Yes          |
-| `EvalPackage`          | Disable [`eval`]                                                           |        No        |          No          |
-| `CorePackage`          | Basic essentials                                                           |                  |                      |
-| `StandardPackage`      | Standard library                                                           |                  |                      |
+| Package                | Description                                                                                            | In `CorePackage` | In `StandardPackage` |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ | :--------------: | :------------------: |
+| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`) for numeric types that are not built in (e.g. `u16`)    |       Yes        |         Yes          |
+| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)                                                                   |       Yes        |         Yes          |
+| `LogicPackage`         | Logical and comparison operators (e.g. `==`, `>`) for numeric types that are not built in (e.g. `u16`) |       Yes        |         Yes          |
+| `BasicStringPackage`   | Basic string functions (e.g. `print`, `debug`, `len`) that are not built in                            |       Yes        |         Yes          |
+| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])                                                               |       Yes        |         Yes          |
+| `MoreStringPackage`    | Additional string functions, including converting common types to string                               |        No        |         Yes          |
+| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)                                                              |        No        |         Yes          |
+| `BasicArrayPackage`    | Basic [array] functions (not available under `no_index`)                                               |        No        |         Yes          |
+| `BasicMapPackage`      | Basic [object map] functions (not available under `no_object`)                                         |        No        |         Yes          |
+| `EvalPackage`          | Disable [`eval`]                                                                                       |        No        |          No          |
+| `CorePackage`          | Basic essentials                                                                                       |       Yes        |         Yes          |
+| `StandardPackage`      | Standard library                                                                                       |        No        |         Yes          |
 
 Packages typically contain Rust functions that are callable within a Rhai script.
 All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).

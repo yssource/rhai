@@ -34,9 +34,11 @@ Speed enhancements
 ------------------
 
 * Common operators (e.g. `+`, `>`, `==`) now call into highly efficient built-in implementations for standard types
-  (i.e. `INT`, `FLOAT`, `bool`, `char`, `()` and some `String`) if not overridden by a registered function.
+  (i.e. `INT`, `FLOAT`, `bool`, `char`, `()` and `ImmutableString`) if not overridden by a registered function.
   This yields a 5-10% speed benefit depending on script operator usage. Scripts running tight loops will see
   significant speed-up.
+* Common assignment operators (e.g. `+=`, `%=`) now call into highly efficient built-in implementations for
+  standard types (i.e. `INT`, `FLOAT`, `bool`, `char`, `()` and `ImmutableString`) if not overridden by a registered function.
 * Implementations of common operators for standard types are removed from the `ArithmeticPackage` and `LogicPackage`
   (and therefore the `CorePackage`) because they are now always available, even under `Engine::new_raw`.
 * Operator-assignment statements (e.g. `+=`) are now handled directly and much faster.

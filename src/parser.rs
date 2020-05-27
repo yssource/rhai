@@ -1444,17 +1444,18 @@ fn parse_op_assignment_stmt<'a>(
 
     let op = match token {
         Token::Equals => "".into(),
-        Token::PlusAssign => Token::Plus.syntax(),
-        Token::MinusAssign => Token::Minus.syntax(),
-        Token::MultiplyAssign => Token::Multiply.syntax(),
-        Token::DivideAssign => Token::Divide.syntax(),
-        Token::LeftShiftAssign => Token::LeftShift.syntax(),
-        Token::RightShiftAssign => Token::RightShift.syntax(),
-        Token::ModuloAssign => Token::Modulo.syntax(),
-        Token::PowerOfAssign => Token::PowerOf.syntax(),
-        Token::AndAssign => Token::Ampersand.syntax(),
-        Token::OrAssign => Token::Pipe.syntax(),
-        Token::XOrAssign => Token::XOr.syntax(),
+
+        Token::PlusAssign
+        | Token::MinusAssign
+        | Token::MultiplyAssign
+        | Token::DivideAssign
+        | Token::LeftShiftAssign
+        | Token::RightShiftAssign
+        | Token::ModuloAssign
+        | Token::PowerOfAssign
+        | Token::AndAssign
+        | Token::OrAssign
+        | Token::XOrAssign => token.syntax(),
 
         _ => return Ok(lhs),
     };
