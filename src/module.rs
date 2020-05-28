@@ -534,6 +534,105 @@ impl Module {
         )
     }
 
+    /// Set a Rust function taking four parameters into the module, returning a hash key.
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_3("calc", |x: i64, y: String, z: i64, _w: ()| {
+    ///     Ok(x + y.len() as i64 + z)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    pub fn set_fn_4<
+        A: Variant + Clone,
+        B: Variant + Clone,
+        C: Variant + Clone,
+        D: Variant + Clone,
+        T: Variant + Clone,
+    >(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C, D) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        let f = move |args: &mut FnCallArgs| {
+            let a = mem::take(args[0]).cast::<A>();
+            let b = mem::take(args[1]).cast::<B>();
+            let c = mem::take(args[2]).cast::<C>();
+            let d = mem::take(args[3]).cast::<D>();
+
+            func(a, b, c, d).map(Dynamic::from)
+        };
+        let args = [
+            TypeId::of::<A>(),
+            TypeId::of::<B>(),
+            TypeId::of::<C>(),
+            TypeId::of::<D>(),
+        ];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_pure(Box::new(f)),
+        )
+    }
+
+    /// Set a Rust function taking three parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: String, z: i64, _w: ()| {
+    ///     *x += y.len() as i64 + z; Ok(*x)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    pub fn set_fn_4_mut<
+        A: Variant + Clone,
+        B: Variant + Clone,
+        C: Variant + Clone,
+        D: Variant + Clone,
+        T: Variant + Clone,
+    >(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        let f = move |args: &mut FnCallArgs| {
+            let b = mem::take(args[1]).cast::<B>();
+            let c = mem::take(args[2]).cast::<C>();
+            let d = mem::take(args[3]).cast::<D>();
+            let a = args[0].downcast_mut::<A>().unwrap();
+
+            func(a, b, c, d).map(Dynamic::from)
+        };
+        let args = [
+            TypeId::of::<A>(),
+            TypeId::of::<B>(),
+            TypeId::of::<C>(),
+            TypeId::of::<C>(),
+        ];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
     /// Get a Rust function.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
@@ -554,8 +653,8 @@ impl Module {
 
     /// Get a modules-qualified function.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
-    /// It is also returned by the `set_fn_XXX` calls.
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
+    /// the hash calculated by `index_all_sub_modules`.
     pub(crate) fn get_qualified_fn(
         &mut self,
         name: &str,
