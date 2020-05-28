@@ -81,6 +81,5 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
     lib.set_fn_2("+", |s: ImmutableString, ch: char| Ok(s + ch));
     lib.set_fn_2_mut("+=", |s: &mut ImmutableString, ch: char| { *s += ch; Ok(()) });
     lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| { *s += ch; Ok(()) });
-    lib.set_fn_2_mut("+=", |s: &mut ImmutableString, s2: ImmutableString| { *s += &s2; Ok(()) });
     lib.set_fn_2_mut("append", |s: &mut ImmutableString, s2: ImmutableString| { *s += &s2; Ok(()) });
 });

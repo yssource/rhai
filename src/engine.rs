@@ -18,10 +18,7 @@ use crate::utils::StaticVec;
 use crate::parser::FLOAT;
 
 #[cfg(not(feature = "no_module"))]
-use crate::module::{resolvers, ModuleRef, ModuleResolver};
-
-#[cfg(feature = "no_module")]
-use crate::parser::ModuleRef;
+use crate::module::{resolvers, ModuleResolver};
 
 use crate::stdlib::{
     any::TypeId,
@@ -30,7 +27,6 @@ use crate::stdlib::{
     format,
     iter::{empty, once},
     mem,
-    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     string::{String, ToString},
     vec::Vec,
@@ -2184,6 +2180,14 @@ fn run_builtin_op_assignment(
         match op {
             "&=" => return Ok(Some(*x = *x && y)),
             "|=" => return Ok(Some(*x = *x || y)),
+            _ => (),
+        }
+    } else if args_type == TypeId::of::<ImmutableString>() {
+        let x = x.downcast_mut::<ImmutableString>().unwrap();
+        let y = y.downcast_ref::<ImmutableString>().unwrap();
+
+        match op {
+            "+=" => return Ok(Some(*x += y)),
             _ => (),
         }
     }
