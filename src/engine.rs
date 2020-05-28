@@ -608,10 +608,13 @@ impl Engine {
         let native_only = hashes.1 == 0;
 
         // Check for stack overflow
-        if level > self.max_call_stack_depth {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(not(feature = "unchecked"))]
+        {
+            if level > self.max_call_stack_depth {
+                return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
+            }
         }
-
         // First search in script-defined functions (can override built-in)
         if !native_only {
             if let Some(fn_def) = lib.get(&hashes.1) {
