@@ -1122,6 +1122,7 @@ Comments
 --------
 
 Comments are C-style, including '`/*` ... `*/`' pairs and '`//`' for comments to the end of the line.
+Comments can be nested.
 
 ```rust
 let /* intruder comment */ name = "Bob";
@@ -1138,14 +1139,35 @@ let /* intruder comment */ name = "Bob";
 */
 ```
 
+Keywords
+--------
+
+The following are reserved keywords in Rhai:
+
+| Keywords                                          | Usage                 | Not available under feature |
+| ------------------------------------------------- | --------------------- | :-------------------------: |
+| `true`, `false`                                   | Boolean constants     |                             |
+| `let`, `const`                                    | Variable declarations |                             |
+| `if`, `else`                                      | Control flow          |                             |
+| `while`, `loop`, `for`, `in`, `continue`, `break` | Looping               |                             |
+| `fn`, `private`                                   | Functions             |       [`no_function`]       |
+| `return`                                          | Return values         |                             |
+| `throw`                                           | Return errors         |                             |
+| `import`, `export`, `as`                          | Modules               |        [`no_module`]        |
+
+Keywords cannot be the name of a [function] or [variable], unless the relevant exclusive feature is enabled.
+For example, `fn` is a valid variable name if the [`no_function`] feature is used.
+
 Statements
 ----------
 
-Statements are terminated by semicolons '`;`' - they are mandatory, except for the _last_ statement where it can be omitted.
+Statements are terminated by semicolons '`;`' and they are mandatory,
+except for the _last_ statement in a _block_ (enclosed by '`{`' .. '`}`' pairs) where it can be omitted.
 
-A statement can be used anywhere where an expression is expected. The _last_ statement of a statement block
-(enclosed by '`{`' .. '`}`' pairs) is always the return value of the statement. If a statement has no return value
-(e.g. variable definitions, assignments) then the value will be [`()`].
+A statement can be used anywhere where an expression is expected. These are called, for lack of a more
+creative name, "statement expressions."  The _last_ statement of a statement block is _always_ the block's
+return value when used as a statement.
+If the last statement has no return value (e.g. variable definitions, assignments) then it is assumed to be [`()`].
 
 ```rust
 let a = 42;             // normal assignment statement
@@ -1153,16 +1175,17 @@ let a = foo(42);        // normal function call statement
 foo < 42;               // normal expression as statement
 
 let a = { 40 + 2 };     // 'a' is set to the value of the statement block, which is the value of the last statement
-//              ^ notice that the last statement does not require a terminating semicolon (although it also works with it)
-//                ^ notice that a semicolon is required here to terminate the assignment statement; it is syntax error without it
+//              ^ the last statement does not require a terminating semicolon (although it also works with it)
+//                ^ semicolon required here to terminate the assignment statement; it is a syntax error without it
 
-4 * 10 + 2              // this is also a statement, which is an expression, with no ending semicolon because
-                        // it is the last statement of the whole block
+4 * 10 + 2              // a statement which is just one expression; no ending semicolon is OK
+                        // because it is the last statement of the whole block
 ```
 
 Variables
 ---------
 
+[variable]: #variables
 [variables]: #variables
 
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
@@ -1307,8 +1330,8 @@ Strings and Chars
 [strings]: #strings-and-chars
 [char]: #strings-and-chars
 
-String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and
-hex ('`\x`_xx_') escape sequences.
+String and character literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_')
+and hex ('`\x`_xx_') escape sequences.
 
 Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full,
 32-bit extended Unicode code points.
@@ -1388,7 +1411,7 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 ### Built-in functions
 
-The following standard methods (defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
+The following standard methods (mostly defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
 
 | Function                | Parameter(s)                                                 | Description                                                                                       |
 | ----------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
@@ -1463,7 +1486,7 @@ Arrays are disabled via the [`no_index`] feature.
 
 ### Built-in functions
 
-The following methods (defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
+The following methods (mostly defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
 
 | Function                | Parameter(s)                                                          | Description                                                                                          |
 | ----------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -1963,6 +1986,9 @@ println!(result);           // prints "Runtime error: 42 is too large! (line 5, 
 Functions
 ---------
 
+[function]: #functions
+[functions]: #functions
+
 Rhai supports defining functions in script (unless disabled with [`no_function`]):
 
 ```rust
@@ -2007,8 +2033,9 @@ fn foo() { x }              // <- syntax error: variable 'x' doesn't exist
 
 Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
 It is important to remember that all arguments are passed by _value_, so all functions are _pure_
-(i.e. they never modifytheir arguments).
-Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if not careful.
+(i.e. they never modify their arguments).
+Any update to an argument will **not** be reflected back to the caller.
+This can introduce subtle bugs, if not careful, especially when using the _method-call_ style.
 
 ```rust
 fn change(s) {              // 's' is passed by value
@@ -2016,7 +2043,7 @@ fn change(s) {              // 's' is passed by value
 }
 
 let x = 500;
-x.change();                 // de-sugars to change(x)
+x.change();                 // de-sugars to 'change(x)'
 x == 500;                   // 'x' is NOT changed!
 ```
 

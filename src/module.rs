@@ -1044,6 +1044,9 @@ mod stat {
 
     /// Module resolution service that serves modules added into it.
     ///
+    /// `StaticModuleResolver` is a smart pointer to a `HashMap<String, Module>`.
+    /// It can simply be treated as `&HashMap<String, Module>`.
+    ///
     /// # Examples
     ///
     /// ```

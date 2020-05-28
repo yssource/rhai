@@ -1550,14 +1550,8 @@ impl Engine {
                 let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
                 let def_val = def_val.as_ref();
 
-                let mut arg_values = args_expr
-                    .iter()
-                    .map(|expr| self.eval_expr(scope, state, lib, expr, level))
-                    .collect::<Result<StaticVec<_>, _>>()?;
-
-                let mut args: StaticVec<_> = arg_values.iter_mut().collect();
-
-                if name == KEYWORD_EVAL && args.len() == 1 && args.get(0).is::<ImmutableString>() {
+                // Handle eval
+                if name == KEYWORD_EVAL && args_expr.len() == 1 {
                     let hash_fn =
                         calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
@@ -1567,7 +1561,8 @@ impl Engine {
                         let pos = args_expr.get(0).position();
 
                         // Evaluate the text string as a script
-                        let result = self.eval_script_expr(scope, state, lib, args.pop(), pos);
+                        let script = self.eval_expr(scope, state, lib, args_expr.get(0), level)?;
+                        let result = self.eval_script_expr(scope, state, lib, &script, pos);
 
                         if scope.len() != prev_len {
                             // IMPORTANT! If the eval defines new variables in the current scope,
@@ -1580,6 +1575,46 @@ impl Engine {
                 }
 
                 // Normal function call - except for eval (handled above)
+                let mut arg_values: StaticVec<Dynamic>;
+                let mut args: StaticVec<_>;
+
+                if args_expr.is_empty() {
+                    // No arguments
+                    args = Default::default();
+                } else {
+                    // See if the first argument is a variable, if so, convert to method-call style
+                    // in order to leverage potential &mut first argument and avoid cloning the value
+                    match args_expr.get(0) {
+                        // func(x, ...) -> x.func(...)
+                        lhs @ Expr::Variable(_) => {
+                            arg_values = args_expr
+                                .iter()
+                                .skip(1)
+                                .map(|expr| self.eval_expr(scope, state, lib, expr, level))
+                                .collect::<Result<_, _>>()?;
+
+                            let (target, _, typ, pos) = search_scope(scope, state, lhs)?;
+                            self.inc_operations(state, pos)?;
+
+                            match typ {
+                                ScopeEntryType::Module => unreachable!(),
+                                ScopeEntryType::Constant | ScopeEntryType::Normal => (),
+                            }
+
+                            args = once(target).chain(arg_values.iter_mut()).collect();
+                        }
+                        // func(..., ...)
+                        _ => {
+                            arg_values = args_expr
+                                .iter()
+                                .map(|expr| self.eval_expr(scope, state, lib, expr, level))
+                                .collect::<Result<_, _>>()?;
+
+                            args = arg_values.iter_mut().collect();
+                        }
+                    }
+                }
+
                 let args = args.as_mut();
                 self.exec_fn_call(
                     state, lib, name, *native, *hash, args, false, def_val, *pos, level,
@@ -2012,8 +2047,8 @@ fn run_builtin_binary_op(
     }
 
     if args_type == TypeId::of::<INT>() {
-        let x = x.downcast_ref::<INT>().unwrap().clone();
-        let y = y.downcast_ref::<INT>().unwrap().clone();
+        let x = *x.downcast_ref::<INT>().unwrap();
+        let y = *y.downcast_ref::<INT>().unwrap();
 
         #[cfg(not(feature = "unchecked"))]
         match op {
@@ -2054,8 +2089,8 @@ fn run_builtin_binary_op(
             _ => (),
         }
     } else if args_type == TypeId::of::<bool>() {
-        let x = x.downcast_ref::<bool>().unwrap().clone();
-        let y = y.downcast_ref::<bool>().unwrap().clone();
+        let x = *x.downcast_ref::<bool>().unwrap();
+        let y = *y.downcast_ref::<bool>().unwrap();
 
         match op {
             "&" => return Ok(Some((x && y).into())),
@@ -2079,8 +2114,8 @@ fn run_builtin_binary_op(
             _ => (),
         }
     } else if args_type == TypeId::of::<char>() {
-        let x = x.downcast_ref::<char>().unwrap().clone();
-        let y = y.downcast_ref::<char>().unwrap().clone();
+        let x = *x.downcast_ref::<char>().unwrap();
+        let y = *y.downcast_ref::<char>().unwrap();
 
         match op {
             "==" => return Ok(Some((x == y).into())),
@@ -2102,8 +2137,8 @@ fn run_builtin_binary_op(
     #[cfg(not(feature = "no_float"))]
     {
         if args_type == TypeId::of::<FLOAT>() {
-            let x = x.downcast_ref::<FLOAT>().unwrap().clone();
-            let y = y.downcast_ref::<FLOAT>().unwrap().clone();
+            let x = *x.downcast_ref::<FLOAT>().unwrap();
+            let y = *y.downcast_ref::<FLOAT>().unwrap();
 
             match op {
                 "+" => return Ok(Some((x + y).into())),
@@ -2142,7 +2177,7 @@ fn run_builtin_op_assignment(
 
     if args_type == TypeId::of::<INT>() {
         let x = x.downcast_mut::<INT>().unwrap();
-        let y = y.downcast_ref::<INT>().unwrap().clone();
+        let y = *y.downcast_ref::<INT>().unwrap();
 
         #[cfg(not(feature = "unchecked"))]
         match op {
@@ -2178,7 +2213,7 @@ fn run_builtin_op_assignment(
         }
     } else if args_type == TypeId::of::<bool>() {
         let x = x.downcast_mut::<bool>().unwrap();
-        let y = y.downcast_ref::<bool>().unwrap().clone();
+        let y = *y.downcast_ref::<bool>().unwrap();
 
         match op {
             "&=" => return Ok(Some(*x = *x && y)),
@@ -2199,7 +2234,7 @@ fn run_builtin_op_assignment(
     {
         if args_type == TypeId::of::<FLOAT>() {
             let x = x.downcast_mut::<FLOAT>().unwrap();
-            let y = y.downcast_ref::<FLOAT>().unwrap().clone();
+            let y = *y.downcast_ref::<FLOAT>().unwrap();
 
             match op {
                 "+=" => return Ok(Some(*x += y)),
