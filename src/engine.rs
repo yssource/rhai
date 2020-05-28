@@ -618,8 +618,31 @@ impl Engine {
         // First search in script-defined functions (can override built-in)
         if !native_only {
             if let Some(fn_def) = lib.get(&hashes.1) {
+                let mut this_copy: Option<Dynamic>;
+                let mut this_pointer: Option<&mut Dynamic> = None;
+
+                if is_ref && !args.is_empty() {
+                    // Clone the original value.  It'll be consumed because the function
+                    // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
+                    this_copy = Some(args[0].clone());
+
+                    // Replace the first reference with a reference to the clone, force-casting the lifetime.
+                    // Keep the original reference.  Must remember to restore it before existing this function.
+                    this_pointer = Some(mem::replace(
+                        args.get_mut(0).unwrap(),
+                        unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
+                    ));
+                }
+
+                // Run scripted function
                 let result =
                     self.call_script_fn(scope, state, lib, fn_name, fn_def, args, pos, level)?;
+
+                // Restore the original reference
+                if let Some(this_pointer) = this_pointer {
+                    mem::replace(args.get_mut(0).unwrap(), this_pointer);
+                }
+
                 return Ok((result, false));
             }
         }
@@ -1577,6 +1600,7 @@ impl Engine {
                 // Normal function call - except for eval (handled above)
                 let mut arg_values: StaticVec<Dynamic>;
                 let mut args: StaticVec<_>;
+                let mut is_ref = false;
 
                 if args_expr.is_empty() {
                     // No arguments
@@ -1602,6 +1626,8 @@ impl Engine {
                             }
 
                             args = once(target).chain(arg_values.iter_mut()).collect();
+
+                            is_ref = true;
                         }
                         // func(..., ...)
                         _ => {
@@ -1617,7 +1643,7 @@ impl Engine {
 
                 let args = args.as_mut();
                 self.exec_fn_call(
-                    state, lib, name, *native, *hash, args, false, def_val, *pos, level,
+                    state, lib, name, *native, *hash, args, is_ref, def_val, *pos, level,
                 )
                 .map(|(v, _)| v)
             }
