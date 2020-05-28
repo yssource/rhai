@@ -7,7 +7,7 @@ let x = 1_000_000;
 print("Ready... Go!");
 
 while x > 0 {
-    x = x - 1;
+    x -= 1;
 }
 
 print("Finished. Run time = " + now.elapsed() + " seconds.");

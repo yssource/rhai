@@ -4,7 +4,7 @@ use crate::any::{Dynamic, Variant};
 use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
-use crate::fn_native::{IteratorFn, ObjectGetCallback, ObjectIndexerCallback, ObjectSetCallback};
+use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::{parse, parse_global_expr, AST};
@@ -162,11 +162,13 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_get<T, U, F>(&mut self, name: &str, callback: F)
-    where
+    pub fn register_get<T, U>(
+        &mut self,
+        name: &str,
+        callback: impl Fn(&mut T) -> U + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
-        F: ObjectGetCallback<T, U>,
     {
         self.register_fn(&make_getter(name), callback);
     }
@@ -208,11 +210,13 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_set<T, U, F>(&mut self, name: &str, callback: F)
-    where
+    pub fn register_set<T, U>(
+        &mut self,
+        name: &str,
+        callback: impl Fn(&mut T, U) + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
-        F: ObjectSetCallback<T, U>,
     {
         self.register_fn(&make_setter(name), callback);
     }
@@ -256,12 +260,14 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_get_set<T, U, G, S>(&mut self, name: &str, get_fn: G, set_fn: S)
-    where
+    pub fn register_get_set<T, U>(
+        &mut self,
+        name: &str,
+        get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
+        set_fn: impl Fn(&mut T, U) + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
-        G: ObjectGetCallback<T, U>,
-        S: ObjectSetCallback<T, U>,
     {
         self.register_get(name, get_fn);
         self.register_set(name, set_fn);
@@ -305,12 +311,13 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
-    pub fn register_indexer<T, X, U, F>(&mut self, callback: F)
-    where
+    pub fn register_indexer<T, X, U>(
+        &mut self,
+        callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
+    ) where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
-        F: ObjectIndexerCallback<T, X, U>,
     {
         self.register_fn(FUNC_INDEXER, callback);
     }
@@ -334,7 +341,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile(&self, script: &str) -> Result<AST, Box<ParseError>> {
+    pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_with_scope(&Scope::new(), script)
     }
 
@@ -376,7 +383,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, Box<ParseError>> {
+    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
 
@@ -430,7 +437,7 @@ impl Engine {
         &self,
         scope: &Scope,
         scripts: &[&str],
-    ) -> Result<AST, Box<ParseError>> {
+    ) -> Result<AST, ParseError> {
         self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
 
@@ -440,7 +447,7 @@ impl Engine {
         scope: &Scope,
         scripts: &[&str],
         optimization_level: OptimizationLevel,
-    ) -> Result<AST, Box<ParseError>> {
+    ) -> Result<AST, ParseError> {
         let stream = lex(scripts);
 
         parse(
@@ -607,7 +614,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn compile_expression(&self, script: &str) -> Result<AST, Box<ParseError>> {
+    pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
 
@@ -654,7 +661,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: &str,
-    ) -> Result<AST, Box<ParseError>> {
+    ) -> Result<AST, ParseError> {
         let scripts = [script];
         let stream = lex(&scripts);
 
@@ -902,12 +909,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        let mut state = State::new(ast.fn_lib());
+        let mut state = State::new();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -973,12 +980,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut state = State::new(ast.fn_lib());
+        let mut state = State::new();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -1034,17 +1041,18 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
-        let fn_lib = ast.fn_lib();
+        let lib = ast.lib();
         let pos = Position::none();
 
-        let fn_def = fn_lib
+        let fn_def = lib
             .get_function_by_signature(name, args.len(), true)
             .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
 
-        let state = State::new(fn_lib);
+        let mut state = State::new();
         let args = args.as_mut();
 
-        let (result, _) = self.call_script_fn(Some(scope), state, name, fn_def, args, pos, 0)?;
+        let result =
+            self.call_script_fn(Some(scope), &mut state, &lib, name, fn_def, args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -1074,14 +1082,14 @@ impl Engine {
         mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
-        let fn_lib = ast
-            .fn_lib()
+        let lib = ast
+            .lib()
             .iter()
             .map(|(_, fn_def)| fn_def.as_ref().clone())
             .collect();
 
         let stmt = mem::take(ast.statements_mut());
-        optimize_into_ast(self, scope, stmt, fn_lib, optimization_level)
+        optimize_into_ast(self, scope, stmt, lib, optimization_level)
     }
 
     /// Register a callback for script evaluation progress.
@@ -1118,47 +1126,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "sync")]
-    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + Send + Sync + 'static) {
-        self.progress = Some(Box::new(callback));
-    }
-
-    /// Register a callback for script evaluation progress.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::cell::Cell;
-    /// # use std::rc::Rc;
-    /// use rhai::Engine;
-    ///
-    /// let result = Rc::new(Cell::new(0_u64));
-    /// let logger = result.clone();
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// engine.on_progress(move |ops| {
-    ///     if ops > 10000 {
-    ///         false
-    ///     } else if ops % 800 == 0 {
-    ///         logger.set(ops);
-    ///         true
-    ///     } else {
-    ///         true
-    ///     }
-    /// });
-    ///
-    /// engine.consume("for x in range(0, 50000) {}")
-    ///     .expect_err("should error");
-    ///
-    /// assert_eq!(result.get(), 9600);
-    ///
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "sync"))]
-    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + 'static) {
+    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + SendSync + 'static) {
         self.progress = Some(Box::new(callback));
     }
 
@@ -1186,36 +1154,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "sync")]
-    pub fn on_print(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.print = Box::new(callback);
-    }
-    /// Override default action of `print` (print to stdout using `println!`)
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::cell::RefCell;
-    /// # use std::rc::Rc;
-    /// use rhai::Engine;
-    ///
-    /// let result = Rc::new(RefCell::new(String::from("")));
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // Override action of 'print' function
-    /// let logger = result.clone();
-    /// engine.on_print(move |s| logger.borrow_mut().push_str(s));
-    ///
-    /// engine.consume("print(40 + 2);")?;
-    ///
-    /// assert_eq!(*result.borrow(), "42");
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "sync"))]
-    pub fn on_print(&mut self, callback: impl Fn(&str) + 'static) {
+    pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
         self.print = Box::new(callback);
     }
 
@@ -1243,36 +1182,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "sync")]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + Send + Sync + 'static) {
-        self.debug = Box::new(callback);
-    }
-    /// Override default action of `debug` (print to stdout using `println!`)
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # use std::cell::RefCell;
-    /// # use std::rc::Rc;
-    /// use rhai::Engine;
-    ///
-    /// let result = Rc::new(RefCell::new(String::from("")));
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // Override action of 'print' function
-    /// let logger = result.clone();
-    /// engine.on_debug(move |s| logger.borrow_mut().push_str(s));
-    ///
-    /// engine.consume(r#"debug("hello");"#)?;
-    ///
-    /// assert_eq!(*result.borrow(), r#""hello""#);
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "sync"))]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + 'static) {
+    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
         self.debug = Box::new(callback);
     }
 }

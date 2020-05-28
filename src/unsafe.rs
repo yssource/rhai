@@ -42,6 +42,18 @@ pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, B
     }
 }
 
+/// # DANGEROUS!!!
+///
+/// A dangerous function that blindly casts a reference from one lifetime to another lifetime.
+///
+/// Force-casting a a reference to another lifetime saves on allocations and string cloning,
+/// but must be used with the utmost care.
+pub fn unsafe_mut_cast_to_lifetime<'a, T>(value: &mut T) -> &'a mut T {
+    unsafe { mem::transmute::<_, &'a mut T>(value) }
+}
+
+/// # DANGEROUS!!!
+///
 /// A dangerous function that blindly casts a `&str` from one lifetime to a `Cow<str>` of
 /// another lifetime.  This is mainly used to let us push a block-local variable into the
 /// current `Scope` without cloning the variable name.  Doing this is safe because all local

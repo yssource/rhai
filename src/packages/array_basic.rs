@@ -4,9 +4,9 @@ use crate::any::{Dynamic, Variant};
 use crate::def_package;
 use crate::engine::Array;
 use crate::module::FuncReturn;
-use crate::parser::INT;
+use crate::parser::{ImmutableString, INT};
 
-use crate::stdlib::{any::TypeId, boxed::Box, string::String};
+use crate::stdlib::{any::TypeId, boxed::Box};
 
 // Register array utility functions
 fn push<T: Variant + Clone>(list: &mut Array, item: T) -> FuncReturn<()> {
@@ -45,11 +45,15 @@ macro_rules! reg_tri {
 
 #[cfg(not(feature = "no_index"))]
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    reg_op!(lib, "push", push, INT, bool, char, String, Array, ());
-    reg_tri!(lib, "pad", pad, INT, bool, char, String, Array, ());
-    reg_tri!(lib, "insert", ins, INT, bool, char, String, Array, ());
+    reg_op!(lib, "push", push, INT, bool, char, ImmutableString, Array, ());
+    reg_tri!(lib, "pad", pad, INT, bool, char, ImmutableString, Array, ());
+    reg_tri!(lib, "insert", ins, INT, bool, char, ImmutableString, Array, ());
 
     lib.set_fn_2_mut("append", |x: &mut Array, y: Array| {
+        x.extend(y);
+        Ok(())
+    });
+    lib.set_fn_2_mut("+=", |x: &mut Array, y: Array| {
         x.extend(y);
         Ok(())
     });

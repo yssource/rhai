@@ -1,12 +1,12 @@
 //! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-use crate::fn_native::{CallableFunction, IteratorFn};
+use crate::fn_native::{CallableFunction, IteratorFn, Shared};
 use crate::module::Module;
 use crate::utils::StaticVec;
 
-use crate::stdlib::{any::TypeId, boxed::Box, collections::HashMap, rc::Rc, sync::Arc, vec::Vec};
+use crate::stdlib::any::TypeId;
 
-mod arithmetic;
+pub(crate) mod arithmetic;
 mod array_basic;
 mod eval;
 mod iter_basic;
@@ -44,35 +44,27 @@ pub trait Package {
     fn get(&self) -> PackageLibrary;
 }
 
-/// Type which `Rc`-wraps a `Module` to facilitate sharing library instances.
-#[cfg(not(feature = "sync"))]
-pub type PackageLibrary = Rc<Module>;
-
-/// Type which `Arc`-wraps a `Module` to facilitate sharing library instances.
-#[cfg(feature = "sync")]
-pub type PackageLibrary = Arc<Module>;
+/// A sharable `Module` to facilitate sharing library instances.
+pub type PackageLibrary = Shared<Module>;
 
 /// Type containing a collection of `PackageLibrary` instances.
 /// All function and type iterator keys in the loaded packages are indexed for fast access.
 #[derive(Clone, Default)]
-pub(crate) struct PackagesCollection {
-    /// Collection of `PackageLibrary` instances.
-    packages: StaticVec<PackageLibrary>,
-}
+pub(crate) struct PackagesCollection(StaticVec<PackageLibrary>);
 
 impl PackagesCollection {
     /// Add a `PackageLibrary` into the `PackagesCollection`.
     pub fn push(&mut self, package: PackageLibrary) {
         // Later packages override previous ones.
-        self.packages.insert(0, package);
+        self.0.insert(0, package);
     }
     /// Does the specified function hash key exist in the `PackagesCollection`?
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.packages.iter().any(|p| p.contains_fn(hash))
+        self.0.iter().any(|p| p.contains_fn(hash))
     }
     /// Get specified function via its hash key.
     pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
-        self.packages
+        self.0
             .iter()
             .map(|p| p.get_fn(hash))
             .find(|f| f.is_some())
@@ -80,11 +72,11 @@ impl PackagesCollection {
     }
     /// Does the specified TypeId iterator exist in the `PackagesCollection`?
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.packages.iter().any(|p| p.contains_iter(id))
+        self.0.iter().any(|p| p.contains_iter(id))
     }
     /// Get the specified TypeId iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.packages
+        self.0
             .iter()
             .map(|p| p.get_iter(id))
             .find(|f| f.is_some())

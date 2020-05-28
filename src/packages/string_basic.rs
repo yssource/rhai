@@ -1,7 +1,7 @@
 use crate::def_package;
 use crate::engine::{FUNC_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::module::FuncReturn;
-use crate::parser::INT;
+use crate::parser::{ImmutableString, INT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
@@ -12,19 +12,19 @@ use crate::engine::Map;
 use crate::stdlib::{
     fmt::{Debug, Display},
     format,
-    string::{String, ToString},
+    string::ToString,
 };
 
 // Register print and debug
-fn to_debug<T: Debug>(x: &mut T) -> FuncReturn<String> {
-    Ok(format!("{:?}", x))
+fn to_debug<T: Debug>(x: &mut T) -> FuncReturn<ImmutableString> {
+    Ok(format!("{:?}", x).into())
 }
-fn to_string<T: Display>(x: &mut T) -> FuncReturn<String> {
-    Ok(format!("{}", x))
+fn to_string<T: Display>(x: &mut T) -> FuncReturn<ImmutableString> {
+    Ok(format!("{}", x).into())
 }
 #[cfg(not(feature = "no_object"))]
-fn format_map(x: &mut Map) -> FuncReturn<String> {
-    Ok(format!("#{:?}", x))
+fn format_map(x: &mut Map) -> FuncReturn<ImmutableString> {
+    Ok(format!("#{:?}", x).into())
 }
 
 macro_rules! reg_op {
@@ -41,10 +41,10 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
     lib.set_fn_1(KEYWORD_PRINT, |_: ()| Ok("".to_string()));
     lib.set_fn_1(FUNC_TO_STRING, |_: ()| Ok("".to_string()));
 
-    lib.set_fn_1_mut(KEYWORD_PRINT, |s: &mut String| Ok(s.clone()));
-    lib.set_fn_1_mut(FUNC_TO_STRING, |s: &mut String| Ok(s.clone()));
+    lib.set_fn_1(KEYWORD_PRINT, |s: ImmutableString| Ok(s));
+    lib.set_fn_1(FUNC_TO_STRING, |s: ImmutableString| Ok(s));
 
-    reg_op!(lib, KEYWORD_DEBUG, to_debug, INT, bool, (), char, String);
+    reg_op!(lib, KEYWORD_DEBUG, to_debug, INT, bool, (), char, ImmutableString);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
@@ -78,29 +78,8 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
         lib.set_fn_1_mut(KEYWORD_DEBUG, format_map);
     }
 
-    lib.set_fn_2(
-        "+",
-        |mut s: String, ch: char| {
-            s.push(ch);
-            Ok(s)
-        },
-    );
-    lib.set_fn_2(
-        "+",
-        |mut s: String, s2: String| {
-            s.push_str(&s2);
-            Ok(s)
-        },
-    );
-    lib.set_fn_2_mut("append", |s: &mut String, ch: char| {
-        s.push(ch);
-        Ok(())
-    });
-    lib.set_fn_2_mut(
-        "append",
-        |s: &mut String, s2: String| {
-            s.push_str(&s2);
-            Ok(())
-        }
-    );
+    lib.set_fn_2("+", |s: ImmutableString, ch: char| Ok(s + ch));
+    lib.set_fn_2_mut("+=", |s: &mut ImmutableString, ch: char| { *s += ch; Ok(()) });
+    lib.set_fn_2_mut("append", |s: &mut ImmutableString, ch: char| { *s += ch; Ok(()) });
+    lib.set_fn_2_mut("append", |s: &mut ImmutableString, s2: ImmutableString| { *s += &s2; Ok(()) });
 });

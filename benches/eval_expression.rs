@@ -86,7 +86,7 @@ fn bench_eval_call_expression(bench: &mut Bencher) {
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     bench.iter(|| engine.eval_expression::<bool>(script).unwrap());
 }
@@ -101,7 +101,58 @@ fn bench_eval_call(bench: &mut Bencher) {
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     bench.iter(|| engine.eval::<bool>(script).unwrap());
+}
+
+#[bench]
+fn bench_eval_loop_number(bench: &mut Bencher) {
+    let script = r#"
+        let s = 0;
+        for x in range(0, 10000) {
+            s += 1;
+        }
+    "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.consume_ast(&ast).unwrap());
+}
+
+#[bench]
+fn bench_eval_loop_strings_build(bench: &mut Bencher) {
+    let script = r#"
+        let s = 0;
+        for x in range(0, 10000) {
+            s += "x";
+        }
+    "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.consume_ast(&ast).unwrap());
+}
+
+#[bench]
+fn bench_eval_loop_strings_no_build(bench: &mut Bencher) {
+    let script = r#"
+        let s = "hello";
+        for x in range(0, 10000) {
+            s += "";
+        }
+    "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.consume_ast(&ast).unwrap());
 }

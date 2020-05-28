@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{Engine, EvalAltResult, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, ImmutableString, RegisterFn, INT};
 
 #[test]
 fn test_get_set() -> Result<(), Box<EvalAltResult>> {
@@ -43,7 +43,9 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("new_ts", TestStruct::new);
 
     #[cfg(not(feature = "no_index"))]
-    engine.register_indexer(|value: &mut TestStruct, index: String| value.array[index.len()]);
+    engine.register_indexer(|value: &mut TestStruct, index: ImmutableString| {
+        value.array[index.len()]
+    });
 
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x = 500; a.x")?, 500);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x.add(); a.x")?, 42);

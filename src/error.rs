@@ -120,14 +120,14 @@ pub enum ParseErrorType {
 
 impl ParseErrorType {
     /// Make a `ParseError` using the current type and position.
-    pub(crate) fn into_err(self, pos: Position) -> Box<ParseError> {
-        Box::new(ParseError(self, pos))
+    pub(crate) fn into_err(self, pos: Position) -> ParseError {
+        ParseError(Box::new(self), pos)
     }
 }
 
 /// Error when parsing a script.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
-pub struct ParseError(pub(crate) ParseErrorType, pub(crate) Position);
+pub struct ParseError(pub(crate) Box<ParseErrorType>, pub(crate) Position);
 
 impl ParseError {
     /// Get the parse error.
@@ -141,7 +141,7 @@ impl ParseError {
     }
 
     pub(crate) fn desc(&self) -> &str {
-        match &self.0 {
+        match self.0.as_ref() {
             ParseErrorType::BadInput(p) => p,
             ParseErrorType::UnexpectedEOF => "Script is incomplete",
             ParseErrorType::UnknownOperator(_) => "Unknown operator",
@@ -173,7 +173,7 @@ impl Error for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
+        match self.0.as_ref() {
             ParseErrorType::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
             }

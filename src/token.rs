@@ -21,8 +21,8 @@ type LERR = LexError;
 
 /// A location (line number + character position) in the input script.
 ///
-/// In order to keep footprint small, both line number and character position have 16-bit resolution,
-/// meaning they go up to a maximum of 65,535 lines/characters per line.
+/// In order to keep footprint small, both line number and character position have 16-bit unsigned resolution,
+/// meaning they go up to a maximum of 65,535 lines and characters per line.
 /// Advancing beyond the maximum line length or maximum number of lines is not an error but has no effect.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {

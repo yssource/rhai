@@ -80,7 +80,7 @@ pub trait Func<ARGS, RET> {
         self,
         script: &str,
         entry_point: &str,
-    ) -> Result<Self::Output, Box<ParseError>>;
+    ) -> Result<Self::Output, ParseError>;
 }
 
 macro_rules! def_anonymous_fn {
@@ -103,7 +103,7 @@ macro_rules! def_anonymous_fn {
                 })
             }
 
-            fn create_from_script(self, script: &str, entry_point: &str) -> Result<Self::Output, Box<ParseError>> {
+            fn create_from_script(self, script: &str, entry_point: &str) -> Result<Self::Output, ParseError> {
                 let ast = self.compile(script)?;
                 Ok(Func::<($($par,)*), RET>::create_from_ast(self, ast, entry_point))
             }

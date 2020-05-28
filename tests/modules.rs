@@ -63,6 +63,9 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
 
     let mut module = Module::new();
     module.set_var("answer", 42 as INT);
+    module.set_fn_4("sum".to_string(), |x: INT, y: INT, z: INT, w: INT| {
+        Ok(x + y + z + w)
+    });
 
     resolver.insert("hello".to_string(), module);
 
@@ -74,69 +77,72 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
             r#"
                 import "hello" as h1;
                 import "hello" as h2;
-                h2::answer
+                h1::sum(h2::answer, -10, 3, 7)
     "#
         )?,
         42
     );
 
-    engine.set_max_modules(5);
+    #[cfg(not(feature = "unchecked"))]
+    {
+        engine.set_max_modules(5);
 
-    assert!(matches!(
-        *engine
-            .eval::<INT>(
-                r#"
-                    let sum = 0;
+        assert!(matches!(
+            *engine
+                .eval::<INT>(
+                    r#"
+                        let sum = 0;
 
-                    for x in range(0, 10) {
-                        import "hello" as h;
-                        sum += h::answer;
-                    }
+                        for x in range(0, 10) {
+                            import "hello" as h;
+                            sum += h::answer;
+                        }
 
-                    sum
+                        sum
             "#
-            )
-            .expect_err("should error"),
-        EvalAltResult::ErrorTooManyModules(_)
-    ));
+                )
+                .expect_err("should error"),
+            EvalAltResult::ErrorTooManyModules(_)
+        ));
 
-    #[cfg(not(feature = "no_function"))]
-    assert!(matches!(
-        *engine
-            .eval::<INT>(
-                r#"
-                    let sum = 0;
+        #[cfg(not(feature = "no_function"))]
+        assert!(matches!(
+            *engine
+                .eval::<INT>(
+                    r#"
+                        let sum = 0;
 
-                    fn foo() {
-                        import "hello" as h;
-                        sum += h::answer;
-                    }
+                        fn foo() {
+                            import "hello" as h;
+                            sum += h::answer;
+                        }
 
-                    for x in range(0, 10) {
-                        foo();
-                    }
+                        for x in range(0, 10) {
+                            foo();
+                        }
 
-                    sum
+                        sum
             "#
-            )
-            .expect_err("should error"),
-        EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
-    ));
+                )
+                .expect_err("should error"),
+            EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
+        ));
 
-    engine.set_max_modules(0);
+        engine.set_max_modules(0);
 
-    #[cfg(not(feature = "no_function"))]
-    engine.eval::<()>(
-        r#"
-            fn foo() {
-                import "hello" as h;
-            }
+        #[cfg(not(feature = "no_function"))]
+        engine.eval::<()>(
+            r#"
+                fn foo() {
+                    import "hello" as h;
+                }
 
-            for x in range(0, 10) {
-                foo();
-            }
+                for x in range(0, 10) {
+                    foo();
+                }
     "#,
-    )?;
+        )?;
+    }
 
     Ok(())
 }

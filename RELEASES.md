@@ -4,15 +4,45 @@ Rhai Release Notes
 Version 0.14.2
 ==============
 
-Regression
-----------
+Regression fix
+--------------
 
 * Do not optimize script with `eval_expression` - it is assumed to be one-off and short.
+
+Breaking changes
+----------------
+
+* `Engine::compile_XXX` functions now return `ParseError` instead of `Box<ParseError>`.
+* The `RegisterDynamicFn` trait is merged into the `RegisterResutlFn` trait which now always returns
+  `Result<Dynamic, Box<EvalAltResult>>`.
+* Default maximum limit on levels of nested function calls is fine-tuned and set to a different value.
+* Some operator functions are now built in (see _Speed enhancements_ below), so they are available even
+  under `Engine::new_raw`.
+* Strings are now immutable. The type `rhai::ImmutableString` is used instead of `std::string::String`.
+  This is to avoid excessive cloning of strings.  All native-Rust functions taking string parameters
+  should switch to `rhai::ImmutableString` (which is either `Rc<String>` or `Arc<String>` depending on
+  whether the `sync` feature is used).
 
 New features
 ------------
 
-* Set limits on maximum level of nesting expressions and statements to avoid panics during parsing.
+* Set limit on maximum level of nesting expressions and statements to avoid panics during parsing.
+* New `EvalPackage` to disable `eval`.
+* More benchmarks.
+
+Speed enhancements
+------------------
+
+* Common operators (e.g. `+`, `>`, `==`) now call into highly efficient built-in implementations for standard types
+  (i.e. `INT`, `FLOAT`, `bool`, `char`, `()` and `ImmutableString`) if not overridden by a registered function.
+  This yields a 5-10% speed benefit depending on script operator usage. Scripts running tight loops will see
+  significant speed-up.
+* Common assignment operators (e.g. `+=`, `%=`) now call into highly efficient built-in implementations for
+  standard types (i.e. `INT`, `FLOAT`, `bool`, `char`, `()` and `ImmutableString`) if not overridden by a registered function.
+* Implementations of common operators for standard types are removed from the `ArithmeticPackage` and `LogicPackage`
+  (and therefore the `CorePackage`) because they are now always available, even under `Engine::new_raw`.
+* Operator-assignment statements (e.g. `+=`) are now handled directly and much faster.
+* Strings are now _immutable_ and use the `rhai::ImmutableString` type, eliminating large amounts of cloning.
 
 
 Version 0.14.1
