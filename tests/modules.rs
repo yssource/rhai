@@ -63,6 +63,9 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
 
     let mut module = Module::new();
     module.set_var("answer", 42 as INT);
+    module.set_fn_4("sum".to_string(), |x: INT, y: INT, z: INT, w: INT| {
+        Ok(x + y + z + w)
+    });
 
     resolver.insert("hello".to_string(), module);
 
@@ -74,7 +77,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
             r#"
                 import "hello" as h1;
                 import "hello" as h2;
-                h2::answer
+                h1::sum(h2::answer, -10, 3, 7)
     "#
         )?,
         42
