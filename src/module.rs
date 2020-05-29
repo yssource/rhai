@@ -544,7 +544,7 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3("calc", |x: i64, y: String, z: i64, _w: ()| {
+    /// let hash = module.set_fn_4("calc", |x: i64, y: String, z: i64, _w: ()| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
     /// assert!(module.get_fn(hash).is_some());
@@ -583,7 +583,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking three parameters (the first one mutable) into the module,
+    /// Set a Rust function taking four parameters (the first one mutable) into the module,
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -594,7 +594,7 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: String, z: i64, _w: ()| {
+    /// let hash = module.set_fn_4_mut("calc", |x: &mut i64, y: String, z: i64, _w: ()| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
     /// assert!(module.get_fn(hash).is_some());

@@ -33,7 +33,7 @@ fn test_method_call() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<TestStruct>("let x = new_ts(); update(x, 1000); x")?,
-        TestStruct { x: 1 }
+        TestStruct { x: 1001 }
     );
 
     Ok(())

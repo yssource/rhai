@@ -615,33 +615,54 @@ impl Engine {
                 return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
             }
         }
+
+        let mut this_copy: Dynamic = Default::default();
+        let mut old_this_ptr: Option<&mut Dynamic> = None;
+
+        /// This function replaces the first argument of a method call with a clone copy.
+        /// This is to prevent a pure function unintentionally consuming the first argument.
+        fn normalize_first_arg<'a>(
+            normalize: bool,
+            this_copy: &mut Dynamic,
+            old_this_ptr: &mut Option<&'a mut Dynamic>,
+            args: &mut FnCallArgs<'a>,
+        ) {
+            // Only do it for method calls with arguments.
+            if !normalize || args.is_empty() {
+                return;
+            }
+
+            // Clone the original value.
+            *this_copy = args[0].clone();
+
+            // Replace the first reference with a reference to the clone, force-casting the lifetime.
+            // Keep the original reference.  Must remember to restore it later with `restore_first_arg_of_method_call`.
+            let this_pointer = mem::replace(
+                args.get_mut(0).unwrap(),
+                unsafe_mut_cast_to_lifetime(this_copy),
+            );
+
+            *old_this_ptr = Some(this_pointer);
+        }
+
+        /// This function restores the first argument that was replaced by `normalize_first_arg_of_method_call`.
+        fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCallArgs<'a>) {
+            if let Some(this_pointer) = old_this_ptr {
+                mem::replace(args.get_mut(0).unwrap(), this_pointer);
+            }
+        }
+
         // First search in script-defined functions (can override built-in)
         if !native_only {
             if let Some(fn_def) = lib.get(&hashes.1) {
-                let mut this_copy: Option<Dynamic>;
-                let mut this_pointer: Option<&mut Dynamic> = None;
-
-                if is_ref && !args.is_empty() {
-                    // Clone the original value.  It'll be consumed because the function
-                    // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
-                    this_copy = Some(args[0].clone());
-
-                    // Replace the first reference with a reference to the clone, force-casting the lifetime.
-                    // Keep the original reference.  Must remember to restore it before existing this function.
-                    this_pointer = Some(mem::replace(
-                        args.get_mut(0).unwrap(),
-                        unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
-                    ));
-                }
+                normalize_first_arg(is_ref, &mut this_copy, &mut old_this_ptr, args);
 
                 // Run scripted function
                 let result =
                     self.call_script_fn(scope, state, lib, fn_name, fn_def, args, pos, level)?;
 
                 // Restore the original reference
-                if let Some(this_pointer) = this_pointer {
-                    mem::replace(args.get_mut(0).unwrap(), this_pointer);
-                }
+                restore_first_arg(old_this_ptr, args);
 
                 return Ok((result, false));
             }
@@ -654,29 +675,18 @@ impl Engine {
             .or_else(|| self.packages.get_fn(hashes.0))
         {
             // Calling pure function in method-call?
-            let mut this_copy: Option<Dynamic>;
-            let mut this_pointer: Option<&mut Dynamic> = None;
-
-            if func.is_pure() && is_ref && !args.is_empty() {
-                // Clone the original value.  It'll be consumed because the function
-                // is pure and doesn't know that the first value is a reference (i.e. `is_ref`)
-                this_copy = Some(args[0].clone());
-
-                // Replace the first reference with a reference to the clone, force-casting the lifetime.
-                // Keep the original reference.  Must remember to restore it before existing this function.
-                this_pointer = Some(mem::replace(
-                    args.get_mut(0).unwrap(),
-                    unsafe_mut_cast_to_lifetime(this_copy.as_mut().unwrap()),
-                ));
-            }
+            normalize_first_arg(
+                func.is_pure() && is_ref,
+                &mut this_copy,
+                &mut old_this_ptr,
+                args,
+            );
 
             // Run external function
             let result = func.get_native_fn()(args);
 
             // Restore the original reference
-            if let Some(this_pointer) = this_pointer {
-                mem::replace(args.get_mut(0).unwrap(), this_pointer);
-            }
+            restore_first_arg(old_this_ptr, args);
 
             let result = result.map_err(|err| err.new_position(pos))?;
 
