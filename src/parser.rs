@@ -1762,37 +1762,34 @@ fn parse_binary_op<'a>(
         let cmp_def = Some(false.into());
         let op = op_token.syntax();
         let hash = calc_fn_hash(empty(), &op, 2, empty());
+        let op = (op, true, pos);
 
         let mut args = StaticVec::new();
         args.push(root);
         args.push(rhs);
 
         root = match op_token {
-            Token::Plus => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::Minus => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::Multiply => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::Divide => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
+            Token::Plus
+            | Token::Minus
+            | Token::Multiply
+            | Token::Divide
+            | Token::LeftShift
+            | Token::RightShift
+            | Token::Modulo
+            | Token::PowerOf
+            | Token::Ampersand
+            | Token::Pipe
+            | Token::XOr => Expr::FnCall(Box::new((op, None, hash, args, None))),
 
-            Token::LeftShift => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::RightShift => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::Modulo => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::PowerOf => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
+            // '!=' defaults to true when passed invalid operands
+            Token::NotEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, Some(true.into())))),
 
             // Comparison operators default to false when passed invalid operands
-            Token::EqualsTo => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, cmp_def))),
-            Token::NotEqualsTo => {
-                Expr::FnCall(Box::new(((op, true, pos), None, hash, args, cmp_def)))
-            }
-            Token::LessThan => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, cmp_def))),
-            Token::LessThanEqualsTo => {
-                Expr::FnCall(Box::new(((op, true, pos), None, hash, args, cmp_def)))
-            }
-            Token::GreaterThan => {
-                Expr::FnCall(Box::new(((op, true, pos), None, hash, args, cmp_def)))
-            }
-            Token::GreaterThanEqualsTo => {
-                Expr::FnCall(Box::new(((op, true, pos), None, hash, args, cmp_def)))
-            }
+            Token::EqualsTo
+            | Token::LessThan
+            | Token::LessThanEqualsTo
+            | Token::GreaterThan
+            | Token::GreaterThanEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_def))),
 
             Token::Or => {
                 let rhs = args.pop();
@@ -1804,10 +1801,6 @@ fn parse_binary_op<'a>(
                 let current_lhs = args.pop();
                 Expr::And(Box::new((current_lhs, rhs, pos)))
             }
-            Token::Ampersand => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::Pipe => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-            Token::XOr => Expr::FnCall(Box::new(((op, true, pos), None, hash, args, None))),
-
             Token::In => {
                 let rhs = args.pop();
                 let current_lhs = args.pop();
