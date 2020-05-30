@@ -20,21 +20,20 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
     assert!(engine.eval::<bool>(r#"let y = "hello, world!"; 'w' in y"#)?);
     assert!(!engine.eval::<bool>(r#"let y = "hello, world!"; "hey" in y"#)?);
 
-    #[cfg(not(feature = "no_stdlib"))]
     assert_eq!(engine.eval::<String>(r#""foo" + 123"#)?, "foo123");
 
-    #[cfg(not(feature = "no_stdlib"))]
     #[cfg(not(feature = "no_object"))]
     assert_eq!(engine.eval::<String>("(42).to_string()")?, "42");
 
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[y.len-1]"#)?, 'o');
+
     #[cfg(not(feature = "no_float"))]
-    #[cfg(not(feature = "no_stdlib"))]
     assert_eq!(engine.eval::<String>(r#""foo" + 123.4556"#)?, "foo123.4556");
 
     Ok(())
 }
 
-#[cfg(not(feature = "no_stdlib"))]
 #[cfg(not(feature = "no_object"))]
 #[test]
 fn test_string_substring() -> Result<(), Box<EvalAltResult>> {

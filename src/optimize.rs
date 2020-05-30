@@ -122,7 +122,7 @@ fn call_fn_with_constant_arguments(
     state
         .engine
         .call_fn_raw(
-            None,
+            &mut Scope::new(),
             &mut Default::default(),
             state.lib,
             fn_name,
@@ -138,7 +138,7 @@ fn call_fn_with_constant_arguments(
 }
 
 /// Optimize a statement.
-fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -> Stmt {
+fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
     match stmt {
         // if expr { Noop }
         Stmt::IfThenElse(x) if matches!(x.1, Stmt::Noop(_)) => {
@@ -359,11 +359,13 @@ fn optimize_stmt<'a>(stmt: Stmt, state: &mut State<'a>, preserve_result: bool) -
 }
 
 /// Optimize an expression.
-fn optimize_expr<'a>(expr: Expr, state: &mut State<'a>) -> Expr {
+fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: [&str; 3] = [KEYWORD_PRINT, KEYWORD_DEBUG, KEYWORD_EVAL];
 
     match expr {
+        // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
+        Expr::Expr(x) => Expr::Expr(Box::new(optimize_expr(*x, state))),
         // ( stmt )
         Expr::Stmt(x) => match optimize_stmt(x.0, state, true) {
             // ( Noop ) -> ()

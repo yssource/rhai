@@ -23,6 +23,7 @@ use crate::stdlib::{
     collections::HashMap,
     format,
     iter::{empty, Peekable},
+    mem,
     num::NonZeroUsize,
     ops::{Add, Deref, DerefMut},
     string::{String, ToString},
@@ -391,6 +392,8 @@ pub enum Expr {
     Property(Box<((String, String, String), Position)>),
     /// { stmt }
     Stmt(Box<(Stmt, Position)>),
+    /// Wrapped expression - should not be optimized away.
+    Expr(Box<Expr>),
     /// func(expr, ... ) - ((function name, native_only, position), optional modules, hash, arguments, optional default value)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
@@ -441,6 +444,8 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
+            Self::Expr(x) => x.get_constant_value(),
+
             Self::IntegerConstant(x) => x.0.into(),
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.0.into(),
@@ -475,6 +480,8 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_str(&self) -> String {
         match self {
+            Self::Expr(x) => x.get_constant_str(),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.0.to_string(),
 
@@ -494,6 +501,8 @@ impl Expr {
     /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {
+            Self::Expr(x) => x.position(),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.1,
 
@@ -519,6 +528,11 @@ impl Expr {
     /// Override the `Position` of the expression.
     pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
         match &mut self {
+            Self::Expr(ref mut x) => {
+                let expr = mem::take(x);
+                *x = Box::new(expr.set_position(new_pos));
+            }
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.1 = new_pos,
 
@@ -550,6 +564,8 @@ impl Expr {
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
+            Self::Expr(x) => x.is_pure(),
+
             Self::Array(x) => x.0.iter().all(Self::is_pure),
 
             Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
@@ -568,6 +584,8 @@ impl Expr {
     /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
+            Self::Expr(x) => x.is_constant(),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_) => true,
 
@@ -598,6 +616,8 @@ impl Expr {
     /// Is a particular token allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match self {
+            Self::Expr(x) => x.is_valid_postfix(token),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_) => false,
 
@@ -996,7 +1016,7 @@ fn parse_index_chain<'a>(
                 (Token::LeftBracket, _) => {
                     let idx_pos = eat_token(input, Token::LeftBracket);
                     // Recursively parse the indexing chain, right-binding each
-                    let idx = parse_index_chain(
+                    let idx_expr = parse_index_chain(
                         input,
                         state,
                         idx_expr,
@@ -1005,10 +1025,20 @@ fn parse_index_chain<'a>(
                         allow_stmt_expr,
                     )?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new((lhs, idx, pos))))
+                    Ok(Expr::Index(Box::new((lhs, idx_expr, pos))))
                 }
                 // Otherwise terminate the indexing chain
-                _ => Ok(Expr::Index(Box::new((lhs, idx_expr, pos)))),
+                _ => {
+                    match idx_expr {
+                        // Terminate with an `Expr::Expr` wrapper to prevent the last index expression
+                        // inside brackets to be mis-parsed as another level of indexing, or a
+                        // dot expression/function call to be mis-parsed as following the indexing chain.
+                        Expr::Index(_) | Expr::Dot(_) | Expr::FnCall(_) => Ok(Expr::Index(
+                            Box::new((lhs, Expr::Expr(Box::new(idx_expr)), pos)),
+                        )),
+                        _ => Ok(Expr::Index(Box::new((lhs, idx_expr, pos)))),
+                    }
+                }
             }
         }
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),

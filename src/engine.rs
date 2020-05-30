@@ -432,11 +432,11 @@ fn default_print(s: &str) {
 }
 
 /// Search for a variable within the scope
-fn search_scope<'a>(
-    scope: &'a mut Scope,
+fn search_scope<'s, 'a>(
+    scope: &'s mut Scope,
     state: &mut State,
     expr: &'a Expr,
-) -> Result<(&'a mut Dynamic, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
+) -> Result<(&'s mut Dynamic, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
     let ((name, pos), modules, hash_var, index) = match expr {
         Expr::Variable(x) => x.as_ref(),
         _ => unreachable!(),
@@ -592,7 +592,7 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_fn_raw(
         &self,
-        scope: Option<&mut Scope>,
+        scope: &mut Scope,
         state: &mut State,
         lib: &FunctionsLib,
         fn_name: &str,
@@ -774,7 +774,7 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_script_fn(
         &self,
-        scope: Option<&mut Scope>,
+        scope: &mut Scope,
         state: &mut State,
         lib: &FunctionsLib,
         fn_name: &str,
@@ -786,88 +786,42 @@ impl Engine {
         let orig_scope_level = state.scope_level;
         state.scope_level += 1;
 
-        match scope {
-            // Extern scope passed in which is not empty
-            Some(scope) if !scope.is_empty() => {
-                let scope_len = scope.len();
+        let scope_len = scope.len();
 
-                // Put arguments into scope as variables
-                // Actually consume the arguments instead of cloning them
-                scope.extend(
-                    fn_def
-                        .params
-                        .iter()
-                        .zip(args.iter_mut().map(|v| mem::take(*v)))
-                        .map(|(name, value)| {
-                            let var_name = unsafe_cast_var_name_to_lifetime(name.as_str(), state);
-                            (var_name, ScopeEntryType::Normal, value)
-                        }),
-                );
+        // Put arguments into scope as variables
+        // Actually consume the arguments instead of cloning them
+        scope.extend(
+            fn_def
+                .params
+                .iter()
+                .zip(args.iter_mut().map(|v| mem::take(*v)))
+                .map(|(name, value)| {
+                    let var_name = unsafe_cast_var_name_to_lifetime(name.as_str(), state);
+                    (var_name, ScopeEntryType::Normal, value)
+                }),
+        );
 
-                // Evaluate the function at one higher level of call depth
-                let result = self
-                    .eval_stmt(scope, state, lib, &fn_def.body, level + 1)
-                    .or_else(|err| match *err {
-                        // Convert return statement to return value
-                        EvalAltResult::Return(x, _) => Ok(x),
-                        EvalAltResult::ErrorInFunctionCall(name, err, _) => {
-                            Err(Box::new(EvalAltResult::ErrorInFunctionCall(
-                                format!("{} > {}", fn_name, name),
-                                err,
-                                pos,
-                            )))
-                        }
-                        _ => Err(Box::new(EvalAltResult::ErrorInFunctionCall(
-                            fn_name.to_string(),
-                            err,
-                            pos,
-                        ))),
-                    });
+        // Evaluate the function at one higher level of call depth
+        let result = self
+            .eval_stmt(scope, state, lib, &fn_def.body, level + 1)
+            .or_else(|err| match *err {
+                // Convert return statement to return value
+                EvalAltResult::Return(x, _) => Ok(x),
+                EvalAltResult::ErrorInFunctionCall(name, err, _) => Err(Box::new(
+                    EvalAltResult::ErrorInFunctionCall(format!("{} > {}", fn_name, name), err, pos),
+                )),
+                _ => Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                    fn_name.to_string(),
+                    err,
+                    pos,
+                ))),
+            });
 
-                // Remove all local variables
-                scope.rewind(scope_len);
-                state.scope_level = orig_scope_level;
+        // Remove all local variables
+        scope.rewind(scope_len);
+        state.scope_level = orig_scope_level;
 
-                return result;
-            }
-            // No new scope - create internal scope
-            _ => {
-                let mut scope = Scope::new();
-
-                // Put arguments into scope as variables
-                // Actually consume the arguments instead of cloning them
-                scope.extend(
-                    fn_def
-                        .params
-                        .iter()
-                        .zip(args.iter_mut().map(|v| mem::take(*v)))
-                        .map(|(name, value)| (name, ScopeEntryType::Normal, value)),
-                );
-
-                // Evaluate the function at one higher level of call depth
-                let result = self
-                    .eval_stmt(&mut scope, state, lib, &fn_def.body, level + 1)
-                    .or_else(|err| match *err {
-                        // Convert return statement to return value
-                        EvalAltResult::Return(x, _) => Ok(x),
-                        EvalAltResult::ErrorInFunctionCall(name, err, _) => {
-                            Err(Box::new(EvalAltResult::ErrorInFunctionCall(
-                                format!("{} > {}", fn_name, name),
-                                err,
-                                pos,
-                            )))
-                        }
-                        _ => Err(Box::new(EvalAltResult::ErrorInFunctionCall(
-                            fn_name.to_string(),
-                            err,
-                            pos,
-                        ))),
-                    });
-
-                state.scope_level = orig_scope_level;
-                return result;
-            }
-        }
+        result
     }
 
     // Has a system function an override?
@@ -925,9 +879,12 @@ impl Engine {
             }
 
             // Normal function call
-            _ => self.call_fn_raw(
-                None, state, lib, fn_name, hashes, args, is_ref, def_val, pos, level,
-            ),
+            _ => {
+                let mut scope = Scope::new();
+                self.call_fn_raw(
+                    &mut scope, state, lib, fn_name, hashes, args, is_ref, def_val, pos, level,
+                )
+            }
         }
     }
 
@@ -1252,14 +1209,16 @@ impl Engine {
             Expr::FnCall(_) => unreachable!(),
             Expr::Property(_) => idx_values.push(()), // Store a placeholder - no need to copy the property name
             Expr::Index(x) | Expr::Dot(x) => {
+                let (lhs, rhs, _) = x.as_ref();
+
                 // Evaluate in left-to-right order
-                let lhs_val = match x.0 {
+                let lhs_val = match lhs {
                     Expr::Property(_) => Default::default(), // Store a placeholder in case of a property
-                    _ => self.eval_expr(scope, state, lib, &x.0, level)?,
+                    _ => self.eval_expr(scope, state, lib, lhs, level)?,
                 };
 
                 // Push in reverse order
-                self.eval_indexed_chain(scope, state, lib, &x.1, idx_values, size, level)?;
+                self.eval_indexed_chain(scope, state, lib, rhs, idx_values, size, level)?;
 
                 idx_values.push(lhs_val);
             }
@@ -1380,6 +1339,7 @@ impl Engine {
             Dynamic(Union::Array(mut rhs_value)) => {
                 let op = "==";
                 let def_value = false.into();
+                let mut scope = Scope::new();
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter_mut() {
@@ -1394,7 +1354,7 @@ impl Engine {
                     );
 
                     let (r, _) = self.call_fn_raw(
-                        None, state, lib, op, hashes, args, false, def_value, pos, level,
+                        &mut scope, state, lib, op, hashes, args, false, def_value, pos, level,
                     )?;
                     if r.as_bool().unwrap_or(false) {
                         return Ok(true.into());
@@ -1432,6 +1392,8 @@ impl Engine {
         self.inc_operations(state, expr.position())?;
 
         match expr {
+            Expr::Expr(x) => self.eval_expr(scope, state, lib, x.as_ref(), level),
+
             Expr::IntegerConstant(x) => Ok(x.0.into()),
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(x) => Ok(x.0.into()),
@@ -1710,9 +1672,8 @@ impl Engine {
                     Ok(x) if x.is_script() => {
                         let args = args.as_mut();
                         let fn_def = x.get_fn_def();
-                        let result =
-                            self.call_script_fn(None, state, lib, name, fn_def, args, *pos, level)?;
-                        Ok(result)
+                        let mut scope = Scope::new();
+                        self.call_script_fn(&mut scope, state, lib, name, fn_def, args, *pos, level)
                     }
                     Ok(x) => x.get_native_fn()(args.as_mut()).map_err(|err| err.new_position(*pos)),
                     Err(err)
@@ -1772,9 +1733,9 @@ impl Engine {
     }
 
     /// Evaluate a statement
-    pub(crate) fn eval_stmt<'s>(
+    pub(crate) fn eval_stmt(
         &self,
-        scope: &mut Scope<'s>,
+        scope: &mut Scope,
         state: &mut State,
         lib: &FunctionsLib,
         stmt: &Stmt,
