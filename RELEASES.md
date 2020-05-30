@@ -9,6 +9,12 @@ Regression fix
 
 * Do not optimize script with `eval_expression` - it is assumed to be one-off and short.
 
+Bug fixes
+---------
+
+* Indexing with an index or dot expression now works property (it compiled wrongly before).
+  For example, `let s = "hello"; s[s.len-1] = 'x';` now works property instead of an error.
+
 Breaking changes
 ----------------
 
@@ -26,12 +32,15 @@ Breaking changes
   normal function-call style (previously the first argument will be passed by _value_ if not called
   in method-call style).  Of course, if the first argument is a calculated value (e.g. result of an
   expression), then mutating it has no effect, but at least it is not cloned.
+* Some built-in methods (e.g. `len` for string, `floor` for `FLOAT`) now have _property_ versions in
+  addition to methods to simplify coding.
 
 New features
 ------------
 
 * Set limit on maximum level of nesting expressions and statements to avoid panics during parsing.
 * New `EvalPackage` to disable `eval`.
+* `Module::set_getter_fn`, `Module::set_setter_fn` and `Module:set_indexer_fn` to register getter/setter/indexer functions.
 
 Speed enhancements
 ------------------
