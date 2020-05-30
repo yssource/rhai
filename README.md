@@ -704,11 +704,16 @@ let x = (42_i64).into();                        // 'into()' works for standard t
 let y = Dynamic::from(String::from("hello!"));  // remember &str is not supported by Rhai
 ```
 
+Functions registered with the [`Engine`] can be _overloaded_ as long as the _signature_ is unique,
+i.e. different functions can have the same name as long as their parameters are of different types
+and/or different number.
+New definitions _overwrite_ previous definitions of the same name and same number/types of parameters.
+
 Generic functions
 -----------------
 
 Rust generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately.
-This is essentially function overloading (Rhai does not natively support generics).
+This essentially overloads the function with different parameter types (Rhai does not natively support generics).
 
 ```rust
 use std::fmt::Display;
@@ -729,8 +734,8 @@ fn main()
 }
 ```
 
-This example shows how to register multiple functions (or, in this case, multiple overloaded versions of the same function)
-under the same name. This enables function overloading based on the number and types of parameters.
+The above example shows how to register multiple functions (or, in this case, multiple overloaded versions of the same function)
+under the same name.
 
 Fallible functions
 ------------------
@@ -773,7 +778,8 @@ fn main()
 Overriding built-in functions
 ----------------------------
 
-Any similarly-named function defined in a script overrides any built-in function.
+Any similarly-named function defined in a script overrides any built-in function and any registered
+native Rust function of the same name and number of parameters.
 
 ```rust
 // Override the built-in function 'to_int'
@@ -784,11 +790,13 @@ fn to_int(num) {
 print(to_int(123));     // what happens?
 ```
 
+A registered function, in turn, overrides any built-in function of the same name and number/types of parameters.
+
 Operator overloading
 --------------------
 
 In Rhai, a lot of functionalities are actually implemented as functions, including basic operations such as arithmetic calculations.
-For example, in the expression "`a + b`", the `+` operator is _not_ built-in, but calls a function named "`+`" instead!
+For example, in the expression "`a + b`", the `+` operator is _not_ built in, but calls a function named "`+`" instead!
 
 ```rust
 let x = a + b;
@@ -801,7 +809,7 @@ overriding them has no effect at all.
 
 Operator functions cannot be defined as a script function (because operators syntax are not valid function names).
 However, operator functions _can_ be registered to the [`Engine`] via the methods `Engine::register_fn`, `Engine::register_result_fn` etc.
-When a custom operator function is registered with the same name as an operator, it _overloads_ (or overrides) the built-in version.
+When a custom operator function is registered with the same name as an operator, it overrides the built-in version.
 
 ```rust
 use rhai::{Engine, EvalAltResult, RegisterFn};
@@ -828,7 +836,7 @@ let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an e
 ```
 
 Use operator overloading for custom types (described below) only.
-Be very careful when overloading built-in operators because script authors expect standard operators to behave in a
+Be very careful when overriding built-in operators because script authors expect standard operators to behave in a
 consistent and predictable manner, and will be annoyed if a calculation for '`+`' turns into a subtraction, for example.
 
 Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
@@ -915,7 +923,7 @@ engine.register_fn("update", TestStruct::update);   // registers 'update(&mut Te
 engine.register_fn("new_ts", TestStruct::new);      // registers 'new()'
 ```
 
-The custom type is then ready for us in scripts.  Scripts can see the functions and methods registered earlier.
+The custom type is then ready for use in scripts.  Scripts can see the functions and methods registered earlier.
 Get the evaluation result back out from script-land just as before, this time casting to the custom type:
 
 ```rust
@@ -1745,10 +1753,10 @@ The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp 
 
 The following methods (defined in the [`BasicTimePackage`](#packages) but excluded if using a [raw `Engine`]) operate on timestamps:
 
-| Function           | Parameter(s)                       | Description                                              |
-| ------------------ | ---------------------------------- | -------------------------------------------------------- |
-| `elapsed` property | _none_                             | returns the number of seconds since the timestamp        |
-| `-` operator       | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
+| Function                      | Parameter(s)                       | Description                                              |
+| ----------------------------- | ---------------------------------- | -------------------------------------------------------- |
+| `elapsed` method and property | _none_                             | returns the number of seconds since the timestamp        |
+| `-` operator                  | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
 
 ### Examples
 
@@ -1777,15 +1785,19 @@ set of types (see [built-in operators](#built-in-operators)).
 "42" == 42;             // false
 ```
 
-Comparing two values of _different_ data types, or of unknown data types, always results in `false`.
+Comparing two values of _different_ data types, or of unknown data types, always results in `false`,
+except for '`!=`' (not equals) which results in `true`. This is in line with intuition.
 
 ```rust
-42 == 42.0;             // false - i64 is different from f64
-42 > "42";              // false - i64 is different from string
-42 <= "42";             // false again
+42 == 42.0;             // false - i64 cannot be compared with f64
+42 != 42.0;             // true - i64 cannot be compared with f64
+
+42 > "42";              // false - i64 cannot be compared with string
+42 <= "42";             // false - i64 cannot be compared with string
 
 let ts = new_ts();      // custom type
-ts == 42;               // false - types are not the same
+ts == 42;               // false - types cannot be compared
+ts != 42;               // true - types cannot be compared
 ```
 
 Boolean operators
@@ -2073,8 +2085,8 @@ This is similar to Rust and many other modern languages.
 
 ### Function overloading
 
-Functions can be _overloaded_ and are resolved purely upon the function's _name_ and the _number_ of parameters
-(but not parameter _types_, since all parameters are the same type - [`Dynamic`]).
+Functions defined in script can be _overloaded_ by _arity_ (i.e. they are resolved purely upon the function's _name_
+and _number_ of parameters, but not parameter _types_ since all parameters are the same type - [`Dynamic`]).
 New definitions _overwrite_ previous definitions of the same name and number of parameters.
 
 ```rust
@@ -2346,19 +2358,20 @@ so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
-* **Memory**: A malignant script may continuously grow an [array] or [object map] until all memory is consumed.
+* **Memory**: A malicous script may continuously grow an [array] or [object map] until all memory is consumed.
   It may also create a large [array] or [object map] literal that exhausts all memory during parsing.
-* **CPU**: A malignant script may run an infinite tight loop that consumes all CPU cycles.
-* **Time**: A malignant script may run indefinitely, thereby blocking the calling system which is waiting for a result.
-* **Stack**: A malignant script may attempt an infinite recursive call that exhausts the call stack.
+* **CPU**: A malicous script may run an infinite tight loop that consumes all CPU cycles.
+* **Time**: A malicous script may run indefinitely, thereby blocking the calling system which is waiting for a result.
+* **Stack**: A malicous script may attempt an infinite recursive call that exhausts the call stack.
   Alternatively, it may create a degenerated deep expression with so many levels that the parser exhausts the call stack
   when parsing the expression; or even deeply-nested statement blocks, if nested deep enough.
-* **Overflows**: A malignant script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
+* **Overflows**: A malicous script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
   create bad floating-point representations, in order to crash the system.
-* **Files**: A malignant script may continuously [`import`] an external module within an infinite loop,
+* **Files**: A malicous script may continuously [`import`] an external module within an infinite loop,
   thereby putting heavy load on the file-system (or even the network if the file is not local).
+  Furthermore, the module script may simply [`import`] itself in an infinite recursion.
   Even when modules are not created from files, they still typically consume a lot of resources to load.
-* **Data**: A malignant script may attempt to read from and/or write to data that it does not own. If this happens,
+* **Data**: A malicous script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
 
 ### Maximum number of operations
@@ -2434,7 +2447,7 @@ Rhai by default limits function calls to a maximum depth of 128 levels (16 level
 This limit may be changed via the `Engine::set_max_call_levels` method.
 
 When setting this limit, care must be also taken to the evaluation depth of each _statement_
-within the function. It is entirely possible for a malignant script to embed an recursive call deep
+within the function. It is entirely possible for a malicous script to embed an recursive call deep
 inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
 
 The limit can be disabled via the [`unchecked`] feature for higher performance
@@ -2479,7 +2492,7 @@ engine.set_max_expr_depths(50, 5);          // allow nesting up to 50 layers of 
 
 Beware that there may be multiple layers for a simple language construct, even though it may correspond
 to only one AST node. That is because the Rhai _parser_ internally runs a recursive chain of function calls
-and it is important that a malignant script does not panic the parser in the first place.
+and it is important that a malicous script does not panic the parser in the first place.
 
 Functions are placed under stricter limits because of the multiplicative effect of recursion.
 A script can effectively call itself while deep inside an expression chain within the function body,
@@ -2492,7 +2505,7 @@ Make sure that `C x ( 5 + F ) + S` layered calls do not cause a stack overflow, 
 * `S` = maximum statement depth at global level.
 
 A script exceeding the maximum nesting depths will terminate with a parsing error.
-The malignant `AST` will not be able to get past parsing in the first place.
+The malicous `AST` will not be able to get past parsing in the first place.
 
 This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
