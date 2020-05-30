@@ -48,7 +48,7 @@ fn test_for_object() -> Result<(), Box<EvalAltResult>> {
             sum += value;
         }
 
-        keys.len() + sum
+        keys.len + sum
     "#;
 
     assert_eq!(engine.eval::<INT>(script)?, 9);

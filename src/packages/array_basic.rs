@@ -105,6 +105,10 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
         },
     );
     lib.set_fn_1_mut("len", |list: &mut Array| Ok(list.len() as INT));
+
+    #[cfg(not(feature = "no_object"))]
+    lib.set_getter_fn("len", |list: &mut Array| Ok(list.len() as INT));
+
     lib.set_fn_1_mut("clear", |list: &mut Array| {
         list.clear();
         Ok(())

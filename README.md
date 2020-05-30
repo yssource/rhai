@@ -300,7 +300,7 @@ let ast = engine.compile(true,
     r"
         // a function with two parameters: String and i64
         fn hello(x, y) {
-            x.len() + y
+            x.len + y
         }
 
         // functions can be overloaded: this one takes only one parameter
@@ -355,7 +355,7 @@ use rhai::{Engine, Func};                       // use 'Func' for 'create_from_s
 
 let engine = Engine::new();                     // create a new 'Engine' just for this
 
-let script = "fn calc(x, y) { x + y.len() < 42 }";
+let script = "fn calc(x, y) { x + y.len < 42 }";
 
 // Func takes two type parameters:
 //   1) a tuple made up of the types of the script function's parameters
@@ -945,8 +945,8 @@ If the [`no_object`] feature is turned on, however, the _method_ style of functi
 (i.e. calling a function as an object-method) is no longer supported.
 
 ```rust
-// Below is a syntax error under 'no_object' because 'len' cannot be called in method style.
-let result = engine.eval::<i64>("let x = [1, 2, 3]; x.len()")?;
+// Below is a syntax error under 'no_object' because 'clear' cannot be called in method style.
+let result = engine.eval::<()>("let x = [1, 2, 3]; x.clear()")?;
 ```
 
 [`type_of()`] works fine with custom types and returns the name of the type.
@@ -1082,7 +1082,7 @@ fn main() -> Result<(), Box<EvalAltResult>>
 
     // First invocation
     engine.eval_with_scope::<()>(&mut scope, r"
-        let x = 4 + 5 - y + z + s.len();
+        let x = 4 + 5 - y + z + s.len;
         y = 1;
     ")?;
 
@@ -1312,16 +1312,16 @@ Floating-point functions
 
 The following standard functions (defined in the [`BasicMathPackage`](#packages) but excluded if using a [raw `Engine`]) operate on `f64` only:
 
-| Category         | Functions                                                    |
-| ---------------- | ------------------------------------------------------------ |
-| Trigonometry     | `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` in degrees       |
-| Arc-trigonometry | `asin`, `acos`, `atan`, `asinh`, `acosh`, `atanh` in degrees |
-| Square root      | `sqrt`                                                       |
-| Exponential      | `exp` (base _e_)                                             |
-| Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)         |
-| Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction`               |
-| Conversion       | [`to_int`]                                                   |
-| Testing          | `is_nan`, `is_finite`, `is_infinite`                         |
+| Category         | Functions                                                             |
+| ---------------- | --------------------------------------------------------------------- |
+| Trigonometry     | `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` in degrees                |
+| Arc-trigonometry | `asin`, `acos`, `atan`, `asinh`, `acosh`, `atanh` in degrees          |
+| Square root      | `sqrt`                                                                |
+| Exponential      | `exp` (base _e_)                                                      |
+| Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)                  |
+| Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction` methods and properties |
+| Conversion       | [`to_int`]                                                            |
+| Testing          | `is_nan`, `is_finite`, `is_infinite` methods and properties           |
 
 Strings and Chars
 -----------------
@@ -1413,32 +1413,32 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 The following standard methods (mostly defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
 
-| Function                | Parameter(s)                                                 | Description                                                                                       |
-| ----------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `len`                   | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
-| `pad`                   | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
-| `+=` operator, `append` | character/string to append                                   | Adds a character or a string to the end of another string                                         |
-| `clear`                 | _none_                                                       | empties the string                                                                                |
-| `truncate`              | target length                                                | cuts off the string at exactly a specified number of characters                                   |
-| `contains`              | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
-| `index_of`              | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
-| `sub_string`            | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
-| `crop`                  | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`               | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
-| `trim`                  | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
+| Function                  | Parameter(s)                                                 | Description                                                                                       |
+| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `len` method and property | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
+| `pad`                     | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
+| `+=` operator, `append`   | character/string to append                                   | Adds a character or a string to the end of another string                                         |
+| `clear`                   | _none_                                                       | empties the string                                                                                |
+| `truncate`                | target length                                                | cuts off the string at exactly a specified number of characters                                   |
+| `contains`                | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
+| `index_of`                | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
+| `sub_string`              | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
+| `crop`                    | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
+| `replace`                 | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
+| `trim`                    | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples
 
 ```rust
 let full_name == " Bob C. Davis ";
-full_name.len() == 14;
+full_name.len == 14;
 
 full_name.trim();
-full_name.len() == 12;
+full_name.len == 12;
 full_name == "Bob C. Davis";
 
 full_name.pad(15, '$');
-full_name.len() == 15;
+full_name.len == 15;
 full_name == "Bob C. Davis$$$";
 
 let n = full_name.index_of('$');
@@ -1449,11 +1449,11 @@ full_name.index_of("$$", n + 1) == 13;
 full_name.sub_string(n, 3) == "$$$";
 
 full_name.truncate(6);
-full_name.len() == 6;
+full_name.len == 6;
 full_name == "Bob C.";
 
 full_name.replace("Bob", "John");
-full_name.len() == 7;
+full_name.len == 7;
 full_name == "John C.";
 
 full_name.contains('C') == true;
@@ -1466,7 +1466,7 @@ full_name.crop(0, 1);
 full_name == "C";
 
 full_name.clear();
-full_name.len() == 0;
+full_name.len == 0;
 ```
 
 Arrays
@@ -1488,19 +1488,19 @@ Arrays are disabled via the [`no_index`] feature.
 
 The following methods (mostly defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
 
-| Function                | Parameter(s)                                                          | Description                                                                                          |
-| ----------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `push`                  | element to insert                                                     | inserts an element at the end                                                                        |
-| `+=` operator, `append` | array to append                                                       | concatenates the second array to the end of the first                                                |
-| `+` operator            | first array, second array                                             | concatenates the first array with the second                                                         |
-| `insert`                | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
-| `pop`                   | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
-| `shift`                 | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
-| `remove`                | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
-| `len`                   | _none_                                                                | returns the number of elements                                                                       |
-| `pad`                   | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
-| `clear`                 | _none_                                                                | empties the array                                                                                    |
-| `truncate`              | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
+| Function                  | Parameter(s)                                                          | Description                                                                                          |
+| ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `push`                    | element to insert                                                     | inserts an element at the end                                                                        |
+| `+=` operator, `append`   | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+` operator              | first array, second array                                             | concatenates the first array with the second                                                         |
+| `insert`                  | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
+| `pop`                     | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
+| `shift`                   | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
+| `remove`                  | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `len` method and property | _none_                                                                | returns the number of elements                                                                       |
+| `pad`                     | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
+| `clear`                   | _none_                                                                | empties the array                                                                                    |
+| `truncate`                | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
 ### Examples
 
@@ -1510,7 +1510,7 @@ let y = [2, 3];         // array literal with 2 elements
 y.insert(0, 1);         // insert element at the beginning
 y.insert(999, 4);       // insert element at the end
 
-y.len() == 4;
+y.len == 4;
 
 y[0] == 1;
 y[1] == 2;
@@ -1527,7 +1527,7 @@ y[1] = 42;              // array elements can be reassigned
 
 y.remove(2) == 3;       // remove element
 
-y.len() == 3;
+y.len == 3;
 
 y[2] == 4;              // elements after the removed element are shifted
 
@@ -1551,7 +1551,7 @@ foo == 1;
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
 
-y.len() == 5;
+y.len == 5;
 
 let first = y.shift();  // remove the first element, 4 elements remaining
 first == 1;
@@ -1559,7 +1559,7 @@ first == 1;
 let last = y.pop();     // remove the last element, 3 elements remaining
 last == 5;
 
-y.len() == 3;
+y.len == 3;
 
 for item in y {         // arrays can be iterated with a 'for' statement
     print(item);
@@ -1567,15 +1567,15 @@ for item in y {         // arrays can be iterated with a 'for' statement
 
 y.pad(10, "hello");     // pad the array up to 10 elements
 
-y.len() == 10;
+y.len == 10;
 
 y.truncate(5);          // truncate the array to 5 elements
 
-y.len() == 5;
+y.len == 5;
 
 y.clear();              // empty the array
 
-y.len() == 0;
+y.len == 0;
 ```
 
 `push` and `pad` are only defined for standard built-in types. For custom types, type-specific versions must be registered:
@@ -1745,10 +1745,10 @@ The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp 
 
 The following methods (defined in the [`BasicTimePackage`](#packages) but excluded if using a [raw `Engine`]) operate on timestamps:
 
-| Function     | Parameter(s)                       | Description                                              |
-| ------------ | ---------------------------------- | -------------------------------------------------------- |
-| `elapsed`    | _none_                             | returns the number of seconds since the timestamp        |
-| `-` operator | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
+| Function           | Parameter(s)                       | Description                                              |
+| ------------------ | ---------------------------------- | -------------------------------------------------------- |
+| `elapsed` property | _none_                             | returns the number of seconds since the timestamp        |
+| `-` operator       | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
 
 ### Examples
 
@@ -1757,7 +1757,7 @@ let now = timestamp();
 
 // Do some lengthy operation...
 
-if now.elapsed() > 30.0 {
+if now.elapsed > 30.0 {
     print("takes too long (over 30 seconds)!")
 }
 ```
@@ -2281,7 +2281,7 @@ let ast = engine.compile(r#"
         x + 1
     }
     fn add_len(x, y) {
-        x + y.len()
+        x + y.len
     }
 
     // Imported modules can become sub-modules

@@ -106,6 +106,10 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     }
 
     lib.set_fn_1_mut("len", |s: &mut ImmutableString| Ok(s.chars().count() as INT));
+
+    #[cfg(not(feature = "no_object"))]
+    lib.set_getter_fn("len", |s: &mut ImmutableString| Ok(s.chars().count() as INT));
+
     lib.set_fn_2_mut(
         "contains",
         |s: &mut ImmutableString, ch: char| Ok(s.contains(ch)),
