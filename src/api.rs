@@ -1051,8 +1051,7 @@ impl Engine {
         let mut state = State::new();
         let args = args.as_mut();
 
-        let result =
-            self.call_script_fn(Some(scope), &mut state, &lib, name, fn_def, args, pos, 0)?;
+        let result = self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, pos, 0)?;
 
         let return_type = self.map_type_name(result.type_name());
 

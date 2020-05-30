@@ -9,6 +9,12 @@ Regression fix
 
 * Do not optimize script with `eval_expression` - it is assumed to be one-off and short.
 
+Bug fixes
+---------
+
+* Indexing with an index or dot expression now works property (it compiled wrongly before).
+  For example, `let s = "hello"; s[s.len-1] = 'x';` now works property instead of an error.
+
 Breaking changes
 ----------------
 
@@ -22,13 +28,19 @@ Breaking changes
   This is to avoid excessive cloning of strings.  All native-Rust functions taking string parameters
   should switch to `rhai::ImmutableString` (which is either `Rc<String>` or `Arc<String>` depending on
   whether the `sync` feature is used).
+* Native Rust functions registered with the `Engine` also mutates the first argument when called in
+  normal function-call style (previously the first argument will be passed by _value_ if not called
+  in method-call style).  Of course, if the first argument is a calculated value (e.g. result of an
+  expression), then mutating it has no effect, but at least it is not cloned.
+* Some built-in methods (e.g. `len` for string, `floor` for `FLOAT`) now have _property_ versions in
+  addition to methods to simplify coding.
 
 New features
 ------------
 
 * Set limit on maximum level of nesting expressions and statements to avoid panics during parsing.
 * New `EvalPackage` to disable `eval`.
-* More benchmarks.
+* `Module::set_getter_fn`, `Module::set_setter_fn` and `Module:set_indexer_fn` to register getter/setter/indexer functions.
 
 Speed enhancements
 ------------------
@@ -43,6 +55,11 @@ Speed enhancements
   (and therefore the `CorePackage`) because they are now always available, even under `Engine::new_raw`.
 * Operator-assignment statements (e.g. `+=`) are now handled directly and much faster.
 * Strings are now _immutable_ and use the `rhai::ImmutableString` type, eliminating large amounts of cloning.
+* For Native Rust functions taking a first `&mut` parameter, the first argument is passed by reference instead of
+  by value, even if not called in method-call style.  This allows many functions declared with `&mut` parameter to avoid
+  excessive cloning. For example, if `a` is a large array, getting its length in this manner: `len(a)` used to result
+  in a full clone of `a` before taking the length and throwing the copy away. Now, `a` is simply passed by reference,
+  avoiding the cloning altogether.
 
 
 Version 0.14.1

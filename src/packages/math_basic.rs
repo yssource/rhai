@@ -43,6 +43,18 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
         lib.set_fn_1("is_finite", |x: FLOAT| Ok(x.is_finite()));
         lib.set_fn_1("is_infinite", |x: FLOAT| Ok(x.is_infinite()));
 
+        #[cfg(not(feature = "no_object"))]
+        {
+            lib.set_getter_fn("floor", |x: &mut FLOAT| Ok(x.floor()));
+            lib.set_getter_fn("ceiling", |x: &mut FLOAT| Ok(x.ceil()));
+            lib.set_getter_fn("round", |x: &mut FLOAT| Ok(x.ceil()));
+            lib.set_getter_fn("int", |x: &mut FLOAT| Ok(x.trunc()));
+            lib.set_getter_fn("fraction", |x: &mut FLOAT| Ok(x.fract()));
+            lib.set_getter_fn("is_nan", |x: &mut FLOAT| Ok(x.is_nan()));
+            lib.set_getter_fn("is_finite", |x: &mut FLOAT| Ok(x.is_finite()));
+            lib.set_getter_fn("is_infinite", |x: &mut FLOAT| Ok(x.is_infinite()));
+        }
+
         // Register conversion functions
         lib.set_fn_1("to_float", |x: INT| Ok(x as FLOAT));
         lib.set_fn_1("to_float", |x: f32| Ok(x as FLOAT));

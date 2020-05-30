@@ -24,9 +24,9 @@ fn mat_gen(n) {
 }
 
 fn mat_mul(a, b) {
-    let m = a.len();
-    let n = a[0].len();
-    let p = b[0].len();
+    let m = a.len;
+    let n = a[0].len;
+    let p = b[0].len;
 
     let b2 = new_mat(n, p);
 	
@@ -38,13 +38,13 @@ fn mat_mul(a, b) {
 
     let c = new_mat(m, p);
 
-	for i in range(0, c.len()) {
+	for i in range(0, c.len) {
 		let ci = c[i];
-		for j in range(0, ci.len()) {
+		for j in range(0, ci.len) {
 			let b2j = b2[j];
 			ci[j] = 0.0;
 			
-			for z in range(0, a[i].len()) {
+			for z in range(0, a[i].len) {
 				let x = a[i][z];
 				let y = b2j[z];
 				ci[j] += x * y;
@@ -66,4 +66,4 @@ for i in range(0, SIZE) {
 	print(c[i]);
 }
 
-print("Finished. Run time = " + now.elapsed() + " seconds.");
+print("Finished. Run time = " + now.elapsed + " seconds.");

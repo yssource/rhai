@@ -48,7 +48,7 @@ fn bench_eval_expression_optimized_simple(bench: &mut Bencher) {
             2 > 1 &&
             "something" != "nothing" ||
             "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
-            [array, with, spaces].len() <= #{prop:name}.len() &&
+            [array, with, spaces].len <= #{prop:name}.len &&
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
@@ -65,7 +65,7 @@ fn bench_eval_expression_optimized_full(bench: &mut Bencher) {
             2 > 1 &&
             "something" != "nothing" ||
             "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
-            [array, with, spaces].len() <= #{prop:name}.len() &&
+            [array, with, spaces].len <= #{prop:name}.len &&
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
@@ -82,7 +82,7 @@ fn bench_eval_call_expression(bench: &mut Bencher) {
             2 > 1 &&
             "something" != "nothing" ||
             "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
-            [array, with, spaces].len() <= #{prop:name}.len() &&
+            [array, with, spaces].len <= #{prop:name}.len &&
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
@@ -97,7 +97,7 @@ fn bench_eval_call(bench: &mut Bencher) {
             2 > 1 &&
             "something" != "nothing" ||
             "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
-            [array, with, spaces].len() <= #{prop:name}.len() &&
+            [array, with, spaces].len <= #{prop:name}.len &&
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 

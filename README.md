@@ -47,7 +47,7 @@ It doesn't attempt to be a new language. For example:
 
 * No classes.  Well, Rust doesn't either. On the other hand...
 * No traits...  so it is also not Rust. Do your Rusty stuff in Rust.
-* No structures - definte your types in Rust instead; Rhai can seamless work with _any Rust type_.
+* No structures - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
 * No first-class functions - Code your functions in Rust instead, and register them with Rhai.
 * No closures - do your closure magic in Rust instead; [turn a Rhai scripted function into a Rust closure](#calling-rhai-functions-from-rust).
 * It is best to expose an API in Rhai for scripts to call.  All your core functionalities should be in Rust.
@@ -300,7 +300,7 @@ let ast = engine.compile(true,
     r"
         // a function with two parameters: String and i64
         fn hello(x, y) {
-            x.len() + y
+            x.len + y
         }
 
         // functions can be overloaded: this one takes only one parameter
@@ -355,7 +355,7 @@ use rhai::{Engine, Func};                       // use 'Func' for 'create_from_s
 
 let engine = Engine::new();                     // create a new 'Engine' just for this
 
-let script = "fn calc(x, y) { x + y.len() < 42 }";
+let script = "fn calc(x, y) { x + y.len < 42 }";
 
 // Func takes two type parameters:
 //   1) a tuple made up of the types of the script function's parameters
@@ -945,8 +945,8 @@ If the [`no_object`] feature is turned on, however, the _method_ style of functi
 (i.e. calling a function as an object-method) is no longer supported.
 
 ```rust
-// Below is a syntax error under 'no_object' because 'len' cannot be called in method style.
-let result = engine.eval::<i64>("let x = [1, 2, 3]; x.len()")?;
+// Below is a syntax error under 'no_object' because 'clear' cannot be called in method style.
+let result = engine.eval::<()>("let x = [1, 2, 3]; x.clear()")?;
 ```
 
 [`type_of()`] works fine with custom types and returns the name of the type.
@@ -1082,7 +1082,7 @@ fn main() -> Result<(), Box<EvalAltResult>>
 
     // First invocation
     engine.eval_with_scope::<()>(&mut scope, r"
-        let x = 4 + 5 - y + z + s.len();
+        let x = 4 + 5 - y + z + s.len;
         y = 1;
     ")?;
 
@@ -1122,6 +1122,7 @@ Comments
 --------
 
 Comments are C-style, including '`/*` ... `*/`' pairs and '`//`' for comments to the end of the line.
+Comments can be nested.
 
 ```rust
 let /* intruder comment */ name = "Bob";
@@ -1138,14 +1139,35 @@ let /* intruder comment */ name = "Bob";
 */
 ```
 
+Keywords
+--------
+
+The following are reserved keywords in Rhai:
+
+| Keywords                                          | Usage                 | Not available under feature |
+| ------------------------------------------------- | --------------------- | :-------------------------: |
+| `true`, `false`                                   | Boolean constants     |                             |
+| `let`, `const`                                    | Variable declarations |                             |
+| `if`, `else`                                      | Control flow          |                             |
+| `while`, `loop`, `for`, `in`, `continue`, `break` | Looping               |                             |
+| `fn`, `private`                                   | Functions             |       [`no_function`]       |
+| `return`                                          | Return values         |                             |
+| `throw`                                           | Return errors         |                             |
+| `import`, `export`, `as`                          | Modules               |        [`no_module`]        |
+
+Keywords cannot be the name of a [function] or [variable], unless the relevant exclusive feature is enabled.
+For example, `fn` is a valid variable name if the [`no_function`] feature is used.
+
 Statements
 ----------
 
-Statements are terminated by semicolons '`;`' - they are mandatory, except for the _last_ statement where it can be omitted.
+Statements are terminated by semicolons '`;`' and they are mandatory,
+except for the _last_ statement in a _block_ (enclosed by '`{`' .. '`}`' pairs) where it can be omitted.
 
-A statement can be used anywhere where an expression is expected. The _last_ statement of a statement block
-(enclosed by '`{`' .. '`}`' pairs) is always the return value of the statement. If a statement has no return value
-(e.g. variable definitions, assignments) then the value will be [`()`].
+A statement can be used anywhere where an expression is expected. These are called, for lack of a more
+creative name, "statement expressions."  The _last_ statement of a statement block is _always_ the block's
+return value when used as a statement.
+If the last statement has no return value (e.g. variable definitions, assignments) then it is assumed to be [`()`].
 
 ```rust
 let a = 42;             // normal assignment statement
@@ -1153,16 +1175,17 @@ let a = foo(42);        // normal function call statement
 foo < 42;               // normal expression as statement
 
 let a = { 40 + 2 };     // 'a' is set to the value of the statement block, which is the value of the last statement
-//              ^ notice that the last statement does not require a terminating semicolon (although it also works with it)
-//                ^ notice that a semicolon is required here to terminate the assignment statement; it is syntax error without it
+//              ^ the last statement does not require a terminating semicolon (although it also works with it)
+//                ^ semicolon required here to terminate the assignment statement; it is a syntax error without it
 
-4 * 10 + 2              // this is also a statement, which is an expression, with no ending semicolon because
-                        // it is the last statement of the whole block
+4 * 10 + 2              // a statement which is just one expression; no ending semicolon is OK
+                        // because it is the last statement of the whole block
 ```
 
 Variables
 ---------
 
+[variable]: #variables
 [variables]: #variables
 
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
@@ -1289,16 +1312,16 @@ Floating-point functions
 
 The following standard functions (defined in the [`BasicMathPackage`](#packages) but excluded if using a [raw `Engine`]) operate on `f64` only:
 
-| Category         | Functions                                                    |
-| ---------------- | ------------------------------------------------------------ |
-| Trigonometry     | `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` in degrees       |
-| Arc-trigonometry | `asin`, `acos`, `atan`, `asinh`, `acosh`, `atanh` in degrees |
-| Square root      | `sqrt`                                                       |
-| Exponential      | `exp` (base _e_)                                             |
-| Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)         |
-| Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction`               |
-| Conversion       | [`to_int`]                                                   |
-| Testing          | `is_nan`, `is_finite`, `is_infinite`                         |
+| Category         | Functions                                                             |
+| ---------------- | --------------------------------------------------------------------- |
+| Trigonometry     | `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` in degrees                |
+| Arc-trigonometry | `asin`, `acos`, `atan`, `asinh`, `acosh`, `atanh` in degrees          |
+| Square root      | `sqrt`                                                                |
+| Exponential      | `exp` (base _e_)                                                      |
+| Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)                  |
+| Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction` methods and properties |
+| Conversion       | [`to_int`]                                                            |
+| Testing          | `is_nan`, `is_finite`, `is_infinite` methods and properties           |
 
 Strings and Chars
 -----------------
@@ -1307,8 +1330,8 @@ Strings and Chars
 [strings]: #strings-and-chars
 [char]: #strings-and-chars
 
-String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and
-hex ('`\x`_xx_') escape sequences.
+String and character literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_')
+and hex ('`\x`_xx_') escape sequences.
 
 Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full,
 32-bit extended Unicode code points.
@@ -1388,34 +1411,34 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 ### Built-in functions
 
-The following standard methods (defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
+The following standard methods (mostly defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
 
-| Function                | Parameter(s)                                                 | Description                                                                                       |
-| ----------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `len`                   | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
-| `pad`                   | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
-| `+=` operator, `append` | character/string to append                                   | Adds a character or a string to the end of another string                                         |
-| `clear`                 | _none_                                                       | empties the string                                                                                |
-| `truncate`              | target length                                                | cuts off the string at exactly a specified number of characters                                   |
-| `contains`              | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
-| `index_of`              | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
-| `sub_string`            | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
-| `crop`                  | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`               | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
-| `trim`                  | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
+| Function                  | Parameter(s)                                                 | Description                                                                                       |
+| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `len` method and property | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
+| `pad`                     | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
+| `+=` operator, `append`   | character/string to append                                   | Adds a character or a string to the end of another string                                         |
+| `clear`                   | _none_                                                       | empties the string                                                                                |
+| `truncate`                | target length                                                | cuts off the string at exactly a specified number of characters                                   |
+| `contains`                | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
+| `index_of`                | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
+| `sub_string`              | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
+| `crop`                    | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
+| `replace`                 | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
+| `trim`                    | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples
 
 ```rust
 let full_name == " Bob C. Davis ";
-full_name.len() == 14;
+full_name.len == 14;
 
 full_name.trim();
-full_name.len() == 12;
+full_name.len == 12;
 full_name == "Bob C. Davis";
 
 full_name.pad(15, '$');
-full_name.len() == 15;
+full_name.len == 15;
 full_name == "Bob C. Davis$$$";
 
 let n = full_name.index_of('$');
@@ -1426,11 +1449,11 @@ full_name.index_of("$$", n + 1) == 13;
 full_name.sub_string(n, 3) == "$$$";
 
 full_name.truncate(6);
-full_name.len() == 6;
+full_name.len == 6;
 full_name == "Bob C.";
 
 full_name.replace("Bob", "John");
-full_name.len() == 7;
+full_name.len == 7;
 full_name == "John C.";
 
 full_name.contains('C') == true;
@@ -1443,7 +1466,7 @@ full_name.crop(0, 1);
 full_name == "C";
 
 full_name.clear();
-full_name.len() == 0;
+full_name.len == 0;
 ```
 
 Arrays
@@ -1463,21 +1486,21 @@ Arrays are disabled via the [`no_index`] feature.
 
 ### Built-in functions
 
-The following methods (defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
+The following methods (mostly defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
 
-| Function                | Parameter(s)                                                          | Description                                                                                          |
-| ----------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `push`                  | element to insert                                                     | inserts an element at the end                                                                        |
-| `+=` operator, `append` | array to append                                                       | concatenates the second array to the end of the first                                                |
-| `+` operator            | first array, second array                                             | concatenates the first array with the second                                                         |
-| `insert`                | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
-| `pop`                   | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
-| `shift`                 | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
-| `remove`                | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
-| `len`                   | _none_                                                                | returns the number of elements                                                                       |
-| `pad`                   | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
-| `clear`                 | _none_                                                                | empties the array                                                                                    |
-| `truncate`              | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
+| Function                  | Parameter(s)                                                          | Description                                                                                          |
+| ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `push`                    | element to insert                                                     | inserts an element at the end                                                                        |
+| `+=` operator, `append`   | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+` operator              | first array, second array                                             | concatenates the first array with the second                                                         |
+| `insert`                  | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
+| `pop`                     | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
+| `shift`                   | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
+| `remove`                  | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `len` method and property | _none_                                                                | returns the number of elements                                                                       |
+| `pad`                     | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
+| `clear`                   | _none_                                                                | empties the array                                                                                    |
+| `truncate`                | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
 ### Examples
 
@@ -1487,7 +1510,7 @@ let y = [2, 3];         // array literal with 2 elements
 y.insert(0, 1);         // insert element at the beginning
 y.insert(999, 4);       // insert element at the end
 
-y.len() == 4;
+y.len == 4;
 
 y[0] == 1;
 y[1] == 2;
@@ -1504,7 +1527,7 @@ y[1] = 42;              // array elements can be reassigned
 
 y.remove(2) == 3;       // remove element
 
-y.len() == 3;
+y.len == 3;
 
 y[2] == 4;              // elements after the removed element are shifted
 
@@ -1528,7 +1551,7 @@ foo == 1;
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
 
-y.len() == 5;
+y.len == 5;
 
 let first = y.shift();  // remove the first element, 4 elements remaining
 first == 1;
@@ -1536,7 +1559,7 @@ first == 1;
 let last = y.pop();     // remove the last element, 3 elements remaining
 last == 5;
 
-y.len() == 3;
+y.len == 3;
 
 for item in y {         // arrays can be iterated with a 'for' statement
     print(item);
@@ -1544,15 +1567,15 @@ for item in y {         // arrays can be iterated with a 'for' statement
 
 y.pad(10, "hello");     // pad the array up to 10 elements
 
-y.len() == 10;
+y.len == 10;
 
 y.truncate(5);          // truncate the array to 5 elements
 
-y.len() == 5;
+y.len == 5;
 
 y.clear();              // empty the array
 
-y.len() == 0;
+y.len == 0;
 ```
 
 `push` and `pad` are only defined for standard built-in types. For custom types, type-specific versions must be registered:
@@ -1722,10 +1745,10 @@ The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp 
 
 The following methods (defined in the [`BasicTimePackage`](#packages) but excluded if using a [raw `Engine`]) operate on timestamps:
 
-| Function     | Parameter(s)                       | Description                                              |
-| ------------ | ---------------------------------- | -------------------------------------------------------- |
-| `elapsed`    | _none_                             | returns the number of seconds since the timestamp        |
-| `-` operator | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
+| Function           | Parameter(s)                       | Description                                              |
+| ------------------ | ---------------------------------- | -------------------------------------------------------- |
+| `elapsed` property | _none_                             | returns the number of seconds since the timestamp        |
+| `-` operator       | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
 
 ### Examples
 
@@ -1734,7 +1757,7 @@ let now = timestamp();
 
 // Do some lengthy operation...
 
-if now.elapsed() > 30.0 {
+if now.elapsed > 30.0 {
     print("takes too long (over 30 seconds)!")
 }
 ```
@@ -1963,6 +1986,9 @@ println!(result);           // prints "Runtime error: 42 is too large! (line 5, 
 Functions
 ---------
 
+[function]: #functions
+[functions]: #functions
+
 Rhai supports defining functions in script (unless disabled with [`no_function`]):
 
 ```rust
@@ -2007,8 +2033,9 @@ fn foo() { x }              // <- syntax error: variable 'x' doesn't exist
 
 Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
 It is important to remember that all arguments are passed by _value_, so all functions are _pure_
-(i.e. they never modifytheir arguments).
-Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if not careful.
+(i.e. they never modify their arguments).
+Any update to an argument will **not** be reflected back to the caller.
+This can introduce subtle bugs, if not careful, especially when using the _method-call_ style.
 
 ```rust
 fn change(s) {              // 's' is passed by value
@@ -2016,7 +2043,7 @@ fn change(s) {              // 's' is passed by value
 }
 
 let x = 500;
-x.change();                 // de-sugars to change(x)
+x.change();                 // de-sugars to 'change(x)'
 x == 500;                   // 'x' is NOT changed!
 ```
 
@@ -2067,14 +2094,24 @@ Members and methods
 -------------------
 
 Properties and methods in a Rust custom type registered with the [`Engine`] can be called just like in Rust.
+Unlike functions defined in script (for which all arguments are passed by _value_),
+native Rust functions may mutate the object (or the first argument if called in normal function call style).
 
 ```rust
 let a = new_ts();           // constructor function
-a.field = 500;              // property access
-a.update();                 // method call, 'a' can be changed
+a.field = 500;              // property setter
+a.update();                 // method call, 'a' can be modified
 
-update(a);                  // this works, but 'a' is unchanged because only
-                            // a COPY of 'a' is passed to 'update' by VALUE
+update(a);                  // <- this de-sugars to 'a.update()' this if 'a' is a simple variable
+                            //    unlike scripted functions, 'a' can be modified and is not a copy
+
+let array = [ a ];
+
+update(array[0]);           // <- 'array[0]' is an expression returning a calculated value,
+                            //    a transient (i.e. a copy) so this statement has no effect
+                            //    except waste a lot of time cloning
+
+array[0].update();          // <- call this method-call style will update 'a'
 ```
 
 Custom types, properties and methods can be disabled via the [`no_object`] feature.
@@ -2244,7 +2281,7 @@ let ast = engine.compile(r#"
         x + 1
     }
     fn add_len(x, y) {
-        x + y.len()
+        x + y.len
     }
 
     // Imported modules can become sub-modules

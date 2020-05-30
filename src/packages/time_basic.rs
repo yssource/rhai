@@ -10,6 +10,9 @@ use crate::token::Position;
 #[cfg(not(feature = "no_std"))]
 use crate::stdlib::time::Instant;
 
+#[cfg(not(feature = "no_float"))]
+use crate::parser::FLOAT;
+
 #[cfg(not(feature = "no_std"))]
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     // Register date/time functions
@@ -70,27 +73,29 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     lib.set_fn_2("==", eq::<Instant>);
     lib.set_fn_2("!=", ne::<Instant>);
 
-    lib.set_fn_1(
-        "elapsed",
-        |timestamp: Instant| {
-            #[cfg(not(feature = "no_float"))]
-            return Ok(timestamp.elapsed().as_secs_f64());
+    #[cfg(not(feature = "no_float"))]
+    fn elapsed (timestamp: &mut Instant) -> Result<FLOAT, Box<EvalAltResult>> {
+        Ok(timestamp.elapsed().as_secs_f64())
+    }
 
-            #[cfg(feature = "no_float")]
-            {
-                let seconds = timestamp.elapsed().as_secs();
+    #[cfg(feature = "no_float")]
+    fn elapsed (timestamp: &mut Instant) -> Result<INT, Box<EvalAltResult>> {
+        let seconds = timestamp.elapsed().as_secs();
 
-                #[cfg(not(feature = "unchecked"))]
-                {
-                    if seconds > (MAX_INT as u64) {
-                        return Err(Box::new(EvalAltResult::ErrorArithmetic(
-                            format!("Integer overflow for timestamp.elapsed(): {}", seconds),
-                            Position::none(),
-                        )));
-                    }
-                }
-                return Ok(seconds as INT);
+        #[cfg(not(feature = "unchecked"))]
+        {
+            if seconds > (MAX_INT as u64) {
+                return Err(Box::new(EvalAltResult::ErrorArithmetic(
+                    format!("Integer overflow for timestamp.elapsed: {}", seconds),
+                    Position::none(),
+                )));
             }
-        },
-    );
+        }
+        Ok(seconds as INT)
+    }
+
+    lib.set_fn_1_mut("elapsed", elapsed);
+
+    #[cfg(not(feature = "no_object"))]
+    lib.set_getter_fn("elapsed", elapsed);
 });

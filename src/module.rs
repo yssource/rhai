@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, FunctionsLib};
+use crate::engine::{make_getter, make_setter, Engine, FunctionsLib, FUNC_INDEXER};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn};
 use crate::parser::{
     FnAccess,
@@ -378,9 +378,9 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking two parameters into the module, returning a hash key.
+    /// Set a Rust getter function taking one mutable parameter, returning a hash key.
     ///
-    /// If there is a similar existing Rust function, it is replaced.
+    /// If there is a similar existing Rust getter function, it is replaced.
     ///
     /// # Examples
     ///
@@ -388,7 +388,30 @@ impl Module {
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_2("calc", |x: i64, y: String| {
+    /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        self.set_fn_1_mut(make_getter(&name.into()), func)
+    }
+
+    /// Set a Rust function taking two parameters into the module, returning a hash key.
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_2("calc", |x: i64, y: ImmutableString| {
     ///     Ok(x + y.len() as i64)
     /// });
     /// assert!(module.get_fn(hash).is_some());
@@ -417,13 +440,15 @@ impl Module {
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
     /// returning a hash key.
     ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: String| {
+    /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: ImmutableString| {
     ///     *x += y.len() as i64; Ok(*x)
     /// });
     /// assert!(module.get_fn(hash).is_some());
@@ -449,6 +474,59 @@ impl Module {
         )
     }
 
+    /// Set a Rust setter function taking two parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing setter Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_setter_fn("value", |x: &mut i64, y: ImmutableString| {
+    ///     *x = y.len() as i64;
+    ///     Ok(())
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<()> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<()> + Send + Sync + 'static,
+    ) -> u64 {
+        self.set_fn_2_mut(make_setter(&name.into()), func)
+    }
+
+    /// Set a Rust indexer function taking two parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing setter Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_indexer_fn(|x: &mut i64, y: ImmutableString| {
+    ///     Ok(*x + y.len() as i64)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn set_indexer_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+        &mut self,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        self.set_fn_2_mut(FUNC_INDEXER, func)
+    }
+
     /// Set a Rust function taking three parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -456,10 +534,10 @@ impl Module {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3("calc", |x: i64, y: String, z: i64| {
+    /// let hash = module.set_fn_3("calc", |x: i64, y: ImmutableString, z: i64| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
     /// assert!(module.get_fn(hash).is_some());
@@ -499,10 +577,10 @@ impl Module {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: String, z: i64| {
+    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: ImmutableString, z: i64| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
     /// assert!(module.get_fn(hash).is_some());
@@ -541,10 +619,10 @@ impl Module {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3("calc", |x: i64, y: String, z: i64, _w: ()| {
+    /// let hash = module.set_fn_4("calc", |x: i64, y: ImmutableString, z: i64, _w: ()| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
     /// assert!(module.get_fn(hash).is_some());
@@ -583,7 +661,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking three parameters (the first one mutable) into the module,
+    /// Set a Rust function taking four parameters (the first one mutable) into the module,
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -591,10 +669,10 @@ impl Module {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: String, z: i64, _w: ()| {
+    /// let hash = module.set_fn_4_mut("calc", |x: &mut i64, y: ImmutableString, z: i64, _w: ()| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
     /// assert!(module.get_fn(hash).is_some());
@@ -1043,6 +1121,9 @@ mod stat {
     use super::*;
 
     /// Module resolution service that serves modules added into it.
+    ///
+    /// `StaticModuleResolver` is a smart pointer to a `HashMap<String, Module>`.
+    /// It can simply be treated as `&HashMap<String, Module>`.
     ///
     /// # Examples
     ///

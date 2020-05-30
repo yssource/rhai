@@ -101,22 +101,26 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
     #[cfg(not(feature = "no_index"))]
     {
-        lib.set_fn_2("+", |x: ImmutableString, y: Array| Ok(format!("{}{:?}", x, y)));
+        lib.set_fn_2_mut("+", |x: &mut ImmutableString, y: Array| Ok(format!("{}{:?}", x, y)));
         lib.set_fn_2_mut("+", |x: &mut Array, y: ImmutableString| Ok(format!("{:?}{}", x, y)));
     }
 
-    lib.set_fn_1("len", |s: ImmutableString| Ok(s.chars().count() as INT));
-    lib.set_fn_2(
+    lib.set_fn_1_mut("len", |s: &mut ImmutableString| Ok(s.chars().count() as INT));
+
+    #[cfg(not(feature = "no_object"))]
+    lib.set_getter_fn("len", |s: &mut ImmutableString| Ok(s.chars().count() as INT));
+
+    lib.set_fn_2_mut(
         "contains",
-        |s: ImmutableString, ch: char| Ok(s.contains(ch)),
+        |s: &mut ImmutableString, ch: char| Ok(s.contains(ch)),
     );
-    lib.set_fn_2(
+    lib.set_fn_2_mut(
         "contains",
-        |s: ImmutableString, find: ImmutableString| Ok(s.contains(find.as_str())),
+        |s: &mut ImmutableString, find: ImmutableString| Ok(s.contains(find.as_str())),
     );
-    lib.set_fn_3(
+    lib.set_fn_3_mut(
         "index_of",
-        |s: ImmutableString, ch: char, start: INT| {
+        |s: &mut ImmutableString, ch: char, start: INT| {
             let start = if start < 0 {
                 0
             } else if (start as usize) >= s.chars().count() {
@@ -131,17 +135,17 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
                 .unwrap_or(-1 as INT))
         },
     );
-    lib.set_fn_2(
+    lib.set_fn_2_mut(
         "index_of",
-        |s: ImmutableString, ch: char| {
+        |s: &mut ImmutableString, ch: char| {
             Ok(s.find(ch)
                 .map(|index| s[0..index].chars().count() as INT)
                 .unwrap_or(-1 as INT))
         },
     );
-    lib.set_fn_3(
+    lib.set_fn_3_mut(
         "index_of",
-        |s: ImmutableString, find: ImmutableString, start: INT| {
+        |s: &mut ImmutableString, find: ImmutableString, start: INT| {
             let start = if start < 0 {
                 0
             } else if (start as usize) >= s.chars().count() {
@@ -156,9 +160,9 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
                 .unwrap_or(-1 as INT))
         },
     );
-    lib.set_fn_2(
+    lib.set_fn_2_mut(
         "index_of",
-        |s: ImmutableString, find: ImmutableString| {
+        |s: &mut ImmutableString, find: ImmutableString| {
             Ok(s.find(find.as_str())
                 .map(|index| s[0..index].chars().count() as INT)
                 .unwrap_or(-1 as INT))
