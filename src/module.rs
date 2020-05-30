@@ -12,7 +12,7 @@ use crate::parser::{
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token};
-use crate::utils::StaticVec;
+use crate::utils::{StaticVec, StraightHasherBuilder};
 
 use crate::stdlib::{
     any::TypeId,
@@ -44,10 +44,14 @@ pub struct Module {
     variables: HashMap<String, Dynamic>,
 
     /// Flattened collection of all module variables, including those in sub-modules.
-    all_variables: HashMap<u64, Dynamic>,
+    all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
 
     /// External Rust functions.
-    functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, CallableFunction)>,
+    functions: HashMap<
+        u64,
+        (String, FnAccess, StaticVec<TypeId>, CallableFunction),
+        StraightHasherBuilder,
+    >,
 
     /// Script-defined functions.
     lib: FunctionsLib,
@@ -57,7 +61,7 @@ pub struct Module {
 
     /// Flattened collection of all external Rust functions, native or scripted,
     /// including those in sub-modules.
-    all_functions: HashMap<u64, CallableFunction>,
+    all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
 }
 
 impl fmt::Debug for Module {
@@ -101,7 +105,7 @@ impl Module {
     /// ```
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
-            functions: HashMap::with_capacity(capacity),
+            functions: HashMap::with_capacity_and_hasher(capacity, StraightHasherBuilder),
             ..Default::default()
         }
     }

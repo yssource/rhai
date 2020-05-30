@@ -12,7 +12,7 @@ use crate::r#unsafe::{unsafe_cast_var_name_to_lifetime, unsafe_mut_cast_to_lifet
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::Position;
-use crate::utils::StaticVec;
+use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -196,7 +196,7 @@ impl State {
 ///
 /// The key of the `HashMap` is a `u64` hash calculated by the function `calc_fn_hash`.
 #[derive(Debug, Clone, Default)]
-pub struct FunctionsLib(HashMap<u64, Shared<FnDef>>);
+pub struct FunctionsLib(HashMap<u64, Shared<FnDef>, StraightHasherBuilder>);
 
 impl FunctionsLib {
     /// Create a new `FunctionsLib` from a collection of `FnDef`.
@@ -261,7 +261,7 @@ impl From<Vec<(u64, Shared<FnDef>)>> for FunctionsLib {
 }
 
 impl Deref for FunctionsLib {
-    type Target = HashMap<u64, Shared<FnDef>>;
+    type Target = HashMap<u64, Shared<FnDef>, StraightHasherBuilder>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -269,7 +269,7 @@ impl Deref for FunctionsLib {
 }
 
 impl DerefMut for FunctionsLib {
-    fn deref_mut(&mut self) -> &mut HashMap<u64, Shared<FnDef>> {
+    fn deref_mut(&mut self) -> &mut HashMap<u64, Shared<FnDef>, StraightHasherBuilder> {
         &mut self.0
     }
 }
@@ -952,21 +952,24 @@ impl Engine {
         let mut idx_val = idx_values.pop();
 
         if is_index {
+            let pos = rhs.position();
+
             match rhs {
-                // xxx[idx].dot_rhs... | xxx[idx][dot_rhs]...
+                // xxx[idx].expr... | xxx[idx][expr]...
                 Expr::Dot(x) | Expr::Index(x) => {
+                    let (idx, expr, pos) = x.as_ref();
                     let is_idx = matches!(rhs, Expr::Index(_));
-                    let pos = x.0.position();
-                    let this_ptr = &mut self
-                        .get_indexed_mut(state, lib, obj, is_ref, idx_val, pos, op_pos, false)?;
+                    let idx_pos = idx.position();
+                    let this_ptr = &mut self.get_indexed_mut(
+                        state, lib, obj, is_ref, idx_val, idx_pos, op_pos, false,
+                    )?;
 
                     self.eval_dot_index_chain_helper(
-                        state, lib, this_ptr, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, lib, this_ptr, expr, idx_values, is_idx, *pos, level, new_val,
                     )
                 }
                 // xxx[rhs] = new_val
                 _ if new_val.is_some() => {
-                    let pos = rhs.position();
                     let this_ptr = &mut self
                         .get_indexed_mut(state, lib, obj, is_ref, idx_val, pos, op_pos, true)?;
 
@@ -975,16 +978,7 @@ impl Engine {
                 }
                 // xxx[rhs]
                 _ => self
-                    .get_indexed_mut(
-                        state,
-                        lib,
-                        obj,
-                        is_ref,
-                        idx_val,
-                        rhs.position(),
-                        op_pos,
-                        false,
-                    )
+                    .get_indexed_mut(state, lib, obj, is_ref, idx_val, pos, op_pos, false)
                     .map(|v| (v.clone_into_dynamic(), false)),
             }
         } else {
@@ -1050,57 +1044,51 @@ impl Engine {
                     .map(|(v, _)| (v, false))
                 }
                 #[cfg(not(feature = "no_object"))]
-                // {xxx:map}.idx_lhs[idx_expr] | {xxx:map}.dot_lhs.rhs
+                // {xxx:map}.prop[expr] | {xxx:map}.prop.expr
                 Expr::Index(x) | Expr::Dot(x) if obj.is::<Map>() => {
+                    let (prop, expr, pos) = x.as_ref();
                     let is_idx = matches!(rhs, Expr::Index(_));
 
-                    let mut val = if let Expr::Property(p) = &x.0 {
+                    let mut val = if let Expr::Property(p) = prop {
                         let ((prop, _, _), _) = p.as_ref();
                         let index = prop.clone().into();
-                        self.get_indexed_mut(state, lib, obj, is_ref, index, x.2, op_pos, false)?
+                        self.get_indexed_mut(state, lib, obj, is_ref, index, *pos, op_pos, false)?
                     } else {
-                        // Syntax error
-                        return Err(Box::new(EvalAltResult::ErrorDotExpr(
-                            "".into(),
-                            rhs.position(),
-                        )));
+                        unreachable!();
                     };
 
                     self.eval_dot_index_chain_helper(
-                        state, lib, &mut val, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, lib, &mut val, expr, idx_values, is_idx, *pos, level, new_val,
                     )
                 }
-                // xxx.idx_lhs[idx_expr] | xxx.dot_lhs.rhs
+                // xxx.prop[expr] | xxx.prop.expr
                 Expr::Index(x) | Expr::Dot(x) => {
-                    let is_idx = matches!(rhs, Expr::Index(_));
+                    let (prop, expr, pos) = x.as_ref();
+                    let is_idx = matches!(expr, Expr::Index(_));
                     let args = &mut [obj, &mut Default::default()];
 
-                    let (mut val, updated) = if let Expr::Property(p) = &x.0 {
+                    let (mut val, updated) = if let Expr::Property(p) = prop {
                         let ((_, getter, _), _) = p.as_ref();
                         let args = &mut args[..1];
-                        self.exec_fn_call(state, lib, getter, true, 0, args, is_ref, None, x.2, 0)?
+                        self.exec_fn_call(state, lib, getter, true, 0, args, is_ref, None, *pos, 0)?
                     } else {
-                        // Syntax error
-                        return Err(Box::new(EvalAltResult::ErrorDotExpr(
-                            "".into(),
-                            rhs.position(),
-                        )));
+                        unreachable!();
                     };
                     let val = &mut val;
                     let target = &mut val.into();
 
                     let (result, may_be_changed) = self.eval_dot_index_chain_helper(
-                        state, lib, target, &x.1, idx_values, is_idx, x.2, level, new_val,
+                        state, lib, target, expr, idx_values, is_idx, *pos, level, new_val,
                     )?;
 
                     // Feed the value back via a setter just in case it has been updated
                     if updated || may_be_changed {
-                        if let Expr::Property(p) = &x.0 {
+                        if let Expr::Property(p) = prop {
                             let ((_, _, setter), _) = p.as_ref();
                             // Re-use args because the first &mut parameter will not be consumed
                             args[1] = val;
                             self.exec_fn_call(
-                                state, lib, setter, true, 0, args, is_ref, None, x.2, 0,
+                                state, lib, setter, true, 0, args, is_ref, None, *pos, 0,
                             )
                             .or_else(|err| match *err {
                                 // If there is no setter, no need to feed it back because the property is read-only

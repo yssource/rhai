@@ -7,7 +7,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
-use crate::utils::StaticVec;
+use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleRef;
@@ -1496,32 +1496,26 @@ fn parse_op_assignment_stmt<'a>(
 }
 
 /// Make a dot expression.
-fn make_dot_expr(
-    lhs: Expr,
-    rhs: Expr,
-    op_pos: Position,
-    is_index: bool,
-) -> Result<Expr, ParseError> {
+fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
-        // idx_lhs[idx_rhs].rhs
+        // idx_lhs[idx_expr].rhs
         // Attach dot chain to the bottom level of indexing chain
         (Expr::Index(x), rhs) => {
-            Expr::Index(Box::new((x.0, make_dot_expr(x.1, rhs, op_pos, true)?, x.2)))
+            let (idx_lhs, idx_expr, pos) = *x;
+            Expr::Index(Box::new((
+                idx_lhs,
+                make_dot_expr(idx_expr, rhs, op_pos)?,
+                pos,
+            )))
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let (name, pos) = x.0;
-            let lhs = if is_index { lhs.into_property() } else { lhs };
 
             let getter = make_getter(&name);
             let setter = make_setter(&name);
             let rhs = Expr::Property(Box::new(((name, getter, setter), pos)));
 
-            Expr::Dot(Box::new((lhs, rhs, op_pos)))
-        }
-        (lhs, Expr::Property(x)) => {
-            let lhs = if is_index { lhs.into_property() } else { lhs };
-            let rhs = Expr::Property(x);
             Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }
         // lhs.module::id - syntax error
@@ -1531,34 +1525,30 @@ fn make_dot_expr(
             #[cfg(not(feature = "no_module"))]
             return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
         }
+        // lhs.prop
+        (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x)) => {
             let (dot_lhs, dot_rhs, pos) = *x;
             Expr::Dot(Box::new((
                 lhs,
-                Expr::Dot(Box::new((
-                    dot_lhs.into_property(),
-                    dot_rhs.into_property(),
-                    pos,
-                ))),
+                Expr::Dot(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
         }
         // lhs.idx_lhs[idx_rhs]
         (lhs, Expr::Index(x)) => {
-            let (idx_lhs, idx_rhs, pos) = *x;
+            let (dot_lhs, dot_rhs, pos) = *x;
             Expr::Dot(Box::new((
                 lhs,
-                Expr::Index(Box::new((
-                    idx_lhs.into_property(),
-                    idx_rhs.into_property(),
-                    pos,
-                ))),
+                Expr::Index(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
         }
+        // lhs.func()
+        (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
-        (lhs, rhs) => Expr::Dot(Box::new((lhs, rhs.into_property(), op_pos))),
+        _ => unreachable!(),
     })
 }
 
@@ -1822,7 +1812,7 @@ fn parse_binary_op<'a>(
                     _ => (),
                 }
 
-                make_dot_expr(current_lhs, rhs, pos, false)?
+                make_dot_expr(current_lhs, rhs, pos)?
             }
 
             token => return Err(PERR::UnknownOperator(token.into()).into_err(pos)),
@@ -2493,22 +2483,20 @@ pub fn parse_global_expr<'a>(
 fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     max_expr_depth: (usize, usize),
-) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), ParseError> {
+) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
-    let mut functions = HashMap::<u64, FnDef>::new();
+    let mut functions = HashMap::with_hasher(StraightHasherBuilder);
     let mut state = ParseState::new(max_expr_depth.0);
 
     while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
-            let mut access = FnAccess::Public;
-            let mut must_be_fn = false;
-
-            if match_token(input, Token::Private)? {
-                access = FnAccess::Private;
-                must_be_fn = true;
-            }
+            let (access, must_be_fn) = if match_token(input, Token::Private)? {
+                (FnAccess::Private, true)
+            } else {
+                (FnAccess::Public, false)
+            };
 
             match input.peek().unwrap() {
                 (Token::Fn, _) => {
@@ -2565,7 +2553,7 @@ fn parse_global_level<'a>(
         }
     }
 
-    Ok((statements, functions))
+    Ok((statements, functions.into_iter().map(|(_, v)| v).collect()))
 }
 
 /// Run the parser on an input stream, returning an AST.
@@ -2576,9 +2564,8 @@ pub fn parse<'a>(
     optimization_level: OptimizationLevel,
     max_expr_depth: (usize, usize),
 ) -> Result<AST, ParseError> {
-    let (statements, functions) = parse_global_level(input, max_expr_depth)?;
+    let (statements, lib) = parse_global_level(input, max_expr_depth)?;
 
-    let lib = functions.into_iter().map(|(_, v)| v).collect();
     Ok(
         // Optimize AST
         optimize_into_ast(engine, scope, statements, lib, optimization_level),
