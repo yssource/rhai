@@ -441,7 +441,6 @@ fn search_scope<'s, 'a>(
         Expr::Variable(x) => x.as_ref(),
         _ => unreachable!(),
     };
-    let index = if state.always_search { None } else { *index };
 
     #[cfg(not(feature = "no_module"))]
     {
@@ -469,6 +468,8 @@ fn search_scope<'s, 'a>(
             ));
         }
     }
+
+    let index = if state.always_search { None } else { *index };
 
     let index = if let Some(index) = index {
         scope.len() - index.get()
@@ -1102,7 +1103,7 @@ impl Engine {
                 }
                 // Syntax error
                 _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
-                    format!("{:?}", rhs),
+                    "".into(),
                     rhs.position(),
                 ))),
             }
@@ -1115,13 +1116,16 @@ impl Engine {
         scope: &mut Scope,
         state: &mut State,
         lib: &FunctionsLib,
-        dot_lhs: &Expr,
-        dot_rhs: &Expr,
-        is_index: bool,
-        op_pos: Position,
+        expr: &Expr,
         level: usize,
         new_val: Option<Dynamic>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let ((dot_lhs, dot_rhs, op_pos), is_index) = match expr {
+            Expr::Index(x) => (x.as_ref(), true),
+            Expr::Dot(x) => (x.as_ref(), false),
+            _ => unreachable!(),
+        };
+
         let idx_values = &mut StaticVec::new();
 
         self.eval_indexed_chain(scope, state, lib, dot_rhs, idx_values, 0, level)?;
@@ -1146,7 +1150,7 @@ impl Engine {
 
                 let this_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
-                    state, lib, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
+                    state, lib, this_ptr, dot_rhs, idx_values, is_index, *op_pos, level, new_val,
                 )
                 .map(|(v, _)| v)
             }
@@ -1161,7 +1165,7 @@ impl Engine {
                 let val = self.eval_expr(scope, state, lib, expr, level)?;
                 let this_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
-                    state, lib, this_ptr, dot_rhs, idx_values, is_index, op_pos, level, new_val,
+                    state, lib, this_ptr, dot_rhs, idx_values, is_index, *op_pos, level, new_val,
                 )
                 .map(|(v, _)| v)
             }
@@ -1477,14 +1481,14 @@ impl Engine {
                     Expr::Variable(_) => unreachable!(),
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
-                    Expr::Index(x) => self.eval_dot_index_chain(
-                        scope, state, lib, &x.0, &x.1, true, x.2, level, new_val,
-                    ),
+                    Expr::Index(_) => {
+                        self.eval_dot_index_chain(scope, state, lib, lhs_expr, level, new_val)
+                    }
                     // dot_lhs.dot_rhs op= rhs
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(x) => self.eval_dot_index_chain(
-                        scope, state, lib, &x.0, &x.1, false, *op_pos, level, new_val,
-                    ),
+                    Expr::Dot(_) => {
+                        self.eval_dot_index_chain(scope, state, lib, lhs_expr, level, new_val)
+                    }
                     // Error assignment to constant
                     expr if expr.is_constant() => {
                         Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
@@ -1501,15 +1505,11 @@ impl Engine {
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(x) => {
-                self.eval_dot_index_chain(scope, state, lib, &x.0, &x.1, true, x.2, level, None)
-            }
+            Expr::Index(_) => self.eval_dot_index_chain(scope, state, lib, expr, level, None),
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(x) => {
-                self.eval_dot_index_chain(scope, state, lib, &x.0, &x.1, false, x.2, level, None)
-            }
+            Expr::Dot(_) => self.eval_dot_index_chain(scope, state, lib, expr, level, None),
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(
