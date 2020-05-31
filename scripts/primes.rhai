@@ -15,7 +15,7 @@ let total_primes_found = 0;
 for p in range(2, MAX_NUMBER_TO_CHECK) {
     if !prime_mask[p] { continue; }
 
-    print(p);
+    //print(p);
 
     total_primes_found += 1;
 

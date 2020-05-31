@@ -62,8 +62,10 @@ let a = mat_gen(SIZE);
 let b = mat_gen(SIZE);
 let c = mat_mul(a, b);
 
+/*
 for i in range(0, SIZE) {
 	print(c[i]);
 }
+*/
 
 print("Finished. Run time = " + now.elapsed + " seconds.");
