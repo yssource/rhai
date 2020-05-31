@@ -37,7 +37,7 @@ Features
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.15.0, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is `0.15.0`, so the language and API's may change before they stabilize.
 
 What Rhai doesn't do
 --------------------
@@ -67,7 +67,7 @@ This is similar to some dynamic languages where most of the core functionalities
 Installation
 ------------
 
-Install the Rhai crate by adding this line to `dependencies`:
+Install the Rhai crate on [`crates.io`](https::/crates.io/crates/rhai/) by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
@@ -191,33 +191,35 @@ A number of examples can be found in the `examples` folder:
 Examples can be run with the following command:
 
 ```bash
-cargo run --example name
+cargo run --example {example_name}
 ```
 
 The `repl` example is a particularly good one as it allows one to interactively try out Rhai's
 language features in a standard REPL (**R**ead-**E**val-**P**rint **L**oop).
 
-Example Scripts
+Example scripts
 ---------------
 
 There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
 
-| Language feature scripts                             | Description                                                   |
-| ---------------------------------------------------- | ------------------------------------------------------------- |
-| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                              |
-| [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                         |
-| [`comments.rhai`](scripts/comments.rhai)             | just comments                                                 |
-| [`for1.rhai`](scripts/for1.rhai)                     | for loops                                                     |
-| [`function_decl1.rhai`](scripts/function_decl1.rhai) | a function without parameters                                 |
-| [`function_decl2.rhai`](scripts/function_decl2.rhai) | a function with two parameters                                |
-| [`function_decl3.rhai`](scripts/function_decl3.rhai) | a function with many parameters                               |
-| [`if1.rhai`](scripts/if1.rhai)                       | if example                                                    |
-| [`loop.rhai`](scripts/loop.rhai)                     | endless loop in Rhai, this example emulates a do..while cycle |
-| [`op1.rhai`](scripts/op1.rhai)                       | just a simple addition                                        |
-| [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                            |
-| [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                      |
-| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                           |
-| [`while.rhai`](scripts/while.rhai)                   | while loop                                                    |
+| Language feature scripts                             | Description                                                                   |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                                              |
+| [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                                         |
+| [`comments.rhai`](scripts/comments.rhai)             | just comments                                                                 |
+| [`for1.rhai`](scripts/for1.rhai)                     | [`for`](#for-loop) loops                                                      |
+| [`for2.rhai`](scripts/for2.rhai)                     | [`for`](#for-loop) loops on [arrays]                                          |
+| [`function_decl1.rhai`](scripts/function_decl1.rhai) | a [function] without parameters                                               |
+| [`function_decl2.rhai`](scripts/function_decl2.rhai) | a [function] with two parameters                                              |
+| [`function_decl3.rhai`](scripts/function_decl3.rhai) | a [function] with many parameters                                             |
+| [`if1.rhai`](scripts/if1.rhai)                       | [`if`](#if-statement) example                                                 |
+| [`loop.rhai`](scripts/loop.rhai)                     | count-down [`loop`](#infinite-loop) in Rhai, emulating a `do` .. `while` loop |
+| [`op1.rhai`](scripts/op1.rhai)                       | just simple addition                                                          |
+| [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                                            |
+| [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                                      |
+| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                                           |
+| [`strings_map.rhai`](scripts/strings_map.rhai)       | [string] and [object map] operations                                          |
+| [`while.rhai`](scripts/while.rhai)                   | [`while`](#while-loop) loop                                                   |
 
 | Example scripts                              | Description                                                                        |
 | -------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -247,6 +249,7 @@ fn main() -> Result<(), Box<EvalAltResult>>
     let engine = Engine::new();
 
     let result = engine.eval::<i64>("40 + 2")?;
+    //                      ^^^^^^^ cast the result to an 'i64', this is required
 
     println!("Answer: {}", result);             // prints 42
 
@@ -302,6 +305,8 @@ let ast = engine.compile_file("hello_world.rhai".into())?;
 ```
 
 ### Calling Rhai functions from Rust
+
+[`private`]: #calling-rhai-functions-from-rust
 
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `Engine::call_fn`.
 Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
@@ -1870,8 +1875,8 @@ my_str += 12345;
 my_str == "abcABC12345"
 ```
 
-`if` statements
----------------
+`if` statement
+--------------
 
 ```rust
 if foo(x) {
@@ -1906,8 +1911,8 @@ let x = if decision { 42 }; // no else branch defaults to '()'
 x == ();
 ```
 
-`while` loops
--------------
+`while` loop
+------------
 
 ```rust
 let x = 10;
@@ -1934,8 +1939,8 @@ loop {
 }
 ```
 
-`for` loops
------------
+`for` loop
+----------
 
 Iterating through a range or an [array] is provided by the `for` ... `in` loop.
 
@@ -2206,8 +2211,8 @@ Modules can be disabled via the [`no_module`] feature.
 A _module_ is a single script (or pre-compiled `AST`) containing global variables and functions.
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
 Variables not exported are _private_ and invisible to the outside.
-On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the `private` prefix.
-Functions declared `private` are invisible to the outside.
+On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the [`private`] prefix.
+Functions declared [`private`] are invisible to the outside.
 
 Everything exported from a module is **constant** (**read-only**).
 
@@ -2301,7 +2306,7 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer
 
 It is easy to convert a pre-compiled `AST` into a module: just use `Module::eval_ast_as_new`.
 Don't forget the `export` statement, otherwise there will be no variables exposed by the module
-other than non-`private` functions (unless that's intentional).
+other than non-[`private`] functions (unless that's intentional).
 
 ```rust
 use rhai::{Engine, Module};
