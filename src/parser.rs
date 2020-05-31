@@ -2485,7 +2485,7 @@ fn parse_global_level<'a>(
     max_expr_depth: (usize, usize),
 ) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
-    let mut functions = HashMap::with_hasher(StraightHasherBuilder);
+    let mut functions = HashMap::<u64, FnDef, _>::with_hasher(StraightHasherBuilder);
     let mut state = ParseState::new(max_expr_depth.0);
 
     while !input.peek().unwrap().0.is_eof() {
