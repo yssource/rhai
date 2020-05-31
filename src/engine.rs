@@ -1064,7 +1064,7 @@ impl Engine {
                 // xxx.prop[expr] | xxx.prop.expr
                 Expr::Index(x) | Expr::Dot(x) => {
                     let (prop, expr, pos) = x.as_ref();
-                    let is_idx = matches!(expr, Expr::Index(_));
+                    let is_idx = matches!(rhs, Expr::Index(_));
                     let args = &mut [obj, &mut Default::default()];
 
                     let (mut val, updated) = if let Expr::Property(p) = prop {
@@ -1102,7 +1102,7 @@ impl Engine {
                 }
                 // Syntax error
                 _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
-                    "".into(),
+                    format!("{:?}", rhs),
                     rhs.position(),
                 ))),
             }
