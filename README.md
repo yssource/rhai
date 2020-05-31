@@ -341,6 +341,16 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
+For more control, construct all arguments as `Dynamic` values and use `Engine::call_fn_dynamic`:
+
+```rust
+let result: Dynamic = engine.call_fn_dynamic(&mut scope, &ast, "hello",
+                            &mut [ String::from("abc").into(), 123_i64.into() ])?;
+```
+
+However, beware that `Engine::call_fn_dynamic` _consumes_ its arguments, meaning that all arguments passed to it
+will be replaced by `()` afterwards.  To re-use the arguments, clone them beforehand and pass in the clone.
+
 ### Creating Rust anonymous functions from Rhai script
 
 [`Func`]: #creating-rust-anonymous-functions-from-rhai-script

@@ -41,6 +41,7 @@ New features
 * Set limit on maximum level of nesting expressions and statements to avoid panics during parsing.
 * New `EvalPackage` to disable `eval`.
 * `Module::set_getter_fn`, `Module::set_setter_fn` and `Module:set_indexer_fn` to register getter/setter/indexer functions.
+* `Engine::call_fn_dynamic` for more control in calling script functions.
 
 Speed enhancements
 ------------------
@@ -60,6 +61,8 @@ Speed enhancements
   excessive cloning. For example, if `a` is a large array, getting its length in this manner: `len(a)` used to result
   in a full clone of `a` before taking the length and throwing the copy away. Now, `a` is simply passed by reference,
   avoiding the cloning altogether.
+* A custom hasher simply passes through `u64` keys without hashing to avoid function call hash keys
+  (which as by themselves `u64`) being hashed twice.
 
 
 Version 0.14.1
