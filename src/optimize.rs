@@ -37,6 +37,10 @@ impl OptimizationLevel {
     pub fn is_none(self) -> bool {
         self == Self::None
     }
+    /// Is the `OptimizationLevel` Simple.
+    pub fn is_simple(self) -> bool {
+        self == Self::Simple
+    }
     /// Is the `OptimizationLevel` Full.
     pub fn is_full(self) -> bool {
         self == Self::Full
