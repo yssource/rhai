@@ -37,7 +37,7 @@ Features
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is `0.15.0`, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is `0.16.0`, so the language and API's may change before they stabilize.
 
 What Rhai doesn't do
 --------------------
@@ -71,7 +71,7 @@ Install the Rhai crate on [`crates.io`](https::/crates.io/crates/rhai/) by addin
 
 ```toml
 [dependencies]
-rhai = "0.15.0"
+rhai = "0.16.0"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -427,7 +427,7 @@ are supported.
 | `+`,                     | `+=`                         | `INT`, `FLOAT` (if not [`no_float`]), `ImmutableString`                       |
 | `-`, `*`, `/`, `%`, `~`, | `-=`, `*=`, `/=`, `%=`, `~=` | `INT`, `FLOAT` (if not [`no_float`])                                          |
 | `<<`, `>>`, `^`,         | `<<=`, `>>=`, `^=`           | `INT`                                                                         |
-| `&`, `\|`,               | `&=`, `|=`                   | `INT`, `bool`                                                                 |
+| `&`, `\|`,               | `&=`, `\|=`                  | `INT`, `bool`                                                                 |
 | `&&`, `\|\|`             |                              | `bool`                                                                        |
 | `==`, `!=`               |                              | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `ImmutableString` |
 | `>`, `>=`, `<`, `<=`     |                              | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `ImmutableString`         |
@@ -496,7 +496,7 @@ In these cases, use the `compile_expression` and `eval_expression` methods or th
 let result = engine.eval_expression::<i64>("2 + (10 + 10) * 2")?;
 ```
 
-When evaluation _expressions_, no full-blown statement (e.g. `if`, `while`, `for`) - not even variable assignments -
+When evaluating _expressions_, no full-blown statement (e.g. `if`, `while`, `for`) - not even variable assignments -
 is supported and will be considered parse errors when encountered.
 
 ```rust

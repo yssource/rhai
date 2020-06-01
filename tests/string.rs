@@ -23,9 +23,24 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<String>(r#""foo" + 123"#)?, "foo123");
 
     #[cfg(not(feature = "no_object"))]
-    assert_eq!(engine.eval::<String>("(42).to_string()")?, "42");
+    assert_eq!(engine.eval::<String>("to_string(42)")?, "42");
+
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[1]"#)?, 'e');
 
     #[cfg(not(feature = "no_object"))]
+    assert_eq!(engine.eval::<INT>(r#"let y = "hello"; y.len"#)?, 5);
+
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<INT>(r#"let y = "hello"; y.clear(); y.len"#)?,
+        0
+    );
+
+    assert_eq!(engine.eval::<INT>(r#"let y = "hello"; len(y)"#)?, 5);
+
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
     assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[y.len-1]"#)?, 'o');
 
     #[cfg(not(feature = "no_float"))]
