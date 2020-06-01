@@ -622,28 +622,33 @@ impl Expr {
             | Self::Or(_)
             | Self::True(_)
             | Self::False(_)
-            | Self::Unit(_) => false,
+            | Self::Unit(_)
+            | Self::Assignment(_) => false,
 
             Self::StringConstant(_)
             | Self::Stmt(_)
             | Self::FnCall(_)
-            | Self::Assignment(_)
             | Self::Dot(_)
             | Self::Index(_)
             | Self::Array(_)
             | Self::Map(_) => match token {
+                #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 _ => false,
             },
 
             Self::Variable(_) => match token {
-                Token::LeftBracket | Token::LeftParen => true,
+                #[cfg(not(feature = "no_index"))]
+                Token::LeftBracket => true,
+                Token::LeftParen => true,
                 Token::DoubleColon => true,
                 _ => false,
             },
 
             Self::Property(_) => match token {
-                Token::LeftBracket | Token::LeftParen => true,
+                #[cfg(not(feature = "no_index"))]
+                Token::LeftBracket => true,
+                Token::LeftParen => true,
                 _ => false,
             },
         }
@@ -1267,7 +1272,11 @@ fn parse_primary<'a>(
                 parse_index_chain(input, state, expr, token_pos, level + 1, allow_stmt_expr)?
             }
             // Unknown postfix operator
-            (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
+            (expr, token) => panic!(
+                "unknown postfix operator '{}' for {:?}",
+                token.syntax(),
+                expr
+            ),
         }
     }
 
