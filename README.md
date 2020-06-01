@@ -19,8 +19,8 @@ Features
   including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers).
 * Freely pass Rust variables/constants into a script via an external [`Scope`].
 * Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust.
-* Low compile-time overhead (~0.6 sec debug/~3 sec release for `rhai_runner` sample app).
-* Fairly efficient evaluation (1 million iterations in 0.75 sec on my 5 year old laptop).
+* Fairly low compile-time overhead.
+* Fairly efficient evaluation (1 million iterations in 0.25 sec on a single core, 2.3 GHz Linux VM).
 * Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
@@ -37,7 +37,7 @@ Features
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.15.0, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is `0.15.0`, so the language and API's may change before they stabilize.
 
 What Rhai doesn't do
 --------------------
@@ -47,15 +47,27 @@ It doesn't attempt to be a new language. For example:
 
 * No classes.  Well, Rust doesn't either. On the other hand...
 * No traits...  so it is also not Rust. Do your Rusty stuff in Rust.
-* No structures - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
+* No structures/records - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
+  There is, however, a built-in [object map] type which is adequate for most uses.
 * No first-class functions - Code your functions in Rust instead, and register them with Rhai.
+* No garbage collection - this should be expected, so...
 * No closures - do your closure magic in Rust instead; [turn a Rhai scripted function into a Rust closure](#calling-rhai-functions-from-rust).
-* It is best to expose an API in Rhai for scripts to call.  All your core functionalities should be in Rust.
+* No byte-codes/JIT - Rhai has an AST-walking interpreter which will not win any speed races. The purpose of Rhai is not
+  to be extremely _fast_, but to make it as easy as possible to integrate with native Rust programs.
+
+Due to this intended usage, Rhai deliberately keeps the language simple and small by omitting advanced language features
+such as classes, inheritance, first-class functions, closures, concurrency, byte-codes, JIT etc.
+Avoid the temptation to write full-fledge program logic entirely in Rhai - that use case is best fulfilled by
+more complete languages such as JS or Lua.
+
+Therefore, in actual practice, it is usually best to expose a Rust API into Rhai for scripts to call.
+All your core functionalities should be in Rust.
+This is similar to some dynamic languages where most of the core functionalities reside in a C/C++ standard library.
 
 Installation
 ------------
 
-Install the Rhai crate by adding this line to `dependencies`:
+Install the Rhai crate on [`crates.io`](https::/crates.io/crates/rhai/) by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
@@ -93,7 +105,7 @@ Optional features
 | `no_index`    | Disable [arrays] and indexing features.                                                                                                                                                                |
 | `no_object`   | Disable support for custom types and [object maps].                                                                                                                                                    |
 | `no_function` | Disable script-defined functions.                                                                                                                                                                      |
-| `no_module`   | Disable loading modules.                                                                                                                                                                               |
+| `no_module`   | Disable loading external modules.                                                                                                                                                                      |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                                                   |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
@@ -179,33 +191,35 @@ A number of examples can be found in the `examples` folder:
 Examples can be run with the following command:
 
 ```bash
-cargo run --example name
+cargo run --example {example_name}
 ```
 
 The `repl` example is a particularly good one as it allows one to interactively try out Rhai's
 language features in a standard REPL (**R**ead-**E**val-**P**rint **L**oop).
 
-Example Scripts
+Example scripts
 ---------------
 
 There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
 
-| Language feature scripts                             | Description                                                   |
-| ---------------------------------------------------- | ------------------------------------------------------------- |
-| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                              |
-| [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                         |
-| [`comments.rhai`](scripts/comments.rhai)             | just comments                                                 |
-| [`for1.rhai`](scripts/for1.rhai)                     | for loops                                                     |
-| [`function_decl1.rhai`](scripts/function_decl1.rhai) | a function without parameters                                 |
-| [`function_decl2.rhai`](scripts/function_decl2.rhai) | a function with two parameters                                |
-| [`function_decl3.rhai`](scripts/function_decl3.rhai) | a function with many parameters                               |
-| [`if1.rhai`](scripts/if1.rhai)                       | if example                                                    |
-| [`loop.rhai`](scripts/loop.rhai)                     | endless loop in Rhai, this example emulates a do..while cycle |
-| [`op1.rhai`](scripts/op1.rhai)                       | just a simple addition                                        |
-| [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                            |
-| [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                      |
-| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                           |
-| [`while.rhai`](scripts/while.rhai)                   | while loop                                                    |
+| Language feature scripts                             | Description                                                                   |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                                              |
+| [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                                         |
+| [`comments.rhai`](scripts/comments.rhai)             | just comments                                                                 |
+| [`for1.rhai`](scripts/for1.rhai)                     | [`for`](#for-loop) loops                                                      |
+| [`for2.rhai`](scripts/for2.rhai)                     | [`for`](#for-loop) loops on [arrays]                                          |
+| [`function_decl1.rhai`](scripts/function_decl1.rhai) | a [function] without parameters                                               |
+| [`function_decl2.rhai`](scripts/function_decl2.rhai) | a [function] with two parameters                                              |
+| [`function_decl3.rhai`](scripts/function_decl3.rhai) | a [function] with many parameters                                             |
+| [`if1.rhai`](scripts/if1.rhai)                       | [`if`](#if-statement) example                                                 |
+| [`loop.rhai`](scripts/loop.rhai)                     | count-down [`loop`](#infinite-loop) in Rhai, emulating a `do` .. `while` loop |
+| [`op1.rhai`](scripts/op1.rhai)                       | just simple addition                                                          |
+| [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                                            |
+| [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                                      |
+| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                                           |
+| [`strings_map.rhai`](scripts/strings_map.rhai)       | [string] and [object map] operations                                          |
+| [`while.rhai`](scripts/while.rhai)                   | [`while`](#while-loop) loop                                                   |
 
 | Example scripts                              | Description                                                                        |
 | -------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -235,6 +249,7 @@ fn main() -> Result<(), Box<EvalAltResult>>
     let engine = Engine::new();
 
     let result = engine.eval::<i64>("40 + 2")?;
+    //                      ^^^^^^^ cast the result to an 'i64', this is required
 
     println!("Answer: {}", result);             // prints 42
 
@@ -291,6 +306,8 @@ let ast = engine.compile_file("hello_world.rhai".into())?;
 
 ### Calling Rhai functions from Rust
 
+[`private`]: #calling-rhai-functions-from-rust
+
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `Engine::call_fn`.
 Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
 
@@ -340,6 +357,16 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 // 'hidden' is declared with 'private'.
 let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
+
+For more control, construct all arguments as `Dynamic` values and use `Engine::call_fn_dynamic`:
+
+```rust
+let result: Dynamic = engine.call_fn_dynamic(&mut scope, &ast, "hello",
+                            &mut [ String::from("abc").into(), 123_i64.into() ])?;
+```
+
+However, beware that `Engine::call_fn_dynamic` _consumes_ its arguments, meaning that all arguments passed to it
+will be replaced by `()` afterwards.  To re-use the arguments, clone them beforehand and pass in the clone.
 
 ### Creating Rust anonymous functions from Rhai script
 
@@ -704,11 +731,16 @@ let x = (42_i64).into();                        // 'into()' works for standard t
 let y = Dynamic::from(String::from("hello!"));  // remember &str is not supported by Rhai
 ```
 
+Functions registered with the [`Engine`] can be _overloaded_ as long as the _signature_ is unique,
+i.e. different functions can have the same name as long as their parameters are of different types
+and/or different number.
+New definitions _overwrite_ previous definitions of the same name and same number/types of parameters.
+
 Generic functions
 -----------------
 
 Rust generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately.
-This is essentially function overloading (Rhai does not natively support generics).
+This essentially overloads the function with different parameter types (Rhai does not natively support generics).
 
 ```rust
 use std::fmt::Display;
@@ -729,8 +761,8 @@ fn main()
 }
 ```
 
-This example shows how to register multiple functions (or, in this case, multiple overloaded versions of the same function)
-under the same name. This enables function overloading based on the number and types of parameters.
+The above example shows how to register multiple functions (or, in this case, multiple overloaded versions of the same function)
+under the same name.
 
 Fallible functions
 ------------------
@@ -773,7 +805,8 @@ fn main()
 Overriding built-in functions
 ----------------------------
 
-Any similarly-named function defined in a script overrides any built-in function.
+Any similarly-named function defined in a script overrides any built-in function and any registered
+native Rust function of the same name and number of parameters.
 
 ```rust
 // Override the built-in function 'to_int'
@@ -784,11 +817,13 @@ fn to_int(num) {
 print(to_int(123));     // what happens?
 ```
 
+A registered function, in turn, overrides any built-in function of the same name and number/types of parameters.
+
 Operator overloading
 --------------------
 
 In Rhai, a lot of functionalities are actually implemented as functions, including basic operations such as arithmetic calculations.
-For example, in the expression "`a + b`", the `+` operator is _not_ built-in, but calls a function named "`+`" instead!
+For example, in the expression "`a + b`", the `+` operator is _not_ built in, but calls a function named "`+`" instead!
 
 ```rust
 let x = a + b;
@@ -801,7 +836,7 @@ overriding them has no effect at all.
 
 Operator functions cannot be defined as a script function (because operators syntax are not valid function names).
 However, operator functions _can_ be registered to the [`Engine`] via the methods `Engine::register_fn`, `Engine::register_result_fn` etc.
-When a custom operator function is registered with the same name as an operator, it _overloads_ (or overrides) the built-in version.
+When a custom operator function is registered with the same name as an operator, it overrides the built-in version.
 
 ```rust
 use rhai::{Engine, EvalAltResult, RegisterFn};
@@ -828,7 +863,7 @@ let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an e
 ```
 
 Use operator overloading for custom types (described below) only.
-Be very careful when overloading built-in operators because script authors expect standard operators to behave in a
+Be very careful when overriding built-in operators because script authors expect standard operators to behave in a
 consistent and predictable manner, and will be annoyed if a calculation for '`+`' turns into a subtraction, for example.
 
 Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
@@ -915,7 +950,7 @@ engine.register_fn("update", TestStruct::update);   // registers 'update(&mut Te
 engine.register_fn("new_ts", TestStruct::new);      // registers 'new()'
 ```
 
-The custom type is then ready for us in scripts.  Scripts can see the functions and methods registered earlier.
+The custom type is then ready for use in scripts.  Scripts can see the functions and methods registered earlier.
 Get the evaluation result back out from script-land just as before, this time casting to the custom type:
 
 ```rust
@@ -1745,10 +1780,10 @@ The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp 
 
 The following methods (defined in the [`BasicTimePackage`](#packages) but excluded if using a [raw `Engine`]) operate on timestamps:
 
-| Function           | Parameter(s)                       | Description                                              |
-| ------------------ | ---------------------------------- | -------------------------------------------------------- |
-| `elapsed` property | _none_                             | returns the number of seconds since the timestamp        |
-| `-` operator       | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
+| Function                      | Parameter(s)                       | Description                                              |
+| ----------------------------- | ---------------------------------- | -------------------------------------------------------- |
+| `elapsed` method and property | _none_                             | returns the number of seconds since the timestamp        |
+| `-` operator                  | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
 
 ### Examples
 
@@ -1777,15 +1812,19 @@ set of types (see [built-in operators](#built-in-operators)).
 "42" == 42;             // false
 ```
 
-Comparing two values of _different_ data types, or of unknown data types, always results in `false`.
+Comparing two values of _different_ data types, or of unknown data types, always results in `false`,
+except for '`!=`' (not equals) which results in `true`. This is in line with intuition.
 
 ```rust
-42 == 42.0;             // false - i64 is different from f64
-42 > "42";              // false - i64 is different from string
-42 <= "42";             // false again
+42 == 42.0;             // false - i64 cannot be compared with f64
+42 != 42.0;             // true - i64 cannot be compared with f64
+
+42 > "42";              // false - i64 cannot be compared with string
+42 <= "42";             // false - i64 cannot be compared with string
 
 let ts = new_ts();      // custom type
-ts == 42;               // false - types are not the same
+ts == 42;               // false - types cannot be compared
+ts != 42;               // true - types cannot be compared
 ```
 
 Boolean operators
@@ -1836,8 +1875,8 @@ my_str += 12345;
 my_str == "abcABC12345"
 ```
 
-`if` statements
----------------
+`if` statement
+--------------
 
 ```rust
 if foo(x) {
@@ -1872,8 +1911,8 @@ let x = if decision { 42 }; // no else branch defaults to '()'
 x == ();
 ```
 
-`while` loops
--------------
+`while` loop
+------------
 
 ```rust
 let x = 10;
@@ -1900,8 +1939,8 @@ loop {
 }
 ```
 
-`for` loops
------------
+`for` loop
+----------
 
 Iterating through a range or an [array] is provided by the `for` ... `in` loop.
 
@@ -2073,8 +2112,8 @@ This is similar to Rust and many other modern languages.
 
 ### Function overloading
 
-Functions can be _overloaded_ and are resolved purely upon the function's _name_ and the _number_ of parameters
-(but not parameter _types_, since all parameters are the same type - [`Dynamic`]).
+Functions defined in script can be _overloaded_ by _arity_ (i.e. they are resolved purely upon the function's _name_
+and _number_ of parameters, but not parameter _types_ since all parameters are the same type - [`Dynamic`]).
 New definitions _overwrite_ previous definitions of the same name and number of parameters.
 
 ```rust
@@ -2172,8 +2211,8 @@ Modules can be disabled via the [`no_module`] feature.
 A _module_ is a single script (or pre-compiled `AST`) containing global variables and functions.
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
 Variables not exported are _private_ and invisible to the outside.
-On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the `private` prefix.
-Functions declared `private` are invisible to the outside.
+On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the [`private`] prefix.
+Functions declared [`private`] are invisible to the outside.
 
 Everything exported from a module is **constant** (**read-only**).
 
@@ -2267,7 +2306,7 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer
 
 It is easy to convert a pre-compiled `AST` into a module: just use `Module::eval_ast_as_new`.
 Don't forget the `export` statement, otherwise there will be no variables exposed by the module
-other than non-`private` functions (unless that's intentional).
+other than non-[`private`] functions (unless that's intentional).
 
 ```rust
 use rhai::{Engine, Module};
@@ -2346,19 +2385,20 @@ so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
-* **Memory**: A malignant script may continuously grow an [array] or [object map] until all memory is consumed.
+* **Memory**: A malicous script may continuously grow an [array] or [object map] until all memory is consumed.
   It may also create a large [array] or [object map] literal that exhausts all memory during parsing.
-* **CPU**: A malignant script may run an infinite tight loop that consumes all CPU cycles.
-* **Time**: A malignant script may run indefinitely, thereby blocking the calling system which is waiting for a result.
-* **Stack**: A malignant script may attempt an infinite recursive call that exhausts the call stack.
+* **CPU**: A malicous script may run an infinite tight loop that consumes all CPU cycles.
+* **Time**: A malicous script may run indefinitely, thereby blocking the calling system which is waiting for a result.
+* **Stack**: A malicous script may attempt an infinite recursive call that exhausts the call stack.
   Alternatively, it may create a degenerated deep expression with so many levels that the parser exhausts the call stack
   when parsing the expression; or even deeply-nested statement blocks, if nested deep enough.
-* **Overflows**: A malignant script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
+* **Overflows**: A malicous script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
   create bad floating-point representations, in order to crash the system.
-* **Files**: A malignant script may continuously [`import`] an external module within an infinite loop,
+* **Files**: A malicous script may continuously [`import`] an external module within an infinite loop,
   thereby putting heavy load on the file-system (or even the network if the file is not local).
+  Furthermore, the module script may simply [`import`] itself in an infinite recursion.
   Even when modules are not created from files, they still typically consume a lot of resources to load.
-* **Data**: A malignant script may attempt to read from and/or write to data that it does not own. If this happens,
+* **Data**: A malicous script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
 
 ### Maximum number of operations
@@ -2434,7 +2474,7 @@ Rhai by default limits function calls to a maximum depth of 128 levels (16 level
 This limit may be changed via the `Engine::set_max_call_levels` method.
 
 When setting this limit, care must be also taken to the evaluation depth of each _statement_
-within the function. It is entirely possible for a malignant script to embed an recursive call deep
+within the function. It is entirely possible for a malicous script to embed an recursive call deep
 inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
 
 The limit can be disabled via the [`unchecked`] feature for higher performance
@@ -2479,7 +2519,7 @@ engine.set_max_expr_depths(50, 5);          // allow nesting up to 50 layers of 
 
 Beware that there may be multiple layers for a simple language construct, even though it may correspond
 to only one AST node. That is because the Rhai _parser_ internally runs a recursive chain of function calls
-and it is important that a malignant script does not panic the parser in the first place.
+and it is important that a malicous script does not panic the parser in the first place.
 
 Functions are placed under stricter limits because of the multiplicative effect of recursion.
 A script can effectively call itself while deep inside an expression chain within the function body,
@@ -2492,7 +2532,7 @@ Make sure that `C x ( 5 + F ) + S` layered calls do not cause a stack overflow, 
 * `S` = maximum statement depth at global level.
 
 A script exceeding the maximum nesting depths will terminate with a parsing error.
-The malignant `AST` will not be able to get past parsing in the first place.
+The malicous `AST` will not be able to get past parsing in the first place.
 
 This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).

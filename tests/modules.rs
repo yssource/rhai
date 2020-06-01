@@ -195,6 +195,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
     let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
     let mut scope = Scope::new();
+
     scope.push_module("testing", module);
 
     assert_eq!(

@@ -4,17 +4,11 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::engine::{make_getter, make_setter, Engine, FunctionsLib};
 use crate::error::{LexError, ParseError, ParseErrorType};
+use crate::module::ModuleRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
-use crate::utils::StaticVec;
-
-#[cfg(not(feature = "no_module"))]
-use crate::module::ModuleRef;
-
-#[cfg(feature = "no_module")]
-#[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, Default)]
-pub struct ModuleRef;
+use crate::utils::{StaticVec, StraightHasherBuilder};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -644,7 +638,6 @@ impl Expr {
 
             Self::Variable(_) => match token {
                 Token::LeftBracket | Token::LeftParen => true,
-                #[cfg(not(feature = "no_module"))]
                 Token::DoubleColon => true,
                 _ => false,
             },
@@ -761,27 +754,21 @@ fn parse_call_expr<'a>(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            #[cfg(not(feature = "no_module"))]
-            let hash_fn_def = {
-                if let Some(modules) = modules.as_mut() {
-                    modules.set_index(state.find_module(&modules.get(0).0));
+            let hash_fn_def = if let Some(modules) = modules.as_mut() {
+                modules.set_index(state.find_module(&modules.get(0).0));
 
-                    // Rust functions are indexed in two steps:
-                    // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + number of arguments.
-                    // 2) Calculate a second hash with no qualifiers, empty function name,
-                    //    zero number of arguments, and the actual list of argument `TypeId`'s.
-                    // 3) The final hash is the XOR of the two hashes.
-                    let qualifiers = modules.iter().map(|(m, _)| m.as_str());
-                    calc_fn_hash(qualifiers, &id, 0, empty())
-                } else {
-                    // Qualifiers (none) + function name + no parameters.
-                    calc_fn_hash(empty(), &id, 0, empty())
-                }
+                // Rust functions are indexed in two steps:
+                // 1) Calculate a hash in a similar manner to script-defined functions,
+                //    i.e. qualifiers + function name + number of arguments.
+                // 2) Calculate a second hash with no qualifiers, empty function name,
+                //    zero number of arguments, and the actual list of argument `TypeId`'s.
+                // 3) The final hash is the XOR of the two hashes.
+                let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                calc_fn_hash(qualifiers, &id, 0, empty())
+            } else {
+                // Qualifiers (none) + function name + no parameters.
+                calc_fn_hash(empty(), &id, 0, empty())
             };
-            // Qualifiers (none) + function name + no parameters.
-            #[cfg(feature = "no_module")]
-            let hash_fn_def = calc_fn_hash(empty(), &id, 0, empty());
 
             return Ok(Expr::FnCall(Box::new((
                 (id.into(), false, begin),
@@ -803,27 +790,21 @@ fn parse_call_expr<'a>(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                #[cfg(not(feature = "no_module"))]
-                let hash_fn_def = {
-                    if let Some(modules) = modules.as_mut() {
-                        modules.set_index(state.find_module(&modules.get(0).0));
+                let hash_fn_def = if let Some(modules) = modules.as_mut() {
+                    modules.set_index(state.find_module(&modules.get(0).0));
 
-                        // Rust functions are indexed in two steps:
-                        // 1) Calculate a hash in a similar manner to script-defined functions,
-                        //    i.e. qualifiers + function name + number of arguments.
-                        // 2) Calculate a second hash with no qualifiers, empty function name,
-                        //    zero number of arguments, and the actual list of argument `TypeId`'s.
-                        // 3) The final hash is the XOR of the two hashes.
-                        let qualifiers = modules.iter().map(|(m, _)| m.as_str());
-                        calc_fn_hash(qualifiers, &id, args.len(), empty())
-                    } else {
-                        // Qualifiers (none) + function name + number of arguments.
-                        calc_fn_hash(empty(), &id, args.len(), empty())
-                    }
+                    // Rust functions are indexed in two steps:
+                    // 1) Calculate a hash in a similar manner to script-defined functions,
+                    //    i.e. qualifiers + function name + number of arguments.
+                    // 2) Calculate a second hash with no qualifiers, empty function name,
+                    //    zero number of arguments, and the actual list of argument `TypeId`'s.
+                    // 3) The final hash is the XOR of the two hashes.
+                    let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                    calc_fn_hash(qualifiers, &id, args.len(), empty())
+                } else {
+                    // Qualifiers (none) + function name + number of arguments.
+                    calc_fn_hash(empty(), &id, args.len(), empty())
                 };
-                // Qualifiers (none) + function name + number of arguments.
-                #[cfg(feature = "no_module")]
-                let hash_fn_def = calc_fn_hash(empty(), &id, args.len(), empty());
 
                 return Ok(Expr::FnCall(Box::new((
                     (id.into(), false, begin),
@@ -1265,7 +1246,6 @@ fn parse_primary<'a>(
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
-            #[cfg(not(feature = "no_module"))]
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
                     let ((name, pos), mut modules, _, index) = *x;
@@ -1293,7 +1273,6 @@ fn parse_primary<'a>(
 
     match &mut root_expr {
         // Cache the hash key for module-qualified variables
-        #[cfg(not(feature = "no_module"))]
         Expr::Variable(x) if x.1.is_some() => {
             let ((name, _), modules, hash, _) = x.as_mut();
             let modules = modules.as_mut().unwrap();
@@ -1496,22 +1475,21 @@ fn parse_op_assignment_stmt<'a>(
 }
 
 /// Make a dot expression.
-fn make_dot_expr(
-    lhs: Expr,
-    rhs: Expr,
-    op_pos: Position,
-    is_index: bool,
-) -> Result<Expr, ParseError> {
+fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
-        // idx_lhs[idx_rhs].rhs
+        // idx_lhs[idx_expr].rhs
         // Attach dot chain to the bottom level of indexing chain
         (Expr::Index(x), rhs) => {
-            Expr::Index(Box::new((x.0, make_dot_expr(x.1, rhs, op_pos, true)?, x.2)))
+            let (idx_lhs, idx_expr, pos) = *x;
+            Expr::Index(Box::new((
+                idx_lhs,
+                make_dot_expr(idx_expr, rhs, op_pos)?,
+                pos,
+            )))
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let (name, pos) = x.0;
-            let lhs = if is_index { lhs.into_property() } else { lhs };
 
             let getter = make_getter(&name);
             let setter = make_setter(&name);
@@ -1519,46 +1497,34 @@ fn make_dot_expr(
 
             Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }
-        (lhs, Expr::Property(x)) => {
-            let lhs = if is_index { lhs.into_property() } else { lhs };
-            let rhs = Expr::Property(x);
-            Expr::Dot(Box::new((lhs, rhs, op_pos)))
-        }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            #[cfg(feature = "no_module")]
-            unreachable!();
-            #[cfg(not(feature = "no_module"))]
             return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
         }
+        // lhs.prop
+        (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x)) => {
             let (dot_lhs, dot_rhs, pos) = *x;
             Expr::Dot(Box::new((
                 lhs,
-                Expr::Dot(Box::new((
-                    dot_lhs.into_property(),
-                    dot_rhs.into_property(),
-                    pos,
-                ))),
+                Expr::Dot(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
         }
         // lhs.idx_lhs[idx_rhs]
         (lhs, Expr::Index(x)) => {
-            let (idx_lhs, idx_rhs, pos) = *x;
+            let (dot_lhs, dot_rhs, pos) = *x;
             Expr::Dot(Box::new((
                 lhs,
-                Expr::Index(Box::new((
-                    idx_lhs.into_property(),
-                    idx_rhs.into_property(),
-                    pos,
-                ))),
+                Expr::Index(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
         }
+        // lhs.func()
+        (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
-        (lhs, rhs) => Expr::Dot(Box::new((lhs, rhs.into_property(), op_pos))),
+        _ => unreachable!(),
     })
 }
 
@@ -1822,7 +1788,7 @@ fn parse_binary_op<'a>(
                     _ => (),
                 }
 
-                make_dot_expr(current_lhs, rhs, pos, false)?
+                make_dot_expr(current_lhs, rhs, pos)?
             }
 
             token => return Err(PERR::UnknownOperator(token.into()).into_err(pos)),
@@ -2123,6 +2089,7 @@ fn parse_import<'a>(
 }
 
 /// Parse an export statement.
+#[cfg(not(feature = "no_module"))]
 fn parse_export<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     state: &mut ParseState,
@@ -2304,7 +2271,9 @@ fn parse_stmt<'a>(
         Token::LeftBrace => parse_block(input, state, breakable, level + 1, allow_stmt_expr),
 
         // fn ...
+        #[cfg(not(feature = "no_function"))]
         Token::Fn if !is_global => Err(PERR::WrongFnDefinition.into_err(*pos)),
+        #[cfg(not(feature = "no_function"))]
         Token::Fn => unreachable!(),
 
         Token::If => parse_if(input, state, breakable, level + 1, allow_stmt_expr),
@@ -2353,8 +2322,6 @@ fn parse_stmt<'a>(
 
         Token::Let => parse_let(input, state, Normal, level + 1, allow_stmt_expr),
         Token::Const => parse_let(input, state, Constant, level + 1, allow_stmt_expr),
-
-        #[cfg(not(feature = "no_module"))]
         Token::Import => parse_import(input, state, level + 1, allow_stmt_expr),
 
         #[cfg(not(feature = "no_module"))]
@@ -2368,6 +2335,7 @@ fn parse_stmt<'a>(
 }
 
 /// Parse a function definition.
+#[cfg(not(feature = "no_function"))]
 fn parse_fn<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     state: &mut ParseState,
@@ -2493,24 +2461,23 @@ pub fn parse_global_expr<'a>(
 fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     max_expr_depth: (usize, usize),
-) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), ParseError> {
+) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
-    let mut functions = HashMap::<u64, FnDef>::new();
+    let mut functions = HashMap::<u64, FnDef, _>::with_hasher(StraightHasherBuilder);
     let mut state = ParseState::new(max_expr_depth.0);
 
     while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
-            let mut access = FnAccess::Public;
-            let mut must_be_fn = false;
-
-            if match_token(input, Token::Private)? {
-                access = FnAccess::Private;
-                must_be_fn = true;
-            }
+            let (access, must_be_fn) = if match_token(input, Token::Private)? {
+                (FnAccess::Private, true)
+            } else {
+                (FnAccess::Public, false)
+            };
 
             match input.peek().unwrap() {
+                #[cfg(not(feature = "no_function"))]
                 (Token::Fn, _) => {
                     let mut state = ParseState::new(max_expr_depth.1);
                     let func = parse_fn(input, &mut state, access, 0, true)?;
@@ -2565,7 +2532,7 @@ fn parse_global_level<'a>(
         }
     }
 
-    Ok((statements, functions))
+    Ok((statements, functions.into_iter().map(|(_, v)| v).collect()))
 }
 
 /// Run the parser on an input stream, returning an AST.
@@ -2576,9 +2543,8 @@ pub fn parse<'a>(
     optimization_level: OptimizationLevel,
     max_expr_depth: (usize, usize),
 ) -> Result<AST, ParseError> {
-    let (statements, functions) = parse_global_level(input, max_expr_depth)?;
+    let (statements, lib) = parse_global_level(input, max_expr_depth)?;
 
-    let lib = functions.into_iter().map(|(_, v)| v).collect();
     Ok(
         // Optimize AST
         optimize_into_ast(engine, scope, statements, lib, optimization_level),

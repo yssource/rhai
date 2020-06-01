@@ -997,6 +997,7 @@ impl Engine {
     }
 
     /// Call a script function defined in an `AST` with multiple arguments.
+    /// Arguments are passed as a tuple.
     ///
     /// # Example
     ///
@@ -1040,6 +1041,67 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
+        let result = self.call_fn_dynamic(scope, ast, name, arg_values.as_mut())?;
+
+        let return_type = self.map_type_name(result.type_name());
+
+        return result.try_cast().ok_or_else(|| {
+            Box::new(EvalAltResult::ErrorMismatchOutputType(
+                return_type.into(),
+                Position::none(),
+            ))
+        });
+    }
+
+    /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
+    ///
+    /// ## WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do you use the arguments after this call. If you need them afterwards,
+    /// clone them _before_ calling this function.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast = engine.compile(r"
+    ///     fn add(x, y) { len(x) + y + foo }
+    ///     fn add1(x)   { len(x) + 1 + foo }
+    ///     fn bar()     { foo/2 }
+    /// ")?;
+    ///
+    /// let mut scope = Scope::new();
+    /// scope.push("foo", 42_i64);
+    ///
+    /// // Call the script-defined function
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", &mut [ String::from("abc").into(), 123_i64.into() ])?;
+    /// assert_eq!(result.cast::<i64>(), 168);
+    ///
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", &mut [ String::from("abc").into() ])?;
+    /// assert_eq!(result.cast::<i64>(), 46);
+    ///
+    /// let result= engine.call_fn_dynamic(&mut scope, &ast, "bar", &mut [])?;
+    /// assert_eq!(result.cast::<i64>(), 21);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_function"))]
+    pub fn call_fn_dynamic(
+        &self,
+        scope: &mut Scope,
+        ast: &AST,
+        name: &str,
+        arg_values: &mut [Dynamic],
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let lib = ast.lib();
         let pos = Position::none();
@@ -1051,16 +1113,7 @@ impl Engine {
         let mut state = State::new();
         let args = args.as_mut();
 
-        let result = self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, pos, 0)?;
-
-        let return_type = self.map_type_name(result.type_name());
-
-        return result.try_cast().ok_or_else(|| {
-            Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.into(),
-                pos,
-            ))
-        });
+        self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, pos, 0)
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.

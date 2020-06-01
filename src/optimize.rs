@@ -37,6 +37,10 @@ impl OptimizationLevel {
     pub fn is_none(self) -> bool {
         self == Self::None
     }
+    /// Is the `OptimizationLevel` Simple.
+    pub fn is_simple(self) -> bool {
+        self == Self::Simple
+    }
     /// Is the `OptimizationLevel` Full.
     pub fn is_full(self) -> bool {
         self == Self::Full
@@ -381,10 +385,10 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // ( stmt )
             stmt => Expr::Stmt(Box::new((stmt, x.1))),
         },
-        // id = expr
+        // id op= expr
         Expr::Assignment(x) => match x.2 {
-            //id = id2 op= expr2
-            Expr::Assignment(x2) if x.1 == "=" => match (x.0, x2.0) {
+            //id = id2 op= rhs
+            Expr::Assignment(x2) if x.1.is_empty() => match (x.0, &x2.0) {
                 // var = var op= expr2 -> var op= expr2
                 (Expr::Variable(a), Expr::Variable(b))
                     if a.1.is_none() && b.1.is_none() && a.0 == b.0 && a.3 == b.3 =>
@@ -393,14 +397,10 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                     state.set_dirty();
                     Expr::Assignment(Box::new((Expr::Variable(a), x2.1, optimize_expr(x2.2, state), x.3)))
                 }
-                // id1 = id2 op= expr2
-                (id1, id2) => {
-                    Expr::Assignment(Box::new((
-                        id1, x.1, Expr::Assignment(Box::new((id2, x2.1, optimize_expr(x2.2, state), x2.3))), x.3,
-                    )))
-                }
+                // expr1 = expr2 op= rhs
+                (expr1, _) => Expr::Assignment(Box::new((expr1, x.1, optimize_expr(Expr::Assignment(x2), state), x.3))),
             },
-            // id op= expr
+            // expr = rhs
             expr => Expr::Assignment(Box::new((x.0, x.1, optimize_expr(expr, state), x.3))),
         },
 

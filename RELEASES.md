@@ -13,13 +13,13 @@ Bug fixes
 ---------
 
 * Indexing with an index or dot expression now works property (it compiled wrongly before).
-  For example, `let s = "hello"; s[s.len-1] = 'x';` now works property instead of an error.
+  For example, `let s = "hello"; s[s.len-1] = 'x';` now works property instead of causing a runtime error.
 
 Breaking changes
 ----------------
 
 * `Engine::compile_XXX` functions now return `ParseError` instead of `Box<ParseError>`.
-* The `RegisterDynamicFn` trait is merged into the `RegisterResutlFn` trait which now always returns
+* The `RegisterDynamicFn` trait is merged into the `RegisterResultFn` trait which now always returns
   `Result<Dynamic, Box<EvalAltResult>>`.
 * Default maximum limit on levels of nested function calls is fine-tuned and set to a different value.
 * Some operator functions are now built in (see _Speed enhancements_ below), so they are available even
@@ -41,6 +41,7 @@ New features
 * Set limit on maximum level of nesting expressions and statements to avoid panics during parsing.
 * New `EvalPackage` to disable `eval`.
 * `Module::set_getter_fn`, `Module::set_setter_fn` and `Module:set_indexer_fn` to register getter/setter/indexer functions.
+* `Engine::call_fn_dynamic` for more control in calling script functions.
 
 Speed enhancements
 ------------------
@@ -60,6 +61,8 @@ Speed enhancements
   excessive cloning. For example, if `a` is a large array, getting its length in this manner: `len(a)` used to result
   in a full clone of `a` before taking the length and throwing the copy away. Now, `a` is simply passed by reference,
   avoiding the cloning altogether.
+* A custom hasher simply passes through `u64` keys without hashing to avoid function call hash keys
+  (which are by themselves `u64`) being hashed twice.
 
 
 Version 0.14.1

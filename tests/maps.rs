@@ -21,6 +21,10 @@ fn test_map_indexing() -> Result<(), Box<EvalAltResult>> {
             )?,
             'o'
         );
+        assert_eq!(
+            engine.eval::<String>(r#"let a = [#{s:"hello"}]; a[0].s[2] = 'X'; a[0].s"#)?,
+            "heXlo"
+        );
     }
 
     assert_eq!(

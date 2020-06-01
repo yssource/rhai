@@ -181,6 +181,7 @@ pub enum Token {
     XOr,
     Ampersand,
     And,
+    #[cfg(not(feature = "no_function"))]
     Fn,
     Continue,
     Break,
@@ -199,6 +200,7 @@ pub enum Token {
     PowerOfAssign,
     Private,
     Import,
+    #[cfg(not(feature = "no_module"))]
     Export,
     As,
     LexError(Box<LexError>),
@@ -260,6 +262,7 @@ impl Token {
                 Or => "||",
                 Ampersand => "&",
                 And => "&&",
+                #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
                 Continue => "continue",
                 Break => "break",
@@ -283,6 +286,7 @@ impl Token {
                 PowerOfAssign => "~=",
                 Private => "private",
                 Import => "import",
+                #[cfg(not(feature = "no_module"))]
                 Export => "export",
                 As => "as",
                 EOF => "{EOF}",
@@ -754,12 +758,9 @@ impl<'a> TokenIterator<'a> {
                             "for" => Token::For,
                             "in" => Token::In,
                             "private" => Token::Private,
-
-                            #[cfg(not(feature = "no_module"))]
                             "import" => Token::Import,
                             #[cfg(not(feature = "no_module"))]
                             "export" => Token::Export,
-                            #[cfg(not(feature = "no_module"))]
                             "as" => Token::As,
 
                             #[cfg(not(feature = "no_function"))]
@@ -916,7 +917,6 @@ impl<'a> TokenIterator<'a> {
                 }
                 ('=', _) => return Some((Token::Equals, pos)),
 
-                #[cfg(not(feature = "no_module"))]
                 (':', ':') => {
                     self.eat_next();
                     return Some((Token::DoubleColon, pos));
