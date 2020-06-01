@@ -5,9 +5,7 @@ use crate::engine::{
     KEYWORD_TYPE_OF,
 };
 use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
-use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
-use crate::token::Position;
 use crate::utils::StaticVec;
 
 use crate::stdlib::{
@@ -113,8 +111,7 @@ fn call_fn_with_constant_arguments(
     state: &State,
     fn_name: &str,
     arg_values: &mut [Dynamic],
-    pos: Position,
-) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
+) -> Option<Dynamic> {
     // Search built-in's and external functions
     let hash_fn = calc_fn_hash(
         empty(),
@@ -134,11 +131,10 @@ fn call_fn_with_constant_arguments(
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             None,
-            pos,
             0,
         )
         .map(|(v, _)| Some(v))
-        .or_else(|_| Ok(None))
+        .unwrap_or_else(|_| None)
 }
 
 /// Optimize a statement.
@@ -574,22 +570,22 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 ""
             };
 
-            call_fn_with_constant_arguments(&state, name, arg_values.as_mut(), *pos).ok()
-                .and_then(|result|
-                    result.or_else(|| {
-                        if !arg_for_type_of.is_empty() {
-                            // Handle `type_of()`
-                            Some(arg_for_type_of.to_string().into())
-                        } else {
-                            // Otherwise use the default value, if any
-                            def_value.clone()
-                        }
-                    }).and_then(|result| map_dynamic_to_expr(result, *pos))
-                    .map(|expr| {
-                        state.set_dirty();
-                        expr
-                    })
-                ).unwrap_or_else(|| {
+            call_fn_with_constant_arguments(&state, name, arg_values.as_mut())
+                .or_else(|| {
+                    if !arg_for_type_of.is_empty() {
+                        // Handle `type_of()`
+                        Some(arg_for_type_of.to_string().into())
+                    } else {
+                        // Otherwise use the default value, if any
+                        def_value.clone()
+                    }
+                })
+                .and_then(|result| map_dynamic_to_expr(result, *pos))
+                .map(|expr| {
+                    state.set_dirty();
+                    expr
+                })
+                .unwrap_or_else(|| {
                     // Optimize function call arguments
                     x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                     Expr::FnCall(x)

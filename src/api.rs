@@ -1104,16 +1104,20 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let lib = ast.lib();
-        let pos = Position::none();
 
         let fn_def = lib
             .get_function_by_signature(name, args.len(), true)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
+            .ok_or_else(|| {
+                Box::new(EvalAltResult::ErrorFunctionNotFound(
+                    name.into(),
+                    Position::none(),
+                ))
+            })?;
 
         let mut state = State::new();
         let args = args.as_mut();
 
-        self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, pos, 0)
+        self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, 0)
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
