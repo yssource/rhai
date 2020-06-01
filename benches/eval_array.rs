@@ -61,3 +61,27 @@ fn bench_eval_array_large_set(bench: &mut Bencher) {
 
     bench.iter(|| engine.consume_ast(&ast).unwrap());
 }
+
+#[bench]
+fn bench_eval_array_loop(bench: &mut Bencher) {
+    let script = r#"
+            let list = [];
+            
+            for i in range(0, 10_000) {
+                list.push(i);
+            }
+
+            let sum = 0;
+
+            for i in list {
+                sum += i;
+            }
+        "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.consume_ast(&ast).unwrap());
+}

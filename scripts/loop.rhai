@@ -6,7 +6,7 @@ let x = 10;
 loop {
     print(x);
 
-    x = x - 1;
+    x -= 1;
 
 	if x <= 0 { break; }
 }

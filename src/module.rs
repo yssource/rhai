@@ -2,35 +2,31 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, FunctionsLib};
-use crate::fn_native::{
-    FnAny, FnCallArgs, IteratorFn, NativeCallable, NativeFunction, NativeFunctionABI,
-    NativeFunctionABI::*, SharedIteratorFunction, SharedNativeFunction,
+use crate::engine::{make_getter, make_setter, Engine, FunctionsLib, FUNC_INDEXER};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn};
+use crate::parser::{
+    FnAccess,
+    FnAccess::{Private, Public},
+    AST,
 };
-use crate::parser::{FnAccess, FnDef, SharedFnDef, AST};
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token};
-use crate::utils::{StaticVec, EMPTY_TYPE_ID};
+use crate::utils::{StaticVec, StraightHasherBuilder};
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     collections::HashMap,
     fmt,
-    iter::{empty, repeat},
+    iter::empty,
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
     vec,
     vec::Vec,
 };
-
-/// Default function access mode.
-const DEF_ACCESS: FnAccess = FnAccess::Public;
 
 /// Return type of module-level Rust function.
 pub type FuncReturn<T> = Result<T, Box<EvalAltResult>>;
@@ -48,22 +44,24 @@ pub struct Module {
     variables: HashMap<String, Dynamic>,
 
     /// Flattened collection of all module variables, including those in sub-modules.
-    all_variables: HashMap<u64, Dynamic>,
+    all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
 
     /// External Rust functions.
-    functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, SharedNativeFunction)>,
-
-    /// Flattened collection of all external Rust functions, including those in sub-modules.
-    all_functions: HashMap<u64, SharedNativeFunction>,
+    functions: HashMap<
+        u64,
+        (String, FnAccess, StaticVec<TypeId>, CallableFunction),
+        StraightHasherBuilder,
+    >,
 
     /// Script-defined functions.
-    fn_lib: FunctionsLib,
-
-    /// Flattened collection of all script-defined functions, including those in sub-modules.
-    all_fn_lib: FunctionsLib,
+    lib: FunctionsLib,
 
     /// Iterator functions, keyed by the type producing the iterator.
-    type_iterators: HashMap<TypeId, SharedIteratorFunction>,
+    type_iterators: HashMap<TypeId, IteratorFn>,
+
+    /// Flattened collection of all external Rust functions, native or scripted,
+    /// including those in sub-modules.
+    all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
 }
 
 impl fmt::Debug for Module {
@@ -73,7 +71,7 @@ impl fmt::Debug for Module {
             "<module {:?}, functions={}, lib={}>",
             self.variables,
             self.functions.len(),
-            self.fn_lib.len()
+            self.lib.len()
         )
     }
 }
@@ -107,7 +105,7 @@ impl Module {
     /// ```
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
-            functions: HashMap::with_capacity(capacity),
+            functions: HashMap::with_capacity_and_hasher(capacity, StraightHasherBuilder),
             ..Default::default()
         }
     }
@@ -170,7 +168,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
-    pub fn set_var<K: Into<String>, T: Variant + Clone>(&mut self, name: K, value: T) {
+    pub fn set_var(&mut self, name: impl Into<String>, value: impl Variant + Clone) {
         self.variables.insert(name.into(), Dynamic::from(value));
     }
 
@@ -250,7 +248,7 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
-    pub fn set_sub_module<K: Into<String>>(&mut self, name: K, sub_module: Module) {
+    pub fn set_sub_module(&mut self, name: impl Into<String>, sub_module: Module) {
         self.modules.insert(name.into(), sub_module.into());
     }
 
@@ -277,24 +275,19 @@ impl Module {
     /// If there is an existing Rust function of the same hash, it is replaced.
     pub fn set_fn(
         &mut self,
-        name: String,
-        abi: NativeFunctionABI,
+        name: impl Into<String>,
         access: FnAccess,
         params: &[TypeId],
-        func: Box<FnAny>,
+        func: CallableFunction,
     ) -> u64 {
-        let hash_fn = calc_fn_hash(empty(), &name, params.iter().cloned());
+        let name = name.into();
 
-        let f = Box::new(NativeFunction::from((func, abi))) as Box<dyn NativeCallable>;
-
-        #[cfg(not(feature = "sync"))]
-        let func = Rc::new(f);
-        #[cfg(feature = "sync")]
-        let func = Arc::new(f);
+        let hash_fn = calc_fn_hash(empty(), &name, params.len(), params.iter().cloned());
 
         let params = params.into_iter().cloned().collect();
 
-        self.functions.insert(hash_fn, (name, access, params, func));
+        self.functions
+            .insert(hash_fn, (name, access, params, func.into()));
 
         hash_fn
     }
@@ -312,15 +305,20 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_0<K: Into<String>, T: Variant + Clone>(
+    pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
-        name: K,
+        name: impl Into<String>,
         #[cfg(not(feature = "sync"))] func: impl Fn() -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn() -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
         let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
-        let arg_types = [];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        let args = [];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -336,16 +334,21 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_1<K: Into<String>, A: Variant + Clone, T: Variant + Clone>(
+    pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        name: K,
+        name: impl Into<String>,
         #[cfg(not(feature = "sync"))] func: impl Fn(A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
         let f =
             move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
-        let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        let args = [TypeId::of::<A>()];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -361,17 +364,45 @@ impl Module {
     /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_1_mut<K: Into<String>, A: Variant + Clone, T: Variant + Clone>(
+    pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        name: K,
+        name: impl Into<String>,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
-        let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
+        let args = [TypeId::of::<A>()];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
+    /// Set a Rust getter function taking one mutable parameter, returning a hash key.
+    ///
+    /// If there is a similar existing Rust getter function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        self.set_fn_1_mut(make_getter(&name.into()), func)
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -381,17 +412,17 @@ impl Module {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_2("calc", |x: i64, y: String| {
+    /// let hash = module.set_fn_2("calc", |x: i64, y: ImmutableString| {
     ///     Ok(x + y.len() as i64)
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_2<K: Into<String>, A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+    pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        name: K,
+        name: impl Into<String>,
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
@@ -401,32 +432,34 @@ impl Module {
 
             func(a, b).map(Dynamic::from)
         };
-        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        let args = [TypeId::of::<A>(), TypeId::of::<B>()];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
     /// returning a hash key.
     ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: String| {
+    /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: ImmutableString| {
     ///     *x += y.len() as i64; Ok(*x)
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn set_fn_2_mut<
-        K: Into<String>,
-        A: Variant + Clone,
-        B: Variant + Clone,
-        T: Variant + Clone,
-    >(
+    pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        name: K,
+        name: impl Into<String>,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
@@ -436,8 +469,66 @@ impl Module {
 
             func(a, b).map(Dynamic::from)
         };
-        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
+        let args = [TypeId::of::<A>(), TypeId::of::<B>()];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
+    /// Set a Rust setter function taking two parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing setter Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_setter_fn("value", |x: &mut i64, y: ImmutableString| {
+    ///     *x = y.len() as i64;
+    ///     Ok(())
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<()> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<()> + Send + Sync + 'static,
+    ) -> u64 {
+        self.set_fn_2_mut(make_setter(&name.into()), func)
+    }
+
+    /// Set a Rust indexer function taking two parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing setter Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_indexer_fn(|x: &mut i64, y: ImmutableString| {
+    ///     Ok(*x + y.len() as i64)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn set_indexer_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+        &mut self,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        self.set_fn_2_mut(FUNC_INDEXER, func)
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -447,23 +538,22 @@ impl Module {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3("calc", |x: i64, y: String, z: i64| {
+    /// let hash = module.set_fn_3("calc", |x: i64, y: ImmutableString, z: i64| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_3<
-        K: Into<String>,
         A: Variant + Clone,
         B: Variant + Clone,
         C: Variant + Clone,
         T: Variant + Clone,
     >(
         &mut self,
-        name: K,
+        name: impl Into<String>,
         #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
@@ -474,8 +564,13 @@ impl Module {
 
             func(a, b, c).map(Dynamic::from)
         };
-        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name.into(), Pure, DEF_ACCESS, &arg_types, Box::new(f))
+        let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -486,23 +581,22 @@ impl Module {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: String, z: i64| {
+    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: ImmutableString, z: i64| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     pub fn set_fn_3_mut<
-        K: Into<String>,
         A: Variant + Clone,
         B: Variant + Clone,
         C: Variant + Clone,
         T: Variant + Clone,
     >(
         &mut self,
-        name: K,
+        name: impl Into<String>,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
@@ -513,8 +607,112 @@ impl Module {
 
             func(a, b, c).map(Dynamic::from)
         };
-        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name.into(), Method, DEF_ACCESS, &arg_types, Box::new(f))
+        let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
+    /// Set a Rust function taking four parameters into the module, returning a hash key.
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_4("calc", |x: i64, y: ImmutableString, z: i64, _w: ()| {
+    ///     Ok(x + y.len() as i64 + z)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    pub fn set_fn_4<
+        A: Variant + Clone,
+        B: Variant + Clone,
+        C: Variant + Clone,
+        D: Variant + Clone,
+        T: Variant + Clone,
+    >(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C, D) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        let f = move |args: &mut FnCallArgs| {
+            let a = mem::take(args[0]).cast::<A>();
+            let b = mem::take(args[1]).cast::<B>();
+            let c = mem::take(args[2]).cast::<C>();
+            let d = mem::take(args[3]).cast::<D>();
+
+            func(a, b, c, d).map(Dynamic::from)
+        };
+        let args = [
+            TypeId::of::<A>(),
+            TypeId::of::<B>(),
+            TypeId::of::<C>(),
+            TypeId::of::<D>(),
+        ];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_pure(Box::new(f)),
+        )
+    }
+
+    /// Set a Rust function taking four parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_fn_4_mut("calc", |x: &mut i64, y: ImmutableString, z: i64, _w: ()| {
+    ///     *x += y.len() as i64 + z; Ok(*x)
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    pub fn set_fn_4_mut<
+        A: Variant + Clone,
+        B: Variant + Clone,
+        C: Variant + Clone,
+        D: Variant + Clone,
+        T: Variant + Clone,
+    >(
+        &mut self,
+        name: impl Into<String>,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+    ) -> u64 {
+        let f = move |args: &mut FnCallArgs| {
+            let b = mem::take(args[1]).cast::<B>();
+            let c = mem::take(args[2]).cast::<C>();
+            let d = mem::take(args[3]).cast::<D>();
+            let a = args[0].downcast_mut::<A>().unwrap();
+
+            func(a, b, c, d).map(Dynamic::from)
+        };
+        let args = [
+            TypeId::of::<A>(),
+            TypeId::of::<B>(),
+            TypeId::of::<C>(),
+            TypeId::of::<C>(),
+        ];
+        self.set_fn(
+            name,
+            Public,
+            &args,
+            CallableFunction::from_method(Box::new(f)),
+        )
     }
 
     /// Get a Rust function.
@@ -531,35 +729,25 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.get_fn(hash).is_some());
     /// ```
-    pub fn get_fn(&self, hash_fn: u64) -> Option<&Box<dyn NativeCallable>> {
-        self.functions.get(&hash_fn).map(|(_, _, _, v)| v.as_ref())
+    pub fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
+        self.functions.get(&hash_fn).map(|(_, _, _, v)| v)
     }
 
     /// Get a modules-qualified function.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
-    /// It is also returned by the `set_fn_XXX` calls.
+    /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
+    /// the hash calculated by `index_all_sub_modules`.
     pub(crate) fn get_qualified_fn(
         &mut self,
         name: &str,
         hash_fn_native: u64,
-    ) -> Result<&Box<dyn NativeCallable>, Box<EvalAltResult>> {
-        self.all_functions
-            .get(&hash_fn_native)
-            .map(|f| f.as_ref())
-            .ok_or_else(|| {
-                Box::new(EvalAltResult::ErrorFunctionNotFound(
-                    name.to_string(),
-                    Position::none(),
-                ))
-            })
-    }
-
-    /// Get a modules-qualified script-defined functions.
-    ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
-    pub(crate) fn get_qualified_scripted_fn(&mut self, hash_fn_def: u64) -> Option<&FnDef> {
-        self.all_fn_lib.get_function(hash_fn_def)
+    ) -> Result<&CallableFunction, Box<EvalAltResult>> {
+        self.all_functions.get(&hash_fn_native).ok_or_else(|| {
+            Box::new(EvalAltResult::ErrorFunctionNotFound(
+                name.to_string(),
+                Position::none(),
+            ))
+        })
     }
 
     /// Create a new `Module` by evaluating an `AST`.
@@ -607,7 +795,7 @@ impl Module {
             },
         );
 
-        module.fn_lib = module.fn_lib.merge(ast.fn_lib());
+        module.lib = module.lib.merge(ast.lib());
 
         Ok(module)
     }
@@ -620,77 +808,66 @@ impl Module {
             module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
-            functions: &mut Vec<(u64, SharedNativeFunction)>,
-            fn_lib: &mut Vec<(u64, SharedFnDef)>,
+            functions: &mut Vec<(u64, CallableFunction)>,
         ) {
             for (name, m) in &module.modules {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
-                index_module(m, qualifiers, variables, functions, fn_lib);
+                index_module(m, qualifiers, variables, functions);
                 qualifiers.pop();
             }
 
             // Index all variables
             for (var_name, value) in &module.variables {
                 // Qualifiers + variable name
-                let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, empty());
+                let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0, empty());
                 variables.push((hash_var, value.clone()));
             }
             // Index all Rust functions
             for (name, access, params, func) in module.functions.values() {
                 match access {
                     // Private functions are not exported
-                    FnAccess::Private => continue,
-                    FnAccess::Public => (),
+                    Private => continue,
+                    Public => (),
                 }
                 // Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
-                //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                let hash_fn_def = calc_fn_hash(
-                    qualifiers.iter().map(|&v| v),
-                    name,
-                    repeat(EMPTY_TYPE_ID()).take(params.len()),
-                );
-                // 2) Calculate a second hash with no qualifiers, empty function name, and
-                //    the actual list of parameter `TypeId`'.s
-                let hash_fn_args = calc_fn_hash(empty(), "", params.iter().cloned());
+                //    i.e. qualifiers + function name + number of arguments.
+                let hash_fn_def =
+                    calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
+                // 2) Calculate a second hash with no qualifiers, empty function name,
+                //    zero number of arguments, and the actual list of argument `TypeId`'.s
+                let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
                 // 3) The final hash is the XOR of the two hashes.
                 let hash_fn_native = hash_fn_def ^ hash_fn_args;
 
                 functions.push((hash_fn_native, func.clone()));
             }
             // Index all script-defined functions
-            for fn_def in module.fn_lib.values() {
+            for fn_def in module.lib.values() {
                 match fn_def.access {
                     // Private functions are not exported
-                    FnAccess::Private => continue,
-                    DEF_ACCESS => (),
+                    Private => continue,
+                    Public => (),
                 }
-                // Qualifiers + function name + placeholders (one for each parameter)
+                // Qualifiers + function name + number of arguments.
                 let hash_fn_def = calc_fn_hash(
                     qualifiers.iter().map(|&v| v),
                     &fn_def.name,
-                    repeat(EMPTY_TYPE_ID()).take(fn_def.params.len()),
+                    fn_def.params.len(),
+                    empty(),
                 );
-                fn_lib.push((hash_fn_def, fn_def.clone()));
+                functions.push((hash_fn_def, CallableFunction::Script(fn_def.clone()).into()));
             }
         }
 
         let mut variables = Vec::new();
         let mut functions = Vec::new();
-        let mut fn_lib = Vec::new();
 
-        index_module(
-            self,
-            &mut vec!["root"],
-            &mut variables,
-            &mut functions,
-            &mut fn_lib,
-        );
+        index_module(self, &mut vec!["root"], &mut variables, &mut functions);
 
         self.all_variables = variables.into_iter().collect();
         self.all_functions = functions.into_iter().collect();
-        self.all_fn_lib = fn_lib.into();
     }
 
     /// Does a type iterator exist in the module?
@@ -699,16 +876,13 @@ impl Module {
     }
 
     /// Set a type iterator into the module.
-    pub fn set_iter(&mut self, typ: TypeId, func: Box<IteratorFn>) {
-        #[cfg(not(feature = "sync"))]
-        self.type_iterators.insert(typ, Rc::new(func));
-        #[cfg(feature = "sync")]
-        self.type_iterators.insert(typ, Arc::new(func));
+    pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) {
+        self.type_iterators.insert(typ, func);
     }
 
     /// Get the specified type iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<&SharedIteratorFunction> {
-        self.type_iterators.get(&id)
+    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
+        self.type_iterators.get(&id).cloned()
     }
 }
 
@@ -951,6 +1125,9 @@ mod stat {
     use super::*;
 
     /// Module resolution service that serves modules added into it.
+    ///
+    /// `StaticModuleResolver` is a smart pointer to a `HashMap<String, Module>`.
+    /// It can simply be treated as `&HashMap<String, Module>`.
     ///
     /// # Examples
     ///

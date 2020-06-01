@@ -11,7 +11,7 @@ print("foo" >= "bar");          // string comparison
 print("the answer is " + 42);   // string building using non-string types
 
 let s = "hello, world!";        // string variable
-print("length=" + s.len());     // should be 13
+print("length=" + s.len);       // should be 13
 
-s[s.len()-1] = '?';             // change the string
-print(s);                       // should print 'hello, world?'
+s[s.len-1] = '?';               // change the string
+print("Question: " + s);        // should print 'Question: hello, world?'

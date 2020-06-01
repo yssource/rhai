@@ -7,7 +7,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
-use crate::utils::{StaticVec, EMPTY_TYPE_ID};
+use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleRef;
@@ -22,12 +22,11 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     format,
-    iter::{empty, repeat, Peekable},
+    iter::{empty, Peekable},
+    mem,
     num::NonZeroUsize,
     ops::{Add, Deref, DerefMut},
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
     vec,
     vec::Vec,
 };
@@ -52,6 +51,8 @@ pub type FLOAT = f64;
 
 type PERR = ParseErrorType;
 
+pub use crate::utils::ImmutableString;
+
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
@@ -59,21 +60,14 @@ type PERR = ParseErrorType;
 pub struct AST(
     /// Global statements.
     Vec<Stmt>,
-    /// Script-defined functions, wrapped in an `Arc` for shared access.
-    #[cfg(feature = "sync")]
-    Arc<FunctionsLib>,
-    /// Script-defined functions, wrapped in an `Rc` for shared access.
-    #[cfg(not(feature = "sync"))]
-    Rc<FunctionsLib>,
+    /// Script-defined functions.
+    FunctionsLib,
 );
 
 impl AST {
     /// Create a new `AST`.
-    pub fn new(statements: Vec<Stmt>, fn_lib: FunctionsLib) -> Self {
-        #[cfg(feature = "sync")]
-        return Self(statements, Arc::new(fn_lib));
-        #[cfg(not(feature = "sync"))]
-        return Self(statements, Rc::new(fn_lib));
+    pub fn new(statements: Vec<Stmt>, lib: FunctionsLib) -> Self {
+        Self(statements, lib)
     }
 
     /// Get the statements.
@@ -87,8 +81,8 @@ impl AST {
     }
 
     /// Get the script-defined functions.
-    pub(crate) fn fn_lib(&self) -> &FunctionsLib {
-        self.1.as_ref()
+    pub(crate) fn lib(&self) -> &FunctionsLib {
+        &self.1
     }
 
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
@@ -147,20 +141,13 @@ impl AST {
             (true, true) => vec![],
         };
 
-        Self::new(ast, functions.merge(other.1.as_ref()))
+        Self::new(ast, functions.merge(&other.1))
     }
 
     /// Clear all function definitions in the `AST`.
     #[cfg(not(feature = "no_function"))]
     pub fn clear_functions(&mut self) {
-        #[cfg(feature = "sync")]
-        {
-            self.1 = Arc::new(Default::default());
-        }
-        #[cfg(not(feature = "sync"))]
-        {
-            self.1 = Rc::new(Default::default());
-        }
+        self.1 = Default::default();
     }
 
     /// Clear all statements in the `AST`, leaving only function definitions.
@@ -202,13 +189,6 @@ pub struct FnDef {
     pub pos: Position,
 }
 
-/// A sharable script-defined function.
-#[cfg(feature = "sync")]
-pub type SharedFnDef = Arc<FnDef>;
-/// A sharable script-defined function.
-#[cfg(not(feature = "sync"))]
-pub type SharedFnDef = Rc<FnDef>;
-
 /// `return`/`throw` statement.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum ReturnType {
@@ -218,21 +198,27 @@ pub enum ReturnType {
     Exception,
 }
 
-/// A type that encapsulates a local stack with variable names to simulate an actual runtime scope.
 #[derive(Debug, Clone, Default)]
-struct Stack(Vec<(String, ScopeEntryType)>);
+struct ParseState {
+    /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
+    stack: Vec<(String, ScopeEntryType)>,
+    max_expr_depth: usize,
+}
 
-impl Stack {
-    /// Create a new `Stack`.
-    pub fn new() -> Self {
-        Default::default()
+impl ParseState {
+    /// Create a new `ParseState`.
+    pub fn new(max_expr_depth: usize) -> Self {
+        Self {
+            max_expr_depth,
+            ..Default::default()
+        }
     }
-    /// Find a variable by name in the `Stack`, searching in reverse.
+    /// Find a variable by name in the `ParseState`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,
-    /// i.e. the top element of the `Stack` is offset 1.
-    /// Return zero when the variable name is not found in the `Stack`.
+    /// i.e. the top element of the `ParseState` is offset 1.
+    /// Return zero when the variable name is not found in the `ParseState`.
     pub fn find(&self, name: &str) -> Option<NonZeroUsize> {
-        self.0
+        self.stack
             .iter()
             .rev()
             .enumerate()
@@ -242,12 +228,12 @@ impl Stack {
             })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
-    /// Find a module by name in the `Stack`, searching in reverse.
+    /// Find a module by name in the `ParseState`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,
-    /// i.e. the top element of the `Stack` is offset 1.
-    /// Return zero when the variable name is not found in the `Stack`.
+    /// i.e. the top element of the `ParseState` is offset 1.
+    /// Return zero when the variable name is not found in the `ParseState`.
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
-        self.0
+        self.stack
             .iter()
             .rev()
             .enumerate()
@@ -259,17 +245,17 @@ impl Stack {
     }
 }
 
-impl Deref for Stack {
+impl Deref for ParseState {
     type Target = Vec<(String, ScopeEntryType)>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.stack
     }
 }
 
-impl DerefMut for Stack {
+impl DerefMut for ParseState {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.stack
     }
 }
 
@@ -378,11 +364,6 @@ impl Stmt {
     }
 }
 
-#[cfg(not(feature = "no_module"))]
-type MRef = Option<Box<ModuleRef>>;
-#[cfg(feature = "no_module")]
-type MRef = Option<ModuleRef>;
-
 /// An expression.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -397,27 +378,36 @@ pub enum Expr {
     /// Character constant.
     CharConstant(Box<(char, Position)>),
     /// String constant.
-    StringConstant(Box<(String, Position)>),
+    StringConstant(Box<(ImmutableString, Position)>),
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
-    Variable(Box<((String, Position), MRef, u64, Option<NonZeroUsize>)>),
+    Variable(
+        Box<(
+            (String, Position),
+            Option<Box<ModuleRef>>,
+            u64,
+            Option<NonZeroUsize>,
+        )>,
+    ),
     /// Property access.
     Property(Box<((String, String, String), Position)>),
     /// { stmt }
     Stmt(Box<(Stmt, Position)>),
-    /// func(expr, ... ) - ((function name, position), optional modules, hash, arguments, optional default value)
+    /// Wrapped expression - should not be optimized away.
+    Expr(Box<Expr>),
+    /// func(expr, ... ) - ((function name, native_only, position), optional modules, hash, arguments, optional default value)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<(
-            (Cow<'static, str>, Position),
-            MRef,
+            (Cow<'static, str>, bool, Position),
+            Option<Box<ModuleRef>>,
             u64,
             StaticVec<Expr>,
             Option<Dynamic>,
         )>,
     ),
-    /// expr = expr
-    Assignment(Box<(Expr, Expr, Position)>),
+    /// expr op= expr
+    Assignment(Box<(Expr, Cow<'static, str>, Expr, Position)>),
     /// lhs.rhs
     Dot(Box<(Expr, Expr, Position)>),
     /// expr[expr]
@@ -454,6 +444,8 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_value(&self) -> Dynamic {
         match self {
+            Self::Expr(x) => x.get_constant_value(),
+
             Self::IntegerConstant(x) => x.0.into(),
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.0.into(),
@@ -488,6 +480,8 @@ impl Expr {
     /// Panics when the expression is not constant.
     pub fn get_constant_str(&self) -> String {
         match self {
+            Self::Expr(x) => x.get_constant_str(),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.0.to_string(),
 
@@ -507,6 +501,8 @@ impl Expr {
     /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {
+            Self::Expr(x) => x.position(),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.1,
 
@@ -518,19 +514,25 @@ impl Expr {
             Self::Property(x) => x.1,
             Self::Stmt(x) => x.1,
             Self::Variable(x) => (x.0).1,
-            Self::FnCall(x) => (x.0).1,
+            Self::FnCall(x) => (x.0).2,
+            Self::Assignment(x) => x.0.position(),
 
             Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
 
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
 
-            Self::Assignment(x) | Self::Dot(x) | Self::Index(x) => x.0.position(),
+            Self::Dot(x) | Self::Index(x) => x.0.position(),
         }
     }
 
     /// Override the `Position` of the expression.
     pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
         match &mut self {
+            Self::Expr(ref mut x) => {
+                let expr = mem::take(x);
+                *x = Box::new(expr.set_position(new_pos));
+            }
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.1 = new_pos,
 
@@ -542,14 +544,14 @@ impl Expr {
             Self::Variable(x) => (x.0).1 = new_pos,
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(x) => (x.0).1 = new_pos,
+            Self::FnCall(x) => (x.0).2 = new_pos,
             Self::And(x) => x.2 = new_pos,
             Self::Or(x) => x.2 = new_pos,
             Self::In(x) => x.2 = new_pos,
             Self::True(pos) => *pos = new_pos,
             Self::False(pos) => *pos = new_pos,
             Self::Unit(pos) => *pos = new_pos,
-            Self::Assignment(x) => x.2 = new_pos,
+            Self::Assignment(x) => x.3 = new_pos,
             Self::Dot(x) => x.2 = new_pos,
             Self::Index(x) => x.2 = new_pos,
         }
@@ -562,6 +564,8 @@ impl Expr {
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
+            Self::Expr(x) => x.is_pure(),
+
             Self::Array(x) => x.0.iter().all(Self::is_pure),
 
             Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
@@ -580,6 +584,8 @@ impl Expr {
     /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
+            Self::Expr(x) => x.is_constant(),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_) => true,
 
@@ -610,6 +616,8 @@ impl Expr {
     /// Is a particular token allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match self {
+            Self::Expr(x) => x.is_valid_postfix(token),
+
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_) => false,
 
@@ -678,7 +686,7 @@ fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
 }
 
 /// Match a particular token, consuming it if matched.
-fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, Box<ParseError>> {
+fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, ParseError> {
     let (t, _) = input.peek().unwrap();
     if *t == token {
         eat_token(input, token);
@@ -691,15 +699,20 @@ fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool
 /// Parse ( expr )
 fn parse_paren_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     pos: Position,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
     if match_token(input, Token::RightParen)? {
         return Ok(Expr::Unit(pos));
     }
 
-    let expr = parse_expr(input, stack, allow_stmt_expr)?;
+    let expr = parse_expr(input, state, level + 1, allow_stmt_expr)?;
 
     match input.next().unwrap() {
         // ( xxx )
@@ -718,18 +731,24 @@ fn parse_paren_expr<'a>(
 /// Parse a function call.
 fn parse_call_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     id: String,
-    #[cfg(not(feature = "no_module"))] mut modules: Option<Box<ModuleRef>>,
-    #[cfg(feature = "no_module")] modules: Option<ModuleRef>,
+    mut modules: Option<Box<ModuleRef>>,
     begin: Position,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
+    let (token, pos) = input.peek().unwrap();
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(*pos));
+    }
+
     let mut args = StaticVec::new();
 
-    match input.peek().unwrap() {
+    match token {
         // id <EOF>
-        (Token::EOF, pos) => {
+        Token::EOF => {
             return Err(PERR::MissingToken(
                 Token::RightParen.into(),
                 format!("to close the arguments list of this function call '{}'", id),
@@ -737,33 +756,35 @@ fn parse_call_expr<'a>(
             .into_err(*pos))
         }
         // id <error>
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
+        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
         // id()
-        (Token::RightParen, _) => {
+        Token::RightParen => {
             eat_token(input, Token::RightParen);
 
             #[cfg(not(feature = "no_module"))]
             let hash_fn_def = {
                 if let Some(modules) = modules.as_mut() {
-                    modules.set_index(stack.find_module(&modules.get(0).0));
+                    modules.set_index(state.find_module(&modules.get(0).0));
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + no parameters.
-                    // 2) Calculate a second hash with no qualifiers, empty function name, and
-                    //    the actual list of parameter `TypeId`'.s
+                    //    i.e. qualifiers + function name + number of arguments.
+                    // 2) Calculate a second hash with no qualifiers, empty function name,
+                    //    zero number of arguments, and the actual list of argument `TypeId`'s.
                     // 3) The final hash is the XOR of the two hashes.
-                    calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, empty())
+                    let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                    calc_fn_hash(qualifiers, &id, 0, empty())
                 } else {
-                    calc_fn_hash(empty(), &id, empty())
+                    // Qualifiers (none) + function name + no parameters.
+                    calc_fn_hash(empty(), &id, 0, empty())
                 }
             };
             // Qualifiers (none) + function name + no parameters.
             #[cfg(feature = "no_module")]
-            let hash_fn_def = calc_fn_hash(empty(), &id, empty());
+            let hash_fn_def = calc_fn_hash(empty(), &id, 0, empty());
 
             return Ok(Expr::FnCall(Box::new((
-                (id.into(), begin),
+                (id.into(), false, begin),
                 modules,
                 hash_fn_def,
                 args,
@@ -775,36 +796,37 @@ fn parse_call_expr<'a>(
     }
 
     loop {
-        args.push(parse_expr(input, stack, allow_stmt_expr)?);
+        args.push(parse_expr(input, state, level + 1, allow_stmt_expr)?);
 
         match input.peek().unwrap() {
             // id(...args)
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
-                let args_iter = repeat(EMPTY_TYPE_ID()).take(args.len());
 
                 #[cfg(not(feature = "no_module"))]
                 let hash_fn_def = {
                     if let Some(modules) = modules.as_mut() {
-                        modules.set_index(stack.find_module(&modules.get(0).0));
+                        modules.set_index(state.find_module(&modules.get(0).0));
 
                         // Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
-                        //    i.e. qualifiers + function name + dummy parameter types (one for each parameter).
-                        // 2) Calculate a second hash with no qualifiers, empty function name, and
-                        //    the actual list of parameter `TypeId`'.s
+                        //    i.e. qualifiers + function name + number of arguments.
+                        // 2) Calculate a second hash with no qualifiers, empty function name,
+                        //    zero number of arguments, and the actual list of argument `TypeId`'s.
                         // 3) The final hash is the XOR of the two hashes.
-                        calc_fn_hash(modules.iter().map(|(m, _)| m.as_str()), &id, args_iter)
+                        let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                        calc_fn_hash(qualifiers, &id, args.len(), empty())
                     } else {
-                        calc_fn_hash(empty(), &id, args_iter)
+                        // Qualifiers (none) + function name + number of arguments.
+                        calc_fn_hash(empty(), &id, args.len(), empty())
                     }
                 };
-                // Qualifiers (none) + function name + dummy parameter types (one for each parameter).
+                // Qualifiers (none) + function name + number of arguments.
                 #[cfg(feature = "no_module")]
-                let hash_fn_def = calc_fn_hash(empty(), &id, args_iter);
+                let hash_fn_def = calc_fn_hash(empty(), &id, args.len(), empty());
 
                 return Ok(Expr::FnCall(Box::new((
-                    (id.into(), begin),
+                    (id.into(), false, begin),
                     modules,
                     hash_fn_def,
                     args,
@@ -843,12 +865,17 @@ fn parse_call_expr<'a>(
 /// Indexing binds to the right, so this call parses all possible levels of indexing following in the input.
 fn parse_index_chain<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     lhs: Expr,
     pos: Position,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
-    let idx_expr = parse_expr(input, stack, allow_stmt_expr)?;
+) -> Result<Expr, ParseError> {
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
+    let idx_expr = parse_expr(input, state, level + 1, allow_stmt_expr)?;
 
     // Check type of indexing - must be integer or string
     match &idx_expr {
@@ -871,30 +898,25 @@ fn parse_index_chain<'a>(
             }
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x) => {
+            Expr::FloatConstant(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(x.1))
+                .into_err(lhs.position()))
             }
 
-            Expr::CharConstant(x) => {
+            Expr::CharConstant(_)
+            | Expr::Assignment(_)
+            | Expr::And(_)
+            | Expr::Or(_)
+            | Expr::In(_)
+            | Expr::True(_)
+            | Expr::False(_)
+            | Expr::Unit(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(x.1))
-            }
-            Expr::Assignment(x) | Expr::And(x) | Expr::Or(x) | Expr::In(x) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Only arrays, object maps and strings can be indexed".into(),
-                )
-                .into_err(x.2))
-            }
-            Expr::True(pos) | Expr::False(pos) | Expr::Unit(pos) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Only arrays, object maps and strings can be indexed".into(),
-                )
-                .into_err(pos))
+                .into_err(lhs.position()))
             }
 
             _ => (),
@@ -912,32 +934,25 @@ fn parse_index_chain<'a>(
             }
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x) => {
+            Expr::FloatConstant(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(x.1))
+                .into_err(lhs.position()))
             }
 
-            Expr::CharConstant(x) => {
+            Expr::CharConstant(_)
+            | Expr::Assignment(_)
+            | Expr::And(_)
+            | Expr::Or(_)
+            | Expr::In(_)
+            | Expr::True(_)
+            | Expr::False(_)
+            | Expr::Unit(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(x.1))
-            }
-
-            Expr::Assignment(x) | Expr::And(x) | Expr::Or(x) | Expr::In(x) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Only arrays, object maps and strings can be indexed".into(),
-                )
-                .into_err(x.2))
-            }
-
-            Expr::True(pos) | Expr::False(pos) | Expr::Unit(pos) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Only arrays, object maps and strings can be indexed".into(),
-                )
-                .into_err(pos))
+                .into_err(lhs.position()))
             }
 
             _ => (),
@@ -945,46 +960,46 @@ fn parse_index_chain<'a>(
 
         // lhs[float]
         #[cfg(not(feature = "no_float"))]
-        Expr::FloatConstant(x) => {
+        x @ Expr::FloatConstant(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a float".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // lhs[char]
-        Expr::CharConstant(x) => {
+        x @ Expr::CharConstant(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // lhs[??? = ??? ]
-        Expr::Assignment(x) => {
+        x @ Expr::Assignment(_) => {
             return Err(PERR::MalformedIndexExpr(
-                "Array access expects integer index, not ()".into(),
+                "Array access expects integer index, not an assignment".into(),
             )
-            .into_err(x.2))
+            .into_err(x.position()))
         }
         // lhs[()]
-        Expr::Unit(pos) => {
+        x @ Expr::Unit(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not ()".into(),
             )
-            .into_err(*pos))
+            .into_err(x.position()))
         }
         // lhs[??? && ???], lhs[??? || ???], lhs[??? in ???]
-        Expr::And(x) | Expr::Or(x) | Expr::In(x) => {
+        x @ Expr::And(_) | x @ Expr::Or(_) | x @ Expr::In(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
-            .into_err(x.2))
+            .into_err(x.position()))
         }
         // lhs[true], lhs[false]
-        Expr::True(pos) | Expr::False(pos) => {
+        x @ Expr::True(_) | x @ Expr::False(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
-            .into_err(*pos))
+            .into_err(x.position()))
         }
         // All other expressions
         _ => (),
@@ -1001,12 +1016,29 @@ fn parse_index_chain<'a>(
                 (Token::LeftBracket, _) => {
                     let idx_pos = eat_token(input, Token::LeftBracket);
                     // Recursively parse the indexing chain, right-binding each
-                    let idx = parse_index_chain(input, stack, idx_expr, idx_pos, allow_stmt_expr)?;
+                    let idx_expr = parse_index_chain(
+                        input,
+                        state,
+                        idx_expr,
+                        idx_pos,
+                        level + 1,
+                        allow_stmt_expr,
+                    )?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new((lhs, idx, pos))))
+                    Ok(Expr::Index(Box::new((lhs, idx_expr, pos))))
                 }
                 // Otherwise terminate the indexing chain
-                _ => Ok(Expr::Index(Box::new((lhs, idx_expr, pos)))),
+                _ => {
+                    match idx_expr {
+                        // Terminate with an `Expr::Expr` wrapper to prevent the last index expression
+                        // inside brackets to be mis-parsed as another level of indexing, or a
+                        // dot expression/function call to be mis-parsed as following the indexing chain.
+                        Expr::Index(_) | Expr::Dot(_) | Expr::FnCall(_) => Ok(Expr::Index(
+                            Box::new((lhs, Expr::Expr(Box::new(idx_expr)), pos)),
+                        )),
+                        _ => Ok(Expr::Index(Box::new((lhs, idx_expr, pos)))),
+                    }
+                }
             }
         }
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
@@ -1021,15 +1053,20 @@ fn parse_index_chain<'a>(
 /// Parse an array literal.
 fn parse_array_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     pos: Position,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
     let mut arr = StaticVec::new();
 
     if !match_token(input, Token::RightBracket)? {
         while !input.peek().unwrap().0.is_eof() {
-            arr.push(parse_expr(input, stack, allow_stmt_expr)?);
+            arr.push(parse_expr(input, state, level + 1, allow_stmt_expr)?);
 
             match input.peek().unwrap() {
                 (Token::Comma, _) => eat_token(input, Token::Comma),
@@ -1064,10 +1101,15 @@ fn parse_array_literal<'a>(
 /// Parse a map literal.
 fn parse_map_literal<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     pos: Position,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
     let mut map = StaticVec::new();
 
     if !match_token(input, Token::RightBrace)? {
@@ -1112,7 +1154,7 @@ fn parse_map_literal<'a>(
                 }
             };
 
-            let expr = parse_expr(input, stack, allow_stmt_expr)?;
+            let expr = parse_expr(input, state, level + 1, allow_stmt_expr)?;
 
             map.push(((name, pos), expr));
 
@@ -1161,17 +1203,24 @@ fn parse_map_literal<'a>(
 /// Parse a primary expression.
 fn parse_primary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
-    let (token, pos) = match input.peek().unwrap() {
+) -> Result<Expr, ParseError> {
+    let (token, pos) = input.peek().unwrap();
+    let pos = *pos;
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
+    let (token, _) = match token {
         // { - block statement as expression
-        (Token::LeftBrace, pos) if allow_stmt_expr => {
-            let pos = *pos;
-            return parse_block(input, stack, false, allow_stmt_expr)
+        Token::LeftBrace if allow_stmt_expr => {
+            return parse_block(input, state, false, level + 1, allow_stmt_expr)
                 .map(|block| Expr::Stmt(Box::new((block, pos))));
         }
-        (Token::EOF, pos) => return Err(PERR::UnexpectedEOF.into_err(*pos)),
+        Token::EOF => return Err(PERR::UnexpectedEOF.into_err(pos)),
         _ => input.next().unwrap(),
     };
 
@@ -1180,16 +1229,16 @@ fn parse_primary<'a>(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, pos))),
-        Token::StringConst(s) => Expr::StringConstant(Box::new((s, pos))),
+        Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), pos))),
         Token::Identifier(s) => {
-            let index = stack.find(&s);
+            let index = state.find(&s);
             Expr::Variable(Box::new(((s, pos), None, 0, index)))
         }
-        Token::LeftParen => parse_paren_expr(input, stack, pos, allow_stmt_expr)?,
+        Token::LeftParen => parse_paren_expr(input, state, pos, level + 1, allow_stmt_expr)?,
         #[cfg(not(feature = "no_index"))]
-        Token::LeftBracket => parse_array_literal(input, stack, pos, allow_stmt_expr)?,
+        Token::LeftBracket => parse_array_literal(input, state, pos, level + 1, allow_stmt_expr)?,
         #[cfg(not(feature = "no_object"))]
-        Token::MapStart => parse_map_literal(input, stack, pos, allow_stmt_expr)?,
+        Token::MapStart => parse_map_literal(input, state, pos, level + 1, allow_stmt_expr)?,
         Token::True => Expr::True(pos),
         Token::False => Expr::False(pos),
         Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
@@ -1212,7 +1261,7 @@ fn parse_primary<'a>(
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
                 let ((name, pos), modules, _, _) = *x;
-                parse_call_expr(input, stack, name, modules, pos, allow_stmt_expr)?
+                parse_call_expr(input, state, name, modules, pos, level + 1, allow_stmt_expr)?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
@@ -1235,7 +1284,7 @@ fn parse_primary<'a>(
             // Indexing
             #[cfg(not(feature = "no_index"))]
             (expr, Token::LeftBracket) => {
-                parse_index_chain(input, stack, expr, token_pos, allow_stmt_expr)?
+                parse_index_chain(input, state, expr, token_pos, level + 1, allow_stmt_expr)?
             }
             // Unknown postfix operator
             (expr, token) => panic!("unknown postfix operator {:?} for {:?}", token, expr),
@@ -1250,8 +1299,8 @@ fn parse_primary<'a>(
             let modules = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
-            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, empty());
-            modules.set_index(stack.find_module(&modules.get(0).0));
+            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
+            modules.set_index(state.find_module(&modules.get(0).0));
         }
         _ => (),
     }
@@ -1262,23 +1311,28 @@ fn parse_primary<'a>(
 /// Parse a potential unary operator.
 fn parse_unary<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
-    match input.peek().unwrap() {
+) -> Result<Expr, ParseError> {
+    let (token, pos) = input.peek().unwrap();
+    let pos = *pos;
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
+    match token {
         // If statement is allowed to act as expressions
-        (Token::If, pos) => {
-            let pos = *pos;
-            Ok(Expr::Stmt(Box::new((
-                parse_if(input, stack, false, allow_stmt_expr)?,
-                pos,
-            ))))
-        }
+        Token::If => Ok(Expr::Stmt(Box::new((
+            parse_if(input, state, false, level + 1, allow_stmt_expr)?,
+            pos,
+        )))),
         // -expr
-        (Token::UnaryMinus, _) => {
+        Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
 
-            match parse_unary(input, stack, allow_stmt_expr)? {
+            match parse_unary(input, state, level + 1, allow_stmt_expr)? {
                 // Negative integer
                 Expr::IntegerConstant(x) => {
                     let (num, pos) = *x;
@@ -1310,12 +1364,12 @@ fn parse_unary<'a>(
                 // Call negative function
                 expr => {
                     let op = "-";
-                    let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+                    let hash = calc_fn_hash(empty(), op, 2, empty());
                     let mut args = StaticVec::new();
                     args.push(expr);
 
                     Ok(Expr::FnCall(Box::new((
-                        (op.into(), pos),
+                        (op.into(), true, pos),
                         None,
                         hash,
                         args,
@@ -1325,21 +1379,21 @@ fn parse_unary<'a>(
             }
         }
         // +expr
-        (Token::UnaryPlus, _) => {
+        Token::UnaryPlus => {
             eat_token(input, Token::UnaryPlus);
-            parse_unary(input, stack, allow_stmt_expr)
+            parse_unary(input, state, level + 1, allow_stmt_expr)
         }
         // !expr
-        (Token::Bang, _) => {
+        Token::Bang => {
             let pos = eat_token(input, Token::Bang);
             let mut args = StaticVec::new();
-            args.push(parse_primary(input, stack, allow_stmt_expr)?);
+            args.push(parse_primary(input, state, level + 1, allow_stmt_expr)?);
 
             let op = "!";
-            let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(2));
+            let hash = calc_fn_hash(empty(), op, 2, empty());
 
             Ok(Expr::FnCall(Box::new((
-                (op.into(), pos),
+                (op.into(), true, pos),
                 None,
                 hash,
                 args,
@@ -1347,24 +1401,29 @@ fn parse_unary<'a>(
             ))))
         }
         // <EOF>
-        (Token::EOF, pos) => Err(PERR::UnexpectedEOF.into_err(*pos)),
+        Token::EOF => Err(PERR::UnexpectedEOF.into_err(pos)),
         // All other tokens
-        _ => parse_primary(input, stack, allow_stmt_expr),
+        _ => parse_primary(input, state, level + 1, allow_stmt_expr),
     }
 }
 
 fn make_assignment_stmt<'a>(
-    stack: &mut Stack,
+    fn_name: Cow<'static, str>,
+    state: &mut ParseState,
     lhs: Expr,
     rhs: Expr,
     pos: Position,
-) -> Result<Expr, Box<ParseError>> {
+) -> Result<Expr, ParseError> {
     match &lhs {
-        Expr::Variable(x) if x.3.is_none() => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
+        Expr::Variable(x) if x.3.is_none() => {
+            Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+        }
         Expr::Variable(x) => {
             let ((name, name_pos), _, _, index) = x.as_ref();
-            match stack[(stack.len() - index.unwrap().get())].1 {
-                ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
+            match state.stack[(state.len() - index.unwrap().get())].1 {
+                ScopeEntryType::Normal => {
+                    Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                }
                 // Constant values cannot be assigned to
                 ScopeEntryType::Constant => {
                     Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
@@ -1373,11 +1432,15 @@ fn make_assignment_stmt<'a>(
             }
         }
         Expr::Index(x) | Expr::Dot(x) => match &x.0 {
-            Expr::Variable(x) if x.3.is_none() => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
+            Expr::Variable(x) if x.3.is_none() => {
+                Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+            }
             Expr::Variable(x) => {
                 let ((name, name_pos), _, _, index) = x.as_ref();
-                match stack[(stack.len() - index.unwrap().get())].1 {
-                    ScopeEntryType::Normal => Ok(Expr::Assignment(Box::new((lhs, rhs, pos)))),
+                match state.stack[(state.len() - index.unwrap().get())].1 {
+                    ScopeEntryType::Normal => {
+                        Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                    }
                     // Constant values cannot be assigned to
                     ScopeEntryType::Constant => {
                         Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
@@ -1397,73 +1460,62 @@ fn make_assignment_stmt<'a>(
 /// Parse an operator-assignment expression.
 fn parse_op_assignment_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     lhs: Expr,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
-    let (op, pos) = match *input.peek().unwrap() {
-        (Token::Equals, _) => {
-            let pos = eat_token(input, Token::Equals);
-            let rhs = parse_expr(input, stack, allow_stmt_expr)?;
-            return make_assignment_stmt(stack, lhs, rhs, pos);
-        }
-        (Token::PlusAssign, pos) => ("+", pos),
-        (Token::MinusAssign, pos) => ("-", pos),
-        (Token::MultiplyAssign, pos) => ("*", pos),
-        (Token::DivideAssign, pos) => ("/", pos),
-        (Token::LeftShiftAssign, pos) => ("<<", pos),
-        (Token::RightShiftAssign, pos) => (">>", pos),
-        (Token::ModuloAssign, pos) => ("%", pos),
-        (Token::PowerOfAssign, pos) => ("~", pos),
-        (Token::AndAssign, pos) => ("&", pos),
-        (Token::OrAssign, pos) => ("|", pos),
-        (Token::XOrAssign, pos) => ("^", pos),
-        (_, _) => return Ok(lhs),
+) -> Result<Expr, ParseError> {
+    let (token, pos) = input.peek().unwrap();
+    let pos = *pos;
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
+    let op = match token {
+        Token::Equals => "".into(),
+
+        Token::PlusAssign
+        | Token::MinusAssign
+        | Token::MultiplyAssign
+        | Token::DivideAssign
+        | Token::LeftShiftAssign
+        | Token::RightShiftAssign
+        | Token::ModuloAssign
+        | Token::PowerOfAssign
+        | Token::AndAssign
+        | Token::OrAssign
+        | Token::XOrAssign => token.syntax(),
+
+        _ => return Ok(lhs),
     };
 
-    input.next();
-
-    let lhs_copy = lhs.clone();
-    let rhs = parse_expr(input, stack, allow_stmt_expr)?;
-
-    // lhs op= rhs -> lhs = op(lhs, rhs)
-    let mut args = StaticVec::new();
-    args.push(lhs_copy);
-    args.push(rhs);
-
-    let hash = calc_fn_hash(empty(), op, repeat(EMPTY_TYPE_ID()).take(args.len()));
-    let rhs_expr = Expr::FnCall(Box::new(((op.into(), pos), None, hash, args, None)));
-
-    make_assignment_stmt(stack, lhs, rhs_expr, pos)
+    let (_, pos) = input.next().unwrap();
+    let rhs = parse_expr(input, state, level + 1, allow_stmt_expr)?;
+    make_assignment_stmt(op, state, lhs, rhs, pos)
 }
 
 /// Make a dot expression.
-fn make_dot_expr(
-    lhs: Expr,
-    rhs: Expr,
-    op_pos: Position,
-    is_index: bool,
-) -> Result<Expr, Box<ParseError>> {
+fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
-        // idx_lhs[idx_rhs].rhs
+        // idx_lhs[idx_expr].rhs
         // Attach dot chain to the bottom level of indexing chain
         (Expr::Index(x), rhs) => {
-            Expr::Index(Box::new((x.0, make_dot_expr(x.1, rhs, op_pos, true)?, x.2)))
+            let (idx_lhs, idx_expr, pos) = *x;
+            Expr::Index(Box::new((
+                idx_lhs,
+                make_dot_expr(idx_expr, rhs, op_pos)?,
+                pos,
+            )))
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let (name, pos) = x.0;
-            let lhs = if is_index { lhs.into_property() } else { lhs };
 
             let getter = make_getter(&name);
             let setter = make_setter(&name);
             let rhs = Expr::Property(Box::new(((name, getter, setter), pos)));
 
-            Expr::Dot(Box::new((lhs, rhs, op_pos)))
-        }
-        (lhs, Expr::Property(x)) => {
-            let lhs = if is_index { lhs.into_property() } else { lhs };
-            let rhs = Expr::Property(x);
             Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }
         // lhs.module::id - syntax error
@@ -1473,67 +1525,56 @@ fn make_dot_expr(
             #[cfg(not(feature = "no_module"))]
             return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
         }
+        // lhs.prop
+        (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x)) => {
             let (dot_lhs, dot_rhs, pos) = *x;
             Expr::Dot(Box::new((
                 lhs,
-                Expr::Dot(Box::new((
-                    dot_lhs.into_property(),
-                    dot_rhs.into_property(),
-                    pos,
-                ))),
+                Expr::Dot(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
         }
         // lhs.idx_lhs[idx_rhs]
         (lhs, Expr::Index(x)) => {
-            let (idx_lhs, idx_rhs, pos) = *x;
+            let (dot_lhs, dot_rhs, pos) = *x;
             Expr::Dot(Box::new((
                 lhs,
-                Expr::Index(Box::new((
-                    idx_lhs.into_property(),
-                    idx_rhs.into_property(),
-                    pos,
-                ))),
+                Expr::Index(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
         }
+        // lhs.func()
+        (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
-        (lhs, rhs) => Expr::Dot(Box::new((lhs, rhs.into_property(), op_pos))),
+        _ => unreachable!(),
     })
 }
 
 /// Make an 'in' expression.
-fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<ParseError>> {
+fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     match (&lhs, &rhs) {
-        (_, Expr::IntegerConstant(x)) => {
+        (_, x @ Expr::IntegerConstant(_))
+        | (_, x @ Expr::And(_))
+        | (_, x @ Expr::Or(_))
+        | (_, x @ Expr::In(_))
+        | (_, x @ Expr::Assignment(_))
+        | (_, x @ Expr::True(_))
+        | (_, x @ Expr::False(_))
+        | (_, x @ Expr::Unit(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression expects a string, array or object map".into(),
             )
-            .into_err(x.1))
-        }
-
-        (_, Expr::And(x)) | (_, Expr::Or(x)) | (_, Expr::In(x)) | (_, Expr::Assignment(x)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression expects a string, array or object map".into(),
-            )
-            .into_err(x.2))
-        }
-
-        (_, Expr::True(pos)) | (_, Expr::False(pos)) | (_, Expr::Unit(pos)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression expects a string, array or object map".into(),
-            )
-            .into_err(*pos))
+            .into_err(x.position()))
         }
 
         #[cfg(not(feature = "no_float"))]
-        (_, Expr::FloatConstant(x)) => {
+        (_, x @ Expr::FloatConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression expects a string, array or object map".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
 
         // "xxx" in "xxxx", 'x' in "xxxx" - OK!
@@ -1542,63 +1583,58 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
 
         // 123.456 in "xxxx"
         #[cfg(not(feature = "no_float"))]
-        (Expr::FloatConstant(x), Expr::StringConstant(_)) => {
+        (x @ Expr::FloatConstant(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a float".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // 123 in "xxxx"
-        (Expr::IntegerConstant(x), Expr::StringConstant(_)) => {
+        (x @ Expr::IntegerConstant(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a number".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // (??? && ???) in "xxxx", (??? || ???) in "xxxx", (??? in ???) in "xxxx",
-        (Expr::And(x), Expr::StringConstant(_))
-        | (Expr::Or(x), Expr::StringConstant(_))
-        | (Expr::In(x), Expr::StringConstant(_)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not a boolean".into(),
-            )
-            .into_err(x.2))
-        }
         //  true in "xxxx", false in "xxxx"
-        (Expr::True(pos), Expr::StringConstant(_))
-        | (Expr::False(pos), Expr::StringConstant(_)) => {
+        (x @ Expr::And(_), Expr::StringConstant(_))
+        | (x @ Expr::Or(_), Expr::StringConstant(_))
+        | (x @ Expr::In(_), Expr::StringConstant(_))
+        | (x @ Expr::True(_), Expr::StringConstant(_))
+        | (x @ Expr::False(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a boolean".into(),
             )
-            .into_err(*pos))
+            .into_err(x.position()))
         }
         // [???, ???, ???] in "xxxx"
-        (Expr::Array(x), Expr::StringConstant(_)) => {
+        (x @ Expr::Array(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an array".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // #{...} in "xxxx"
-        (Expr::Map(x), Expr::StringConstant(_)) => {
+        (x @ Expr::Map(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an object map".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // (??? = ???) in "xxxx"
-        (Expr::Assignment(x), Expr::StringConstant(_)) => {
+        (x @ Expr::Assignment(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not ()".into(),
+                "'in' expression for a string expects a string, not an assignment".into(),
             )
-            .into_err(x.2))
+            .into_err(x.position()))
         }
         // () in "xxxx"
-        (Expr::Unit(pos), Expr::StringConstant(_)) => {
+        (x @ Expr::Unit(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not ()".into(),
             )
-            .into_err(*pos))
+            .into_err(x.position()))
         }
 
         // "xxx" in #{...}, 'x' in #{...} - OK!
@@ -1606,62 +1642,58 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
 
         // 123.456 in #{...}
         #[cfg(not(feature = "no_float"))]
-        (Expr::FloatConstant(x), Expr::Map(_)) => {
+        (x @ Expr::FloatConstant(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a float".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // 123 in #{...}
-        (Expr::IntegerConstant(x), Expr::Map(_)) => {
+        (x @ Expr::IntegerConstant(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a number".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // (??? && ???) in #{...}, (??? || ???) in #{...}, (??? in ???) in #{...},
-        (Expr::And(x), Expr::Map(_))
-        | (Expr::Or(x), Expr::Map(_))
-        | (Expr::In(x), Expr::Map(_)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not a boolean".into(),
-            )
-            .into_err(x.2))
-        }
         // true in #{...}, false in #{...}
-        (Expr::True(pos), Expr::Map(_)) | (Expr::False(pos), Expr::Map(_)) => {
+        (x @ Expr::And(_), Expr::Map(_))
+        | (x @ Expr::Or(_), Expr::Map(_))
+        | (x @ Expr::In(_), Expr::Map(_))
+        | (x @ Expr::True(_), Expr::Map(_))
+        | (x @ Expr::False(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a boolean".into(),
             )
-            .into_err(*pos))
+            .into_err(x.position()))
         }
         // [???, ???, ???] in #{..}
-        (Expr::Array(x), Expr::Map(_)) => {
+        (x @ Expr::Array(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not an array".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // #{...} in #{..}
-        (Expr::Map(x), Expr::Map(_)) => {
+        (x @ Expr::Map(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not an object map".into(),
             )
-            .into_err(x.1))
+            .into_err(x.position()))
         }
         // (??? = ???) in #{...}
-        (Expr::Assignment(x), Expr::Map(_)) => {
+        (x @ Expr::Assignment(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not ()".into(),
+                "'in' expression for an object map expects a string, not an assignment".into(),
             )
-            .into_err(x.2))
+            .into_err(x.position()))
         }
         // () in #{...}
-        (Expr::Unit(pos), Expr::Map(_)) => {
+        (x @ Expr::Unit(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not ()".into(),
             )
-            .into_err(*pos))
+            .into_err(x.position()))
         }
 
         _ => (),
@@ -1673,74 +1705,81 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, Box<Pars
 /// Parse a binary expression.
 fn parse_binary_op<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     parent_precedence: u8,
     lhs: Expr,
+    mut level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
-    let mut current_lhs = lhs;
+) -> Result<Expr, ParseError> {
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(lhs.position()));
+    }
+
+    let mut root = lhs;
 
     loop {
-        let (current_precedence, bind_right) = input.peek().map_or_else(
-            || (0, false),
-            |(current_op, _)| (current_op.precedence(), current_op.is_bind_right()),
-        );
+        let (current_op, _) = input.peek().unwrap();
+        let precedence = current_op.precedence();
+        let bind_right = current_op.is_bind_right();
 
         // Bind left to the parent lhs expression if precedence is higher
         // If same precedence, then check if the operator binds right
-        if current_precedence < parent_precedence
-            || (current_precedence == parent_precedence && !bind_right)
-        {
-            return Ok(current_lhs);
+        if precedence < parent_precedence || (precedence == parent_precedence && !bind_right) {
+            return Ok(root);
         }
 
         let (op_token, pos) = input.next().unwrap();
 
-        let rhs = parse_unary(input, stack, allow_stmt_expr)?;
+        let rhs = parse_unary(input, state, level, allow_stmt_expr)?;
 
         let next_precedence = input.peek().unwrap().0.precedence();
 
         // Bind to right if the next operator has higher precedence
         // If same precedence, then check if the operator binds right
-        let rhs = if (current_precedence == next_precedence && bind_right)
-            || current_precedence < next_precedence
-        {
-            parse_binary_op(input, stack, current_precedence, rhs, allow_stmt_expr)?
+        let rhs = if (precedence == next_precedence && bind_right) || precedence < next_precedence {
+            parse_binary_op(input, state, precedence, rhs, level, allow_stmt_expr)?
         } else {
             // Otherwise bind to left (even if next operator has the same precedence)
             rhs
         };
 
+        level += 1;
+
+        if level > state.max_expr_depth {
+            return Err(PERR::ExprTooDeep.into_err(pos));
+        }
+
         let cmp_def = Some(false.into());
         let op = op_token.syntax();
-        let hash = calc_fn_hash(empty(), &op, repeat(EMPTY_TYPE_ID()).take(2));
+        let hash = calc_fn_hash(empty(), &op, 2, empty());
+        let op = (op, true, pos);
 
         let mut args = StaticVec::new();
-        args.push(current_lhs);
+        args.push(root);
         args.push(rhs);
 
-        current_lhs = match op_token {
-            Token::Plus => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::Minus => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::Multiply => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::Divide => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+        root = match op_token {
+            Token::Plus
+            | Token::Minus
+            | Token::Multiply
+            | Token::Divide
+            | Token::LeftShift
+            | Token::RightShift
+            | Token::Modulo
+            | Token::PowerOf
+            | Token::Ampersand
+            | Token::Pipe
+            | Token::XOr => Expr::FnCall(Box::new((op, None, hash, args, None))),
 
-            Token::LeftShift => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::RightShift => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::Modulo => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::PowerOf => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
+            // '!=' defaults to true when passed invalid operands
+            Token::NotEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, Some(true.into())))),
 
             // Comparison operators default to false when passed invalid operands
-            Token::EqualsTo => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
-            Token::NotEqualsTo => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
-            Token::LessThan => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
-            Token::LessThanEqualsTo => {
-                Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def)))
-            }
-            Token::GreaterThan => Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def))),
-            Token::GreaterThanEqualsTo => {
-                Expr::FnCall(Box::new(((op, pos), None, hash, args, cmp_def)))
-            }
+            Token::EqualsTo
+            | Token::LessThan
+            | Token::LessThanEqualsTo
+            | Token::GreaterThan
+            | Token::GreaterThanEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_def))),
 
             Token::Or => {
                 let rhs = args.pop();
@@ -1752,10 +1791,6 @@ fn parse_binary_op<'a>(
                 let current_lhs = args.pop();
                 Expr::And(Box::new((current_lhs, rhs, pos)))
             }
-            Token::Ampersand => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::Pipe => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-            Token::XOr => Expr::FnCall(Box::new(((op, pos), None, hash, args, None))),
-
             Token::In => {
                 let rhs = args.pop();
                 let current_lhs = args.pop();
@@ -1770,15 +1805,14 @@ fn parse_binary_op<'a>(
                 match &mut rhs {
                     // current_lhs.rhs(...) - method call
                     Expr::FnCall(x) => {
-                        let ((id, _), _, hash, args, _) = x.as_mut();
+                        let ((id, _, _), _, hash, args, _) = x.as_mut();
                         // Recalculate function call hash because there is an additional argument
-                        let args_iter = repeat(EMPTY_TYPE_ID()).take(args.len() + 1);
-                        *hash = calc_fn_hash(empty(), id, args_iter);
+                        *hash = calc_fn_hash(empty(), id, args.len() + 1, empty());
                     }
                     _ => (),
                 }
 
-                make_dot_expr(current_lhs, rhs, pos, false)?
+                make_dot_expr(current_lhs, rhs, pos)?
             }
 
             token => return Err(PERR::UnknownOperator(token.into()).into_err(pos)),
@@ -1789,18 +1823,25 @@ fn parse_binary_op<'a>(
 /// Parse an expression.
 fn parse_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Expr, Box<ParseError>> {
-    let lhs = parse_unary(input, stack, allow_stmt_expr)?;
-    parse_binary_op(input, stack, 1, lhs, allow_stmt_expr)
+) -> Result<Expr, ParseError> {
+    let (_, pos) = input.peek().unwrap();
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(*pos));
+    }
+
+    let lhs = parse_unary(input, state, level + 1, allow_stmt_expr)?;
+    parse_binary_op(input, state, 1, lhs, level + 1, allow_stmt_expr)
 }
 
 /// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
 fn ensure_not_statement_expr<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     type_name: &str,
-) -> Result<(), Box<ParseError>> {
+) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         // Disallow statement expressions
         (Token::LeftBrace, pos) | (Token::EOF, pos) => {
@@ -1812,9 +1853,7 @@ fn ensure_not_statement_expr<'a>(
 }
 
 /// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
-fn ensure_not_assignment<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
-) -> Result<(), Box<ParseError>> {
+fn ensure_not_assignment<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         (Token::Equals, pos) => {
             return Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
@@ -1843,27 +1882,32 @@ fn ensure_not_assignment<'a>(
 /// Parse an if statement.
 fn parse_if<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     breakable: bool,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // if ...
-    eat_token(input, Token::If);
+    let pos = eat_token(input, Token::If);
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
 
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, stack, allow_stmt_expr)?;
+    let guard = parse_expr(input, state, level + 1, allow_stmt_expr)?;
     ensure_not_assignment(input)?;
-    let if_body = parse_block(input, stack, breakable, allow_stmt_expr)?;
+    let if_body = parse_block(input, state, breakable, level + 1, allow_stmt_expr)?;
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).unwrap_or(false) {
         Some(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
-            parse_if(input, stack, breakable, allow_stmt_expr)?
+            parse_if(input, state, breakable, level + 1, allow_stmt_expr)?
         } else {
             // if guard { if_body } else { else-body }
-            parse_block(input, stack, breakable, allow_stmt_expr)?
+            parse_block(input, state, breakable, level + 1, allow_stmt_expr)?
         })
     } else {
         None
@@ -1875,17 +1919,22 @@ fn parse_if<'a>(
 /// Parse a while loop.
 fn parse_while<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // while ...
-    eat_token(input, Token::While);
+    let pos = eat_token(input, Token::While);
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
 
     // while guard { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, stack, allow_stmt_expr)?;
+    let guard = parse_expr(input, state, level + 1, allow_stmt_expr)?;
     ensure_not_assignment(input)?;
-    let body = parse_block(input, stack, true, allow_stmt_expr)?;
+    let body = parse_block(input, state, true, level + 1, allow_stmt_expr)?;
 
     Ok(Stmt::While(Box::new((guard, body))))
 }
@@ -1893,14 +1942,19 @@ fn parse_while<'a>(
 /// Parse a loop statement.
 fn parse_loop<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // loop ...
-    eat_token(input, Token::Loop);
+    let pos = eat_token(input, Token::Loop);
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
 
     // loop { body }
-    let body = parse_block(input, stack, true, allow_stmt_expr)?;
+    let body = parse_block(input, state, true, level + 1, allow_stmt_expr)?;
 
     Ok(Stmt::Loop(Box::new(body)))
 }
@@ -1908,11 +1962,16 @@ fn parse_loop<'a>(
 /// Parse a for loop.
 fn parse_for<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // for ...
-    eat_token(input, Token::For);
+    let pos = eat_token(input, Token::For);
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
 
     // for name ...
     let name = match input.next().unwrap() {
@@ -1940,14 +1999,14 @@ fn parse_for<'a>(
 
     // for name in expr { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let expr = parse_expr(input, stack, allow_stmt_expr)?;
+    let expr = parse_expr(input, state, level + 1, allow_stmt_expr)?;
 
-    let prev_len = stack.len();
-    stack.push((name.clone(), ScopeEntryType::Normal));
+    let prev_len = state.len();
+    state.push((name.clone(), ScopeEntryType::Normal));
 
-    let body = parse_block(input, stack, true, allow_stmt_expr)?;
+    let body = parse_block(input, state, true, level + 1, allow_stmt_expr)?;
 
-    stack.truncate(prev_len);
+    state.truncate(prev_len);
 
     Ok(Stmt::For(Box::new((name, expr, body))))
 }
@@ -1955,12 +2014,17 @@ fn parse_for<'a>(
 /// Parse a variable definition statement.
 fn parse_let<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     var_type: ScopeEntryType,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
-    input.next();
+    let (_, pos) = input.next().unwrap();
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
 
     // let name ...
     let (name, pos) = match input.next().unwrap() {
@@ -1972,17 +2036,17 @@ fn parse_let<'a>(
     // let name = ...
     if match_token(input, Token::Equals)? {
         // let name = expr
-        let init_value = parse_expr(input, stack, allow_stmt_expr)?;
+        let init_value = parse_expr(input, state, level + 1, allow_stmt_expr)?;
 
         match var_type {
             // let name = expr
             ScopeEntryType::Normal => {
-                stack.push((name.clone(), ScopeEntryType::Normal));
+                state.push((name.clone(), ScopeEntryType::Normal));
                 Ok(Stmt::Let(Box::new(((name, pos), Some(init_value)))))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
-                stack.push((name.clone(), ScopeEntryType::Constant));
+                state.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(((name, pos), init_value))))
             }
             // const name = expr - error
@@ -1996,11 +2060,11 @@ fn parse_let<'a>(
         // let name
         match var_type {
             ScopeEntryType::Normal => {
-                stack.push((name.clone(), ScopeEntryType::Normal));
+                state.push((name.clone(), ScopeEntryType::Normal));
                 Ok(Stmt::Let(Box::new(((name, pos), None))))
             }
             ScopeEntryType::Constant => {
-                stack.push((name.clone(), ScopeEntryType::Constant));
+                state.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(((name, pos), Expr::Unit(pos)))))
             }
             // Variable cannot be a module
@@ -2012,14 +2076,19 @@ fn parse_let<'a>(
 /// Parse an import statement.
 fn parse_import<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // import ...
     let pos = eat_token(input, Token::Import);
 
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
     // import expr ...
-    let expr = parse_expr(input, stack, allow_stmt_expr)?;
+    let expr = parse_expr(input, state, level + 1, allow_stmt_expr)?;
 
     // import expr as ...
     match input.next().unwrap() {
@@ -2039,13 +2108,21 @@ fn parse_import<'a>(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
-    stack.push((name.clone(), ScopeEntryType::Module));
+    state.push((name.clone(), ScopeEntryType::Module));
     Ok(Stmt::Import(Box::new((expr, (name, pos)))))
 }
 
 /// Parse an export statement.
-fn parse_export<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Box<ParseError>> {
-    eat_token(input, Token::Export);
+fn parse_export<'a>(
+    input: &mut Peekable<TokenIterator<'a>>,
+    state: &mut ParseState,
+    level: usize,
+) -> Result<Stmt, ParseError> {
+    let pos = eat_token(input, Token::Export);
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
 
     let mut exports = StaticVec::new();
 
@@ -2103,10 +2180,11 @@ fn parse_export<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<Stmt, Box
 /// Parse a statement block.
 fn parse_block<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     breakable: bool,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
     // Must start with {
     let pos = match input.next().unwrap() {
         (Token::LeftBrace, pos) => pos,
@@ -2120,12 +2198,16 @@ fn parse_block<'a>(
         }
     };
 
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
+
     let mut statements = StaticVec::new();
-    let prev_len = stack.len();
+    let prev_len = state.len();
 
     while !match_token(input, Token::RightBrace)? {
         // Parse statements inside the block
-        let stmt = parse_stmt(input, stack, breakable, false, allow_stmt_expr)?;
+        let stmt = parse_stmt(input, state, breakable, false, level + 1, allow_stmt_expr)?;
 
         // See if it needs a terminating semicolon
         let need_semicolon = !stmt.is_self_terminated();
@@ -2162,7 +2244,7 @@ fn parse_block<'a>(
         }
     }
 
-    stack.truncate(prev_len);
+    state.truncate(prev_len);
 
     Ok(Stmt::Block(Box::new((statements, pos))))
 }
@@ -2170,41 +2252,55 @@ fn parse_block<'a>(
 /// Parse an expression as a statement.
 fn parse_expr_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
-    let expr = parse_expr(input, stack, allow_stmt_expr)?;
-    let expr = parse_op_assignment_stmt(input, stack, expr, allow_stmt_expr)?;
+) -> Result<Stmt, ParseError> {
+    let (_, pos) = input.peek().unwrap();
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(*pos));
+    }
+
+    let expr = parse_expr(input, state, level + 1, allow_stmt_expr)?;
+    let expr = parse_op_assignment_stmt(input, state, expr, level + 1, allow_stmt_expr)?;
     Ok(Stmt::Expr(Box::new(expr)))
 }
 
 /// Parse a single statement.
 fn parse_stmt<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     breakable: bool,
     is_global: bool,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<Stmt, Box<ParseError>> {
+) -> Result<Stmt, ParseError> {
+    use ScopeEntryType::{Constant, Normal};
+
     let (token, pos) = match input.peek().unwrap() {
         (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
         x => x,
     };
 
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(*pos));
+    }
+
     match token {
         // Semicolon - empty statement
         Token::SemiColon => Ok(Stmt::Noop(*pos)),
 
-        Token::LeftBrace => parse_block(input, stack, breakable, allow_stmt_expr),
+        Token::LeftBrace => parse_block(input, state, breakable, level + 1, allow_stmt_expr),
 
         // fn ...
         Token::Fn if !is_global => Err(PERR::WrongFnDefinition.into_err(*pos)),
         Token::Fn => unreachable!(),
 
-        Token::If => parse_if(input, stack, breakable, allow_stmt_expr),
-        Token::While => parse_while(input, stack, allow_stmt_expr),
-        Token::Loop => parse_loop(input, stack, allow_stmt_expr),
-        Token::For => parse_for(input, stack, allow_stmt_expr),
+        Token::If => parse_if(input, state, breakable, level + 1, allow_stmt_expr),
+        Token::While => parse_while(input, state, level + 1, allow_stmt_expr),
+        Token::Loop => parse_loop(input, state, level + 1, allow_stmt_expr),
+        Token::For => parse_for(input, state, level + 1, allow_stmt_expr),
 
         Token::Continue if breakable => {
             let pos = eat_token(input, Token::Continue);
@@ -2234,7 +2330,7 @@ fn parse_stmt<'a>(
                 }
                 // `return` or `throw` with expression
                 (_, _) => {
-                    let expr = parse_expr(input, stack, allow_stmt_expr)?;
+                    let expr = parse_expr(input, state, level + 1, allow_stmt_expr)?;
                     let pos = expr.position();
 
                     Ok(Stmt::ReturnWithVal(Box::new((
@@ -2245,30 +2341,35 @@ fn parse_stmt<'a>(
             }
         }
 
-        Token::Let => parse_let(input, stack, ScopeEntryType::Normal, allow_stmt_expr),
-        Token::Const => parse_let(input, stack, ScopeEntryType::Constant, allow_stmt_expr),
+        Token::Let => parse_let(input, state, Normal, level + 1, allow_stmt_expr),
+        Token::Const => parse_let(input, state, Constant, level + 1, allow_stmt_expr),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Import => parse_import(input, stack, allow_stmt_expr),
+        Token::Import => parse_import(input, state, level + 1, allow_stmt_expr),
 
         #[cfg(not(feature = "no_module"))]
         Token::Export if !is_global => Err(PERR::WrongExport.into_err(*pos)),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Export => parse_export(input),
+        Token::Export => parse_export(input, state, level + 1),
 
-        _ => parse_expr_stmt(input, stack, allow_stmt_expr),
+        _ => parse_expr_stmt(input, state, level + 1, allow_stmt_expr),
     }
 }
 
 /// Parse a function definition.
 fn parse_fn<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    stack: &mut Stack,
+    state: &mut ParseState,
     access: FnAccess,
+    level: usize,
     allow_stmt_expr: bool,
-) -> Result<FnDef, Box<ParseError>> {
+) -> Result<FnDef, ParseError> {
     let pos = eat_token(input, Token::Fn);
+
+    if level > state.max_expr_depth {
+        return Err(PERR::ExprTooDeep.into_err(pos));
+    }
 
     let name = match input.next().unwrap() {
         (Token::Identifier(s), _) => s,
@@ -2289,7 +2390,7 @@ fn parse_fn<'a>(
         loop {
             match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
-                    stack.push((s.clone(), ScopeEntryType::Normal));
+                    state.push((s.clone(), ScopeEntryType::Normal));
                     params.push((s, pos))
                 }
                 (Token::LexError(err), pos) => {
@@ -2333,7 +2434,7 @@ fn parse_fn<'a>(
 
     // Parse function body
     let body = match input.peek().unwrap() {
-        (Token::LeftBrace, _) => parse_block(input, stack, false, allow_stmt_expr)?,
+        (Token::LeftBrace, _) => parse_block(input, state, false, level + 1, allow_stmt_expr)?,
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
     };
 
@@ -2353,9 +2454,10 @@ pub fn parse_global_expr<'a>(
     engine: &Engine,
     scope: &Scope,
     optimization_level: OptimizationLevel,
-) -> Result<AST, Box<ParseError>> {
-    let mut stack = Stack::new();
-    let expr = parse_expr(input, &mut stack, false)?;
+    max_expr_depth: usize,
+) -> Result<AST, ParseError> {
+    let mut state = ParseState::new(max_expr_depth);
+    let expr = parse_expr(input, &mut state, 0, false)?;
 
     match input.peek().unwrap() {
         (Token::EOF, _) => (),
@@ -2380,34 +2482,29 @@ pub fn parse_global_expr<'a>(
 /// Parse the global level statements.
 fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-) -> Result<(Vec<Stmt>, HashMap<u64, FnDef>), Box<ParseError>> {
+    max_expr_depth: (usize, usize),
+) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
-    let mut functions = HashMap::<u64, FnDef>::new();
-    let mut stack = Stack::new();
+    let mut functions = HashMap::<u64, FnDef, _>::with_hasher(StraightHasherBuilder);
+    let mut state = ParseState::new(max_expr_depth.0);
 
     while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
         #[cfg(not(feature = "no_function"))]
         {
-            let mut access = FnAccess::Public;
-            let mut must_be_fn = false;
-
-            if match_token(input, Token::Private)? {
-                access = FnAccess::Private;
-                must_be_fn = true;
-            }
+            let (access, must_be_fn) = if match_token(input, Token::Private)? {
+                (FnAccess::Private, true)
+            } else {
+                (FnAccess::Public, false)
+            };
 
             match input.peek().unwrap() {
                 (Token::Fn, _) => {
-                    let mut stack = Stack::new();
-                    let func = parse_fn(input, &mut stack, access, true)?;
+                    let mut state = ParseState::new(max_expr_depth.1);
+                    let func = parse_fn(input, &mut state, access, 0, true)?;
 
-                    // Qualifiers (none) + function name + argument `TypeId`'s
-                    let hash = calc_fn_hash(
-                        empty(),
-                        &func.name,
-                        repeat(EMPTY_TYPE_ID()).take(func.params.len()),
-                    );
+                    // Qualifiers (none) + function name + number of arguments.
+                    let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
 
                     functions.insert(hash, func);
                     continue;
@@ -2423,7 +2520,7 @@ fn parse_global_level<'a>(
             }
         }
         // Actual statement
-        let stmt = parse_stmt(input, &mut stack, false, true, true)?;
+        let stmt = parse_stmt(input, &mut state, false, true, 0, true)?;
 
         let need_semicolon = !stmt.is_self_terminated();
 
@@ -2456,7 +2553,7 @@ fn parse_global_level<'a>(
         }
     }
 
-    Ok((statements, functions))
+    Ok((statements, functions.into_iter().map(|(_, v)| v).collect()))
 }
 
 /// Run the parser on an input stream, returning an AST.
@@ -2465,13 +2562,13 @@ pub fn parse<'a>(
     engine: &Engine,
     scope: &Scope,
     optimization_level: OptimizationLevel,
-) -> Result<AST, Box<ParseError>> {
-    let (statements, functions) = parse_global_level(input)?;
+    max_expr_depth: (usize, usize),
+) -> Result<AST, ParseError> {
+    let (statements, lib) = parse_global_level(input, max_expr_depth)?;
 
-    let fn_lib = functions.into_iter().map(|(_, v)| v).collect();
     Ok(
         // Optimize AST
-        optimize_into_ast(engine, scope, statements, fn_lib, optimization_level),
+        optimize_into_ast(engine, scope, statements, lib, optimization_level),
     )
 }
 
@@ -2486,7 +2583,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),
         Union::Char(value) => Some(Expr::CharConstant(Box::new((value, pos)))),
-        Union::Str(value) => Some(Expr::StringConstant(Box::new(((*value).clone(), pos)))),
+        Union::Str(value) => Some(Expr::StringConstant(Box::new((value.clone(), pos)))),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]

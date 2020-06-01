@@ -20,7 +20,7 @@ use crate::stdlib::{
 };
 
 // Checked add
-fn add<T: Display + CheckedAdd>(x: T, y: T) -> FuncReturn<T> {
+pub(crate) fn add<T: Display + CheckedAdd>(x: T, y: T) -> FuncReturn<T> {
     x.checked_add(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
             format!("Addition overflow: {} + {}", x, y),
@@ -29,7 +29,7 @@ fn add<T: Display + CheckedAdd>(x: T, y: T) -> FuncReturn<T> {
     })
 }
 // Checked subtract
-fn sub<T: Display + CheckedSub>(x: T, y: T) -> FuncReturn<T> {
+pub(crate) fn sub<T: Display + CheckedSub>(x: T, y: T) -> FuncReturn<T> {
     x.checked_sub(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
             format!("Subtraction underflow: {} - {}", x, y),
@@ -38,7 +38,7 @@ fn sub<T: Display + CheckedSub>(x: T, y: T) -> FuncReturn<T> {
     })
 }
 // Checked multiply
-fn mul<T: Display + CheckedMul>(x: T, y: T) -> FuncReturn<T> {
+pub(crate) fn mul<T: Display + CheckedMul>(x: T, y: T) -> FuncReturn<T> {
     x.checked_mul(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
             format!("Multiplication overflow: {} * {}", x, y),
@@ -47,7 +47,7 @@ fn mul<T: Display + CheckedMul>(x: T, y: T) -> FuncReturn<T> {
     })
 }
 // Checked divide
-fn div<T>(x: T, y: T) -> FuncReturn<T>
+pub(crate) fn div<T>(x: T, y: T) -> FuncReturn<T>
 where
     T: Display + CheckedDiv + PartialEq + Zero,
 {
@@ -67,7 +67,7 @@ where
     })
 }
 // Checked negative - e.g. -(i32::MIN) will overflow i32::MAX
-fn neg<T: Display + CheckedNeg>(x: T) -> FuncReturn<T> {
+pub(crate) fn neg<T: Display + CheckedNeg>(x: T) -> FuncReturn<T> {
     x.checked_neg().ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
             format!("Negation overflow: -{}", x),
@@ -76,7 +76,7 @@ fn neg<T: Display + CheckedNeg>(x: T) -> FuncReturn<T> {
     })
 }
 // Checked absolute
-fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> FuncReturn<T> {
+pub(crate) fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> FuncReturn<T> {
     // FIX - We don't use Signed::abs() here because, contrary to documentation, it panics
     //       when the number is ::MIN instead of returning ::MIN itself.
     if x >= <T as Zero>::zero() {
@@ -133,7 +133,7 @@ fn binary_xor<T: BitXor>(x: T, y: T) -> FuncReturn<<T as BitXor>::Output> {
     Ok(x ^ y)
 }
 // Checked left-shift
-fn shl<T: Display + CheckedShl>(x: T, y: INT) -> FuncReturn<T> {
+pub(crate) fn shl<T: Display + CheckedShl>(x: T, y: INT) -> FuncReturn<T> {
     // Cannot shift by a negative number of bits
     if y < 0 {
         return Err(Box::new(EvalAltResult::ErrorArithmetic(
@@ -150,7 +150,7 @@ fn shl<T: Display + CheckedShl>(x: T, y: INT) -> FuncReturn<T> {
     })
 }
 // Checked right-shift
-fn shr<T: Display + CheckedShr>(x: T, y: INT) -> FuncReturn<T> {
+pub(crate) fn shr<T: Display + CheckedShr>(x: T, y: INT) -> FuncReturn<T> {
     // Cannot shift by a negative number of bits
     if y < 0 {
         return Err(Box::new(EvalAltResult::ErrorArithmetic(
@@ -167,15 +167,15 @@ fn shr<T: Display + CheckedShr>(x: T, y: INT) -> FuncReturn<T> {
     })
 }
 // Unchecked left-shift - may panic if shifting by a negative number of bits
-fn shl_u<T: Shl<T>>(x: T, y: T) -> FuncReturn<<T as Shl<T>>::Output> {
+pub(crate) fn shl_u<T: Shl<T>>(x: T, y: T) -> FuncReturn<<T as Shl<T>>::Output> {
     Ok(x.shl(y))
 }
 // Unchecked right-shift - may panic if shifting by a negative number of bits
-fn shr_u<T: Shr<T>>(x: T, y: T) -> FuncReturn<<T as Shr<T>>::Output> {
+pub(crate) fn shr_u<T: Shr<T>>(x: T, y: T) -> FuncReturn<<T as Shr<T>>::Output> {
     Ok(x.shr(y))
 }
 // Checked modulo
-fn modulo<T: Display + CheckedRem>(x: T, y: T) -> FuncReturn<T> {
+pub(crate) fn modulo<T: Display + CheckedRem>(x: T, y: T) -> FuncReturn<T> {
     x.checked_rem(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
             format!("Modulo division by zero or overflow: {} % {}", x, y),
@@ -188,7 +188,7 @@ fn modulo_u<T: Rem>(x: T, y: T) -> FuncReturn<<T as Rem>::Output> {
     Ok(x % y)
 }
 // Checked power
-fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
+pub(crate) fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
     #[cfg(not(feature = "only_i32"))]
     {
         if y > (u32::MAX as INT) {
@@ -229,17 +229,17 @@ fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
     }
 }
 // Unchecked integer power - may panic on overflow or if the power index is too high (> u32::MAX)
-fn pow_i_i_u(x: INT, y: INT) -> FuncReturn<INT> {
+pub(crate) fn pow_i_i_u(x: INT, y: INT) -> FuncReturn<INT> {
     Ok(x.pow(y as u32))
 }
 // Floating-point power - always well-defined
 #[cfg(not(feature = "no_float"))]
-fn pow_f_f(x: FLOAT, y: FLOAT) -> FuncReturn<FLOAT> {
+pub(crate) fn pow_f_f(x: FLOAT, y: FLOAT) -> FuncReturn<FLOAT> {
     Ok(x.powf(y))
 }
 // Checked power
 #[cfg(not(feature = "no_float"))]
-fn pow_f_i(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
+pub(crate) fn pow_f_i(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
     // Raise to power that is larger than an i32
     if y > (i32::MAX as INT) {
         return Err(Box::new(EvalAltResult::ErrorArithmetic(
@@ -253,7 +253,7 @@ fn pow_f_i(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
 // Unchecked power - may be incorrect if the power index is too high (> i32::MAX)
 #[cfg(feature = "unchecked")]
 #[cfg(not(feature = "no_float"))]
-fn pow_f_i_u(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
+pub(crate) fn pow_f_i_u(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
     Ok(x.powi(y as i32))
 }
 
@@ -269,119 +269,69 @@ macro_rules! reg_op {
 }
 
 def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
-    // Checked basic arithmetic
-    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "only_i32"))]
+    #[cfg(not(feature = "only_i64"))]
     {
-        reg_op!(lib, "+", add, INT);
-        reg_op!(lib, "-", sub, INT);
-        reg_op!(lib, "*", mul, INT);
-        reg_op!(lib, "/", div, INT);
-
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
+        #[cfg(not(feature = "unchecked"))]
         {
-            reg_op!(lib, "+", add, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "-", sub, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "*", mul, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "/", div, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            // Checked basic arithmetic
+            reg_op!(lib, "+", add, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "-", sub, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "*", mul, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "/", div, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            // Checked bit shifts
+            reg_op!(lib, "<<", shl, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, ">>", shr, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "%", modulo, i8, u8, i16, u16, i32, u32, u64, i128, u128);
         }
-    }
 
-    // Unchecked basic arithmetic
-    #[cfg(feature = "unchecked")]
-    {
-        reg_op!(lib, "+", add_u, INT);
-        reg_op!(lib, "-", sub_u, INT);
-        reg_op!(lib, "*", mul_u, INT);
-        reg_op!(lib, "/", div_u, INT);
-
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
+        #[cfg(feature = "unchecked")]
         {
-            reg_op!(lib, "+", add_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "-", sub_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "*", mul_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "/", div_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+            // Unchecked basic arithmetic
+            reg_op!(lib, "+", add_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "-", sub_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "*", mul_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "/", div_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            // Unchecked bit shifts
+            reg_op!(lib, "<<", shl_u, i64, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, ">>", shr_u, i64, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "%", modulo_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
         }
     }
 
     // Basic arithmetic for floating-point - no need to check
     #[cfg(not(feature = "no_float"))]
     {
-        reg_op!(lib, "+", add_u, f32, f64);
-        reg_op!(lib, "-", sub_u, f32, f64);
-        reg_op!(lib, "*", mul_u, f32, f64);
-        reg_op!(lib, "/", div_u, f32, f64);
+        reg_op!(lib, "+", add_u, f32);
+        reg_op!(lib, "-", sub_u, f32);
+        reg_op!(lib, "*", mul_u, f32);
+        reg_op!(lib, "/", div_u, f32);
     }
-
-    // Bit operations
-    reg_op!(lib, "|", binary_or, INT);
-    reg_op!(lib, "&", binary_and, INT);
-    reg_op!(lib, "^", binary_xor, INT);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_op!(lib, "|", binary_or, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, "&", binary_and, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, "^", binary_xor, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_op!(lib, "|", binary_or, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, "&", binary_and, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, "^", binary_xor, i8, u8, i16, u16, i32, u32, u64, i128, u128);
     }
 
-    // Checked bit shifts
-    #[cfg(not(feature = "unchecked"))]
-    {
-        reg_op!(lib, "<<", shl, INT);
-        reg_op!(lib, ">>", shr, INT);
-        reg_op!(lib, "%", modulo, INT);
-
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
-        {
-            reg_op!(lib, "<<", shl, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, ">>", shr, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "%", modulo, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        }
-    }
-
-    // Unchecked bit shifts
-    #[cfg(feature = "unchecked")]
-    {
-        reg_op!(lib, "<<", shl_u, INT, INT);
-        reg_op!(lib, ">>", shr_u, INT, INT);
-        reg_op!(lib, "%", modulo_u, INT);
-
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
-        {
-            reg_op!(lib, "<<", shl_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, ">>", shr_u, i64, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-            reg_op!(lib, "%", modulo_u, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        }
-    }
-
-    // Checked power
-    #[cfg(not(feature = "unchecked"))]
-    {
-        lib.set_fn_2("~", pow_i_i);
-
-        #[cfg(not(feature = "no_float"))]
-        lib.set_fn_2("~", pow_f_i);
-    }
-
-    // Unchecked power
-    #[cfg(feature = "unchecked")]
-    {
-        lib.set_fn_2("~", pow_i_i_u);
-
-        #[cfg(not(feature = "no_float"))]
-        lib.set_fn_2("~", pow_f_i_u);
-    }
-
-    // Floating-point modulo and power
     #[cfg(not(feature = "no_float"))]
     {
-        reg_op!(lib, "%", modulo_u, f32, f64);
-        lib.set_fn_2("~", pow_f_f);
+        // Checked power
+        #[cfg(not(feature = "unchecked"))]
+        lib.set_fn_2("~", pow_f_i);
+
+        // Unchecked power
+        #[cfg(feature = "unchecked")]
+        lib.set_fn_2("~", pow_f_i_u);
+
+        // Floating-point modulo and power
+        reg_op!(lib, "%", modulo_u, f32);
+
+        // Floating-point unary
+        reg_unary!(lib, "-", neg_u, f32, f64);
+        reg_unary!(lib, "abs", abs_u, f32, f64);
     }
 
     // Checked unary
@@ -410,12 +360,5 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
             reg_unary!(lib, "-", neg_u, i8, i16, i32, i64, i128);
             reg_unary!(lib, "abs", abs_u, i8, i16, i32, i64, i128);
         }
-    }
-
-    // Floating-point unary
-    #[cfg(not(feature = "no_float"))]
-    {
-        reg_unary!(lib, "-", neg_u, f32, f64);
-        reg_unary!(lib, "abs", abs_u, f32, f64);
     }
 });

@@ -22,7 +22,7 @@ fn test_float() -> Result<(), Box<EvalAltResult>> {
 
 #[test]
 #[cfg(not(feature = "no_object"))]
-fn struct_with_float() -> Result<(), Box<EvalAltResult>> {
+fn test_struct_with_float() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestStruct {
         x: f64,
@@ -61,6 +61,19 @@ fn struct_with_float() -> Result<(), Box<EvalAltResult>> {
         (engine.eval::<FLOAT>("let ts = new_ts(); ts.x = 10.1001; ts.x")? - 10.1001).abs()
             < EPSILON
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_float_func() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.register_fn("sum", |x: FLOAT, y: FLOAT, z: FLOAT, w: FLOAT| {
+        x + y + z + w
+    });
+
+    assert_eq!(engine.eval::<FLOAT>("sum(1.0, 2.0, 3.0, 4.0)")?, 10.0);
 
     Ok(())
 }

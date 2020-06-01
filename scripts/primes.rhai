@@ -2,7 +2,7 @@
 
 let now = timestamp();
 
-const MAX_NUMBER_TO_CHECK = 100_000;     // 9592 primes <= 100000
+const MAX_NUMBER_TO_CHECK = 1_000_000;     // 9592 primes <= 100000
 
 let prime_mask = [];
 prime_mask.pad(MAX_NUMBER_TO_CHECK, true);
@@ -15,7 +15,7 @@ let total_primes_found = 0;
 for p in range(2, MAX_NUMBER_TO_CHECK) {
     if !prime_mask[p] { continue; }
 
-    print(p);
+    //print(p);
 
     total_primes_found += 1;
 
@@ -26,8 +26,8 @@ for p in range(2, MAX_NUMBER_TO_CHECK) {
 }
 
 print("Total " + total_primes_found + " primes <= " + MAX_NUMBER_TO_CHECK);
-print("Run time = " + now.elapsed() + " seconds.");
+print("Run time = " + now.elapsed + " seconds.");
 
-if total_primes_found != 9_592 {
-    print("The answer is WRONG! Should be 9,592!");
+if total_primes_found != 78_498 {
+    print("The answer is WRONG! Should be 78,498!");
 }

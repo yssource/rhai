@@ -1,6 +1,6 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::parser::INT;
+use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 
 #[cfg(not(feature = "no_module"))]
@@ -151,7 +151,7 @@ pub struct Dynamic(pub(crate) Union);
 pub enum Union {
     Unit(()),
     Bool(bool),
-    Str(Box<String>),
+    Str(ImmutableString),
     Char(char),
     Int(INT),
     #[cfg(not(feature = "no_float"))]
@@ -178,6 +178,10 @@ impl Dynamic {
     /// Is the value held by this `Dynamic` a particular type?
     pub fn is<T: Variant + Clone>(&self) -> bool {
         self.type_id() == TypeId::of::<T>()
+            || match self.0 {
+                Union::Str(_) => TypeId::of::<String>() == TypeId::of::<T>(),
+                _ => false,
+            }
     }
 
     /// Get the TypeId of the value held by this `Dynamic`.
@@ -185,7 +189,7 @@ impl Dynamic {
         match &self.0 {
             Union::Unit(_) => TypeId::of::<()>(),
             Union::Bool(_) => TypeId::of::<bool>(),
-            Union::Str(_) => TypeId::of::<String>(),
+            Union::Str(_) => TypeId::of::<ImmutableString>(),
             Union::Char(_) => TypeId::of::<char>(),
             Union::Int(_) => TypeId::of::<INT>(),
             #[cfg(not(feature = "no_float"))]
@@ -342,6 +346,12 @@ impl Dynamic {
             return Self(result);
         } else if let Some(result) = dyn_value.downcast_ref::<char>().cloned().map(Union::Char) {
             return Self(result);
+        } else if let Some(result) = dyn_value
+            .downcast_ref::<ImmutableString>()
+            .cloned()
+            .map(Union::Str)
+        {
+            return Self(result);
         }
 
         #[cfg(not(feature = "no_float"))]
@@ -358,7 +368,7 @@ impl Dynamic {
             Err(var) => var,
         };
         var = match unsafe_cast_box::<_, String>(var) {
-            Ok(s) => return Self(Union::Str(s)),
+            Ok(s) => return Self(Union::Str(s.into())),
             Err(var) => var,
         };
         #[cfg(not(feature = "no_index"))]
@@ -395,14 +405,19 @@ impl Dynamic {
     /// assert_eq!(x.try_cast::<u32>().unwrap(), 42);
     /// ```
     pub fn try_cast<T: Variant>(self) -> Option<T> {
-        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+        let type_id = TypeId::of::<T>();
+
+        if type_id == TypeId::of::<Dynamic>() {
             return unsafe_cast_box::<_, T>(Box::new(self)).ok().map(|v| *v);
         }
 
         match self.0 {
             Union::Unit(value) => unsafe_try_cast(value),
             Union::Bool(value) => unsafe_try_cast(value),
-            Union::Str(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+            Union::Str(value) if type_id == TypeId::of::<ImmutableString>() => {
+                unsafe_try_cast(value)
+            }
+            Union::Str(value) => unsafe_try_cast(value.into_owned()),
             Union::Char(value) => unsafe_try_cast(value),
             Union::Int(value) => unsafe_try_cast(value),
             #[cfg(not(feature = "no_float"))]
@@ -434,16 +449,19 @@ impl Dynamic {
     /// assert_eq!(x.cast::<u32>(), 42);
     /// ```
     pub fn cast<T: Variant + Clone>(self) -> T {
-        //self.try_cast::<T>().unwrap()
+        let type_id = TypeId::of::<T>();
 
-        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+        if type_id == TypeId::of::<Dynamic>() {
             return *unsafe_cast_box::<_, T>(Box::new(self)).unwrap();
         }
 
         match self.0 {
             Union::Unit(value) => unsafe_try_cast(value).unwrap(),
             Union::Bool(value) => unsafe_try_cast(value).unwrap(),
-            Union::Str(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
+            Union::Str(value) if type_id == TypeId::of::<ImmutableString>() => {
+                unsafe_try_cast(value).unwrap()
+            }
+            Union::Str(value) => unsafe_try_cast(value.into_owned()).unwrap(),
             Union::Char(value) => unsafe_try_cast(value).unwrap(),
             Union::Int(value) => unsafe_try_cast(value).unwrap(),
             #[cfg(not(feature = "no_float"))]
@@ -469,7 +487,9 @@ impl Dynamic {
         match &self.0 {
             Union::Unit(value) => (value as &dyn Any).downcast_ref::<T>(),
             Union::Bool(value) => (value as &dyn Any).downcast_ref::<T>(),
-            Union::Str(value) => (value.as_ref() as &dyn Any).downcast_ref::<T>(),
+            Union::Str(value) => (value as &dyn Any)
+                .downcast_ref::<T>()
+                .or_else(|| (value.as_ref() as &dyn Any).downcast_ref::<T>()),
             Union::Char(value) => (value as &dyn Any).downcast_ref::<T>(),
             Union::Int(value) => (value as &dyn Any).downcast_ref::<T>(),
             #[cfg(not(feature = "no_float"))]
@@ -495,7 +515,7 @@ impl Dynamic {
         match &mut self.0 {
             Union::Unit(value) => (value as &mut dyn Any).downcast_mut::<T>(),
             Union::Bool(value) => (value as &mut dyn Any).downcast_mut::<T>(),
-            Union::Str(value) => (value.as_mut() as &mut dyn Any).downcast_mut::<T>(),
+            Union::Str(value) => (value as &mut dyn Any).downcast_mut::<T>(),
             Union::Char(value) => (value as &mut dyn Any).downcast_mut::<T>(),
             Union::Int(value) => (value as &mut dyn Any).downcast_mut::<T>(),
             #[cfg(not(feature = "no_float"))]
@@ -515,6 +535,16 @@ impl Dynamic {
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
+            _ => Err(self.type_name()),
+        }
+    }
+
+    /// Cast the `Dynamic` as the system floating-point type `FLOAT` and return it.
+    /// Returns the name of the actual type if the cast fails.
+    #[cfg(not(feature = "no_float"))]
+    pub fn as_float(&self) -> Result<FLOAT, &'static str> {
+        match self.0 {
+            Union::Float(n) => Ok(n),
             _ => Err(self.type_name()),
         }
     }
@@ -550,7 +580,7 @@ impl Dynamic {
     /// Returns the name of the actual type if the cast fails.
     pub fn take_string(self) -> Result<String, &'static str> {
         match self.0 {
-            Union::Str(s) => Ok(*s),
+            Union::Str(s) => Ok(s.into_owned()),
             _ => Err(self.type_name()),
         }
     }
@@ -584,7 +614,12 @@ impl From<char> for Dynamic {
 }
 impl From<String> for Dynamic {
     fn from(value: String) -> Self {
-        Self(Union::Str(Box::new(value)))
+        Self(Union::Str(value.into()))
+    }
+}
+impl From<ImmutableString> for Dynamic {
+    fn from(value: ImmutableString) -> Self {
+        Self(Union::Str(value))
     }
 }
 #[cfg(not(feature = "no_index"))]
@@ -592,6 +627,14 @@ impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
     fn from(value: Vec<T>) -> Self {
         Self(Union::Array(Box::new(
             value.into_iter().map(Dynamic::from).collect(),
+        )))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl<T: Variant + Clone> From<&[T]> for Dynamic {
+    fn from(value: &[T]) -> Self {
+        Self(Union::Array(Box::new(
+            value.iter().cloned().map(Dynamic::from).collect(),
         )))
     }
 }

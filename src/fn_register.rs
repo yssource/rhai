@@ -4,11 +4,11 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
-use crate::fn_native::{FnCallArgs, NativeFunctionABI::*};
+use crate::fn_native::{CallableFunction, FnAny, FnCallArgs};
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 
-use crate::stdlib::{any::TypeId, boxed::Box, mem, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, mem};
 
 /// Trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {
@@ -42,49 +42,22 @@ pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN);
 }
 
-/// Trait to register custom functions that return `Dynamic` values with the `Engine`.
-pub trait RegisterDynamicFn<FN, ARGS> {
-    /// Register a custom function returning `Dynamic` values with the `Engine`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Dynamic, RegisterDynamicFn};
-    ///
-    /// // Function that returns a Dynamic value
-    /// fn return_the_same_as_dynamic(x: i64) -> Dynamic {
-    ///     Dynamic::from(x)
-    /// }
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // You must use the trait rhai::RegisterDynamicFn to get this method.
-    /// engine.register_dynamic_fn("get_any_number", return_the_same_as_dynamic);
-    ///
-    /// assert_eq!(engine.eval::<i64>("get_any_number(42)")?, 42);
-    /// # Ok(())
-    /// # }
-    /// ```
-    fn register_dynamic_fn(&mut self, name: &str, f: FN);
-}
-
-/// Trait to register fallible custom functions returning `Result<_, Box<EvalAltResult>>` with the `Engine`.
-pub trait RegisterResultFn<FN, ARGS, RET> {
+/// Trait to register fallible custom functions returning `Result<Dynamic, Box<EvalAltResult>>` with the `Engine`.
+pub trait RegisterResultFn<FN, ARGS> {
     /// Register a custom fallible function with the `Engine`.
     ///
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, RegisterResultFn, EvalAltResult};
+    /// use rhai::{Engine, Dynamic, RegisterResultFn, EvalAltResult};
     ///
     /// // Normal function
-    /// fn div(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
+    /// fn div(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///     if y == 0 {
     ///         // '.into()' automatically converts to 'Box<EvalAltResult::ErrorRuntime>'
     ///         Err("division by zero!".into())
     ///     } else {
-    ///         Ok(x / y)
+    ///         Ok((x / y).into())
     ///     }
     /// }
     ///
@@ -155,7 +128,7 @@ macro_rules! make_func {
 
             // Map the result
             $map(r)
-		})
+		}) as Box<FnAny>
 	};
 }
 
@@ -167,28 +140,22 @@ pub fn map_dynamic<T: Variant + Clone>(data: T) -> Result<Dynamic, Box<EvalAltRe
 
 /// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_identity(data: Dynamic) -> Result<Dynamic, Box<EvalAltResult>> {
-    Ok(data)
-}
-
-/// To `Result<Dynamic, Box<EvalAltResult>>` mapping function.
-#[inline(always)]
-pub fn map_result<T: Variant + Clone>(
-    data: Result<T, Box<EvalAltResult>>,
+pub fn map_result(
+    data: Result<Dynamic, Box<EvalAltResult>>,
 ) -> Result<Dynamic, Box<EvalAltResult>> {
-    data.map(|v| v.into_dynamic())
+    data
 }
 
 macro_rules! def_register {
     () => {
-        def_register!(imp Pure;);
+        def_register!(imp from_pure :);
     };
-    (imp $abi:expr ; $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
+    (imp $abi:ident : $($par:ident => $mark:ty => $param:ty => $clone:expr),*) => {
     //   ^ function ABI type
-    //                 ^ function parameter generic type name (A, B, C etc.)
-    //                               ^ function parameter marker type (T, Ref<T> or Mut<T>)
-    //                                           ^ function parameter actual type (T, &T or &mut T)
-    //                                                        ^ dereferencing function
+    //                  ^ function parameter generic type name (A, B, C etc.)
+    //                                ^ function parameter marker type (T, Ref<T> or Mut<T>)
+    //                                            ^ function parameter actual type (T, &T or &mut T)
+    //                                                         ^ dereferencing function
         impl<
             $($par: Variant + Clone,)*
 
@@ -202,9 +169,9 @@ macro_rules! def_register {
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
             fn register_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                self.global_module.set_fn(name, FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    make_func!(f : map_dynamic ; $($par => $clone),*)
+                    CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $clone),*))
                 );
             }
         }
@@ -213,35 +180,15 @@ macro_rules! def_register {
             $($par: Variant + Clone,)*
 
             #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> Dynamic + Send + Sync + 'static,
-
+            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync + 'static,
             #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> Dynamic + 'static,
-        > RegisterDynamicFn<FN, ($($mark,)*)> for Engine
-        {
-            fn register_dynamic_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
-                    &[$(TypeId::of::<$par>()),*],
-                    make_func!(f : map_identity ; $($par => $clone),*)
-                );
-            }
-        }
-
-        impl<
-            $($par: Variant + Clone,)*
-
-            #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> Result<RET, Box<EvalAltResult>> + Send + Sync + 'static,
-            #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> Result<RET, Box<EvalAltResult>> + 'static,
-
-            RET: Variant + Clone
-        > RegisterResultFn<FN, ($($mark,)*), RET> for Engine
+            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + 'static,
+        > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
-                self.global_module.set_fn(name.to_string(), $abi, FnAccess::Public,
+                self.global_module.set_fn(name, FnAccess::Public,
                     &[$(TypeId::of::<$par>()),*],
-                    make_func!(f : map_result ; $($par => $clone),*)
+                    CallableFunction::$abi(make_func!(f : map_result ; $($par => $clone),*))
                 );
             }
         }
@@ -249,10 +196,11 @@ macro_rules! def_register {
         //def_register!(imp_pop $($par => $mark => $param),*);
     };
     ($p0:ident $(, $p:ident)*) => {
-        def_register!(imp Pure   ; $p0 => $p0      => $p0      => by_value $(, $p => $p => $p => by_value)*);
-        def_register!(imp Method ; $p0 => Mut<$p0> => &mut $p0 => by_ref   $(, $p => $p => $p => by_value)*);
-        // handle the first parameter                             ^ first parameter passed through
-        //                                                                                       ^ others passed by value (by_value)
+        def_register!(imp from_pure   : $p0 => $p0      => $p0      => by_value $(, $p => $p => $p => by_value)*);
+        def_register!(imp from_method : $p0 => Mut<$p0> => &mut $p0 => by_ref   $(, $p => $p => $p => by_value)*);
+        //                ^ CallableFunction
+        // handle the first parameter                                  ^ first parameter passed through
+        //                                                                                            ^ others passed by value (by_value)
 
         // Currently does not support first argument which is a reference, as there will be
         // conflicting implementations since &T: Any and T: Any cannot be distinguished

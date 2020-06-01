@@ -17,7 +17,7 @@ let now = timestamp();
 
 let result = fib(target);
 
-print("Finished. Run time = " + now.elapsed() + " seconds.");
+print("Finished. Run time = " + now.elapsed + " seconds.");
 
 print("Fibonacci number #" + target + " = " + result);
 

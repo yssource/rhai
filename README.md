@@ -11,41 +11,67 @@ Rhai - Embedded Scripting for Rust
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
 to add scripting to any application.
 
-Rhai's current features set:
+Features
+--------
 
 * Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector.
 * Tight integration with native Rust [functions](#working-with-functions) and [types](#custom-types-and-methods),
   including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers).
 * Freely pass Rust variables/constants into a script via an external [`Scope`].
 * Easily [call a script-defined function](#calling-rhai-functions-from-rust) from Rust.
-* Low compile-time overhead (~0.6 sec debug/~3 sec release for `rhai_runner` sample app).
-* Fairly efficient evaluation (1 million iterations in 0.75 sec on my 5 year old laptop).
+* Fairly low compile-time overhead.
+* Fairly efficient evaluation (1 million iterations in 0.25 sec on a single core, 2.3 GHz Linux VM).
 * Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
-* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment without explicit permission.
-* Rugged (protection against [stack-overflow](#maximum-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
+* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
+* Rugged (protection against [stack-overflow](#maximum-call-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
 * Track script evaluation [progress](#tracking-progress) and manually terminate a script run.
 * [`no-std`](#optional-features) support.
 * [Function overloading](#function-overloading).
 * [Operator overloading](#operator-overloading).
 * Organize code base with dynamically-loadable [Modules].
-* Compiled script is [optimized](#script-optimization) for repeated evaluations.
+* Scripts are [optimized](#script-optimization) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features).
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is 0.14.1, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is `0.15.0`, so the language and API's may change before they stabilize.
+
+What Rhai doesn't do
+--------------------
+
+Rhai's purpose is to provide a dynamic layer over Rust code, in the same spirit of _zero cost abstractions_.
+It doesn't attempt to be a new language. For example:
+
+* No classes.  Well, Rust doesn't either. On the other hand...
+* No traits...  so it is also not Rust. Do your Rusty stuff in Rust.
+* No structures/records - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
+  There is, however, a built-in [object map] type which is adequate for most uses.
+* No first-class functions - Code your functions in Rust instead, and register them with Rhai.
+* No garbage collection - this should be expected, so...
+* No closures - do your closure magic in Rust instead; [turn a Rhai scripted function into a Rust closure](#calling-rhai-functions-from-rust).
+* No byte-codes/JIT - Rhai has an AST-walking interpreter which will not win any speed races. The purpose of Rhai is not
+  to be extremely _fast_, but to make it as easy as possible to integrate with native Rust programs.
+
+Due to this intended usage, Rhai deliberately keeps the language simple and small by omitting advanced language features
+such as classes, inheritance, first-class functions, closures, concurrency, byte-codes, JIT etc.
+Avoid the temptation to write full-fledge program logic entirely in Rhai - that use case is best fulfilled by
+more complete languages such as JS or Lua.
+
+Therefore, in actual practice, it is usually best to expose a Rust API into Rhai for scripts to call.
+All your core functionalities should be in Rust.
+This is similar to some dynamic languages where most of the core functionalities reside in a C/C++ standard library.
 
 Installation
 ------------
 
-Install the Rhai crate by adding this line to `dependencies`:
+Install the Rhai crate on [`crates.io`](https::/crates.io/crates/rhai/) by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
-rhai = "0.14.1"
+rhai = "0.15.0"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -55,7 +81,7 @@ Use the latest released crate version on [`crates.io`](https::/crates.io/crates/
 rhai = "*"
 ```
 
-Crate versions are released on [`crates.io`](https::/crates.io/crates/rhai/) infrequently, so if you want to track the
+Crate versions are released on [`crates.io`](https::/crates.io/crates/rhai/) infrequently, so to track the
 latest features, enhancements and bug fixes, pull directly from GitHub:
 
 ```toml
@@ -68,19 +94,19 @@ Beware that in order to use pre-releases (e.g. alpha and beta), the exact versio
 Optional features
 -----------------
 
-| Feature       | Description                                                                                                                                                                |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `unchecked`   | Exclude arithmetic checking (such as over-flows and division by zero), stack depth limit and operations count limit. Beware that a bad script may panic the entire system! |
-| `no_function` | Disable script-defined functions.                                                                                                                                          |
-| `no_index`    | Disable [arrays] and indexing features.                                                                                                                                    |
-| `no_object`   | Disable support for custom types and object maps.                                                                                                                          |
-| `no_float`    | Disable floating-point numbers and math.                                                                                                                                   |
-| `no_optimize` | Disable the script optimizer.                                                                                                                                              |
-| `no_module`   | Disable modules.                                                                                                                                                           |
-| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                                           |
-| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                                           |
-| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                       |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and `AST`, are all `Send + Sync`.           |
+| Feature       | Description                                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unchecked`   | Disable arithmetic checking (such as over-flows and division by zero), call stack depth limit, operations count limit and modules loading limit. Beware that a bad script may panic the entire system! |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and `AST`, are all `Send + Sync`.                                       |
+| `no_optimize` | Disable the script optimizer.                                                                                                                                                                          |
+| `no_float`    | Disable floating-point numbers and math.                                                                                                                                                               |
+| `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                                                                       |
+| `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                                                                                       |
+| `no_index`    | Disable [arrays] and indexing features.                                                                                                                                                                |
+| `no_object`   | Disable support for custom types and [object maps].                                                                                                                                                    |
+| `no_function` | Disable script-defined functions.                                                                                                                                                                      |
+| `no_module`   | Disable loading modules.                                                                                                                                                                               |
+| `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                                                   |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
 Most features are here to opt-**out** of certain functionalities that are not needed.
@@ -88,16 +114,16 @@ Excluding unneeded functionalities can result in smaller, faster builds
 as well as more control over what a script can (or cannot) do.
 
 [`unchecked`]: #optional-features
-[`no_index`]: #optional-features
-[`no_float`]: #optional-features
-[`no_function`]: #optional-features
-[`no_object`]: #optional-features
+[`sync`]: #optional-features
 [`no_optimize`]: #optional-features
-[`no_module`]: #optional-features
+[`no_float`]: #optional-features
 [`only_i32`]: #optional-features
 [`only_i64`]: #optional-features
+[`no_index`]: #optional-features
+[`no_object`]: #optional-features
+[`no_function`]: #optional-features
+[`no_module`]: #optional-features
 [`no_std`]: #optional-features
-[`sync`]: #optional-features
 
 ### Performance builds
 
@@ -133,9 +159,9 @@ Omitting arrays (`no_index`) yields the most code-size savings, followed by floa
 (`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).
 Disable script-defined functions (`no_function`) only when the feature is not needed because code size savings is minimal.
 
-[`Engine::new_raw`](#raw-engine) creates a _raw_ engine which does not register _any_ utility functions.
-This makes the scripting language quite useless as even basic arithmetic operators are not supported.
-Selectively include the necessary functionalities by loading specific [packages](#packages) to minimize the footprint.
+[`Engine::new_raw`](#raw-engine) creates a _raw_ engine.
+A _raw_ engine supports, out of the box, only a very [restricted set](#built-in-operators) of basic arithmetic and logical operators.
+Selectively include other necessary functionalities by loading specific [packages] to minimize the footprint.
 Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
 Related
@@ -165,33 +191,35 @@ A number of examples can be found in the `examples` folder:
 Examples can be run with the following command:
 
 ```bash
-cargo run --example name
+cargo run --example {example_name}
 ```
 
-The `repl` example is a particularly good one as it allows you to interactively try out Rhai's
+The `repl` example is a particularly good one as it allows one to interactively try out Rhai's
 language features in a standard REPL (**R**ead-**E**val-**P**rint **L**oop).
 
-Example Scripts
+Example scripts
 ---------------
 
 There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
 
-| Language feature scripts                             | Description                                                   |
-| ---------------------------------------------------- | ------------------------------------------------------------- |
-| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                              |
-| [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                         |
-| [`comments.rhai`](scripts/comments.rhai)             | just comments                                                 |
-| [`for1.rhai`](scripts/for1.rhai)                     | for loops                                                     |
-| [`function_decl1.rhai`](scripts/function_decl1.rhai) | a function without parameters                                 |
-| [`function_decl2.rhai`](scripts/function_decl2.rhai) | a function with two parameters                                |
-| [`function_decl3.rhai`](scripts/function_decl3.rhai) | a function with many parameters                               |
-| [`if1.rhai`](scripts/if1.rhai)                       | if example                                                    |
-| [`loop.rhai`](scripts/loop.rhai)                     | endless loop in Rhai, this example emulates a do..while cycle |
-| [`op1.rhai`](scripts/op1.rhai)                       | just a simple addition                                        |
-| [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                            |
-| [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                      |
-| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                           |
-| [`while.rhai`](scripts/while.rhai)                   | while loop                                                    |
+| Language feature scripts                             | Description                                                                   |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`array.rhai`](scripts/array.rhai)                   | [arrays] in Rhai                                                              |
+| [`assignment.rhai`](scripts/assignment.rhai)         | variable declarations                                                         |
+| [`comments.rhai`](scripts/comments.rhai)             | just comments                                                                 |
+| [`for1.rhai`](scripts/for1.rhai)                     | [`for`](#for-loop) loops                                                      |
+| [`for2.rhai`](scripts/for2.rhai)                     | [`for`](#for-loop) loops on [arrays]                                          |
+| [`function_decl1.rhai`](scripts/function_decl1.rhai) | a [function] without parameters                                               |
+| [`function_decl2.rhai`](scripts/function_decl2.rhai) | a [function] with two parameters                                              |
+| [`function_decl3.rhai`](scripts/function_decl3.rhai) | a [function] with many parameters                                             |
+| [`if1.rhai`](scripts/if1.rhai)                       | [`if`](#if-statement) example                                                 |
+| [`loop.rhai`](scripts/loop.rhai)                     | count-down [`loop`](#infinite-loop) in Rhai, emulating a `do` .. `while` loop |
+| [`op1.rhai`](scripts/op1.rhai)                       | just simple addition                                                          |
+| [`op2.rhai`](scripts/op2.rhai)                       | simple addition and multiplication                                            |
+| [`op3.rhai`](scripts/op3.rhai)                       | change evaluation order with parenthesis                                      |
+| [`string.rhai`](scripts/string.rhai)                 | [string] operations                                                           |
+| [`strings_map.rhai`](scripts/strings_map.rhai)       | [string] and [object map] operations                                          |
+| [`while.rhai`](scripts/while.rhai)                   | [`while`](#while-loop) loop                                                   |
 
 | Example scripts                              | Description                                                                        |
 | -------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -221,6 +249,7 @@ fn main() -> Result<(), Box<EvalAltResult>>
     let engine = Engine::new();
 
     let result = engine.eval::<i64>("40 + 2")?;
+    //                      ^^^^^^^ cast the result to an 'i64', this is required
 
     println!("Answer: {}", result);             // prints 42
 
@@ -277,6 +306,8 @@ let ast = engine.compile_file("hello_world.rhai".into())?;
 
 ### Calling Rhai functions from Rust
 
+[`private`]: #calling-rhai-functions-from-rust
+
 Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function from Rust via `Engine::call_fn`.
 Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
 
@@ -286,7 +317,7 @@ let ast = engine.compile(true,
     r"
         // a function with two parameters: String and i64
         fn hello(x, y) {
-            x.len() + y
+            x.len + y
         }
 
         // functions can be overloaded: this one takes only one parameter
@@ -327,6 +358,16 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
+For more control, construct all arguments as `Dynamic` values and use `Engine::call_fn_dynamic`:
+
+```rust
+let result: Dynamic = engine.call_fn_dynamic(&mut scope, &ast, "hello",
+                            &mut [ String::from("abc").into(), 123_i64.into() ])?;
+```
+
+However, beware that `Engine::call_fn_dynamic` _consumes_ its arguments, meaning that all arguments passed to it
+will be replaced by `()` afterwards.  To re-use the arguments, clone them beforehand and pass in the clone.
+
 ### Creating Rust anonymous functions from Rhai script
 
 [`Func`]: #creating-rust-anonymous-functions-from-rhai-script
@@ -341,7 +382,7 @@ use rhai::{Engine, Func};                       // use 'Func' for 'create_from_s
 
 let engine = Engine::new();                     // create a new 'Engine' just for this
 
-let script = "fn calc(x, y) { x + y.len() < 42 }";
+let script = "fn calc(x, y) { x + y.len < 42 }";
 
 // Func takes two type parameters:
 //   1) a tuple made up of the types of the script function's parameters
@@ -376,9 +417,25 @@ Raw `Engine`
 `Engine::new` creates a scripting [`Engine`] with common functionalities (e.g. printing to the console via `print`).
 In many controlled embedded environments, however, these are not needed.
 
-Use `Engine::new_raw` to create a _raw_ `Engine`, in which _nothing_ is added, not even basic arithmetic and logic operators!
+Use `Engine::new_raw` to create a _raw_ `Engine`, in which only a minimal set of basic arithmetic and logical operators
+are supported.
+
+### Built-in operators
+
+| Operators                | Assignment operators         | Supported for type (see [standard types])                                     |
+| ------------------------ | ---------------------------- | ----------------------------------------------------------------------------- |
+| `+`,                     | `+=`                         | `INT`, `FLOAT` (if not [`no_float`]), `ImmutableString`                       |
+| `-`, `*`, `/`, `%`, `~`, | `-=`, `*=`, `/=`, `%=`, `~=` | `INT`, `FLOAT` (if not [`no_float`])                                          |
+| `<<`, `>>`, `^`,         | `<<=`, `>>=`, `^=`           | `INT`                                                                         |
+| `&`, `\|`,               | `&=`, `|=`                   | `INT`, `bool`                                                                 |
+| `&&`, `\|\|`             |                              | `bool`                                                                        |
+| `==`, `!=`               |                              | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `ImmutableString` |
+| `>`, `>=`, `<`, `<=`     |                              | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `ImmutableString`         |
 
 ### Packages
+
+[package]: #packages
+[packages]: #packages
 
 Rhai functional features are provided in different _packages_ that can be loaded via a call to `Engine::load_package`.
 Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be loaded in order for
@@ -397,19 +454,20 @@ engine.load_package(package.get());             // load the package manually. 'g
 
 The follow packages are available:
 
-| Package                | Description                                     | In `CorePackage` | In `StandardPackage` |
-| ---------------------- | ----------------------------------------------- | :--------------: | :------------------: |
-| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`)  |       Yes        |         Yes          |
-| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)            |       Yes        |         Yes          |
-| `LogicPackage`         | Logic and comparison operators (e.g. `==`, `>`) |       Yes        |         Yes          |
-| `BasicStringPackage`   | Basic string functions                          |       Yes        |         Yes          |
-| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])        |       Yes        |         Yes          |
-| `MoreStringPackage`    | Additional string functions                     |        No        |         Yes          |
-| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)       |        No        |         Yes          |
-| `BasicArrayPackage`    | Basic [array] functions                         |        No        |         Yes          |
-| `BasicMapPackage`      | Basic [object map] functions                    |        No        |         Yes          |
-| `CorePackage`          | Basic essentials                                |                  |                      |
-| `StandardPackage`      | Standard library                                |                  |                      |
+| Package                | Description                                                                                            | In `CorePackage` | In `StandardPackage` |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ | :--------------: | :------------------: |
+| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`) for numeric types that are not built in (e.g. `u16`)    |       Yes        |         Yes          |
+| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)                                                                   |       Yes        |         Yes          |
+| `LogicPackage`         | Logical and comparison operators (e.g. `==`, `>`) for numeric types that are not built in (e.g. `u16`) |       Yes        |         Yes          |
+| `BasicStringPackage`   | Basic string functions (e.g. `print`, `debug`, `len`) that are not built in                            |       Yes        |         Yes          |
+| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])                                                               |       Yes        |         Yes          |
+| `MoreStringPackage`    | Additional string functions, including converting common types to string                               |        No        |         Yes          |
+| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)                                                              |        No        |         Yes          |
+| `BasicArrayPackage`    | Basic [array] functions (not available under `no_index`)                                               |        No        |         Yes          |
+| `BasicMapPackage`      | Basic [object map] functions (not available under `no_object`)                                         |        No        |         Yes          |
+| `EvalPackage`          | Disable [`eval`]                                                                                       |        No        |          No          |
+| `CorePackage`          | Basic essentials                                                                                       |       Yes        |         Yes          |
+| `StandardPackage`      | Standard library                                                                                       |        No        |         Yes          |
 
 Packages typically contain Rust functions that are callable within a Rhai script.
 All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).
@@ -454,6 +512,7 @@ Values and types
 [`type_of()`]: #values-and-types
 [`to_string()`]: #values-and-types
 [`()`]: #values-and-types
+[standard types]: #values-and-types
 
 The following primitive types are supported natively:
 
@@ -463,14 +522,14 @@ The following primitive types are supported natively:
 | **Floating-point number** (disabled with [`no_float`])                        | `f32`, `f64` _(default)_                                                                             | `"f32"` or `"f64"`    | `"123.4567"` etc.     |
 | **Boolean value**                                                             | `bool`                                                                                               | `"bool"`              | `"true"` or `"false"` |
 | **Unicode character**                                                         | `char`                                                                                               | `"char"`              | `"A"`, `"x"` etc.     |
-| **Unicode string**                                                            | `String` (_not_ `&str`)                                                                              | `"string"`            | `"hello"` etc.        |
+| **Immutable Unicode string**                                                  | `rhai::ImmutableString` (implemented as `Rc<String>` or `Arc<String>`, _not_ `&str`)                 | `"string"`            | `"hello"` etc.        |
 | **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ?, ?, ? ]"`       |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
 | **Timestamp** (implemented in the [`BasicTimePackage`](#packages))            | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
 | **Dynamic value** (i.e. can be anything)                                      | `rhai::Dynamic`                                                                                      | _the actual type_     | _actual value_        |
 | **System integer** (current configuration)                                    | `rhai::INT` (`i32` or `i64`)                                                                         | `"i32"` or `"i64"`    | `"42"`, `"123"` etc.  |
 | **System floating-point** (current configuration, disabled with [`no_float`]) | `rhai::FLOAT` (`f32` or `f64`)                                                                       | `"f32"` or `"f64"`    | `"123.456"` etc.      |
-| **Nothing/void/nil/null** (or whatever you want to call it)                   | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
+| **Nothing/void/nil/null** (or whatever it is called)                          | `()`                                                                                                 | `"()"`                | `""` _(empty string)_ |
 
 All types are treated strictly separate by Rhai, meaning that `i32` and `i64` and `u32` are completely different -
 they even cannot be added together. This is very similar to Rust.
@@ -482,6 +541,10 @@ If only 32-bit integers are needed, enabling the [`only_i32`] feature will remov
 This is useful on some 32-bit targets where using 64-bit integers incur a performance penalty.
 
 If no floating-point is needed or supported, use the [`no_float`] feature to remove it.
+
+[Strings] in Rhai are _immutable_, meaning that they can be shared but not modified.  In actual, the `ImmutableString` type
+is an alias to `Rc<String>` or `Arc<String>` (depending on the [`sync`] feature).
+Any modification done to a Rhai string will cause the string to be cloned and the modifications made to the copy.
 
 The `to_string` function converts a standard type into a [string] for display purposes.
 
@@ -558,7 +621,7 @@ let value: i64 = item.cast();                   // type can also be inferred
 let value = item.try_cast::<i64>().unwrap();    // 'try_cast' does not panic when the cast fails, but returns 'None'
 ```
 
-The `type_name` method gets the name of the actual type as a static string slice, which you may match against.
+The `type_name` method gets the name of the actual type as a static string slice, which can be `match`-ed against.
 
 ```rust
 let list: Array = engine.eval("...")?;          // return type is 'Array'
@@ -577,6 +640,7 @@ The following conversion traits are implemented for `Dynamic`:
 * `From<i64>` (`i32` if [`only_i32`])
 * `From<f64>` (if not [`no_float`])
 * `From<bool>`
+* `From<rhai::ImmutableString>`
 * `From<String>`
 * `From<char>`
 * `From<Vec<T>>` (into an [array])
@@ -607,13 +671,12 @@ Traits
 
 A number of traits, under the `rhai::` module namespace, provide additional functionalities.
 
-| Trait               | Description                                                                            | Methods                                 |
-| ------------------- | -------------------------------------------------------------------------------------- | --------------------------------------- |
-| `RegisterFn`        | Trait for registering functions                                                        | `register_fn`                           |
-| `RegisterDynamicFn` | Trait for registering functions returning [`Dynamic`]                                  | `register_dynamic_fn`                   |
-| `RegisterResultFn`  | Trait for registering fallible functions returning `Result<`_T_`, Box<EvalAltResult>>` | `register_result_fn`                    |
-| `Func`              | Trait for creating anonymous functions from script                                     | `create_from_ast`, `create_from_script` |
-| `ModuleResolver`    | Trait implemented by module resolution services                                        | `resolve`                               |
+| Trait              | Description                                                                              | Methods                                 |
+| ------------------ | ---------------------------------------------------------------------------------------- | --------------------------------------- |
+| `RegisterFn`       | Trait for registering functions                                                          | `register_fn`                           |
+| `RegisterResultFn` | Trait for registering fallible functions returning `Result<Dynamic, Box<EvalAltResult>>` | `register_result_fn`                    |
+| `Func`             | Trait for creating anonymous functions from script                                       | `create_from_ast`, `create_from_script` |
+| `ModuleResolver`   | Trait implemented by module resolution services                                          | `resolve`                               |
 
 Working with functions
 ----------------------
@@ -624,16 +687,16 @@ To call these functions, they need to be registered with the [`Engine`].
 ```rust
 use rhai::{Dynamic, Engine, EvalAltResult};
 use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
-use rhai::{Dynamic, RegisterDynamicFn};         // use 'RegisterDynamicFn' trait for 'register_dynamic_fn'
+use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
-// Normal function
+// Normal function that returns any value type
 fn add(x: i64, y: i64) -> i64 {
     x + y
 }
 
-// Function that returns a Dynamic value
-fn get_an_any() -> Dynamic {
-    Dynamic::from(42_i64)
+// Function that returns a 'Dynamic' value - must return a 'Result'
+fn get_any_value() -> Result<Dynamic, Box<EvalAltResult>> {
+    Ok((42_i64).into())                         // standard types can use 'into()'
 }
 
 fn main() -> Result<(), Box<EvalAltResult>>
@@ -646,10 +709,10 @@ fn main() -> Result<(), Box<EvalAltResult>>
 
     println!("Answer: {}", result);             // prints 42
 
-    // Functions that return Dynamic values must use register_dynamic_fn()
-    engine.register_dynamic_fn("get_an_any", get_an_any);
+    // Functions that return Dynamic values must use register_result_fn()
+    engine.register_result_fn("get_any_value", get_any_value);
 
-    let result = engine.eval::<i64>("get_an_any()")?;
+    let result = engine.eval::<i64>("get_any_value()")?;
 
     println!("Answer: {}", result);             // prints 42
 
@@ -657,25 +720,27 @@ fn main() -> Result<(), Box<EvalAltResult>>
 }
 ```
 
-To return a [`Dynamic`] value from a Rust function, use the `Dynamic::from` method.
+To create a [`Dynamic`] value, use the `Dynamic::from` method.
+[Standard types] in Rhai can also use `into()`.
 
 ```rust
 use rhai::Dynamic;
 
-fn decide(yes_no: bool) -> Dynamic {
-    if yes_no {
-        Dynamic::from(42_i64)
-    } else {
-        Dynamic::from(String::from("hello!"))   // remember &str is not supported by Rhai
-    }
-}
+let x = (42_i64).into();                        // 'into()' works for standard types
+
+let y = Dynamic::from(String::from("hello!"));  // remember &str is not supported by Rhai
 ```
+
+Functions registered with the [`Engine`] can be _overloaded_ as long as the _signature_ is unique,
+i.e. different functions can have the same name as long as their parameters are of different types
+and/or different number.
+New definitions _overwrite_ previous definitions of the same name and same number/types of parameters.
 
 Generic functions
 -----------------
 
 Rust generic functions can be used in Rhai, but separate instances for each concrete type must be registered separately.
-This is essentially function overloading (Rhai does not natively support generics).
+This essentially overloads the function with different parameter types (Rhai does not natively support generics).
 
 ```rust
 use std::fmt::Display;
@@ -696,8 +761,8 @@ fn main()
 }
 ```
 
-This example shows how to register multiple functions (or, in this case, multiple overloaded versions of the same function)
-under the same name. This enables function overloading based on the number and types of parameters.
+The above example shows how to register multiple functions (or, in this case, multiple overloaded versions of the same function)
+under the same name.
 
 Fallible functions
 ------------------
@@ -705,7 +770,7 @@ Fallible functions
 If a function is _fallible_ (i.e. it returns a `Result<_, Error>`), it can be registered with `register_result_fn`
 (using the `RegisterResultFn` trait).
 
-The function must return `Result<_, Box<EvalAltResult>>`. `Box<EvalAltResult>` implements `From<&str>` and `From<String>` etc.
+The function must return `Result<Dynamic, Box<EvalAltResult>>`. `Box<EvalAltResult>` implements `From<&str>` and `From<String>` etc.
 and the error text gets converted into `Box<EvalAltResult::ErrorRuntime>`.
 
 The error values are `Box`-ed in order to reduce memory footprint of the error path, which should be hit rarely.
@@ -714,13 +779,13 @@ The error values are `Box`-ed in order to reduce memory footprint of the error p
 use rhai::{Engine, EvalAltResult, Position};
 use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
-// Function that may fail
-fn safe_divide(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
+// Function that may fail - the result type must be 'Dynamic'
+fn safe_divide(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     if y == 0 {
         // Return an error if y is zero
         Err("Division by zero!".into())         // short-cut to create Box<EvalAltResult::ErrorRuntime>
     } else {
-        Ok(x / y)
+        Ok((x / y).into())                      // convert result into 'Dynamic'
     }
 }
 
@@ -740,7 +805,8 @@ fn main()
 Overriding built-in functions
 ----------------------------
 
-Any similarly-named function defined in a script overrides any built-in function.
+Any similarly-named function defined in a script overrides any built-in function and any registered
+native Rust function of the same name and number of parameters.
 
 ```rust
 // Override the built-in function 'to_int'
@@ -751,11 +817,13 @@ fn to_int(num) {
 print(to_int(123));     // what happens?
 ```
 
+A registered function, in turn, overrides any built-in function of the same name and number/types of parameters.
+
 Operator overloading
 --------------------
 
 In Rhai, a lot of functionalities are actually implemented as functions, including basic operations such as arithmetic calculations.
-For example, in the expression "`a + b`", the `+` operator is _not_ built-in, but calls a function named "`+`" instead!
+For example, in the expression "`a + b`", the `+` operator is _not_ built in, but calls a function named "`+`" instead!
 
 ```rust
 let x = a + b;
@@ -768,7 +836,7 @@ overriding them has no effect at all.
 
 Operator functions cannot be defined as a script function (because operators syntax are not valid function names).
 However, operator functions _can_ be registered to the [`Engine`] via the methods `Engine::register_fn`, `Engine::register_result_fn` etc.
-When a custom operator function is registered with the same name as an operator, it _overloads_ (or overrides) the built-in version.
+When a custom operator function is registered with the same name as an operator, it overrides the built-in version.
 
 ```rust
 use rhai::{Engine, EvalAltResult, RegisterFn};
@@ -795,7 +863,7 @@ let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an e
 ```
 
 Use operator overloading for custom types (described below) only.
-Be very careful when overloading built-in operators because script writers expect standard operators to behave in a
+Be very careful when overriding built-in operators because script authors expect standard operators to behave in a
 consistent and predictable manner, and will be annoyed if a calculation for '`+`' turns into a subtraction, for example.
 
 Operator overloading also impacts script optimization when using [`OptimizationLevel::Full`].
@@ -804,7 +872,7 @@ See the [relevant section](#script-optimization) for more details.
 Custom types and methods
 -----------------------
 
-Here's an more complete example of working with Rust.  First the example, then we'll break it into parts:
+A more complete example of working with Rust:
 
 ```rust
 use rhai::{Engine, EvalAltResult};
@@ -842,8 +910,8 @@ fn main() -> Result<(), Box<EvalAltResult>>
 }
 ```
 
-All custom types must implement `Clone`.  This allows the [`Engine`] to pass by value.
-You can turn off support for custom types via the [`no_object`] feature.
+All custom types must implement `Clone` as this allows the [`Engine`] to pass by value.
+Support for custom types can be turned off via the [`no_object`] feature.
 
 ```rust
 #[derive(Clone)]
@@ -852,11 +920,12 @@ struct TestStruct {
 }
 ```
 
-Next, we create a few methods that we'll later use in our scripts.  Notice that we register our custom type with the [`Engine`].
+Next, create a few methods for later use in scripts.
+Notice that the custom type needs to be _registered_ with the [`Engine`].
 
 ```rust
 impl TestStruct {
-    fn update(&mut self) {
+    fn update(&mut self) {                          // methods take &mut as first parameter
         self.field += 41;
     }
 
@@ -870,19 +939,19 @@ let engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-To use native types, methods and functions with the [`Engine`], we need to register them.
-There are some convenience functions to help with these. Below, the `update` and `new` methods are registered with the [`Engine`].
+To use native types, methods and functions with the [`Engine`], simply register them using one of the `Engine::register_XXX` API.
+Below, the `update` and `new` methods are registered using `Engine::register_fn`.
 
-*Note: [`Engine`] follows the convention that methods use a `&mut` first parameter so that invoking methods
-can update the value in memory.*
+***Note**: Rhai follows the convention that methods of custom types take a `&mut` first parameter so that invoking methods
+can update the custom types. All other parameters in Rhai are passed by value (i.e. clones).*
 
 ```rust
 engine.register_fn("update", TestStruct::update);   // registers 'update(&mut TestStruct)'
 engine.register_fn("new_ts", TestStruct::new);      // registers 'new()'
 ```
 
-Finally, we call our script.  The script can see the function and method we registered earlier.
-We need to get the result back out from script land just as before, this time casting to our custom struct type.
+The custom type is then ready for use in scripts.  Scripts can see the functions and methods registered earlier.
+Get the evaluation result back out from script-land just as before, this time casting to the custom type:
 
 ```rust
 let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
@@ -890,18 +959,19 @@ let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 println!("result: {}", result.field);               // prints 42
 ```
 
-In fact, any function with a first argument (either by copy or via a `&mut` reference) can be used as a method call
-on that type because internally they are the same thing:
-methods on a type is implemented as a functions taking a `&mut` first argument.
+In fact, any function with a first argument that is a `&mut` reference can be used as method calls because
+internally they are the same thing: methods on a type is implemented as a functions taking a `&mut` first argument.
 
 ```rust
 fn foo(ts: &mut TestStruct) -> i64 {
     ts.field
 }
 
-engine.register_fn("foo", foo);
+engine.register_fn("foo", foo);                     // register ad hoc function with correct signature
 
-let result = engine.eval::<i64>("let x = new_ts(); x.foo()")?;
+let result = engine.eval::<i64>(
+    "let x = new_ts(); x.foo()"                     // 'foo' can be called like a method on 'x'
+)?;
 
 println!("result: {}", result);                     // prints 1
 ```
@@ -910,12 +980,12 @@ If the [`no_object`] feature is turned on, however, the _method_ style of functi
 (i.e. calling a function as an object-method) is no longer supported.
 
 ```rust
-// Below is a syntax error under 'no_object' because 'len' cannot be called in method style.
-let result = engine.eval::<i64>("let x = [1, 2, 3]; x.len()")?;
+// Below is a syntax error under 'no_object' because 'clear' cannot be called in method style.
+let result = engine.eval::<()>("let x = [1, 2, 3]; x.clear()")?;
 ```
 
 [`type_of()`] works fine with custom types and returns the name of the type.
-If `register_type_with_name` is used to register the custom type
+If `Engine::register_type_with_name` is used to register the custom type
 with a special "pretty-print" name, [`type_of()`] will return that name instead.
 
 ```rust
@@ -938,20 +1008,23 @@ Similarly, custom types can expose members by registering a `get` and/or `set` f
 ```rust
 #[derive(Clone)]
 struct TestStruct {
-    field: i64
+    field: String
 }
 
+// Remember Rhai uses 'ImmutableString' instead of 'String'
 impl TestStruct {
-    fn get_field(&mut self) -> i64 {
-        self.field
+    fn get_field(&mut self) -> ImmutableString {
+        // Make an 'ImmutableString' from a 'String'
+        self.field.into(0)
     }
 
-    fn set_field(&mut self, new_val: i64) {
-        self.field = new_val;
+    fn set_field(&mut self, new_val: ImmutableString) {
+        // Get a 'String' from an 'ImmutableString'
+        self.field = (*new_val).clone();
     }
 
     fn new() -> Self {
-        TestStruct { field: 1 }
+        TestStruct { field: "hello" }
     }
 }
 
@@ -962,7 +1035,8 @@ engine.register_type::<TestStruct>();
 engine.register_get_set("xyz", TestStruct::get_field, TestStruct::set_field);
 engine.register_fn("new_ts", TestStruct::new);
 
-let result = engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?;
+// Return result can be 'String' - Rhai will automatically convert it from 'ImmutableString'
+let result = engine.eval::<String>(r#"let a = new_ts(); a.xyz = "42"; a.xyz"#)?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
@@ -1004,7 +1078,7 @@ println!("Answer: {}", result);                     // prints 42
 
 Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set`, `register_get_set`
 and `register_indexer` are not available when the [`no_object`] feature is turned on.
-`register_indexer` is also not available when the [`no_index`] feature is turned on. 
+`register_indexer` is also not available when the [`no_index`] feature is turned on.
 
 `Scope` - Initializing and maintaining state
 -------------------------------------------
@@ -1043,7 +1117,7 @@ fn main() -> Result<(), Box<EvalAltResult>>
 
     // First invocation
     engine.eval_with_scope::<()>(&mut scope, r"
-        let x = 4 + 5 - y + z + s.len();
+        let x = 4 + 5 - y + z + s.len;
         y = 1;
     ")?;
 
@@ -1066,12 +1140,13 @@ fn main() -> Result<(), Box<EvalAltResult>>
 Engine configuration options
 ---------------------------
 
-| Method                   | Description                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [`script optimization`].         |
-| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. |
-
-[`script optimization`]: #script-optimization
+| Method                   | Description                                                                                                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [script optimization].                                                                      |
+| `set_max_expr_depths`    | Set the maximum nesting levels of an expression/statement. See [maximum statement depth](#maximum-statement-depth).                                 |
+| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. See [maximum call stack depth](#maximum-call-stack-depth). |
+| `set_max_operations`     | Set the maximum number of _operations_ that a script is allowed to consume. See [maximum number of operations](#maximum-number-of-operations).      |
+| `set_max_modules`        | Set the maximum number of [modules] that a script is allowed to load. See [maximum number of modules](#maximum-number-of-modules).                  |
 
 -------
 
@@ -1082,6 +1157,7 @@ Comments
 --------
 
 Comments are C-style, including '`/*` ... `*/`' pairs and '`//`' for comments to the end of the line.
+Comments can be nested.
 
 ```rust
 let /* intruder comment */ name = "Bob";
@@ -1098,14 +1174,35 @@ let /* intruder comment */ name = "Bob";
 */
 ```
 
+Keywords
+--------
+
+The following are reserved keywords in Rhai:
+
+| Keywords                                          | Usage                 | Not available under feature |
+| ------------------------------------------------- | --------------------- | :-------------------------: |
+| `true`, `false`                                   | Boolean constants     |                             |
+| `let`, `const`                                    | Variable declarations |                             |
+| `if`, `else`                                      | Control flow          |                             |
+| `while`, `loop`, `for`, `in`, `continue`, `break` | Looping               |                             |
+| `fn`, `private`                                   | Functions             |       [`no_function`]       |
+| `return`                                          | Return values         |                             |
+| `throw`                                           | Return errors         |                             |
+| `import`, `export`, `as`                          | Modules               |        [`no_module`]        |
+
+Keywords cannot be the name of a [function] or [variable], unless the relevant exclusive feature is enabled.
+For example, `fn` is a valid variable name if the [`no_function`] feature is used.
+
 Statements
 ----------
 
-Statements are terminated by semicolons '`;`' - they are mandatory, except for the _last_ statement where it can be omitted.
+Statements are terminated by semicolons '`;`' and they are mandatory,
+except for the _last_ statement in a _block_ (enclosed by '`{`' .. '`}`' pairs) where it can be omitted.
 
-A statement can be used anywhere where an expression is expected. The _last_ statement of a statement block
-(enclosed by '`{`' .. '`}`' pairs) is always the return value of the statement. If a statement has no return value
-(e.g. variable definitions, assignments) then the value will be [`()`].
+A statement can be used anywhere where an expression is expected. These are called, for lack of a more
+creative name, "statement expressions."  The _last_ statement of a statement block is _always_ the block's
+return value when used as a statement.
+If the last statement has no return value (e.g. variable definitions, assignments) then it is assumed to be [`()`].
 
 ```rust
 let a = 42;             // normal assignment statement
@@ -1113,16 +1210,17 @@ let a = foo(42);        // normal function call statement
 foo < 42;               // normal expression as statement
 
 let a = { 40 + 2 };     // 'a' is set to the value of the statement block, which is the value of the last statement
-//              ^ notice that the last statement does not require a terminating semicolon (although it also works with it)
-//                ^ notice that a semicolon is required here to terminate the assignment statement; it is syntax error without it
+//              ^ the last statement does not require a terminating semicolon (although it also works with it)
+//                ^ semicolon required here to terminate the assignment statement; it is a syntax error without it
 
-4 * 10 + 2              // this is also a statement, which is an expression, with no ending semicolon because
-                        // it is the last statement of the whole block
+4 * 10 + 2              // a statement which is just one expression; no ending semicolon is OK
+                        // because it is the last statement of the whole block
 ```
 
 Variables
 ---------
 
+[variable]: #variables
 [variables]: #variables
 
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
@@ -1236,7 +1334,7 @@ number = -5 - +5;
 Numeric functions
 -----------------
 
-The following standard functions (defined in the [`BasicMathPackage`] but excluded if using a [raw `Engine`]) operate on
+The following standard functions (defined in the [`BasicMathPackage`](#packages) but excluded if using a [raw `Engine`]) operate on
 `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                       |
@@ -1249,16 +1347,16 @@ Floating-point functions
 
 The following standard functions (defined in the [`BasicMathPackage`](#packages) but excluded if using a [raw `Engine`]) operate on `f64` only:
 
-| Category         | Functions                                                    |
-| ---------------- | ------------------------------------------------------------ |
-| Trigonometry     | `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` in degrees       |
-| Arc-trigonometry | `asin`, `acos`, `atan`, `asinh`, `acosh`, `atanh` in degrees |
-| Square root      | `sqrt`                                                       |
-| Exponential      | `exp` (base _e_)                                             |
-| Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)         |
-| Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction`               |
-| Conversion       | [`to_int`]                                                   |
-| Testing          | `is_nan`, `is_finite`, `is_infinite`                         |
+| Category         | Functions                                                             |
+| ---------------- | --------------------------------------------------------------------- |
+| Trigonometry     | `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` in degrees                |
+| Arc-trigonometry | `asin`, `acos`, `atan`, `asinh`, `acosh`, `atanh` in degrees          |
+| Square root      | `sqrt`                                                                |
+| Exponential      | `exp` (base _e_)                                                      |
+| Logarithmic      | `ln` (base _e_), `log10` (base 10), `log` (any base)                  |
+| Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction` methods and properties |
+| Conversion       | [`to_int`]                                                            |
+| Testing          | `is_nan`, `is_finite`, `is_infinite` methods and properties           |
 
 Strings and Chars
 -----------------
@@ -1267,8 +1365,8 @@ Strings and Chars
 [strings]: #strings-and-chars
 [char]: #strings-and-chars
 
-String and char literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_') and
-hex ('`\x`_xx_') escape sequences.
+String and character literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_')
+and hex ('`\x`_xx_') escape sequences.
 
 Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicode code points and '`\U`' maps the full,
 32-bit extended Unicode code points.
@@ -1293,6 +1391,9 @@ This is similar to most other languages where strings are internally represented
 Unicode characters.
 Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
 In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
+
+Rhai strings are _immutable_ and can be shared.
+Modifying a Rhai string actually causes it first to be cloned, and then the modification made to the copy.
 
 Strings can be built up from other strings and types via the `+` operator (provided by the [`MoreStringPackage`](#packages)
 but excluded if using a [raw `Engine`]). This is particularly useful when printing output.
@@ -1345,34 +1446,34 @@ record == "Bob X. Davis: age 42 ❤\n";
 
 ### Built-in functions
 
-The following standard methods (defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
+The following standard methods (mostly defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
 
-| Function     | Parameter(s)                                                 | Description                                                                                       |
-| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `len`        | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
-| `pad`        | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
-| `append`     | character/string to append                                   | Adds a character or a string to the end of another string                                         |
-| `clear`      | _none_                                                       | empties the string                                                                                |
-| `truncate`   | target length                                                | cuts off the string at exactly a specified number of characters                                   |
-| `contains`   | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
-| `index_of`   | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
-| `sub_string` | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
-| `crop`       | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`    | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
-| `trim`       | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
+| Function                  | Parameter(s)                                                 | Description                                                                                       |
+| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `len` method and property | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
+| `pad`                     | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
+| `+=` operator, `append`   | character/string to append                                   | Adds a character or a string to the end of another string                                         |
+| `clear`                   | _none_                                                       | empties the string                                                                                |
+| `truncate`                | target length                                                | cuts off the string at exactly a specified number of characters                                   |
+| `contains`                | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
+| `index_of`                | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
+| `sub_string`              | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
+| `crop`                    | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
+| `replace`                 | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
+| `trim`                    | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
 
 ### Examples
 
 ```rust
 let full_name == " Bob C. Davis ";
-full_name.len() == 14;
+full_name.len == 14;
 
 full_name.trim();
-full_name.len() == 12;
+full_name.len == 12;
 full_name == "Bob C. Davis";
 
 full_name.pad(15, '$');
-full_name.len() == 15;
+full_name.len == 15;
 full_name == "Bob C. Davis$$$";
 
 let n = full_name.index_of('$');
@@ -1383,11 +1484,11 @@ full_name.index_of("$$", n + 1) == 13;
 full_name.sub_string(n, 3) == "$$$";
 
 full_name.truncate(6);
-full_name.len() == 6;
+full_name.len == 6;
 full_name == "Bob C.";
 
 full_name.replace("Bob", "John");
-full_name.len() == 7;
+full_name.len == 7;
 full_name == "John C.";
 
 full_name.contains('C') == true;
@@ -1400,7 +1501,7 @@ full_name.crop(0, 1);
 full_name == "C";
 
 full_name.clear();
-full_name.len() == 0;
+full_name.len == 0;
 ```
 
 Arrays
@@ -1420,21 +1521,21 @@ Arrays are disabled via the [`no_index`] feature.
 
 ### Built-in functions
 
-The following methods (defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
+The following methods (mostly defined in the [`BasicArrayPackage`](#packages) but excluded if using a [raw `Engine`]) operate on arrays:
 
-| Function     | Parameter(s)                                                          | Description                                                                                          |
-| ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `push`       | element to insert                                                     | inserts an element at the end                                                                        |
-| `append`     | array to append                                                       | concatenates the second array to the end of the first                                                |
-| `+` operator | first array, second array                                             | concatenates the first array with the second                                                         |
-| `insert`     | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
-| `pop`        | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
-| `shift`      | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
-| `remove`     | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
-| `len`        | _none_                                                                | returns the number of elements                                                                       |
-| `pad`        | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
-| `clear`      | _none_                                                                | empties the array                                                                                    |
-| `truncate`   | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
+| Function                  | Parameter(s)                                                          | Description                                                                                          |
+| ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `push`                    | element to insert                                                     | inserts an element at the end                                                                        |
+| `+=` operator, `append`   | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+` operator              | first array, second array                                             | concatenates the first array with the second                                                         |
+| `insert`                  | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
+| `pop`                     | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
+| `shift`                   | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
+| `remove`                  | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `len` method and property | _none_                                                                | returns the number of elements                                                                       |
+| `pad`                     | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
+| `clear`                   | _none_                                                                | empties the array                                                                                    |
+| `truncate`                | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
 ### Examples
 
@@ -1444,7 +1545,7 @@ let y = [2, 3];         // array literal with 2 elements
 y.insert(0, 1);         // insert element at the beginning
 y.insert(999, 4);       // insert element at the end
 
-y.len() == 4;
+y.len == 4;
 
 y[0] == 1;
 y[1] == 2;
@@ -1461,7 +1562,7 @@ y[1] = 42;              // array elements can be reassigned
 
 y.remove(2) == 3;       // remove element
 
-y.len() == 3;
+y.len == 3;
 
 y[2] == 4;              // elements after the removed element are shifted
 
@@ -1485,7 +1586,7 @@ foo == 1;
 y.push(4);              // 4 elements
 y.push(5);              // 5 elements
 
-y.len() == 5;
+y.len == 5;
 
 let first = y.shift();  // remove the first element, 4 elements remaining
 first == 1;
@@ -1493,7 +1594,7 @@ first == 1;
 let last = y.pop();     // remove the last element, 3 elements remaining
 last == 5;
 
-y.len() == 3;
+y.len == 3;
 
 for item in y {         // arrays can be iterated with a 'for' statement
     print(item);
@@ -1501,15 +1602,15 @@ for item in y {         // arrays can be iterated with a 'for' statement
 
 y.pad(10, "hello");     // pad the array up to 10 elements
 
-y.len() == 10;
+y.len == 10;
 
 y.truncate(5);          // truncate the array to 5 elements
 
-y.len() == 5;
+y.len == 5;
 
 y.clear();              // empty the array
 
-y.len() == 0;
+y.len == 0;
 ```
 
 `push` and `pad` are only defined for standard built-in types. For custom types, type-specific versions must be registered:
@@ -1544,16 +1645,16 @@ Object maps are disabled via the [`no_object`] feature.
 
 The following methods (defined in the [`BasicMapPackage`](#packages) but excluded if using a [raw `Engine`]) operate on object maps:
 
-| Function     | Parameter(s)                        | Description                                                                                                                              |
-| ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `has`        | property name                       | does the object map contain a property of a particular name?                                                                             |
-| `len`        | _none_                              | returns the number of properties                                                                                                         |
-| `clear`      | _none_                              | empties the object map                                                                                                                   |
-| `remove`     | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
-| `mixin`      | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
-| `+` operator | first object map, second object map | merges the first object map with the second                                                                                              |
-| `keys`       | _none_                              | returns an [array] of all the property names (in random order), not available under [`no_index`]                                         |
-| `values`     | _none_                              | returns an [array] of all the property values (in random order), not available under [`no_index`]                                        |
+| Function               | Parameter(s)                        | Description                                                                                                                              |
+| ---------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `has`                  | property name                       | does the object map contain a property of a particular name?                                                                             |
+| `len`                  | _none_                              | returns the number of properties                                                                                                         |
+| `clear`                | _none_                              | empties the object map                                                                                                                   |
+| `remove`               | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
+| `+=` operator, `mixin` | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
+| `+` operator           | first object map, second object map | merges the first object map with the second                                                                                              |
+| `keys`                 | _none_                              | returns an [array] of all the property names (in random order), not available under [`no_index`]                                         |
+| `values`               | _none_                              | returns an [array] of all the property values (in random order), not available under [`no_index`]                                        |
 
 ### Examples
 
@@ -1679,10 +1780,10 @@ The Rust type of a timestamp is `std::time::Instant`. [`type_of()`] a timestamp 
 
 The following methods (defined in the [`BasicTimePackage`](#packages) but excluded if using a [raw `Engine`]) operate on timestamps:
 
-| Function     | Parameter(s)                       | Description                                              |
-| ------------ | ---------------------------------- | -------------------------------------------------------- |
-| `elapsed`    | _none_                             | returns the number of seconds since the timestamp        |
-| `-` operator | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
+| Function                      | Parameter(s)                       | Description                                              |
+| ----------------------------- | ---------------------------------- | -------------------------------------------------------- |
+| `elapsed` method and property | _none_                             | returns the number of seconds since the timestamp        |
+| `-` operator                  | later timestamp, earlier timestamp | returns the number of seconds between the two timestamps |
 
 ### Examples
 
@@ -1691,7 +1792,7 @@ let now = timestamp();
 
 // Do some lengthy operation...
 
-if now.elapsed() > 30.0 {
+if now.elapsed > 30.0 {
     print("takes too long (over 30 seconds)!")
 }
 ```
@@ -1699,10 +1800,10 @@ if now.elapsed() > 30.0 {
 Comparison operators
 --------------------
 
-Comparing most values of the same data type work out-of-the-box for standard types supported by the system.
+Comparing most values of the same data type work out-of-the-box for all [standard types] supported by the system.
 
-However, if using a [raw `Engine`], comparisons can only be made between restricted system types -
-`INT` (`i64` or `i32` depending on [`only_i32`] and [`only_i64`]), `f64` (if not [`no_float`]), [string], [array], `bool`, `char`.
+However, if using a [raw `Engine`] without loading any [packages], comparisons can only be made between a limited
+set of types (see [built-in operators](#built-in-operators)).
 
 ```rust
 42 == 42;               // true
@@ -1711,15 +1812,19 @@ However, if using a [raw `Engine`], comparisons can only be made between restric
 "42" == 42;             // false
 ```
 
-Comparing two values of _different_ data types, or of unknown data types, always results in `false`.
+Comparing two values of _different_ data types, or of unknown data types, always results in `false`,
+except for '`!=`' (not equals) which results in `true`. This is in line with intuition.
 
 ```rust
-42 == 42.0;             // false - i64 is different from f64
-42 > "42";              // false - i64 is different from string
-42 <= "42";             // false again
+42 == 42.0;             // false - i64 cannot be compared with f64
+42 != 42.0;             // true - i64 cannot be compared with f64
+
+42 > "42";              // false - i64 cannot be compared with string
+42 <= "42";             // false - i64 cannot be compared with string
 
 let ts = new_ts();      // custom type
-ts == 42;               // false - types are not the same
+ts == 42;               // false - types cannot be compared
+ts != 42;               // true - types cannot be compared
 ```
 
 Boolean operators
@@ -1770,8 +1875,8 @@ my_str += 12345;
 my_str == "abcABC12345"
 ```
 
-`if` statements
----------------
+`if` statement
+--------------
 
 ```rust
 if foo(x) {
@@ -1806,8 +1911,8 @@ let x = if decision { 42 }; // no else branch defaults to '()'
 x == ();
 ```
 
-`while` loops
--------------
+`while` loop
+------------
 
 ```rust
 let x = 10;
@@ -1834,8 +1939,8 @@ loop {
 }
 ```
 
-`for` loops
------------
+`for` loop
+----------
 
 Iterating through a range or an [array] is provided by the `for` ... `in` loop.
 
@@ -1920,6 +2025,9 @@ println!(result);           // prints "Runtime error: 42 is too large! (line 5, 
 Functions
 ---------
 
+[function]: #functions
+[functions]: #functions
+
 Rhai supports defining functions in script (unless disabled with [`no_function`]):
 
 ```rust
@@ -1964,8 +2072,9 @@ fn foo() { x }              // <- syntax error: variable 'x' doesn't exist
 
 Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
 It is important to remember that all arguments are passed by _value_, so all functions are _pure_
-(i.e. they never modifytheir arguments).
-Any update to an argument will **not** be reflected back to the caller. This can introduce subtle bugs, if not careful.
+(i.e. they never modify their arguments).
+Any update to an argument will **not** be reflected back to the caller.
+This can introduce subtle bugs, if not careful, especially when using the _method-call_ style.
 
 ```rust
 fn change(s) {              // 's' is passed by value
@@ -1973,7 +2082,7 @@ fn change(s) {              // 's' is passed by value
 }
 
 let x = 500;
-x.change();                 // de-sugars to change(x)
+x.change();                 // de-sugars to 'change(x)'
 x == 500;                   // 'x' is NOT changed!
 ```
 
@@ -2003,8 +2112,8 @@ This is similar to Rust and many other modern languages.
 
 ### Function overloading
 
-Functions can be _overloaded_ and are resolved purely upon the function's _name_ and the _number_ of parameters
-(but not parameter _types_, since all parameters are the same type - [`Dynamic`]).
+Functions defined in script can be _overloaded_ by _arity_ (i.e. they are resolved purely upon the function's _name_
+and _number_ of parameters, but not parameter _types_ since all parameters are the same type - [`Dynamic`]).
 New definitions _overwrite_ previous definitions of the same name and number of parameters.
 
 ```rust
@@ -2024,14 +2133,24 @@ Members and methods
 -------------------
 
 Properties and methods in a Rust custom type registered with the [`Engine`] can be called just like in Rust.
+Unlike functions defined in script (for which all arguments are passed by _value_),
+native Rust functions may mutate the object (or the first argument if called in normal function call style).
 
 ```rust
 let a = new_ts();           // constructor function
-a.field = 500;              // property access
-a.update();                 // method call, 'a' can be changed
+a.field = 500;              // property setter
+a.update();                 // method call, 'a' can be modified
 
-update(a);                  // this works, but 'a' is unchanged because only
-                            // a COPY of 'a' is passed to 'update' by VALUE
+update(a);                  // <- this de-sugars to 'a.update()' this if 'a' is a simple variable
+                            //    unlike scripted functions, 'a' can be modified and is not a copy
+
+let array = [ a ];
+
+update(array[0]);           // <- 'array[0]' is an expression returning a calculated value,
+                            //    a transient (i.e. a copy) so this statement has no effect
+                            //    except waste a lot of time cloning
+
+array[0].update();          // <- call this method-call style will update 'a'
 ```
 
 Custom types, properties and methods can be disabled via the [`no_object`] feature.
@@ -2092,8 +2211,8 @@ Modules can be disabled via the [`no_module`] feature.
 A _module_ is a single script (or pre-compiled `AST`) containing global variables and functions.
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
 Variables not exported are _private_ and invisible to the outside.
-On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the `private` prefix.
-Functions declared `private` are invisible to the outside.
+On the other hand, all functions are automatically exported, _unless_ it is explicitly opt-out with the [`private`] prefix.
+Functions declared [`private`] are invisible to the outside.
 
 Everything exported from a module is **constant** (**read-only**).
 
@@ -2187,7 +2306,7 @@ engine.eval_expression_with_scope::<i64>(&scope, "question::inc(question::answer
 
 It is easy to convert a pre-compiled `AST` into a module: just use `Module::eval_ast_as_new`.
 Don't forget the `export` statement, otherwise there will be no variables exposed by the module
-other than non-`private` functions (unless that's intentional).
+other than non-[`private`] functions (unless that's intentional).
 
 ```rust
 use rhai::{Engine, Module};
@@ -2201,7 +2320,7 @@ let ast = engine.compile(r#"
         x + 1
     }
     fn add_len(x, y) {
-        x + y.len()
+        x + y.len
     }
 
     // Imported modules can become sub-modules
@@ -2266,16 +2385,20 @@ so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
-* **Memory**: A malignant script may continuously grow an [array] or [object map] until all memory is consumed.
-* **CPU**: A malignant script may run an infinite tight loop that consumes all CPU cycles.
-* **Time**: A malignant script may run indefinitely, thereby blocking the calling system which is waiting for a result.
-* **Stack**: A malignant script may attempt an infinite recursive call that exhausts the call stack.
-* **Overflows**: A malignant script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
+* **Memory**: A malicous script may continuously grow an [array] or [object map] until all memory is consumed.
+  It may also create a large [array] or [object map] literal that exhausts all memory during parsing.
+* **CPU**: A malicous script may run an infinite tight loop that consumes all CPU cycles.
+* **Time**: A malicous script may run indefinitely, thereby blocking the calling system which is waiting for a result.
+* **Stack**: A malicous script may attempt an infinite recursive call that exhausts the call stack.
+  Alternatively, it may create a degenerated deep expression with so many levels that the parser exhausts the call stack
+  when parsing the expression; or even deeply-nested statement blocks, if nested deep enough.
+* **Overflows**: A malicous script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
   create bad floating-point representations, in order to crash the system.
-* **Files**: A malignant script may continuously [`import`] an external module within an infinite loop,
+* **Files**: A malicous script may continuously [`import`] an external module within an infinite loop,
   thereby putting heavy load on the file-system (or even the network if the file is not local).
+  Furthermore, the module script may simply [`import`] itself in an infinite recursion.
   Even when modules are not created from files, they still typically consume a lot of resources to load.
-* **Data**: A malignant script may attempt to read from and/or write to data that it does not own. If this happens,
+* **Data**: A malicous script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
 
 ### Maximum number of operations
@@ -2341,10 +2464,19 @@ engine.set_max_modules(5);                  // allow loading only up to 5 module
 engine.set_max_modules(0);                  // allow unlimited modules
 ```
 
-### Maximum stack depth
+A script attempting to load more than the maximum number of modules will terminate with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
 
-Rhai by default limits function calls to a maximum depth of 256 levels (28 levels in debug build).
+### Maximum call stack depth
+
+Rhai by default limits function calls to a maximum depth of 128 levels (16 levels in debug build).
 This limit may be changed via the `Engine::set_max_call_levels` method.
+
+When setting this limit, care must be also taken to the evaluation depth of each _statement_
+within the function. It is entirely possible for a malicous script to embed an recursive call deep
+inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
+
 The limit can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
 
@@ -2357,12 +2489,61 @@ engine.set_max_call_levels(0);              // allow no function calls at all (m
 ```
 
 A script exceeding the maximum call stack depth will terminate with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+### Maximum statement depth
+
+Rhai by default limits statements and expressions nesting to a maximum depth of 128
+(which should be plenty) when they are at _global_ level, but only a depth of 32
+when they are within function bodies.  For debug builds, these limits are set further
+downwards to 32 and 16 respectively.
+
+That is because it is possible to overflow the [`Engine`]'s stack when it tries to
+recursively parse an extremely deeply-nested code stream.
+
+```rust
+// The following, if long enough, can easily cause stack overflow during parsing.
+let a = (1+(1+(1+(1+(1+(1+(1+(1+(1+(1+(...)+1)))))))))));
+```
+
+This limit may be changed via the `Engine::set_max_expr_depths` method.  There are two limits to set,
+one for the maximum depth at global level, and the other for function bodies.
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_expr_depths(50, 5);          // allow nesting up to 50 layers of expressions/statements
+                                            // at global level, but only 5 inside functions
+```
+
+Beware that there may be multiple layers for a simple language construct, even though it may correspond
+to only one AST node. That is because the Rhai _parser_ internally runs a recursive chain of function calls
+and it is important that a malicous script does not panic the parser in the first place.
+
+Functions are placed under stricter limits because of the multiplicative effect of recursion.
+A script can effectively call itself while deep inside an expression chain within the function body,
+thereby overflowing the stack even when the level of recursion is within limit.
+
+Make sure that `C x ( 5 + F ) + S` layered calls do not cause a stack overflow, where:
+
+* `C` = maximum call stack depth,
+* `F` = maximum statement depth for functions,
+* `S` = maximum statement depth at global level.
+
+A script exceeding the maximum nesting depths will terminate with a parsing error.
+The malicous `AST` will not be able to get past parsing in the first place.
+
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
 
 ### Checked arithmetic
 
-All arithmetic calculations in Rhai are _checked_, meaning that the script terminates with an error whenever
-it detects a numeric over-flow/under-flow condition or an invalid floating-point operation, instead of
-crashing the entire system.  This checking can be turned off via the [`unchecked`] feature for higher performance
+By default, all arithmetic calculations in Rhai are _checked_, meaning that the script terminates
+with an error whenever it detects a numeric over-flow/under-flow condition or an invalid
+floating-point operation, instead of crashing the entire system.
+
+This checking can be turned off via the [`unchecked`] feature for higher performance
 (but higher risks as well).
 
 ### Blocking access to external data
@@ -2379,9 +2560,10 @@ engine.register_get("add", add);            // configure 'engine'
 let engine = engine;                        // shadow the variable so that 'engine' is now immutable
 ```
 
-
 Script optimization
 ===================
+
+[script optimization]: #script-optimization
 
 Rhai includes an _optimizer_ that tries to optimize a script after parsing.
 This can reduce resource utilization and increase execution speed.
@@ -2395,7 +2577,7 @@ For example, in the following:
     123;                    // eliminated: no effect
     "hello";                // eliminated: no effect
     [1, 2, x, x*2, 5];      // eliminated: no effect
-    foo(42);                // NOT eliminated: the function 'foo' may have side effects
+    foo(42);                // NOT eliminated: the function 'foo' may have side-effects
     666                     // NOT eliminated: this is the return value of the block,
                             // and the block is the last one so this is the return value of the whole script
 }
@@ -2446,7 +2628,7 @@ if DECISION == 1 {          // NOT optimized away because you can define
 }
 ```
 
-because no operator functions will be run (in order not to trigger side effects) during the optimization process
+because no operator functions will be run (in order not to trigger side-effects) during the optimization process
 (unless the optimization level is set to [`OptimizationLevel::Full`]). So, instead, do this:
 
 ```rust
@@ -2468,7 +2650,7 @@ if DECISION_1 {
 In general, boolean constants are most effective for the optimizer to automatically prune
 large `if`-`else` branches because they do not depend on operators.
 
-Alternatively, turn the optimizer to [`OptimizationLevel::Full`]
+Alternatively, turn the optimizer to [`OptimizationLevel::Full`].
 
 Here be dragons!
 ================
@@ -2484,7 +2666,7 @@ There are actually three levels of optimizations: `None`, `Simple` and `Full`.
 
 * `None` is obvious - no optimization on the AST is performed.
 
-* `Simple` (default) performs relatively _safe_ optimizations without causing side effects
+* `Simple` (default) performs only relatively _safe_ optimizations without causing side-effects
   (i.e. it only relies on static analysis and will not actually perform any function calls).
 
 * `Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.
@@ -2539,28 +2721,32 @@ let x = (1+2)*3-4/5%6;      // <- will be replaced by 'let x = 9'
 let y = (1>2) || (3<=4);    // <- will be replaced by 'let y = true'
 ```
 
-Function side effect considerations
-----------------------------------
+Side-effect considerations
+--------------------------
 
 All of Rhai's built-in functions (and operators which are implemented as functions) are _pure_ (i.e. they do not mutate state
-nor cause side any effects, with the exception of `print` and `debug` which are handled specially) so using
-[`OptimizationLevel::Full`] is usually quite safe _unless_ you register your own types and functions.
+nor cause any side-effects, with the exception of `print` and `debug` which are handled specially) so using
+[`OptimizationLevel::Full`] is usually quite safe _unless_ custom types and functions are registered.
 
 If custom functions are registered, they _may_ be called (or maybe not, if the calls happen to lie within a pruned code block).
-If custom functions are registered to replace built-in operators, they will also be called when the operators are used
-(in an `if` statement, for example) and cause side-effects.
+If custom functions are registered to overload built-in operators, they will also be called when the operators are used
+(in an `if` statement, for example) causing side-effects.
 
-Function volatility considerations
----------------------------------
+Therefore, the rule-of-thumb is: _always_ register custom types and functions _after_ compiling scripts if
+ [`OptimizationLevel::Full`] is used.  _DO NOT_ depend on knowledge that the functions have no side-effects,
+ because those functions can change later on and, when that happens, existing scripts may break in subtle ways.
 
-Even if a custom function does not mutate state nor cause side effects, it may still be _volatile_, i.e. it _depends_
-on the external environment and is not _pure_. A perfect example is a function that gets the current time -
-obviously each run will return a different value! The optimizer, when using [`OptimizationLevel::Full`], _assumes_ that
-all functions are _pure_, so when it finds constant arguments it will eagerly execute the function call.
-This causes the script to behave differently from the intended semantics because essentially the result of the function call
-will always be the same value.
+Volatility considerations
+-------------------------
 
-Therefore, **avoid using [`OptimizationLevel::Full`]** if you intend to register non-_pure_ custom types and/or functions.
+Even if a custom function does not mutate state nor cause side-effects, it may still be _volatile_,
+i.e. it _depends_ on the external environment and is not _pure_.
+A perfect example is a function that gets the current time - obviously each run will return a different value!
+The optimizer, when using [`OptimizationLevel::Full`], will _merrily assume_ that all functions are _pure_,
+so when it finds constant arguments (or none) it eagerly executes the function call and replaces it with the result.
+This causes the script to behave differently from the intended semantics.
+
+Therefore, **avoid using [`OptimizationLevel::Full`]** if non-_pure_ custom types and/or functions are involved.
 
 Subtle semantic changes
 -----------------------
@@ -2595,7 +2781,7 @@ print("end!");
 
 In the script above, if `my_decision` holds anything other than a boolean value, the script should have been terminated due to
 a type error. However, after optimization, the entire `if` statement is removed (because an access to `my_decision` produces
-no side effects), thus the script silently runs to completion without errors.
+no side-effects), thus the script silently runs to completion without errors.
 
 Turning off optimizations
 -------------------------
@@ -2610,8 +2796,12 @@ let engine = rhai::Engine::new();
 engine.set_optimization_level(rhai::OptimizationLevel::None);
 ```
 
+Alternatively, turn off optimizations via the [`no_optimize`] feature.
+
 `eval` - or "How to Shoot Yourself in the Foot even Easier"
 ---------------------------------------------------------
+
+[`eval`]: #eval---or-how-to-shoot-yourself-in-the-foot-even-easier
 
 Saving the best for last: in addition to script optimizations, there is the ever-dreaded... `eval` function!
 
@@ -2656,8 +2846,8 @@ x += 32;
 print(x);
 ```
 
-For those who subscribe to the (very sensible) motto of ["`eval` is **evil**"](http://linterrors.com/js/eval-is-evil),
-disable `eval` by overriding it, probably with something that throws.
+For those who subscribe to the (very sensible) motto of ["`eval` is evil"](http://linterrors.com/js/eval-is-evil),
+disable `eval` by overloading it, probably with something that throws.
 
 ```rust
 fn eval(script) { throw "eval is evil! I refuse to run " + script }
@@ -2665,7 +2855,7 @@ fn eval(script) { throw "eval is evil! I refuse to run " + script }
 let x = eval("40 + 2");     // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
 ```
 
-Or override it from Rust:
+Or overload it from Rust:
 
 ```rust
 fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
@@ -2673,4 +2863,17 @@ fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
 }
 
 engine.register_result_fn("eval", alt_eval);
+```
+
+There is even a package named [`EvalPackage`](#packages) which implements the disabling override:
+
+```rust
+use rhai::Engine;
+use rhai::packages::Package                     // load the 'Package' trait to use packages
+use rhai::packages::EvalPackage;                // the 'eval' package disables 'eval'
+
+let mut engine = Engine::new();
+let package = EvalPackage::new();               // create the package
+
+engine.load_package(package.get());             // load the package
 ```

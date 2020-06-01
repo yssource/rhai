@@ -26,7 +26,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
                 let y = [4, 5];
                 x.append(y);
 
-                x.len() + r
+                x.len + r
            "
         )?,
         14
