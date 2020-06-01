@@ -105,7 +105,7 @@ Optional features
 | `no_index`    | Disable [arrays] and indexing features.                                                                                                                                                                |
 | `no_object`   | Disable support for custom types and [object maps].                                                                                                                                                    |
 | `no_function` | Disable script-defined functions.                                                                                                                                                                      |
-| `no_module`   | Disable loading modules.                                                                                                                                                                               |
+| `no_module`   | Disable loading external modules.                                                                                                                                                                      |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                                                   |
 
 By default, Rhai includes all the standard functionalities in a small, tight package.

@@ -4,7 +4,7 @@ use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::fn_native::{CallableFunction, FnCallArgs, Shared};
-use crate::module::Module;
+use crate::module::{resolvers, Module, ModuleResolver};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, FnDef, ImmutableString, ReturnType, Stmt, AST, INT};
@@ -16,9 +16,6 @@ use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
-
-#[cfg(not(feature = "no_module"))]
-use crate::module::{resolvers, ModuleResolver};
 
 use crate::stdlib::{
     any::TypeId,
@@ -297,7 +294,6 @@ pub struct Engine {
     pub(crate) packages: PackagesCollection,
 
     /// A module resolution service.
-    #[cfg(not(feature = "no_module"))]
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
@@ -350,8 +346,7 @@ impl Default for Engine {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
             module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(feature = "no_std")]
+            #[cfg(any(feature = "no_module", feature = "no_std"))]
             module_resolver: None,
 
             type_names: HashMap::new(),
@@ -442,31 +437,28 @@ fn search_scope<'s, 'a>(
         _ => unreachable!(),
     };
 
-    #[cfg(not(feature = "no_module"))]
-    {
-        if let Some(modules) = modules.as_ref() {
-            let module = if let Some(index) = modules.index() {
-                scope
-                    .get_mut(scope.len() - index.get())
-                    .0
-                    .downcast_mut::<Module>()
-                    .unwrap()
-            } else {
-                let (id, root_pos) = modules.get(0);
+    if let Some(modules) = modules.as_ref() {
+        let module = if let Some(index) = modules.index() {
+            scope
+                .get_mut(scope.len() - index.get())
+                .0
+                .downcast_mut::<Module>()
+                .unwrap()
+        } else {
+            let (id, root_pos) = modules.get(0);
 
-                scope.find_module(id).ok_or_else(|| {
-                    Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
-                })?
-            };
+            scope
+                .find_module_internal(id)
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
+        };
 
-            return Ok((
-                module.get_qualified_var_mut(name, *hash_var, *pos)?,
-                name,
-                // Module variables are constant
-                ScopeEntryType::Constant,
-                *pos,
-            ));
-        }
+        return Ok((
+            module.get_qualified_var_mut(name, *hash_var, *pos)?,
+            name,
+            // Module variables are constant
+            ScopeEntryType::Constant,
+            *pos,
+        ));
     }
 
     let index = if state.always_search { None } else { *index };
@@ -496,8 +488,6 @@ impl Engine {
         Self {
             packages: Default::default(),
             global_module: Default::default(),
-
-            #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
             type_names: HashMap::new(),
@@ -1609,7 +1599,6 @@ impl Engine {
             }
 
             // Module-qualified function call
-            #[cfg(not(feature = "no_module"))]
             Expr::FnCall(x) if x.1.is_some() => {
                 let ((name, _, pos), modules, hash_fn_def, args_expr, def_val) = x.as_ref();
                 let modules = modules.as_ref().unwrap();
@@ -1630,7 +1619,7 @@ impl Engine {
                         .downcast_mut::<Module>()
                         .unwrap()
                 } else {
-                    scope.find_module(id).ok_or_else(|| {
+                    scope.find_module_internal(id).ok_or_else(|| {
                         Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
                     })?
                 };
@@ -1919,21 +1908,18 @@ impl Engine {
 
             // Import statement
             Stmt::Import(x) => {
-                #[cfg(feature = "no_module")]
-                unreachable!();
+                let (expr, (name, pos)) = x.as_ref();
 
-                #[cfg(not(feature = "no_module"))]
+                // Guard against too many modules
+                if state.modules >= self.max_modules {
+                    return Err(Box::new(EvalAltResult::ErrorTooManyModules(*pos)));
+                }
+
+                if let Some(path) = self
+                    .eval_expr(scope, state, lib, &expr, level)?
+                    .try_cast::<ImmutableString>()
                 {
-                    let (expr, (name, pos)) = x.as_ref();
-
-                    // Guard against too many modules
-                    if state.modules >= self.max_modules {
-                        return Err(Box::new(EvalAltResult::ErrorTooManyModules(*pos)));
-                    }
-
-                    if let Some(path) = self
-                        .eval_expr(scope, state, lib, &expr, level)?
-                        .try_cast::<ImmutableString>()
+                    #[cfg(not(feature = "no_module"))]
                     {
                         if let Some(resolver) = &self.module_resolver {
                             // Use an empty scope to create a module
@@ -1941,7 +1927,7 @@ impl Engine {
                                 resolver.resolve(self, Scope::new(), &path, expr.position())?;
 
                             let mod_name = unsafe_cast_var_name_to_lifetime(name, &state);
-                            scope.push_module(mod_name, module);
+                            scope.push_module_internal(mod_name, module);
 
                             state.modules += 1;
 
@@ -1952,9 +1938,12 @@ impl Engine {
                                 expr.position(),
                             )))
                         }
-                    } else {
-                        Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                     }
+
+                    #[cfg(feature = "no_module")]
+                    Ok(Default::default())
+                } else {
+                    Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                 }
             }
 

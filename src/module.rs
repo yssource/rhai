@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{make_getter, make_setter, Engine, FunctionsLib, FUNC_INDEXER};
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
@@ -945,23 +945,7 @@ impl ModuleRef {
 }
 
 /// Trait that encapsulates a module resolution service.
-#[cfg(not(feature = "no_module"))]
-#[cfg(not(feature = "sync"))]
-pub trait ModuleResolver {
-    /// Resolve a module based on a path string.
-    fn resolve(
-        &self,
-        engine: &Engine,
-        scope: Scope,
-        path: &str,
-        pos: Position,
-    ) -> Result<Module, Box<EvalAltResult>>;
-}
-
-/// Trait that encapsulates a module resolution service.
-#[cfg(not(feature = "no_module"))]
-#[cfg(feature = "sync")]
-pub trait ModuleResolver: Send + Sync {
+pub trait ModuleResolver: SendSync {
     /// Resolve a module based on a path string.
     fn resolve(
         &self,
@@ -979,6 +963,8 @@ pub mod resolvers {
     pub use super::file::FileModuleResolver;
     pub use super::stat::StaticModuleResolver;
 }
+#[cfg(feature = "no_module")]
+pub mod resolvers {}
 
 /// Script file-based module resolver.
 #[cfg(not(feature = "no_module"))]
