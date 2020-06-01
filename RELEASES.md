@@ -1,7 +1,11 @@
 Rhai Release Notes
 ==================
 
-Version 0.14.2
+Version 0.16.0
+==============
+
+
+Version 0.15.0
 ==============
 
 Regression fix
