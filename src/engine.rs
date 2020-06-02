@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{CallableFunction, FnCallArgs, Shared};
+use crate::fn_native::{CallableFunction, Callback, FnCallArgs, Shared};
 use crate::module::{resolvers, Module, ModuleResolver};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
@@ -302,26 +302,12 @@ pub struct Engine {
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: HashMap<String, String>,
 
-    /// Closure for implementing the `print` command.
-    #[cfg(not(feature = "sync"))]
-    pub(crate) print: Box<dyn Fn(&str) + 'static>,
-    /// Closure for implementing the `print` command.
-    #[cfg(feature = "sync")]
-    pub(crate) print: Box<dyn Fn(&str) + Send + Sync + 'static>,
-
-    /// Closure for implementing the `debug` command.
-    #[cfg(not(feature = "sync"))]
-    pub(crate) debug: Box<dyn Fn(&str) + 'static>,
-    /// Closure for implementing the `debug` command.
-    #[cfg(feature = "sync")]
-    pub(crate) debug: Box<dyn Fn(&str) + Send + Sync + 'static>,
-
-    /// Closure for progress reporting.
-    #[cfg(not(feature = "sync"))]
-    pub(crate) progress: Option<Box<dyn Fn(u64) -> bool + 'static>>,
-    /// Closure for progress reporting.
-    #[cfg(feature = "sync")]
-    pub(crate) progress: Option<Box<dyn Fn(u64) -> bool + Send + Sync + 'static>>,
+    /// Callback closure for implementing the `print` command.
+    pub(crate) print: Callback<str, ()>,
+    /// Callback closure for implementing the `debug` command.
+    pub(crate) debug: Callback<str, ()>,
+    /// Callback closure for progress reporting.
+    pub(crate) progress: Option<Callback<u64, bool>>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -2012,7 +1998,7 @@ impl Engine {
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
-            if !progress(state.operations) {
+            if !progress(&state.operations) {
                 // Terminate script if progress returns false
                 return Err(Box::new(EvalAltResult::ErrorTerminated(Position::none())));
             }

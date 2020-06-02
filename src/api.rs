@@ -1163,7 +1163,7 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// engine.on_progress(move |ops| {
+    /// engine.on_progress(move |&ops| {
     ///     if ops > 10000 {
     ///         false
     ///     } else if ops % 800 == 0 {
@@ -1182,7 +1182,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + SendSync + 'static) {
+    pub fn on_progress(&mut self, callback: impl Fn(&u64) -> bool + SendSync + 'static) {
         self.progress = Some(Box::new(callback));
     }
 

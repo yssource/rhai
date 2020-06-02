@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.16.0
 ==============
 
+Breaking changes
+----------------
+
+* Callback closure passed to `Engine::on_progress` now takes `&u64` instead of `u64` to be consistent with other callback signatures.
+
 
 Version 0.15.0
 ==============

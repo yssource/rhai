@@ -57,6 +57,11 @@ pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> 
 
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
+#[cfg(not(feature = "sync"))]
+pub type Callback<T, R> = Box<dyn Fn(&T) -> R + 'static>;
+#[cfg(feature = "sync")]
+pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
+
 /// A type encapsulating a function callable by Rhai.
 #[derive(Clone)]
 pub enum CallableFunction {

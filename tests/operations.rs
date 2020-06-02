@@ -6,7 +6,7 @@ fn test_max_operations() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_max_operations(500);
 
-    engine.on_progress(|count| {
+    engine.on_progress(|&count| {
         if count % 100 == 0 {
             println!("{}", count);
         }
@@ -34,7 +34,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_max_operations(500);
 
-    engine.on_progress(|count| {
+    engine.on_progress(|&count| {
         if count % 100 == 0 {
             println!("{}", count);
         }
@@ -90,7 +90,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_max_operations(500);
 
-    engine.on_progress(|count| {
+    engine.on_progress(|&count| {
         if count % 100 == 0 {
             println!("{}", count);
         }

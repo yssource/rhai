@@ -2439,7 +2439,7 @@ provide a closure to the `Engine::on_progress` method:
 ```rust
 let mut engine = Engine::new();
 
-engine.on_progress(|count| {                // 'count' is the number of operations performed
+engine.on_progress(|&count| {               // 'count' is the number of operations performed
     if count % 1000 == 0 {
         println!("{}", count);              // print out a progress log every 1,000 operations
     }
