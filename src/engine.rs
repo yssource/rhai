@@ -1652,6 +1652,7 @@ impl Engine {
                         let mut scope = Scope::new();
                         self.call_script_fn(&mut scope, state, lib, name, fn_def, args, *pos, level)
                     }
+                    Ok(x) if x.is_plugin_fn() => x.get_plugin_fn().call(args.as_mut(), *pos),
                     Ok(x) => x.get_native_fn()(args.as_mut()).map_err(|err| err.new_position(*pos)),
                     Err(err)
                         if def_val.is_some()

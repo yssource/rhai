@@ -6,6 +6,7 @@ use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs};
 use crate::parser::FnAccess;
+use crate::plugin::Plugin;
 use crate::result::EvalAltResult;
 
 use crate::stdlib::{any::TypeId, boxed::Box, mem};
@@ -13,40 +14,76 @@ use crate::stdlib::{any::TypeId, boxed::Box, mem};
 /// A trait to register custom plugins with the `Engine`.
 ///
 /// A plugin consists of a number of functions. All functions will be registered with the engine.
-#[cfg(feature = "plugins")]
-pub trait RegisterPlugin<PL: Plugin> {
-    /// Register a custom function with the `Engine`.
+pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
+    /// Allow extensions of the engine's behavior.
+    ///
+    /// This can include importing modules, registering functions to the global name space, and
+    /// more.
     ///
     /// # Example
     ///
     /// ```
-    /// use rhai::{Dynamic, Engine, INT, Plugin, RegisterDynamicFn, RegisterPlugin};
+    /// use rhai::{FLOAT, INT, Module, ModuleResolver, RegisterFn, RegisterPlugin};
+    /// use rhai::plugin::*;
+    /// use rhai::module_resolvers::*;
     ///
-    /// // A simple custom plugin type. This should not usually be done with hand-written code.
-    /// struct AddOffsetPlugin(INT);
-    /// impl AddOffsetPlugin {
-    ///     fn add_offset(&self, x: INT) -> Dynamic {
-    ///         Dynamic::from(x + self.0)
+    /// // A function we want to expose to Rhai.
+    /// #[derive(Copy, Clone)]
+    /// struct DistanceFunction();
+    ///
+    /// impl PluginFunction for DistanceFunction {
+    ///     fn is_method_call(&self) -> bool { false }
+    ///     fn is_varadic(&self) -> bool { false }
+    ///
+    ///     fn call(&self, args: &[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///         let x1: &FLOAT = args[0].downcast_ref::<FLOAT>().unwrap();
+    ///         let y1: &FLOAT = args[1].downcast_ref::<FLOAT>().unwrap();
+    ///         let x2: &FLOAT = args[2].downcast_ref::<FLOAT>().unwrap();
+    ///         let y2: &FLOAT = args[3].downcast_ref::<FLOAT>().unwrap();
+    ///         let square_sum = (y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0);
+    ///         Ok(Dynamic::from(square_sum.sqrt()))
+    ///     }
+    ///
+    ///     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+    ///         Box::new(DistanceFunction())
     ///     }
     /// }
-    /// impl Plugin for AddOffsetPlugin {
-    ///     fn name(&self) -> &str {
-    ///         "My Plugin"
-    ///     }
+    ///
+    /// // A simple custom plugin. This should not usually be done with hand-written code.
+    /// #[derive(Copy, Clone)]
+    /// pub struct AdvancedMathPlugin();
+    ///
+    /// impl Plugin for AdvancedMathPlugin {
     ///     fn register_contents(self, engine: &mut Engine) {
-    ///         let add_offset_fn: Box<dyn Fn(INT) -> Dynamic> = {
-    ///             Box::new(move |x| self.add_offset(x))
-    ///         };
-    ///         engine.register_dynamic_fn("add_offset", add_offset_fn);
+    ///         // Plugins are allowed to have side-effects on the engine.
+    ///         engine.register_fn("get_mystic_number", || { 42 as FLOAT });
+    ///
+    ///         // Main purpose: create a module to expose the functions to Rhai.
+    ///         //
+    ///         // This is currently a hack. There needs to be a better API here for "plugin"
+    ///         // modules.
+    ///         let mut m = Module::new();
+    ///         m.set_fn("euclidean_distance".to_string(), FnAccess::Public,
+    ///                  &[std::any::TypeId::of::<FLOAT>(),
+    ///                    std::any::TypeId::of::<FLOAT>(),
+    ///                    std::any::TypeId::of::<FLOAT>(),
+    ///                    std::any::TypeId::of::<FLOAT>()],
+    ///                  CallableFunction::from_plugin(DistanceFunction()));
+    ///         let mut r = StaticModuleResolver::new();
+    ///         r.insert("Math::Advanced".to_string(), m);
+    ///         engine.set_module_resolver(Some(r));
     ///     }
     /// }
+    ///
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     ///
     /// let mut engine = Engine::new();
-    /// engine.register_plugin(AddOffsetPlugin(50));
+    /// engine.register_plugin(AdvancedMathPlugin());
     ///
-    /// assert_eq!(engine.eval::<i64>("add_offset(42)")?, 92);
+    /// assert_eq!(engine.eval::<FLOAT>(
+    ///     r#"import "Math::Advanced" as math;
+    ///        let x = math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#)?, 41.0);
     /// # Ok(())
     /// # }
     /// ```
@@ -115,15 +152,6 @@ pub trait RegisterResultFn<FN, ARGS> {
     fn register_result_fn(&mut self, name: &str, f: FN);
 }
 
-/// Represents an externally-written plugin for the Rhai interpreter.
-///
-/// This should not be used directly. Use the `plugin_module!` macro instead.
-#[cfg(feature = "plugins")]
-pub trait Plugin {
-    fn register_contents(self, engine: &mut Engine);
-    fn name(&self) -> &str;
-}
-
 // These types are used to build a unique _marker_ tuple type for each combination
 // of function parameter types in order to make each trait implementation unique.
 // That is because stable Rust currently does not allow distinguishing implementations
@@ -156,10 +184,9 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     mem::take(data).cast::<T>()
 }
 
-#[cfg(feature = "plugins")]
 impl<PL: Plugin> RegisterPlugin<PL> for Engine {
     fn register_plugin(&mut self, plugin: PL) {
-        plugin.register_contents(self)
+        plugin.register_contents(self);
     }
 }
 
