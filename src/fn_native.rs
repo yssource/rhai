@@ -1,6 +1,7 @@
 use crate::any::Dynamic;
 use crate::parser::FnDef;
 use crate::result::EvalAltResult;
+use crate::token::Position;
 
 use crate::stdlib::{boxed::Box, rc::Rc, sync::Arc};
 
@@ -57,6 +58,13 @@ pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> 
 
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
+#[cfg(feature = "sync")]
+pub type SharedPluginFunction = Arc<dyn PluginFunction + Send + Sync>;
+#[cfg(not(feature = "sync"))]
+pub type SharedPluginFunction = Rc<dyn PluginFunction>;
+
+use crate::plugin::PluginFunction;
+
 /// A type encapsulating a function callable by Rhai.
 #[derive(Clone)]
 pub enum CallableFunction {
@@ -69,6 +77,8 @@ pub enum CallableFunction {
     Iterator(IteratorFn),
     /// A script-defined function.
     Script(Shared<FnDef>),
+    /// A plugin-defined function,
+    Plugin(SharedPluginFunction),
 }
 
 impl CallableFunction {
@@ -77,6 +87,7 @@ impl CallableFunction {
         match self {
             Self::Pure(_) => true,
             Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
+            Self::Plugin(_) => false,
         }
     }
     /// Is this a pure native Rust method-call?
@@ -84,6 +95,7 @@ impl CallableFunction {
         match self {
             Self::Method(_) => true,
             Self::Pure(_) | Self::Iterator(_) | Self::Script(_) => false,
+            Self::Plugin(_) => false,
         }
     }
     /// Is this an iterator function?
@@ -91,6 +103,7 @@ impl CallableFunction {
         match self {
             Self::Iterator(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Script(_) => false,
+            Self::Plugin(_) => false,
         }
     }
     /// Is this a Rhai-scripted function?
@@ -98,6 +111,14 @@ impl CallableFunction {
         match self {
             Self::Script(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
+            Self::Plugin(_) => false,
+        }
+    }
+    /// Is this a plugin-defined function?
+    pub fn is_plugin_fn(&self) -> bool {
+        match self {
+            Self::Plugin(_) => true,
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
         }
     }
     /// Get a reference to a native Rust function.
@@ -109,6 +130,7 @@ impl CallableFunction {
         match self {
             Self::Pure(f) | Self::Method(f) => f.as_ref(),
             Self::Iterator(_) | Self::Script(_) => panic!(),
+            Self::Plugin(_) => panic!(),
         }
     }
     /// Get a reference to a script-defined function definition.
@@ -120,6 +142,7 @@ impl CallableFunction {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
             Self::Script(f) => f,
+            Self::Plugin(_) => panic!(),
         }
     }
     /// Get a reference to an iterator function.
@@ -131,6 +154,18 @@ impl CallableFunction {
         match self {
             Self::Iterator(f) => *f,
             Self::Pure(_) | Self::Method(_) | Self::Script(_) => panic!(),
+            Self::Plugin(_) => panic!(),
+        }
+    }
+    /// Get a reference to a plugin function.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `CallableFunction` is not `Plugin`.
+    pub fn get_plugin_fn<'s>(&'s self) -> SharedPluginFunction {
+        match self {
+            Self::Plugin(f) => f.clone(),
+            Self::Pure(_) | Self::Method(_) | Self::Script(_) | Self::Iterator(_) => panic!(),
         }
     }
     /// Create a new `CallableFunction::Pure`.
@@ -140,5 +175,17 @@ impl CallableFunction {
     /// Create a new `CallableFunction::Method`.
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
+    }
+
+    #[cfg(feature = "sync")]
+    /// Create a new `CallableFunction::Plugin`.
+    pub fn from_plugin(plugin: impl PluginFunction + 'static + Send + Sync) -> Self {
+        Self::Plugin(Arc::new(plugin))
+    }
+
+    #[cfg(not(feature = "sync"))]
+    /// Create a new `CallableFunction::Plugin`.
+    pub fn from_plugin(plugin: impl PluginFunction + 'static) -> Self {
+        Self::Plugin(Rc::new(plugin))
     }
 }
