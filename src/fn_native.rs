@@ -1,7 +1,7 @@
 use crate::any::Dynamic;
 use crate::parser::FnDef;
+use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
-use crate::token::Position;
 
 use crate::stdlib::{boxed::Box, rc::Rc, sync::Arc};
 
@@ -63,7 +63,10 @@ pub type SharedPluginFunction = Arc<dyn PluginFunction + Send + Sync>;
 #[cfg(not(feature = "sync"))]
 pub type SharedPluginFunction = Rc<dyn PluginFunction>;
 
-use crate::plugin::PluginFunction;
+#[cfg(not(feature = "sync"))]
+pub type Callback<T, R> = Box<dyn Fn(&T) -> R + 'static>;
+#[cfg(feature = "sync")]
+pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
 
 /// A type encapsulating a function callable by Rhai.
 #[derive(Clone)]

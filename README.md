@@ -472,8 +472,7 @@ The follow packages are available:
 Packages typically contain Rust functions that are callable within a Rhai script.
 All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).
 Once a package is created (e.g. via `new`), it can be _shared_ (via `get`) among multiple instances of [`Engine`],
-even across threads (if the [`sync`] feature is turned on).
-Therefore, a package only has to be created _once_.
+even across threads (under the [`sync`] feature). Therefore, a package only has to be created _once_.
 
 Packages are actually implemented as [modules], so they share a lot of behavior and characteristics.
 The main difference is that a package loads under the _global_ namespace, while a module loads under its own
@@ -573,7 +572,7 @@ if type_of(x) == "string" {
 
 [`Dynamic`]: #dynamic-values
 
-A `Dynamic` value can be _any_ type. However, if the [`sync`] feature is used, then all types must be `Send + Sync`.
+A `Dynamic` value can be _any_ type. However, under the [`sync`] feature, all types must be `Send + Sync`.
 
 Because [`type_of()`] a `Dynamic` value returns the type of the actual value, it is usually used to perform type-specific
 actions based on the actual value's type.
@@ -976,7 +975,7 @@ let result = engine.eval::<i64>(
 println!("result: {}", result);                     // prints 1
 ```
 
-If the [`no_object`] feature is turned on, however, the _method_ style of function calls
+Under the [`no_object`] feature, however, the _method_ style of function calls
 (i.e. calling a function as an object-method) is no longer supported.
 
 ```rust
@@ -1077,8 +1076,23 @@ println!("Answer: {}", result);                     // prints 42
 ```
 
 Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set`, `register_get_set`
-and `register_indexer` are not available when the [`no_object`] feature is turned on.
-`register_indexer` is also not available when the [`no_index`] feature is turned on.
+and `register_indexer` are not available under the [`no_object`] feature.
+`register_indexer` is also not available under the [`no_index`] feature.
+
+Printing for custom types
+-------------------------
+
+To use custom types for `print` and `debug`, or format its value into a [string], it is necessary that the following
+functions be registered (assuming the custom type is `T` and it is `Display + Debug`):
+
+| Function    | Signature                                        | Typical implementation         | Usage                                                                                   |
+| ----------- | ------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------- |
+| `to_string` | `|s: &mut T| -> String`                          | `s.to_string()`                | Converts the custom type into a [string]                                                |
+| `print`     | `|s: &mut T| -> String`                          | `s.to_string()`                | Converts the custom type into a [string] for the [`print`](#print-and-debug) statement  |
+| `debug`     | `|s: &mut T| -> String`                          | `format!("{:?}", s)`           | Converts the custom type into a [string] for the [`debug`](#print-and-debug) statement  |
+| `+`         | `|s1: ImmutableString, s: T| -> ImmutableString` | `s1 + s`                       | Append the custom type to another [string], for `print("Answer: " + type);` usage       |
+| `+`         | `|s: T, s2: ImmutableString| -> String`          | `s.to_string().push_str(&s2);` | Append another [string] to the custom type, for `print(type + " is the answer");` usage |
+| `+=`        | `|s1: &mut ImmutableString, s: T|`               | `s1 += s.to_string()`          | Append the custom type to an existing [string], for `s += type;` usage                  |
 
 `Scope` - Initializing and maintaining state
 -------------------------------------------
@@ -1089,8 +1103,8 @@ By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting on
 but no global state. This gives each evaluation a clean starting slate. In order to continue using the same global state
 from one invocation to the next, such a state must be manually created and passed in.
 
-All `Scope` variables are [`Dynamic`], meaning they can store values of any type.  If the [`sync`] feature is used, however,
-then only types that are `Send + Sync` are supported, and the entire `Scope` itself will also be `Send + Sync`.
+All `Scope` variables are [`Dynamic`], meaning they can store values of any type.  Under the [`sync`] feature, however,
+only types that are `Send + Sync` are supported, and the entire `Scope` itself will also be `Send + Sync`.
 This is extremely useful in multi-threaded applications.
 
 In this example, a global state object (a `Scope`) is created with a few initialized variables, then the same state is
@@ -1191,7 +1205,7 @@ The following are reserved keywords in Rhai:
 | `import`, `export`, `as`                          | Modules               |        [`no_module`]        |
 
 Keywords cannot be the name of a [function] or [variable], unless the relevant exclusive feature is enabled.
-For example, `fn` is a valid variable name if the [`no_function`] feature is used.
+For example, `fn` is a valid variable name under the [`no_function`] feature.
 
 Statements
 ----------
@@ -1729,7 +1743,7 @@ technically be mapped to [`()`].  A valid JSON string does not start with a hash
 Rhai object map does - that's the major difference!
 
 JSON numbers are all floating-point while Rhai supports integers (`INT`) and floating-point (`FLOAT`) if
-the [`no_float`] feature is not turned on.  Most common generators of JSON data distinguish between
+the [`no_float`] feature is not enabled.  Most common generators of JSON data distinguish between
 integer and floating-point values by always serializing a floating-point number with a decimal point
 (i.e. `123.0` instead of `123` which is assumed to be an integer).  This style can be used successfully
 with Rhai object maps.
@@ -2364,7 +2378,7 @@ Built-in module resolvers are grouped under the `rhai::module_resolvers` module 
 | Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                                    |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
-| `StaticModuleResolver` | Loads modules that are statically added. This can be used when the [`no_std`] feature is turned on.                                                                                                                                                                                                                                                            |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used under the [`no_std`] feature.                                                                                                                                                                                                                                                                        |
 
 An [`Engine`]'s module resolver is set via a call to `Engine::set_module_resolver`:
 
@@ -2439,7 +2453,7 @@ provide a closure to the `Engine::on_progress` method:
 ```rust
 let mut engine = Engine::new();
 
-engine.on_progress(|count| {                // 'count' is the number of operations performed
+engine.on_progress(|&count| {               // 'count' is the number of operations performed
     if count % 1000 == 0 {
         println!("{}", count);              // print out a progress log every 1,000 operations
     }

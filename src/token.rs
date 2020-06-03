@@ -198,6 +198,7 @@ pub enum Token {
     XOrAssign,
     ModuloAssign,
     PowerOfAssign,
+    #[cfg(not(feature = "no_function"))]
     Private,
     Import,
     #[cfg(not(feature = "no_module"))]
@@ -284,6 +285,7 @@ impl Token {
                 ModuloAssign => "%=",
                 PowerOf => "~",
                 PowerOfAssign => "~=",
+                #[cfg(not(feature = "no_function"))]
                 Private => "private",
                 Import => "import",
                 #[cfg(not(feature = "no_module"))]
@@ -757,6 +759,7 @@ impl<'a> TokenIterator<'a> {
                             "throw" => Token::Throw,
                             "for" => Token::For,
                             "in" => Token::In,
+                            #[cfg(not(feature = "no_function"))]
                             "private" => Token::Private,
                             "import" => Token::Import,
                             #[cfg(not(feature = "no_module"))]

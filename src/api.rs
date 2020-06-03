@@ -7,7 +7,7 @@ use crate::fn_call::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
-use crate::parser::{parse, parse_global_expr, AST};
+use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{lex, Position};
@@ -449,14 +449,7 @@ impl Engine {
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let stream = lex(scripts);
-
-        parse(
-            &mut stream.peekable(),
-            self,
-            scope,
-            optimization_level,
-            (self.max_expr_depth, self.max_function_expr_depth),
-        )
+        self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
     /// Read the contents of a file into a string.
@@ -578,13 +571,8 @@ impl Engine {
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
         let stream = lex(&scripts);
-        let ast = parse_global_expr(
-            &mut stream.peekable(),
-            self,
-            &scope,
-            OptimizationLevel::None,
-            self.max_expr_depth,
-        )?;
+        let ast =
+            self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
         // Handle null - map to ()
         if has_null {
@@ -667,13 +655,7 @@ impl Engine {
 
         {
             let mut peekable = stream.peekable();
-            parse_global_expr(
-                &mut peekable,
-                self,
-                scope,
-                self.optimization_level,
-                self.max_expr_depth,
-            )
+            self.parse_global_expr(&mut peekable, scope, self.optimization_level)
         }
     }
 
@@ -825,12 +807,10 @@ impl Engine {
         let scripts = [script];
         let stream = lex(&scripts);
 
-        let ast = parse_global_expr(
+        let ast = self.parse_global_expr(
             &mut stream.peekable(),
-            self,
             scope,
             OptimizationLevel::None, // No need to optimize a lone expression
-            self.max_expr_depth,
         )?;
 
         self.eval_ast_with_scope(scope, &ast)
@@ -957,13 +937,7 @@ impl Engine {
         let scripts = [script];
         let stream = lex(&scripts);
 
-        let ast = parse(
-            &mut stream.peekable(),
-            self,
-            scope,
-            self.optimization_level,
-            (self.max_expr_depth, self.max_function_expr_depth),
-        )?;
+        let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
 
@@ -1104,16 +1078,20 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let lib = ast.lib();
-        let pos = Position::none();
 
         let fn_def = lib
             .get_function_by_signature(name, args.len(), true)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
+            .ok_or_else(|| {
+                Box::new(EvalAltResult::ErrorFunctionNotFound(
+                    name.into(),
+                    Position::none(),
+                ))
+            })?;
 
         let mut state = State::new();
         let args = args.as_mut();
 
-        self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, pos, 0)
+        self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, 0)
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
@@ -1159,7 +1137,7 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// engine.on_progress(move |ops| {
+    /// engine.on_progress(move |&ops| {
     ///     if ops > 10000 {
     ///         false
     ///     } else if ops % 800 == 0 {
@@ -1178,7 +1156,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + SendSync + 'static) {
+    pub fn on_progress(&mut self, callback: impl Fn(&u64) -> bool + SendSync + 'static) {
         self.progress = Some(Box::new(callback));
     }
 

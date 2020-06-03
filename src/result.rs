@@ -331,10 +331,12 @@ impl EvalAltResult {
         }
     }
 
-    /// Consume the current `EvalAltResult` and return a new one
-    /// with the specified `Position`.
+    /// Consume the current `EvalAltResult` and return a new one with the specified `Position`
+    /// if the current position is `Position::None`.
     pub(crate) fn new_position(mut self: Box<Self>, new_position: Position) -> Box<Self> {
-        self.set_position(new_position);
+        if self.position().is_none() {
+            self.set_position(new_position);
+        }
         self
     }
 }
