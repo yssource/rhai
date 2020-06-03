@@ -2478,44 +2478,15 @@ fn parse_fn<'a>(
     })
 }
 
-pub fn parse_global_expr<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
-    engine: &Engine,
-    scope: &Scope,
-    optimization_level: OptimizationLevel,
-    max_expr_depth: usize,
-) -> Result<AST, ParseError> {
-    let mut state = ParseState::new(max_expr_depth);
-    let expr = parse_expr(input, &mut state, 0, false, false)?;
-
-    match input.peek().unwrap() {
-        (Token::EOF, _) => (),
-        // Return error if the expression doesn't end
-        (token, pos) => {
-            return Err(PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(*pos))
-        }
-    }
-
-    Ok(
-        // Optimize AST
-        optimize_into_ast(
-            engine,
-            scope,
-            vec![Stmt::Expr(Box::new(expr))],
-            vec![],
-            optimization_level,
-        ),
-    )
-}
-
 /// Parse the global level statements.
 fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
-    max_expr_depth: (usize, usize),
+    max_expr_depth: usize,
+    max_function_expr_depth: usize,
 ) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
     let mut functions = HashMap::<u64, FnDef, _>::with_hasher(StraightHasherBuilder);
-    let mut state = ParseState::new(max_expr_depth.0);
+    let mut state = ParseState::new(max_expr_depth);
 
     while !input.peek().unwrap().0.is_eof() {
         // Collect all the function definitions
@@ -2530,7 +2501,7 @@ fn parse_global_level<'a>(
             match input.peek().unwrap() {
                 #[cfg(not(feature = "no_function"))]
                 (Token::Fn, _) => {
-                    let mut state = ParseState::new(max_expr_depth.1);
+                    let mut state = ParseState::new(max_function_expr_depth);
                     let func = parse_fn(input, &mut state, access, 0, true, true)?;
 
                     // Qualifiers (none) + function name + number of arguments.
@@ -2586,20 +2557,49 @@ fn parse_global_level<'a>(
     Ok((statements, functions.into_iter().map(|(_, v)| v).collect()))
 }
 
-/// Run the parser on an input stream, returning an AST.
-pub fn parse<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
-    engine: &Engine,
-    scope: &Scope,
-    optimization_level: OptimizationLevel,
-    max_expr_depth: (usize, usize),
-) -> Result<AST, ParseError> {
-    let (statements, lib) = parse_global_level(input, max_expr_depth)?;
+impl Engine {
+    pub(crate) fn parse_global_expr<'a>(
+        &self,
+        input: &mut Peekable<TokenIterator<'a>>,
+        scope: &Scope,
+        optimization_level: OptimizationLevel,
+    ) -> Result<AST, ParseError> {
+        let mut state = ParseState::new(self.max_expr_depth);
+        let expr = parse_expr(input, &mut state, 0, false, false)?;
 
-    Ok(
-        // Optimize AST
-        optimize_into_ast(engine, scope, statements, lib, optimization_level),
-    )
+        match input.peek().unwrap() {
+            (Token::EOF, _) => (),
+            // Return error if the expression doesn't end
+            (token, pos) => {
+                return Err(
+                    PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(*pos)
+                )
+            }
+        }
+
+        let expr = vec![Stmt::Expr(Box::new(expr))];
+
+        Ok(
+            // Optimize AST
+            optimize_into_ast(self, scope, expr, Default::default(), optimization_level),
+        )
+    }
+
+    /// Run the parser on an input stream, returning an AST.
+    pub(crate) fn parse<'a>(
+        &self,
+        input: &mut Peekable<TokenIterator<'a>>,
+        scope: &Scope,
+        optimization_level: OptimizationLevel,
+    ) -> Result<AST, ParseError> {
+        let (statements, lib) =
+            parse_global_level(input, self.max_expr_depth, self.max_function_expr_depth)?;
+
+        Ok(
+            // Optimize AST
+            optimize_into_ast(self, scope, statements, lib, optimization_level),
+        )
+    }
 }
 
 /// Map a `Dynamic` value to an expression.
