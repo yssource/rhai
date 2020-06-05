@@ -1,7 +1,9 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
+use crate::engine::{
+    get_script_function_by_signature, make_getter, make_setter, Engine, State, FUNC_INDEXER,
+};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
@@ -1077,10 +1079,7 @@ impl Engine {
         arg_values: &mut [Dynamic],
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
-        let lib = ast.lib();
-
-        let fn_def = lib
-            .get_function_by_signature(name, args.len(), true)
+        let fn_def = get_script_function_by_signature(ast.lib(), name, args.len(), true)
             .ok_or_else(|| {
                 Box::new(EvalAltResult::ErrorFunctionNotFound(
                     name.into(),
@@ -1091,7 +1090,7 @@ impl Engine {
         let mut state = State::new();
         let args = args.as_mut();
 
-        self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, 0)
+        self.call_script_fn(scope, &mut state, ast.lib(), name, fn_def, args, 0)
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
@@ -1114,8 +1113,9 @@ impl Engine {
     ) -> AST {
         let lib = ast
             .lib()
-            .iter()
-            .map(|(_, fn_def)| fn_def.as_ref().clone())
+            .iter_fn()
+            .filter(|(_, _, _, f)| f.is_script())
+            .map(|(_, _, _, f)| f.get_fn_def().clone())
             .collect();
 
         let stmt = mem::take(ast.statements_mut());

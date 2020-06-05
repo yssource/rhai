@@ -2,9 +2,9 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, FunctionsLib};
+use crate::engine::{make_getter, make_setter, Engine};
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::module::ModuleRef;
+use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::token::{Position, Token, TokenIterator};
@@ -55,12 +55,12 @@ pub struct AST(
     /// Global statements.
     Vec<Stmt>,
     /// Script-defined functions.
-    FunctionsLib,
+    Module,
 );
 
 impl AST {
     /// Create a new `AST`.
-    pub fn new(statements: Vec<Stmt>, lib: FunctionsLib) -> Self {
+    pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
         Self(statements, lib)
     }
 
@@ -75,7 +75,7 @@ impl AST {
     }
 
     /// Get the script-defined functions.
-    pub(crate) fn lib(&self) -> &FunctionsLib {
+    pub(crate) fn lib(&self) -> &Module {
         &self.1
     }
 
@@ -135,7 +135,10 @@ impl AST {
             (true, true) => vec![],
         };
 
-        Self::new(ast, functions.merge(&other.1))
+        let mut functions = functions.clone();
+        functions.merge(&other.1);
+
+        Self::new(ast, functions)
     }
 
     /// Clear all function definitions in the `AST`.
@@ -170,7 +173,7 @@ pub enum FnAccess {
 
 /// A scripted function definition.
 #[derive(Debug, Clone)]
-pub struct FnDef {
+pub struct ScriptFnDef {
     /// Function name.
     pub name: String,
     /// Function access mode.
@@ -2393,7 +2396,7 @@ fn parse_fn<'a>(
     level: usize,
     if_expr: bool,
     stmt_expr: bool,
-) -> Result<FnDef, ParseError> {
+) -> Result<ScriptFnDef, ParseError> {
     let pos = eat_token(input, Token::Fn);
 
     if level > state.max_expr_depth {
@@ -2469,7 +2472,7 @@ fn parse_fn<'a>(
 
     let params = params.into_iter().map(|(p, _)| p).collect();
 
-    Ok(FnDef {
+    Ok(ScriptFnDef {
         name,
         access,
         params,
@@ -2483,9 +2486,9 @@ fn parse_global_level<'a>(
     input: &mut Peekable<TokenIterator<'a>>,
     max_expr_depth: usize,
     max_function_expr_depth: usize,
-) -> Result<(Vec<Stmt>, Vec<FnDef>), ParseError> {
+) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
     let mut statements = Vec::<Stmt>::new();
-    let mut functions = HashMap::<u64, FnDef, _>::with_hasher(StraightHasherBuilder);
+    let mut functions = HashMap::<u64, ScriptFnDef, _>::with_hasher(StraightHasherBuilder);
     let mut state = ParseState::new(max_expr_depth);
 
     while !input.peek().unwrap().0.is_eof() {

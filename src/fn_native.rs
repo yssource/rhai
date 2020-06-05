@@ -1,8 +1,8 @@
 use crate::any::Dynamic;
-use crate::parser::FnDef;
+use crate::parser::ScriptFnDef;
 use crate::result::EvalAltResult;
 
-use crate::stdlib::{boxed::Box, rc::Rc, sync::Arc};
+use crate::stdlib::{boxed::Box, fmt, rc::Rc, sync::Arc};
 
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
@@ -73,7 +73,18 @@ pub enum CallableFunction {
     /// An iterator function.
     Iterator(IteratorFn),
     /// A script-defined function.
-    Script(Shared<FnDef>),
+    Script(Shared<ScriptFnDef>),
+}
+
+impl fmt::Debug for CallableFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Pure(_) => write!(f, "NativePureFunction"),
+            Self::Method(_) => write!(f, "NativeMethod"),
+            Self::Iterator(_) => write!(f, "NativeIterator"),
+            Self::Script(fn_def) => write!(f, "{:?}", fn_def),
+        }
+    }
 }
 
 impl CallableFunction {
@@ -116,12 +127,23 @@ impl CallableFunction {
             Self::Iterator(_) | Self::Script(_) => panic!(),
         }
     }
+    /// Get a shared reference to a script-defined function definition.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `CallableFunction` is not `Script`.
+    pub fn get_shared_fn_def(&self) -> Shared<ScriptFnDef> {
+        match self {
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
+            Self::Script(f) => f.clone(),
+        }
+    }
     /// Get a reference to a script-defined function definition.
     ///
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Script`.
-    pub fn get_fn_def(&self) -> &FnDef {
+    pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
             Self::Script(f) => f,
@@ -145,5 +167,23 @@ impl CallableFunction {
     /// Create a new `CallableFunction::Method`.
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
+    }
+}
+
+impl From<IteratorFn> for CallableFunction {
+    fn from(func: IteratorFn) -> Self {
+        Self::Iterator(func)
+    }
+}
+
+impl From<ScriptFnDef> for CallableFunction {
+    fn from(func: ScriptFnDef) -> Self {
+        Self::Script(func.into())
+    }
+}
+
+impl From<Shared<ScriptFnDef>> for CallableFunction {
+    fn from(func: Shared<ScriptFnDef>) -> Self {
+        Self::Script(func)
     }
 }
