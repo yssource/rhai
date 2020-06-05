@@ -2,12 +2,12 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, FunctionsLib, FUNC_INDEXER};
+use crate::engine::{make_getter, make_setter, Engine, FUNC_INDEXER};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
-    AST,
+    ScriptFnDef, AST,
 };
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
@@ -53,9 +53,6 @@ pub struct Module {
         StraightHasherBuilder,
     >,
 
-    /// Script-defined functions.
-    lib: FunctionsLib,
-
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: HashMap<TypeId, IteratorFn>,
 
@@ -68,10 +65,9 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<module {:?}, functions={}, lib={}>",
+            "<module {:?}, functions={}>",
             self.variables,
             self.functions.len(),
-            self.lib.len()
         )
     }
 }
@@ -184,6 +180,23 @@ impl Module {
         self.all_variables
             .get_mut(&hash_var)
             .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.to_string(), pos)))
+    }
+
+    /// Set a script-defined function into the module.
+    ///
+    /// If there is an existing function of the same name and number of arguments, it is replaced.
+    pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) {
+        // None + function name + number of arguments.
+        let hash_fn_def = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
+        self.functions.insert(
+            hash_fn_def,
+            (
+                fn_def.name.to_string(),
+                fn_def.access,
+                Default::default(),
+                fn_def.into(),
+            ),
+        );
     }
 
     /// Does a sub-module exist in the module?
@@ -750,6 +763,41 @@ impl Module {
         })
     }
 
+    /// Merge another module into this module.
+    pub fn merge(&mut self, other: &Self) {
+        self.variables
+            .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
+        self.functions
+            .extend(other.functions.iter().map(|(&k, v)| (k, v.clone())));
+        self.type_iterators
+            .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
+    }
+
+    /// Get the number of variables in the module.
+    pub fn num_var(&self) -> usize {
+        self.variables.len()
+    }
+    /// Get the number of functions in the module.
+    pub fn num_fn(&self) -> usize {
+        self.variables.len()
+    }
+    /// Get the number of type iterators in the module.
+    pub fn num_iter(&self) -> usize {
+        self.variables.len()
+    }
+
+    /// Get an iterator to the variables in the module.
+    pub fn iter_var(&self) -> impl Iterator<Item = (&String, &Dynamic)> {
+        self.variables.iter()
+    }
+
+    /// Get an iterator to the functions in the module.
+    pub(crate) fn iter_fn(
+        &self,
+    ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, CallableFunction)> {
+        self.functions.values()
+    }
+
     /// Create a new `Module` by evaluating an `AST`.
     ///
     /// # Examples
@@ -795,12 +843,12 @@ impl Module {
             },
         );
 
-        module.lib = module.lib.merge(ast.lib());
+        module.merge(ast.lib());
 
         Ok(module)
     }
 
-    /// Scan through all the sub-modules in the `Module` build an index of all
+    /// Scan through all the sub-modules in the module build an index of all
     /// variables and external Rust functions via hashing.
     pub(crate) fn index_all_sub_modules(&mut self) {
         // Collect a particular module.
@@ -830,34 +878,31 @@ impl Module {
                     Private => continue,
                     Public => (),
                 }
-                // Rust functions are indexed in two steps:
-                // 1) Calculate a hash in a similar manner to script-defined functions,
-                //    i.e. qualifiers + function name + number of arguments.
-                let hash_fn_def =
-                    calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
-                // 2) Calculate a second hash with no qualifiers, empty function name,
-                //    zero number of arguments, and the actual list of argument `TypeId`'.s
-                let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
-                // 3) The final hash is the XOR of the two hashes.
-                let hash_fn_native = hash_fn_def ^ hash_fn_args;
 
-                functions.push((hash_fn_native, func.clone()));
-            }
-            // Index all script-defined functions
-            for fn_def in module.lib.values() {
-                match fn_def.access {
-                    // Private functions are not exported
-                    Private => continue,
-                    Public => (),
+                if func.is_script() {
+                    let fn_def = func.get_shared_fn_def();
+                    // Qualifiers + function name + number of arguments.
+                    let hash_fn_def = calc_fn_hash(
+                        qualifiers.iter().map(|&v| v),
+                        &fn_def.name,
+                        fn_def.params.len(),
+                        empty(),
+                    );
+                    functions.push((hash_fn_def, fn_def.into()));
+                } else {
+                    // Rust functions are indexed in two steps:
+                    // 1) Calculate a hash in a similar manner to script-defined functions,
+                    //    i.e. qualifiers + function name + number of arguments.
+                    let hash_fn_def =
+                        calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
+                    // 2) Calculate a second hash with no qualifiers, empty function name,
+                    //    zero number of arguments, and the actual list of argument `TypeId`'.s
+                    let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
+                    // 3) The final hash is the XOR of the two hashes.
+                    let hash_fn_native = hash_fn_def ^ hash_fn_args;
+
+                    functions.push((hash_fn_native, func.clone()));
                 }
-                // Qualifiers + function name + number of arguments.
-                let hash_fn_def = calc_fn_hash(
-                    qualifiers.iter().map(|&v| v),
-                    &fn_def.name,
-                    fn_def.params.len(),
-                    empty(),
-                );
-                functions.push((hash_fn_def, CallableFunction::Script(fn_def.clone()).into()));
             }
         }
 
