@@ -74,9 +74,11 @@ pub const KEYWORD_EVAL: &str = "eval";
 pub const FUNC_TO_STRING: &str = "to_string";
 pub const FUNC_GETTER: &str = "get$";
 pub const FUNC_SETTER: &str = "set$";
-pub const FUNC_INDEXER: &str = "$index$";
+pub const FUNC_INDEXER_GET: &str = "$index$get$";
+pub const FUNC_INDEXER_SET: &str = "$index$set$";
 
 /// A type that encapsulates a mutation target for an expression with side effects.
+#[derive(Debug)]
 enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
     Ref(&'a mut Dynamic),
@@ -91,40 +93,45 @@ impl Target<'_> {
     /// Is the `Target` a reference pointing to other data?
     pub fn is_ref(&self) -> bool {
         match self {
-            Target::Ref(_) => true,
-            Target::Value(_) | Target::StringChar(_, _, _) => false,
+            Self::Ref(_) => true,
+            Self::Value(_) | Self::StringChar(_, _, _) => false,
         }
     }
-
+    /// Is the `Target` an owned value?
+    pub fn is_value(&self) -> bool {
+        match self {
+            Self::Ref(_) => false,
+            Self::Value(_) => true,
+            Self::StringChar(_, _, _) => false,
+        }
+    }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
-            Target::Ref(r) => r.clone(),        // Referenced value is cloned
-            Target::Value(v) => v,              // Owned value is simply taken
-            Target::StringChar(_, _, ch) => ch, // Character is taken
+            Self::Ref(r) => r.clone(),        // Referenced value is cloned
+            Self::Value(v) => v,              // Owned value is simply taken
+            Self::StringChar(_, _, ch) => ch, // Character is taken
         }
     }
-
     /// Get a mutable reference from the `Target`.
     pub fn as_mut(&mut self) -> &mut Dynamic {
         match self {
-            Target::Ref(r) => *r,
-            Target::Value(ref mut r) => r,
-            Target::StringChar(_, _, ref mut r) => r,
+            Self::Ref(r) => *r,
+            Self::Value(ref mut r) => r,
+            Self::StringChar(_, _, ref mut r) => r,
         }
     }
-
     /// Update the value of the `Target`.
     /// Position in `EvalAltResult` is None and must be set afterwards.
     pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
         match self {
-            Target::Ref(r) => **r = new_val,
-            Target::Value(_) => {
+            Self::Ref(r) => **r = new_val,
+            Self::Value(_) => {
                 return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
                     Position::none(),
                 )))
             }
-            Target::StringChar(Dynamic(Union::Str(ref mut s)), index, _) => {
+            Self::StringChar(Dynamic(Union::Str(ref mut s)), index, _) => {
                 // Replace the character at the specified index position
                 let new_ch = new_val
                     .as_char()
@@ -163,20 +170,17 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 ///
 /// This type uses some unsafe code, mainly for avoiding cloning of local variable names via
 /// direct lifetime casting.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Default)]
 pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
     pub always_search: bool,
-
     /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
     /// is one level higher, and so on.
     pub scope_level: usize,
-
     /// Number of operations performed.
     pub operations: u64,
-
     /// Number of modules loaded.
     pub modules: u64,
 }
@@ -361,14 +365,23 @@ fn search_scope<'s, 'a>(
         _ => unreachable!(),
     };
 
+    // Check if it is qualified
     if let Some(modules) = modules.as_ref() {
-        let module = if let Some(index) = modules.index() {
+        // Qualified - check if the root module is directly indexed
+        let index = if state.always_search {
+            None
+        } else {
+            modules.index()
+        };
+
+        let module = if let Some(index) = index {
             scope
                 .get_mut(scope.len() - index.get())
                 .0
                 .downcast_mut::<Module>()
                 .unwrap()
         } else {
+            // Find the root module in the scope
             let (id, root_pos) = modules.get(0);
 
             scope
@@ -376,28 +389,27 @@ fn search_scope<'s, 'a>(
                 .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
         };
 
-        return Ok((
-            module.get_qualified_var_mut(name, *hash_var, *pos)?,
-            name,
-            // Module variables are constant
-            ScopeEntryType::Constant,
-            *pos,
-        ));
-    }
+        let target = module.get_qualified_var_mut(name, *hash_var, *pos)?;
 
-    let index = if state.always_search { None } else { *index };
-
-    let index = if let Some(index) = index {
-        scope.len() - index.get()
+        // Module variables are constant
+        Ok((target, name, ScopeEntryType::Constant, *pos))
     } else {
-        scope
-            .get_index(name)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), *pos)))?
-            .0
-    };
+        // Unqualified - check if it is directly indexed
+        let index = if state.always_search { None } else { *index };
 
-    let (val, typ) = scope.get_mut(index);
-    Ok((val, name, typ, *pos))
+        let index = if let Some(index) = index {
+            scope.len() - index.get()
+        } else {
+            // Find the variable in the scope
+            scope
+                .get_index(name)
+                .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), *pos)))?
+                .0
+        };
+
+        let (val, typ) = scope.get_mut(index);
+        Ok((val, name, typ, *pos))
+    }
 }
 
 impl Engine {
@@ -585,10 +597,16 @@ impl Engine {
         .or_else(|| self.packages.get_fn(hashes.0));
 
         if let Some(func) = func {
+            // Calling pure function in method-call?
+            normalize_first_arg(
+                (func.is_pure() || func.is_script()) && is_ref,
+                &mut this_copy,
+                &mut old_this_ptr,
+                args,
+            );
+
             if func.is_script() {
                 // Run scripted function
-                normalize_first_arg(is_ref, &mut this_copy, &mut old_this_ptr, args);
-
                 let fn_def = func.get_fn_def();
                 let result =
                     self.call_script_fn(scope, state, lib, fn_name, fn_def, args, level)?;
@@ -598,14 +616,6 @@ impl Engine {
 
                 return Ok((result, false));
             } else {
-                // Calling pure function in method-call?
-                normalize_first_arg(
-                    func.is_pure() && is_ref,
-                    &mut this_copy,
-                    &mut old_this_ptr,
-                    args,
-                );
-
                 // Run external function
                 let result = func.get_native_fn()(args)?;
 
@@ -668,22 +678,40 @@ impl Engine {
             )));
         }
 
-        let types_list: Vec<_> = args
-            .iter()
-            .map(|name| self.map_type_name(name.type_name()))
-            .collect();
-
-        // Getter function not found?
-        if fn_name == FUNC_INDEXER {
+        // index getter function not found?
+        if fn_name == FUNC_INDEXER_GET && args.len() == 2 {
             return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                format!("[]({})", types_list.join(", ")),
+                format!(
+                    "{} [{}]",
+                    self.map_type_name(args[0].type_name()),
+                    self.map_type_name(args[1].type_name()),
+                ),
+                Position::none(),
+            )));
+        }
+
+        // index setter function not found?
+        if fn_name == FUNC_INDEXER_SET {
+            return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+                format!(
+                    "{} [{}]=",
+                    self.map_type_name(args[0].type_name()),
+                    self.map_type_name(args[1].type_name()),
+                ),
                 Position::none(),
             )));
         }
 
         // Raise error
         Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-            format!("{} ({})", fn_name, types_list.join(", ")),
+            format!(
+                "{} ({})",
+                fn_name,
+                args.iter()
+                    .map(|name| self.map_type_name(name.type_name()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Position::none(),
         )))
     }
@@ -787,12 +815,8 @@ impl Engine {
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-        let hash_fn = calc_fn_hash(
-            empty(),
-            fn_name,
-            args.len(),
-            args.iter().map(|a| a.type_id()),
-        );
+        let arg_types = args.iter().map(|a| a.type_id());
+        let hash_fn = calc_fn_hash(empty(), fn_name, args.len(), arg_types);
         let hashes = (hash_fn, if native_only { 0 } else { hash_fn_def });
 
         match fn_name {
@@ -890,8 +914,8 @@ impl Engine {
                     let (idx, expr, pos) = x.as_ref();
                     let is_idx = matches!(rhs, Expr::Index(_));
                     let idx_pos = idx.position();
-                    let this_ptr = &mut self
-                        .get_indexed_mut(state, lib, obj, is_ref, idx_val, idx_pos, false)?;
+                    let this_ptr =
+                        &mut self.get_indexed_mut(state, lib, target, idx_val, idx_pos, false)?;
 
                     self.eval_dot_index_chain_helper(
                         state, lib, this_ptr, expr, idx_values, is_idx, level, new_val,
@@ -900,17 +924,52 @@ impl Engine {
                 }
                 // xxx[rhs] = new_val
                 _ if new_val.is_some() => {
-                    let this_ptr =
-                        &mut self.get_indexed_mut(state, lib, obj, is_ref, idx_val, pos, true)?;
+                    let mut idx_val2 = idx_val.clone();
 
-                    this_ptr
-                        .set_value(new_val.unwrap())
-                        .map_err(|err| EvalAltResult::new_position(err, rhs.position()))?;
-                    Ok((Default::default(), true))
+                    match self.get_indexed_mut(state, lib, target, idx_val, pos, true) {
+                        // Indexed value is an owned value - the only possibility is an indexer
+                        // Try to call an index setter
+                        Ok(this_ptr) if this_ptr.is_value() => {
+                            let fn_name = FUNC_INDEXER_SET;
+                            let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val.unwrap()];
+
+                            self.exec_fn_call(state, lib, fn_name, true, 0, args, is_ref, None, 0)
+                                .or_else(|err| match *err {
+                                    // If there is no index setter, no need to set it back because the indexer is read-only
+                                    EvalAltResult::ErrorFunctionNotFound(s, _)
+                                        if s == FUNC_INDEXER_SET =>
+                                    {
+                                        Ok(Default::default())
+                                    }
+                                    _ => Err(err),
+                                })?;
+                        }
+                        // Indexed value is a reference - update directly
+                        Ok(ref mut this_ptr) => {
+                            this_ptr
+                                .set_value(new_val.unwrap())
+                                .map_err(|err| EvalAltResult::new_position(err, rhs.position()))?;
+                        }
+                        Err(err) => match *err {
+                            // No index getter - try to call an index setter
+                            EvalAltResult::ErrorIndexingType(_, _) => {
+                                let fn_name = FUNC_INDEXER_SET;
+                                let args =
+                                    &mut [target.as_mut(), &mut idx_val2, &mut new_val.unwrap()];
+
+                                self.exec_fn_call(
+                                    state, lib, fn_name, true, 0, args, is_ref, None, 0,
+                                )?;
+                            }
+                            // Error
+                            err => return Err(Box::new(err)),
+                        },
+                    }
+                    Ok(Default::default())
                 }
                 // xxx[rhs]
                 _ => self
-                    .get_indexed_mut(state, lib, obj, is_ref, idx_val, pos, false)
+                    .get_indexed_mut(state, lib, target, idx_val, pos, false)
                     .map(|v| (v.clone_into_dynamic(), false)),
             }
         } else {
@@ -940,8 +999,7 @@ impl Engine {
                 Expr::Property(x) if obj.is::<Map>() && new_val.is_some() => {
                     let ((prop, _, _), pos) = x.as_ref();
                     let index = prop.clone().into();
-                    let mut val =
-                        self.get_indexed_mut(state, lib, obj, is_ref, index, *pos, true)?;
+                    let mut val = self.get_indexed_mut(state, lib, target, index, *pos, true)?;
 
                     val.set_value(new_val.unwrap())
                         .map_err(|err| EvalAltResult::new_position(err, rhs.position()))?;
@@ -952,7 +1010,7 @@ impl Engine {
                 Expr::Property(x) if obj.is::<Map>() => {
                     let ((prop, _, _), pos) = x.as_ref();
                     let index = prop.clone().into();
-                    let val = self.get_indexed_mut(state, lib, obj, is_ref, index, *pos, false)?;
+                    let val = self.get_indexed_mut(state, lib, target, index, *pos, false)?;
 
                     Ok((val.clone_into_dynamic(), false))
                 }
@@ -981,7 +1039,7 @@ impl Engine {
                     let mut val = if let Expr::Property(p) = prop {
                         let ((prop, _, _), _) = p.as_ref();
                         let index = prop.clone().into();
-                        self.get_indexed_mut(state, lib, obj, is_ref, index, *pos, false)?
+                        self.get_indexed_mut(state, lib, target, index, *pos, false)?
                     } else {
                         unreachable!();
                     };
@@ -1160,13 +1218,15 @@ impl Engine {
         &self,
         state: &mut State,
         lib: &Module,
-        val: &'a mut Dynamic,
-        is_ref: bool,
+        target: &'a mut Target,
         mut idx: Dynamic,
         idx_pos: Position,
         create: bool,
     ) -> Result<Target<'a>, Box<EvalAltResult>> {
         self.inc_operations(state)?;
+
+        let is_ref = target.is_ref();
+        let val = target.as_mut();
 
         match val {
             #[cfg(not(feature = "no_index"))]
@@ -1233,7 +1293,7 @@ impl Engine {
             }
 
             _ => {
-                let fn_name = FUNC_INDEXER;
+                let fn_name = FUNC_INDEXER_GET;
                 let type_name = self.map_type_name(val.type_name());
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(state, lib, fn_name, true, 0, args, is_ref, None, 0)

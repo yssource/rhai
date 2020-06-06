@@ -472,7 +472,7 @@ The follow packages are available:
 Packages typically contain Rust functions that are callable within a Rhai script.
 All functions registered in a package is loaded under the _global namespace_ (i.e. they're available without module qualifiers).
 Once a package is created (e.g. via `new`), it can be _shared_ (via `get`) among multiple instances of [`Engine`],
-even across threads (under the [`sync`] feature). Therefore, a package only has to be created _once_.
+even across threads (under [`sync`]). Therefore, a package only has to be created _once_.
 
 Packages are actually implemented as [modules], so they share a lot of behavior and characteristics.
 The main difference is that a package loads under the _global_ namespace, while a module loads under its own
@@ -572,7 +572,7 @@ if type_of(x) == "string" {
 
 [`Dynamic`]: #dynamic-values
 
-A `Dynamic` value can be _any_ type. However, under the [`sync`] feature, all types must be `Send + Sync`.
+A `Dynamic` value can be _any_ type. However, under [`sync`], all types must be `Send + Sync`.
 
 Because [`type_of()`] a `Dynamic` value returns the type of the actual value, it is usually used to perform type-specific
 actions based on the actual value's type.
@@ -975,8 +975,8 @@ let result = engine.eval::<i64>(
 println!("result: {}", result);                     // prints 1
 ```
 
-Under the [`no_object`] feature, however, the _method_ style of function calls
-(i.e. calling a function as an object-method) is no longer supported.
+Under [`no_object`], however, the _method_ style of function calls (i.e. calling a function as an object-method)
+is no longer supported.
 
 ```rust
 // Below is a syntax error under 'no_object' because 'clear' cannot be called in method style.
@@ -999,8 +999,7 @@ let x = new_ts();
 print(x.type_of());                                 // prints "Hello"
 ```
 
-Getters and setters
--------------------
+### Getters and setters
 
 Similarly, custom types can expose members by registering a `get` and/or `set` function.
 
@@ -1040,12 +1039,10 @@ let result = engine.eval::<String>(r#"let a = new_ts(); a.xyz = "42"; a.xyz"#)?;
 println!("Answer: {}", result);                     // prints 42
 ```
 
-Indexers
---------
+### Indexers
 
 Custom types can also expose an _indexer_ by registering an indexer function.
 A custom type with an indexer function defined can use the bracket '`[]`' notation to get a property value
-(but not update it - indexers are read-only).
 
 ```rust
 #[derive(Clone)]
@@ -1057,9 +1054,12 @@ impl TestStruct {
     fn get_field(&mut self, index: i64) -> i64 {
         self.fields[index as usize]
     }
+    fn set_field(&mut self, index: i64, value: i64) {
+        self.fields[index as usize] = value
+    }
 
     fn new() -> Self {
-        TestStruct { fields: vec![1, 2, 42, 4, 5] }
+        TestStruct { fields: vec![1, 2, 3, 4, 5] }
     }
 }
 
@@ -1068,22 +1068,31 @@ let engine = Engine::new();
 engine.register_type::<TestStruct>();
 
 engine.register_fn("new_ts", TestStruct::new);
-engine.register_indexer(TestStruct::get_field);
 
-let result = engine.eval::<i64>("let a = new_ts(); a[2]")?;
+// Shorthand: engine.register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
+engine.register_indexer_get(TestStruct::get_field);
+engine.register_indexer_set(TestStruct::set_field);
+
+let result = engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
 
-Needless to say, `register_type`, `register_type_with_name`, `register_get`, `register_set`, `register_get_set`
-and `register_indexer` are not available under the [`no_object`] feature.
-`register_indexer` is also not available under the [`no_index`] feature.
+For efficiency reasons, indexers **cannot** be used to overload (i.e. override) built-in indexing operations for
+[arrays] and [object maps].
 
-Printing for custom types
--------------------------
+### Disabling custom types
 
-To use custom types for `print` and `debug`, or format its value into a [string], it is necessary that the following
-functions be registered (assuming the custom type is `T` and it is `Display + Debug`):
+The custom types API `register_type`, `register_type_with_name`, `register_get`, `register_set`, `register_get_set`,
+`register_indexer_get`, `register_indexer_set` and `register_indexer_get_set` are not available under [`no_object`].
+
+The indexers API `register_indexer_get`, `register_indexer_set` and `register_indexer_get_set` are also
+not available under [`no_index`].
+
+### Printing for custom types
+
+To use custom types for `print` and `debug`, or convert its value into a [string], it is necessary that the following
+functions be registered (assuming the custom type is `T : Display + Debug`):
 
 | Function    | Signature                                        | Typical implementation         | Usage                                                                                   |
 | ----------- | ------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------- |
@@ -1103,7 +1112,7 @@ By default, Rhai treats each [`Engine`] invocation as a fresh one, persisting on
 but no global state. This gives each evaluation a clean starting slate. In order to continue using the same global state
 from one invocation to the next, such a state must be manually created and passed in.
 
-All `Scope` variables are [`Dynamic`], meaning they can store values of any type.  Under the [`sync`] feature, however,
+All `Scope` variables are [`Dynamic`], meaning they can store values of any type.  Under [`sync`], however,
 only types that are `Send + Sync` are supported, and the entire `Scope` itself will also be `Send + Sync`.
 This is extremely useful in multi-threaded applications.
 
@@ -1205,7 +1214,7 @@ The following are reserved keywords in Rhai:
 | `import`, `export`, `as`                          | Modules               |        [`no_module`]        |
 
 Keywords cannot be the name of a [function] or [variable], unless the relevant exclusive feature is enabled.
-For example, `fn` is a valid variable name under the [`no_function`] feature.
+For example, `fn` is a valid variable name under [`no_function`].
 
 Statements
 ----------
@@ -2375,10 +2384,10 @@ which simply loads a script file based on the path (with `.rhai` extension attac
 
 Built-in module resolvers are grouped under the `rhai::module_resolvers` module namespace.
 
-| Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FileModuleResolver`   | The default module resolution service, not available under the [`no_std`] feature. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
-| `StaticModuleResolver` | Loads modules that are statically added. This can be used under the [`no_std`] feature.                                                                                                                                                                                                                                                                        |
+| Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileModuleResolver`   | The default module resolution service, not available under [`no_std`]. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used under [`no_std`].                                                                                                                                                                                                                                                                        |
 
 An [`Engine`]'s module resolver is set via a call to `Engine::set_module_resolver`:
 

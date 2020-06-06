@@ -8,6 +8,13 @@ Breaking changes
 ----------------
 
 * Callback closure passed to `Engine::on_progress` now takes `&u64` instead of `u64` to be consistent with other callback signatures.
+* `Engine::register_indexer` is renamed to `Engine::register_indexer_get`.
+* `Module::set_indexer_fn` is renamed to `Module::set_indexer_get_fn`.
+
+New features
+------------
+
+* Indexers are now split into getters ans setters (which now support updates).  The API is split into `Engine::register_indexer_get` and `Engine::register_indexer_set` with `Engine::register_indexer_get_set` being a shorthand.  Similarly, `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn` are added.
 
 
 Version 0.15.0

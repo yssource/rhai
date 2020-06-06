@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, FUNC_INDEXER};
+use crate::engine::{make_getter, make_setter, Engine, FUNC_INDEXER_GET, FUNC_INDEXER_SET};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::parser::{
     FnAccess,
@@ -518,7 +518,7 @@ impl Module {
         self.set_fn_2_mut(make_setter(&name.into()), func)
     }
 
-    /// Set a Rust indexer function taking two parameters (the first one mutable) into the module,
+    /// Set a Rust index getter taking two parameters (the first one mutable) into the module,
     /// returning a hash key.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
@@ -529,19 +529,19 @@ impl Module {
     /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_indexer_fn(|x: &mut i64, y: ImmutableString| {
+    /// let hash = module.set_indexer_get_fn(|x: &mut i64, y: ImmutableString| {
     ///     Ok(*x + y.len() as i64)
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
-    pub fn set_indexer_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+    pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
         #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
     ) -> u64 {
-        self.set_fn_2_mut(FUNC_INDEXER, func)
+        self.set_fn_2_mut(FUNC_INDEXER_GET, func)
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -623,6 +623,44 @@ impl Module {
         let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
+            Public,
+            &args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
+    /// Set a Rust index setter taking three parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_indexer_set_fn(|x: &mut i64, y: ImmutableString, value: i64| {
+    ///     *x = y.len() as i64 + value;
+    ///     Ok(())
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone>(
+        &mut self,
+        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, A) -> FuncReturn<()> + 'static,
+        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, A) -> FuncReturn<()> + Send + Sync + 'static,
+    ) -> u64 {
+        let f = move |args: &mut FnCallArgs| {
+            let b = mem::take(args[1]).cast::<B>();
+            let c = mem::take(args[2]).cast::<A>();
+            let a = args[0].downcast_mut::<A>().unwrap();
+
+            func(a, b, c).map(Dynamic::from)
+        };
+        let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<A>()];
+        self.set_fn(
+            FUNC_INDEXER_SET,
             Public,
             &args,
             CallableFunction::from_method(Box::new(f)),
