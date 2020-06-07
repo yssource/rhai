@@ -7,6 +7,7 @@ use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs};
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
+use crate::utils::ImmutableString;
 
 use crate::stdlib::{any::TypeId, boxed::Box, mem};
 
@@ -99,9 +100,16 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> &mut T {
 /// Dereference into value.
 #[inline(always)]
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
-    // We consume the argument and then replace it with () - the argument is not supposed to be used again.
-    // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
-    mem::take(data).cast::<T>()
+    if TypeId::of::<T>() == TypeId::of::<&str>() {
+        // &str parameters are mapped to the underlying ImmutableString
+        let r = data.as_str().unwrap();
+        let x = unsafe { mem::transmute::<_, &T>(&r) };
+        x.clone()
+    } else {
+        // We consume the argument and then replace it with () - the argument is not supposed to be used again.
+        // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
+        mem::take(data).cast::<T>()
+    }
 }
 
 /// This macro creates a closure wrapping a registered function.
@@ -146,6 +154,18 @@ pub fn map_result(
     data
 }
 
+/// Remap `&str` to `ImmutableString`.
+#[inline(always)]
+fn map_type_id<T: 'static>() -> TypeId {
+    let id = TypeId::of::<T>();
+
+    if id == TypeId::of::<&str>() {
+        TypeId::of::<ImmutableString>()
+    } else {
+        id
+    }
+}
+
 macro_rules! def_register {
     () => {
         def_register!(imp from_pure :);
@@ -170,7 +190,7 @@ macro_rules! def_register {
         {
             fn register_fn(&mut self, name: &str, f: FN) {
                 self.global_module.set_fn(name, FnAccess::Public,
-                    &[$(TypeId::of::<$par>()),*],
+                    &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $clone),*))
                 );
             }
@@ -187,7 +207,7 @@ macro_rules! def_register {
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {
                 self.global_module.set_fn(name, FnAccess::Public,
-                    &[$(TypeId::of::<$par>()),*],
+                    &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $clone),*))
                 );
             }

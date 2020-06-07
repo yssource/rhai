@@ -906,6 +906,9 @@ impl Engine {
         let mut idx_val = idx_values.pop();
 
         if is_index {
+            #[cfg(feature = "no_index")]
+            unreachable!();
+
             let pos = rhs.position();
 
             match rhs {
@@ -1292,6 +1295,7 @@ impl Engine {
                 }
             }
 
+            #[cfg(not(feature = "no_index"))]
             _ => {
                 let fn_name = FUNC_INDEXER_GET;
                 let type_name = self.map_type_name(val.type_name());
@@ -1305,6 +1309,12 @@ impl Engine {
                         ))
                     })
             }
+
+            #[cfg(feature = "no_index")]
+            _ => Err(Box::new(EvalAltResult::ErrorIndexingType(
+                self.map_type_name(val.type_name()).into(),
+                Position::none(),
+            ))),
         }
     }
 

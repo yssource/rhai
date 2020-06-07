@@ -684,13 +684,18 @@ Rhai's scripting engine is very lightweight.  It gets most of its abilities from
 To call these functions, they need to be registered with the [`Engine`].
 
 ```rust
-use rhai::{Dynamic, Engine, EvalAltResult};
+use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString};
 use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
 use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
 
-// Normal function that returns any value type
-fn add(x: i64, y: i64) -> i64 {
-    x + y
+// Normal function that returns a standard type
+// Remember to use 'ImmutableString' and not 'String'
+fn add_len(x: i64, s: ImmutableString) -> i64 {
+    x + s.len()
+}
+// Alternatively, '&str' maps directly to 'ImmutableString'
+fn add_len_str(x: i64, s: &str) -> i64 {
+    x + s.len()
 }
 
 // Function that returns a 'Dynamic' value - must return a 'Result'
@@ -702,9 +707,14 @@ fn main() -> Result<(), Box<EvalAltResult>>
 {
     let engine = Engine::new();
 
-    engine.register_fn("add", add);
+    engine.register_fn("add", add_len);
+    engine.register_fn("add_str", add_len_str);
 
-    let result = engine.eval::<i64>("add(40, 2)")?;
+    let result = engine.eval::<i64>(r#"add(40, "xx")"#)?;
+
+    println!("Answer: {}", result);             // prints 42
+
+    let result = engine.eval::<i64>(r#"add_str(40, "xx")"#)?;
 
     println!("Answer: {}", result);             // prints 42
 
@@ -734,6 +744,25 @@ Functions registered with the [`Engine`] can be _overloaded_ as long as the _sig
 i.e. different functions can have the same name as long as their parameters are of different types
 and/or different number.
 New definitions _overwrite_ previous definitions of the same name and same number/types of parameters.
+
+### `String` parameters
+
+Functions accepting a parameter of `String` should use `&str` instead because it maps directly to `ImmutableString`
+which is the type that Rhai uses to represent strings internally.
+
+```rust
+fn get_len1(s: String) -> i64 { s.len() as i64 }            // <- Rhai will not find this function
+fn get_len2(s: &str) -> i64 { s.len() as i64 }              // <- Rhai finds this function fine
+fn get_len3(s: ImmutableString) -> i64 { s.len() as i64 }   // <- the above is equivalent to this
+
+engine.register_fn("len1", get_len1);
+engine.register_fn("len2", get_len2);
+engine.register_fn("len3", get_len3);
+
+let len = engine.eval::<i64>("x.len1()")?;                  // error: function 'len1 (string)' not found
+let len = engine.eval::<i64>("x.len2()")?;                  // works fine
+let len = engine.eval::<i64>("x.len3()")?;                  // works fine
+```
 
 Generic functions
 -----------------
@@ -1387,6 +1416,9 @@ Strings and Chars
 [string]: #strings-and-chars
 [strings]: #strings-and-chars
 [char]: #strings-and-chars
+
+All strings in Rhai are implemented as `ImmutableString` (see [standard types]).
+`ImmutableString` should be used in place of the standard Rust type `String` when registering functions.
 
 String and character literals follow C-style formatting, with support for Unicode ('`\u`_xxxx_' or '`\U`_xxxxxxxx_')
 and hex ('`\x`_xx_') escape sequences.
