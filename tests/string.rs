@@ -168,7 +168,7 @@ fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine.eval::<INT>(r#"foo3("hello")"#).expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(ref x, _) if x == "foo3 (string)"
+        EvalAltResult::ErrorFunctionNotFound(ref x, _) if x == "foo3 (&str | ImmutableString)"
     ));
 
     Ok(())

@@ -708,7 +708,11 @@ impl Engine {
                 "{} ({})",
                 fn_name,
                 args.iter()
-                    .map(|name| self.map_type_name(name.type_name()))
+                    .map(|name| if name.is::<ImmutableString>() {
+                        "&str | ImmutableString"
+                    } else {
+                        self.map_type_name(name.type_name())
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

@@ -101,10 +101,10 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> &mut T {
 #[inline(always)]
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
-        // &str parameters are mapped to the underlying ImmutableString
-        let r = data.as_str().unwrap();
-        let x = unsafe { mem::transmute::<_, &T>(&r) };
-        x.clone()
+        // If T is &str, data must be ImmutableString, so map directly to it
+        let ref_str = data.as_str().unwrap();
+        let ref_T = unsafe { mem::transmute::<_, &T>(&ref_str) };
+        ref_T.clone()
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
