@@ -4,7 +4,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
-use crate::fn_native::{CallableFunction, FnAny, FnCallArgs};
+use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::utils::ImmutableString;
@@ -101,10 +101,10 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> &mut T {
 #[inline(always)]
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
-        // &str parameters are mapped to the underlying ImmutableString
-        let r = data.as_str().unwrap();
-        let x = unsafe { mem::transmute::<_, &T>(&r) };
-        x.clone()
+        // If T is &str, data must be ImmutableString, so map directly to it
+        let ref_str = data.as_str().unwrap();
+        let ref_T = unsafe { mem::transmute::<_, &T>(&ref_str) };
+        ref_T.clone()
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
@@ -178,13 +178,7 @@ macro_rules! def_register {
     //                                                         ^ dereferencing function
         impl<
             $($par: Variant + Clone,)*
-
-            #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> RET + Send + Sync + 'static,
-
-            #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> RET + 'static,
-
+            FN: Fn($($param),*) -> RET + SendSync + 'static,
             RET: Variant + Clone
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
@@ -198,11 +192,7 @@ macro_rules! def_register {
 
         impl<
             $($par: Variant + Clone,)*
-
-            #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync + 'static,
-            #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + 'static,
+            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
         > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {

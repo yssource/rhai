@@ -1,5 +1,6 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
+use crate::fn_native::SendSync;
 use crate::module::Module;
 use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
@@ -54,31 +55,6 @@ pub trait Variant: Any {
     fn _closed(&self) -> _Private;
 }
 
-#[cfg(not(feature = "sync"))]
-impl<T: Any + Clone> Variant for T {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self as &mut dyn Any
-    }
-    fn as_box_any(self: Box<Self>) -> Box<dyn Any> {
-        self as Box<dyn Any>
-    }
-    fn type_name(&self) -> &'static str {
-        type_name::<T>()
-    }
-    fn into_dynamic(self) -> Dynamic {
-        Dynamic::from(self)
-    }
-    fn clone_into_dynamic(&self) -> Dynamic {
-        Dynamic::from(self.clone())
-    }
-    fn _closed(&self) -> _Private {
-        _Private
-    }
-}
-
 /// Trait to represent any type.
 ///
 /// `From<_>` is implemented for `i64` (`i32` if `only_i32`), `f64` (if not `no_float`),
@@ -108,8 +84,7 @@ pub trait Variant: Any + Send + Sync {
     fn _closed(&self) -> _Private;
 }
 
-#[cfg(feature = "sync")]
-impl<T: Any + Clone + Send + Sync> Variant for T {
+impl<T: Any + Clone + SendSync> Variant for T {
     fn as_any(&self) -> &dyn Any {
         self as &dyn Any
     }
