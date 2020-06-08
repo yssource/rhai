@@ -190,8 +190,9 @@ impl<T: Clone> Clone for StaticVec<T> {
 
         if self.is_fixed_storage() {
             for x in 0..self.len {
-                let item: &T = unsafe { mem::transmute(self.list.get(x).unwrap()) };
-                value.list[x] = MaybeUninit::new(item.clone());
+                let item = self.list.get(x).unwrap();
+                let item_value = unsafe { mem::transmute::<_, &T>(item) };
+                value.list[x] = MaybeUninit::new(item_value.clone());
             }
         } else {
             value.more = self.more.clone();
@@ -424,7 +425,7 @@ impl<T> StaticVec<T> {
             panic!("index OOB in StaticVec");
         }
 
-        let list: &[T; MAX_STATIC_VEC] = unsafe { mem::transmute(&self.list) };
+        let list = unsafe { mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&self.list) };
 
         if self.is_fixed_storage() {
             list.get(index).unwrap()
@@ -442,7 +443,7 @@ impl<T> StaticVec<T> {
             panic!("index OOB in StaticVec");
         }
 
-        let list: &mut [T; MAX_STATIC_VEC] = unsafe { mem::transmute(&mut self.list) };
+        let list = unsafe { mem::transmute::<_, &mut [T; MAX_STATIC_VEC]>(&mut self.list) };
 
         if self.is_fixed_storage() {
             list.get_mut(index).unwrap()
@@ -452,7 +453,7 @@ impl<T> StaticVec<T> {
     }
     /// Get an iterator to entries in the `StaticVec`.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        let list: &[T; MAX_STATIC_VEC] = unsafe { mem::transmute(&self.list) };
+        let list = unsafe { mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&self.list) };
 
         if self.is_fixed_storage() {
             list[..self.len].iter()
@@ -462,7 +463,7 @@ impl<T> StaticVec<T> {
     }
     /// Get a mutable iterator to entries in the `StaticVec`.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        let list: &mut [T; MAX_STATIC_VEC] = unsafe { mem::transmute(&mut self.list) };
+        let list = unsafe { mem::transmute::<_, &mut [T; MAX_STATIC_VEC]>(&mut self.list) };
 
         if self.is_fixed_storage() {
             list[..self.len].iter_mut()
@@ -549,7 +550,7 @@ impl<T: fmt::Debug> fmt::Debug for StaticVec<T> {
 
 impl<T> AsRef<[T]> for StaticVec<T> {
     fn as_ref(&self) -> &[T] {
-        let list: &[T; MAX_STATIC_VEC] = unsafe { mem::transmute(&self.list) };
+        let list = unsafe { mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&self.list) };
 
         if self.is_fixed_storage() {
             &list[..self.len]
@@ -561,7 +562,7 @@ impl<T> AsRef<[T]> for StaticVec<T> {
 
 impl<T> AsMut<[T]> for StaticVec<T> {
     fn as_mut(&mut self) -> &mut [T] {
-        let list: &mut [T; MAX_STATIC_VEC] = unsafe { mem::transmute(&mut self.list) };
+        let list = unsafe { mem::transmute::<_, &mut [T; MAX_STATIC_VEC]>(&mut self.list) };
 
         if self.is_fixed_storage() {
             &mut list[..self.len]
