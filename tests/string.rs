@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, ImmutableString, RegisterFn, INT};
 
 #[test]
 fn test_string() -> Result<(), Box<EvalAltResult>> {
@@ -151,6 +151,25 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
         )?,
         -1
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.register_fn("foo1", |s: &str| s.len() as INT);
+    engine.register_fn("foo2", |s: ImmutableString| s.len() as INT);
+    engine.register_fn("foo3", |s: String| s.len() as INT);
+
+    assert_eq!(engine.eval::<INT>(r#"foo1("hello")"#)?, 5);
+    assert_eq!(engine.eval::<INT>(r#"foo2("hello")"#)?, 5);
+
+    assert!(matches!(
+        *engine.eval::<INT>(r#"foo3("hello")"#).expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(ref x, _) if x == "foo3 (&str | ImmutableString)"
+    ));
 
     Ok(())
 }
