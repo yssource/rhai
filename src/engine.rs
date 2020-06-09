@@ -228,7 +228,7 @@ pub fn get_script_function_by_signature<'a>(
 /// # }
 /// ```
 ///
-/// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_module: Module,
