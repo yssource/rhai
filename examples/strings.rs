@@ -74,6 +74,4 @@ fn main() -> Result<(), Box<EvalAltResult>> {
 
         println!();
     }
-
-    Ok(())
 }
