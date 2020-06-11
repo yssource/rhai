@@ -1416,9 +1416,11 @@ fn make_assignment_stmt<'a>(
     pos: Position,
 ) -> Result<Expr, ParseError> {
     match &lhs {
+        // var (non-indexed) = rhs
         Expr::Variable(x) if x.3.is_none() => {
             Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
         }
+        // var (indexed) = rhs
         Expr::Variable(x) => {
             let ((name, name_pos), _, _, index) = x.as_ref();
             match state.stack[(state.len() - index.unwrap().get())].1 {
@@ -1432,10 +1434,13 @@ fn make_assignment_stmt<'a>(
                 ScopeEntryType::Module => unreachable!(),
             }
         }
+        // xxx[???] = rhs, xxx.??? = rhs
         Expr::Index(x) | Expr::Dot(x) => match &x.0 {
+            // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
             Expr::Variable(x) if x.3.is_none() => {
                 Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
             }
+            // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
                 let ((name, name_pos), _, _, index) = x.as_ref();
                 match state.stack[(state.len() - index.unwrap().get())].1 {
@@ -1449,11 +1454,18 @@ fn make_assignment_stmt<'a>(
                     ScopeEntryType::Module => unreachable!(),
                 }
             }
+            // expr[???] = rhs, expr.??? = rhs
             _ => Err(PERR::AssignmentToCopy.into_err(x.0.position())),
         },
+        // const_expr = rhs
         expr if expr.is_constant() => {
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
+        // ??? && ??? = rhs, ??? || ??? = rhs
+        Expr::And(_) | Expr::Or(_) => {
+            Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(pos))
+        }
+        // expr = rhs
         _ => Err(PERR::AssignmentToCopy.into_err(lhs.position())),
     }
 }
