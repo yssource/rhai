@@ -65,7 +65,7 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<module {:?}, functions={}>",
+            "<module vars={:?}, functions={}>",
             self.variables,
             self.functions.len(),
         )

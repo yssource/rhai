@@ -82,7 +82,7 @@ impl fmt::Debug for CallableFunction {
             Self::Pure(_) => write!(f, "NativePureFunction"),
             Self::Method(_) => write!(f, "NativeMethod"),
             Self::Iterator(_) => write!(f, "NativeIterator"),
-            Self::Script(fn_def) => write!(f, "{:?}", fn_def),
+            Self::Script(fn_def) => fmt::Debug::fmt(fn_def, f),
         }
     }
 }

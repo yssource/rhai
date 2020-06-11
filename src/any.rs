@@ -202,17 +202,17 @@ impl fmt::Display for Dynamic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
             Union::Unit(_) => write!(f, ""),
-            Union::Bool(value) => write!(f, "{}", value),
-            Union::Str(value) => write!(f, "{}", value),
-            Union::Char(value) => write!(f, "{}", value),
-            Union::Int(value) => write!(f, "{}", value),
+            Union::Bool(value) => fmt::Display::fmt(value, f),
+            Union::Str(value) => fmt::Display::fmt(value, f),
+            Union::Char(value) => fmt::Display::fmt(value, f),
+            Union::Int(value) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value) => write!(f, "{}", value),
+            Union::Float(value) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value) => write!(f, "{:?}", value),
+            Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
-            Union::Module(value) => write!(f, "{:?}", value),
+            Union::Module(value) => fmt::Debug::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
@@ -224,18 +224,18 @@ impl fmt::Display for Dynamic {
 impl fmt::Debug for Dynamic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
-            Union::Unit(value) => write!(f, "{:?}", value),
-            Union::Bool(value) => write!(f, "{:?}", value),
-            Union::Str(value) => write!(f, "{:?}", value),
-            Union::Char(value) => write!(f, "{:?}", value),
-            Union::Int(value) => write!(f, "{:?}", value),
+            Union::Unit(value) => fmt::Debug::fmt(value, f),
+            Union::Bool(value) => fmt::Debug::fmt(value, f),
+            Union::Str(value) => fmt::Debug::fmt(value, f),
+            Union::Char(value) => fmt::Debug::fmt(value, f),
+            Union::Int(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value) => write!(f, "{:?}", value),
+            Union::Float(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value) => write!(f, "{:?}", value),
+            Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
-            Union::Module(value) => write!(f, "{:?}", value),
+            Union::Module(value) => fmt::Debug::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
