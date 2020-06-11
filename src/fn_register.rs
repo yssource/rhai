@@ -4,7 +4,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
-use crate::fn_native::{CallableFunction, FnAny, FnCallArgs};
+use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::parser::FnAccess;
 use crate::plugin::Plugin;
 use crate::result::EvalAltResult;
@@ -264,13 +264,7 @@ macro_rules! def_register {
     //                                                         ^ dereferencing function
         impl<
             $($par: Variant + Clone,)*
-
-            #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> RET + Send + Sync + 'static,
-
-            #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> RET + 'static,
-
+            FN: Fn($($param),*) -> RET + SendSync + 'static,
             RET: Variant + Clone
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
@@ -284,11 +278,7 @@ macro_rules! def_register {
 
         impl<
             $($par: Variant + Clone,)*
-
-            #[cfg(feature = "sync")]
-            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync + 'static,
-            #[cfg(not(feature = "sync"))]
-            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + 'static,
+            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
         > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
             fn register_result_fn(&mut self, name: &str, f: FN) {

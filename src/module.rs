@@ -65,7 +65,7 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<module {:?}, functions={}>",
+            "<module vars={:?}, functions={}>",
             self.variables,
             self.functions.len(),
         )
@@ -187,9 +187,9 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) {
         // None + function name + number of arguments.
-        let hash_fn_def = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
+        let hash_script = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
         self.functions.insert(
-            hash_fn_def,
+            hash_script,
             (
                 fn_def.name.to_string(),
                 fn_def.access,
@@ -321,8 +321,7 @@ impl Module {
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn() -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn() -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn() -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
         let args = [];
@@ -350,8 +349,7 @@ impl Module {
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f =
             move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
@@ -380,8 +378,7 @@ impl Module {
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
@@ -412,8 +409,7 @@ impl Module {
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         self.set_fn_1_mut(make_getter(&name.into()), func)
     }
@@ -436,8 +432,7 @@ impl Module {
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A, B) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
@@ -473,8 +468,7 @@ impl Module {
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
@@ -512,8 +506,7 @@ impl Module {
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<()> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<()> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
         self.set_fn_2_mut(make_setter(&name.into()), func)
     }
@@ -538,8 +531,7 @@ impl Module {
     #[cfg(not(feature = "no_index"))]
     pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         self.set_fn_2_mut(FUNC_INDEXER_GET, func)
     }
@@ -567,8 +559,7 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
@@ -610,8 +601,7 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
@@ -648,8 +638,7 @@ impl Module {
     /// ```
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, A) -> FuncReturn<()> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, A) -> FuncReturn<()> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B, A) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
@@ -691,8 +680,7 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C, D) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
@@ -741,8 +729,7 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
@@ -791,9 +778,9 @@ impl Module {
     pub(crate) fn get_qualified_fn(
         &mut self,
         name: &str,
-        hash_fn_native: u64,
+        hash_qualified_fn: u64,
     ) -> Result<&CallableFunction, Box<EvalAltResult>> {
-        self.all_functions.get(&hash_fn_native).ok_or_else(|| {
+        self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {
             Box::new(EvalAltResult::ErrorFunctionNotFound(
                 name.to_string(),
                 Position::none(),
@@ -920,26 +907,26 @@ impl Module {
                 if func.is_script() {
                     let fn_def = func.get_shared_fn_def();
                     // Qualifiers + function name + number of arguments.
-                    let hash_fn_def = calc_fn_hash(
+                    let hash_qualified_script = calc_fn_hash(
                         qualifiers.iter().map(|&v| v),
                         &fn_def.name,
                         fn_def.params.len(),
                         empty(),
                     );
-                    functions.push((hash_fn_def, fn_def.into()));
+                    functions.push((hash_qualified_script, fn_def.into()));
                 } else {
-                    // Rust functions are indexed in two steps:
+                    // Qualified Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
                     //    i.e. qualifiers + function name + number of arguments.
-                    let hash_fn_def =
+                    let hash_qualified_script =
                         calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
                     // 2) Calculate a second hash with no qualifiers, empty function name,
                     //    zero number of arguments, and the actual list of argument `TypeId`'.s
                     let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
                     // 3) The final hash is the XOR of the two hashes.
-                    let hash_fn_native = hash_fn_def ^ hash_fn_args;
+                    let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
 
-                    functions.push((hash_fn_native, func.clone()));
+                    functions.push((hash_qualified_fn, func.clone()));
                 }
             }
         }

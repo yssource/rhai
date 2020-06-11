@@ -200,8 +200,8 @@ pub fn get_script_function_by_signature<'a>(
     public_only: bool,
 ) -> Option<&'a ScriptFnDef> {
     // Qualifiers (none) + function name + number of arguments.
-    let hash_fn_def = calc_fn_hash(empty(), name, params, empty());
-    let func = module.get_fn(hash_fn_def)?;
+    let hash_script = calc_fn_hash(empty(), name, params, empty());
+    let func = module.get_fn(hash_script)?;
     if !func.is_script() {
         return None;
     }
@@ -228,7 +228,7 @@ pub fn get_script_function_by_signature<'a>(
 /// # }
 /// ```
 ///
-/// Currently, `Engine` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_module: Module,
@@ -524,7 +524,7 @@ impl Engine {
         state: &mut State,
         lib: &Module,
         fn_name: &str,
-        hashes: (u64, u64),
+        (hash_fn, hash_script): (u64, u64),
         args: &mut FnCallArgs,
         is_ref: bool,
         def_val: Option<&Dynamic>,
@@ -532,7 +532,7 @@ impl Engine {
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
-        let native_only = hashes.1 == 0;
+        let native_only = hash_script == 0;
 
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
@@ -587,14 +587,14 @@ impl Engine {
         // Then search packages
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
         let func = if !native_only {
-            lib.get_fn(hashes.1) //.or_else(|| lib.get_fn(hashes.0))
+            lib.get_fn(hash_script) //.or_else(|| lib.get_fn(hash_fn))
         } else {
             None
         }
-        //.or_else(|| self.global_module.get_fn(hashes.1))
-        .or_else(|| self.global_module.get_fn(hashes.0))
-        //.or_else(|| self.packages.get_fn(hashes.1))
-        .or_else(|| self.packages.get_fn(hashes.0));
+        //.or_else(|| self.global_module.get_fn(hash_script))
+        .or_else(|| self.global_module.get_fn(hash_fn))
+        //.or_else(|| self.packages.get_fn(hash_script))
+        .or_else(|| self.packages.get_fn(hash_fn));
 
         if let Some(func) = func {
             // Calling pure function in method-call?
@@ -784,18 +784,18 @@ impl Engine {
     }
 
     // Has a system function an override?
-    fn has_override(&self, lib: &Module, hashes: (u64, u64)) -> bool {
+    fn has_override(&self, lib: &Module, (hash_fn, hash_script): (u64, u64)) -> bool {
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
 
         // First check script-defined functions
-        lib.contains_fn(hashes.1)
-        //|| lib.contains_fn(hashes.0)
+        lib.contains_fn(hash_script)
+        //|| lib.contains_fn(hash_fn)
         // Then check registered functions
-        //|| self.global_module.contains_fn(hashes.1)
-        || self.global_module.contains_fn(hashes.0)
+        //|| self.global_module.contains_fn(hash_script)
+        || self.global_module.contains_fn(hash_fn)
         // Then check packages
-        //|| self.packages.contains_fn(hashes.1)
-        || self.packages.contains_fn(hashes.0)
+        //|| self.packages.contains_fn(hash_script)
+        || self.packages.contains_fn(hash_fn)
     }
 
     /// Perform an actual function call, taking care of special functions
@@ -812,7 +812,7 @@ impl Engine {
         lib: &Module,
         fn_name: &str,
         native_only: bool,
-        hash_fn_def: u64,
+        hash_script: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
         def_val: Option<&Dynamic>,
@@ -821,7 +821,7 @@ impl Engine {
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
         let arg_types = args.iter().map(|a| a.type_id());
         let hash_fn = calc_fn_hash(empty(), fn_name, args.len(), arg_types);
-        let hashes = (hash_fn, if native_only { 0 } else { hash_fn_def });
+        let hashes = (hash_fn, if native_only { 0 } else { hash_script });
 
         match fn_name {
             // type_of
@@ -1412,7 +1412,7 @@ impl Engine {
             Expr::Property(_) => unreachable!(),
 
             // Statement block
-            Expr::Stmt(stmt) => self.eval_stmt(scope, state, lib, &stmt.0, level),
+            Expr::Stmt(x) => self.eval_stmt(scope, state, lib, &x.0, level),
 
             // var op= rhs
             Expr::Assignment(x) if matches!(x.0, Expr::Variable(_)) => {
@@ -1625,7 +1625,7 @@ impl Engine {
 
             // Module-qualified function call
             Expr::FnCall(x) if x.1.is_some() => {
-                let ((name, _, pos), modules, hash_fn_def, args_expr, def_val) = x.as_ref();
+                let ((name, _, pos), modules, hash_script, args_expr, def_val) = x.as_ref();
                 let modules = modules.as_ref().unwrap();
 
                 let mut arg_values = args_expr
@@ -1650,13 +1650,13 @@ impl Engine {
                 };
 
                 // First search in script-defined functions (can override built-in)
-                let func = match module.get_qualified_fn(name, *hash_fn_def) {
+                let func = match module.get_qualified_fn(name, *hash_script) {
                     Err(err) if matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) => {
                         // Then search in Rust functions
                         self.inc_operations(state)
                             .map_err(|err| EvalAltResult::new_position(err, *pos))?;
 
-                        // Rust functions are indexed in two steps:
+                        // Qualified Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
                         //    i.e. qualifiers + function name + number of arguments.
                         // 2) Calculate a second hash with no qualifiers, empty function name,
@@ -1664,9 +1664,9 @@ impl Engine {
                         let hash_fn_args =
                             calc_fn_hash(empty(), "", 0, args.iter().map(|a| a.type_id()));
                         // 3) The final hash is the XOR of the two hashes.
-                        let hash_fn_native = *hash_fn_def ^ hash_fn_args;
+                        let hash_qualified_fn = *hash_script ^ hash_fn_args;
 
-                        module.get_qualified_fn(name, hash_fn_native)
+                        module.get_qualified_fn(name, hash_qualified_fn)
                     }
                     r => r,
                 };

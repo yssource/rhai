@@ -542,9 +542,7 @@ impl<T: Default> StaticVec<T> {
 
 impl<T: fmt::Debug> fmt::Debug for StaticVec<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[ ")?;
-        self.iter().try_for_each(|v| write!(f, "{:?}, ", v))?;
-        write!(f, "]")
+        fmt::Debug::fmt(&self.iter().collect::<Vec<_>>(), f)
     }
 }
 

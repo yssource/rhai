@@ -19,6 +19,8 @@ use crate::stdlib::{
 
 type LERR = LexError;
 
+pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
+
 /// A location (line number + character position) in the input script.
 ///
 /// In order to keep footprint small, both line number and character position have 16-bit unsigned resolution,

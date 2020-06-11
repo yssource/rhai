@@ -1,5 +1,6 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
+use crate::fn_native::SendSync;
 use crate::module::Module;
 use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
@@ -54,31 +55,6 @@ pub trait Variant: Any {
     fn _closed(&self) -> _Private;
 }
 
-#[cfg(not(feature = "sync"))]
-impl<T: Any + Clone> Variant for T {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self as &mut dyn Any
-    }
-    fn as_box_any(self: Box<Self>) -> Box<dyn Any> {
-        self as Box<dyn Any>
-    }
-    fn type_name(&self) -> &'static str {
-        type_name::<T>()
-    }
-    fn into_dynamic(self) -> Dynamic {
-        Dynamic::from(self)
-    }
-    fn clone_into_dynamic(&self) -> Dynamic {
-        Dynamic::from(self.clone())
-    }
-    fn _closed(&self) -> _Private {
-        _Private
-    }
-}
-
 /// Trait to represent any type.
 ///
 /// `From<_>` is implemented for `i64` (`i32` if `only_i32`), `f64` (if not `no_float`),
@@ -108,8 +84,7 @@ pub trait Variant: Any + Send + Sync {
     fn _closed(&self) -> _Private;
 }
 
-#[cfg(feature = "sync")]
-impl<T: Any + Clone + Send + Sync> Variant for T {
+impl<T: Any + Clone + SendSync> Variant for T {
     fn as_any(&self) -> &dyn Any {
         self as &dyn Any
     }
@@ -227,17 +202,17 @@ impl fmt::Display for Dynamic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
             Union::Unit(_) => write!(f, ""),
-            Union::Bool(value) => write!(f, "{}", value),
-            Union::Str(value) => write!(f, "{}", value),
-            Union::Char(value) => write!(f, "{}", value),
-            Union::Int(value) => write!(f, "{}", value),
+            Union::Bool(value) => fmt::Display::fmt(value, f),
+            Union::Str(value) => fmt::Display::fmt(value, f),
+            Union::Char(value) => fmt::Display::fmt(value, f),
+            Union::Int(value) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value) => write!(f, "{}", value),
+            Union::Float(value) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value) => write!(f, "{:?}", value),
+            Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
-            Union::Module(value) => write!(f, "{:?}", value),
+            Union::Module(value) => fmt::Debug::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
@@ -249,18 +224,18 @@ impl fmt::Display for Dynamic {
 impl fmt::Debug for Dynamic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
-            Union::Unit(value) => write!(f, "{:?}", value),
-            Union::Bool(value) => write!(f, "{:?}", value),
-            Union::Str(value) => write!(f, "{:?}", value),
-            Union::Char(value) => write!(f, "{:?}", value),
-            Union::Int(value) => write!(f, "{:?}", value),
+            Union::Unit(value) => fmt::Debug::fmt(value, f),
+            Union::Bool(value) => fmt::Debug::fmt(value, f),
+            Union::Str(value) => fmt::Debug::fmt(value, f),
+            Union::Char(value) => fmt::Debug::fmt(value, f),
+            Union::Int(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value) => write!(f, "{:?}", value),
+            Union::Float(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value) => write!(f, "{:?}", value),
+            Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
-            Union::Module(value) => write!(f, "{:?}", value),
+            Union::Module(value) => fmt::Debug::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),

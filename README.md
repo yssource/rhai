@@ -37,7 +37,7 @@ Features
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is `0.16.0`, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is `0.15.1`, so the language and API's may change before they stabilize.
 
 What Rhai doesn't do
 --------------------
@@ -71,7 +71,7 @@ Install the Rhai crate on [`crates.io`](https::/crates.io/crates/rhai/) by addin
 
 ```toml
 [dependencies]
-rhai = "0.16.0"
+rhai = "0.15.1"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -179,13 +179,14 @@ A number of examples can be found in the `examples` folder:
 
 | Example                                                            | Description                                                                 |
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| [`arrays_and_structs`](examples/arrays_and_structs.rs)             | demonstrates registering a new type to Rhai and the usage of [arrays] on it |
-| [`custom_types_and_methods`](examples/custom_types_and_methods.rs) | shows how to register a type and methods for it                             |
+| [`arrays_and_structs`](examples/arrays_and_structs.rs)             | shows how to register a custom Rust type and using [arrays] on it           |
+| [`custom_types_and_methods`](examples/custom_types_and_methods.rs) | shows how to register a custom Rust type and methods for it                 |
 | [`hello`](examples/hello.rs)                                       | simple example that evaluates an expression and prints the result           |
 | [`no_std`](examples/no_std.rs)                                     | example to test out `no-std` builds                                         |
 | [`reuse_scope`](examples/reuse_scope.rs)                           | evaluates two pieces of code in separate runs, but using a common [`Scope`] |
 | [`rhai_runner`](examples/rhai_runner.rs)                           | runs each filename passed to it as a Rhai script                            |
-| [`simple_fn`](examples/simple_fn.rs)                               | shows how to register a Rust function to a Rhai [`Engine`]                  |
+| [`simple_fn`](examples/simple_fn.rs)                               | shows how to register a simple function                                     |
+| [`strings`](examples/strings.rs)                                   | shows different ways to register functions taking string arguments          |
 | [`repl`](examples/repl.rs)                                         | a simple REPL, interactively evaluate statements from stdin                 |
 
 Examples can be run with the following command:
@@ -314,7 +315,7 @@ Functions declared with `private` are hidden and cannot be called from Rust (see
 ```rust
 // Define functions in a script.
 let ast = engine.compile(true,
-    r"
+    r#"
         // a function with two parameters: String and i64
         fn hello(x, y) {
             x.len + y
@@ -334,7 +335,7 @@ let ast = engine.compile(true,
         private hidden() {
             throw "you shouldn't see me!";
         }
-    ")?;
+    "#)?;
 
 // A custom scope can also contain any variables/constants available to the functions
 let mut scope = Scope::new();
@@ -521,7 +522,7 @@ The following primitive types are supported natively:
 | **Floating-point number** (disabled with [`no_float`])                        | `f32`, `f64` _(default)_                                                                             | `"f32"` or `"f64"`    | `"123.4567"` etc.     |
 | **Boolean value**                                                             | `bool`                                                                                               | `"bool"`              | `"true"` or `"false"` |
 | **Unicode character**                                                         | `char`                                                                                               | `"char"`              | `"A"`, `"x"` etc.     |
-| **Immutable Unicode string**                                                  | `rhai::ImmutableString` (implemented as `Rc<String>` or `Arc<String>`, _not_ `&str`)                 | `"string"`            | `"hello"` etc.        |
+| **Immutable Unicode string**                                                  | `rhai::ImmutableString` (implemented as `Rc<String>` or `Arc<String>`)                               | `"string"`            | `"hello"` etc.        |
 | **Array** (disabled with [`no_index`])                                        | `rhai::Array`                                                                                        | `"array"`             | `"[ ?, ?, ? ]"`       |
 | **Object map** (disabled with [`no_object`])                                  | `rhai::Map`                                                                                          | `"map"`               | `#{ "a": 1, "b": 2 }` |
 | **Timestamp** (implemented in the [`BasicTimePackage`](#packages))            | `std::time::Instant`                                                                                 | `"timestamp"`         | _not supported_       |
@@ -1038,13 +1039,13 @@ struct TestStruct {
     field: String
 }
 
-// Remember Rhai uses 'ImmutableString' instead of 'String'
 impl TestStruct {
-    fn get_field(&mut self) -> ImmutableString {
-        // Make an 'ImmutableString' from a 'String'
-        self.field.into(0)
+    // Returning a 'String' is OK - Rhai converts it into 'ImmutableString'
+    fn get_field(&mut self) -> String {
+        self.field.clone()
     }
 
+    // Remember Rhai uses 'ImmutableString' or '&str' instead of 'String'
     fn set_field(&mut self, new_val: ImmutableString) {
         // Get a 'String' from an 'ImmutableString'
         self.field = (*new_val).clone();

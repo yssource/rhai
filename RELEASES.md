@@ -1,8 +1,11 @@
 Rhai Release Notes
 ==================
 
-Version 0.16.0
+Version 0.15.1
 ==============
+
+This is a minor release which enables updating indexers (via registered indexer setters) and supports functions
+with `&str` parameters (maps transparently to `ImmutableString`).
 
 Breaking changes
 ----------------
@@ -14,12 +17,14 @@ Breaking changes
 New features
 ------------
 
-* Indexers are now split into getters ans setters (which now support updates).  The API is split into `Engine::register_indexer_get` and `Engine::register_indexer_set` with `Engine::register_indexer_get_set` being a shorthand.  Similarly, `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn` are added.
+* Indexers are now split into getters and setters (which now support updates).  The API is split into `Engine::register_indexer_get` and `Engine::register_indexer_set` with `Engine::register_indexer_get_set` being a shorthand.  Similarly, `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn` are added.
 * `Engine:register_fn` and `Engine:register_result_fn` accepts functions that take parameters of type `&str` (immutable string slice), which maps directly to `ImmutableString`. This is to avoid needing wrappers for functions taking string parameters.
 
 
 Version 0.15.0
 ==============
+
+This version uses immutable strings (`ImmutableString` type) and built-in operator functions (e.g. `+`, `>`, `+=`) to improve speed, plus some bug fixes.
 
 Regression fix
 --------------
