@@ -16,7 +16,7 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     format,
-    iter::{empty, Peekable},
+    iter::empty,
     mem,
     num::NonZeroUsize,
     ops::{Add, Deref, DerefMut},
@@ -751,15 +751,13 @@ fn parse_paren_expr(
         // ( xxx )
         (Token::RightParen, _) => Ok(expr),
         // ( <error>
-        (Token::LexError(err), pos) => {
-            return Err(PERR::BadInput(err.to_string()).into_err(settings.pos))
-        }
+        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
         // ( xxx ???
         (_, pos) => Err(PERR::MissingToken(
             Token::RightParen.into(),
             "for a matching ( in this expression".into(),
         )
-        .into_err(settings.pos)),
+        .into_err(pos)),
     }
 }
 
@@ -769,10 +767,9 @@ fn parse_call_expr(
     state: &mut ParseState,
     id: String,
     mut modules: Option<Box<ModuleRef>>,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, token_pos) = input.peek().unwrap();
-    settings.pos = *token_pos;
+    let (token, _) = input.peek().unwrap();
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut args = StaticVec::new();
@@ -888,7 +885,7 @@ fn parse_index_chain(
     input: &mut TokenStream,
     state: &mut ParseState,
     lhs: Expr,
-    settings: ParseSettings,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1031,11 +1028,12 @@ fn parse_index_chain(
             match input.peek().unwrap() {
                 // If another indexing level, right-bind it
                 (Token::LeftBracket, _) => {
-                    let idx_pos = eat_token(input, Token::LeftBracket);
+                    let prev_pos = settings.pos;
+                    settings.pos = eat_token(input, Token::LeftBracket);
                     // Recursively parse the indexing chain, right-binding each
                     let idx_expr = parse_index_chain(input, state, idx_expr, settings.level_up())?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new((lhs, idx_expr, settings.pos))))
+                    Ok(Expr::Index(Box::new((lhs, idx_expr, prev_pos))))
                 }
                 // Otherwise terminate the indexing chain
                 _ => {
@@ -1257,11 +1255,13 @@ fn parse_primary(
         }
 
         let (token, token_pos) = input.next().unwrap();
+        settings.pos = token_pos;
 
         root_expr = match (root_expr, token) {
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
                 let ((name, pos), modules, _, _) = *x;
+                settings.pos = pos;
                 parse_call_expr(input, state, name, modules, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
@@ -1269,6 +1269,7 @@ fn parse_primary(
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
                     let ((name, pos), mut modules, _, index) = *x;
+
                     if let Some(ref mut modules) = modules {
                         modules.push((name, pos));
                     } else {
@@ -1284,7 +1285,6 @@ fn parse_primary(
             // Indexing
             #[cfg(not(feature = "no_index"))]
             (expr, Token::LeftBracket) => {
-                settings.pos = token_pos;
                 parse_index_chain(input, state, expr, settings.level_up())?
             }
             // Unknown postfix operator
