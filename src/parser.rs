@@ -195,10 +195,11 @@ pub enum ReturnType {
     Exception,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 struct ParseState {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
+    /// Maximum levels of expression nesting.
     max_expr_depth: usize,
 }
 
@@ -253,6 +254,41 @@ impl Deref for ParseState {
 impl DerefMut for ParseState {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.stack
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+/// A type that encapsulates all the settings for a particular parsing function.
+struct ParseSettings {
+    /// Current position.
+    pos: Position,
+    /// Is the construct being parsed located at global level?
+    is_global: bool,
+    /// Is the current position inside a loop?
+    is_breakable: bool,
+    /// Is if-expression allowed?
+    allow_if_expr: bool,
+    /// Is statement-expression allowed?
+    allow_stmt_expr: bool,
+    /// Current expression nesting level.
+    level: usize,
+}
+
+impl ParseSettings {
+    /// Create a new `ParseSettings` with one higher expression level.
+    pub fn level_up(&self) -> Self {
+        Self {
+            level: self.level + 1,
+            ..*self
+        }
+    }
+    /// Make sure that the current level of expression nesting is within the maximum limit.
+    pub fn ensure_level_within_max_limit(&self, limit: usize) -> Result<(), ParseError> {
+        if self.level > limit {
+            Err(PERR::ExprTooDeep.into_err(self.pos))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -701,32 +737,29 @@ fn match_token(input: &mut TokenStream, token: Token) -> Result<bool, ParseError
 fn parse_paren_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
-    pos: Position,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     if match_token(input, Token::RightParen)? {
-        return Ok(Expr::Unit(pos));
+        return Ok(Expr::Unit(settings.pos));
     }
 
-    let expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+    let expr = parse_expr(input, state, settings.level_up())?;
 
     match input.next().unwrap() {
         // ( xxx )
         (Token::RightParen, _) => Ok(expr),
         // ( <error>
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::LexError(err), pos) => {
+            return Err(PERR::BadInput(err.to_string()).into_err(settings.pos))
+        }
         // ( xxx ???
         (_, pos) => Err(PERR::MissingToken(
             Token::RightParen.into(),
             "for a matching ( in this expression".into(),
         )
-        .into_err(pos)),
+        .into_err(settings.pos)),
     }
 }
 
@@ -736,16 +769,11 @@ fn parse_call_expr(
     state: &mut ParseState,
     id: String,
     mut modules: Option<Box<ModuleRef>>,
-    begin: Position,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, pos) = input.peek().unwrap();
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(*pos));
-    }
+    let (token, token_pos) = input.peek().unwrap();
+    settings.pos = *token_pos;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut args = StaticVec::new();
 
@@ -756,10 +784,10 @@ fn parse_call_expr(
                 Token::RightParen.into(),
                 format!("to close the arguments list of this function call '{}'", id),
             )
-            .into_err(*pos))
+            .into_err(settings.pos))
         }
         // id <error>
-        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
+        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(settings.pos)),
         // id()
         Token::RightParen => {
             eat_token(input, Token::RightParen);
@@ -781,7 +809,7 @@ fn parse_call_expr(
             };
 
             return Ok(Expr::FnCall(Box::new((
-                (id.into(), false, begin),
+                (id.into(), false, settings.pos),
                 modules,
                 hash_script,
                 args,
@@ -792,8 +820,10 @@ fn parse_call_expr(
         _ => (),
     }
 
+    let settings = settings.level_up();
+
     loop {
-        args.push(parse_expr(input, state, level + 1, if_expr, stmt_expr)?);
+        args.push(parse_expr(input, state, settings)?);
 
         match input.peek().unwrap() {
             // id(...args)
@@ -817,7 +847,7 @@ fn parse_call_expr(
                 };
 
                 return Ok(Expr::FnCall(Box::new((
-                    (id.into(), false, begin),
+                    (id.into(), false, settings.pos),
                     modules,
                     hash_script,
                     args,
@@ -858,16 +888,11 @@ fn parse_index_chain(
     input: &mut TokenStream,
     state: &mut ParseState,
     lhs: Expr,
-    pos: Position,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let idx_expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+    let idx_expr = parse_expr(input, state, settings.level_up())?;
 
     // Check type of indexing - must be integer or string
     match &idx_expr {
@@ -1008,17 +1033,9 @@ fn parse_index_chain(
                 (Token::LeftBracket, _) => {
                     let idx_pos = eat_token(input, Token::LeftBracket);
                     // Recursively parse the indexing chain, right-binding each
-                    let idx_expr = parse_index_chain(
-                        input,
-                        state,
-                        idx_expr,
-                        idx_pos,
-                        level + 1,
-                        if_expr,
-                        stmt_expr,
-                    )?;
+                    let idx_expr = parse_index_chain(input, state, idx_expr, settings.level_up())?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new((lhs, idx_expr, pos))))
+                    Ok(Expr::Index(Box::new((lhs, idx_expr, settings.pos))))
                 }
                 // Otherwise terminate the indexing chain
                 _ => {
@@ -1027,9 +1044,9 @@ fn parse_index_chain(
                         // inside brackets to be mis-parsed as another level of indexing, or a
                         // dot expression/function call to be mis-parsed as following the indexing chain.
                         Expr::Index(_) | Expr::Dot(_) | Expr::FnCall(_) => Ok(Expr::Index(
-                            Box::new((lhs, Expr::Expr(Box::new(idx_expr)), pos)),
+                            Box::new((lhs, Expr::Expr(Box::new(idx_expr)), settings.pos)),
                         )),
-                        _ => Ok(Expr::Index(Box::new((lhs, idx_expr, pos)))),
+                        _ => Ok(Expr::Index(Box::new((lhs, idx_expr, settings.pos)))),
                     }
                 }
             }
@@ -1047,20 +1064,15 @@ fn parse_index_chain(
 fn parse_array_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
-    pos: Position,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut arr = StaticVec::new();
 
     if !match_token(input, Token::RightBracket)? {
         while !input.peek().unwrap().0.is_eof() {
-            let expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+            let expr = parse_expr(input, state, settings.level_up())?;
             arr.push(expr);
 
             match input.peek().unwrap() {
@@ -1090,21 +1102,16 @@ fn parse_array_literal(
         }
     }
 
-    Ok(Expr::Array(Box::new((arr, pos))))
+    Ok(Expr::Array(Box::new((arr, settings.pos))))
 }
 
 /// Parse a map literal.
 fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
-    pos: Position,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut map = StaticVec::new();
 
@@ -1150,7 +1157,7 @@ fn parse_map_literal(
                 }
             };
 
-            let expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+            let expr = parse_expr(input, state, settings.level_up())?;
 
             map.push(((name, pos), expr));
 
@@ -1193,56 +1200,51 @@ fn parse_map_literal(
         })
         .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
 
-    Ok(Expr::Map(Box::new((map, pos))))
+    Ok(Expr::Map(Box::new((map, settings.pos))))
 }
 
 /// Parse a primary expression.
 fn parse_primary(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, pos) = input.peek().unwrap();
-    let pos = *pos;
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    let (token, pos1) = input.peek().unwrap();
+    settings.pos = *pos1;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let (token, _) = match token {
         // { - block statement as expression
-        Token::LeftBrace if stmt_expr => {
-            return parse_block(input, state, false, level + 1, if_expr, stmt_expr)
-                .map(|block| Expr::Stmt(Box::new((block, pos))));
+        Token::LeftBrace if settings.allow_stmt_expr => {
+            return parse_block(input, state, settings.level_up())
+                .map(|block| Expr::Stmt(Box::new((block, settings.pos))))
         }
-        Token::EOF => return Err(PERR::UnexpectedEOF.into_err(pos)),
+        Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
         _ => input.next().unwrap(),
     };
 
     let mut root_expr = match token {
-        Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, pos))),
+        Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, settings.pos))),
         #[cfg(not(feature = "no_float"))]
-        Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, pos))),
-        Token::CharConstant(c) => Expr::CharConstant(Box::new((c, pos))),
-        Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), pos))),
+        Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, settings.pos))),
+        Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
+        Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
             let index = state.find(&s);
-            Expr::Variable(Box::new(((s, pos), None, 0, index)))
+            Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
-        Token::LeftParen => parse_paren_expr(input, state, pos, level + 1, if_expr, stmt_expr)?,
+        Token::LeftParen => parse_paren_expr(input, state, settings.level_up())?,
         #[cfg(not(feature = "no_index"))]
-        Token::LeftBracket => {
-            parse_array_literal(input, state, pos, level + 1, if_expr, stmt_expr)?
-        }
+        Token::LeftBracket => parse_array_literal(input, state, settings.level_up())?,
         #[cfg(not(feature = "no_object"))]
-        Token::MapStart => parse_map_literal(input, state, pos, level + 1, if_expr, stmt_expr)?,
-        Token::True => Expr::True(pos),
-        Token::False => Expr::False(pos),
-        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        Token::MapStart => parse_map_literal(input, state, settings.level_up())?,
+        Token::True => Expr::True(settings.pos),
+        Token::False => Expr::False(settings.pos),
+        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(settings.pos)),
         token => {
-            return Err(PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(pos))
+            return Err(
+                PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(settings.pos)
+            )
         }
     };
 
@@ -1260,16 +1262,7 @@ fn parse_primary(
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
                 let ((name, pos), modules, _, _) = *x;
-                parse_call_expr(
-                    input,
-                    state,
-                    name,
-                    modules,
-                    pos,
-                    level + 1,
-                    if_expr,
-                    stmt_expr,
-                )?
+                parse_call_expr(input, state, name, modules, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
@@ -1291,7 +1284,8 @@ fn parse_primary(
             // Indexing
             #[cfg(not(feature = "no_index"))]
             (expr, Token::LeftBracket) => {
-                parse_index_chain(input, state, expr, token_pos, level + 1, if_expr, stmt_expr)?
+                settings.pos = token_pos;
+                parse_index_chain(input, state, expr, settings.level_up())?
             }
             // Unknown postfix operator
             (expr, token) => panic!(
@@ -1322,28 +1316,23 @@ fn parse_primary(
 fn parse_unary(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, pos) = input.peek().unwrap();
-    let pos = *pos;
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    let (token, token_pos) = input.peek().unwrap();
+    settings.pos = *token_pos;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
         // If statement is allowed to act as expressions
-        Token::If if if_expr => Ok(Expr::Stmt(Box::new((
-            parse_if(input, state, false, level + 1, if_expr, stmt_expr)?,
-            pos,
+        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(Box::new((
+            parse_if(input, state, settings.level_up())?,
+            settings.pos,
         )))),
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
 
-            match parse_unary(input, state, level + 1, if_expr, stmt_expr)? {
+            match parse_unary(input, state, settings.level_up())? {
                 // Negative integer
                 Expr::IntegerConstant(x) => {
                     let (num, pos) = *x;
@@ -1392,13 +1381,13 @@ fn parse_unary(
         // +expr
         Token::UnaryPlus => {
             eat_token(input, Token::UnaryPlus);
-            parse_unary(input, state, level + 1, if_expr, stmt_expr)
+            parse_unary(input, state, settings.level_up())
         }
         // !expr
         Token::Bang => {
             let pos = eat_token(input, Token::Bang);
             let mut args = StaticVec::new();
-            let expr = parse_primary(input, state, level + 1, if_expr, stmt_expr)?;
+            let expr = parse_primary(input, state, settings.level_up())?;
             args.push(expr);
 
             let op = "!";
@@ -1413,9 +1402,9 @@ fn parse_unary(
             ))))
         }
         // <EOF>
-        Token::EOF => Err(PERR::UnexpectedEOF.into_err(pos)),
+        Token::EOF => Err(PERR::UnexpectedEOF.into_err(settings.pos)),
         // All other tokens
-        _ => parse_primary(input, state, level + 1, if_expr, stmt_expr),
+        _ => parse_primary(input, state, settings.level_up()),
     }
 }
 
@@ -1474,16 +1463,11 @@ fn parse_op_assignment_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
     lhs: Expr,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, pos) = input.peek().unwrap();
-    let pos = *pos;
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    let (token, token_pos) = input.peek().unwrap();
+    settings.pos = *token_pos;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let op = match token {
         Token::Equals => "".into(),
@@ -1504,7 +1488,7 @@ fn parse_op_assignment_stmt(
     };
 
     let (_, pos) = input.next().unwrap();
-    let rhs = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+    let rhs = parse_expr(input, state, settings.level_up())?;
     make_assignment_stmt(op, state, lhs, rhs, pos)
 }
 
@@ -1718,13 +1702,10 @@ fn parse_binary_op(
     state: &mut ParseState,
     parent_precedence: u8,
     lhs: Expr,
-    mut level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(lhs.position()));
-    }
+    settings.pos = lhs.position();
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut root = lhs;
 
@@ -1741,24 +1722,22 @@ fn parse_binary_op(
 
         let (op_token, pos) = input.next().unwrap();
 
-        let rhs = parse_unary(input, state, level, if_expr, stmt_expr)?;
+        let rhs = parse_unary(input, state, settings)?;
 
         let next_precedence = input.peek().unwrap().0.precedence();
 
         // Bind to right if the next operator has higher precedence
         // If same precedence, then check if the operator binds right
         let rhs = if (precedence == next_precedence && bind_right) || precedence < next_precedence {
-            parse_binary_op(input, state, precedence, rhs, level, if_expr, stmt_expr)?
+            parse_binary_op(input, state, precedence, rhs, settings)?
         } else {
             // Otherwise bind to left (even if next operator has the same precedence)
             rhs
         };
 
-        level += 1;
-
-        if level > state.max_expr_depth {
-            return Err(PERR::ExprTooDeep.into_err(pos));
-        }
+        settings = settings.level_up();
+        settings.pos = pos;
+        settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
         let cmp_def = Some(false.into());
         let op = op_token.syntax();
@@ -1835,18 +1814,13 @@ fn parse_binary_op(
 fn parse_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (_, pos) = input.peek().unwrap();
+    settings.pos = input.peek().unwrap().1;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(*pos));
-    }
-
-    let lhs = parse_unary(input, state, level + 1, if_expr, stmt_expr)?;
-    parse_binary_op(input, state, 1, lhs, level + 1, if_expr, stmt_expr)
+    let lhs = parse_unary(input, state, settings.level_up())?;
+    parse_binary_op(input, state, 1, lhs, settings.level_up())
 }
 
 /// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
@@ -1892,32 +1866,26 @@ fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
 fn parse_if(
     input: &mut TokenStream,
     state: &mut ParseState,
-    breakable: bool,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // if ...
-    let pos = eat_token(input, Token::If);
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = eat_token(input, Token::If);
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+    let guard = parse_expr(input, state, settings.level_up())?;
     ensure_not_assignment(input)?;
-    let if_body = parse_block(input, state, breakable, level + 1, if_expr, stmt_expr)?;
+    let if_body = parse_block(input, state, settings.level_up())?;
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).unwrap_or(false) {
         Some(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
-            parse_if(input, state, breakable, level + 1, if_expr, stmt_expr)?
+            parse_if(input, state, settings.level_up())?
         } else {
             // if guard { if_body } else { else-body }
-            parse_block(input, state, breakable, level + 1, if_expr, stmt_expr)?
+            parse_block(input, state, settings.level_up())?
         })
     } else {
         None
@@ -1930,22 +1898,19 @@ fn parse_if(
 fn parse_while(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // while ...
-    let pos = eat_token(input, Token::While);
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = eat_token(input, Token::While);
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // while guard { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+    let guard = parse_expr(input, state, settings.level_up())?;
     ensure_not_assignment(input)?;
-    let body = parse_block(input, state, true, level + 1, if_expr, stmt_expr)?;
+
+    settings.is_breakable = true;
+    let body = parse_block(input, state, settings.level_up())?;
 
     Ok(Stmt::While(Box::new((guard, body))))
 }
@@ -1954,19 +1919,15 @@ fn parse_while(
 fn parse_loop(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // loop ...
-    let pos = eat_token(input, Token::Loop);
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = eat_token(input, Token::Loop);
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // loop { body }
-    let body = parse_block(input, state, true, level + 1, if_expr, stmt_expr)?;
+    settings.is_breakable = true;
+    let body = parse_block(input, state, settings.level_up())?;
 
     Ok(Stmt::Loop(Box::new(body)))
 }
@@ -1975,16 +1936,11 @@ fn parse_loop(
 fn parse_for(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // for ...
-    let pos = eat_token(input, Token::For);
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = eat_token(input, Token::For);
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // for name ...
     let name = match input.next().unwrap() {
@@ -2012,12 +1968,13 @@ fn parse_for(
 
     // for name in expr { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+    let expr = parse_expr(input, state, settings.level_up())?;
 
     let prev_len = state.len();
     state.push((name.clone(), ScopeEntryType::Normal));
 
-    let body = parse_block(input, state, true, level + 1, if_expr, stmt_expr)?;
+    settings.is_breakable = true;
+    let body = parse_block(input, state, settings.level_up())?;
 
     state.truncate(prev_len);
 
@@ -2029,16 +1986,11 @@ fn parse_let(
     input: &mut TokenStream,
     state: &mut ParseState,
     var_type: ScopeEntryType,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
-    let (_, pos) = input.next().unwrap();
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = input.next().unwrap().1;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // let name ...
     let (name, pos) = match input.next().unwrap() {
@@ -2050,7 +2002,7 @@ fn parse_let(
     // let name = ...
     if match_token(input, Token::Equals)? {
         // let name = expr
-        let init_value = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+        let init_value = parse_expr(input, state, settings.level_up())?;
 
         match var_type {
             // let name = expr
@@ -2091,19 +2043,14 @@ fn parse_let(
 fn parse_import(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // import ...
-    let pos = eat_token(input, Token::Import);
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = eat_token(input, Token::Import);
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // import expr ...
-    let expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+    let expr = parse_expr(input, state, settings.level_up())?;
 
     // import expr as ...
     match input.next().unwrap() {
@@ -2124,7 +2071,7 @@ fn parse_import(
     };
 
     state.push((name.clone(), ScopeEntryType::Module));
-    Ok(Stmt::Import(Box::new((expr, (name, pos)))))
+    Ok(Stmt::Import(Box::new((expr, (name, settings.pos)))))
 }
 
 /// Parse an export statement.
@@ -2132,13 +2079,10 @@ fn parse_import(
 fn parse_export(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    let pos = eat_token(input, Token::Export);
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = eat_token(input, Token::Export);
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut exports = StaticVec::new();
 
@@ -2197,13 +2141,10 @@ fn parse_export(
 fn parse_block(
     input: &mut TokenStream,
     state: &mut ParseState,
-    breakable: bool,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // Must start with {
-    let pos = match input.next().unwrap() {
+    settings.pos = match input.next().unwrap() {
         (Token::LeftBrace, pos) => pos,
         (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
         (_, pos) => {
@@ -2215,24 +2156,15 @@ fn parse_block(
         }
     };
 
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = StaticVec::new();
     let prev_len = state.len();
 
     while !match_token(input, Token::RightBrace)? {
         // Parse statements inside the block
-        let stmt = parse_stmt(
-            input,
-            state,
-            breakable,
-            false,
-            level + 1,
-            if_expr,
-            stmt_expr,
-        )?;
+        settings.is_global = false;
+        let stmt = parse_stmt(input, state, settings.level_up())?;
 
         // See if it needs a terminating semicolon
         let need_semicolon = !stmt.is_self_terminated();
@@ -2271,25 +2203,20 @@ fn parse_block(
 
     state.truncate(prev_len);
 
-    Ok(Stmt::Block(Box::new((statements, pos))))
+    Ok(Stmt::Block(Box::new((statements, settings.pos))))
 }
 
 /// Parse an expression as a statement.
 fn parse_expr_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    let (_, pos) = input.peek().unwrap();
+    settings.pos = input.peek().unwrap().1;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(*pos));
-    }
-
-    let expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
-    let expr = parse_op_assignment_stmt(input, state, expr, level + 1, if_expr, stmt_expr)?;
+    let expr = parse_expr(input, state, settings.level_up())?;
+    let expr = parse_op_assignment_stmt(input, state, expr, settings.level_up())?;
     Ok(Stmt::Expr(Box::new(expr)))
 }
 
@@ -2297,53 +2224,45 @@ fn parse_expr_stmt(
 fn parse_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    breakable: bool,
-    is_global: bool,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     use ScopeEntryType::{Constant, Normal};
 
-    let (token, pos) = match input.peek().unwrap() {
+    let (token, token_pos) = match input.peek().unwrap() {
         (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
         x => x,
     };
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(*pos));
-    }
+    settings.pos = *token_pos;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
         // Semicolon - empty statement
-        Token::SemiColon => Ok(Stmt::Noop(*pos)),
+        Token::SemiColon => Ok(Stmt::Noop(settings.pos)),
 
-        Token::LeftBrace => parse_block(input, state, breakable, level + 1, if_expr, stmt_expr),
+        Token::LeftBrace => parse_block(input, state, settings.level_up()),
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
-        Token::Fn if !is_global => Err(PERR::WrongFnDefinition.into_err(*pos)),
+        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(settings.pos)),
         #[cfg(not(feature = "no_function"))]
         Token::Fn => unreachable!(),
 
-        Token::If => parse_if(input, state, breakable, level + 1, if_expr, stmt_expr),
-        Token::While => parse_while(input, state, level + 1, if_expr, stmt_expr),
-        Token::Loop => parse_loop(input, state, level + 1, if_expr, stmt_expr),
-        Token::For => parse_for(input, state, level + 1, if_expr, stmt_expr),
+        Token::If => parse_if(input, state, settings.level_up()),
+        Token::While => parse_while(input, state, settings.level_up()),
+        Token::Loop => parse_loop(input, state, settings.level_up()),
+        Token::For => parse_for(input, state, settings.level_up()),
 
-        Token::Continue if breakable => {
+        Token::Continue if settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
             Ok(Stmt::Continue(pos))
         }
-        Token::Break if breakable => {
+        Token::Break if settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::Break(pos))
         }
-        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(*pos)),
+        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
 
         Token::Return | Token::Throw => {
-            let pos = *pos;
-
             let return_type = match input.next().unwrap() {
                 (Token::Return, _) => ReturnType::Return,
                 (Token::Throw, _) => ReturnType::Exception,
@@ -2354,12 +2273,13 @@ fn parse_stmt(
                 // `return`/`throw` at <EOF>
                 (Token::EOF, pos) => Ok(Stmt::ReturnWithVal(Box::new(((return_type, *pos), None)))),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => {
-                    Ok(Stmt::ReturnWithVal(Box::new(((return_type, pos), None))))
-                }
+                (Token::SemiColon, _) => Ok(Stmt::ReturnWithVal(Box::new((
+                    (return_type, settings.pos),
+                    None,
+                )))),
                 // `return` or `throw` with expression
                 (_, _) => {
-                    let expr = parse_expr(input, state, level + 1, if_expr, stmt_expr)?;
+                    let expr = parse_expr(input, state, settings.level_up())?;
                     let pos = expr.position();
 
                     Ok(Stmt::ReturnWithVal(Box::new((
@@ -2370,17 +2290,17 @@ fn parse_stmt(
             }
         }
 
-        Token::Let => parse_let(input, state, Normal, level + 1, if_expr, stmt_expr),
-        Token::Const => parse_let(input, state, Constant, level + 1, if_expr, stmt_expr),
-        Token::Import => parse_import(input, state, level + 1, if_expr, stmt_expr),
+        Token::Let => parse_let(input, state, Normal, settings.level_up()),
+        Token::Const => parse_let(input, state, Constant, settings.level_up()),
+        Token::Import => parse_import(input, state, settings.level_up()),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Export if !is_global => Err(PERR::WrongExport.into_err(*pos)),
+        Token::Export if !settings.is_global => Err(PERR::WrongExport.into_err(settings.pos)),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Export => parse_export(input, state, level + 1),
+        Token::Export => parse_export(input, state, settings.level_up()),
 
-        _ => parse_expr_stmt(input, state, level + 1, if_expr, stmt_expr),
+        _ => parse_expr_stmt(input, state, settings.level_up()),
     }
 }
 
@@ -2390,15 +2310,10 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     access: FnAccess,
-    level: usize,
-    if_expr: bool,
-    stmt_expr: bool,
+    mut settings: ParseSettings,
 ) -> Result<ScriptFnDef, ParseError> {
-    let pos = eat_token(input, Token::Fn);
-
-    if level > state.max_expr_depth {
-        return Err(PERR::ExprTooDeep.into_err(pos));
-    }
+    settings.pos = eat_token(input, Token::Fn);
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let name = match input.next().unwrap() {
         (Token::Identifier(s), _) => s,
@@ -2463,7 +2378,10 @@ fn parse_fn(
 
     // Parse function body
     let body = match input.peek().unwrap() {
-        (Token::LeftBrace, _) => parse_block(input, state, false, level + 1, if_expr, stmt_expr)?,
+        (Token::LeftBrace, _) => {
+            settings.is_breakable = false;
+            parse_block(input, state, settings.level_up())?
+        }
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
     };
 
@@ -2474,7 +2392,7 @@ fn parse_fn(
         access,
         params,
         body,
-        pos,
+        pos: settings.pos,
     })
 }
 
@@ -2500,9 +2418,17 @@ fn parse_global_level(
 
             match input.peek().unwrap() {
                 #[cfg(not(feature = "no_function"))]
-                (Token::Fn, _) => {
+                (Token::Fn, pos) => {
                     let mut state = ParseState::new(max_function_expr_depth);
-                    let func = parse_fn(input, &mut state, access, 0, true, true)?;
+                    let settings = ParseSettings {
+                        allow_if_expr: true,
+                        allow_stmt_expr: true,
+                        is_global: false,
+                        is_breakable: false,
+                        level: 0,
+                        pos: *pos,
+                    };
+                    let func = parse_fn(input, &mut state, access, settings)?;
 
                     // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -2520,8 +2446,17 @@ fn parse_global_level(
                 _ => (),
             }
         }
+
         // Actual statement
-        let stmt = parse_stmt(input, &mut state, false, true, 0, true, true)?;
+        let settings = ParseSettings {
+            allow_if_expr: true,
+            allow_stmt_expr: true,
+            is_global: true,
+            is_breakable: false,
+            level: 0,
+            pos: Position::none(),
+        };
+        let stmt = parse_stmt(input, &mut state, settings)?;
 
         let need_semicolon = !stmt.is_self_terminated();
 
@@ -2565,7 +2500,15 @@ impl Engine {
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let mut state = ParseState::new(self.max_expr_depth);
-        let expr = parse_expr(input, &mut state, 0, false, false)?;
+        let settings = ParseSettings {
+            allow_if_expr: false,
+            allow_stmt_expr: false,
+            is_global: true,
+            is_breakable: false,
+            level: 0,
+            pos: Position::none(),
+        };
+        let expr = parse_expr(input, &mut state, settings)?;
 
         match input.peek().unwrap() {
             (Token::EOF, _) => (),
