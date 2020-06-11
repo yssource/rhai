@@ -7,7 +7,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::token::{Position, Token, TokenIterator};
+use crate::token::{Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 use crate::stdlib::{
@@ -672,7 +672,7 @@ impl Expr {
 }
 
 /// Consume a particular token, checking that it is the expected one.
-fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
+fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     let (t, pos) = input.next().unwrap();
 
     if t != token {
@@ -687,7 +687,7 @@ fn eat_token(input: &mut Peekable<TokenIterator>, token: Token) -> Position {
 }
 
 /// Match a particular token, consuming it if matched.
-fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool, ParseError> {
+fn match_token(input: &mut TokenStream, token: Token) -> Result<bool, ParseError> {
     let (t, _) = input.peek().unwrap();
     if *t == token {
         eat_token(input, token);
@@ -698,8 +698,8 @@ fn match_token(input: &mut Peekable<TokenIterator>, token: Token) -> Result<bool
 }
 
 /// Parse ( expr )
-fn parse_paren_expr<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_paren_expr(
+    input: &mut TokenStream,
     state: &mut ParseState,
     pos: Position,
     level: usize,
@@ -731,8 +731,8 @@ fn parse_paren_expr<'a>(
 }
 
 /// Parse a function call.
-fn parse_call_expr<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_call_expr(
+    input: &mut TokenStream,
     state: &mut ParseState,
     id: String,
     mut modules: Option<Box<ModuleRef>>,
@@ -764,7 +764,7 @@ fn parse_call_expr<'a>(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let hash_fn_def = if let Some(modules) = modules.as_mut() {
+            let hash_script = if let Some(modules) = modules.as_mut() {
                 modules.set_index(state.find_module(&modules.get(0).0));
 
                 // Rust functions are indexed in two steps:
@@ -783,7 +783,7 @@ fn parse_call_expr<'a>(
             return Ok(Expr::FnCall(Box::new((
                 (id.into(), false, begin),
                 modules,
-                hash_fn_def,
+                hash_script,
                 args,
                 None,
             ))));
@@ -800,7 +800,7 @@ fn parse_call_expr<'a>(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash_fn_def = if let Some(modules) = modules.as_mut() {
+                let hash_script = if let Some(modules) = modules.as_mut() {
                     modules.set_index(state.find_module(&modules.get(0).0));
 
                     // Rust functions are indexed in two steps:
@@ -819,7 +819,7 @@ fn parse_call_expr<'a>(
                 return Ok(Expr::FnCall(Box::new((
                     (id.into(), false, begin),
                     modules,
-                    hash_fn_def,
+                    hash_script,
                     args,
                     None,
                 ))));
@@ -854,8 +854,8 @@ fn parse_call_expr<'a>(
 
 /// Parse an indexing chain.
 /// Indexing binds to the right, so this call parses all possible levels of indexing following in the input.
-fn parse_index_chain<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_index_chain(
+    input: &mut TokenStream,
     state: &mut ParseState,
     lhs: Expr,
     pos: Position,
@@ -1044,8 +1044,8 @@ fn parse_index_chain<'a>(
 }
 
 /// Parse an array literal.
-fn parse_array_literal<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_array_literal(
+    input: &mut TokenStream,
     state: &mut ParseState,
     pos: Position,
     level: usize,
@@ -1094,8 +1094,8 @@ fn parse_array_literal<'a>(
 }
 
 /// Parse a map literal.
-fn parse_map_literal<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_map_literal(
+    input: &mut TokenStream,
     state: &mut ParseState,
     pos: Position,
     level: usize,
@@ -1197,8 +1197,8 @@ fn parse_map_literal<'a>(
 }
 
 /// Parse a primary expression.
-fn parse_primary<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_primary(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -1319,8 +1319,8 @@ fn parse_primary<'a>(
 }
 
 /// Parse a potential unary operator.
-fn parse_unary<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_unary(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -1470,8 +1470,8 @@ fn make_assignment_stmt<'a>(
 }
 
 /// Parse an operator-assignment expression.
-fn parse_op_assignment_stmt<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_op_assignment_stmt(
+    input: &mut TokenStream,
     state: &mut ParseState,
     lhs: Expr,
     level: usize,
@@ -1713,8 +1713,8 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
 }
 
 /// Parse a binary expression.
-fn parse_binary_op<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_binary_op(
+    input: &mut TokenStream,
     state: &mut ParseState,
     parent_precedence: u8,
     lhs: Expr,
@@ -1832,8 +1832,8 @@ fn parse_binary_op<'a>(
 }
 
 /// Parse an expression.
-fn parse_expr<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_expr(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -1850,10 +1850,7 @@ fn parse_expr<'a>(
 }
 
 /// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
-fn ensure_not_statement_expr<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
-    type_name: &str,
-) -> Result<(), ParseError> {
+fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         // Disallow statement expressions
         (Token::LeftBrace, pos) | (Token::EOF, pos) => {
@@ -1865,7 +1862,7 @@ fn ensure_not_statement_expr<'a>(
 }
 
 /// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
-fn ensure_not_assignment<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<(), ParseError> {
+fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         (Token::Equals, pos) => {
             return Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
@@ -1892,8 +1889,8 @@ fn ensure_not_assignment<'a>(input: &mut Peekable<TokenIterator<'a>>) -> Result<
 }
 
 /// Parse an if statement.
-fn parse_if<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_if(
+    input: &mut TokenStream,
     state: &mut ParseState,
     breakable: bool,
     level: usize,
@@ -1930,8 +1927,8 @@ fn parse_if<'a>(
 }
 
 /// Parse a while loop.
-fn parse_while<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_while(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -1954,8 +1951,8 @@ fn parse_while<'a>(
 }
 
 /// Parse a loop statement.
-fn parse_loop<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_loop(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -1975,8 +1972,8 @@ fn parse_loop<'a>(
 }
 
 /// Parse a for loop.
-fn parse_for<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_for(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -2028,8 +2025,8 @@ fn parse_for<'a>(
 }
 
 /// Parse a variable definition statement.
-fn parse_let<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_let(
+    input: &mut TokenStream,
     state: &mut ParseState,
     var_type: ScopeEntryType,
     level: usize,
@@ -2091,8 +2088,8 @@ fn parse_let<'a>(
 }
 
 /// Parse an import statement.
-fn parse_import<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_import(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -2132,8 +2129,8 @@ fn parse_import<'a>(
 
 /// Parse an export statement.
 #[cfg(not(feature = "no_module"))]
-fn parse_export<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_export(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
 ) -> Result<Stmt, ParseError> {
@@ -2197,8 +2194,8 @@ fn parse_export<'a>(
 }
 
 /// Parse a statement block.
-fn parse_block<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_block(
+    input: &mut TokenStream,
     state: &mut ParseState,
     breakable: bool,
     level: usize,
@@ -2278,8 +2275,8 @@ fn parse_block<'a>(
 }
 
 /// Parse an expression as a statement.
-fn parse_expr_stmt<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_expr_stmt(
+    input: &mut TokenStream,
     state: &mut ParseState,
     level: usize,
     if_expr: bool,
@@ -2297,8 +2294,8 @@ fn parse_expr_stmt<'a>(
 }
 
 /// Parse a single statement.
-fn parse_stmt<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_stmt(
+    input: &mut TokenStream,
     state: &mut ParseState,
     breakable: bool,
     is_global: bool,
@@ -2389,8 +2386,8 @@ fn parse_stmt<'a>(
 
 /// Parse a function definition.
 #[cfg(not(feature = "no_function"))]
-fn parse_fn<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_fn(
+    input: &mut TokenStream,
     state: &mut ParseState,
     access: FnAccess,
     level: usize,
@@ -2482,8 +2479,8 @@ fn parse_fn<'a>(
 }
 
 /// Parse the global level statements.
-fn parse_global_level<'a>(
-    input: &mut Peekable<TokenIterator<'a>>,
+fn parse_global_level(
+    input: &mut TokenStream,
     max_expr_depth: usize,
     max_function_expr_depth: usize,
 ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
@@ -2561,9 +2558,9 @@ fn parse_global_level<'a>(
 }
 
 impl Engine {
-    pub(crate) fn parse_global_expr<'a>(
+    pub(crate) fn parse_global_expr(
         &self,
-        input: &mut Peekable<TokenIterator<'a>>,
+        input: &mut TokenStream,
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
@@ -2589,9 +2586,9 @@ impl Engine {
     }
 
     /// Run the parser on an input stream, returning an AST.
-    pub(crate) fn parse<'a>(
+    pub(crate) fn parse(
         &self,
-        input: &mut Peekable<TokenIterator<'a>>,
+        input: &mut TokenStream,
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
