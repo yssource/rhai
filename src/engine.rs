@@ -871,9 +871,7 @@ impl Engine {
 
         // If new functions are defined within the eval string, it is an error
         if ast.lib().num_fn() != 0 {
-            return Err(Box::new(EvalAltResult::ErrorParsing(
-                ParseErrorType::WrongFnDefinition.into_err(Position::none()),
-            )));
+            return Err(ParseErrorType::WrongFnDefinition.into());
         }
 
         let statements = mem::take(ast.statements_mut());

@@ -1,5 +1,6 @@
 //! Module containing error definitions for the parsing process.
 
+use crate::result::EvalAltResult;
 use crate::token::Position;
 
 use crate::stdlib::{boxed::Box, char, error::Error, fmt, string::String};
@@ -123,113 +124,111 @@ impl ParseErrorType {
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
         ParseError(Box::new(self), pos)
     }
+
+    pub(crate) fn desc(&self) -> &str {
+        match self {
+            Self::BadInput(p) => p,
+            Self::UnexpectedEOF => "Script is incomplete",
+            Self::UnknownOperator(_) => "Unknown operator",
+            Self::MissingToken(_, _) => "Expecting a certain token that is missing",
+            Self::MalformedCallExpr(_) => "Invalid expression in function call arguments",
+            Self::MalformedIndexExpr(_) => "Invalid index in indexing expression",
+            Self::MalformedInExpr(_) => "Invalid 'in' expression",
+            Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
+            Self::ForbiddenConstantExpr(_) => "Expecting a constant",
+            Self::PropertyExpected => "Expecting name of a property",
+            Self::VariableExpected => "Expecting name of a variable",
+            Self::ExprExpected(_) => "Expecting an expression",
+            Self::FnMissingName => "Expecting name in function declaration",
+            Self::FnMissingParams(_) => "Expecting parameters in function declaration",
+            Self::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
+            Self::FnMissingBody(_) => "Expecting body statement block for function declaration",
+            Self::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
+            Self::DuplicatedExport(_) => "Duplicated variable/function in export statement",
+            Self::WrongExport => "Export statement can only appear at global level",
+            Self::AssignmentToCopy => "Only a copy of the value is change with this assignment",
+            Self::AssignmentToConstant(_) => "Cannot assign to a constant value",
+            Self::ExprTooDeep => "Expression exceeds maximum complexity",
+            Self::LoopBreak => "Break statement should only be used inside a loop"
+        }
+    }
+}
+
+impl fmt::Display for ParseErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
+                write!(f, "{}", if s.is_empty() { self.desc() } else { s })
+            }
+            Self::ForbiddenConstantExpr(s) => {
+                write!(f, "Expecting a constant to assign to '{}'", s)
+            }
+            Self::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s),
+
+            Self::MalformedIndexExpr(s) => {
+                write!(f, "{}", if s.is_empty() { self.desc() } else { s })
+            }
+
+            Self::MalformedInExpr(s) => write!(f, "{}", if s.is_empty() { self.desc() } else { s }),
+
+            Self::DuplicatedProperty(s) => {
+                write!(f, "Duplicated property '{}' for object map literal", s)
+            }
+
+            Self::ExprExpected(s) => write!(f, "Expecting {} expression", s),
+
+            Self::FnMissingParams(s) => write!(f, "Expecting parameters for function '{}'", s),
+
+            Self::FnMissingBody(s) => {
+                write!(f, "Expecting body statement block for function '{}'", s)
+            }
+
+            Self::FnDuplicatedParam(s, arg) => {
+                write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)
+            }
+
+            Self::DuplicatedExport(s) => write!(
+                f,
+                "Duplicated variable/function '{}' in export statement",
+                s
+            ),
+
+            Self::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s),
+
+            Self::AssignmentToConstant(s) if s.is_empty() => write!(f, "{}", self.desc()),
+            Self::AssignmentToConstant(s) => write!(f, "Cannot assign to constant '{}'", s),
+            _ => write!(f, "{}", self.desc()),
+        }
+    }
 }
 
 /// Error when parsing a script.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
-pub struct ParseError(pub(crate) Box<ParseErrorType>, pub(crate) Position);
-
-impl ParseError {
-    /// Get the parse error.
-    pub fn error_type(&self) -> &ParseErrorType {
-        &self.0
-    }
-
-    /// Get the location in the script of the error.
-    pub fn position(&self) -> Position {
-        self.1
-    }
-
-    pub(crate) fn desc(&self) -> &str {
-        match self.0.as_ref() {
-            ParseErrorType::BadInput(p) => p,
-            ParseErrorType::UnexpectedEOF => "Script is incomplete",
-            ParseErrorType::UnknownOperator(_) => "Unknown operator",
-            ParseErrorType::MissingToken(_, _) => "Expecting a certain token that is missing",
-            ParseErrorType::MalformedCallExpr(_) => "Invalid expression in function call arguments",
-            ParseErrorType::MalformedIndexExpr(_) => "Invalid index in indexing expression",
-            ParseErrorType::MalformedInExpr(_) => "Invalid 'in' expression",
-            ParseErrorType::DuplicatedProperty(_) => "Duplicated property in object map literal",
-            ParseErrorType::ForbiddenConstantExpr(_) => "Expecting a constant",
-            ParseErrorType::PropertyExpected => "Expecting name of a property",
-            ParseErrorType::VariableExpected => "Expecting name of a variable",
-            ParseErrorType::ExprExpected(_) => "Expecting an expression",
-            ParseErrorType::FnMissingName => "Expecting name in function declaration",
-            ParseErrorType::FnMissingParams(_) => "Expecting parameters in function declaration",
-            ParseErrorType::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
-            ParseErrorType::FnMissingBody(_) => "Expecting body statement block for function declaration",
-            ParseErrorType::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
-            ParseErrorType::DuplicatedExport(_) => "Duplicated variable/function in export statement",
-            ParseErrorType::WrongExport => "Export statement can only appear at global level",
-            ParseErrorType::AssignmentToCopy => "Only a copy of the value is change with this assignment",
-            ParseErrorType::AssignmentToConstant(_) => "Cannot assign to a constant value",
-            ParseErrorType::ExprTooDeep => "Expression exceeds maximum complexity",
-            ParseErrorType::LoopBreak => "Break statement should only be used inside a loop"
-        }
-    }
-}
+pub struct ParseError(pub Box<ParseErrorType>, pub Position);
 
 impl Error for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0.as_ref() {
-            ParseErrorType::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
-                write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
-            }
-            ParseErrorType::ForbiddenConstantExpr(s) => {
-                write!(f, "Expecting a constant to assign to '{}'", s)?
-            }
-            ParseErrorType::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s)?,
+        fmt::Display::fmt(&self.0, f)?;
 
-            ParseErrorType::MalformedIndexExpr(s) => {
-                write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
-            }
-
-            ParseErrorType::MalformedInExpr(s) => {
-                write!(f, "{}", if s.is_empty() { self.desc() } else { s })?
-            }
-
-            ParseErrorType::DuplicatedProperty(s) => {
-                write!(f, "Duplicated property '{}' for object map literal", s)?
-            }
-
-            ParseErrorType::ExprExpected(s) => write!(f, "Expecting {} expression", s)?,
-
-            ParseErrorType::FnMissingParams(s) => {
-                write!(f, "Expecting parameters for function '{}'", s)?
-            }
-
-            ParseErrorType::FnMissingBody(s) => {
-                write!(f, "Expecting body statement block for function '{}'", s)?
-            }
-
-            ParseErrorType::FnDuplicatedParam(s, arg) => {
-                write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)?
-            }
-
-            ParseErrorType::DuplicatedExport(s) => write!(
-                f,
-                "Duplicated variable/function '{}' in export statement",
-                s
-            )?,
-
-            ParseErrorType::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s)?,
-
-            ParseErrorType::AssignmentToConstant(s) if s.is_empty() => {
-                write!(f, "{}", self.desc())?
-            }
-            ParseErrorType::AssignmentToConstant(s) => {
-                write!(f, "Cannot assign to constant '{}'", s)?
-            }
-            _ => write!(f, "{}", self.desc())?,
-        }
-
+        // Do not write any position if None
         if !self.1.is_none() {
-            // Do not write any position if None
-            Ok(())
-        } else {
-            write!(f, " ({})", self.1)
+            write!(f, " ({})", self.1)?;
         }
+
+        Ok(())
+    }
+}
+
+impl From<ParseErrorType> for Box<EvalAltResult> {
+    fn from(err: ParseErrorType) -> Self {
+        Box::new(EvalAltResult::ErrorParsing(err, Position::none()))
+    }
+}
+
+impl From<ParseError> for Box<EvalAltResult> {
+    fn from(err: ParseError) -> Self {
+        Box::new(EvalAltResult::ErrorParsing(*err.0, err.1))
     }
 }

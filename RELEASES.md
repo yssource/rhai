@@ -13,6 +13,7 @@ Breaking changes
 * Callback closure passed to `Engine::on_progress` now takes `&u64` instead of `u64` to be consistent with other callback signatures.
 * `Engine::register_indexer` is renamed to `Engine::register_indexer_get`.
 * `Module::set_indexer_fn` is renamed to `Module::set_indexer_get_fn`.
+* The tuple `ParseError` now exposes the internal fields and the `ParseError::error_type` and `ParseError::position` methods are removed.  The first tuple field is the `ParseErrorType` and the second tuple field is the `Position`.
 
 New features
 ------------
