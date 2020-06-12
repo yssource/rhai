@@ -1,5 +1,7 @@
 #![cfg(not(feature = "no_module"))]
-use rhai::{module_resolvers, Engine, EvalAltResult, Module, Scope, INT};
+use rhai::{
+    module_resolvers, Engine, EvalAltResult, Module, ParseError, ParseErrorType, Scope, INT,
+};
 
 #[test]
 fn test_module() {
@@ -227,6 +229,23 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
             .eval_expression_with_scope::<()>(&mut scope, "testing::hidden()")
             .expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "hidden"
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_module_export() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(matches!(
+        engine.compile(r"let x = 10; { export x; }").expect_err("should error"),
+        ParseError(x, _) if *x == ParseErrorType::WrongExport
+    ));
+
+    assert!(matches!(
+        engine.compile(r"fn abc(x) { export x; }").expect_err("should error"),
+        ParseError(x, _) if *x == ParseErrorType::WrongExport
     ));
 
     Ok(())

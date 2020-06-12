@@ -1,19 +1,17 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, Func, ParseErrorType, Scope, INT};
+use rhai::{Engine, EvalAltResult, Func, ParseError, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_fn() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     // Expect duplicated parameters error
-    match engine
-        .compile("fn hello(x, x) { x }")
-        .expect_err("should be error")
-        .error_type()
-    {
-        ParseErrorType::FnDuplicatedParam(f, p) if f == "hello" && p == "x" => (),
-        _ => assert!(false, "wrong error"),
-    }
+    assert!(matches!(
+        engine
+            .compile("fn hello(x, x) { x }")
+            .expect_err("should be error"),
+        ParseError(x, _) if *x == ParseErrorType::FnDuplicatedParam("hello".to_string(), "x".to_string())
+    ));
 
     Ok(())
 }

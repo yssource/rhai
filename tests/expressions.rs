@@ -21,6 +21,8 @@ fn test_expressions() -> Result<(), Box<EvalAltResult>> {
     assert!(engine.eval_expression::<()>("x = 42").is_err());
     assert!(engine.compile_expression("let x = 42").is_err());
 
+    engine.compile("40 + { let x = 2; x }")?;
+
     Ok(())
 }
 
