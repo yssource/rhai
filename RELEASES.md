@@ -14,6 +14,7 @@ Breaking changes
 * `Engine::register_indexer` is renamed to `Engine::register_indexer_get`.
 * `Module::set_indexer_fn` is renamed to `Module::set_indexer_get_fn`.
 * The tuple `ParseError` now exposes the internal fields and the `ParseError::error_type` and `ParseError::position` methods are removed.  The first tuple field is the `ParseErrorType` and the second tuple field is the `Position`.
+* `Engine::call_fn_dynamic` now takes any type that implements `IntoIterator<Item = Dynamic>`.
 
 New features
 ------------
