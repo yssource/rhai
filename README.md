@@ -316,7 +316,7 @@ Functions declared with `private` are hidden and cannot be called from Rust (see
 // Define functions in a script.
 let ast = engine.compile(true,
     r#"
-        // a function with two parameters: String and i64
+        // a function with two parameters: string and i64
         fn hello(x, y) {
             x.len + y
         }
