@@ -26,11 +26,11 @@ Features
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
 * Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 * Rugged (protection against [stack-overflow](#maximum-call-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
-* Track script evaluation [progress](#tracking-progress) and manually terminate a script run.
+* Track script evaluation [progress](#tracking-progress-and-force-terminate-script-run) and manually terminate a script run.
 * [`no-std`](#optional-features) support.
 * [Function overloading](#function-overloading).
 * [Operator overloading](#operator-overloading).
-* Organize code base with dynamically-loadable [Modules].
+* Organize code base with dynamically-loadable [modules].
 * Scripts are [optimized](#script-optimization) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features).
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
@@ -2434,8 +2434,8 @@ engine.set_module_resolver(None);
 Ruggedization - protect against DoS attacks
 ------------------------------------------
 
-For scripting systems open to user-land scripts, it is always best to limit the amount of resources used by a script
-so that it does not consume more resources that it is allowed to.
+For scripting systems open to untrusted user-land scripts, it is always best to limit the amount of resources used by
+a script so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
@@ -2476,38 +2476,46 @@ A good rule-of-thumb is that one simple non-trivial expression consumes on avera
 One _operation_ can take an unspecified amount of time and real CPU cycles, depending on the particulars.
 For example, loading a constant consumes very few CPU cycles, while calling an external Rust function,
 though also counted as only one operation, may consume much more computing resources.
-If it helps to visualize, think of an _operation_ as roughly equals to one _instruction_ of a hypothetical CPU.
+To help visualize, think of an _operation_ as roughly equals to one _instruction_ of a hypothetical CPU
+which includes _specialized_ instructions, such as _function call_, _load module_ etc., each taking up
+one CPU cycle to execute.
 
-The _operation count_ is intended to be a very course-grained measurement of the amount of CPU that a script
-is consuming, and allows the system to impose a hard upper limit.
+The _operations count_ is intended to be a very course-grained measurement of the amount of CPU that a script
+has consumed, allowing the system to impose a hard upper limit on computing resources.
 
-A script exceeding the maximum operations count will terminate with an error result.
-This check can be disabled via the [`unchecked`] feature for higher performance
-(but higher risks as well).
+A script exceeding the maximum operations count terminates with an error result.
+This can be disabled via the [`unchecked`] feature for higher performance (but higher risks as well).
 
-### Tracking progress
+### Tracking progress and force-terminate script run
 
-To track script evaluation progress and to force-terminate a script prematurely (for any reason),
-provide a closure to the `Engine::on_progress` method:
+It is impossible to know when, or even whether, a script run will end
+(a.k.a. the [Halting Problem](http://en.wikipedia.org/wiki/Halting_problem)).
+When dealing with third-party untrusted scripts that may be malicious, to track evaluation progress and
+to force-terminate a script prematurely (for any reason), provide a closure to the `Engine::on_progress` method:
 
 ```rust
 let mut engine = Engine::new();
 
-engine.on_progress(|&count| {               // 'count' is the number of operations performed
+engine.on_progress(|&count| {               // parameter is '&u64' - number of operations already performed
     if count % 1000 == 0 {
         println!("{}", count);              // print out a progress log every 1,000 operations
     }
-    true                                    // return 'true' to continue the script
-                                            // returning 'false' will terminate the script
+    true                                    // return 'true' to continue running the script
+                                            // return 'false' to immediately terminate the script
 });
 ```
 
-The closure passed to `Engine::on_progress` will be called once every operation.
+The closure passed to `Engine::on_progress` will be called once for every operation.
 Return `false` to terminate the script immediately.
+
+Notice that the _operations count_ value passed into the closure does not indicate the _percentage_ of work
+already done by the script (and thus it is not real _progress_ tracking), because it is impossible to determine
+how long a script may run.  It is possible, however, to calculate this percentage based on an estimated
+total number of operations for a typical run.
 
 ### Maximum number of modules
 
-Rhai by default does not limit how many [modules] are loaded via the [`import`] statement.
+Rhai by default does not limit how many [modules] can be loaded via [`import`] statements.
 This can be changed via the `Engine::set_max_modules` method, with zero being unlimited (the default).
 
 ```rust
@@ -2528,7 +2536,7 @@ Rhai by default limits function calls to a maximum depth of 128 levels (16 level
 This limit may be changed via the `Engine::set_max_call_levels` method.
 
 When setting this limit, care must be also taken to the evaluation depth of each _statement_
-within the function. It is entirely possible for a malicous script to embed an recursive call deep
+within the function. It is entirely possible for a malicous script to embed a recursive call deep
 inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
 
 The limit can be disabled via the [`unchecked`] feature for higher performance
@@ -2627,7 +2635,7 @@ For example, in the following:
 
 ```rust
 {
-    let x = 999;            // NOT eliminated: Rhai doesn't check yet whether a variable is used later on
+    let x = 999;            // NOT eliminated: variable may be used later on (perhaps even an 'eval')
     123;                    // eliminated: no effect
     "hello";                // eliminated: no effect
     [1, 2, x, x*2, 5];      // eliminated: no effect
