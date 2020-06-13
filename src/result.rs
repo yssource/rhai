@@ -81,6 +81,8 @@ pub enum EvalAltResult {
     ErrorTooManyModules(Position),
     /// Call stack over maximum limit.
     ErrorStackOverflow(Position),
+    /// Data value over maximum size limit. Wrapped values are the data type, maximum size and current size.
+    ErrorDataTooLarge(String, usize, usize, Position),
     /// The script is prematurely terminated.
     ErrorTerminated(Position),
     /// Run-time error encountered. Wrapped value is the error message.
@@ -139,6 +141,7 @@ impl EvalAltResult {
             Self::ErrorTooManyOperations(_) => "Too many operations",
             Self::ErrorTooManyModules(_) => "Too many modules imported",
             Self::ErrorStackOverflow(_) => "Stack overflow",
+            Self::ErrorDataTooLarge(_, _, _, _) => "Data size exceeds maximum limit",
             Self::ErrorTerminated(_) => "Script terminated.",
             Self::ErrorRuntime(_, _) => "Runtime error",
             Self::ErrorLoopBreak(true, _) => "Break statement not inside a loop",
@@ -228,6 +231,9 @@ impl fmt::Display for EvalAltResult {
                 "String index {} is out of bounds: only {} characters in the string",
                 index, max
             )?,
+            Self::ErrorDataTooLarge(typ, max, size, _) => {
+                write!(f, "{} ({}) exceeds the maximum limit ({})", typ, size, max)?
+            }
         }
 
         // Do not write any position if None
@@ -279,6 +285,7 @@ impl EvalAltResult {
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorDataTooLarge(_, _, _, pos)
             | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)
@@ -316,6 +323,7 @@ impl EvalAltResult {
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorDataTooLarge(_, _, _, pos)
             | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)

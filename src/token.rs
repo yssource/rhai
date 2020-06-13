@@ -429,6 +429,8 @@ impl From<Token> for String {
 
 /// An iterator on a `Token` stream.
 pub struct TokenIterator<'a> {
+    /// Maximum length of a string (0 = unlimited).
+    max_string_size: usize,
     /// Can the next token be a unary operator?
     can_be_unary: bool,
     /// Current position.
@@ -494,6 +496,7 @@ impl<'a> TokenIterator<'a> {
     pub fn parse_string_literal(
         &mut self,
         enclosing_char: char,
+        max_length: usize,
     ) -> Result<String, (LexError, Position)> {
         let mut result = Vec::new();
         let mut escape = String::with_capacity(12);
@@ -504,6 +507,10 @@ impl<'a> TokenIterator<'a> {
                 .ok_or((LERR::UnterminatedString, self.pos))?;
 
             self.advance();
+
+            if max_length > 0 && result.len() > max_length {
+                return Err((LexError::StringTooLong(max_length), self.pos));
+            }
 
             match next_char {
                 // \...
@@ -592,7 +599,13 @@ impl<'a> TokenIterator<'a> {
             }
         }
 
-        Ok(result.iter().collect())
+        let s = result.iter().collect::<String>();
+
+        if max_length > 0 && s.len() > max_length {
+            return Err((LexError::StringTooLong(max_length), self.pos));
+        }
+
+        Ok(s)
     }
 
     /// Get the next token.
@@ -779,10 +792,12 @@ impl<'a> TokenIterator<'a> {
 
                 // " - string literal
                 ('"', _) => {
-                    return self.parse_string_literal('"').map_or_else(
-                        |err| Some((Token::LexError(Box::new(err.0)), err.1)),
-                        |out| Some((Token::StringConst(out), pos)),
-                    );
+                    return self
+                        .parse_string_literal('"', self.max_string_size)
+                        .map_or_else(
+                            |err| Some((Token::LexError(Box::new(err.0)), err.1)),
+                            |out| Some((Token::StringConst(out), pos)),
+                        );
                 }
 
                 // ' - character literal
@@ -793,19 +808,25 @@ impl<'a> TokenIterator<'a> {
                     ));
                 }
                 ('\'', _) => {
-                    return Some(self.parse_string_literal('\'').map_or_else(
-                        |err| (Token::LexError(Box::new(err.0)), err.1),
-                        |result| {
-                            let mut chars = result.chars();
-                            let first = chars.next();
+                    return Some(
+                        self.parse_string_literal('\'', self.max_string_size)
+                            .map_or_else(
+                                |err| (Token::LexError(Box::new(err.0)), err.1),
+                                |result| {
+                                    let mut chars = result.chars();
+                                    let first = chars.next();
 
-                            if chars.next().is_some() {
-                                (Token::LexError(Box::new(LERR::MalformedChar(result))), pos)
-                            } else {
-                                (Token::CharConstant(first.expect("should be Some")), pos)
-                            }
-                        },
-                    ));
+                                    if chars.next().is_some() {
+                                        (
+                                            Token::LexError(Box::new(LERR::MalformedChar(result))),
+                                            pos,
+                                        )
+                                    } else {
+                                        (Token::CharConstant(first.expect("should be Some")), pos)
+                                    }
+                                },
+                            ),
+                    );
                 }
 
                 // Braces
@@ -1047,8 +1068,9 @@ impl<'a> Iterator for TokenIterator<'a> {
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a>(input: &'a [&'a str]) -> TokenIterator<'a> {
+pub fn lex<'a>(input: &'a [&'a str], max_string_size: usize) -> TokenIterator<'a> {
     TokenIterator {
+        max_string_size,
         can_be_unary: true,
         pos: Position::new(1, 0),
         streams: input.iter().map(|s| s.chars().peekable()).collect(),
