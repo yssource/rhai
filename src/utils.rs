@@ -216,6 +216,15 @@ impl<T> FromIterator<T> for StaticVec<T> {
     }
 }
 
+impl<T: 'static> IntoIterator for StaticVec<T> {
+    type Item = T;
+    type IntoIter = Box<dyn Iterator<Item = T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_iter()
+    }
+}
+
 impl<T> StaticVec<T> {
     /// Create a new `StaticVec`.
     #[inline(always)]

@@ -14,7 +14,7 @@ to add scripting to any application.
 Features
 --------
 
-* Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector.
+* Easy-to-use language similar to JS+Rust with dynamic typing.
 * Tight integration with native Rust [functions](#working-with-functions) and [types](#custom-types-and-methods),
   including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers).
 * Freely pass Rust variables/constants into a script via an external [`Scope`].
@@ -25,12 +25,12 @@ Features
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
 * Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
-* Rugged (protection against [stack-overflow](#maximum-call-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
-* Track script evaluation [progress](#tracking-progress) and manually terminate a script run.
+* Rugged - protection against malicious attacks (such as [stack-overflow](#maximum-call-stack-depth), [over-sized data](#maximum-length-of-strings), and [runaway scripts](#maximum-number-of-operations) etc.) that may come from untrusted third-party user-land scripts.
+* Track script evaluation [progress](#tracking-progress-and-force-terminate-script-run) and manually terminate a script run.
 * [`no-std`](#optional-features) support.
 * [Function overloading](#function-overloading).
 * [Operator overloading](#operator-overloading).
-* Organize code base with dynamically-loadable [Modules].
+* Organize code base with dynamically-loadable [modules].
 * Scripts are [optimized](#script-optimization) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features).
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
@@ -316,7 +316,7 @@ Functions declared with `private` are hidden and cannot be called from Rust (see
 // Define functions in a script.
 let ast = engine.compile(true,
     r#"
-        // a function with two parameters: String and i64
+        // a function with two parameters: string and i64
         fn hello(x, y) {
             x.len + y
         }
@@ -359,15 +359,13 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
-For more control, construct all arguments as `Dynamic` values and use `Engine::call_fn_dynamic`:
+For more control, construct all arguments as `Dynamic` values and use `Engine::call_fn_dynamic`, passing it
+anything that implements `IntoIterator<Item = Dynamic>` (such as a simple `Vec<Dynamic>`):
 
 ```rust
 let result: Dynamic = engine.call_fn_dynamic(&mut scope, &ast, "hello",
-                            &mut [ String::from("abc").into(), 123_i64.into() ])?;
+                            vec![ String::from("abc").into(), 123_i64.into() ])?;
 ```
-
-However, beware that `Engine::call_fn_dynamic` _consumes_ its arguments, meaning that all arguments passed to it
-will be replaced by `()` afterwards.  To re-use the arguments, clone them beforehand and pass in the clone.
 
 ### Creating Rust anonymous functions from Rhai script
 
@@ -738,7 +736,7 @@ use rhai::Dynamic;
 
 let x = (42_i64).into();                        // 'into()' works for standard types
 
-let y = Dynamic::from(String::from("hello!"));  // remember &str is not supported by Rhai
+let y = Dynamic::from("hello!".to_string());    // remember &str is not supported by Rhai
 ```
 
 Functions registered with the [`Engine`] can be _overloaded_ as long as the _signature_ is unique,
@@ -1124,14 +1122,14 @@ not available under [`no_index`].
 To use custom types for `print` and `debug`, or convert its value into a [string], it is necessary that the following
 functions be registered (assuming the custom type is `T : Display + Debug`):
 
-| Function    | Signature                                        | Typical implementation         | Usage                                                                                   |
-| ----------- | ------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------- |
-| `to_string` | `|s: &mut T| -> String`                          | `s.to_string()`                | Converts the custom type into a [string]                                                |
-| `print`     | `|s: &mut T| -> String`                          | `s.to_string()`                | Converts the custom type into a [string] for the [`print`](#print-and-debug) statement  |
-| `debug`     | `|s: &mut T| -> String`                          | `format!("{:?}", s)`           | Converts the custom type into a [string] for the [`debug`](#print-and-debug) statement  |
-| `+`         | `|s1: ImmutableString, s: T| -> ImmutableString` | `s1 + s`                       | Append the custom type to another [string], for `print("Answer: " + type);` usage       |
-| `+`         | `|s: T, s2: ImmutableString| -> String`          | `s.to_string().push_str(&s2);` | Append another [string] to the custom type, for `print(type + " is the answer");` usage |
-| `+=`        | `|s1: &mut ImmutableString, s: T|`               | `s1 += s.to_string()`          | Append the custom type to an existing [string], for `s += type;` usage                  |
+| Function    | Signature                                        | Typical implementation                | Usage                                                                                   |
+| ----------- | ------------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------------------- |
+| `to_string` | `|s: &mut T| -> ImmutableString`                 | `s.to_string().into()`                | Converts the custom type into a [string]                                                |
+| `print`     | `|s: &mut T| -> ImmutableString`                 | `s.to_string().into()`                | Converts the custom type into a [string] for the [`print`](#print-and-debug) statement  |
+| `debug`     | `|s: &mut T| -> ImmutableString`                 | `format!("{:?}", s).into()`           | Converts the custom type into a [string] for the [`debug`](#print-and-debug) statement  |
+| `+`         | `|s1: ImmutableString, s: T| -> ImmutableString` | `s1 + s`                              | Append the custom type to another [string], for `print("Answer: " + type);` usage       |
+| `+`         | `|s: T, s2: ImmutableString| -> ImmutableString` | `s.to_string().push_str(&s2).into();` | Append another [string] to the custom type, for `print(type + " is the answer");` usage |
+| `+=`        | `|s1: &mut ImmutableString, s: T|`               | `s1 += s.to_string()`                 | Append the custom type to an existing [string], for `s += type;` usage                  |
 
 `Scope` - Initializing and maintaining state
 -------------------------------------------
@@ -1193,13 +1191,16 @@ fn main() -> Result<(), Box<EvalAltResult>>
 Engine configuration options
 ---------------------------
 
-| Method                   | Description                                                                                                                                         |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [script optimization].                                                                      |
-| `set_max_expr_depths`    | Set the maximum nesting levels of an expression/statement. See [maximum statement depth](#maximum-statement-depth).                                 |
-| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. See [maximum call stack depth](#maximum-call-stack-depth). |
-| `set_max_operations`     | Set the maximum number of _operations_ that a script is allowed to consume. See [maximum number of operations](#maximum-number-of-operations).      |
-| `set_max_modules`        | Set the maximum number of [modules] that a script is allowed to load. See [maximum number of modules](#maximum-number-of-modules).                  |
+| Method                   | Not available under          | Description                                                                                                                                         |
+| ------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_optimization_level` | [`no_optimize`]              | Set the amount of script _optimizations_ performed. See [script optimization].                                                                      |
+| `set_max_expr_depths`    | [`unchecked`]                | Set the maximum nesting levels of an expression/statement. See [maximum statement depth](#maximum-statement-depth).                                 |
+| `set_max_call_levels`    | [`unchecked`]                | Set the maximum number of function call levels (default 50) to avoid infinite recursion. See [maximum call stack depth](#maximum-call-stack-depth). |
+| `set_max_operations`     | [`unchecked`]                | Set the maximum number of _operations_ that a script is allowed to consume. See [maximum number of operations](#maximum-number-of-operations).      |
+| `set_max_modules`        | [`unchecked`]                | Set the maximum number of [modules] that a script is allowed to load. See [maximum number of modules](#maximum-number-of-modules).                  |
+| `set_max_string_size`    | [`unchecked`]                | Set the maximum length (in UTF-8 bytes) for [strings]. See [maximum length of strings](#maximum-length-of-strings).                                 |
+| `set_max_array_size`     | [`unchecked`], [`no_index`]  | Set the maximum size for [arrays]. See [maximum size of arrays](#maximum-size-of-arrays).                                                           |
+| `set_max_map_size`       | [`unchecked`], [`no_object`] | Set the maximum number of properties for [object maps]. See [maximum size of object maps](#maximum-size-of-object-maps).                            |
 
 -------
 
@@ -1500,6 +1501,9 @@ record == "Bob X. Davis: age 42 ❤\n";
 'C' in record == false;
 ```
 
+The maximum allowed length of a string can be controlled via `Engine::set_max_string_size`
+(see [maximum length of strings](#maximum-length-of-strings)).
+
 ### Built-in functions
 
 The following standard methods (mostly defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
@@ -1675,6 +1679,9 @@ y.len == 0;
 engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(item)) );
 ```
 
+The maximum allowed size of an array can be controlled via `Engine::set_max_array_size`
+(see [maximum size of arrays](#maximum-size-of-arrays)).
+
 Object maps
 -----------
 
@@ -1777,6 +1784,9 @@ y.clear();              // empty the object map
 
 y.len() == 0;
 ```
+
+The maximum allowed size of an object map can be controlled via `Engine::set_max_map_size`
+(see [maximum size of object maps](#maximum-size-of-object-maps)).
 
 ### Parsing from JSON
 
@@ -2436,12 +2446,12 @@ engine.set_module_resolver(None);
 Ruggedization - protect against DoS attacks
 ------------------------------------------
 
-For scripting systems open to user-land scripts, it is always best to limit the amount of resources used by a script
-so that it does not consume more resources that it is allowed to.
+For scripting systems open to untrusted user-land scripts, it is always best to limit the amount of resources used by
+a script so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
-* **Memory**: A malicous script may continuously grow an [array] or [object map] until all memory is consumed.
+* **Memory**: A malicous script may continuously grow a [string], an [array] or [object map] until all memory is consumed.
   It may also create a large [array] or [object map] literal that exhausts all memory during parsing.
 * **CPU**: A malicous script may run an infinite tight loop that consumes all CPU cycles.
 * **Time**: A malicous script may run indefinitely, thereby blocking the calling system which is waiting for a result.
@@ -2456,6 +2466,60 @@ The most important resources to watch out for are:
   Even when modules are not created from files, they still typically consume a lot of resources to load.
 * **Data**: A malicous script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
+
+### Maximum length of strings
+
+Rhai by default does not limit how long a [string] can be.
+This can be changed via the `Engine::set_max_string_size` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_string_size(500);            // allow strings only up to 500 bytes long (in UTF-8 format)
+
+engine.set_max_string_size(0);              // allow unlimited string length
+```
+
+A script attempting to create a string literal longer than the maximum will terminate with a parse error.
+Any script operation that produces a string longer than the maximum also terminates the script with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+### Maximum size of arrays
+
+Rhai by default does not limit how large an [array] can be.
+This can be changed via the `Engine::set_max_array_size` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_array_size(500);             // allow arrays only up to 500 items
+
+engine.set_max_array_size(0);               // allow unlimited arrays
+```
+
+A script attempting to create an array literal larger than the maximum will terminate with a parse error.
+Any script operation that produces an array larger than the maximum also terminates the script with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+### Maximum size of object maps
+
+Rhai by default does not limit how large (i.e. the number of properties) an [object map] can be.
+This can be changed via the `Engine::set_max_map_size` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_map_size(500);               // allow object maps with only up to 500 properties
+
+engine.set_max_map_size(0);                 // allow unlimited object maps
+```
+
+A script attempting to create an object map literal with more properties than the maximum will terminate with a parse error.
+Any script operation that produces an object map with more properties than the maximum also terminates the script with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
 
 ### Maximum number of operations
 
@@ -2478,38 +2542,46 @@ A good rule-of-thumb is that one simple non-trivial expression consumes on avera
 One _operation_ can take an unspecified amount of time and real CPU cycles, depending on the particulars.
 For example, loading a constant consumes very few CPU cycles, while calling an external Rust function,
 though also counted as only one operation, may consume much more computing resources.
-If it helps to visualize, think of an _operation_ as roughly equals to one _instruction_ of a hypothetical CPU.
+To help visualize, think of an _operation_ as roughly equals to one _instruction_ of a hypothetical CPU
+which includes _specialized_ instructions, such as _function call_, _load module_ etc., each taking up
+one CPU cycle to execute.
 
-The _operation count_ is intended to be a very course-grained measurement of the amount of CPU that a script
-is consuming, and allows the system to impose a hard upper limit.
+The _operations count_ is intended to be a very course-grained measurement of the amount of CPU that a script
+has consumed, allowing the system to impose a hard upper limit on computing resources.
 
-A script exceeding the maximum operations count will terminate with an error result.
-This check can be disabled via the [`unchecked`] feature for higher performance
-(but higher risks as well).
+A script exceeding the maximum operations count terminates with an error result.
+This can be disabled via the [`unchecked`] feature for higher performance (but higher risks as well).
 
-### Tracking progress
+### Tracking progress and force-terminate script run
 
-To track script evaluation progress and to force-terminate a script prematurely (for any reason),
-provide a closure to the `Engine::on_progress` method:
+It is impossible to know when, or even whether, a script run will end
+(a.k.a. the [Halting Problem](http://en.wikipedia.org/wiki/Halting_problem)).
+When dealing with third-party untrusted scripts that may be malicious, to track evaluation progress and
+to force-terminate a script prematurely (for any reason), provide a closure to the `Engine::on_progress` method:
 
 ```rust
 let mut engine = Engine::new();
 
-engine.on_progress(|&count| {               // 'count' is the number of operations performed
+engine.on_progress(|&count| {               // parameter is '&u64' - number of operations already performed
     if count % 1000 == 0 {
         println!("{}", count);              // print out a progress log every 1,000 operations
     }
-    true                                    // return 'true' to continue the script
-                                            // returning 'false' will terminate the script
+    true                                    // return 'true' to continue running the script
+                                            // return 'false' to immediately terminate the script
 });
 ```
 
-The closure passed to `Engine::on_progress` will be called once every operation.
+The closure passed to `Engine::on_progress` will be called once for every operation.
 Return `false` to terminate the script immediately.
+
+Notice that the _operations count_ value passed into the closure does not indicate the _percentage_ of work
+already done by the script (and thus it is not real _progress_ tracking), because it is impossible to determine
+how long a script may run.  It is possible, however, to calculate this percentage based on an estimated
+total number of operations for a typical run.
 
 ### Maximum number of modules
 
-Rhai by default does not limit how many [modules] are loaded via the [`import`] statement.
+Rhai by default does not limit how many [modules] can be loaded via [`import`] statements.
 This can be changed via the `Engine::set_max_modules` method, with zero being unlimited (the default).
 
 ```rust
@@ -2530,7 +2602,7 @@ Rhai by default limits function calls to a maximum depth of 128 levels (16 level
 This limit may be changed via the `Engine::set_max_call_levels` method.
 
 When setting this limit, care must be also taken to the evaluation depth of each _statement_
-within the function. It is entirely possible for a malicous script to embed an recursive call deep
+within the function. It is entirely possible for a malicous script to embed a recursive call deep
 inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
 
 The limit can be disabled via the [`unchecked`] feature for higher performance
@@ -2629,7 +2701,7 @@ For example, in the following:
 
 ```rust
 {
-    let x = 999;            // NOT eliminated: Rhai doesn't check yet whether a variable is used later on
+    let x = 999;            // NOT eliminated: variable may be used later on (perhaps even an 'eval')
     123;                    // eliminated: no effect
     "hello";                // eliminated: no effect
     [1, 2, x, x*2, 5];      // eliminated: no effect

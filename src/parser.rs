@@ -201,13 +201,27 @@ struct ParseState {
     stack: Vec<(String, ScopeEntryType)>,
     /// Maximum levels of expression nesting.
     max_expr_depth: usize,
+    /// Maximum length of a string.
+    pub max_string_size: usize,
+    /// Maximum length of an array.
+    pub max_array_size: usize,
+    /// Maximum number of properties in a map.
+    pub max_map_size: usize,
 }
 
 impl ParseState {
     /// Create a new `ParseState`.
-    pub fn new(max_expr_depth: usize) -> Self {
+    pub fn new(
+        max_expr_depth: usize,
+        max_string_size: usize,
+        max_array_size: usize,
+        max_map_size: usize,
+    ) -> Self {
         Self {
             max_expr_depth,
+            max_string_size,
+            max_array_size,
+            max_map_size,
             ..Default::default()
         }
     }
@@ -1070,6 +1084,14 @@ fn parse_array_literal(
 
     if !match_token(input, Token::RightBracket)? {
         while !input.peek().unwrap().0.is_eof() {
+            if state.max_array_size > 0 && arr.len() >= state.max_array_size {
+                return Err(PERR::LiteralTooLarge(
+                    "Size of array literal".to_string(),
+                    state.max_array_size,
+                )
+                .into_err(input.peek().unwrap().1));
+            }
+
             let expr = parse_expr(input, state, settings.level_up())?;
             arr.push(expr);
 
@@ -1155,8 +1177,15 @@ fn parse_map_literal(
                 }
             };
 
-            let expr = parse_expr(input, state, settings.level_up())?;
+            if state.max_map_size > 0 && map.len() >= state.max_map_size {
+                return Err(PERR::LiteralTooLarge(
+                    "Number of properties in object map literal".to_string(),
+                    state.max_map_size,
+                )
+                .into_err(input.peek().unwrap().1));
+            }
 
+            let expr = parse_expr(input, state, settings.level_up())?;
             map.push(((name, pos), expr));
 
             match input.peek().unwrap() {
@@ -2408,102 +2437,6 @@ fn parse_fn(
     })
 }
 
-/// Parse the global level statements.
-fn parse_global_level(
-    input: &mut TokenStream,
-    max_expr_depth: usize,
-    max_function_expr_depth: usize,
-) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
-    let mut statements = Vec::<Stmt>::new();
-    let mut functions = HashMap::<u64, ScriptFnDef, _>::with_hasher(StraightHasherBuilder);
-    let mut state = ParseState::new(max_expr_depth);
-
-    while !input.peek().unwrap().0.is_eof() {
-        // Collect all the function definitions
-        #[cfg(not(feature = "no_function"))]
-        {
-            let (access, must_be_fn) = if match_token(input, Token::Private)? {
-                (FnAccess::Private, true)
-            } else {
-                (FnAccess::Public, false)
-            };
-
-            match input.peek().unwrap() {
-                #[cfg(not(feature = "no_function"))]
-                (Token::Fn, pos) => {
-                    let mut state = ParseState::new(max_function_expr_depth);
-                    let settings = ParseSettings {
-                        allow_if_expr: true,
-                        allow_stmt_expr: true,
-                        is_global: false,
-                        is_breakable: false,
-                        level: 0,
-                        pos: *pos,
-                    };
-                    let func = parse_fn(input, &mut state, access, settings)?;
-
-                    // Qualifiers (none) + function name + number of arguments.
-                    let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
-
-                    functions.insert(hash, func);
-                    continue;
-                }
-                (_, pos) if must_be_fn => {
-                    return Err(PERR::MissingToken(
-                        Token::Fn.into(),
-                        format!("following '{}'", Token::Private.syntax()),
-                    )
-                    .into_err(*pos))
-                }
-                _ => (),
-            }
-        }
-
-        // Actual statement
-        let settings = ParseSettings {
-            allow_if_expr: true,
-            allow_stmt_expr: true,
-            is_global: true,
-            is_breakable: false,
-            level: 0,
-            pos: Position::none(),
-        };
-        let stmt = parse_stmt(input, &mut state, settings)?;
-
-        let need_semicolon = !stmt.is_self_terminated();
-
-        statements.push(stmt);
-
-        match input.peek().unwrap() {
-            // EOF
-            (Token::EOF, _) => break,
-            // stmt ;
-            (Token::SemiColon, _) if need_semicolon => {
-                eat_token(input, Token::SemiColon);
-            }
-            // stmt ;
-            (Token::SemiColon, _) if !need_semicolon => (),
-            // { stmt } ???
-            (_, _) if !need_semicolon => (),
-            // stmt <error>
-            (Token::LexError(err), pos) => {
-                return Err(PERR::BadInput(err.to_string()).into_err(*pos))
-            }
-            // stmt ???
-            (_, pos) => {
-                // Semicolons are not optional between statements
-                return Err(PERR::MissingToken(
-                    Token::SemiColon.into(),
-                    "to terminate this statement".into(),
-                )
-                .into_err(*pos));
-            }
-        }
-    }
-
-    Ok((statements, functions.into_iter().map(|(_, v)| v).collect()))
-}
-
 impl Engine {
     pub(crate) fn parse_global_expr(
         &self,
@@ -2511,7 +2444,12 @@ impl Engine {
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let mut state = ParseState::new(self.max_expr_depth);
+        let mut state = ParseState::new(
+            self.max_expr_depth,
+            self.max_string_size,
+            self.max_array_size,
+            self.max_map_size,
+        );
         let settings = ParseSettings {
             allow_if_expr: false,
             allow_stmt_expr: false,
@@ -2540,6 +2478,111 @@ impl Engine {
         )
     }
 
+    /// Parse the global level statements.
+    fn parse_global_level(
+        &self,
+        input: &mut TokenStream,
+    ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
+        let mut statements = Vec::<Stmt>::new();
+        let mut functions = HashMap::<u64, ScriptFnDef, _>::with_hasher(StraightHasherBuilder);
+        let mut state = ParseState::new(
+            self.max_expr_depth,
+            self.max_string_size,
+            self.max_array_size,
+            self.max_map_size,
+        );
+
+        while !input.peek().unwrap().0.is_eof() {
+            // Collect all the function definitions
+            #[cfg(not(feature = "no_function"))]
+            {
+                let (access, must_be_fn) = if match_token(input, Token::Private)? {
+                    (FnAccess::Private, true)
+                } else {
+                    (FnAccess::Public, false)
+                };
+
+                match input.peek().unwrap() {
+                    #[cfg(not(feature = "no_function"))]
+                    (Token::Fn, pos) => {
+                        let mut state = ParseState::new(
+                            self.max_function_expr_depth,
+                            self.max_string_size,
+                            self.max_array_size,
+                            self.max_map_size,
+                        );
+                        let settings = ParseSettings {
+                            allow_if_expr: true,
+                            allow_stmt_expr: true,
+                            is_global: false,
+                            is_breakable: false,
+                            level: 0,
+                            pos: *pos,
+                        };
+                        let func = parse_fn(input, &mut state, access, settings)?;
+
+                        // Qualifiers (none) + function name + number of arguments.
+                        let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
+
+                        functions.insert(hash, func);
+                        continue;
+                    }
+                    (_, pos) if must_be_fn => {
+                        return Err(PERR::MissingToken(
+                            Token::Fn.into(),
+                            format!("following '{}'", Token::Private.syntax()),
+                        )
+                        .into_err(*pos))
+                    }
+                    _ => (),
+                }
+            }
+
+            // Actual statement
+            let settings = ParseSettings {
+                allow_if_expr: true,
+                allow_stmt_expr: true,
+                is_global: true,
+                is_breakable: false,
+                level: 0,
+                pos: Position::none(),
+            };
+            let stmt = parse_stmt(input, &mut state, settings)?;
+
+            let need_semicolon = !stmt.is_self_terminated();
+
+            statements.push(stmt);
+
+            match input.peek().unwrap() {
+                // EOF
+                (Token::EOF, _) => break,
+                // stmt ;
+                (Token::SemiColon, _) if need_semicolon => {
+                    eat_token(input, Token::SemiColon);
+                }
+                // stmt ;
+                (Token::SemiColon, _) if !need_semicolon => (),
+                // { stmt } ???
+                (_, _) if !need_semicolon => (),
+                // stmt <error>
+                (Token::LexError(err), pos) => {
+                    return Err(PERR::BadInput(err.to_string()).into_err(*pos))
+                }
+                // stmt ???
+                (_, pos) => {
+                    // Semicolons are not optional between statements
+                    return Err(PERR::MissingToken(
+                        Token::SemiColon.into(),
+                        "to terminate this statement".into(),
+                    )
+                    .into_err(*pos));
+                }
+            }
+        }
+
+        Ok((statements, functions.into_iter().map(|(_, v)| v).collect()))
+    }
+
     /// Run the parser on an input stream, returning an AST.
     pub(crate) fn parse(
         &self,
@@ -2547,8 +2590,7 @@ impl Engine {
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (statements, lib) =
-            parse_global_level(input, self.max_expr_depth, self.max_function_expr_depth)?;
+        let (statements, lib) = self.parse_global_level(input)?;
 
         Ok(
             // Optimize AST

@@ -547,7 +547,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts);
+        let stream = lex(scripts, self.max_string_size);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
@@ -669,7 +669,7 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
-        let stream = lex(&scripts);
+        let stream = lex(&scripts, self.max_string_size);
         let ast =
             self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
@@ -750,7 +750,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts);
+        let stream = lex(&scripts, self.max_string_size);
 
         {
             let mut peekable = stream.peekable();
@@ -904,7 +904,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts);
+        let stream = lex(&scripts, self.max_string_size);
 
         let ast = self.parse_global_expr(
             &mut stream.peekable(),
@@ -1034,7 +1034,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts);
+        let stream = lex(&scripts, self.max_string_size);
 
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
@@ -1114,7 +1114,7 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let result = self.call_fn_dynamic(scope, ast, name, arg_values.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -1127,13 +1127,6 @@ impl Engine {
     }
 
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
-    ///
-    /// ## WARNING
-    ///
-    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
-    /// This is to avoid unnecessarily cloning the arguments.
-    /// Do you use the arguments after this call. If you need them afterwards,
-    /// clone them _before_ calling this function.
     ///
     /// # Example
     ///
@@ -1155,13 +1148,13 @@ impl Engine {
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", &mut [ String::from("abc").into(), 123_i64.into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", vec![ String::from("abc").into(), 123_i64.into() ])?;
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", &mut [ String::from("abc").into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", vec![ String::from("abc").into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result= engine.call_fn_dynamic(&mut scope, &ast, "bar", &mut [])?;
+    /// let result= engine.call_fn_dynamic(&mut scope, &ast, "bar", vec![])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     /// # }
     /// # Ok(())
@@ -1169,6 +1162,25 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_function"))]
     pub fn call_fn_dynamic(
+        &self,
+        scope: &mut Scope,
+        ast: &AST,
+        name: &str,
+        arg_values: impl IntoIterator<Item = Dynamic>,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let mut arg_values: StaticVec<_> = arg_values.into_iter().collect();
+        self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())
+    }
+
+    /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
+    ///
+    /// ## WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
+    pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
         ast: &AST,

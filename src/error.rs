@@ -12,6 +12,8 @@ pub enum LexError {
     UnexpectedChar(char),
     /// A string literal is not terminated before a new-line or EOF.
     UnterminatedString,
+    /// An identifier is in an invalid format.
+    StringTooLong(usize),
     /// An string/character/numeric escape sequence is in an invalid format.
     MalformedEscapeSequence(String),
     /// An numeric literal is in an invalid format.
@@ -35,6 +37,11 @@ impl fmt::Display for LexError {
             Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
             Self::MalformedIdentifier(s) => write!(f, "Variable name is not proper: '{}'", s),
             Self::UnterminatedString => write!(f, "Open string is not terminated"),
+            Self::StringTooLong(max) => write!(
+                f,
+                "Length of string literal exceeds the maximum limit ({})",
+                max
+            ),
             Self::ImproperKeyword(s) => write!(f, "{}", s),
         }
     }
@@ -109,12 +116,16 @@ pub enum ParseErrorType {
     WrongExport,
     /// Assignment to a copy of a value.
     AssignmentToCopy,
-    /// Assignment to an a constant variable.
+    /// Assignment to an a constant variable. Wrapped value is the constant variable name.
     AssignmentToConstant(String),
     /// Expression exceeding the maximum levels of complexity.
     ///
     /// Never appears under the `unchecked` feature.
     ExprTooDeep,
+    /// Literal exceeding the maximum size. Wrapped values are the data type name and the maximum size.
+    ///
+    /// Never appears under the `unchecked` feature.
+    LiteralTooLarge(String, usize),
     /// Break statement not inside a loop.
     LoopBreak,
 }
@@ -149,13 +160,14 @@ impl ParseErrorType {
             Self::AssignmentToCopy => "Only a copy of the value is change with this assignment",
             Self::AssignmentToConstant(_) => "Cannot assign to a constant value",
             Self::ExprTooDeep => "Expression exceeds maximum complexity",
+            Self::LiteralTooLarge(_, _) => "Literal exceeds maximum limit",
             Self::LoopBreak => "Break statement should only be used inside a loop"
         }
     }
 }
 
 impl fmt::Display for ParseErrorType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })
@@ -197,6 +209,9 @@ impl fmt::Display for ParseErrorType {
 
             Self::AssignmentToConstant(s) if s.is_empty() => write!(f, "{}", self.desc()),
             Self::AssignmentToConstant(s) => write!(f, "Cannot assign to constant '{}'", s),
+            Self::LiteralTooLarge(typ, max) => {
+                write!(f, "{} exceeds the maximum limit ({})", typ, max)
+            }
             _ => write!(f, "{}", self.desc()),
         }
     }

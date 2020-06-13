@@ -67,6 +67,13 @@ pub const MAX_EXPR_DEPTH: usize = usize::MAX;
 #[cfg(feature = "unchecked")]
 pub const MAX_FUNCTION_EXPR_DEPTH: usize = usize::MAX;
 
+#[cfg(feature = "unchecked")]
+pub const MAX_STRING_SIZE: usize = usize::MAX;
+#[cfg(feature = "unchecked")]
+pub const MAX_ARRAY_SIZE: usize = usize::MAX;
+#[cfg(feature = "unchecked")]
+pub const MAX_MAP_SIZE: usize = usize::MAX;
+
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";
@@ -262,6 +269,12 @@ pub struct Engine {
     pub(crate) max_operations: u64,
     /// Maximum number of modules allowed to load.
     pub(crate) max_modules: u64,
+    /// Maximum length of a string.
+    pub(crate) max_string_size: usize,
+    /// Maximum length of an array.
+    pub(crate) max_array_size: usize,
+    /// Maximum number of properties in a map.
+    pub(crate) max_map_size: usize,
 }
 
 impl Default for Engine {
@@ -298,6 +311,9 @@ impl Default for Engine {
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
             max_operations: u64::MAX,
             max_modules: u64::MAX,
+            max_string_size: usize::MAX,
+            max_array_size: usize::MAX,
+            max_map_size: usize::MAX,
         };
 
         engine.load_package(StandardPackage::new().get());
@@ -442,6 +458,9 @@ impl Engine {
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
             max_operations: u64::MAX,
             max_modules: u64::MAX,
+            max_string_size: usize::MAX,
+            max_array_size: usize::MAX,
+            max_map_size: usize::MAX,
         }
     }
 
@@ -495,11 +514,31 @@ impl Engine {
         self.max_modules = if modules == 0 { u64::MAX } else { modules };
     }
 
-    /// Set the depth limits for expressions/statements.
+    /// Set the depth limits for expressions/statements (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_expr_depths(&mut self, max_expr_depth: usize, max_function_expr_depth: usize) {
         self.max_expr_depth = max_expr_depth;
         self.max_function_expr_depth = max_function_expr_depth;
+    }
+
+    /// Set the maximum length of strings (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    pub fn set_max_string_size(&mut self, max_size: usize) {
+        self.max_string_size = max_size;
+    }
+
+    /// Set the maximum length of arrays (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn set_max_array_size(&mut self, max_size: usize) {
+        self.max_array_size = max_size;
+    }
+
+    /// Set the maximum length of object maps (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_object"))]
+    pub fn set_max_map_size(&mut self, max_size: usize) {
+        self.max_map_size = max_size;
     }
 
     /// Set the module resolution service used by the `Engine`.
@@ -1395,7 +1434,7 @@ impl Engine {
         self.inc_operations(state)
             .map_err(|err| EvalAltResult::new_position(err, expr.position()))?;
 
-        match expr {
+        let result = match expr {
             Expr::Expr(x) => self.eval_expr(scope, state, lib, x.as_ref(), level),
 
             Expr::IntegerConstant(x) => Ok(x.0.into()),
@@ -1732,7 +1771,13 @@ impl Engine {
             Expr::Unit(_) => Ok(().into()),
 
             _ => unreachable!(),
+        };
+
+        if let Ok(val) = &result {
+            self.check_data_size(val)?;
         }
+
+        result
     }
 
     /// Evaluate a statement
@@ -1747,7 +1792,7 @@ impl Engine {
         self.inc_operations(state)
             .map_err(|err| EvalAltResult::new_position(err, stmt.position()))?;
 
-        match stmt {
+        let result = match stmt {
             // No-op
             Stmt::Noop(_) => Ok(Default::default()),
 
@@ -1999,6 +2044,52 @@ impl Engine {
                 }
                 Ok(Default::default())
             }
+        };
+
+        if let Ok(val) = &result {
+            self.check_data_size(val)?;
+        }
+
+        result
+    }
+
+    /// Check a `Dynamic` value to ensure that its size is within allowable limit.
+    fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
+        #[cfg(feature = "unchecked")]
+        return Ok(());
+
+        match value {
+            Dynamic(Union::Str(s))
+                if self.max_string_size > 0 && s.len() > self.max_string_size =>
+            {
+                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                    "Length of string".to_string(),
+                    self.max_string_size,
+                    s.len(),
+                    Position::none(),
+                )))
+            }
+            #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Array(arr))
+                if self.max_array_size > 0 && arr.len() > self.max_array_size =>
+            {
+                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                    "Length of array".to_string(),
+                    self.max_array_size,
+                    arr.len(),
+                    Position::none(),
+                )))
+            }
+            #[cfg(not(feature = "no_object"))]
+            Dynamic(Union::Map(map)) if self.max_map_size > 0 && map.len() > self.max_map_size => {
+                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                    "Number of properties in object map".to_string(),
+                    self.max_map_size,
+                    map.len(),
+                    Position::none(),
+                )))
+            }
+            _ => Ok(()),
         }
     }
 

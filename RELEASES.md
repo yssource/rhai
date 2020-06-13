@@ -14,12 +14,14 @@ Breaking changes
 * `Engine::register_indexer` is renamed to `Engine::register_indexer_get`.
 * `Module::set_indexer_fn` is renamed to `Module::set_indexer_get_fn`.
 * The tuple `ParseError` now exposes the internal fields and the `ParseError::error_type` and `ParseError::position` methods are removed.  The first tuple field is the `ParseErrorType` and the second tuple field is the `Position`.
+* `Engine::call_fn_dynamic` now takes any type that implements `IntoIterator<Item = Dynamic>`.
 
 New features
 ------------
 
 * Indexers are now split into getters and setters (which now support updates).  The API is split into `Engine::register_indexer_get` and `Engine::register_indexer_set` with `Engine::register_indexer_get_set` being a shorthand.  Similarly, `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn` are added.
 * `Engine:register_fn` and `Engine:register_result_fn` accepts functions that take parameters of type `&str` (immutable string slice), which maps directly to `ImmutableString`. This is to avoid needing wrappers for functions taking string parameters.
+* Set maximum limit on data sizes: `Engine::set_max_string_size`, `Engine::set_max_array_size` and `Engine::set_max_map_size`.
 
 
 Version 0.15.0
