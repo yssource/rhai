@@ -155,7 +155,7 @@ impl ParseErrorType {
 }
 
 impl fmt::Display for ParseErrorType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
                 write!(f, "{}", if s.is_empty() { self.desc() } else { s })
