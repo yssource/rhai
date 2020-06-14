@@ -14,7 +14,7 @@ to add scripting to any application.
 Features
 --------
 
-* Easy-to-use language similar to JS+Rust with dynamic typing but _no_ garbage collector.
+* Easy-to-use language similar to JS+Rust with dynamic typing.
 * Tight integration with native Rust [functions](#working-with-functions) and [types](#custom-types-and-methods),
   including [getters/setters](#getters-and-setters), [methods](#members-and-methods) and [indexers](#indexers).
 * Freely pass Rust variables/constants into a script via an external [`Scope`].
@@ -25,7 +25,7 @@ Features
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
 * Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
-* Rugged (protection against [stack-overflow](#maximum-call-stack-depth) and [runaway scripts](#maximum-number-of-operations) etc.).
+* Rugged - protection against malicious attacks (such as [stack-overflow](#maximum-call-stack-depth), [over-sized data](#maximum-length-of-strings), and [runaway scripts](#maximum-number-of-operations) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](#tracking-progress-and-force-terminate-script-run) and manually terminate a script run.
 * [`no-std`](#optional-features) support.
 * [Function overloading](#function-overloading).
@@ -1191,13 +1191,16 @@ fn main() -> Result<(), Box<EvalAltResult>>
 Engine configuration options
 ---------------------------
 
-| Method                   | Description                                                                                                                                         |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `set_optimization_level` | Set the amount of script _optimizations_ performed. See [script optimization].                                                                      |
-| `set_max_expr_depths`    | Set the maximum nesting levels of an expression/statement. See [maximum statement depth](#maximum-statement-depth).                                 |
-| `set_max_call_levels`    | Set the maximum number of function call levels (default 50) to avoid infinite recursion. See [maximum call stack depth](#maximum-call-stack-depth). |
-| `set_max_operations`     | Set the maximum number of _operations_ that a script is allowed to consume. See [maximum number of operations](#maximum-number-of-operations).      |
-| `set_max_modules`        | Set the maximum number of [modules] that a script is allowed to load. See [maximum number of modules](#maximum-number-of-modules).                  |
+| Method                   | Not available under          | Description                                                                                                                                         |
+| ------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_optimization_level` | [`no_optimize`]              | Set the amount of script _optimizations_ performed. See [script optimization].                                                                      |
+| `set_max_expr_depths`    | [`unchecked`]                | Set the maximum nesting levels of an expression/statement. See [maximum statement depth](#maximum-statement-depth).                                 |
+| `set_max_call_levels`    | [`unchecked`]                | Set the maximum number of function call levels (default 50) to avoid infinite recursion. See [maximum call stack depth](#maximum-call-stack-depth). |
+| `set_max_operations`     | [`unchecked`]                | Set the maximum number of _operations_ that a script is allowed to consume. See [maximum number of operations](#maximum-number-of-operations).      |
+| `set_max_modules`        | [`unchecked`]                | Set the maximum number of [modules] that a script is allowed to load. See [maximum number of modules](#maximum-number-of-modules).                  |
+| `set_max_string_size`    | [`unchecked`]                | Set the maximum length (in UTF-8 bytes) for [strings]. See [maximum length of strings](#maximum-length-of-strings).                                 |
+| `set_max_array_size`     | [`unchecked`], [`no_index`]  | Set the maximum size for [arrays]. See [maximum size of arrays](#maximum-size-of-arrays).                                                           |
+| `set_max_map_size`       | [`unchecked`], [`no_object`] | Set the maximum number of properties for [object maps]. See [maximum size of object maps](#maximum-size-of-object-maps).                            |
 
 -------
 
@@ -1498,6 +1501,9 @@ record == "Bob X. Davis: age 42 ❤\n";
 'C' in record == false;
 ```
 
+The maximum allowed length of a string can be controlled via `Engine::set_max_string_size`
+(see [maximum length of strings](#maximum-length-of-strings)).
+
 ### Built-in functions
 
 The following standard methods (mostly defined in the [`MoreStringPackage`](#packages) but excluded if using a [raw `Engine`]) operate on strings:
@@ -1673,6 +1679,9 @@ y.len == 0;
 engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(item)) );
 ```
 
+The maximum allowed size of an array can be controlled via `Engine::set_max_array_size`
+(see [maximum size of arrays](#maximum-size-of-arrays)).
+
 Object maps
 -----------
 
@@ -1775,6 +1784,9 @@ y.clear();              // empty the object map
 
 y.len() == 0;
 ```
+
+The maximum allowed size of an object map can be controlled via `Engine::set_max_map_size`
+(see [maximum size of object maps](#maximum-size-of-object-maps)).
 
 ### Parsing from JSON
 
@@ -2439,7 +2451,7 @@ a script so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
-* **Memory**: A malicous script may continuously grow an [array] or [object map] until all memory is consumed.
+* **Memory**: A malicous script may continuously grow a [string], an [array] or [object map] until all memory is consumed.
   It may also create a large [array] or [object map] literal that exhausts all memory during parsing.
 * **CPU**: A malicous script may run an infinite tight loop that consumes all CPU cycles.
 * **Time**: A malicous script may run indefinitely, thereby blocking the calling system which is waiting for a result.
@@ -2454,6 +2466,89 @@ The most important resources to watch out for are:
   Even when modules are not created from files, they still typically consume a lot of resources to load.
 * **Data**: A malicous script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
+
+### Maximum length of strings
+
+Rhai by default does not limit how long a [string] can be.
+This can be changed via the `Engine::set_max_string_size` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_string_size(500);            // allow strings only up to 500 bytes long (in UTF-8 format)
+
+engine.set_max_string_size(0);              // allow unlimited string length
+```
+
+A script attempting to create a string literal longer than the maximum will terminate with a parse error.
+Any script operation that produces a string longer than the maximum also terminates the script with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+Be conservative when setting a maximum limit and always consider the fact that a registered function may grow
+a string's length without Rhai noticing until the very end.  For instance, the built-in '`+`' operator for strings
+concatenates two strings together to form one longer string; if both strings are _slightly_ below the maximum
+length limit, the resultant string may be almost _twice_ the maximum length.  The '`pad`' function grows a string
+to a specified length which may be longer than the allowed maximum
+(to trap this risk, register a custom '`pad`' function that checks the arguments).
+
+### Maximum size of arrays
+
+Rhai by default does not limit how large an [array] can be.
+This can be changed via the `Engine::set_max_array_size` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_array_size(500);             // allow arrays only up to 500 items
+
+engine.set_max_array_size(0);               // allow unlimited arrays
+```
+
+A script attempting to create an array literal larger than the maximum will terminate with a parse error.
+Any script operation that produces an array larger than the maximum also terminates the script with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+Be conservative when setting a maximum limit and always consider the fact that a registered function may grow
+an array's size without Rhai noticing until the very end.
+For instance, the built-in '`+`' operator for arrays concatenates two arrays together to form one larger array;
+if both arrays are _slightly_ below the maximum size limit, the resultant array may be almost _twice_ the maximum size.
+The '`pad`' function grows an array to a specified size which may be larger than the allowed maximum
+(to trap this risk, register a custom '`pad`' function that checks the arguments).
+
+As a malicious script may create a deeply-nested array which consumes huge amounts of memory while each individual
+array still stays under the maximum size limit, Rhai also recursively adds up the sizes of all strings, arrays
+and object maps contained within each array to make sure that the _aggregate_ sizes of none of these data structures
+exceed their respective maximum size limits (if any).
+
+### Maximum size of object maps
+
+Rhai by default does not limit how large (i.e. the number of properties) an [object map] can be.
+This can be changed via the `Engine::set_max_map_size` method, with zero being unlimited (the default).
+
+```rust
+let mut engine = Engine::new();
+
+engine.set_max_map_size(500);               // allow object maps with only up to 500 properties
+
+engine.set_max_map_size(0);                 // allow unlimited object maps
+```
+
+A script attempting to create an object map literal with more properties than the maximum will terminate with a parse error.
+Any script operation that produces an object map with more properties than the maximum also terminates the script with an error result.
+This check can be disabled via the [`unchecked`] feature for higher performance
+(but higher risks as well).
+
+Be conservative when setting a maximum limit and always consider the fact that a registered function may grow
+an object map's size without Rhai noticing until the very end.  For instance, the built-in '`+`' operator for object maps
+concatenates two object maps together to form one larger object map; if both object maps are _slightly_ below the maximum
+size limit, the resultant object map may be almost _twice_ the maximum size.
+
+As a malicious script may create a deeply-nested object map which consumes huge amounts of memory while each individual
+object map still stays under the maximum size limit, Rhai also recursively adds up the sizes of all strings, arrays
+and object maps contained within each object map to make sure that the _aggregate_ sizes of none of these data structures
+exceed their respective maximum size limits (if any).
 
 ### Maximum number of operations
 
@@ -2516,14 +2611,17 @@ total number of operations for a typical run.
 ### Maximum number of modules
 
 Rhai by default does not limit how many [modules] can be loaded via [`import`] statements.
-This can be changed via the `Engine::set_max_modules` method, with zero being unlimited (the default).
+This can be changed via the `Engine::set_max_modules` method. Notice that setting the maximum number
+of modules to zero does _not_ indicate unlimited modules, but disallows loading any module altogether.
 
 ```rust
 let mut engine = Engine::new();
 
 engine.set_max_modules(5);                  // allow loading only up to 5 modules
 
-engine.set_max_modules(0);                  // allow unlimited modules
+engine.set_max_modules(0);                  // disallow loading any module (maximum = zero)
+
+engine.set_max_modules(1000);               // set to a large number for effectively unlimited modules
 ```
 
 A script attempting to load more than the maximum number of modules will terminate with an error result.

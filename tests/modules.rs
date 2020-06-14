@@ -130,7 +130,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
             EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
         ));
 
-        engine.set_max_modules(0);
+        engine.set_max_modules(1000);
 
         #[cfg(not(feature = "no_function"))]
         engine.eval::<()>(

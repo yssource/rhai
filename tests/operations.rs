@@ -111,3 +111,20 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_max_operations_progress() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    engine.set_max_operations(500);
+
+    engine.on_progress(|&count| count < 100);
+
+    assert!(matches!(
+        *engine
+            .eval::<()>("for x in range(0, 500) {}")
+            .expect_err("should error"),
+        EvalAltResult::ErrorTerminated(_)
+    ));
+
+    Ok(())
+}

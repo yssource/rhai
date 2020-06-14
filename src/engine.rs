@@ -182,7 +182,7 @@ pub struct State {
     /// Number of operations performed.
     pub operations: u64,
     /// Number of modules loaded.
-    pub modules: u64,
+    pub modules: usize,
 }
 
 impl State {
@@ -261,7 +261,13 @@ pub struct Engine {
     /// Maximum number of operations allowed to run.
     pub(crate) max_operations: u64,
     /// Maximum number of modules allowed to load.
-    pub(crate) max_modules: u64,
+    pub(crate) max_modules: usize,
+    /// Maximum length of a string.
+    pub(crate) max_string_size: usize,
+    /// Maximum length of an array.
+    pub(crate) max_array_size: usize,
+    /// Maximum number of properties in a map.
+    pub(crate) max_map_size: usize,
 }
 
 impl Default for Engine {
@@ -296,8 +302,11 @@ impl Default for Engine {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: u64::MAX,
-            max_modules: u64::MAX,
+            max_operations: 0,
+            max_modules: usize::MAX,
+            max_string_size: 0,
+            max_array_size: 0,
+            max_map_size: 0,
         };
 
         engine.load_package(StandardPackage::new().get());
@@ -440,8 +449,11 @@ impl Engine {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: u64::MAX,
-            max_modules: u64::MAX,
+            max_operations: 0,
+            max_modules: usize::MAX,
+            max_string_size: 0,
+            max_array_size: 0,
+            max_map_size: 0,
         }
     }
 
@@ -482,24 +494,40 @@ impl Engine {
     /// consuming too much resources (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_operations(&mut self, operations: u64) {
-        self.max_operations = if operations == 0 {
-            u64::MAX
-        } else {
-            operations
-        };
+        self.max_operations = operations;
     }
 
-    /// Set the maximum number of imported modules allowed for a script (0 for unlimited).
+    /// Set the maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_modules(&mut self, modules: u64) {
-        self.max_modules = if modules == 0 { u64::MAX } else { modules };
+    pub fn set_max_modules(&mut self, modules: usize) {
+        self.max_modules = modules;
     }
 
-    /// Set the depth limits for expressions/statements.
+    /// Set the depth limits for expressions/statements (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_expr_depths(&mut self, max_expr_depth: usize, max_function_expr_depth: usize) {
         self.max_expr_depth = max_expr_depth;
         self.max_function_expr_depth = max_function_expr_depth;
+    }
+
+    /// Set the maximum length of strings (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    pub fn set_max_string_size(&mut self, max_size: usize) {
+        self.max_string_size = max_size;
+    }
+
+    /// Set the maximum length of arrays (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn set_max_array_size(&mut self, max_size: usize) {
+        self.max_array_size = max_size;
+    }
+
+    /// Set the maximum length of object maps (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_object"))]
+    pub fn set_max_map_size(&mut self, max_size: usize) {
+        self.max_map_size = max_size;
     }
 
     /// Set the module resolution service used by the `Engine`.
@@ -1395,7 +1423,7 @@ impl Engine {
         self.inc_operations(state)
             .map_err(|err| EvalAltResult::new_position(err, expr.position()))?;
 
-        match expr {
+        let result = match expr {
             Expr::Expr(x) => self.eval_expr(scope, state, lib, x.as_ref(), level),
 
             Expr::IntegerConstant(x) => Ok(x.0.into()),
@@ -1731,7 +1759,13 @@ impl Engine {
             Expr::Unit(_) => Ok(().into()),
 
             _ => unreachable!(),
+        };
+
+        if let Ok(val) = &result {
+            self.check_data_size(val)?;
         }
+
+        result
     }
 
     /// Evaluate a statement
@@ -1746,7 +1780,7 @@ impl Engine {
         self.inc_operations(state)
             .map_err(|err| EvalAltResult::new_position(err, stmt.position()))?;
 
-        match stmt {
+        let result = match stmt {
             // No-op
             Stmt::Noop(_) => Ok(Default::default()),
 
@@ -1998,6 +2032,98 @@ impl Engine {
                 }
                 Ok(Default::default())
             }
+        };
+
+        if let Ok(val) = &result {
+            self.check_data_size(val)?;
+        }
+
+        result
+    }
+
+    /// Check a `Dynamic` value to ensure that its size is within allowable limit.
+    fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
+        #[cfg(feature = "unchecked")]
+        return Ok(());
+
+        if self.max_string_size + self.max_array_size + self.max_map_size == 0 {
+            return Ok(());
+        }
+
+        // Recursively calculate the size of a value (especially `Array` and `Map`)
+        fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
+            match value {
+                #[cfg(not(feature = "no_index"))]
+                Dynamic(Union::Array(arr)) => {
+                    let mut arrays = 0;
+                    let mut maps = 0;
+
+                    arr.iter().for_each(|value| match value {
+                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        _ => arrays += 1,
+                    });
+
+                    (arrays, maps, 0)
+                }
+                #[cfg(not(feature = "no_object"))]
+                Dynamic(Union::Map(map)) => {
+                    let mut arrays = 0;
+                    let mut maps = 0;
+
+                    map.values().for_each(|value| match value {
+                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        _ => maps += 1,
+                    });
+
+                    (arrays, maps, 0)
+                }
+                Dynamic(Union::Str(s)) => (0, 0, s.len()),
+                _ => (0, 0, 0),
+            }
+        }
+
+        match value {
+            Dynamic(Union::Str(_)) if self.max_string_size > 0 => (),
+            #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Array(_)) if self.max_array_size > 0 => (),
+            #[cfg(not(feature = "no_object"))]
+            Dynamic(Union::Map(_)) if self.max_map_size > 0 => (),
+            _ => return Ok(()),
+        };
+
+        let (arr, map, s) = calc_size(value);
+
+        if s > self.max_string_size {
+            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                self.max_string_size,
+                s,
+                Position::none(),
+            )))
+        } else if arr > self.max_array_size {
+            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                "Length of array".to_string(),
+                self.max_array_size,
+                arr,
+                Position::none(),
+            )))
+        } else if map > self.max_map_size {
+            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                "Number of properties in object map".to_string(),
+                self.max_map_size,
+                map,
+                Position::none(),
+            )))
+        } else {
+            Ok(())
         }
     }
 
@@ -2009,7 +2135,7 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         {
             // Guard against too many operations
-            if state.operations > self.max_operations {
+            if self.max_operations > 0 && state.operations > self.max_operations {
                 return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
                     Position::none(),
                 )));
