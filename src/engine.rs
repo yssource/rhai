@@ -63,9 +63,9 @@ pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
 #[cfg(feature = "unchecked")]
 pub const MAX_CALL_STACK_DEPTH: usize = usize::MAX;
 #[cfg(feature = "unchecked")]
-pub const MAX_EXPR_DEPTH: usize = usize::MAX;
+pub const MAX_EXPR_DEPTH: usize = 0;
 #[cfg(feature = "unchecked")]
-pub const MAX_FUNCTION_EXPR_DEPTH: usize = usize::MAX;
+pub const MAX_FUNCTION_EXPR_DEPTH: usize = 0;
 
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
@@ -1761,11 +1761,7 @@ impl Engine {
             _ => unreachable!(),
         };
 
-        if let Ok(val) = &result {
-            self.check_data_size(val)?;
-        }
-
-        result
+        self.check_data_size(result)
     }
 
     /// Evaluate a statement
@@ -2034,20 +2030,20 @@ impl Engine {
             }
         };
 
-        if let Ok(val) = &result {
-            self.check_data_size(val)?;
-        }
-
-        result
+        self.check_data_size(result)
     }
 
-    /// Check a `Dynamic` value to ensure that its size is within allowable limit.
-    fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
+    /// Check a result to ensure that the data size is within allowable limit.
+    fn check_data_size(
+        &self,
+        result: Result<Dynamic, Box<EvalAltResult>>,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(feature = "unchecked")]
-        return Ok(());
+        return result;
 
+        // If no data size limits, just return
         if self.max_string_size + self.max_array_size + self.max_map_size == 0 {
-            return Ok(());
+            return result;
         }
 
         // Recursively calculate the size of a value (especially `Array` and `Map`)
@@ -2090,16 +2086,22 @@ impl Engine {
             }
         }
 
-        match value {
-            Dynamic(Union::Str(_)) if self.max_string_size > 0 => (),
+        match result {
+            // Simply return all errors
+            Err(_) => return result,
+            // String with limit
+            Ok(Dynamic(Union::Str(_))) if self.max_string_size > 0 => (),
+            // Array with limit
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(_)) if self.max_array_size > 0 => (),
+            Ok(Dynamic(Union::Array(_))) if self.max_array_size > 0 => (),
+            // Map with limit
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(_)) if self.max_map_size > 0 => (),
-            _ => return Ok(()),
+            Ok(Dynamic(Union::Map(_))) if self.max_map_size > 0 => (),
+            // Everything else is simply returned
+            Ok(_) => return result,
         };
 
-        let (arr, map, s) = calc_size(value);
+        let (arr, map, s) = calc_size(result.as_ref().unwrap());
 
         if s > self.max_string_size {
             Err(Box::new(EvalAltResult::ErrorDataTooLarge(
@@ -2123,7 +2125,7 @@ impl Engine {
                 Position::none(),
             )))
         } else {
-            Ok(())
+            result
         }
     }
 

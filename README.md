@@ -2207,7 +2207,7 @@ let a = new_ts();           // constructor function
 a.field = 500;              // property setter
 a.update();                 // method call, 'a' can be modified
 
-update(a);                  // <- this de-sugars to 'a.update()' this if 'a' is a simple variable
+update(a);                  // <- this de-sugars to 'a.update()' thus if 'a' is a simple variable
                             //    unlike scripted functions, 'a' can be modified and is not a copy
 
 let array = [ a ];
