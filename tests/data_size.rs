@@ -14,12 +14,12 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         engine.compile(r#"let x = "hello, world!";"#).expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::BadInput("Length of string literal exceeds the maximum limit (10)".to_string())
+        ParseError(x, _) if *x == ParseErrorType::LiteralTooLarge("Length of string literal".to_string(), 10)
     ));
 
     assert!(matches!(
         engine.compile(r#"let x = "朝に紅顔、暮に白骨";"#).expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::BadInput("Length of string literal exceeds the maximum limit (10)".to_string())
+        ParseError(x, _) if *x == ParseErrorType::LiteralTooLarge("Length of string literal".to_string(), 10)
     ));
 
     assert!(matches!(

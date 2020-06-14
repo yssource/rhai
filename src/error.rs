@@ -22,8 +22,8 @@ pub enum LexError {
     MalformedChar(String),
     /// An identifier is in an invalid format.
     MalformedIdentifier(String),
-    /// Bad keyword encountered when tokenizing the script text.
-    ImproperKeyword(String),
+    /// Bad symbol encountered when tokenizing the script text.
+    ImproperSymbol(String),
 }
 
 impl Error for LexError {}
@@ -42,8 +42,15 @@ impl fmt::Display for LexError {
                 "Length of string literal exceeds the maximum limit ({})",
                 max
             ),
-            Self::ImproperKeyword(s) => write!(f, "{}", s),
+            Self::ImproperSymbol(s) => write!(f, "{}", s),
         }
+    }
+}
+
+impl LexError {
+    /// Convert a `LexError` into a `ParseError`.
+    pub fn into_err(&self, pos: Position) -> ParseError {
+        ParseError(Box::new(self.into()), pos)
     }
 }
 
@@ -213,6 +220,17 @@ impl fmt::Display for ParseErrorType {
                 write!(f, "{} exceeds the maximum limit ({})", typ, max)
             }
             _ => write!(f, "{}", self.desc()),
+        }
+    }
+}
+
+impl From<&LexError> for ParseErrorType {
+    fn from(err: &LexError) -> Self {
+        match err {
+            LexError::StringTooLong(max) => {
+                Self::LiteralTooLarge("Length of string literal".to_string(), *max)
+            }
+            _ => Self::BadInput(err.to_string()),
         }
     }
 }
