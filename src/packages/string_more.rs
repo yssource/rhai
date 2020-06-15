@@ -222,32 +222,35 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             let len = *args[1].downcast_ref::< INT>().unwrap();
 
             // Check if string will be over max size limit
-            if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
+            #[cfg(not(feature = "unchecked"))]
+            {
+                if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
+                    return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                        "Length of string".to_string(),
+                        engine.max_string_size,
+                        len as usize,
+                        Position::none(),
+                    )));
+                }
+            }
+
+            let ch = *args[2].downcast_ref::< char>().unwrap();
+            let s = args[0].downcast_mut::<ImmutableString>().unwrap();
+
+            let copy = s.make_mut();
+            for _ in 0..copy.chars().count() - len as usize {
+                copy.push(ch);
+            }
+
+            if engine.max_string_size > 0 && copy.len() > engine.max_string_size {
                 Err(Box::new(EvalAltResult::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     engine.max_string_size,
-                    len as usize,
+                    copy.len(),
                     Position::none(),
                 )))
             } else {
-                let ch = *args[2].downcast_ref::< char>().unwrap();
-                let s = args[0].downcast_mut::<ImmutableString>().unwrap();
-
-                let copy = s.make_mut();
-                for _ in 0..copy.chars().count() - len as usize {
-                    copy.push(ch);
-                }
-
-                if engine.max_string_size > 0 && copy.len() > engine.max_string_size {
-                    Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                        "Length of string".to_string(),
-                        engine.max_string_size,
-                        copy.len(),
-                        Position::none(),
-                    )))
-                } else {
-                    Ok(())
-                }
+                Ok(())
             }
         },
     );

@@ -29,24 +29,27 @@ fn pad<T: Variant + Clone>(engine: &Engine, args: &mut [&mut Dynamic]) -> FuncRe
     let len = *args[1].downcast_ref::<INT>().unwrap();
 
     // Check if array will be over max size limit
-    if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
-        Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-            "Size of array".to_string(),
-            engine.max_array_size,
-            len as usize,
-            Position::none(),
-        )))
-    } else if len >= 0 {
+    #[cfg(not(feature = "unchecked"))]
+    {
+        if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
+            return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                "Size of array".to_string(),
+                engine.max_array_size,
+                len as usize,
+                Position::none(),
+            )));
+        }
+    }
+
+    if len >= 0 {
         let item = args[2].downcast_ref::<T>().unwrap().clone();
         let list = args[0].downcast_mut::<Array>().unwrap();
 
         while list.len() < len as usize {
             push(list, item.clone())?;
         }
-        Ok(())
-    } else {
-        Ok(())
     }
+    Ok(())
 }
 
 macro_rules! reg_op {
