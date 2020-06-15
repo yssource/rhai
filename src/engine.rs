@@ -645,7 +645,7 @@ impl Engine {
                 return Ok((result, false));
             } else {
                 // Run external function
-                let result = func.get_native_fn()(args)?;
+                let result = func.get_native_fn()(self, args)?;
 
                 // Restore the original reference
                 restore_first_arg(old_this_ptr, args);
@@ -1474,7 +1474,7 @@ impl Engine {
                             .or_else(|| self.packages.get_fn(hash_fn))
                         {
                             // Overriding exact implementation
-                            func(&mut [lhs_ptr, &mut rhs_val])?;
+                            func(self, &mut [lhs_ptr, &mut rhs_val])?;
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
@@ -1705,7 +1705,9 @@ impl Engine {
                         self.call_script_fn(&mut scope, state, lib, name, fn_def, args, level)
                             .map_err(|err| EvalAltResult::new_position(err, *pos))
                     }
-                    Ok(f) => f.get_native_fn()(args.as_mut()).map_err(|err| err.new_position(*pos)),
+                    Ok(f) => {
+                        f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
+                    }
                     Err(err)
                         if def_val.is_some()
                             && matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) =>
@@ -2112,7 +2114,7 @@ impl Engine {
             )))
         } else if arr > self.max_array_size {
             Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                "Length of array".to_string(),
+                "Size of array".to_string(),
                 self.max_array_size,
                 arr,
                 Position::none(),

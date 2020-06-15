@@ -1,4 +1,5 @@
 use crate::any::Dynamic;
+use crate::engine::Engine;
 use crate::parser::ScriptFnDef;
 use crate::result::EvalAltResult;
 
@@ -51,9 +52,10 @@ pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 #[cfg(feature = "sync")]
-pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+pub type FnAny =
+    dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 

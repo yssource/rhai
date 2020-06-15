@@ -2488,9 +2488,7 @@ This check can be disabled via the [`unchecked`] feature for higher performance
 Be conservative when setting a maximum limit and always consider the fact that a registered function may grow
 a string's length without Rhai noticing until the very end.  For instance, the built-in '`+`' operator for strings
 concatenates two strings together to form one longer string; if both strings are _slightly_ below the maximum
-length limit, the resultant string may be almost _twice_ the maximum length.  The '`pad`' function grows a string
-to a specified length which may be longer than the allowed maximum
-(to trap this risk, register a custom '`pad`' function that checks the arguments).
+length limit, the resultant string may be almost _twice_ the maximum length.
 
 ### Maximum size of arrays
 
@@ -2514,8 +2512,6 @@ Be conservative when setting a maximum limit and always consider the fact that a
 an array's size without Rhai noticing until the very end.
 For instance, the built-in '`+`' operator for arrays concatenates two arrays together to form one larger array;
 if both arrays are _slightly_ below the maximum size limit, the resultant array may be almost _twice_ the maximum size.
-The '`pad`' function grows an array to a specified size which may be larger than the allowed maximum
-(to trap this risk, register a custom '`pad`' function that checks the arguments).
 
 As a malicious script may create a deeply-nested array which consumes huge amounts of memory while each individual
 array still stays under the maximum size limit, Rhai also recursively adds up the sizes of all strings, arrays

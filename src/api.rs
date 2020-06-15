@@ -751,7 +751,6 @@ impl Engine {
     ) -> Result<AST, ParseError> {
         let scripts = [script];
         let stream = lex(&scripts, self.max_string_size);
-
         {
             let mut peekable = stream.peekable();
             self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -906,11 +905,8 @@ impl Engine {
         let scripts = [script];
         let stream = lex(&scripts, self.max_string_size);
 
-        let ast = self.parse_global_expr(
-            &mut stream.peekable(),
-            scope,
-            OptimizationLevel::None, // No need to optimize a lone expression
-        )?;
+        // No need to optimize a lone expression
+        let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
 
         self.eval_ast_with_scope(scope, &ast)
     }
@@ -983,6 +979,7 @@ impl Engine {
         });
     }
 
+    /// Evaluate an `AST` with own scope.
     pub(crate) fn eval_ast_with_scope_raw(
         &self,
         scope: &mut Scope,
@@ -1035,7 +1032,6 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
         let stream = lex(&scripts, self.max_string_size);
-
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }

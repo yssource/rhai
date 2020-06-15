@@ -35,6 +35,19 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
         EvalAltResult::ErrorDataTooLarge(_, 10, 13, _)
     ));
 
+    assert!(matches!(
+        *engine
+            .eval::<String>(
+                r#"
+                    let x = "hello";
+                    x.pad(100, '!');
+                    x
+                "#
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorDataTooLarge(_, 10, 100, _)
+    ));
+
     engine.set_max_string_size(0);
 
     assert_eq!(
@@ -78,6 +91,18 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
             )
             .expect_err("should error"),
         EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+    ));
+    assert!(matches!(
+        *engine
+            .eval::<Array>(
+                r"
+                    let x = [1,2,3,4,5,6];
+                    x.pad(100, 42);
+                    x
+                "
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorDataTooLarge(_, 10, 100, _)
     ));
 
     assert!(matches!(

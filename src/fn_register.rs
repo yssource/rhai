@@ -1,5 +1,4 @@
 //! Module which defines the function registration mechanism.
-
 #![allow(non_snake_case)]
 
 use crate::any::{Dynamic, Variant};
@@ -120,7 +119,7 @@ macro_rules! make_func {
 //                           ^ function parameter generic type name (A, B, C etc.)
 //                                           ^ dereferencing function
 
-		Box::new(move |args: &mut FnCallArgs| {
+		Box::new(move |_: &Engine, args: &mut FnCallArgs| {
             // The arguments are assumed to be of the correct number and types!
 
 			#[allow(unused_variables, unused_mut)]

@@ -1,7 +1,9 @@
 #![cfg(not(feature = "no_module"))]
 use rhai::{
-    module_resolvers, Engine, EvalAltResult, Module, ParseError, ParseErrorType, Scope, INT,
+    module_resolvers, Dynamic, Engine, EvalAltResult, Module, ParseError, ParseErrorType, Scope,
+    INT,
 };
+use std::any::TypeId;
 
 #[test]
 fn test_module() {
@@ -20,6 +22,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
 
     let mut sub_module2 = Module::new();
     sub_module2.set_var("answer", 41 as INT);
+
     let hash_inc = sub_module2.set_fn_1("inc", |x: INT| Ok(x + 1));
 
     sub_module.set_sub_module("universe", sub_module2);
