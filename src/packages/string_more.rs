@@ -1,12 +1,17 @@
+use crate::any::Dynamic;
 use crate::def_package;
+use crate::engine::Engine;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
+use crate::result::EvalAltResult;
+use crate::token::Position;
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
 
 use crate::stdlib::{
+    any::TypeId,
     fmt::Display,
     format,
     string::{String, ToString},
@@ -210,14 +215,40 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             Ok(())
         },
     );
-    lib.set_fn_3_mut(
+    lib.set_fn_var_args(
         "pad",
-        |s: &mut ImmutableString, len: INT, ch: char| {
-            let copy = s.make_mut();
-            for _ in 0..copy.chars().count() - len as usize {
-                copy.push(ch);
+        &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
+        |engine: &Engine, args: &mut [&mut Dynamic]| {
+            let len = *args[1].downcast_ref::< INT>().unwrap();
+
+            // Check if string will be over max size limit
+            if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
+                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                    "Length of string".to_string(),
+                    engine.max_string_size,
+                    len as usize,
+                    Position::none(),
+                )))
+            } else {
+                let ch = *args[2].downcast_ref::< char>().unwrap();
+                let s = args[0].downcast_mut::<ImmutableString>().unwrap();
+
+                let copy = s.make_mut();
+                for _ in 0..copy.chars().count() - len as usize {
+                    copy.push(ch);
+                }
+
+                if engine.max_string_size > 0 && copy.len() > engine.max_string_size {
+                    Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                        "Length of string".to_string(),
+                        engine.max_string_size,
+                        copy.len(),
+                        Position::none(),
+                    )))
+                } else {
+                    Ok(())
+                }
             }
-            Ok(())
         },
     );
     lib.set_fn_3_mut(

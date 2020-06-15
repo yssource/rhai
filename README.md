@@ -2207,7 +2207,7 @@ let a = new_ts();           // constructor function
 a.field = 500;              // property setter
 a.update();                 // method call, 'a' can be modified
 
-update(a);                  // <- this de-sugars to 'a.update()' this if 'a' is a simple variable
+update(a);                  // <- this de-sugars to 'a.update()' thus if 'a' is a simple variable
                             //    unlike scripted functions, 'a' can be modified and is not a copy
 
 let array = [ a ];
@@ -2480,10 +2480,15 @@ engine.set_max_string_size(500);            // allow strings only up to 500 byte
 engine.set_max_string_size(0);              // allow unlimited string length
 ```
 
-A script attempting to create a string literal longer than the maximum will terminate with a parse error.
+A script attempting to create a string literal longer than the maximum length will terminate with a parse error.
 Any script operation that produces a string longer than the maximum also terminates the script with an error result.
 This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
+
+Be conservative when setting a maximum limit and always consider the fact that a registered function may grow
+a string's length without Rhai noticing until the very end.  For instance, the built-in '`+`' operator for strings
+concatenates two strings together to form one longer string; if both strings are _slightly_ below the maximum
+length limit, the resultant string may be almost _twice_ the maximum length.
 
 ### Maximum size of arrays
 
@@ -2503,6 +2508,16 @@ Any script operation that produces an array larger than the maximum also termina
 This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
 
+Be conservative when setting a maximum limit and always consider the fact that a registered function may grow
+an array's size without Rhai noticing until the very end.
+For instance, the built-in '`+`' operator for arrays concatenates two arrays together to form one larger array;
+if both arrays are _slightly_ below the maximum size limit, the resultant array may be almost _twice_ the maximum size.
+
+As a malicious script may create a deeply-nested array which consumes huge amounts of memory while each individual
+array still stays under the maximum size limit, Rhai also recursively adds up the sizes of all strings, arrays
+and object maps contained within each array to make sure that the _aggregate_ sizes of none of these data structures
+exceed their respective maximum size limits (if any).
+
 ### Maximum size of object maps
 
 Rhai by default does not limit how large (i.e. the number of properties) an [object map] can be.
@@ -2520,6 +2535,16 @@ A script attempting to create an object map literal with more properties than th
 Any script operation that produces an object map with more properties than the maximum also terminates the script with an error result.
 This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
+
+Be conservative when setting a maximum limit and always consider the fact that a registered function may grow
+an object map's size without Rhai noticing until the very end.  For instance, the built-in '`+`' operator for object maps
+concatenates two object maps together to form one larger object map; if both object maps are _slightly_ below the maximum
+size limit, the resultant object map may be almost _twice_ the maximum size.
+
+As a malicious script may create a deeply-nested object map which consumes huge amounts of memory while each individual
+object map still stays under the maximum size limit, Rhai also recursively adds up the sizes of all strings, arrays
+and object maps contained within each object map to make sure that the _aggregate_ sizes of none of these data structures
+exceed their respective maximum size limits (if any).
 
 ### Maximum number of operations
 
@@ -2582,14 +2607,17 @@ total number of operations for a typical run.
 ### Maximum number of modules
 
 Rhai by default does not limit how many [modules] can be loaded via [`import`] statements.
-This can be changed via the `Engine::set_max_modules` method, with zero being unlimited (the default).
+This can be changed via the `Engine::set_max_modules` method. Notice that setting the maximum number
+of modules to zero does _not_ indicate unlimited modules, but disallows loading any module altogether.
 
 ```rust
 let mut engine = Engine::new();
 
 engine.set_max_modules(5);                  // allow loading only up to 5 modules
 
-engine.set_max_modules(0);                  // allow unlimited modules
+engine.set_max_modules(0);                  // disallow loading any module (maximum = zero)
+
+engine.set_max_modules(1000);               // set to a large number for effectively unlimited modules
 ```
 
 A script attempting to load more than the maximum number of modules will terminate with an error result.

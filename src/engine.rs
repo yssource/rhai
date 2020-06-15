@@ -63,16 +63,9 @@ pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
 #[cfg(feature = "unchecked")]
 pub const MAX_CALL_STACK_DEPTH: usize = usize::MAX;
 #[cfg(feature = "unchecked")]
-pub const MAX_EXPR_DEPTH: usize = usize::MAX;
+pub const MAX_EXPR_DEPTH: usize = 0;
 #[cfg(feature = "unchecked")]
-pub const MAX_FUNCTION_EXPR_DEPTH: usize = usize::MAX;
-
-#[cfg(feature = "unchecked")]
-pub const MAX_STRING_SIZE: usize = usize::MAX;
-#[cfg(feature = "unchecked")]
-pub const MAX_ARRAY_SIZE: usize = usize::MAX;
-#[cfg(feature = "unchecked")]
-pub const MAX_MAP_SIZE: usize = usize::MAX;
+pub const MAX_FUNCTION_EXPR_DEPTH: usize = 0;
 
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
@@ -189,7 +182,7 @@ pub struct State {
     /// Number of operations performed.
     pub operations: u64,
     /// Number of modules loaded.
-    pub modules: u64,
+    pub modules: usize,
 }
 
 impl State {
@@ -268,7 +261,7 @@ pub struct Engine {
     /// Maximum number of operations allowed to run.
     pub(crate) max_operations: u64,
     /// Maximum number of modules allowed to load.
-    pub(crate) max_modules: u64,
+    pub(crate) max_modules: usize,
     /// Maximum length of a string.
     pub(crate) max_string_size: usize,
     /// Maximum length of an array.
@@ -309,11 +302,11 @@ impl Default for Engine {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: u64::MAX,
-            max_modules: u64::MAX,
-            max_string_size: usize::MAX,
-            max_array_size: usize::MAX,
-            max_map_size: usize::MAX,
+            max_operations: 0,
+            max_modules: usize::MAX,
+            max_string_size: 0,
+            max_array_size: 0,
+            max_map_size: 0,
         };
 
         engine.load_package(StandardPackage::new().get());
@@ -456,11 +449,11 @@ impl Engine {
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
             max_expr_depth: MAX_EXPR_DEPTH,
             max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: u64::MAX,
-            max_modules: u64::MAX,
-            max_string_size: usize::MAX,
-            max_array_size: usize::MAX,
-            max_map_size: usize::MAX,
+            max_operations: 0,
+            max_modules: usize::MAX,
+            max_string_size: 0,
+            max_array_size: 0,
+            max_map_size: 0,
         }
     }
 
@@ -501,17 +494,13 @@ impl Engine {
     /// consuming too much resources (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_operations(&mut self, operations: u64) {
-        self.max_operations = if operations == 0 {
-            u64::MAX
-        } else {
-            operations
-        };
+        self.max_operations = operations;
     }
 
-    /// Set the maximum number of imported modules allowed for a script (0 for unlimited).
+    /// Set the maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_modules(&mut self, modules: u64) {
-        self.max_modules = if modules == 0 { u64::MAX } else { modules };
+    pub fn set_max_modules(&mut self, modules: usize) {
+        self.max_modules = modules;
     }
 
     /// Set the depth limits for expressions/statements (0 for unlimited).
@@ -656,7 +645,7 @@ impl Engine {
                 return Ok((result, false));
             } else {
                 // Run external function
-                let result = func.get_native_fn()(args)?;
+                let result = func.get_native_fn()(self, args)?;
 
                 // Restore the original reference
                 restore_first_arg(old_this_ptr, args);
@@ -1485,7 +1474,7 @@ impl Engine {
                             .or_else(|| self.packages.get_fn(hash_fn))
                         {
                             // Overriding exact implementation
-                            func(&mut [lhs_ptr, &mut rhs_val])?;
+                            func(self, &mut [lhs_ptr, &mut rhs_val])?;
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
@@ -1717,7 +1706,9 @@ impl Engine {
                             .map_err(|err| EvalAltResult::new_position(err, *pos))
                     }
                     Ok(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut(), *pos),
-                    Ok(f) => f.get_native_fn()(args.as_mut()).map_err(|err| err.new_position(*pos)),
+                    Ok(f) => {
+                        f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
+                    }
                     Err(err)
                         if def_val.is_some()
                             && matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) =>
@@ -1773,11 +1764,7 @@ impl Engine {
             _ => unreachable!(),
         };
 
-        if let Ok(val) = &result {
-            self.check_data_size(val)?;
-        }
-
-        result
+        self.check_data_size(result)
     }
 
     /// Evaluate a statement
@@ -2046,50 +2033,102 @@ impl Engine {
             }
         };
 
-        if let Ok(val) = &result {
-            self.check_data_size(val)?;
-        }
-
-        result
+        self.check_data_size(result)
     }
 
-    /// Check a `Dynamic` value to ensure that its size is within allowable limit.
-    fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
+    /// Check a result to ensure that the data size is within allowable limit.
+    fn check_data_size(
+        &self,
+        result: Result<Dynamic, Box<EvalAltResult>>,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(feature = "unchecked")]
-        return Ok(());
+        return result;
 
-        match value {
-            Dynamic(Union::Str(s))
-                if self.max_string_size > 0 && s.len() > self.max_string_size =>
-            {
-                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                    "Length of string".to_string(),
-                    self.max_string_size,
-                    s.len(),
-                    Position::none(),
-                )))
+        // If no data size limits, just return
+        if self.max_string_size + self.max_array_size + self.max_map_size == 0 {
+            return result;
+        }
+
+        // Recursively calculate the size of a value (especially `Array` and `Map`)
+        fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
+            match value {
+                #[cfg(not(feature = "no_index"))]
+                Dynamic(Union::Array(arr)) => {
+                    let mut arrays = 0;
+                    let mut maps = 0;
+
+                    arr.iter().for_each(|value| match value {
+                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        _ => arrays += 1,
+                    });
+
+                    (arrays, maps, 0)
+                }
+                #[cfg(not(feature = "no_object"))]
+                Dynamic(Union::Map(map)) => {
+                    let mut arrays = 0;
+                    let mut maps = 0;
+
+                    map.values().for_each(|value| match value {
+                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        _ => maps += 1,
+                    });
+
+                    (arrays, maps, 0)
+                }
+                Dynamic(Union::Str(s)) => (0, 0, s.len()),
+                _ => (0, 0, 0),
             }
+        }
+
+        match result {
+            // Simply return all errors
+            Err(_) => return result,
+            // String with limit
+            Ok(Dynamic(Union::Str(_))) if self.max_string_size > 0 => (),
+            // Array with limit
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(arr))
-                if self.max_array_size > 0 && arr.len() > self.max_array_size =>
-            {
-                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                    "Length of array".to_string(),
-                    self.max_array_size,
-                    arr.len(),
-                    Position::none(),
-                )))
-            }
+            Ok(Dynamic(Union::Array(_))) if self.max_array_size > 0 => (),
+            // Map with limit
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(map)) if self.max_map_size > 0 && map.len() > self.max_map_size => {
-                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                    "Number of properties in object map".to_string(),
-                    self.max_map_size,
-                    map.len(),
-                    Position::none(),
-                )))
-            }
-            _ => Ok(()),
+            Ok(Dynamic(Union::Map(_))) if self.max_map_size > 0 => (),
+            // Everything else is simply returned
+            Ok(_) => return result,
+        };
+
+        let (arr, map, s) = calc_size(result.as_ref().unwrap());
+
+        if s > self.max_string_size {
+            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                self.max_string_size,
+                s,
+                Position::none(),
+            )))
+        } else if arr > self.max_array_size {
+            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                "Size of array".to_string(),
+                self.max_array_size,
+                arr,
+                Position::none(),
+            )))
+        } else if map > self.max_map_size {
+            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                "Number of properties in object map".to_string(),
+                self.max_map_size,
+                map,
+                Position::none(),
+            )))
+        } else {
+            result
         }
     }
 
@@ -2101,7 +2140,7 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         {
             // Guard against too many operations
-            if state.operations > self.max_operations {
+            if self.max_operations > 0 && state.operations > self.max_operations {
                 return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
                     Position::none(),
                 )));

@@ -2,9 +2,11 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
-use crate::engine::Array;
+use crate::engine::{Array, Engine};
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
+use crate::result::EvalAltResult;
+use crate::token::Position;
 
 use crate::stdlib::{any::TypeId, boxed::Box};
 
@@ -23,13 +25,28 @@ fn ins<T: Variant + Clone>(list: &mut Array, position: INT, item: T) -> FuncRetu
     }
     Ok(())
 }
-fn pad<T: Variant + Clone>(list: &mut Array, len: INT, item: T) -> FuncReturn<()> {
-    if len >= 0 {
+fn pad<T: Variant + Clone>(engine: &Engine, args: &mut [&mut Dynamic]) -> FuncReturn<()> {
+    let len = *args[1].downcast_ref::<INT>().unwrap();
+
+    // Check if array will be over max size limit
+    if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
+        Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+            "Size of array".to_string(),
+            engine.max_array_size,
+            len as usize,
+            Position::none(),
+        )))
+    } else if len >= 0 {
+        let item = args[2].downcast_ref::<T>().unwrap().clone();
+        let list = args[0].downcast_mut::<Array>().unwrap();
+
         while list.len() < len as usize {
             push(list, item.clone())?;
         }
+        Ok(())
+    } else {
+        Ok(())
     }
-    Ok(())
 }
 
 macro_rules! reg_op {
@@ -42,11 +59,21 @@ macro_rules! reg_tri {
         $( $lib.set_fn_3_mut($op, $func::<$par>); )*
     };
 }
+macro_rules! reg_pad {
+    ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
+        $({
+            $lib.set_fn_var_args($op,
+                &[TypeId::of::<Array>(), TypeId::of::<INT>(), TypeId::of::<$par>()],
+                $func::<$par>
+            );
+        })*
+    };
+}
 
 #[cfg(not(feature = "no_index"))]
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     reg_op!(lib, "push", push, INT, bool, char, ImmutableString, Array, ());
-    reg_tri!(lib, "pad", pad, INT, bool, char, ImmutableString, Array, ());
+    reg_pad!(lib, "pad", pad, INT, bool, char, ImmutableString, Array, ());
     reg_tri!(lib, "insert", ins, INT, bool, char, ImmutableString, Array, ());
 
     lib.set_fn_2_mut("append", |x: &mut Array, y: Array| {
@@ -69,14 +96,14 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     #[cfg(not(feature = "only_i64"))]
     {
         reg_op!(lib, "push", push, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_tri!(lib, "pad", pad, i8, u8, i16, u16, i32, u32, i64, u64, i128, u128);
+        reg_pad!(lib, "pad", pad, i8, u8, i16, u16, i32, u32, i64, u64, i128, u128);
         reg_tri!(lib, "insert", ins, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
     }
 
     #[cfg(not(feature = "no_float"))]
     {
         reg_op!(lib, "push", push, f32, f64);
-        reg_tri!(lib, "pad", pad, f32, f64);
+        reg_pad!(lib, "pad", pad, f32, f64);
         reg_tri!(lib, "insert", ins, f32, f64);
     }
 

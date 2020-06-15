@@ -305,6 +305,29 @@ impl Module {
         hash_fn
     }
 
+    /// Set a Rust function taking a reference to the scripting `Engine`, plus a list of
+    /// mutable `Dynamic` references into the module, returning a hash key.
+    /// A list of `TypeId`'s is taken as the argument types.
+    ///
+    /// Use this to register a built-in function which must reference settings on the scripting
+    /// `Engine` (e.g. to prevent growing an array beyond the allowed maximum size).
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    pub(crate) fn set_fn_var_args<T: Variant + Clone>(
+        &mut self,
+        name: impl Into<String>,
+        args: &[TypeId],
+        func: impl Fn(&Engine, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> u64 {
+        let f = move |engine: &Engine, args: &mut FnCallArgs| func(engine, args).map(Dynamic::from);
+        self.set_fn(
+            name,
+            Public,
+            args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
     /// Set a Rust function taking no parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -323,7 +346,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn() -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
+        let f = move |_: &Engine, _: &mut FnCallArgs| func().map(Dynamic::from);
         let args = [];
         self.set_fn(
             name,
@@ -351,8 +374,9 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f =
-            move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
+            func(mem::take(args[0]).cast::<A>()).map(Dynamic::from)
+        };
         let args = [TypeId::of::<A>()];
         self.set_fn(
             name,
@@ -380,7 +404,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
         let args = [TypeId::of::<A>()];
@@ -434,7 +458,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
 
@@ -470,7 +494,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
@@ -561,7 +585,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
@@ -603,7 +627,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let a = args[0].downcast_mut::<A>().unwrap();
@@ -640,7 +664,7 @@ impl Module {
         &mut self,
         func: impl Fn(&mut A, B, A) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<A>();
             let a = args[0].downcast_mut::<A>().unwrap();
@@ -682,7 +706,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
@@ -731,7 +755,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let d = mem::take(args[3]).cast::<D>();
@@ -1019,7 +1043,7 @@ pub trait ModuleResolver: SendSync {
     /// Resolve a module based on a path string.
     fn resolve(
         &self,
-        engine: &Engine,
+        _: &Engine,
         scope: Scope,
         path: &str,
         pos: Position,

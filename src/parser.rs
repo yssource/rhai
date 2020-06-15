@@ -298,7 +298,9 @@ impl ParseSettings {
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
     pub fn ensure_level_within_max_limit(&self, limit: usize) -> Result<(), ParseError> {
-        if self.level > limit {
+        if limit == 0 {
+            Ok(())
+        } else if self.level > limit {
             Err(PERR::ExprTooDeep.into_err(self.pos))
         } else {
             Ok(())
@@ -624,7 +626,7 @@ impl Expr {
 
             Self::Variable(_) => true,
 
-            expr => expr.is_constant(),
+            _ => self.is_constant(),
         }
     }
 
@@ -765,7 +767,7 @@ fn parse_paren_expr(
         // ( xxx )
         (Token::RightParen, _) => Ok(expr),
         // ( <error>
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         // ( xxx ???
         (_, pos) => Err(PERR::MissingToken(
             Token::RightParen.into(),
@@ -798,7 +800,7 @@ fn parse_call_expr(
             .into_err(settings.pos))
         }
         // id <error>
-        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(settings.pos)),
+        Token::LexError(err) => return Err(err.into_err(settings.pos)),
         // id()
         Token::RightParen => {
             eat_token(input, Token::RightParen);
@@ -878,9 +880,7 @@ fn parse_call_expr(
                 .into_err(*pos))
             }
             // id(...args <error>
-            (Token::LexError(err), pos) => {
-                return Err(PERR::BadInput(err.to_string()).into_err(*pos))
-            }
+            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
             // id(...args ???
             (_, pos) => {
                 return Err(PERR::MissingToken(
@@ -1063,7 +1063,7 @@ fn parse_index_chain(
                 }
             }
         }
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(*pos)),
+        (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
         (_, pos) => Err(PERR::MissingToken(
             Token::RightBracket.into(),
             "for a matching [ in this index expression".into(),
@@ -1108,9 +1108,7 @@ fn parse_array_literal(
                     )
                     .into_err(*pos))
                 }
-                (Token::LexError(err), pos) => {
-                    return Err(PERR::BadInput(err.to_string()).into_err(*pos))
-                }
+                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
                 (_, pos) => {
                     return Err(PERR::MissingToken(
                         Token::Comma.into(),
@@ -1142,9 +1140,7 @@ fn parse_map_literal(
             let (name, pos) = match input.next().unwrap() {
                 (Token::Identifier(s), pos) => (s, pos),
                 (Token::StringConst(s), pos) => (s, pos),
-                (Token::LexError(err), pos) => {
-                    return Err(PERR::BadInput(err.to_string()).into_err(pos))
-                }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (_, pos) if map.is_empty() => {
                     return Err(
                         PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
@@ -1162,9 +1158,7 @@ fn parse_map_literal(
 
             match input.next().unwrap() {
                 (Token::Colon, _) => (),
-                (Token::LexError(err), pos) => {
-                    return Err(PERR::BadInput(err.to_string()).into_err(pos))
-                }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (_, pos) => {
                     return Err(PERR::MissingToken(
                         Token::Colon.into(),
@@ -1203,9 +1197,7 @@ fn parse_map_literal(
                     )
                     .into_err(*pos))
                 }
-                (Token::LexError(err), pos) => {
-                    return Err(PERR::BadInput(err.to_string()).into_err(*pos))
-                }
+                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
                 (_, pos) => {
                     return Err(
                         PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
@@ -1267,8 +1259,8 @@ fn parse_primary(
         Token::MapStart => parse_map_literal(input, state, settings.level_up())?,
         Token::True => Expr::True(settings.pos),
         Token::False => Expr::False(settings.pos),
-        Token::LexError(err) => return Err(PERR::BadInput(err.to_string()).into_err(settings.pos)),
-        token => {
+        Token::LexError(err) => return Err(err.into_err(settings.pos)),
+        _ => {
             return Err(
                 PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(settings.pos)
             )
@@ -1378,12 +1370,7 @@ fn parse_unary(
                                 None
                             }
                         })
-                        .ok_or_else(|| {
-                            PERR::BadInput(
-                                LexError::MalformedNumber(format!("-{}", x.0)).to_string(),
-                            )
-                            .into_err(pos)
-                        })
+                        .ok_or_else(|| LexError::MalformedNumber(format!("-{}", x.0)).into_err(pos))
                 }
 
                 // Negative float
@@ -1846,7 +1833,7 @@ fn parse_binary_op(
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 
-            token => return Err(PERR::UnknownOperator(token.into()).into_err(pos)),
+            op_token => return Err(PERR::UnknownOperator(op_token.into()).into_err(pos)),
         };
     }
 }
@@ -1988,7 +1975,7 @@ fn parse_for(
         // Variable name
         (Token::Identifier(s), _) => s,
         // Bad identifier
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         // EOF
         (Token::EOF, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         // Not a variable name
@@ -1998,7 +1985,7 @@ fn parse_for(
     // for name in ...
     match input.next().unwrap() {
         (Token::In, _) => (),
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => {
             return Err(
                 PERR::MissingToken(Token::In.into(), "after the iteration variable".into())
@@ -2036,7 +2023,7 @@ fn parse_let(
     // let name ...
     let (name, pos) = match input.next().unwrap() {
         (Token::Identifier(s), pos) => (s, pos),
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
@@ -2107,7 +2094,7 @@ fn parse_import(
     // import expr as name ...
     let (name, _) = match input.next().unwrap() {
         (Token::Identifier(s), pos) => (s, pos),
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
@@ -2130,9 +2117,7 @@ fn parse_export(
     loop {
         let (id, id_pos) = match input.next().unwrap() {
             (Token::Identifier(s), pos) => (s.clone(), pos),
-            (Token::LexError(err), pos) => {
-                return Err(PERR::BadInput(err.to_string()).into_err(pos))
-            }
+            (Token::LexError(err), pos) => return Err(err.into_err(pos)),
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
 
@@ -2187,7 +2172,7 @@ fn parse_block(
     // Must start with {
     settings.pos = match input.next().unwrap() {
         (Token::LeftBrace, pos) => pos,
-        (Token::LexError(err), pos) => return Err(PERR::BadInput(err.to_string()).into_err(pos)),
+        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => {
             return Err(PERR::MissingToken(
                 Token::LeftBrace.into(),
@@ -2227,9 +2212,7 @@ fn parse_block(
             // { ... { stmt } ???
             (_, _) if !need_semicolon => (),
             // { ... stmt <error>
-            (Token::LexError(err), pos) => {
-                return Err(PERR::BadInput(err.to_string()).into_err(*pos))
-            }
+            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
             // { ... stmt ???
             (_, pos) => {
                 // Semicolons are not optional between statements
@@ -2378,9 +2361,7 @@ fn parse_fn(
                     state.push((s.clone(), ScopeEntryType::Normal));
                     params.push((s, pos))
                 }
-                (Token::LexError(err), pos) => {
-                    return Err(PERR::BadInput(err.to_string()).into_err(pos))
-                }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (_, pos) => {
                     return Err(PERR::MissingToken(Token::RightParen.into(), end_err).into_err(pos))
                 }
@@ -2392,9 +2373,7 @@ fn parse_fn(
                 (Token::Identifier(_), pos) => {
                     return Err(PERR::MissingToken(Token::Comma.into(), sep_err).into_err(pos))
                 }
-                (Token::LexError(err), pos) => {
-                    return Err(PERR::BadInput(err.to_string()).into_err(pos))
-                }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (_, pos) => {
                     return Err(PERR::MissingToken(Token::Comma.into(), sep_err).into_err(pos))
                 }
@@ -2565,9 +2544,7 @@ impl Engine {
                 // { stmt } ???
                 (_, _) if !need_semicolon => (),
                 // stmt <error>
-                (Token::LexError(err), pos) => {
-                    return Err(PERR::BadInput(err.to_string()).into_err(*pos))
-                }
+                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
                 // stmt ???
                 (_, pos) => {
                     // Semicolons are not optional between statements

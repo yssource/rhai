@@ -862,6 +862,14 @@ impl<'a> TokenIterator<'a> {
                     self.eat_next();
                     return Some((Token::MinusAssign, pos));
                 }
+                ('-', '>') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "'->' is not a valid symbol. This is not C or C++!".to_string(),
+                        ))),
+                        pos,
+                    ))
+                }
                 ('-', _) if self.can_be_unary => return Some((Token::UnaryMinus, pos)),
                 ('-', _) => return Some((Token::Minus, pos)),
 
@@ -931,7 +939,7 @@ impl<'a> TokenIterator<'a> {
                     // Warn against `===`
                     if self.peek_next() == Some('=') {
                         return Some((
-                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                Token::LexError(Box::new(LERR::ImproperSymbol(
                                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
                                         .to_string(),
                                 ))),
@@ -941,17 +949,43 @@ impl<'a> TokenIterator<'a> {
 
                     return Some((Token::EqualsTo, pos));
                 }
+                ('=', '>') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "'=>' is not a valid symbol. This is not Rust! Should it be '>='?"
+                                .to_string(),
+                        ))),
+                        pos,
+                    ))
+                }
                 ('=', _) => return Some((Token::Equals, pos)),
 
                 (':', ':') => {
                     self.eat_next();
                     return Some((Token::DoubleColon, pos));
                 }
+                (':', '=') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "':=' is not a valid assignment operator. This is not Pascal! Should it be simply '='?"
+                                .to_string(),
+                        ))),
+                        pos,
+                    ))
+                }
                 (':', _) => return Some((Token::Colon, pos)),
 
                 ('<', '=') => {
                     self.eat_next();
                     return Some((Token::LessThanEqualsTo, pos));
+                }
+                ('<', '-') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "'<-' is not a valid symbol. Should it be '<='?".to_string(),
+                        ))),
+                        pos,
+                    ))
                 }
                 ('<', '<') => {
                     self.eat_next();
@@ -993,7 +1027,7 @@ impl<'a> TokenIterator<'a> {
                     // Warn against `!==`
                     if self.peek_next() == Some('=') {
                         return Some((
-                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                Token::LexError(Box::new(LERR::ImproperSymbol(
                                     "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
                                         .to_string(),
                                 ))),
