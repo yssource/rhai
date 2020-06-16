@@ -1783,7 +1783,6 @@ impl Engine {
                         self.call_script_fn(&mut scope, state, lib, name, fn_def, args, level)
                             .map_err(|err| EvalAltResult::new_position(err, *pos))
                     }
-                    Ok(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut(), *pos),
                     Ok(f) => {
                         f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
                     }
