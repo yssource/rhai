@@ -7,6 +7,11 @@ Version 0.15.1
 This is a minor release which enables updating indexers (via registered indexer setters) and supports functions
 with `&str` parameters (maps transparently to `ImmutableString`).
 
+Buf fix
+-------
+
+* `let s="abc"; s[1].change_to('X');` now correctly sets the character '`X`' into '`s`' yielding `"aXc"`.
+
 Breaking changes
 ----------------
 

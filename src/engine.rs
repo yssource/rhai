@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{Dynamic, Union};
+use crate::any::{Dynamic, Union, Variant};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::fn_native::{CallableFunction, Callback, FnCallArgs};
@@ -103,6 +103,14 @@ impl Target<'_> {
             Self::Ref(_) => false,
             Self::Value(_) => true,
             Self::StringChar(_, _, _) => false,
+        }
+    }
+    /// Is the `Target` a specific type?
+    pub fn is<T: Variant + Clone>(&self) -> bool {
+        match self {
+            Target::Ref(r) => r.is::<T>(),
+            Target::Value(r) => r.is::<T>(),
+            Target::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
@@ -817,7 +825,7 @@ impl Engine {
                     .map(|name| if name.is::<ImmutableString>() {
                         "&str | ImmutableString"
                     } else {
-                        self.map_type_name(name.type_name())
+                        self.map_type_name((*name).type_name())
                     })
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -1006,9 +1014,7 @@ impl Engine {
         mut new_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         let is_ref = target.is_ref();
-
-        // Get a reference to the mutation target Dynamic
-        let obj = target.as_mut();
+        let is_value = target.is_value();
 
         // Pop the last index value
         let mut idx_val = idx_values.pop();
@@ -1090,24 +1096,38 @@ impl Engine {
                     let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
                     let def_val = def_val.as_ref();
 
-                    let mut arg_values: StaticVec<_> = once(obj)
-                        .chain(
-                            idx_val
-                                .downcast_mut::<StaticVec<Dynamic>>()
-                                .unwrap()
-                                .iter_mut(),
-                        )
-                        .collect();
-                    let args = arg_values.as_mut();
+                    // Get a reference to the mutation target Dynamic
+                    let (result, updated) = {
+                        let obj = target.as_mut();
+                        let mut arg_values: StaticVec<_> = once(obj)
+                            .chain(
+                                idx_val
+                                    .downcast_mut::<StaticVec<Dynamic>>()
+                                    .unwrap()
+                                    .iter_mut(),
+                            )
+                            .collect();
+                        let args = arg_values.as_mut();
 
-                    self.exec_fn_call(state, lib, name, *native, *hash, args, is_ref, def_val, 0)
-                        .map_err(|err| EvalAltResult::new_position(err, *pos))
+                        self.exec_fn_call(
+                            state, lib, name, *native, *hash, args, is_ref, def_val, 0,
+                        )
+                        .map_err(|err| EvalAltResult::new_position(err, *pos))?
+                    };
+
+                    // Feed the changed temp value back
+                    if updated && !is_ref && !is_value {
+                        let new_val = target.as_mut().clone();
+                        target.set_value(new_val)?;
+                    }
+
+                    Ok((result, updated))
                 }
                 // xxx.module::fn_name(...) - syntax error
                 Expr::FnCall(_) => unreachable!(),
                 // {xxx:map}.id = ???
                 #[cfg(not(feature = "no_object"))]
-                Expr::Property(x) if obj.is::<Map>() && new_val.is_some() => {
+                Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                     let ((prop, _, _), pos) = x.as_ref();
                     let index = prop.clone().into();
                     let mut val = self.get_indexed_mut(state, lib, target, index, *pos, true)?;
@@ -1118,7 +1138,7 @@ impl Engine {
                 }
                 // {xxx:map}.id
                 #[cfg(not(feature = "no_object"))]
-                Expr::Property(x) if obj.is::<Map>() => {
+                Expr::Property(x) if target.is::<Map>() => {
                     let ((prop, _, _), pos) = x.as_ref();
                     let index = prop.clone().into();
                     let val = self.get_indexed_mut(state, lib, target, index, *pos, false)?;
@@ -1128,7 +1148,7 @@ impl Engine {
                 // xxx.id = ???
                 Expr::Property(x) if new_val.is_some() => {
                     let ((_, _, setter), pos) = x.as_ref();
-                    let mut args = [obj, new_val.as_mut().unwrap()];
+                    let mut args = [target.as_mut(), new_val.as_mut().unwrap()];
                     self.exec_fn_call(state, lib, setter, true, 0, &mut args, is_ref, None, 0)
                         .map(|(v, _)| (v, true))
                         .map_err(|err| EvalAltResult::new_position(err, *pos))
@@ -1136,14 +1156,14 @@ impl Engine {
                 // xxx.id
                 Expr::Property(x) => {
                     let ((_, getter, _), pos) = x.as_ref();
-                    let mut args = [obj];
+                    let mut args = [target.as_mut()];
                     self.exec_fn_call(state, lib, getter, true, 0, &mut args, is_ref, None, 0)
                         .map(|(v, _)| (v, false))
                         .map_err(|err| EvalAltResult::new_position(err, *pos))
                 }
                 #[cfg(not(feature = "no_object"))]
                 // {xxx:map}.prop[expr] | {xxx:map}.prop.expr
-                Expr::Index(x) | Expr::Dot(x) if obj.is::<Map>() => {
+                Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
                     let (prop, expr, pos) = x.as_ref();
                     let is_idx = matches!(rhs, Expr::Index(_));
 
@@ -1164,7 +1184,7 @@ impl Engine {
                 Expr::Index(x) | Expr::Dot(x) => {
                     let (prop, expr, pos) = x.as_ref();
                     let is_idx = matches!(rhs, Expr::Index(_));
-                    let args = &mut [obj, &mut Default::default()];
+                    let args = &mut [target.as_mut(), &mut Default::default()];
 
                     let (mut val, updated) = if let Expr::Property(p) = prop {
                         let ((_, getter, _), _) = p.as_ref();
