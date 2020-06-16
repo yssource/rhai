@@ -22,6 +22,7 @@ New features
 * Indexers are now split into getters and setters (which now support updates).  The API is split into `Engine::register_indexer_get` and `Engine::register_indexer_set` with `Engine::register_indexer_get_set` being a shorthand.  Similarly, `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn` are added.
 * `Engine:register_fn` and `Engine:register_result_fn` accepts functions that take parameters of type `&str` (immutable string slice), which maps directly to `ImmutableString`. This is to avoid needing wrappers for functions taking string parameters.
 * Set maximum limit on data sizes: `Engine::set_max_string_size`, `Engine::set_max_array_size` and `Engine::set_max_map_size`.
+* Supports trailing commas on array literals, object map literals, function definitions and function calls.
 
 
 Version 0.15.0

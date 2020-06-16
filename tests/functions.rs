@@ -8,6 +8,11 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("fn add(x, n) { x + n } add(40, 2)")?, 42);
 
     assert_eq!(
+        engine.eval::<INT>("fn add(x, n,) { x + n } add(40, 2,)")?,
+        42
+    );
+
+    assert_eq!(
         engine.eval::<INT>("fn add(x, n) { x + n } let a = 40; add(a, 2); a")?,
         40
     );

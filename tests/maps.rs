@@ -13,6 +13,10 @@ fn test_map_indexing() -> Result<(), Box<EvalAltResult>> {
             2
         );
         assert_eq!(
+            engine.eval::<INT>(r#"let x = #{a: 1, b: 2, c: 3,}; x["b"]"#)?,
+            2
+        );
+        assert_eq!(
             engine.eval::<char>(
                 r#"
                     let y = #{d: 1, "e": #{a: 42, b: 88, "": "hello"}, " 123 xyz": 9};

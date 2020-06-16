@@ -294,7 +294,7 @@ impl Token {
                 Export => "export",
                 As => "as",
                 EOF => "{EOF}",
-                _ => panic!("operator should be match in outer scope"),
+                _ => unreachable!("operator should be match in outer scope"),
             })
             .into(),
         }
@@ -548,7 +548,7 @@ impl<'a> TokenIterator<'a> {
                         'x' => 2,
                         'u' => 4,
                         'U' => 8,
-                        _ => panic!("should be 'x', 'u' or 'U'"),
+                        _ => unreachable!(),
                     };
 
                     for _ in 0..len {
@@ -667,14 +667,14 @@ impl<'a> TokenIterator<'a> {
                                         '0', '1', '_', '_', '_', '_', '_', '_', '_', '_', '_', '_',
                                         '_', '_', '_', '_', '_', '_', '_', '_', '_', '_', '_',
                                     ],
-                                    _ => panic!("unexpected character {}", ch),
+                                    _ => unreachable!(),
                                 };
 
                                 radix_base = Some(match ch {
                                     'x' | 'X' => 16,
                                     'o' | 'O' => 8,
                                     'b' | 'B' => 2,
-                                    _ => panic!("unexpected character {}", ch),
+                                    _ => unreachable!(),
                                 });
 
                                 while let Some(next_char_in_hex) = self.peek_next() {
@@ -1077,7 +1077,7 @@ impl<'a> TokenIterator<'a> {
                 }
                 ('~', _) => return Some((Token::PowerOf, pos)),
 
-                ('\0', _) => panic!("should not be EOF"),
+                ('\0', _) => unreachable!(),
 
                 (ch, _) if ch.is_whitespace() => (),
                 (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(ch))), pos)),

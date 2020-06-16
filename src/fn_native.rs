@@ -126,7 +126,7 @@ impl CallableFunction {
     pub fn get_native_fn(&self) -> &FnAny {
         match self {
             Self::Pure(f) | Self::Method(f) => f.as_ref(),
-            Self::Iterator(_) | Self::Script(_) => panic!(),
+            Self::Iterator(_) | Self::Script(_) => unreachable!(),
         }
     }
     /// Get a shared reference to a script-defined function definition.
@@ -136,7 +136,7 @@ impl CallableFunction {
     /// Panics if the `CallableFunction` is not `Script`.
     pub fn get_shared_fn_def(&self) -> Shared<ScriptFnDef> {
         match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
             Self::Script(f) => f.clone(),
         }
     }
@@ -147,7 +147,7 @@ impl CallableFunction {
     /// Panics if the `CallableFunction` is not `Script`.
     pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
             Self::Script(f) => f,
         }
     }
@@ -159,7 +159,7 @@ impl CallableFunction {
     pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
             Self::Iterator(f) => *f,
-            Self::Pure(_) | Self::Method(_) | Self::Script(_) => panic!(),
+            Self::Pure(_) | Self::Method(_) | Self::Script(_) => unreachable!(),
         }
     }
     /// Create a new `CallableFunction::Pure`.

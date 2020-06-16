@@ -68,7 +68,7 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
     let r: INT = engine.call_fn(&mut scope, &ast, "add", (40 as INT, 2 as INT))?;
     assert_eq!(r, 42);
 
-    let ast = engine.compile("private fn add(x, n) { x + n }")?;
+    let ast = engine.compile("private fn add(x, n, ) { x + n }")?;
 
     assert!(matches!(
         *engine.call_fn::<_, INT>(&mut scope, &ast, "add", (40 as INT, 2 as INT))
@@ -83,7 +83,7 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
 fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
     let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
         Engine::new(),
-        "fn calc(x, y, z) { (x + y) * z }",
+        "fn calc(x, y, z,) { (x + y) * z }",
         "calc",
     )?;
 

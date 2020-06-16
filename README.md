@@ -1607,6 +1607,8 @@ The following methods (mostly defined in the [`BasicArrayPackage`](#packages) bu
 ```rust
 let y = [2, 3];         // array literal with 2 elements
 
+let y = [2, 3,];        // trailing comma is OK
+
 y.insert(0, 1);         // insert element at the beginning
 y.insert(999, 4);       // insert element at the end
 
@@ -1750,6 +1752,8 @@ y["baz!$@"] == 123.456; // access via index notation
 ts.obj = y;             // object maps can be assigned completely (by value copy)
 let foo = ts.list.a;
 foo == 42;
+
+let foo = #{ a:1,};     // trailing comma is OK
 
 let foo = #{ a:1, b:2, c:3 }["a"];
 foo == 1;
@@ -2115,7 +2119,12 @@ fn add(x, y) {
     return x + y;
 }
 
-print(add(2, 3));
+fn sub(x, y,) {             // trailing comma in parameters list is OK
+    return x - y;
+}
+
+print(add(2, 3));           // prints 5
+print(sub(2, 3,));          // prints -1 - trailing comma in arguments list is OK
 ```
 
 ### Implicit return

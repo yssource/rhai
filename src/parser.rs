@@ -518,7 +518,7 @@ impl Expr {
                 )))
             }
 
-            _ => panic!("cannot get value of non-constant expression"),
+            _ => unreachable!("cannot get value of non-constant expression"),
         }
     }
 
@@ -543,7 +543,7 @@ impl Expr {
 
             Self::Array(x) if x.0.iter().all(Self::is_constant) => "array".to_string(),
 
-            _ => panic!("cannot get value of non-constant expression"),
+            _ => unreachable!("cannot get value of non-constant expression"),
         }
     }
 
@@ -728,7 +728,7 @@ fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     let (t, pos) = input.next().unwrap();
 
     if t != token {
-        panic!(
+        unreachable!(
             "expecting {} (found {}) at {}",
             token.syntax(),
             t.syntax(),
@@ -836,7 +836,11 @@ fn parse_call_expr(
     let settings = settings.level_up();
 
     loop {
-        args.push(parse_expr(input, state, settings)?);
+        match input.peek().unwrap() {
+            // id(...args, ) - handle trailing comma
+            (Token::RightParen, _) => (),
+            _ => args.push(parse_expr(input, state, settings)?),
+        }
 
         match input.peek().unwrap() {
             // id(...args)
@@ -1082,42 +1086,47 @@ fn parse_array_literal(
 
     let mut arr = StaticVec::new();
 
-    if !match_token(input, Token::RightBracket)? {
-        while !input.peek().unwrap().0.is_eof() {
-            if state.max_array_size > 0 && arr.len() >= state.max_array_size {
-                return Err(PERR::LiteralTooLarge(
-                    "Size of array literal".to_string(),
-                    state.max_array_size,
-                )
-                .into_err(input.peek().unwrap().1));
-            }
-
-            let expr = parse_expr(input, state, settings.level_up())?;
-            arr.push(expr);
-
-            match input.peek().unwrap() {
-                (Token::Comma, _) => eat_token(input, Token::Comma),
-                (Token::RightBracket, _) => {
-                    eat_token(input, Token::RightBracket);
-                    break;
-                }
-                (Token::EOF, pos) => {
-                    return Err(PERR::MissingToken(
-                        Token::RightBracket.into(),
-                        "to end this array literal".into(),
-                    )
-                    .into_err(*pos))
-                }
-                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
-                (_, pos) => {
-                    return Err(PERR::MissingToken(
-                        Token::Comma.into(),
-                        "to separate the items of this array literal".into(),
-                    )
-                    .into_err(*pos))
-                }
-            };
+    while !input.peek().unwrap().0.is_eof() {
+        if state.max_array_size > 0 && arr.len() >= state.max_array_size {
+            return Err(PERR::LiteralTooLarge(
+                "Size of array literal".to_string(),
+                state.max_array_size,
+            )
+            .into_err(input.peek().unwrap().1));
         }
+
+        match input.peek().unwrap() {
+            (Token::RightBracket, _) => {
+                eat_token(input, Token::RightBracket);
+                break;
+            }
+            _ => {
+                let expr = parse_expr(input, state, settings.level_up())?;
+                arr.push(expr);
+            }
+        }
+
+        match input.peek().unwrap() {
+            (Token::Comma, _) => {
+                eat_token(input, Token::Comma);
+            }
+            (Token::RightBracket, _) => (),
+            (Token::EOF, pos) => {
+                return Err(PERR::MissingToken(
+                    Token::RightBracket.into(),
+                    "to end this array literal".into(),
+                )
+                .into_err(*pos))
+            }
+            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (_, pos) => {
+                return Err(PERR::MissingToken(
+                    Token::Comma.into(),
+                    "to separate the items of this array literal".into(),
+                )
+                .into_err(*pos))
+            }
+        };
     }
 
     Ok(Expr::Array(Box::new((arr, settings.pos))))
@@ -1133,77 +1142,82 @@ fn parse_map_literal(
 
     let mut map = StaticVec::new();
 
-    if !match_token(input, Token::RightBrace)? {
-        while !input.peek().unwrap().0.is_eof() {
-            const MISSING_RBRACE: &str = "to end this object map literal";
+    while !input.peek().unwrap().0.is_eof() {
+        const MISSING_RBRACE: &str = "to end this object map literal";
 
-            let (name, pos) = match input.next().unwrap() {
-                (Token::Identifier(s), pos) => (s, pos),
-                (Token::StringConst(s), pos) => (s, pos),
-                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                (_, pos) if map.is_empty() => {
-                    return Err(
-                        PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
-                            .into_err(pos),
-                    )
-                }
-                (Token::EOF, pos) => {
-                    return Err(
-                        PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
-                            .into_err(pos),
-                    )
-                }
-                (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
-            };
-
-            match input.next().unwrap() {
-                (Token::Colon, _) => (),
-                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                (_, pos) => {
-                    return Err(PERR::MissingToken(
-                        Token::Colon.into(),
-                        format!(
-                            "to follow the property '{}' in this object map literal",
-                            name
-                        ),
-                    )
-                    .into_err(pos))
-                }
-            };
-
-            if state.max_map_size > 0 && map.len() >= state.max_map_size {
-                return Err(PERR::LiteralTooLarge(
-                    "Number of properties in object map literal".to_string(),
-                    state.max_map_size,
-                )
-                .into_err(input.peek().unwrap().1));
+        match input.peek().unwrap() {
+            (Token::RightBrace, _) => {
+                eat_token(input, Token::RightBrace);
+                break;
             }
+            _ => {
+                let (name, pos) = match input.next().unwrap() {
+                    (Token::Identifier(s), pos) => (s, pos),
+                    (Token::StringConst(s), pos) => (s, pos),
+                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                    (_, pos) if map.is_empty() => {
+                        return Err(PERR::MissingToken(
+                            Token::RightBrace.into(),
+                            MISSING_RBRACE.into(),
+                        )
+                        .into_err(pos))
+                    }
+                    (Token::EOF, pos) => {
+                        return Err(PERR::MissingToken(
+                            Token::RightBrace.into(),
+                            MISSING_RBRACE.into(),
+                        )
+                        .into_err(pos))
+                    }
+                    (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
+                };
 
-            let expr = parse_expr(input, state, settings.level_up())?;
-            map.push(((name, pos), expr));
+                match input.next().unwrap() {
+                    (Token::Colon, _) => (),
+                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                    (_, pos) => {
+                        return Err(PERR::MissingToken(
+                            Token::Colon.into(),
+                            format!(
+                                "to follow the property '{}' in this object map literal",
+                                name
+                            ),
+                        )
+                        .into_err(pos))
+                    }
+                };
 
-            match input.peek().unwrap() {
-                (Token::Comma, _) => {
-                    eat_token(input, Token::Comma);
-                }
-                (Token::RightBrace, _) => {
-                    eat_token(input, Token::RightBrace);
-                    break;
-                }
-                (Token::Identifier(_), pos) => {
-                    return Err(PERR::MissingToken(
-                        Token::Comma.into(),
-                        "to separate the items of this object map literal".into(),
+                if state.max_map_size > 0 && map.len() >= state.max_map_size {
+                    return Err(PERR::LiteralTooLarge(
+                        "Number of properties in object map literal".to_string(),
+                        state.max_map_size,
                     )
-                    .into_err(*pos))
+                    .into_err(input.peek().unwrap().1));
                 }
-                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
-                (_, pos) => {
-                    return Err(
-                        PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
-                            .into_err(*pos),
-                    )
-                }
+
+                let expr = parse_expr(input, state, settings.level_up())?;
+                map.push(((name, pos), expr));
+            }
+        }
+
+        match input.peek().unwrap() {
+            (Token::Comma, _) => {
+                eat_token(input, Token::Comma);
+            }
+            (Token::RightBrace, _) => (),
+            (Token::Identifier(_), pos) => {
+                return Err(PERR::MissingToken(
+                    Token::Comma.into(),
+                    "to separate the items of this object map literal".into(),
+                )
+                .into_err(*pos))
+            }
+            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (_, pos) => {
+                return Err(
+                    PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                        .into_err(*pos),
+                )
             }
         }
     }
@@ -1309,7 +1323,7 @@ fn parse_primary(
                 parse_index_chain(input, state, expr, settings.level_up())?
             }
             // Unknown postfix operator
-            (expr, token) => panic!(
+            (expr, token) => unreachable!(
                 "unknown postfix operator '{}' for {:?}",
                 token.syntax(),
                 expr
@@ -2290,7 +2304,7 @@ fn parse_stmt(
             let return_type = match input.next().unwrap() {
                 (Token::Return, _) => ReturnType::Return,
                 (Token::Throw, _) => ReturnType::Exception,
-                _ => panic!("token should be return or throw"),
+                _ => unreachable!(),
             };
 
             match input.peek().unwrap() {
@@ -2356,15 +2370,20 @@ fn parse_fn(
         let sep_err = format!("to separate the parameters of function '{}'", name);
 
         loop {
-            match input.next().unwrap() {
-                (Token::Identifier(s), pos) => {
-                    state.push((s.clone(), ScopeEntryType::Normal));
-                    params.push((s, pos))
-                }
-                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                (_, pos) => {
-                    return Err(PERR::MissingToken(Token::RightParen.into(), end_err).into_err(pos))
-                }
+            match input.peek().unwrap() {
+                (Token::RightParen, _) => (),
+                _ => match input.next().unwrap() {
+                    (Token::Identifier(s), pos) => {
+                        state.push((s.clone(), ScopeEntryType::Normal));
+                        params.push((s, pos))
+                    }
+                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                    (_, pos) => {
+                        return Err(
+                            PERR::MissingToken(Token::RightParen.into(), end_err).into_err(pos)
+                        )
+                    }
+                },
             }
 
             match input.next().unwrap() {
