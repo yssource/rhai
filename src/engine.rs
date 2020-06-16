@@ -2265,14 +2265,14 @@ fn run_builtin_binary_op(
 
         #[cfg(not(feature = "unchecked"))]
         match op {
-            "+" => return add(x, y).map(Into::<Dynamic>::into).map(Some),
-            "-" => return sub(x, y).map(Into::<Dynamic>::into).map(Some),
-            "*" => return mul(x, y).map(Into::<Dynamic>::into).map(Some),
-            "/" => return div(x, y).map(Into::<Dynamic>::into).map(Some),
-            "%" => return modulo(x, y).map(Into::<Dynamic>::into).map(Some),
-            "~" => return pow_i_i(x, y).map(Into::<Dynamic>::into).map(Some),
-            ">>" => return shr(x, y).map(Into::<Dynamic>::into).map(Some),
-            "<<" => return shl(x, y).map(Into::<Dynamic>::into).map(Some),
+            "+" => return add(x, y).map(Into::into).map(Some),
+            "-" => return sub(x, y).map(Into::into).map(Some),
+            "*" => return mul(x, y).map(Into::into).map(Some),
+            "/" => return div(x, y).map(Into::into).map(Some),
+            "%" => return modulo(x, y).map(Into::into).map(Some),
+            "~" => return pow_i_i(x, y).map(Into::into).map(Some),
+            ">>" => return shr(x, y).map(Into::into).map(Some),
+            "<<" => return shl(x, y).map(Into::into).map(Some),
             _ => (),
         }
 
@@ -2283,9 +2283,9 @@ fn run_builtin_binary_op(
             "*" => return Ok(Some((x * y).into())),
             "/" => return Ok(Some((x / y).into())),
             "%" => return Ok(Some((x % y).into())),
-            "~" => return pow_i_i_u(x, y).map(Into::<Dynamic>::into).map(Some),
-            ">>" => return shr_u(x, y).map(Into::<Dynamic>::into).map(Some),
-            "<<" => return shl_u(x, y).map(Into::<Dynamic>::into).map(Some),
+            "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
+            ">>" => return shr_u(x, y).map(Into::into).map(Some),
+            "<<" => return shl_u(x, y).map(Into::into).map(Some),
             _ => (),
         }
 
@@ -2359,7 +2359,7 @@ fn run_builtin_binary_op(
                 "*" => return Ok(Some((x * y).into())),
                 "/" => return Ok(Some((x / y).into())),
                 "%" => return Ok(Some((x % y).into())),
-                "~" => return pow_f_f(x, y).map(Into::<Dynamic>::into).map(Some),
+                "~" => return pow_f_f(x, y).map(Into::into).map(Some),
                 "==" => return Ok(Some((x == y).into())),
                 "!=" => return Ok(Some((x != y).into())),
                 ">" => return Ok(Some((x > y).into())),

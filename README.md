@@ -1499,6 +1499,11 @@ record == "Bob X. Davis: age 42 ❤\n";
 "Davis" in record == true;
 'X' in record == true;
 'C' in record == false;
+
+// Strings can be iterated with a 'for' statement, yielding characters
+for ch in record {
+    print(ch);
+}
 ```
 
 The maximum allowed length of a string can be controlled via `Engine::set_max_string_size`
@@ -2011,9 +2016,18 @@ loop {
 Iterating through a range or an [array] is provided by the `for` ... `in` loop.
 
 ```rust
-let array = [1, 3, 5, 7, 9, 42];
+// Iterate through string, yielding characters
+let s = "hello, world!";
+
+for ch in s {
+    if ch > 'z' { continue; } // skip to the next iteration
+    print(ch);
+    if x == '@' { break; }   // break out of for loop
+}
 
 // Iterate through array
+let array = [1, 3, 5, 7, 9, 42];
+
 for x in array {
     if x > 10 { continue; } // skip to the next iteration
     print(x);
