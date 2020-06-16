@@ -15,6 +15,7 @@ use crate::stdlib::{
     fmt::Display,
     format,
     string::{String, ToString},
+    vec::Vec,
 };
 
 fn prepend<T: Display>(x: T, y: ImmutableString) -> FuncReturn<ImmutableString> {
@@ -292,5 +293,13 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             }
             Ok(())
         },
+    );
+
+    // Register string iterator
+    lib.set_iter(
+        TypeId::of::<ImmutableString>(),
+        |arr| Box::new(
+            arr.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into)
+        ) as Box<dyn Iterator<Item = Dynamic>>,
     );
 });

@@ -5,10 +5,90 @@ use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::parser::FnAccess;
+use crate::plugin::Plugin;
 use crate::result::EvalAltResult;
 use crate::utils::ImmutableString;
 
 use crate::stdlib::{any::TypeId, boxed::Box, mem};
+
+/// A trait to register custom plugins with the `Engine`.
+///
+/// A plugin consists of a number of functions. All functions will be registered with the engine.
+pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
+    /// Allow extensions of the engine's behavior.
+    ///
+    /// This can include importing modules, registering functions to the global name space, and
+    /// more.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{FLOAT, INT, Module, ModuleResolver, RegisterFn, RegisterPlugin};
+    /// use rhai::plugin::*;
+    /// use rhai::module_resolvers::*;
+    ///
+    /// // A function we want to expose to Rhai.
+    /// #[derive(Copy, Clone)]
+    /// struct DistanceFunction();
+    ///
+    /// impl PluginFunction for DistanceFunction {
+    ///     fn is_method_call(&self) -> bool { false }
+    ///     fn is_varadic(&self) -> bool { false }
+    ///
+    ///     fn call(&self, args: &[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///         let x1: &FLOAT = args[0].downcast_ref::<FLOAT>().unwrap();
+    ///         let y1: &FLOAT = args[1].downcast_ref::<FLOAT>().unwrap();
+    ///         let x2: &FLOAT = args[2].downcast_ref::<FLOAT>().unwrap();
+    ///         let y2: &FLOAT = args[3].downcast_ref::<FLOAT>().unwrap();
+    ///         let square_sum = (y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0);
+    ///         Ok(Dynamic::from(square_sum.sqrt()))
+    ///     }
+    ///
+    ///     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+    ///         Box::new(DistanceFunction())
+    ///     }
+    /// }
+    ///
+    /// // A simple custom plugin. This should not usually be done with hand-written code.
+    /// #[derive(Copy, Clone)]
+    /// pub struct AdvancedMathPlugin();
+    ///
+    /// impl Plugin for AdvancedMathPlugin {
+    ///     fn register_contents(self, engine: &mut Engine) {
+    ///         // Plugins are allowed to have side-effects on the engine.
+    ///         engine.register_fn("get_mystic_number", || { 42 as FLOAT });
+    ///
+    ///         // Main purpose: create a module to expose the functions to Rhai.
+    ///         //
+    ///         // This is currently a hack. There needs to be a better API here for "plugin"
+    ///         // modules.
+    ///         let mut m = Module::new();
+    ///         m.set_fn("euclidean_distance".to_string(), FnAccess::Public,
+    ///                  &[std::any::TypeId::of::<FLOAT>(),
+    ///                    std::any::TypeId::of::<FLOAT>(),
+    ///                    std::any::TypeId::of::<FLOAT>(),
+    ///                    std::any::TypeId::of::<FLOAT>()],
+    ///                  CallableFunction::from_plugin(DistanceFunction()));
+    ///         let mut r = StaticModuleResolver::new();
+    ///         r.insert("Math::Advanced".to_string(), m);
+    ///         engine.set_module_resolver(Some(r));
+    ///     }
+    /// }
+    ///
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.register_plugin(AdvancedMathPlugin());
+    ///
+    /// assert_eq!(engine.eval::<FLOAT>(
+    ///     r#"import "Math::Advanced" as math;
+    ///        let x = math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#)?, 41.0);
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn register_plugin(&mut self, plugin: PL);
+}
 
 /// Trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {
@@ -108,6 +188,12 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
         mem::take(data).cast::<T>()
+    }
+}
+
+impl<PL: Plugin> RegisterPlugin<PL> for Engine {
+    fn register_plugin(&mut self, plugin: PL) {
+        plugin.register_contents(self);
     }
 }
 

@@ -230,6 +230,9 @@ pub fn get_script_function_by_signature<'a>(
 ///
 /// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
+    /// A unique ID identifying this scripting `Engine`.
+    pub id: Option<String>,
+
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_module: Module,
     /// A collection of all library packages loaded into the Engine.
@@ -274,6 +277,8 @@ impl Default for Engine {
     fn default() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
+            id: None,
+
             packages: Default::default(),
             global_module: Default::default(),
 
@@ -431,6 +436,8 @@ impl Engine {
     /// Use the `load_package` method to load additional packages of functions.
     pub fn new_raw() -> Self {
         Self {
+            id: None,
+
             packages: Default::default(),
             global_module: Default::default(),
             module_resolver: None,
@@ -483,6 +490,15 @@ impl Engine {
         self.optimization_level = optimization_level
     }
 
+    /// The current optimization level.
+    /// It controls whether and how the `Engine` will optimize an AST after compilation.
+    ///
+    /// Not available under the `no_optimize` feature.
+    #[cfg(not(feature = "no_optimize"))]
+    pub fn optimization_level(&self) -> OptimizationLevel {
+        self.optimization_level
+    }
+
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
     #[cfg(not(feature = "unchecked"))]
@@ -490,11 +506,27 @@ impl Engine {
         self.max_call_stack_depth = levels
     }
 
+    /// The maximum levels of function calls allowed for a script.
+    #[cfg(not(feature = "unchecked"))]
+    pub fn max_call_levels(&self) -> usize {
+        self.max_call_stack_depth
+    }
+
     /// Set the maximum number of operations allowed for a script to run to avoid
     /// consuming too much resources (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_operations(&mut self, operations: u64) {
-        self.max_operations = operations;
+        self.max_operations = if operations == u64::MAX {
+            0
+        } else {
+            operations
+        };
+    }
+
+    /// The maximum number of operations allowed for a script to run (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    pub fn max_operations(&self) -> u64 {
+        self.max_operations
     }
 
     /// Set the maximum number of imported modules allowed for a script.
@@ -503,31 +535,77 @@ impl Engine {
         self.max_modules = modules;
     }
 
-    /// Set the depth limits for expressions/statements (0 for unlimited).
+    /// The maximum number of imported modules allowed for a script.
+    #[cfg(not(feature = "unchecked"))]
+    pub fn max_modules(&self) -> usize {
+        self.max_modules
+    }
+
+    /// Set the depth limits for expressions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_expr_depths(&mut self, max_expr_depth: usize, max_function_expr_depth: usize) {
-        self.max_expr_depth = max_expr_depth;
-        self.max_function_expr_depth = max_function_expr_depth;
+        self.max_expr_depth = if max_expr_depth == usize::MAX {
+            0
+        } else {
+            max_expr_depth
+        };
+        self.max_function_expr_depth = if max_function_expr_depth == usize::MAX {
+            0
+        } else {
+            max_function_expr_depth
+        };
+    }
+
+    /// The depth limit for expressions (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    pub fn max_expr_depth(&self) -> usize {
+        self.max_expr_depth
+    }
+
+    /// The depth limit for expressions in functions (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    pub fn max_function_expr_depth(&self) -> usize {
+        self.max_function_expr_depth
     }
 
     /// Set the maximum length of strings (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     pub fn set_max_string_size(&mut self, max_size: usize) {
-        self.max_string_size = max_size;
+        self.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
+    }
+
+    /// The maximum length of strings (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    pub fn max_string_size(&self) -> usize {
+        self.max_string_size
     }
 
     /// Set the maximum length of arrays (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
     pub fn set_max_array_size(&mut self, max_size: usize) {
-        self.max_array_size = max_size;
+        self.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
+    }
+
+    /// The maximum length of arrays (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn max_array_size(&self) -> usize {
+        self.max_array_size
     }
 
     /// Set the maximum length of object maps (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
     pub fn set_max_map_size(&mut self, max_size: usize) {
-        self.max_map_size = max_size;
+        self.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
+    }
+
+    /// The maximum length of object maps (0 for unlimited).
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_object"))]
+    pub fn max_map_size(&self) -> usize {
+        self.max_map_size
     }
 
     /// Set the module resolution service used by the `Engine`.
@@ -1705,6 +1783,7 @@ impl Engine {
                         self.call_script_fn(&mut scope, state, lib, name, fn_def, args, level)
                             .map_err(|err| EvalAltResult::new_position(err, *pos))
                     }
+                    Ok(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut(), *pos),
                     Ok(f) => {
                         f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
                     }
@@ -2186,14 +2265,14 @@ fn run_builtin_binary_op(
 
         #[cfg(not(feature = "unchecked"))]
         match op {
-            "+" => return add(x, y).map(Into::<Dynamic>::into).map(Some),
-            "-" => return sub(x, y).map(Into::<Dynamic>::into).map(Some),
-            "*" => return mul(x, y).map(Into::<Dynamic>::into).map(Some),
-            "/" => return div(x, y).map(Into::<Dynamic>::into).map(Some),
-            "%" => return modulo(x, y).map(Into::<Dynamic>::into).map(Some),
-            "~" => return pow_i_i(x, y).map(Into::<Dynamic>::into).map(Some),
-            ">>" => return shr(x, y).map(Into::<Dynamic>::into).map(Some),
-            "<<" => return shl(x, y).map(Into::<Dynamic>::into).map(Some),
+            "+" => return add(x, y).map(Into::into).map(Some),
+            "-" => return sub(x, y).map(Into::into).map(Some),
+            "*" => return mul(x, y).map(Into::into).map(Some),
+            "/" => return div(x, y).map(Into::into).map(Some),
+            "%" => return modulo(x, y).map(Into::into).map(Some),
+            "~" => return pow_i_i(x, y).map(Into::into).map(Some),
+            ">>" => return shr(x, y).map(Into::into).map(Some),
+            "<<" => return shl(x, y).map(Into::into).map(Some),
             _ => (),
         }
 
@@ -2204,9 +2283,9 @@ fn run_builtin_binary_op(
             "*" => return Ok(Some((x * y).into())),
             "/" => return Ok(Some((x / y).into())),
             "%" => return Ok(Some((x % y).into())),
-            "~" => return pow_i_i_u(x, y).map(Into::<Dynamic>::into).map(Some),
-            ">>" => return shr_u(x, y).map(Into::<Dynamic>::into).map(Some),
-            "<<" => return shl_u(x, y).map(Into::<Dynamic>::into).map(Some),
+            "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
+            ">>" => return shr_u(x, y).map(Into::into).map(Some),
+            "<<" => return shl_u(x, y).map(Into::into).map(Some),
             _ => (),
         }
 
@@ -2280,7 +2359,7 @@ fn run_builtin_binary_op(
                 "*" => return Ok(Some((x * y).into())),
                 "/" => return Ok(Some((x / y).into())),
                 "%" => return Ok(Some((x % y).into())),
-                "~" => return pow_f_f(x, y).map(Into::<Dynamic>::into).map(Some),
+                "~" => return pow_f_f(x, y).map(Into::into).map(Some),
                 "==" => return Ok(Some((x == y).into())),
                 "!=" => return Ok(Some((x != y).into())),
                 ">" => return Ok(Some((x > y).into())),

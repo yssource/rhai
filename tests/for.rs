@@ -30,6 +30,26 @@ fn test_for_array() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[test]
+fn test_for_string() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let script = r#"
+        let s = "hello";
+        let sum = 0;
+
+        for ch in s {
+            sum += ch.to_int();
+        }
+
+        sum
+    "#;
+
+    assert_eq!(engine.eval::<INT>(script)?, 532);
+
+    Ok(())
+}
+
 #[cfg(not(feature = "no_object"))]
 #[cfg(not(feature = "no_index"))]
 #[test]

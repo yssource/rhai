@@ -75,10 +75,14 @@ mod engine;
 mod error;
 mod fn_call;
 mod fn_func;
-mod fn_native;
+pub mod fn_native;
 mod fn_register;
 mod module;
 mod optimize;
+#[cfg(not(feature = "no_module"))]
+pub mod plugin;
+#[cfg(feature = "no_module")]
+mod plugin;
 pub mod packages;
 mod parser;
 mod result;
@@ -92,6 +96,7 @@ pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
 pub use fn_register::{RegisterFn, RegisterResultFn};
+pub use fn_register::RegisterPlugin;
 pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};
 pub use result::EvalAltResult;

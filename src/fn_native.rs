@@ -1,6 +1,7 @@
 use crate::any::Dynamic;
 use crate::engine::Engine;
 use crate::parser::ScriptFnDef;
+use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
 
 use crate::stdlib::{boxed::Box, fmt, rc::Rc, sync::Arc};
@@ -59,6 +60,11 @@ pub type FnAny =
 
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
+#[cfg(feature = "sync")]
+pub type SharedPluginFunction = Arc<dyn PluginFunction + Send + Sync>;
+#[cfg(not(feature = "sync"))]
+pub type SharedPluginFunction = Rc<dyn PluginFunction>;
+
 #[cfg(not(feature = "sync"))]
 pub type Callback<T, R> = Box<dyn Fn(&T) -> R + 'static>;
 #[cfg(feature = "sync")]
@@ -74,6 +80,8 @@ pub enum CallableFunction {
     Method(Shared<FnAny>),
     /// An iterator function.
     Iterator(IteratorFn),
+    /// A plugin-defined function,
+    Plugin(SharedPluginFunction),
     /// A script-defined function.
     Script(Shared<ScriptFnDef>),
 }
@@ -84,6 +92,7 @@ impl fmt::Debug for CallableFunction {
             Self::Pure(_) => write!(f, "NativePureFunction"),
             Self::Method(_) => write!(f, "NativeMethod"),
             Self::Iterator(_) => write!(f, "NativeIterator"),
+            Self::Plugin(_) => write!(f, "PluginFunction"),
             Self::Script(fn_def) => fmt::Debug::fmt(fn_def, f),
         }
     }
@@ -95,6 +104,7 @@ impl CallableFunction {
         match self {
             Self::Pure(_) => true,
             Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
+            Self::Plugin(_) => false,
         }
     }
     /// Is this a pure native Rust method-call?
@@ -102,6 +112,7 @@ impl CallableFunction {
         match self {
             Self::Method(_) => true,
             Self::Pure(_) | Self::Iterator(_) | Self::Script(_) => false,
+            Self::Plugin(_) => false,
         }
     }
     /// Is this an iterator function?
@@ -109,6 +120,7 @@ impl CallableFunction {
         match self {
             Self::Iterator(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Script(_) => false,
+            Self::Plugin(_) => false,
         }
     }
     /// Is this a Rhai-scripted function?
@@ -116,6 +128,14 @@ impl CallableFunction {
         match self {
             Self::Script(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
+            Self::Plugin(_) => false,
+        }
+    }
+    /// Is this a plugin-defined function?
+    pub fn is_plugin_fn(&self) -> bool {
+        match self {
+            Self::Plugin(_) => true,
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
         }
     }
     /// Get a reference to a native Rust function.
@@ -127,6 +147,7 @@ impl CallableFunction {
         match self {
             Self::Pure(f) | Self::Method(f) => f.as_ref(),
             Self::Iterator(_) | Self::Script(_) => panic!(),
+            Self::Plugin(_) => panic!(),
         }
     }
     /// Get a shared reference to a script-defined function definition.
@@ -136,7 +157,7 @@ impl CallableFunction {
     /// Panics if the `CallableFunction` is not `Script`.
     pub fn get_shared_fn_def(&self) -> Shared<ScriptFnDef> {
         match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
+            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) | Self::Iterator(_) => panic!(),
             Self::Script(f) => f.clone(),
         }
     }
@@ -149,6 +170,7 @@ impl CallableFunction {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
             Self::Script(f) => f,
+            Self::Plugin(_) => panic!(),
         }
     }
     /// Get a reference to an iterator function.
@@ -160,6 +182,18 @@ impl CallableFunction {
         match self {
             Self::Iterator(f) => *f,
             Self::Pure(_) | Self::Method(_) | Self::Script(_) => panic!(),
+            Self::Plugin(_) => panic!(),
+        }
+    }
+    /// Get a reference to a plugin function.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `CallableFunction` is not `Plugin`.
+    pub fn get_plugin_fn<'s>(&'s self) -> SharedPluginFunction {
+        match self {
+            Self::Plugin(f) => f.clone(),
+            Self::Pure(_) | Self::Method(_) | Self::Script(_) | Self::Iterator(_) => panic!(),
         }
     }
     /// Create a new `CallableFunction::Pure`.
@@ -169,6 +203,18 @@ impl CallableFunction {
     /// Create a new `CallableFunction::Method`.
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
+    }
+
+    #[cfg(feature = "sync")]
+    /// Create a new `CallableFunction::Plugin`.
+    pub fn from_plugin(plugin: impl PluginFunction + 'static + Send + Sync) -> Self {
+        Self::Plugin(Arc::new(plugin))
+    }
+
+    #[cfg(not(feature = "sync"))]
+    /// Create a new `CallableFunction::Plugin`.
+    pub fn from_plugin(plugin: impl PluginFunction + 'static) -> Self {
+        Self::Plugin(Rc::new(plugin))
     }
 }
 
