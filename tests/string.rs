@@ -159,6 +159,20 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
 fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
+    engine.register_fn("set_to_x", |ch: &mut char| *ch = 'X');
+
+    #[cfg(not(feature = "no_index"))]
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<String>(r#"let x="foo"; x[0].set_to_x(); x"#)?,
+        "Xoo"
+    );
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<String>(r#"let x="foo"; set_to_x(x[0]); x"#)?,
+        "foo"
+    );
+
     engine.register_fn("foo1", |s: &str| s.len() as INT);
     engine.register_fn("foo2", |s: ImmutableString| s.len() as INT);
     engine.register_fn("foo3", |s: String| s.len() as INT);

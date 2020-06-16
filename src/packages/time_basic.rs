@@ -1,3 +1,6 @@
+#![cfg(not(target_arch = "wasm32"))]
+#![cfg(not(target_arch = "wasm64"))]
+
 use super::logic::{eq, gt, gte, lt, lte, ne};
 use super::math_basic::MAX_INT;
 

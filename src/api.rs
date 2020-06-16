@@ -27,6 +27,8 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 /// Engine public API

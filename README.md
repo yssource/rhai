@@ -28,6 +28,7 @@ Features
 * Rugged - protection against malicious attacks (such as [stack-overflow](#maximum-call-stack-depth), [over-sized data](#maximum-length-of-strings), and [runaway scripts](#maximum-number-of-operations) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](#tracking-progress-and-force-terminate-script-run) and manually terminate a script run.
 * [`no-std`](#optional-features) support.
+* Supports compiling to `WASM`, optionally with [minimal builds](#minimal-builds).
 * [Function overloading](#function-overloading).
 * [Operator overloading](#operator-overloading).
 * Organize code base with dynamically-loadable [modules].
@@ -141,8 +142,8 @@ Making [`Dynamic`] small helps performance due to better cache efficiency.
 
 ### Minimal builds
 
-In order to compile a _minimal_build - i.e. a build optimized for size - perhaps for embedded targets, it is essential that
-the correct linker flags are used in `cargo.toml`:
+In order to compile a _minimal_build - i.e. a build optimized for size - perhaps for `no-std` embedded targets or for
+compiling to `WASM`, it is essential that the correct linker flags are used in `cargo.toml`:
 
 ```toml
 [profile.release]
@@ -156,7 +157,9 @@ all code is compiled in as what a script requires cannot be predicted. If a lang
 omitting them via special features is a prudent strategy to optimize the build for size.
 
 Omitting arrays (`no_index`) yields the most code-size savings, followed by floating-point support
-(`no_float`), checked arithmetic (`unchecked`) and finally object maps and custom types (`no_object`).
+(`no_float`), checked arithmetic/script resource limits (`unchecked`) and finally object maps and custom types (`no_object`).
+
+Where the usage scenario does not call for loading externally-defined modules, use `no_module` to save some bytes.
 Disable script-defined functions (`no_function`) only when the feature is not needed because code size savings is minimal.
 
 [`Engine::new_raw`](#raw-engine) creates a _raw_ engine.

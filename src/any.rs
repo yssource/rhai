@@ -24,6 +24,8 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 use crate::stdlib::time::Instant;
 
 /// Trait to represent any type.
@@ -192,6 +194,8 @@ impl Dynamic {
             Union::Module(_) => "sub-scope",
 
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
             Union::Variant(value) => (***value).type_name(),
         }
@@ -215,6 +219,8 @@ impl fmt::Display for Dynamic {
             Union::Module(value) => fmt::Debug::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "?"),
         }
@@ -238,6 +244,8 @@ impl fmt::Debug for Dynamic {
             Union::Module(value) => fmt::Debug::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
