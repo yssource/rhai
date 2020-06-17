@@ -292,8 +292,15 @@ impl Default for Engine {
 
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
-            #[cfg(any(feature = "no_module", feature = "no_std"))]
+            #[cfg(any(
+                feature = "no_module",
+                feature = "no_std",
+                target_arch = "wasm32",
+                target_arch = "wasm64"
+            ))]
             module_resolver: None,
 
             type_names: HashMap::new(),
@@ -373,6 +380,8 @@ fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
 /// Print/debug to stdout
 fn default_print(s: &str) {
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     println!("{}", s);
 }
 

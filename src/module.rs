@@ -1054,6 +1054,8 @@ pub trait ModuleResolver: SendSync {
 #[cfg(not(feature = "no_module"))]
 pub mod resolvers {
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     pub use super::file::FileModuleResolver;
     pub use super::stat::StaticModuleResolver;
 }
@@ -1063,6 +1065,8 @@ pub mod resolvers {}
 /// Script file-based module resolver.
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 mod file {
     use super::*;
     use crate::stdlib::path::PathBuf;

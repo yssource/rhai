@@ -11,6 +11,11 @@ Rhai - Embedded Scripting for Rust
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
 to add scripting to any application.
 
+Supported targets
+-----------------
+
+* All common targets, including [WASM] and `no-std`.
+
 Features
 --------
 
@@ -27,13 +32,11 @@ Features
 * Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 * Rugged - protection against malicious attacks (such as [stack-overflow](#maximum-call-stack-depth), [over-sized data](#maximum-length-of-strings), and [runaway scripts](#maximum-number-of-operations) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](#tracking-progress-and-force-terminate-script-run) and manually terminate a script run.
-* [`no-std`](#optional-features) support.
-* Supports compiling to `WASM`, optionally with [minimal builds](#minimal-builds).
 * [Function overloading](#function-overloading).
 * [Operator overloading](#operator-overloading).
 * Organize code base with dynamically-loadable [modules].
 * Scripts are [optimized](#script-optimization) (useful for template-based machine-generated scripts) for repeated evaluations.
-* Support for [minimal builds](#minimal-builds) by excluding unneeded language [features](#optional-features).
+* Support for [minimal builds] by excluding unneeded language [features](#optional-features).
 * Very few additional dependencies (right now only [`num-traits`](https://crates.io/crates/num-traits/)
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
@@ -142,8 +145,10 @@ Making [`Dynamic`] small helps performance due to better cache efficiency.
 
 ### Minimal builds
 
+[minimal builds]: #minimal-builds
+
 In order to compile a _minimal_build - i.e. a build optimized for size - perhaps for `no-std` embedded targets or for
-compiling to `WASM`, it is essential that the correct linker flags are used in `cargo.toml`:
+compiling to [WASM], it is essential that the correct linker flags are used in `cargo.toml`:
 
 ```toml
 [profile.release]
@@ -167,8 +172,19 @@ A _raw_ engine supports, out of the box, only a very [restricted set](#built-in-
 Selectively include other necessary functionalities by loading specific [packages] to minimize the footprint.
 Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
-Related
--------
+### Compiling to WebAssembly (WASM)
+
+[WASM]: #compiling-to-WebAssembly-wasm
+
+It is possible to use Rhai when compiling to WebAssembly (WASM), but certain features will not be available,
+such as the script file API's and loading modules from external script files.
+
+Also look into [minimal builds] to reduce generated WASM size.  As of this version, a typical, full-featured
+Rhai scripting engine compiles to a single WASM file around 200KB gzipped. When excluding features that are
+marginal in WASM environment, the gzipped payload can be further shrunk to 160KB.
+
+Related Resources
+-----------------
 
 Other cool projects to check out:
 
@@ -2453,10 +2469,10 @@ which simply loads a script file based on the path (with `.rhai` extension attac
 
 Built-in module resolvers are grouped under the `rhai::module_resolvers` module namespace.
 
-| Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FileModuleResolver`   | The default module resolution service, not available under [`no_std`]. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
-| `StaticModuleResolver` | Loads modules that are statically added. This can be used under [`no_std`].                                                                                                                                                                                                                                                                        |
+| Module Resolver        | Description                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileModuleResolver`   | The default module resolution service, not available under [`no_std`] or [WASM] builds. Loads a script file (based off the current directory) with `.rhai` extension.<br/>The base directory can be changed via the `FileModuleResolver::new_with_path()` constructor function.<br/>`FileModuleResolver::create_module()` loads a script file and returns a module. |
+| `StaticModuleResolver` | Loads modules that are statically added. This can be used under [`no_std`].                                                                                                                                                                                                                                                                                         |
 
 An [`Engine`]'s module resolver is set via a call to `Engine::set_module_resolver`:
 

@@ -13,6 +13,8 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 use crate::stdlib::path::PathBuf;
 
 /// Evaluation result.
@@ -29,6 +31,8 @@ pub enum EvalAltResult {
     ///
     /// Never appears under the `no_std` feature.
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     ErrorReadingScriptFile(PathBuf, Position, std::io::Error),
 
     /// Call to an unknown function. Wrapped value is the name of the function.
@@ -101,7 +105,9 @@ impl EvalAltResult {
     pub(crate) fn desc(&self) -> &str {
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
+                        Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
 
             Self::ErrorParsing(p, _) => p.desc(),
             Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
@@ -160,6 +166,8 @@ impl fmt::Display for EvalAltResult {
 
         match self {
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             Self::ErrorReadingScriptFile(path, _, err) => {
                 write!(f, "{} '{}': {}", desc, path.display(), err)?
             }
@@ -259,6 +267,8 @@ impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             Self::ErrorReadingScriptFile(_, pos, _) => *pos,
 
             Self::ErrorParsing(_, pos)
@@ -297,6 +307,8 @@ impl EvalAltResult {
     pub fn set_position(&mut self, new_position: Position) {
         match self {
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             Self::ErrorReadingScriptFile(_, pos, _) => *pos = new_position,
 
             Self::ErrorParsing(_, pos)

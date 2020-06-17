@@ -5,7 +5,7 @@ Version 0.15.1
 ==============
 
 This is a minor release which enables updating indexers (via registered indexer setters) and supports functions
-with `&str` parameters (maps transparently to `ImmutableString`).
+with `&str` parameters (maps transparently to `ImmutableString`). WASM is also a tested target.
 
 Buf fix
 -------
@@ -28,7 +28,7 @@ New features
 * `Engine:register_fn` and `Engine:register_result_fn` accepts functions that take parameters of type `&str` (immutable string slice), which maps directly to `ImmutableString`. This is to avoid needing wrappers for functions taking string parameters.
 * Set maximum limit on data sizes: `Engine::set_max_string_size`, `Engine::set_max_array_size` and `Engine::set_max_map_size`.
 * Supports trailing commas on array literals, object map literals, function definitions and function calls.
-* Supports compiling to `WASM`.
+* Enhances support for compiling to WASM.
 
 Version 0.15.0
 ==============
