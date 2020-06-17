@@ -27,6 +27,10 @@ use crate::stdlib::{
 #[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::time::Instant;
 
+#[cfg(not(feature = "no_std"))]
+#[cfg(target_arch = "wasm32")]
+use instant::Instant;
+
 /// Trait to represent any type.
 ///
 /// Currently, `Variant` is not `Send` nor `Sync`, so it can practically be any type.
