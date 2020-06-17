@@ -28,7 +28,6 @@ use crate::stdlib::{
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 /// Engine public API
@@ -556,7 +555,6 @@ impl Engine {
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
         let mut f = File::open(path.clone()).map_err(|err| {
             Box::new(EvalAltResult::ErrorReadingScriptFile(
@@ -601,7 +599,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
@@ -639,7 +636,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
@@ -782,7 +778,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
@@ -808,7 +803,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1015,7 +1009,6 @@ impl Engine {
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     pub fn consume_file(&self, path: PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
@@ -1024,7 +1017,6 @@ impl Engine {
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     pub fn consume_file_with_scope(
         &self,
         scope: &mut Scope,

@@ -34,7 +34,6 @@ pub use string_basic::BasicStringPackage;
 pub use string_more::MoreStringPackage;
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
 pub use time_basic::BasicTimePackage;
 
 /// Trait that all packages must implement.

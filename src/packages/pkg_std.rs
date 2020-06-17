@@ -7,7 +7,6 @@ use super::pkg_core::CorePackage;
 use super::string_more::MoreStringPackage;
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
 use super::time_basic::BasicTimePackage;
 
 use crate::def_package;
@@ -21,7 +20,6 @@ def_package!(crate:StandardPackage:"_Standard_ package containing all built-in f
     BasicMapPackage::init(lib);
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
     BasicTimePackage::init(lib);
     MoreStringPackage::init(lib);
 });

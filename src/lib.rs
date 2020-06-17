@@ -38,7 +38,6 @@
 //!
 //! #   #[cfg(not(feature = "no_std"))]
 //! #   #[cfg(not(target_arch = "wasm32"))]
-//! #   #[cfg(not(target_arch = "wasm64"))]
 //!     assert_eq!(
 //!         // Evaluate the script, expects a 'bool' return
 //!         engine.eval_file::<bool>("my_script.rhai".into())?,
