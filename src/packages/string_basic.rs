@@ -52,9 +52,16 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
         reg_op!(lib, KEYWORD_PRINT, to_string, i8, u8, i16, u16, i32, u32);
         reg_op!(lib, FUNC_TO_STRING, to_string, i8, u8, i16, u16, i32, u32);
         reg_op!(lib, KEYWORD_DEBUG, to_debug, i8, u8, i16, u16, i32, u32);
-        reg_op!(lib, KEYWORD_PRINT, to_string, i64, u64, i128, u128);
-        reg_op!(lib, FUNC_TO_STRING, to_string, i64, u64, i128, u128);
-        reg_op!(lib, KEYWORD_DEBUG, to_debug, i64, u64, i128, u128);
+        reg_op!(lib, KEYWORD_PRINT, to_string, i64, u64);
+        reg_op!(lib, FUNC_TO_STRING, to_string, i64, u64);
+        reg_op!(lib, KEYWORD_DEBUG, to_debug, i64, u64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            reg_op!(lib, KEYWORD_PRINT, to_string, i128, u128);
+            reg_op!(lib, FUNC_TO_STRING, to_string, i128, u128);
+            reg_op!(lib, KEYWORD_DEBUG, to_debug, i128, u128);
+        }
     }
 
     #[cfg(not(feature = "no_float"))]

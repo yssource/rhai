@@ -98,9 +98,16 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_op!(lib, "push", push, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_pad!(lib, "pad", pad, i8, u8, i16, u16, i32, u32, i64, u64, i128, u128);
-        reg_tri!(lib, "insert", ins, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_op!(lib, "push", push, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_pad!(lib, "pad", pad, i8, u8, i16, u16, i32, u32, i64, u64);
+        reg_tri!(lib, "insert", ins, i8, u8, i16, u16, i32, i64, u32, u64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            reg_op!(lib, "push", push, i128, u128);
+            reg_pad!(lib, "pad", pad, i128, u128);
+            reg_tri!(lib, "insert", ins, i128, u128);
+        }
     }
 
     #[cfg(not(feature = "no_float"))]

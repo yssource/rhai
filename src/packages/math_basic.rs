@@ -70,8 +70,12 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
             lib.set_fn_1("to_float", |x: u32| Ok(x as FLOAT));
             lib.set_fn_1("to_float", |x: i64| Ok(x as FLOAT));
             lib.set_fn_1("to_float", |x: u64| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: i128| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: u128| Ok(x as FLOAT));
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                lib.set_fn_1("to_float", |x: i128| Ok(x as FLOAT));
+                lib.set_fn_1("to_float", |x: u128| Ok(x as FLOAT));
+            }
         }
     }
 

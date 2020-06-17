@@ -36,12 +36,22 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_op!(lib, "<", lt, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-        reg_op!(lib, "<=", lte, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-        reg_op!(lib, ">", gt, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-        reg_op!(lib, ">=", gte, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-        reg_op!(lib, "==", eq, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-        reg_op!(lib, "!=", ne, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, "<", lt, i8, u8, i16, u16, i32, u32, u64);
+        reg_op!(lib, "<=", lte, i8, u8, i16, u16, i32, u32, u64);
+        reg_op!(lib, ">", gt, i8, u8, i16, u16, i32, u32, u64);
+        reg_op!(lib, ">=", gte, i8, u8, i16, u16, i32, u32, u64);
+        reg_op!(lib, "==", eq, i8, u8, i16, u16, i32, u32, u64);
+        reg_op!(lib, "!=", ne, i8, u8, i16, u16, i32, u32, u64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            reg_op!(lib, "<", lt, i128, u128);
+            reg_op!(lib, "<=", lte, i128, u128);
+            reg_op!(lib, ">", gt, i128, u128);
+            reg_op!(lib, ">=", gte, i128, u128);
+            reg_op!(lib, "==", eq, i128, u128);
+            reg_op!(lib, "!=", ne, i128, u128);
+        }
     }
 
     #[cfg(not(feature = "no_float"))]
