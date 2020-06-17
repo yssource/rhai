@@ -6,7 +6,7 @@ use crate::error::ParseErrorType;
 use crate::fn_native::{CallableFunction, Callback, FnCallArgs};
 use crate::module::{resolvers, Module, ModuleResolver};
 use crate::optimize::OptimizationLevel;
-use crate::packages::{CorePackage, Package, PackageLibrary, PackagesCollection, StandardPackage};
+use crate::packages::{Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, Stmt, AST, INT};
 use crate::r#unsafe::{unsafe_cast_var_name_to_lifetime, unsafe_mut_cast_to_lifetime};
 use crate::result::EvalAltResult;

@@ -172,12 +172,17 @@ A _raw_ engine supports, out of the box, only a very [restricted set](#built-in-
 Selectively include other necessary functionalities by loading specific [packages] to minimize the footprint.
 Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
 
-### Compiling to WebAssembly (WASM)
+### Building to WebAssembly (WASM)
 
-[WASM]: #compiling-to-WebAssembly-wasm
+[WASM]: #building-to-WebAssembly-wasm
 
-It is possible to use Rhai when compiling to WebAssembly (WASM), but certain features will not be available,
-such as the script file API's and loading modules from external script files.
+It is possible to use Rhai when compiling to WebAssembly (WASM). This yields a scripting engine (and language)
+that can be run in a standard web browser. Why you would want to is another matter... as there is already
+a nice, fast, complete scripting language for the the common WASM environment (i.e. a browser) - and it is called JavaScript.
+But anyhow, do it because you _can_!
+
+When building for WASM, certain features will not be available, such as the script file API's and loading modules
+from external script files.
 
 Also look into [minimal builds] to reduce generated WASM size.  As of this version, a typical, full-featured
 Rhai scripting engine compiles to a single WASM file around 200KB gzipped. When excluding features that are
