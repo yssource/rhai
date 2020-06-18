@@ -5,11 +5,13 @@ use crate::result::EvalAltResult;
 
 use crate::stdlib::{boxed::Box, fmt, rc::Rc, sync::Arc};
 
+/// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
 #[cfg(feature = "sync")]
 impl<T: Send + Sync> SendSync for T {}
 
+/// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(not(feature = "sync"))]
 pub trait SendSync {}
 #[cfg(not(feature = "sync"))]
@@ -57,10 +59,13 @@ pub type FnAny = dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAlt
 pub type FnAny =
     dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
+/// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
+/// A standard callback function.
 #[cfg(not(feature = "sync"))]
 pub type Callback<T, R> = Box<dyn Fn(&T) -> R + 'static>;
+/// A standard callback function.
 #[cfg(feature = "sync")]
 pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
 
