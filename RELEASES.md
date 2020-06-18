@@ -1,13 +1,17 @@
 Rhai Release Notes
 ==================
 
+Version 0.15.2
+==============
+
+
 Version 0.15.1
 ==============
 
 This is a minor release which enables updating indexers (via registered indexer setters) and supports functions
 with `&str` parameters (maps transparently to `ImmutableString`). WASM is also a tested target.
 
-Buf fix
+Bug fix
 -------
 
 * `let s="abc"; s[1].change_to('X');` now correctly sets the character '`X`' into '`s`' yielding `"aXc"`.
@@ -29,6 +33,7 @@ New features
 * Set maximum limit on data sizes: `Engine::set_max_string_size`, `Engine::set_max_array_size` and `Engine::set_max_map_size`.
 * Supports trailing commas on array literals, object map literals, function definitions and function calls.
 * Enhances support for compiling to WASM.
+
 
 Version 0.15.0
 ==============

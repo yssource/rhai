@@ -11,8 +11,8 @@ Rhai - Embedded Scripting for Rust
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
 to add scripting to any application.
 
-Supported targets
------------------
+Supported targets and builds
+---------------------------
 
 * All common CPU targets for Windows, Linux and MacOS.
 * [WASM]
@@ -43,7 +43,7 @@ Features
   to do checked arithmetic operations); for [`no-std`](#optional-features) builds, a number of additional dependencies are
   pulled in to provide for functionalities that used to be in `std`.
 
-**Note:** Currently, the version is `0.15.1`, so the language and API's may change before they stabilize.
+**Note:** Currently, the version is `0.15.2`, so the language and API's may change before they stabilize.
 
 What Rhai doesn't do
 --------------------
@@ -77,7 +77,7 @@ Install the Rhai crate on [`crates.io`](https::/crates.io/crates/rhai/) by addin
 
 ```toml
 [dependencies]
-rhai = "0.15.1"
+rhai = "0.15.2"
 ```
 
 Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
@@ -192,7 +192,7 @@ marginal in WASM environment, the gzipped payload can be further shrunk to 160KB
 
 In benchmark tests, a WASM build runs scripts roughly 1.7-2.2x slower than a native optimized release build.
 
-Related Resources
+Related resources
 -----------------
 
 Other cool projects to check out:
@@ -786,7 +786,7 @@ engine.register_fn("len1", get_len1);
 engine.register_fn("len2", get_len2);
 engine.register_fn("len3", get_len3);
 
-let len = engine.eval::<i64>("x.len1()")?;                  // error: function 'len1 (string)' not found
+let len = engine.eval::<i64>("x.len1()")?;                  // error: function 'len1 (&str | ImmutableString)' not found
 let len = engine.eval::<i64>("x.len2()")?;                  // works fine
 let len = engine.eval::<i64>("x.len3()")?;                  // works fine
 ```
@@ -802,7 +802,7 @@ use std::fmt::Display;
 
 use rhai::{Engine, RegisterFn};
 
-fn show_it<T: Display>(x: &mut T) -> () {
+fn show_it<T: Display>(x: &mut T) {
     println!("put up a good show: {}!", x)
 }
 
@@ -810,9 +810,9 @@ fn main()
 {
     let engine = Engine::new();
 
-    engine.register_fn("print", show_it as fn(x: &mut i64)->());
-    engine.register_fn("print", show_it as fn(x: &mut bool)->());
-    engine.register_fn("print", show_it as fn(x: &mut String)->());
+    engine.register_fn("print", show_it::<i64>);
+    engine.register_fn("print", show_it::<bool>);
+    engine.register_fn("print", show_it::<ImmutableString>);
 }
 ```
 
