@@ -14,7 +14,9 @@ to add scripting to any application.
 Supported targets
 -----------------
 
-* All common targets, including [WASM] and `no-std`.
+* All common CPU targets for Windows, Linux and MacOS.
+* [WASM]
+* `no-std`
 
 Features
 --------
@@ -185,8 +187,10 @@ When building for WASM, certain features will not be available, such as the scri
 from external script files.
 
 Also look into [minimal builds] to reduce generated WASM size.  As of this version, a typical, full-featured
-Rhai scripting engine compiles to a single WASM file around 200KB gzipped. When excluding features that are
+Rhai scripting engine compiles to a single WASM file less than 200KB gzipped. When excluding features that are
 marginal in WASM environment, the gzipped payload can be further shrunk to 160KB.
+
+In benchmark tests, a WASM build runs scripts roughly 1.7-2.2x slower than a native optimized release build.
 
 Related Resources
 -----------------

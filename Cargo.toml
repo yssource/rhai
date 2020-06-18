@@ -65,4 +65,4 @@ features = ["compile-time-rng"]
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-instant= "0.1.4"    # WASM implementation of std::time::Instant
+instant= { version = "0.1.4", features = ["wasm-bindgen"] } # WASM implementation of std::time::Instant
