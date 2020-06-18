@@ -1,5 +1,9 @@
 #![cfg(not(feature = "no_module"))]
-use rhai::{module_resolvers, Engine, EvalAltResult, Module, Scope, INT};
+use rhai::{
+    module_resolvers, Dynamic, Engine, EvalAltResult, Module, ParseError, ParseErrorType, Scope,
+    INT,
+};
+use std::any::TypeId;
 
 #[test]
 fn test_module() {
@@ -18,6 +22,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
 
     let mut sub_module2 = Module::new();
     sub_module2.set_var("answer", 41 as INT);
+
     let hash_inc = sub_module2.set_fn_1("inc", |x: INT| Ok(x + 1));
 
     sub_module.set_sub_module("universe", sub_module2);
@@ -128,7 +133,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
             EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
         ));
 
-        engine.set_max_modules(0);
+        engine.set_max_modules(1000);
 
         #[cfg(not(feature = "no_function"))]
         engine.eval::<()>(
@@ -195,6 +200,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
     let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
     let mut scope = Scope::new();
+
     scope.push_module("testing", module);
 
     assert_eq!(
@@ -226,6 +232,23 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
             .eval_expression_with_scope::<()>(&mut scope, "testing::hidden()")
             .expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "hidden"
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_module_export() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(matches!(
+        engine.compile(r"let x = 10; { export x; }").expect_err("should error"),
+        ParseError(x, _) if *x == ParseErrorType::WrongExport
+    ));
+
+    assert!(matches!(
+        engine.compile(r"fn abc(x) { export x; }").expect_err("should error"),
+        ParseError(x, _) if *x == ParseErrorType::WrongExport
     ));
 
     Ok(())

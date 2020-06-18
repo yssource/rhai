@@ -1,15 +1,21 @@
+use crate::any::Dynamic;
 use crate::def_package;
+use crate::engine::Engine;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
+use crate::result::EvalAltResult;
+use crate::token::Position;
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
 
 use crate::stdlib::{
+    any::TypeId,
     fmt::Display,
     format,
     string::{String, ToString},
+    vec::Vec,
 };
 
 fn prepend<T: Display>(x: T, y: ImmutableString) -> FuncReturn<ImmutableString> {
@@ -89,8 +95,14 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_op!(lib, "+", append, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
-        reg_op!(lib, "+", prepend, i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_op!(lib, "+", append, i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_op!(lib, "+", prepend, i8, u8, i16, u16, i32, i64, u32, u64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            reg_op!(lib, "+", append, i128, u128);
+            reg_op!(lib, "+", prepend, i128, u128);
+        }
     }
 
     #[cfg(not(feature = "no_float"))]
@@ -210,14 +222,43 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             Ok(())
         },
     );
-    lib.set_fn_3_mut(
+    lib.set_fn_var_args(
         "pad",
-        |s: &mut ImmutableString, len: INT, ch: char| {
+        &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
+        |engine: &Engine, args: &mut [&mut Dynamic]| {
+            let len = *args[1].downcast_ref::< INT>().unwrap();
+
+            // Check if string will be over max size limit
+            #[cfg(not(feature = "unchecked"))]
+            {
+                if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
+                    return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                        "Length of string".to_string(),
+                        engine.max_string_size,
+                        len as usize,
+                        Position::none(),
+                    )));
+                }
+            }
+
+            let ch = *args[2].downcast_ref::< char>().unwrap();
+            let s = args[0].downcast_mut::<ImmutableString>().unwrap();
+
             let copy = s.make_mut();
             for _ in 0..copy.chars().count() - len as usize {
                 copy.push(ch);
             }
-            Ok(())
+
+            if engine.max_string_size > 0 && copy.len() > engine.max_string_size {
+                Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                    "Length of string".to_string(),
+                    engine.max_string_size,
+                    copy.len(),
+                    Position::none(),
+                )))
+            } else {
+                Ok(())
+            }
         },
     );
     lib.set_fn_3_mut(
@@ -258,5 +299,13 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             }
             Ok(())
         },
+    );
+
+    // Register string iterator
+    lib.set_iter(
+        TypeId::of::<ImmutableString>(),
+        |arr| Box::new(
+            arr.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into)
+        ) as Box<dyn Iterator<Item = Dynamic>>,
     );
 });

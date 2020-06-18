@@ -275,27 +275,51 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
         #[cfg(not(feature = "unchecked"))]
         {
             // Checked basic arithmetic
-            reg_op!(lib, "+", add, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "-", sub, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "*", mul, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "/", div, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "+", add, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "-", sub, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "*", mul, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "/", div, i8, u8, i16, u16, i32, u32, u64);
             // Checked bit shifts
-            reg_op!(lib, "<<", shl, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, ">>", shr, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "%", modulo, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "<<", shl, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, ">>", shr, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "%", modulo, i8, u8, i16, u16, i32, u32, u64);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                reg_op!(lib, "+", add, i128, u128);
+                reg_op!(lib, "-", sub, i128, u128);
+                reg_op!(lib, "*", mul, i128, u128);
+                reg_op!(lib, "/", div, i128, u128);
+                // Checked bit shifts
+                reg_op!(lib, "<<", shl, i128, u128);
+                reg_op!(lib, ">>", shr, i128, u128);
+                reg_op!(lib, "%", modulo, i128, u128);
+            }
         }
 
         #[cfg(feature = "unchecked")]
         {
             // Unchecked basic arithmetic
-            reg_op!(lib, "+", add_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "-", sub_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "*", mul_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "/", div_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "+", add_u, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "-", sub_u, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "*", mul_u, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "/", div_u, i8, u8, i16, u16, i32, u32, u64);
             // Unchecked bit shifts
-            reg_op!(lib, "<<", shl_u, i64, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, ">>", shr_u, i64, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-            reg_op!(lib, "%", modulo_u, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+            reg_op!(lib, "<<", shl_u, i64, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, ">>", shr_u, i64, i8, u8, i16, u16, i32, u32, u64);
+            reg_op!(lib, "%", modulo_u, i8, u8, i16, u16, i32, u32, u64);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                reg_op!(lib, "+", add_u, i128, u128);
+                reg_op!(lib, "-", sub_u, i128, u128);
+                reg_op!(lib, "*", mul_u, i128, u128);
+                reg_op!(lib, "/", div_u, i128, u128);
+                // Unchecked bit shifts
+                reg_op!(lib, "<<", shl_u, i128, u128);
+                reg_op!(lib, ">>", shr_u, i128, u128);
+                reg_op!(lib, "%", modulo_u, i128, u128);
+            }
         }
     }
 
@@ -311,9 +335,16 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_op!(lib, "|", binary_or, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-        reg_op!(lib, "&", binary_and, i8, u8, i16, u16, i32, u32, u64, i128, u128);
-        reg_op!(lib, "^", binary_xor, i8, u8, i16, u16, i32, u32, u64, i128, u128);
+        reg_op!(lib, "|", binary_or, i8, u8, i16, u16, i32, u32, u64);
+        reg_op!(lib, "&", binary_and, i8, u8, i16, u16, i32, u32, u64);
+        reg_op!(lib, "^", binary_xor, i8, u8, i16, u16, i32, u32, u64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            reg_op!(lib, "|", binary_or, i128, u128);
+            reg_op!(lib, "&", binary_and, i128, u128);
+            reg_op!(lib, "^", binary_xor, i128, u128);
+        }
     }
 
     #[cfg(not(feature = "no_float"))]
@@ -343,8 +374,14 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_unary!(lib, "-", neg, i8, i16, i32, i64, i128);
-            reg_unary!(lib, "abs", abs, i8, i16, i32, i64, i128);
+            reg_unary!(lib, "-", neg, i8, i16, i32, i64);
+            reg_unary!(lib, "abs", abs, i8, i16, i32, i64);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                reg_unary!(lib, "-", neg, i128);
+                reg_unary!(lib, "abs", abs, i128);
+            }
         }
     }
 
@@ -357,8 +394,14 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_unary!(lib, "-", neg_u, i8, i16, i32, i64, i128);
-            reg_unary!(lib, "abs", abs_u, i8, i16, i32, i64, i128);
+            reg_unary!(lib, "-", neg_u, i8, i16, i32, i64);
+            reg_unary!(lib, "abs", abs_u, i8, i16, i32, i64);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                reg_unary!(lib, "-", neg_u, i128);
+                reg_unary!(lib, "abs", abs_u, i128);
+            }
         }
     }
 });

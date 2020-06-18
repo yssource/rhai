@@ -1,19 +1,17 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, Func, ParseErrorType, Scope, INT};
+use rhai::{Engine, EvalAltResult, Func, ParseError, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_fn() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     // Expect duplicated parameters error
-    match engine
-        .compile("fn hello(x, x) { x }")
-        .expect_err("should be error")
-        .error_type()
-    {
-        ParseErrorType::FnDuplicatedParam(f, p) if f == "hello" && p == "x" => (),
-        _ => assert!(false, "wrong error"),
-    }
+    assert!(matches!(
+        engine
+            .compile("fn hello(x, x) { x }")
+            .expect_err("should be error"),
+        ParseError(x, _) if *x == ParseErrorType::FnDuplicatedParam("hello".to_string(), "x".to_string())
+    ));
 
     Ok(())
 }
@@ -70,7 +68,7 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
     let r: INT = engine.call_fn(&mut scope, &ast, "add", (40 as INT, 2 as INT))?;
     assert_eq!(r, 42);
 
-    let ast = engine.compile("private fn add(x, n) { x + n }")?;
+    let ast = engine.compile("private fn add(x, n, ) { x + n }")?;
 
     assert!(matches!(
         *engine.call_fn::<_, INT>(&mut scope, &ast, "add", (40 as INT, 2 as INT))
@@ -85,11 +83,19 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
 fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
     let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
         Engine::new(),
-        "fn calc(x, y, z) { (x + y) * z }",
+        "fn calc(x, y, z,) { (x + y) * z }",
         "calc",
     )?;
 
     assert_eq!(calc_func(42, 123, 9)?, 1485);
+
+    let calc_func = Func::<(INT, String, INT), INT>::create_from_script(
+        Engine::new(),
+        "fn calc(x, y, z) { (x + len(y)) * z }",
+        "calc",
+    )?;
+
+    assert_eq!(calc_func(42, "hello".to_string(), 9)?, 423);
 
     let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
         Engine::new(),

@@ -85,7 +85,10 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             )
         }
 
-        reg_range!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_range!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        reg_range!(lib, "range", i128, u128);
     }
 
     reg_step::<INT>(lib);
@@ -103,6 +106,9 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             )
         }
 
-        reg_step!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64, i128, u128);
+        reg_step!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        reg_step!(lib, "range", i128, u128);
     }
 });

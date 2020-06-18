@@ -42,18 +42,25 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("add", |value: &mut INT| *value += 41);
     engine.register_fn("new_ts", TestStruct::new);
 
-    #[cfg(not(feature = "no_index"))]
-    engine.register_indexer(|value: &mut TestStruct, index: ImmutableString| {
-        value.array[index.len()]
-    });
-
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x = 500; a.x")?, 500);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x.add(); a.x")?, 42);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.y.add(); a.y")?, 0);
 
     #[cfg(not(feature = "no_index"))]
-    assert_eq!(engine.eval::<INT>(r#"let a = new_ts(); a["abc"]"#)?, 4);
+    {
+        engine.register_indexer_get_set(
+            |value: &mut TestStruct, index: ImmutableString| value.array[index.len()],
+            |value: &mut TestStruct, index: ImmutableString, new_val: INT| {
+                value.array[index.len()] = new_val
+            },
+        );
 
+        assert_eq!(engine.eval::<INT>(r#"let a = new_ts(); a["abc"]"#)?, 4);
+        assert_eq!(
+            engine.eval::<INT>(r#"let a = new_ts(); a["abc"] = 42; a["abc"]"#)?,
+            42
+        );
+    }
     Ok(())
 }
 

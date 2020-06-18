@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, ImmutableString, RegisterFn, INT};
 
 #[test]
 fn test_string() -> Result<(), Box<EvalAltResult>> {
@@ -23,9 +23,24 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<String>(r#""foo" + 123"#)?, "foo123");
 
     #[cfg(not(feature = "no_object"))]
-    assert_eq!(engine.eval::<String>("(42).to_string()")?, "42");
+    assert_eq!(engine.eval::<String>("to_string(42)")?, "42");
+
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[1]"#)?, 'e');
 
     #[cfg(not(feature = "no_object"))]
+    assert_eq!(engine.eval::<INT>(r#"let y = "hello"; y.len"#)?, 5);
+
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<INT>(r#"let y = "hello"; y.clear(); y.len"#)?,
+        0
+    );
+
+    assert_eq!(engine.eval::<INT>(r#"let y = "hello"; len(y)"#)?, 5);
+
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
     assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[y.len-1]"#)?, 'o');
 
     #[cfg(not(feature = "no_float"))]
@@ -136,6 +151,39 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
         )?,
         -1
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.register_fn("set_to_x", |ch: &mut char| *ch = 'X');
+
+    #[cfg(not(feature = "no_index"))]
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<String>(r#"let x="foo"; x[0].set_to_x(); x"#)?,
+        "Xoo"
+    );
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<String>(r#"let x="foo"; set_to_x(x[0]); x"#)?,
+        "foo"
+    );
+
+    engine.register_fn("foo1", |s: &str| s.len() as INT);
+    engine.register_fn("foo2", |s: ImmutableString| s.len() as INT);
+    engine.register_fn("foo3", |s: String| s.len() as INT);
+
+    assert_eq!(engine.eval::<INT>(r#"foo1("hello")"#)?, 5);
+    assert_eq!(engine.eval::<INT>(r#"foo2("hello")"#)?, 5);
+
+    assert!(matches!(
+        *engine.eval::<INT>(r#"foo3("hello")"#).expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "foo3 (&str | ImmutableString)"
+    ));
 
     Ok(())
 }

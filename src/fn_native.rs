@@ -1,8 +1,9 @@
 use crate::any::Dynamic;
-use crate::parser::FnDef;
+use crate::engine::Engine;
+use crate::parser::ScriptFnDef;
 use crate::result::EvalAltResult;
 
-use crate::stdlib::{boxed::Box, rc::Rc, sync::Arc};
+use crate::stdlib::{boxed::Box, fmt, rc::Rc, sync::Arc};
 
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
@@ -51,11 +52,17 @@ pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 #[cfg(feature = "sync")]
-pub type FnAny = dyn Fn(&mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+pub type FnAny =
+    dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
+
+#[cfg(not(feature = "sync"))]
+pub type Callback<T, R> = Box<dyn Fn(&T) -> R + 'static>;
+#[cfg(feature = "sync")]
+pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
 
 /// A type encapsulating a function callable by Rhai.
 #[derive(Clone)]
@@ -68,7 +75,18 @@ pub enum CallableFunction {
     /// An iterator function.
     Iterator(IteratorFn),
     /// A script-defined function.
-    Script(Shared<FnDef>),
+    Script(Shared<ScriptFnDef>),
+}
+
+impl fmt::Debug for CallableFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Pure(_) => write!(f, "NativePureFunction"),
+            Self::Method(_) => write!(f, "NativeMethod"),
+            Self::Iterator(_) => write!(f, "NativeIterator"),
+            Self::Script(fn_def) => fmt::Debug::fmt(fn_def, f),
+        }
+    }
 }
 
 impl CallableFunction {
@@ -108,7 +126,18 @@ impl CallableFunction {
     pub fn get_native_fn(&self) -> &FnAny {
         match self {
             Self::Pure(f) | Self::Method(f) => f.as_ref(),
-            Self::Iterator(_) | Self::Script(_) => panic!(),
+            Self::Iterator(_) | Self::Script(_) => unreachable!(),
+        }
+    }
+    /// Get a shared reference to a script-defined function definition.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `CallableFunction` is not `Script`.
+    pub fn get_shared_fn_def(&self) -> Shared<ScriptFnDef> {
+        match self {
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
+            Self::Script(f) => f.clone(),
         }
     }
     /// Get a reference to a script-defined function definition.
@@ -116,9 +145,9 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Script`.
-    pub fn get_fn_def(&self) -> &FnDef {
+    pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => panic!(),
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
             Self::Script(f) => f,
         }
     }
@@ -130,7 +159,7 @@ impl CallableFunction {
     pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
             Self::Iterator(f) => *f,
-            Self::Pure(_) | Self::Method(_) | Self::Script(_) => panic!(),
+            Self::Pure(_) | Self::Method(_) | Self::Script(_) => unreachable!(),
         }
     }
     /// Create a new `CallableFunction::Pure`.
@@ -140,5 +169,23 @@ impl CallableFunction {
     /// Create a new `CallableFunction::Method`.
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
+    }
+}
+
+impl From<IteratorFn> for CallableFunction {
+    fn from(func: IteratorFn) -> Self {
+        Self::Iterator(func)
+    }
+}
+
+impl From<ScriptFnDef> for CallableFunction {
+    fn from(func: ScriptFnDef) -> Self {
+        Self::Script(func.into())
+    }
+}
+
+impl From<Shared<ScriptFnDef>> for CallableFunction {
+    fn from(func: Shared<ScriptFnDef>) -> Self {
+        Self::Script(func)
     }
 }

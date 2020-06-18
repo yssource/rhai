@@ -7,43 +7,41 @@ use std::io::{stdin, stdout, Write};
 
 fn print_error(input: &str, err: EvalAltResult) {
     let lines: Vec<_> = input.trim().split('\n').collect();
+    let pos = err.position();
 
     let line_no = if lines.len() > 1 {
-        match err.position() {
-            p if p.is_none() => "".to_string(),
-            p => format!("{}: ", p.line().unwrap()),
+        if pos.is_none() {
+            "".to_string()
+        } else {
+            format!("{}: ", pos.line().unwrap())
         }
     } else {
         "".to_string()
     };
 
     // Print error
-    let pos = err.position();
     let pos_text = format!(" ({})", pos);
 
-    match pos {
-        p if p.is_none() => {
-            // No position
-            println!("{}", err);
-        }
-        p => {
-            // Specific position
-            println!("{}{}", line_no, lines[p.line().unwrap() - 1]);
+    if pos.is_none() {
+        // No position
+        println!("{}", err);
+    } else {
+        // Specific position
+        println!("{}{}", line_no, lines[pos.line().unwrap() - 1]);
 
-            let err_text = match err {
-                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
-                    format!("Runtime error: {}", err)
-                }
-                err => err.to_string(),
-            };
+        let err_text = match err {
+            EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
+                format!("Runtime error: {}", err)
+            }
+            err => err.to_string(),
+        };
 
-            println!(
-                "{0:>1$} {2}",
-                "^",
-                line_no.len() + p.position().unwrap(),
-                err_text.replace(&pos_text, "")
-            );
-        }
+        println!(
+            "{0:>1$} {2}",
+            "^",
+            line_no.len() + pos.position().unwrap(),
+            err_text.replace(&pos_text, "")
+        );
     }
 }
 
@@ -127,7 +125,7 @@ fn main() {
 
         match engine
             .compile_with_scope(&scope, &script)
-            .map_err(|err| err.into())
+            .map_err(Into::into)
             .and_then(|r| {
                 ast_u = r.clone();
 

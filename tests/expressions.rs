@@ -12,15 +12,16 @@ fn test_expressions() -> Result<(), Box<EvalAltResult>> {
         engine.eval_expression_with_scope::<INT>(&mut scope, "2 + (x + 10) * 2")?,
         42
     );
-    assert_eq!(
-        engine.eval_expression_with_scope::<INT>(&mut scope, "if x > 0 { 42 } else { 123 }")?,
-        42
-    );
+    assert!(engine
+        .eval_expression_with_scope::<INT>(&mut scope, "if x > 0 { 42 } else { 123 }")
+        .is_err());
 
     assert!(engine.eval_expression::<()>("40 + 2;").is_err());
     assert!(engine.eval_expression::<()>("40 + { 2 }").is_err());
     assert!(engine.eval_expression::<()>("x = 42").is_err());
     assert!(engine.compile_expression("let x = 42").is_err());
+
+    engine.compile("40 + { let x = 2; x }")?;
 
     Ok(())
 }

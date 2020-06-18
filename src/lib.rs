@@ -37,6 +37,7 @@
 //!     engine.register_fn("compute", compute_something);
 //!
 //! #   #[cfg(not(feature = "no_std"))]
+//! #   #[cfg(not(target_arch = "wasm32"))]
 //!     assert_eq!(
 //!         // Evaluate the script, expects a 'bool' return
 //!         engine.eval_file::<bool>("my_script.rhai".into())?,
@@ -75,7 +76,7 @@ mod engine;
 mod error;
 mod fn_call;
 mod fn_func;
-mod fn_native;
+pub mod fn_native;
 mod fn_register;
 mod module;
 mod optimize;

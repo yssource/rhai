@@ -10,6 +10,12 @@ fn test_internal_fn() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>("fn add_me(a, b) { a+b } add_me(3, 4)")?,
         7
     );
+
+    assert_eq!(
+        engine.eval::<INT>("fn add_me(a, b,) { a+b } add_me(3, 4,)")?,
+        7
+    );
+
     assert_eq!(engine.eval::<INT>("fn bob() { return 4; 5 } bob()")?, 4);
 
     Ok(())

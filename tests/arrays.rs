@@ -6,6 +6,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("let x = [1, 2, 3]; x[1]")?, 2);
+    assert_eq!(engine.eval::<INT>("let x = [1, 2, 3,]; x[1]")?, 2);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[1] = 5; y[1]")?, 5);
     assert_eq!(
         engine.eval::<char>(r#"let y = [1, [ 42, 88, "93" ], 3]; y[1][2][1]"#)?,

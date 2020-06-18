@@ -3,7 +3,7 @@
 use rhai::{Engine, EvalAltResult, OptimizationLevel, INT};
 
 #[test]
-fn test_optimizer() -> Result<(), Box<EvalAltResult>> {
+fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
     fn run_test(engine: &mut Engine) -> Result<(), Box<EvalAltResult>> {
         assert_eq!(engine.eval::<INT>(r"if true { 42 } else { 123 }")?, 42);
         assert_eq!(
@@ -27,6 +27,30 @@ fn test_optimizer() -> Result<(), Box<EvalAltResult>> {
 
     engine.set_optimization_level(OptimizationLevel::Full);
     run_test(&mut engine)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::Simple);
+
+    let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } }")?;
+
+    assert_eq!(
+        format!("{:?}", ast),
+        "AST([], <module vars={}, functions=0>)"
+    );
+
+    engine.set_optimization_level(OptimizationLevel::Full);
+
+    let ast = engine.compile("if 1 == 2 { 42 }")?;
+
+    assert_eq!(
+        format!("{:?}", ast),
+        "AST([], <module vars={}, functions=0>)"
+    );
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 //! Module containing error definitions for the evaluation process.
 
 use crate::any::Dynamic;
-use crate::error::ParseError;
+use crate::error::ParseErrorType;
 use crate::parser::INT;
 use crate::token::Position;
 
@@ -13,6 +13,7 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::path::PathBuf;
 
 /// Evaluation result.
@@ -23,12 +24,13 @@ use crate::stdlib::path::PathBuf;
 #[derive(Debug)]
 pub enum EvalAltResult {
     /// Syntax error.
-    ErrorParsing(ParseError),
+    ErrorParsing(ParseErrorType, Position),
 
     /// Error reading from a script file. Wrapped value is the path of the script file.
     ///
     /// Never appears under the `no_std` feature.
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     ErrorReadingScriptFile(PathBuf, Position, std::io::Error),
 
     /// Call to an unknown function. Wrapped value is the name of the function.
@@ -81,6 +83,8 @@ pub enum EvalAltResult {
     ErrorTooManyModules(Position),
     /// Call stack over maximum limit.
     ErrorStackOverflow(Position),
+    /// Data value over maximum size limit. Wrapped values are the data type, maximum size and current size.
+    ErrorDataTooLarge(String, usize, usize, Position),
     /// The script is prematurely terminated.
     ErrorTerminated(Position),
     /// Run-time error encountered. Wrapped value is the error message.
@@ -99,9 +103,10 @@ impl EvalAltResult {
     pub(crate) fn desc(&self) -> &str {
         match self {
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
             Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
 
-            Self::ErrorParsing(p) => p.desc(),
+            Self::ErrorParsing(p, _) => p.desc(),
             Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
@@ -139,6 +144,7 @@ impl EvalAltResult {
             Self::ErrorTooManyOperations(_) => "Too many operations",
             Self::ErrorTooManyModules(_) => "Too many modules imported",
             Self::ErrorStackOverflow(_) => "Stack overflow",
+            Self::ErrorDataTooLarge(_, _, _, _) => "Data size exceeds maximum limit",
             Self::ErrorTerminated(_) => "Script terminated.",
             Self::ErrorRuntime(_, _) => "Runtime error",
             Self::ErrorLoopBreak(true, _) => "Break statement not inside a loop",
@@ -153,95 +159,93 @@ impl Error for EvalAltResult {}
 impl fmt::Display for EvalAltResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let desc = self.desc();
+        let pos = self.position();
 
         match self {
             #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(path, pos, err) if pos.is_none() => {
-                write!(f, "{} '{}': {}", desc, path.display(), err)
-            }
-            #[cfg(not(feature = "no_std"))]
-            Self::ErrorReadingScriptFile(path, pos, err) => {
-                write!(f, "{} '{}': {} ({})", desc, path.display(), err, pos)
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::ErrorReadingScriptFile(path, _, err) => {
+                write!(f, "{} '{}': {}", desc, path.display(), err)?
             }
 
-            Self::ErrorParsing(p) => write!(f, "Syntax error: {}", p),
+            Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
-            Self::ErrorInFunctionCall(s, err, pos) => {
-                write!(f, "Error in call to function '{}' ({}): {}", s, pos, err)
+            Self::ErrorInFunctionCall(s, err, _) => {
+                write!(f, "Error in call to function '{}' : {}", s, err)?
             }
 
-            Self::ErrorFunctionNotFound(s, pos)
-            | Self::ErrorVariableNotFound(s, pos)
-            | Self::ErrorModuleNotFound(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
+            Self::ErrorFunctionNotFound(s, _)
+            | Self::ErrorVariableNotFound(s, _)
+            | Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
 
-            Self::ErrorDotExpr(s, pos) if !s.is_empty() => write!(f, "{} {} ({})", desc, s, pos),
+            Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{} {}", desc, s)?,
 
-            Self::ErrorIndexingType(_, pos)
-            | Self::ErrorNumericIndexExpr(pos)
-            | Self::ErrorStringIndexExpr(pos)
-            | Self::ErrorImportExpr(pos)
-            | Self::ErrorLogicGuard(pos)
-            | Self::ErrorFor(pos)
-            | Self::ErrorAssignmentToUnknownLHS(pos)
-            | Self::ErrorInExpr(pos)
-            | Self::ErrorDotExpr(_, pos)
-            | Self::ErrorTooManyOperations(pos)
-            | Self::ErrorTooManyModules(pos)
-            | Self::ErrorStackOverflow(pos)
-            | Self::ErrorTerminated(pos) => write!(f, "{} ({})", desc, pos),
+            Self::ErrorIndexingType(_, _)
+            | Self::ErrorNumericIndexExpr(_)
+            | Self::ErrorStringIndexExpr(_)
+            | Self::ErrorImportExpr(_)
+            | Self::ErrorLogicGuard(_)
+            | Self::ErrorFor(_)
+            | Self::ErrorAssignmentToUnknownLHS(_)
+            | Self::ErrorInExpr(_)
+            | Self::ErrorDotExpr(_, _)
+            | Self::ErrorTooManyOperations(_)
+            | Self::ErrorTooManyModules(_)
+            | Self::ErrorStackOverflow(_)
+            | Self::ErrorTerminated(_) => write!(f, "{}", desc)?,
 
-            Self::ErrorRuntime(s, pos) => {
-                write!(f, "{} ({})", if s.is_empty() { desc } else { s }, pos)
+            Self::ErrorRuntime(s, _) => write!(f, "{}", if s.is_empty() { desc } else { s })?,
+
+            Self::ErrorAssignmentToConstant(s, _) => write!(f, "{}: '{}'", desc, s)?,
+            Self::ErrorMismatchOutputType(s, _) => write!(f, "{}: {}", desc, s)?,
+            Self::ErrorArithmetic(s, _) => write!(f, "{}", s)?,
+
+            Self::ErrorLoopBreak(_, _) => write!(f, "{}", desc)?,
+            Self::Return(_, _) => write!(f, "{}", desc)?,
+
+            Self::ErrorBooleanArgMismatch(op, _) => {
+                write!(f, "{} operator expects boolean operands", op)?
             }
-
-            Self::ErrorAssignmentToConstant(s, pos) => write!(f, "{}: '{}' ({})", desc, s, pos),
-            Self::ErrorMismatchOutputType(s, pos) => write!(f, "{}: {} ({})", desc, s, pos),
-            Self::ErrorArithmetic(s, pos) => write!(f, "{} ({})", s, pos),
-
-            Self::ErrorLoopBreak(_, pos) => write!(f, "{} ({})", desc, pos),
-            Self::Return(_, pos) => write!(f, "{} ({})", desc, pos),
-
-            Self::ErrorBooleanArgMismatch(op, pos) => {
-                write!(f, "{} operator expects boolean operands ({})", op, pos)
+            Self::ErrorCharMismatch(_) => write!(f, "string indexing expects a character value")?,
+            Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
+                write!(f, "{}: {} < 0", desc, index)?
             }
-            Self::ErrorCharMismatch(pos) => {
-                write!(f, "string indexing expects a character value ({})", pos)
-            }
-            Self::ErrorArrayBounds(_, index, pos) if *index < 0 => {
-                write!(f, "{}: {} < 0 ({})", desc, index, pos)
-            }
-            Self::ErrorArrayBounds(0, _, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorArrayBounds(1, index, pos) => write!(
+            Self::ErrorArrayBounds(0, _, _) => write!(f, "{}", desc)?,
+            Self::ErrorArrayBounds(1, index, _) => write!(
                 f,
-                "Array index {} is out of bounds: only one element in the array ({})",
-                index, pos
-            ),
-            Self::ErrorArrayBounds(max, index, pos) => write!(
+                "Array index {} is out of bounds: only one element in the array",
+                index
+            )?,
+            Self::ErrorArrayBounds(max, index, _) => write!(
                 f,
-                "Array index {} is out of bounds: only {} elements in the array ({})",
-                index, max, pos
-            ),
-            Self::ErrorStringBounds(_, index, pos) if *index < 0 => {
-                write!(f, "{}: {} < 0 ({})", desc, index, pos)
+                "Array index {} is out of bounds: only {} elements in the array",
+                index, max
+            )?,
+            Self::ErrorStringBounds(_, index, _) if *index < 0 => {
+                write!(f, "{}: {} < 0", desc, index)?
             }
-            Self::ErrorStringBounds(0, _, pos) => write!(f, "{} ({})", desc, pos),
-            Self::ErrorStringBounds(1, index, pos) => write!(
+            Self::ErrorStringBounds(0, _, _) => write!(f, "{}", desc)?,
+            Self::ErrorStringBounds(1, index, _) => write!(
                 f,
-                "String index {} is out of bounds: only one character in the string ({})",
-                index, pos
-            ),
-            Self::ErrorStringBounds(max, index, pos) => write!(
+                "String index {} is out of bounds: only one character in the string",
+                index
+            )?,
+            Self::ErrorStringBounds(max, index, _) => write!(
                 f,
-                "String index {} is out of bounds: only {} characters in the string ({})",
-                index, max, pos
-            ),
+                "String index {} is out of bounds: only {} characters in the string",
+                index, max
+            )?,
+            Self::ErrorDataTooLarge(typ, max, size, _) => {
+                write!(f, "{} ({}) exceeds the maximum limit ({})", typ, size, max)?
+            }
         }
-    }
-}
 
-impl From<ParseError> for Box<EvalAltResult> {
-    fn from(err: ParseError) -> Self {
-        Box::new(EvalAltResult::ErrorParsing(err))
+        // Do not write any position if None
+        if !pos.is_none() {
+            write!(f, " ({})", pos)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -259,11 +263,11 @@ impl EvalAltResult {
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
             Self::ErrorReadingScriptFile(_, pos, _) => *pos,
 
-            Self::ErrorParsing(err) => err.position(),
-
-            Self::ErrorFunctionNotFound(_, pos)
+            Self::ErrorParsing(_, pos)
+            | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
@@ -286,6 +290,7 @@ impl EvalAltResult {
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorDataTooLarge(_, _, _, pos)
             | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)
@@ -297,11 +302,11 @@ impl EvalAltResult {
     pub fn set_position(&mut self, new_position: Position) {
         match self {
             #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
             Self::ErrorReadingScriptFile(_, pos, _) => *pos = new_position,
 
-            Self::ErrorParsing(err) => err.1 = new_position,
-
-            Self::ErrorFunctionNotFound(_, pos)
+            Self::ErrorParsing(_, pos)
+            | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
@@ -324,6 +329,7 @@ impl EvalAltResult {
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
+            | Self::ErrorDataTooLarge(_, _, _, pos)
             | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
             | Self::ErrorLoopBreak(_, pos)
@@ -331,10 +337,12 @@ impl EvalAltResult {
         }
     }
 
-    /// Consume the current `EvalAltResult` and return a new one
-    /// with the specified `Position`.
+    /// Consume the current `EvalAltResult` and return a new one with the specified `Position`
+    /// if the current position is `Position::None`.
     pub(crate) fn new_position(mut self: Box<Self>, new_position: Position) -> Box<Self> {
-        self.set_position(new_position);
+        if self.position().is_none() {
+            self.set_position(new_position);
+        }
         self
     }
 }

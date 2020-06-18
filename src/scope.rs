@@ -1,11 +1,9 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::any::{Dynamic, Union, Variant};
+use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
-
-#[cfg(not(feature = "no_module"))]
-use crate::module::Module;
 
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
 
@@ -177,7 +175,18 @@ impl<'a> Scope<'a> {
     ///
     /// Modules are used for accessing member variables, functions and plugins under a namespace.
     #[cfg(not(feature = "no_module"))]
-    pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, mut value: Module) {
+    pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Module) {
+        self.push_module_internal(name, value);
+    }
+
+    /// Add (push) a new module to the Scope.
+    ///
+    /// Modules are used for accessing member variables, functions and plugins under a namespace.
+    pub(crate) fn push_module_internal<K: Into<Cow<'a, str>>>(
+        &mut self,
+        name: K,
+        mut value: Module,
+    ) {
         value.index_all_sub_modules();
 
         self.push_dynamic_value(
@@ -350,6 +359,11 @@ impl<'a> Scope<'a> {
     /// Find a module in the Scope, starting from the last entry.
     #[cfg(not(feature = "no_module"))]
     pub fn find_module(&mut self, name: &str) -> Option<&mut Module> {
+        self.find_module_internal(name)
+    }
+
+    /// Find a module in the Scope, starting from the last entry.
+    pub(crate) fn find_module_internal(&mut self, name: &str) -> Option<&mut Module> {
         let index = self.get_module_index(name)?;
         self.get_mut(index).0.downcast_mut::<Module>()
     }
@@ -403,7 +417,7 @@ impl<'a> Scope<'a> {
     pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
         match self.get_index(name) {
             None => self.push(name, value),
-            Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
+            Some((_, EntryType::Constant)) => unreachable!("variable {} is constant", name),
             Some((index, EntryType::Normal)) => {
                 self.0.get_mut(index).unwrap().value = Dynamic::from(value)
             }

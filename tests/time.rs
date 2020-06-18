@@ -1,4 +1,5 @@
 #![cfg(not(feature = "no_std"))]
+#![cfg(not(target_arch = "wasm32"))]
 
 use rhai::{Engine, EvalAltResult, INT};
 

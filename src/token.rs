@@ -19,6 +19,8 @@ use crate::stdlib::{
 
 type LERR = LexError;
 
+pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
+
 /// A location (line number + character position) in the input script.
 ///
 /// In order to keep footprint small, both line number and character position have 16-bit unsigned resolution,
@@ -181,6 +183,7 @@ pub enum Token {
     XOr,
     Ampersand,
     And,
+    #[cfg(not(feature = "no_function"))]
     Fn,
     Continue,
     Break,
@@ -197,8 +200,10 @@ pub enum Token {
     XOrAssign,
     ModuloAssign,
     PowerOfAssign,
+    #[cfg(not(feature = "no_function"))]
     Private,
     Import,
+    #[cfg(not(feature = "no_module"))]
     Export,
     As,
     LexError(Box<LexError>),
@@ -260,6 +265,7 @@ impl Token {
                 Or => "||",
                 Ampersand => "&",
                 And => "&&",
+                #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
                 Continue => "continue",
                 Break => "break",
@@ -281,12 +287,14 @@ impl Token {
                 ModuloAssign => "%=",
                 PowerOf => "~",
                 PowerOfAssign => "~=",
+                #[cfg(not(feature = "no_function"))]
                 Private => "private",
                 Import => "import",
+                #[cfg(not(feature = "no_module"))]
                 Export => "export",
                 As => "as",
                 EOF => "{EOF}",
-                _ => panic!("operator should be match in outer scope"),
+                _ => unreachable!("operator should be match in outer scope"),
             })
             .into(),
         }
@@ -421,6 +429,8 @@ impl From<Token> for String {
 
 /// An iterator on a `Token` stream.
 pub struct TokenIterator<'a> {
+    /// Maximum length of a string (0 = unlimited).
+    max_string_size: usize,
     /// Can the next token be a unary operator?
     can_be_unary: bool,
     /// Current position.
@@ -486,6 +496,7 @@ impl<'a> TokenIterator<'a> {
     pub fn parse_string_literal(
         &mut self,
         enclosing_char: char,
+        max_length: usize,
     ) -> Result<String, (LexError, Position)> {
         let mut result = Vec::new();
         let mut escape = String::with_capacity(12);
@@ -496,6 +507,10 @@ impl<'a> TokenIterator<'a> {
                 .ok_or((LERR::UnterminatedString, self.pos))?;
 
             self.advance();
+
+            if max_length > 0 && result.len() > max_length {
+                return Err((LexError::StringTooLong(max_length), self.pos));
+            }
 
             match next_char {
                 // \...
@@ -533,7 +548,7 @@ impl<'a> TokenIterator<'a> {
                         'x' => 2,
                         'u' => 4,
                         'U' => 8,
-                        _ => panic!("should be 'x', 'u' or 'U'"),
+                        _ => unreachable!(),
                     };
 
                     for _ in 0..len {
@@ -584,7 +599,13 @@ impl<'a> TokenIterator<'a> {
             }
         }
 
-        Ok(result.iter().collect())
+        let s = result.iter().collect::<String>();
+
+        if max_length > 0 && s.len() > max_length {
+            return Err((LexError::StringTooLong(max_length), self.pos));
+        }
+
+        Ok(s)
     }
 
     /// Get the next token.
@@ -646,14 +667,14 @@ impl<'a> TokenIterator<'a> {
                                         '0', '1', '_', '_', '_', '_', '_', '_', '_', '_', '_', '_',
                                         '_', '_', '_', '_', '_', '_', '_', '_', '_', '_', '_',
                                     ],
-                                    _ => panic!("unexpected character {}", ch),
+                                    _ => unreachable!(),
                                 };
 
                                 radix_base = Some(match ch {
                                     'x' | 'X' => 16,
                                     'o' | 'O' => 8,
                                     'b' | 'B' => 2,
-                                    _ => panic!("unexpected character {}", ch),
+                                    _ => unreachable!(),
                                 });
 
                                 while let Some(next_char_in_hex) = self.peek_next() {
@@ -753,13 +774,11 @@ impl<'a> TokenIterator<'a> {
                             "throw" => Token::Throw,
                             "for" => Token::For,
                             "in" => Token::In,
+                            #[cfg(not(feature = "no_function"))]
                             "private" => Token::Private,
-
-                            #[cfg(not(feature = "no_module"))]
                             "import" => Token::Import,
                             #[cfg(not(feature = "no_module"))]
                             "export" => Token::Export,
-                            #[cfg(not(feature = "no_module"))]
                             "as" => Token::As,
 
                             #[cfg(not(feature = "no_function"))]
@@ -773,10 +792,12 @@ impl<'a> TokenIterator<'a> {
 
                 // " - string literal
                 ('"', _) => {
-                    return self.parse_string_literal('"').map_or_else(
-                        |err| Some((Token::LexError(Box::new(err.0)), err.1)),
-                        |out| Some((Token::StringConst(out), pos)),
-                    );
+                    return self
+                        .parse_string_literal('"', self.max_string_size)
+                        .map_or_else(
+                            |err| Some((Token::LexError(Box::new(err.0)), err.1)),
+                            |out| Some((Token::StringConst(out), pos)),
+                        );
                 }
 
                 // ' - character literal
@@ -787,19 +808,25 @@ impl<'a> TokenIterator<'a> {
                     ));
                 }
                 ('\'', _) => {
-                    return Some(self.parse_string_literal('\'').map_or_else(
-                        |err| (Token::LexError(Box::new(err.0)), err.1),
-                        |result| {
-                            let mut chars = result.chars();
-                            let first = chars.next();
+                    return Some(
+                        self.parse_string_literal('\'', self.max_string_size)
+                            .map_or_else(
+                                |err| (Token::LexError(Box::new(err.0)), err.1),
+                                |result| {
+                                    let mut chars = result.chars();
+                                    let first = chars.next();
 
-                            if chars.next().is_some() {
-                                (Token::LexError(Box::new(LERR::MalformedChar(result))), pos)
-                            } else {
-                                (Token::CharConstant(first.expect("should be Some")), pos)
-                            }
-                        },
-                    ));
+                                    if chars.next().is_some() {
+                                        (
+                                            Token::LexError(Box::new(LERR::MalformedChar(result))),
+                                            pos,
+                                        )
+                                    } else {
+                                        (Token::CharConstant(first.expect("should be Some")), pos)
+                                    }
+                                },
+                            ),
+                    );
                 }
 
                 // Braces
@@ -834,6 +861,14 @@ impl<'a> TokenIterator<'a> {
                 ('-', '=') => {
                     self.eat_next();
                     return Some((Token::MinusAssign, pos));
+                }
+                ('-', '>') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "'->' is not a valid symbol. This is not C or C++!".to_string(),
+                        ))),
+                        pos,
+                    ))
                 }
                 ('-', _) if self.can_be_unary => return Some((Token::UnaryMinus, pos)),
                 ('-', _) => return Some((Token::Minus, pos)),
@@ -904,7 +939,7 @@ impl<'a> TokenIterator<'a> {
                     // Warn against `===`
                     if self.peek_next() == Some('=') {
                         return Some((
-                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                Token::LexError(Box::new(LERR::ImproperSymbol(
                                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
                                         .to_string(),
                                 ))),
@@ -914,18 +949,43 @@ impl<'a> TokenIterator<'a> {
 
                     return Some((Token::EqualsTo, pos));
                 }
+                ('=', '>') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "'=>' is not a valid symbol. This is not Rust! Should it be '>='?"
+                                .to_string(),
+                        ))),
+                        pos,
+                    ))
+                }
                 ('=', _) => return Some((Token::Equals, pos)),
 
-                #[cfg(not(feature = "no_module"))]
                 (':', ':') => {
                     self.eat_next();
                     return Some((Token::DoubleColon, pos));
+                }
+                (':', '=') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "':=' is not a valid assignment operator. This is not Pascal! Should it be simply '='?"
+                                .to_string(),
+                        ))),
+                        pos,
+                    ))
                 }
                 (':', _) => return Some((Token::Colon, pos)),
 
                 ('<', '=') => {
                     self.eat_next();
                     return Some((Token::LessThanEqualsTo, pos));
+                }
+                ('<', '-') => {
+                    return Some((
+                        Token::LexError(Box::new(LERR::ImproperSymbol(
+                            "'<-' is not a valid symbol. Should it be '<='?".to_string(),
+                        ))),
+                        pos,
+                    ))
                 }
                 ('<', '<') => {
                     self.eat_next();
@@ -967,7 +1027,7 @@ impl<'a> TokenIterator<'a> {
                     // Warn against `!==`
                     if self.peek_next() == Some('=') {
                         return Some((
-                                Token::LexError(Box::new(LERR::ImproperKeyword(
+                                Token::LexError(Box::new(LERR::ImproperSymbol(
                                     "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
                                         .to_string(),
                                 ))),
@@ -1017,7 +1077,7 @@ impl<'a> TokenIterator<'a> {
                 }
                 ('~', _) => return Some((Token::PowerOf, pos)),
 
-                ('\0', _) => panic!("should not be EOF"),
+                ('\0', _) => unreachable!(),
 
                 (ch, _) if ch.is_whitespace() => (),
                 (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(ch))), pos)),
@@ -1042,8 +1102,9 @@ impl<'a> Iterator for TokenIterator<'a> {
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a>(input: &'a [&'a str]) -> TokenIterator<'a> {
+pub fn lex<'a>(input: &'a [&'a str], max_string_size: usize) -> TokenIterator<'a> {
     TokenIterator {
+        max_string_size,
         can_be_unary: true,
         pos: Position::new(1, 0),
         streams: input.iter().map(|s| s.chars().peekable()).collect(),

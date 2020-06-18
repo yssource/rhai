@@ -2,12 +2,12 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, FunctionsLib, FUNC_INDEXER};
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn};
+use crate::engine::{make_getter, make_setter, Engine, FUNC_INDEXER_GET, FUNC_INDEXER_SET};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
-    AST,
+    ScriptFnDef, AST,
 };
 use crate::result::EvalAltResult;
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
@@ -53,9 +53,6 @@ pub struct Module {
         StraightHasherBuilder,
     >,
 
-    /// Script-defined functions.
-    lib: FunctionsLib,
-
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: HashMap<TypeId, IteratorFn>,
 
@@ -68,10 +65,9 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<module {:?}, functions={}, lib={}>",
+            "<module vars={:?}, functions={}>",
             self.variables,
             self.functions.len(),
-            self.lib.len()
         )
     }
 }
@@ -186,6 +182,23 @@ impl Module {
             .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.to_string(), pos)))
     }
 
+    /// Set a script-defined function into the module.
+    ///
+    /// If there is an existing function of the same name and number of arguments, it is replaced.
+    pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) {
+        // None + function name + number of arguments.
+        let hash_script = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
+        self.functions.insert(
+            hash_script,
+            (
+                fn_def.name.to_string(),
+                fn_def.access,
+                Default::default(),
+                fn_def.into(),
+            ),
+        );
+    }
+
     /// Does a sub-module exist in the module?
     ///
     /// # Examples
@@ -292,6 +305,29 @@ impl Module {
         hash_fn
     }
 
+    /// Set a Rust function taking a reference to the scripting `Engine`, plus a list of
+    /// mutable `Dynamic` references into the module, returning a hash key.
+    /// A list of `TypeId`'s is taken as the argument types.
+    ///
+    /// Use this to register a built-in function which must reference settings on the scripting
+    /// `Engine` (e.g. to prevent growing an array beyond the allowed maximum size).
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    pub(crate) fn set_fn_var_args<T: Variant + Clone>(
+        &mut self,
+        name: impl Into<String>,
+        args: &[TypeId],
+        func: impl Fn(&Engine, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> u64 {
+        let f = move |engine: &Engine, args: &mut FnCallArgs| func(engine, args).map(Dynamic::from);
+        self.set_fn(
+            name,
+            Public,
+            args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
     /// Set a Rust function taking no parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -308,10 +344,9 @@ impl Module {
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn() -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn() -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn() -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &mut FnCallArgs| func().map(Dynamic::from);
+        let f = move |_: &Engine, _: &mut FnCallArgs| func().map(Dynamic::from);
         let args = [];
         self.set_fn(
             name,
@@ -337,11 +372,11 @@ impl Module {
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f =
-            move |args: &mut FnCallArgs| func(mem::take(args[0]).cast::<A>()).map(Dynamic::from);
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
+            func(mem::take(args[0]).cast::<A>()).map(Dynamic::from)
+        };
         let args = [TypeId::of::<A>()];
         self.set_fn(
             name,
@@ -367,10 +402,9 @@ impl Module {
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
         let args = [TypeId::of::<A>()];
@@ -399,8 +433,7 @@ impl Module {
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         self.set_fn_1_mut(make_getter(&name.into()), func)
     }
@@ -423,10 +456,9 @@ impl Module {
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A, B) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
 
@@ -460,10 +492,9 @@ impl Module {
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
@@ -499,13 +530,12 @@ impl Module {
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<()> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<()> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
         self.set_fn_2_mut(make_setter(&name.into()), func)
     }
 
-    /// Set a Rust indexer function taking two parameters (the first one mutable) into the module,
+    /// Set a Rust index getter taking two parameters (the first one mutable) into the module,
     /// returning a hash key.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
@@ -516,19 +546,18 @@ impl Module {
     /// use rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_indexer_fn(|x: &mut i64, y: ImmutableString| {
+    /// let hash = module.set_indexer_get_fn(|x: &mut i64, y: ImmutableString| {
     ///     Ok(*x + y.len() as i64)
     /// });
     /// assert!(module.get_fn(hash).is_some());
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
-    pub fn set_indexer_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+    pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        self.set_fn_2_mut(FUNC_INDEXER, func)
+        self.set_fn_2_mut(FUNC_INDEXER_GET, func)
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -554,10 +583,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
@@ -597,10 +625,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let a = args[0].downcast_mut::<A>().unwrap();
@@ -610,6 +637,43 @@ impl Module {
         let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
+            Public,
+            &args,
+            CallableFunction::from_method(Box::new(f)),
+        )
+    }
+
+    /// Set a Rust index setter taking three parameters (the first one mutable) into the module,
+    /// returning a hash key.
+    ///
+    /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_indexer_set_fn(|x: &mut i64, y: ImmutableString, value: i64| {
+    ///     *x = y.len() as i64 + value;
+    ///     Ok(())
+    /// });
+    /// assert!(module.get_fn(hash).is_some());
+    /// ```
+    pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone>(
+        &mut self,
+        func: impl Fn(&mut A, B, A) -> FuncReturn<()> + SendSync + 'static,
+    ) -> u64 {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
+            let b = mem::take(args[1]).cast::<B>();
+            let c = mem::take(args[2]).cast::<A>();
+            let a = args[0].downcast_mut::<A>().unwrap();
+
+            func(a, b, c).map(Dynamic::from)
+        };
+        let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<A>()];
+        self.set_fn(
+            FUNC_INDEXER_SET,
             Public,
             &args,
             CallableFunction::from_method(Box::new(f)),
@@ -640,10 +704,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(A, B, C, D) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
@@ -690,10 +753,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        #[cfg(not(feature = "sync"))] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + 'static,
-        #[cfg(feature = "sync")] func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + Send + Sync + 'static,
+        func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |args: &mut FnCallArgs| {
+        let f = move |_: &Engine, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let d = mem::take(args[3]).cast::<D>();
@@ -740,14 +802,49 @@ impl Module {
     pub(crate) fn get_qualified_fn(
         &mut self,
         name: &str,
-        hash_fn_native: u64,
+        hash_qualified_fn: u64,
     ) -> Result<&CallableFunction, Box<EvalAltResult>> {
-        self.all_functions.get(&hash_fn_native).ok_or_else(|| {
+        self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {
             Box::new(EvalAltResult::ErrorFunctionNotFound(
                 name.to_string(),
                 Position::none(),
             ))
         })
+    }
+
+    /// Merge another module into this module.
+    pub fn merge(&mut self, other: &Self) {
+        self.variables
+            .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
+        self.functions
+            .extend(other.functions.iter().map(|(&k, v)| (k, v.clone())));
+        self.type_iterators
+            .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
+    }
+
+    /// Get the number of variables in the module.
+    pub fn num_var(&self) -> usize {
+        self.variables.len()
+    }
+    /// Get the number of functions in the module.
+    pub fn num_fn(&self) -> usize {
+        self.variables.len()
+    }
+    /// Get the number of type iterators in the module.
+    pub fn num_iter(&self) -> usize {
+        self.variables.len()
+    }
+
+    /// Get an iterator to the variables in the module.
+    pub fn iter_var(&self) -> impl Iterator<Item = (&String, &Dynamic)> {
+        self.variables.iter()
+    }
+
+    /// Get an iterator to the functions in the module.
+    pub(crate) fn iter_fn(
+        &self,
+    ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, CallableFunction)> {
+        self.functions.values()
     }
 
     /// Create a new `Module` by evaluating an `AST`.
@@ -795,12 +892,12 @@ impl Module {
             },
         );
 
-        module.lib = module.lib.merge(ast.lib());
+        module.merge(ast.lib());
 
         Ok(module)
     }
 
-    /// Scan through all the sub-modules in the `Module` build an index of all
+    /// Scan through all the sub-modules in the module build an index of all
     /// variables and external Rust functions via hashing.
     pub(crate) fn index_all_sub_modules(&mut self) {
         // Collect a particular module.
@@ -830,34 +927,31 @@ impl Module {
                     Private => continue,
                     Public => (),
                 }
-                // Rust functions are indexed in two steps:
-                // 1) Calculate a hash in a similar manner to script-defined functions,
-                //    i.e. qualifiers + function name + number of arguments.
-                let hash_fn_def =
-                    calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
-                // 2) Calculate a second hash with no qualifiers, empty function name,
-                //    zero number of arguments, and the actual list of argument `TypeId`'.s
-                let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
-                // 3) The final hash is the XOR of the two hashes.
-                let hash_fn_native = hash_fn_def ^ hash_fn_args;
 
-                functions.push((hash_fn_native, func.clone()));
-            }
-            // Index all script-defined functions
-            for fn_def in module.lib.values() {
-                match fn_def.access {
-                    // Private functions are not exported
-                    Private => continue,
-                    Public => (),
+                if func.is_script() {
+                    let fn_def = func.get_shared_fn_def();
+                    // Qualifiers + function name + number of arguments.
+                    let hash_qualified_script = calc_fn_hash(
+                        qualifiers.iter().map(|&v| v),
+                        &fn_def.name,
+                        fn_def.params.len(),
+                        empty(),
+                    );
+                    functions.push((hash_qualified_script, fn_def.into()));
+                } else {
+                    // Qualified Rust functions are indexed in two steps:
+                    // 1) Calculate a hash in a similar manner to script-defined functions,
+                    //    i.e. qualifiers + function name + number of arguments.
+                    let hash_qualified_script =
+                        calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
+                    // 2) Calculate a second hash with no qualifiers, empty function name,
+                    //    zero number of arguments, and the actual list of argument `TypeId`'.s
+                    let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
+                    // 3) The final hash is the XOR of the two hashes.
+                    let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
+
+                    functions.push((hash_qualified_fn, func.clone()));
                 }
-                // Qualifiers + function name + number of arguments.
-                let hash_fn_def = calc_fn_hash(
-                    qualifiers.iter().map(|&v| v),
-                    &fn_def.name,
-                    fn_def.params.len(),
-                    empty(),
-                );
-                functions.push((hash_fn_def, CallableFunction::Script(fn_def.clone()).into()));
             }
         }
 
@@ -945,27 +1039,11 @@ impl ModuleRef {
 }
 
 /// Trait that encapsulates a module resolution service.
-#[cfg(not(feature = "no_module"))]
-#[cfg(not(feature = "sync"))]
-pub trait ModuleResolver {
+pub trait ModuleResolver: SendSync {
     /// Resolve a module based on a path string.
     fn resolve(
         &self,
-        engine: &Engine,
-        scope: Scope,
-        path: &str,
-        pos: Position,
-    ) -> Result<Module, Box<EvalAltResult>>;
-}
-
-/// Trait that encapsulates a module resolution service.
-#[cfg(not(feature = "no_module"))]
-#[cfg(feature = "sync")]
-pub trait ModuleResolver: Send + Sync {
-    /// Resolve a module based on a path string.
-    fn resolve(
-        &self,
-        engine: &Engine,
+        _: &Engine,
         scope: Scope,
         path: &str,
         pos: Position,
@@ -976,13 +1054,17 @@ pub trait ModuleResolver: Send + Sync {
 #[cfg(not(feature = "no_module"))]
 pub mod resolvers {
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub use super::file::FileModuleResolver;
     pub use super::stat::StaticModuleResolver;
 }
+#[cfg(feature = "no_module")]
+pub mod resolvers {}
 
 /// Script file-based module resolver.
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
 mod file {
     use super::*;
     use crate::stdlib::path::PathBuf;

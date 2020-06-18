@@ -1,13 +1,16 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, State, FUNC_INDEXER};
+use crate::engine::{
+    get_script_function_by_signature, make_getter, make_setter, Engine, State, FUNC_INDEXER_GET,
+    FUNC_INDEXER_SET,
+};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
-use crate::parser::{parse, parse_global_expr, AST};
+use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{lex, Position};
@@ -24,6 +27,7 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 /// Engine public API
@@ -273,7 +277,7 @@ impl Engine {
         self.register_set(name, set_fn);
     }
 
-    /// Register an indexer function for a registered type with the `Engine`.
+    /// Register an index getter for a registered type with the `Engine`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
@@ -303,7 +307,7 @@ impl Engine {
     /// engine.register_fn("new_ts", TestStruct::new);
     ///
     /// // Register an indexer.
-    /// engine.register_indexer(TestStruct::get_field);
+    /// engine.register_indexer_get(TestStruct::get_field);
     ///
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
     /// # Ok(())
@@ -311,7 +315,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
-    pub fn register_indexer<T, X, U>(
+    pub fn register_indexer_get<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
     ) where
@@ -319,7 +323,103 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FUNC_INDEXER, callback);
+        self.register_fn(FUNC_INDEXER_GET, callback);
+    }
+
+    /// Register an index setter for a registered type with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     fields: Vec<i64>
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register an indexer.
+    /// engine.register_indexer_set(TestStruct::set_field);
+    ///
+    /// assert_eq!(
+    ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
+    ///     42
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn register_indexer_set<T, X, U>(
+        &mut self,
+        callback: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
+    ) where
+        T: Variant + Clone,
+        U: Variant + Clone,
+        X: Variant + Clone,
+    {
+        self.register_fn(FUNC_INDEXER_SET, callback);
+    }
+
+    /// Shorthand for register both index getter and setter functions for a registered type with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     fields: Vec<i64>
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn get_field(&mut self, index: i64) -> i64      { self.fields[index as usize] }
+    ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register an indexer.
+    /// engine.register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
+    ///
+    /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn register_indexer_get_set<T, X, U>(
+        &mut self,
+        getter: impl Fn(&mut T, X) -> U + SendSync + 'static,
+        setter: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
+    ) where
+        T: Variant + Clone,
+        U: Variant + Clone,
+        X: Variant + Clone,
+    {
+        self.register_indexer_get(getter);
+        self.register_indexer_set(setter);
     }
 
     /// Compile a string into an `AST`, which can be used later for evaluation.
@@ -448,19 +548,13 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts);
-
-        parse(
-            &mut stream.peekable(),
-            self,
-            scope,
-            optimization_level,
-            (self.max_expr_depth, self.max_function_expr_depth),
-        )
+        let stream = lex(scripts, self.max_string_size);
+        self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
         let mut f = File::open(path.clone()).map_err(|err| {
             Box::new(EvalAltResult::ErrorReadingScriptFile(
@@ -504,6 +598,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
@@ -540,6 +635,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
@@ -577,14 +673,9 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
-        let stream = lex(&scripts);
-        let ast = parse_global_expr(
-            &mut stream.peekable(),
-            self,
-            &scope,
-            OptimizationLevel::None,
-            self.max_expr_depth,
-        )?;
+        let stream = lex(&scripts, self.max_string_size);
+        let ast =
+            self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
         // Handle null - map to ()
         if has_null {
@@ -663,17 +754,10 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts);
-
+        let stream = lex(&scripts, self.max_string_size);
         {
             let mut peekable = stream.peekable();
-            parse_global_expr(
-                &mut peekable,
-                self,
-                scope,
-                self.optimization_level,
-                self.max_expr_depth,
-            )
+            self.parse_global_expr(&mut peekable, scope, self.optimization_level)
         }
     }
 
@@ -693,6 +777,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
@@ -717,6 +802,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -823,15 +909,10 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts);
+        let stream = lex(&scripts, self.max_string_size);
 
-        let ast = parse_global_expr(
-            &mut stream.peekable(),
-            self,
-            scope,
-            OptimizationLevel::None, // No need to optimize a lone expression
-            self.max_expr_depth,
-        )?;
+        // No need to optimize a lone expression
+        let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
 
         self.eval_ast_with_scope(scope, &ast)
     }
@@ -904,6 +985,7 @@ impl Engine {
         });
     }
 
+    /// Evaluate an `AST` with own scope.
     pub(crate) fn eval_ast_with_scope_raw(
         &self,
         scope: &mut Scope,
@@ -926,6 +1008,7 @@ impl Engine {
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn consume_file(&self, path: PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
@@ -933,6 +1016,7 @@ impl Engine {
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn consume_file_with_scope(
         &self,
         scope: &mut Scope,
@@ -955,15 +1039,8 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts);
-
-        let ast = parse(
-            &mut stream.peekable(),
-            self,
-            scope,
-            self.optimization_level,
-            (self.max_expr_depth, self.max_function_expr_depth),
-        )?;
+        let stream = lex(&scripts, self.max_string_size);
+        let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
 
@@ -1041,7 +1118,7 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let result = self.call_fn_dynamic(scope, ast, name, arg_values.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -1054,13 +1131,6 @@ impl Engine {
     }
 
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
-    ///
-    /// ## WARNING
-    ///
-    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
-    /// This is to avoid unnecessarily cloning the arguments.
-    /// Do you use the arguments after this call. If you need them afterwards,
-    /// clone them _before_ calling this function.
     ///
     /// # Example
     ///
@@ -1082,13 +1152,13 @@ impl Engine {
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", &mut [ String::from("abc").into(), 123_i64.into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", vec![ String::from("abc").into(), 123_i64.into() ])?;
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", &mut [ String::from("abc").into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", vec![ String::from("abc").into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result= engine.call_fn_dynamic(&mut scope, &ast, "bar", &mut [])?;
+    /// let result= engine.call_fn_dynamic(&mut scope, &ast, "bar", vec![])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     /// # }
     /// # Ok(())
@@ -1100,20 +1170,40 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         name: &str,
+        arg_values: impl IntoIterator<Item = Dynamic>,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let mut arg_values: StaticVec<_> = arg_values.into_iter().collect();
+        self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())
+    }
+
+    /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
+    ///
+    /// ## WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
+    pub(crate) fn call_fn_dynamic_raw(
+        &self,
+        scope: &mut Scope,
+        ast: &AST,
+        name: &str,
         arg_values: &mut [Dynamic],
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
-        let lib = ast.lib();
-        let pos = Position::none();
-
-        let fn_def = lib
-            .get_function_by_signature(name, args.len(), true)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorFunctionNotFound(name.into(), pos)))?;
+        let fn_def = get_script_function_by_signature(ast.lib(), name, args.len(), true)
+            .ok_or_else(|| {
+                Box::new(EvalAltResult::ErrorFunctionNotFound(
+                    name.into(),
+                    Position::none(),
+                ))
+            })?;
 
         let mut state = State::new();
         let args = args.as_mut();
 
-        self.call_script_fn(scope, &mut state, &lib, name, fn_def, args, pos, 0)
+        self.call_script_fn(scope, &mut state, ast.lib(), name, fn_def, args, 0)
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
@@ -1136,8 +1226,9 @@ impl Engine {
     ) -> AST {
         let lib = ast
             .lib()
-            .iter()
-            .map(|(_, fn_def)| fn_def.as_ref().clone())
+            .iter_fn()
+            .filter(|(_, _, _, f)| f.is_script())
+            .map(|(_, _, _, f)| f.get_fn_def().clone())
             .collect();
 
         let stmt = mem::take(ast.statements_mut());
@@ -1159,7 +1250,7 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// engine.on_progress(move |ops| {
+    /// engine.on_progress(move |&ops| {
     ///     if ops > 10000 {
     ///         false
     ///     } else if ops % 800 == 0 {
@@ -1178,7 +1269,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_progress(&mut self, callback: impl Fn(u64) -> bool + SendSync + 'static) {
+    pub fn on_progress(&mut self, callback: impl Fn(&u64) -> bool + SendSync + 'static) {
         self.progress = Some(Box::new(callback));
     }
 

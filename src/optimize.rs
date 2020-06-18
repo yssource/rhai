@@ -1,13 +1,9 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
-use crate::engine::{
-    Engine, FunctionsLib,  KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
-};
-use crate::parser::{map_dynamic_to_expr, Expr, FnDef, ReturnType, Stmt, AST};
-use crate::result::EvalAltResult;
+use crate::engine::{Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::module::Module;
+use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
-use crate::token::Position;
 use crate::utils::StaticVec;
 
 use crate::stdlib::{
@@ -56,14 +52,14 @@ struct State<'a> {
     /// An `Engine` instance for eager function evaluation.
     engine: &'a Engine,
     /// Library of script-defined functions.
-    lib: &'a FunctionsLib,
+    lib: &'a Module,
     /// Optimization level.
     optimization_level: OptimizationLevel,
 }
 
 impl<'a> State<'a> {
     /// Create a new State.
-    pub fn new(engine: &'a Engine, lib: &'a FunctionsLib, level: OptimizationLevel) -> Self {
+    pub fn new(engine: &'a Engine, lib: &'a Module, level: OptimizationLevel) -> Self {
         Self {
             changed: false,
             constants: vec![],
@@ -113,8 +109,7 @@ fn call_fn_with_constant_arguments(
     state: &State,
     fn_name: &str,
     arg_values: &mut [Dynamic],
-    pos: Position,
-) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
+) -> Option<Dynamic> {
     // Search built-in's and external functions
     let hash_fn = calc_fn_hash(
         empty(),
@@ -134,11 +129,10 @@ fn call_fn_with_constant_arguments(
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             None,
-            pos,
             0,
         )
         .map(|(v, _)| Some(v))
-        .or_else(|_| Ok(None))
+        .unwrap_or_else(|_| None)
 }
 
 /// Optimize a statement.
@@ -551,14 +545,15 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.3.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
-            let ((name, native_only, pos), _, _, args, def_value) = x.as_mut();
+            let ((name, _, pos), _, _, args, def_value) = x.as_mut();
 
-            // First search in script-defined functions (can override built-in)
+            // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
-            if !*native_only && state.lib.values().find(|f| 
-                &f.name == name
-                && (args.len()..=args.len() + 1).contains(&f.params.len())
-            ).is_some() {
+            if state.lib.iter_fn().find(|(_, _, _, f)| {
+                if !f.is_script() { return false; }
+                let fn_def = f.get_fn_def();
+                &fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
+            }).is_some() {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);
@@ -574,22 +569,22 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 ""
             };
 
-            call_fn_with_constant_arguments(&state, name, arg_values.as_mut(), *pos).ok()
-                .and_then(|result|
-                    result.or_else(|| {
-                        if !arg_for_type_of.is_empty() {
-                            // Handle `type_of()`
-                            Some(arg_for_type_of.to_string().into())
-                        } else {
-                            // Otherwise use the default value, if any
-                            def_value.clone()
-                        }
-                    }).and_then(|result| map_dynamic_to_expr(result, *pos))
-                    .map(|expr| {
-                        state.set_dirty();
-                        expr
-                    })
-                ).unwrap_or_else(|| {
+            call_fn_with_constant_arguments(&state, name, arg_values.as_mut())
+                .or_else(|| {
+                    if !arg_for_type_of.is_empty() {
+                        // Handle `type_of()`
+                        Some(arg_for_type_of.to_string().into())
+                    } else {
+                        // Otherwise use the default value, if any
+                        def_value.clone()
+                    }
+                })
+                .and_then(|result| map_dynamic_to_expr(result, *pos))
+                .map(|expr| {
+                    state.set_dirty();
+                    expr
+                })
+                .unwrap_or_else(|| {
                     // Optimize function call arguments
                     x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                     Expr::FnCall(x)
@@ -620,7 +615,7 @@ fn optimize(
     statements: Vec<Stmt>,
     engine: &Engine,
     scope: &Scope,
-    lib: &FunctionsLib,
+    lib: &Module,
     level: OptimizationLevel,
 ) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
@@ -707,7 +702,7 @@ pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     statements: Vec<Stmt>,
-    functions: Vec<FnDef>,
+    functions: Vec<ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
     #[cfg(feature = "no_optimize")]
@@ -715,37 +710,65 @@ pub fn optimize_into_ast(
 
     #[cfg(not(feature = "no_function"))]
     let lib = {
+        let mut module = Module::new();
+
         if !level.is_none() {
-            let lib = FunctionsLib::from_iter(functions.iter().cloned());
+            // We only need the script library's signatures for optimization purposes
+            let mut lib2 = Module::new();
 
-            FunctionsLib::from_iter(functions.into_iter().map(|mut fn_def| {
-                let pos = fn_def.body.position();
-
-                // Optimize the function body
-                let mut body = optimize(vec![fn_def.body], engine, &Scope::new(), &lib, level);
-
-                // {} -> Noop
-                fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
-                    // { return val; } -> val
-                    Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
-                        Stmt::Expr(Box::new(x.1.unwrap()))
+            functions
+                .iter()
+                .map(|fn_def| {
+                    ScriptFnDef {
+                        name: fn_def.name.clone(),
+                        access: fn_def.access,
+                        body: Default::default(),
+                        params: fn_def.params.clone(),
+                        pos: fn_def.pos,
                     }
-                    // { return; } -> ()
-                    Stmt::ReturnWithVal(x) if x.1.is_none() && (x.0).0 == ReturnType::Return => {
-                        Stmt::Expr(Box::new(Expr::Unit((x.0).1)))
-                    }
-                    // All others
-                    stmt => stmt,
-                };
-                fn_def
-            }))
+                    .into()
+                })
+                .for_each(|fn_def| lib2.set_script_fn(fn_def));
+
+            functions
+                .into_iter()
+                .map(|mut fn_def| {
+                    let pos = fn_def.body.position();
+
+                    // Optimize the function body
+                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new(), &lib2, level);
+
+                    // {} -> Noop
+                    fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                        // { return val; } -> val
+                        Stmt::ReturnWithVal(x)
+                            if x.1.is_some() && (x.0).0 == ReturnType::Return =>
+                        {
+                            Stmt::Expr(Box::new(x.1.unwrap()))
+                        }
+                        // { return; } -> ()
+                        Stmt::ReturnWithVal(x)
+                            if x.1.is_none() && (x.0).0 == ReturnType::Return =>
+                        {
+                            Stmt::Expr(Box::new(Expr::Unit((x.0).1)))
+                        }
+                        // All others
+                        stmt => stmt,
+                    };
+                    fn_def.into()
+                })
+                .for_each(|fn_def| module.set_script_fn(fn_def));
         } else {
-            FunctionsLib::from_iter(functions.into_iter())
+            functions
+                .into_iter()
+                .for_each(|fn_def| module.set_script_fn(fn_def));
         }
+
+        module
     };
 
     #[cfg(feature = "no_function")]
-    let lib: FunctionsLib = Default::default();
+    let lib = Default::default();
 
     AST::new(
         match level {

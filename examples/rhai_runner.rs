@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, Position};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -6,15 +6,17 @@ use rhai::OptimizationLevel;
 use std::{env, fs::File, io::Read, process::exit};
 
 fn eprint_error(input: &str, err: EvalAltResult) {
-    fn eprint_line(lines: &[&str], line: usize, pos: usize, err: &str) {
+    fn eprint_line(lines: &[&str], pos: Position, err: &str) {
+        let line = pos.line().unwrap();
+
         let line_no = format!("{}: ", line);
-        let pos_text = format!(" (line {}, position {})", line, pos);
+        let pos_text = format!(" ({})", pos);
 
         eprintln!("{}{}", line_no, lines[line - 1]);
         eprintln!(
             "{:>1$} {2}",
             "^",
-            line_no.len() + pos,
+            line_no.len() + pos.position().unwrap(),
             err.replace(&pos_text, "")
         );
         eprintln!("");
@@ -25,22 +27,19 @@ fn eprint_error(input: &str, err: EvalAltResult) {
     // Print error
     let pos = err.position();
 
-    match pos {
-        p if p.is_none() => {
-            // No position
-            eprintln!("{}", err);
-        }
-        p => {
-            // Specific position
-            let err_text = match err {
-                EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
-                    format!("Runtime error: {}", err)
-                }
-                err => err.to_string(),
-            };
+    if pos.is_none() {
+        // No position
+        eprintln!("{}", err);
+    } else {
+        // Specific position
+        let err_text = match err {
+            EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
+                format!("Runtime error: {}", err)
+            }
+            err => err.to_string(),
+        };
 
-            eprint_line(&lines, p.line().unwrap(), p.position().unwrap(), &err_text)
-        }
+        eprint_line(&lines, pos, &err_text)
     }
 }
 

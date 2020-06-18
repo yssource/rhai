@@ -1,3 +1,4 @@
+#![cfg(not(feature = "no_std"))]
 use super::logic::{eq, gt, gte, lt, lte, ne};
 use super::math_basic::MAX_INT;
 
@@ -7,13 +8,15 @@ use crate::parser::INT;
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::time::Instant;
+
+#[cfg(target_arch = "wasm32")]
+use instant::Instant;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
-#[cfg(not(feature = "no_std"))]
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     // Register date/time functions
     lib.set_fn_0("timestamp", || Ok(Instant::now()));
