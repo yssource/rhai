@@ -7,7 +7,7 @@ Rhai's scripting engine is very lightweight.  It gets most of its abilities from
 
 To call these functions, they need to be _registered_ with the [`Engine`] using `Engine::register_fn`
 (in the `RegisterFn` trait) and `Engine::register_result_fn` (in the `RegisterResultFn` trait,
-see [fallible functions](/rust/fallible.md)).
+see [fallible functions]({{rootUrl}}/rust/fallible.md)).
 
 ```rust
 use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString};

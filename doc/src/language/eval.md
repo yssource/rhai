@@ -82,7 +82,7 @@ engine.register_result_fn("eval", alt_eval);
 `EvalPackage`
 -------------
 
-There is even a package named [`EvalPackage`](/rust/packages.md) which implements the disabling override:
+There is even a package named [`EvalPackage`]({{rootUrl}}/rust/packages.md) which implements the disabling override:
 
 ```rust
 use rhai::Engine;

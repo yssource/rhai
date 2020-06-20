@@ -1,87 +1,86 @@
-[features]: /start/features.md
-[`unchecked`]: /start/features.md
-[`sync`]: /start/features.md
-[`no_optimize`]: /start/features.md
-[`no_float`]: /start/features.md
-[`only_i32`]: /start/features.md
-[`only_i64`]: /start/features.md
-[`no_index`]: /start/features.md
-[`no_object`]: /start/features.md
-[`no_function`]: /start/features.md
-[`no_module`]: /start/features.md
-[`no_std`]: /start/features.md
+[features]: {{rootUrl}}/start/features.md
+[`unchecked`]: {{rootUrl}}/start/features.md
+[`sync`]: {{rootUrl}}/start/features.md
+[`no_optimize`]: {{rootUrl}}/start/features.md
+[`no_float`]: {{rootUrl}}/start/features.md
+[`only_i32`]: {{rootUrl}}/start/features.md
+[`only_i64`]: {{rootUrl}}/start/features.md
+[`no_index`]: {{rootUrl}}/start/features.md
+[`no_object`]: {{rootUrl}}/start/features.md
+[`no_function`]: {{rootUrl}}/start/features.md
+[`no_module`]: {{rootUrl}}/start/features.md
+[`no_std`]: {{rootUrl}}/start/features.md
 
-[`no-std`]: /start/features.md
+[`no-std`]: {{rootUrl}}/start/features.md
 
-[minimal builds]: /start/builds/minimal.md
-[WASM]: /start/builds/wasm.md
+[minimal builds]: {{rootUrl}}/start/builds/minimal.md
+[WASM]: {{rootUrl}}/start/builds/wasm.md
 
-[`Engine`]: /engine/hello-world.md
-[`private`]: /engine/call_fn.md
-[`Func`]: /engine/func.md
-[`eval_expression`]: /engine/expressions.md
-[`eval_expression_with_scope`]: /engine/expressions.md
-[raw `Engine`]: /engine/raw.md
-[built-in operators]: /engine/raw.md#built-in-operators
-[package]: /rust/packages.md
-[packages]: /rust/packages.md
-[`Scope`]: /rust/scope.md
+[`Engine`]: {{rootUrl}}/engine/hello-world.md
+[`private`]: {{rootUrl}}/engine/call_fn.md
+[`Func`]: {{rootUrl}}/engine/func.md
+[`eval_expression`]: {{rootUrl}}/engine/expressions.md
+[`eval_expression_with_scope`]: {{rootUrl}}/engine/expressions.md
+[raw `Engine`]: {{rootUrl}}/engine/raw.md
+[built-in operators]: {{rootUrl}}/engine/raw.md#built-in-operators
+[package]: {{rootUrl}}/rust/packages.md
+[packages]: {{rootUrl}}/rust/packages.md
+[`Scope`]: {{rootUrl}}/rust/scope.md
 
-[`type_of()`]: /language/type_of.md
-[`to_string()`]: /language/values-and-types.md
-[`()`]: /language/values-and-types.md
-[standard types]: /language/values-and-types.md
-[`Dynamic`]: /language/dynamic.md
-[`to_int`]: /language/convert.md
-[`to_float`]: /language/convert.md
+[`type_of()`]: {{rootUrl}}/language/type_of.md
+[`to_string()`]: {{rootUrl}}/language/values-and-types.md
+[`()`]: {{rootUrl}}/language/values-and-types.md
+[standard types]: {{rootUrl}}/language/values-and-types.md
+[`Dynamic`]: {{rootUrl}}/language/dynamic.md
+[`to_int`]: {{rootUrl}}/language/convert.md
+[`to_float`]: {{rootUrl}}/language/convert.md
 
-[custom type]: /language/custom.md
-[custom types]: /language/custom.md
+[custom type]: {{rootUrl}}/language/custom.md
+[custom types]: {{rootUrl}}/language/custom.md
 
-[`print`]: /language/print-debug.md
-[`debug`]: /language/print-debug.md
+[`print`]: {{rootUrl}}/language/print-debug.md
+[`debug`]: {{rootUrl}}/language/print-debug.md
 
-[variable]: /language/variables.md
-[variables]: /language/variables.md
+[variable]: {{rootUrl}}/language/variables.md
+[variables]: {{rootUrl}}/language/variables.md
 
-[string]: /language/strings-chars.md
-[strings]: /language/strings-chars.md
-[char]: /language/strings-chars.md
+[string]: {{rootUrl}}/language/strings-chars.md
+[strings]: {{rootUrl}}/language/strings-chars.md
+[char]: {{rootUrl}}/language/strings-chars.md
 
-[array]: /language/arrays.md
-[arrays]: /language/arrays.md
-[`Array`]: /language/arrays.md
+[array]: {{rootUrl}}/language/arrays.md
+[arrays]: {{rootUrl}}/language/arrays.md
+[`Array`]: {{rootUrl}}/language/arrays.md
 
-[`Map`]: /language/object-maps.md
-[object map]: /language/object-maps.md
-[object maps]: /language/object-maps.md
+[`Map`]: {{rootUrl}}/language/object-maps.md
+[object map]: {{rootUrl}}/language/object-maps.md
+[object maps]: {{rootUrl}}/language/object-maps.md
 
-[`timestamp`]: /language/timestamps.md
-[timestamp]: /language/timestamps.md
-[timestamps]: /language/timestamps.md
+[`timestamp`]: {{rootUrl}}/language/timestamps.md
+[timestamp]: {{rootUrl}}/language/timestamps.md
+[timestamps]: {{rootUrl}}/language/timestamps.md
 
-[function]: /language/functions.md
-[functions]: /language/functions.md
+[function]: {{rootUrl}}/language/functions.md
+[functions]: {{rootUrl}}/language/functions.md
 
-[`Module`]: /language/modules.md
-[module]: /language/modules.md
-[modules]: /language/modules.md
-[`export`]: /language/modules/export.md
-[`import`]: /language/modules/import.md
+[`Module`]: {{rootUrl}}/language/modules.md
+[module]: {{rootUrl}}/language/modules.md
+[modules]: {{rootUrl}}/language/modules.md
+[`export`]: {{rootUrl}}/language/modules/export.md
+[`import`]: {{rootUrl}}/language/modules/import.md
 
-[`eval`]: /language/eval.md
+[`eval`]: {{rootUrl}}/language/eval.md
 
-[maximum statement depth]: /safety/max-stmt-depth.md
-[maximum call stack depth]: /safety/max-call-stack.md
-[maximum number of operations]: /safety/max-operations.md
-[maximum number of modules]: /safety/max-modules.md
-[maximum length of strings]: /safety/max-string-size.md
-[maximum size of arrays]: /safety/max-array-size.md
-[maximum size of object maps]: /safety/max-map-size.md
+[maximum statement depth]: {{rootUrl}}/safety/max-stmt-depth.md
+[maximum call stack depth]: {{rootUrl}}/safety/max-call-stack.md
+[maximum number of operations]: {{rootUrl}}/safety/max-operations.md
+[maximum number of modules]: {{rootUrl}}/safety/max-modules.md
+[maximum length of strings]: {{rootUrl}}/safety/max-string-size.md
+[maximum size of arrays]: {{rootUrl}}/safety/max-array-size.md
+[maximum size of object maps]: {{rootUrl}}/safety/max-map-size.md
 [progress]:/safety/progress.md
 
-[script optimization]: /engine/optimize.md
-[`OptimizationLevel::Full`]: /engine/optimize/optimize-levels.md
-[`OptimizationLevel::Simple`]: /engine/optimize/optimize-levels.md
-[`OptimizationLevel::None`]: /engine/optimize/optimize-levels.md
-
+[script optimization]: {{rootUrl}}/engine/optimize.md
+[`OptimizationLevel::Full`]: {{rootUrl}}/engine/optimize/optimize-levels.md
+[`OptimizationLevel::Simple`]: {{rootUrl}}/engine/optimize/optimize-levels.md
+[`OptimizationLevel::None`]: {{rootUrl}}/engine/optimize/optimize-levels.md

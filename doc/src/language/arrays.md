@@ -22,7 +22,7 @@ The maximum allowed size of an array can be controlled via `Engine::set_max_arra
 Built-in Functions
 -----------------
 
-The following methods (mostly defined in the [`BasicArrayPackage`](/rust/packages.md) but excluded if using a [raw `Engine`]) operate on arrays:
+The following methods (mostly defined in the [`BasicArrayPackage`]({{rootUrl}}/rust/packages.md) but excluded if using a [raw `Engine`]) operate on arrays:
 
 | Function                  | Parameter(s)                                                          | Description                                                                                          |
 | ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |

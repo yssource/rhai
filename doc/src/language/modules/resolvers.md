@@ -5,7 +5,7 @@ Module Resolvers
 
 When encountering an [`import`] statement, Rhai attempts to _resolve_ the module based on the path string.
 
-_Module Resolvers_ are service types that implement the [`ModuleResolver`](/rust/traits.md) trait.
+_Module Resolvers_ are service types that implement the [`ModuleResolver`]({{rootUrl}}/rust/traits.md) trait.
 
 There are a number of standard resolvers built into Rhai, the default being the `FileModuleResolver`
 which simply loads a script file based on the path (with `.rhai` extension attached) and execute it to form a module.

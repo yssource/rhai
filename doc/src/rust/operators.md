@@ -14,7 +14,7 @@ let x = +(a, b);        // <- the above is equivalent to this function call
 ```
 
 Similarly, comparison operators including `==`, `!=` etc. are all implemented as functions,
-with the stark exception of `&&` and `||`. Because they [_short-circuit_](/language/logic.md#boolean-operators),
+with the stark exception of `&&` and `||`. Because they [_short-circuit_]({{rootUrl}}/language/logic.md#boolean-operators),
 `&&` and `||` are handled specially and _not_ via a function; as a result, overriding them has no effect at all.
 
 Operator functions cannot be defined as a script function (because operators syntax are not valid function names).

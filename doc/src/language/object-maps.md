@@ -39,7 +39,7 @@ The index notation allows setting/getting properties of arbitrary names (even th
 Built-in Functions
 -----------------
 
-The following methods (defined in the [`BasicMapPackage`](/rust/packages.md) but excluded if using a [raw `Engine`])
+The following methods (defined in the [`BasicMapPackage`]({{rootUrl}}/rust/packages.md) but excluded if using a [raw `Engine`])
 operate on object maps:
 
 | Function               | Parameter(s)                        | Description                                                                                                                              |

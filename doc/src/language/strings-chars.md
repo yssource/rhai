@@ -6,7 +6,7 @@ Strings and Characters
 String in Rhai contain any text sequence of valid Unicode characters.
 Internally strings are stored in UTF-8 encoding.
 
-Strings can be built up from other strings and types via the `+` operator (provided by the [`MoreStringPackage`](/rust/packages.md)
+Strings can be built up from other strings and types via the `+` operator (provided by the [`MoreStringPackage`]({{rootUrl}}/rust/packages.md)
 but excluded if using a [raw `Engine`]). This is particularly useful when printing output.
 
 [`type_of()`] a string returns `"string"`.
