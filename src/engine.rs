@@ -2081,10 +2081,7 @@ impl Engine {
                     #[cfg(not(feature = "no_module"))]
                     {
                         if let Some(resolver) = &self.module_resolver {
-                            // Use an empty scope to create a module
-                            let module =
-                                resolver.resolve(self, Scope::new(), &path, expr.position())?;
-
+                            let module = resolver.resolve(self, &path, expr.position())?;
                             let mod_name = unsafe_cast_var_name_to_lifetime(name, &state);
                             scope.push_module_internal(mod_name, module);
 

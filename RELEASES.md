@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.15.2
 ==============
 
+Breaking changes
+----------------
+
+* The trait function `ModuleResolver::resolve` no longer takes a `Scope` as argument.
+
 
 Version 0.15.1
 ==============

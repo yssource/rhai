@@ -1031,13 +1031,7 @@ impl ModuleRef {
 /// Trait that encapsulates a module resolution service.
 pub trait ModuleResolver: SendSync {
     /// Resolve a module based on a path string.
-    fn resolve(
-        &self,
-        _: &Engine,
-        scope: Scope,
-        path: &str,
-        pos: Position,
-    ) -> Result<Module, Box<EvalAltResult>>;
+    fn resolve(&self, _: &Engine, path: &str, pos: Position) -> Result<Module, Box<EvalAltResult>>;
 }
 
 /// Re-export module resolvers.
@@ -1161,10 +1155,9 @@ mod file {
         pub fn create_module<P: Into<PathBuf>>(
             &self,
             engine: &Engine,
-            scope: Scope,
             path: &str,
         ) -> Result<Module, Box<EvalAltResult>> {
-            self.resolve(engine, scope, path, Default::default())
+            self.resolve(engine, path, Default::default())
         }
     }
 
@@ -1172,7 +1165,6 @@ mod file {
         fn resolve(
             &self,
             engine: &Engine,
-            scope: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {
@@ -1186,7 +1178,7 @@ mod file {
                 .compile_file(file_path)
                 .map_err(|err| err.new_position(pos))?;
 
-            Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| err.new_position(pos))
+            Module::eval_ast_as_new(Scope::new(), &ast, engine).map_err(|err| err.new_position(pos))
         }
     }
 }
@@ -1258,7 +1250,6 @@ mod stat {
         fn resolve(
             &self,
             _: &Engine,
-            _: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {
