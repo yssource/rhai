@@ -451,7 +451,7 @@ impl Module {
     /// let hash = module.set_fn_2("calc", |x: i64, y: ImmutableString| {
     ///     Ok(x + y.len() as i64)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -965,7 +965,7 @@ impl Module {
     }
 
     /// Get the specified type iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
+    pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.type_iterators.get(&id).cloned()
     }
 }
