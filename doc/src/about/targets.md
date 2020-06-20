@@ -7,6 +7,6 @@ The following targets and builds are support by Rhai:
 
 * All common CPU targets for Windows, Linux and MacOS.
 
-* [WASM]
+* WebAssembly ([WASM])
 
 * [`no-std`]

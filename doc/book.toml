@@ -7,10 +7,16 @@ language = "en"
 [output.html]
 no-section-label = true
 git-repository-url = "https://github.com/jonathandturner/rhai"
+curly-quotes = true
 
 [output.html.fold]
 enable = true
 level = 4
+
+[outputX.linkcheck]
+follow-web-links = false
+traverse-parent-directories = false
+warning-policy = "ignore"
 
 [preprocessor.tera]
 command = "mdbook-tera --json ./src/context.json"

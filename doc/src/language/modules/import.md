@@ -18,10 +18,11 @@ lock::status = "off";           // <- runtime error - cannot modify a constant
 ```
 
 `import` statements are _scoped_, meaning that they are only accessible inside the scope that they're imported.
-They can appear anywhere a normal statement can be, but in the vast majority of cases `import` statements are
-group at the beginning of a script.
 
-It is, however, not advised to deviate from this common practice unless there is a _Very Good Reason™_.
+They can appear anywhere a normal statement can be, but in the vast majority of cases `import` statements are
+group at the beginning of a script. It is, however, not advised to deviate from this common practice unless
+there is a _Very Good Reason™_.
+
 Especially, do not place an `import` statement within a loop; doing so will repeatedly re-load the same module
 during every iteration of the loop!
 
@@ -34,7 +35,7 @@ if secured {                    // new block scope
     c::encrypt(key);            // use a function in the module
 }                               // the module disappears at the end of the block scope
 
-crypto::encrypt(others);        // <- this causes a run-time error because the 'crypto' module
+c::encrypt(others);             // <- this causes a run-time error because the 'crypto' module
                                 //    is no longer available!
 
 for x in range(0, 1000) {

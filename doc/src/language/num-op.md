@@ -31,7 +31,7 @@ Binary Operators
 | `%`      | Modulo (remainder)                                   |               |
 | `~`      | Power                                                |               |
 | `&`      | Binary _And_ bit-mask                                |      Yes      |
-| `\|`     | Binary _Or_ bit-mask                                 |      Yes      |
+| `|`      | Binary _Or_ bit-mask                                 |      Yes      |
 | `^`      | Binary _Xor_ bit-mask                                |      Yes      |
 | `<<`     | Left bit-shift                                       |      Yes      |
 | `>>`     | Right bit-shift                                      |      Yes      |

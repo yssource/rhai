@@ -17,7 +17,7 @@
 [WASM]: {{rootUrl}}/start/builds/wasm.md
 
 [`Engine`]: {{rootUrl}}/engine/hello-world.md
-[`private`]: {{rootUrl}}/engine/call_fn.md
+[`private`]: {{rootUrl}}/engine/call-fn.md
 [`Func`]: {{rootUrl}}/engine/func.md
 [`eval_expression`]: {{rootUrl}}/engine/expressions.md
 [`eval_expression_with_scope`]: {{rootUrl}}/engine/expressions.md
@@ -27,7 +27,7 @@
 [packages]: {{rootUrl}}/rust/packages.md
 [`Scope`]: {{rootUrl}}/rust/scope.md
 
-[`type_of()`]: {{rootUrl}}/language/type_of.md
+[`type_of()`]: {{rootUrl}}/language/type-of.md
 [`to_string()`]: {{rootUrl}}/language/values-and-types.md
 [`()`]: {{rootUrl}}/language/values-and-types.md
 [standard types]: {{rootUrl}}/language/values-and-types.md
@@ -35,8 +35,8 @@
 [`to_int`]: {{rootUrl}}/language/convert.md
 [`to_float`]: {{rootUrl}}/language/convert.md
 
-[custom type]: {{rootUrl}}/language/custom.md
-[custom types]: {{rootUrl}}/language/custom.md
+[custom type]: {{rootUrl}}/rust/custom.md
+[custom types]: {{rootUrl}}/rust/custom.md
 
 [`print`]: {{rootUrl}}/language/print-debug.md
 [`debug`]: {{rootUrl}}/language/print-debug.md

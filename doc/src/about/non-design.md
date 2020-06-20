@@ -1,5 +1,5 @@
-What Rhai Doesn't Do
-====================
+What Rhai Isn't
+===============
 
 {{#include ../links.md}}
 

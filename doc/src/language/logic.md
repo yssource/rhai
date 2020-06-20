@@ -40,9 +40,9 @@ Boolean operators
 | -------- | ------------------------------------- |
 | `!`      | Boolean _Not_                         |
 | `&&`     | Boolean _And_ (short-circuits)        |
-| `\|\|`   | Boolean _Or_ (short-circuits)         |
+| `||`     | Boolean _Or_ (short-circuits)         |
 | `&`      | Boolean _And_ (doesn't short-circuit) |
-| `\|`     | Boolean _Or_ (doesn't short-circuit)  |
+| `|`      | Boolean _Or_ (doesn't short-circuit)  |
 
 Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated
 if the first one already proves the condition wrong.
