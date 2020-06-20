@@ -4,7 +4,7 @@ Rhai - Embedded Scripting for Rust
 ![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai)
 [![Travis (.org)](https://img.shields.io/travis/jonathandturner/rhai)](http://travis-ci.org/jonathandturner/rhai)
 [![license](https://img.shields.io/github/license/jonathandturner/rhai)](https://github.com/license/jonathandturner/rhai)
-[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https::/crates.io/crates/rhai/)
+[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https:/crates.io/crates/rhai/)
 ![crates.io](https://img.shields.io/crates/d/rhai)
 [![API Docs](https://docs.rs/rhai/badge.svg)](https://docs.rs/rhai/)
 
@@ -73,21 +73,21 @@ This is similar to some dynamic languages where most of the core functionalities
 Installation
 ------------
 
-Install the Rhai crate on [`crates.io`](https::/crates.io/crates/rhai/) by adding this line to `dependencies`:
+Install the Rhai crate on [`crates.io`](https:/crates.io/crates/rhai/) by adding this line to `dependencies`:
 
 ```toml
 [dependencies]
 rhai = "0.15.2"
 ```
 
-Use the latest released crate version on [`crates.io`](https::/crates.io/crates/rhai/):
+Use the latest released crate version on [`crates.io`](https:/crates.io/crates/rhai/):
 
 ```toml
 [dependencies]
 rhai = "*"
 ```
 
-Crate versions are released on [`crates.io`](https::/crates.io/crates/rhai/) infrequently, so to track the
+Crate versions are released on [`crates.io`](https:/crates.io/crates/rhai/) infrequently, so to track the
 latest features, enhancements and bug fixes, pull directly from GitHub:
 
 ```toml
@@ -149,7 +149,7 @@ Making [`Dynamic`] small helps performance due to better cache efficiency.
 
 [minimal builds]: #minimal-builds
 
-In order to compile a _minimal_build - i.e. a build optimized for size - perhaps for `no-std` embedded targets or for
+In order to compile a _minimal_ build - i.e. a build optimized for size - perhaps for `no-std` embedded targets or for
 compiling to [WASM], it is essential that the correct linker flags are used in `cargo.toml`:
 
 ```toml
@@ -2249,7 +2249,7 @@ foo();                      // prints "None."
 Members and methods
 -------------------
 
-Properties and methods in a Rust custom type registered with the [`Engine`] can be called just like in Rust.
+Properties and methods in a Rust custom type registered with the [`Engine`] can be called just like a regular function in Rust.
 Unlike functions defined in script (for which all arguments are passed by _value_),
 native Rust functions may mutate the object (or the first argument if called in normal function call style).
 
@@ -2502,20 +2502,20 @@ a script so that it does not consume more resources that it is allowed to.
 
 The most important resources to watch out for are:
 
-* **Memory**: A malicous script may continuously grow a [string], an [array] or [object map] until all memory is consumed.
+* **Memory**: A malicious script may continuously grow a [string], an [array] or [object map] until all memory is consumed.
   It may also create a large [array] or [object map] literal that exhausts all memory during parsing.
-* **CPU**: A malicous script may run an infinite tight loop that consumes all CPU cycles.
-* **Time**: A malicous script may run indefinitely, thereby blocking the calling system which is waiting for a result.
-* **Stack**: A malicous script may attempt an infinite recursive call that exhausts the call stack.
+* **CPU**: A malicious script may run an infinite tight loop that consumes all CPU cycles.
+* **Time**: A malicious script may run indefinitely, thereby blocking the calling system which is waiting for a result.
+* **Stack**: A malicious script may attempt an infinite recursive call that exhausts the call stack.
   Alternatively, it may create a degenerated deep expression with so many levels that the parser exhausts the call stack
   when parsing the expression; or even deeply-nested statement blocks, if nested deep enough.
-* **Overflows**: A malicous script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
+* **Overflows**: A malicious script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
   create bad floating-point representations, in order to crash the system.
-* **Files**: A malicous script may continuously [`import`] an external module within an infinite loop,
+* **Files**: A malicious script may continuously [`import`] an external module within an infinite loop,
   thereby putting heavy load on the file-system (or even the network if the file is not local).
   Furthermore, the module script may simply [`import`] itself in an infinite recursion.
   Even when modules are not created from files, they still typically consume a lot of resources to load.
-* **Data**: A malicous script may attempt to read from and/or write to data that it does not own. If this happens,
+* **Data**: A malicious script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
 
 ### Maximum length of strings
@@ -2681,7 +2681,7 @@ Rhai by default limits function calls to a maximum depth of 128 levels (16 level
 This limit may be changed via the `Engine::set_max_call_levels` method.
 
 When setting this limit, care must be also taken to the evaluation depth of each _statement_
-within the function. It is entirely possible for a malicous script to embed a recursive call deep
+within the function. It is entirely possible for a malicious script to embed a recursive call deep
 inside a nested expression or statement block (see [maximum statement depth](#maximum-statement-depth)).
 
 The limit can be disabled via the [`unchecked`] feature for higher performance
@@ -2726,7 +2726,7 @@ engine.set_max_expr_depths(50, 5);          // allow nesting up to 50 layers of 
 
 Beware that there may be multiple layers for a simple language construct, even though it may correspond
 to only one AST node. That is because the Rhai _parser_ internally runs a recursive chain of function calls
-and it is important that a malicous script does not panic the parser in the first place.
+and it is important that a malicious script does not panic the parser in the first place.
 
 Functions are placed under stricter limits because of the multiplicative effect of recursion.
 A script can effectively call itself while deep inside an expression chain within the function body,
@@ -2739,7 +2739,7 @@ Make sure that `C x ( 5 + F ) + S` layered calls do not cause a stack overflow, 
 * `S` = maximum statement depth at global level.
 
 A script exceeding the maximum nesting depths will terminate with a parsing error.
-The malicous `AST` will not be able to get past parsing in the first place.
+The malicious `AST` will not be able to get past parsing in the first place.
 
 This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
