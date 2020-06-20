@@ -1,0 +1,12 @@
+[book]
+title = "Rhai - Embedded Scripting for Rust"
+authors = ["Jonathan Turner", "Stephen Chung"]
+description = "Tutorial and reference on the Rhai scripting engine and language."
+language = "en"
+
+[output.html]
+no-section-label = true
+
+[output.html.fold]
+enable = true
+level = 4
