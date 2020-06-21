@@ -1,4 +1,4 @@
-//! Helper module which defines `FnArgs` to make function calling easier.
+//! Helper module which defines `FuncArgs` to make function calling easier.
 
 #![allow(non_snake_case)]
 

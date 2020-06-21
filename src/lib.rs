@@ -54,6 +54,7 @@
 //! | ------------- | ----------------------------------------------------------------------------------------------------------------------------------|
 //! | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!       |
 //! | `no_function` | Disable script-defined functions if not needed.                                                                                   |
+//! | `no_module`   | Disable loading external modules if not needed.                                                                                   |
 //! | `no_index`    | Disable arrays and indexing features if not needed.                                                                               |
 //! | `no_object`   | Disable support for custom types and objects.                                                                                     |
 //! | `no_float`    | Disable floating-point numbers and math if not needed.                                                                            |
@@ -63,7 +64,7 @@
 //! | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                              |
 //! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and `AST` are all `Send + Sync`. |
 //!
-//! [Check out the README on GitHub for details on the Rhai language!](https://github.com/jonathandturner/rhai)
+//! See [The Rhai Book](https://schungx.github.io/rhai/) for details on the Rhai script engine and language.
 
 #![cfg_attr(feature = "no_std", no_std)]
 
@@ -76,7 +77,7 @@ mod engine;
 mod error;
 mod fn_call;
 mod fn_func;
-pub mod fn_native;
+mod fn_native;
 mod fn_register;
 mod module;
 mod optimize;
@@ -92,6 +93,7 @@ mod utils;
 pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
+pub use fn_native::IteratorFn;
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};

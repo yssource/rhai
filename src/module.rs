@@ -339,7 +339,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
@@ -367,7 +367,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -397,7 +397,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -427,7 +427,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
@@ -451,7 +451,7 @@ impl Module {
     /// let hash = module.set_fn_2("calc", |x: i64, y: ImmutableString| {
     ///     Ok(x + y.len() as i64)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -487,7 +487,7 @@ impl Module {
     /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: ImmutableString| {
     ///     *x += y.len() as i64; Ok(*x)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -524,7 +524,7 @@ impl Module {
     ///     *x = y.len() as i64;
     ///     Ok(())
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
@@ -549,7 +549,7 @@ impl Module {
     /// let hash = module.set_indexer_get_fn(|x: &mut i64, y: ImmutableString| {
     ///     Ok(*x + y.len() as i64)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
@@ -573,7 +573,7 @@ impl Module {
     /// let hash = module.set_fn_3("calc", |x: i64, y: ImmutableString, z: i64| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_3<
         A: Variant + Clone,
@@ -615,7 +615,7 @@ impl Module {
     /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: ImmutableString, z: i64| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_3_mut<
         A: Variant + Clone,
@@ -658,7 +658,7 @@ impl Module {
     ///     *x = y.len() as i64 + value;
     ///     Ok(())
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
@@ -693,7 +693,7 @@ impl Module {
     /// let hash = module.set_fn_4("calc", |x: i64, y: ImmutableString, z: i64, _w: ()| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_4<
         A: Variant + Clone,
@@ -742,7 +742,7 @@ impl Module {
     /// let hash = module.set_fn_4_mut("calc", |x: &mut i64, y: ImmutableString, z: i64, _w: ()| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
-    /// assert!(module.get_fn(hash).is_some());
+    /// assert!(module.contains_fn(hash));
     /// ```
     pub fn set_fn_4_mut<
         A: Variant + Clone,
@@ -781,17 +781,7 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
-    /// assert!(module.get_fn(hash).is_some());
-    /// ```
-    pub fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
+    pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
         self.functions.get(&hash_fn).map(|(_, _, _, v)| v)
     }
 
@@ -975,7 +965,7 @@ impl Module {
     }
 
     /// Get the specified type iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
+    pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.type_iterators.get(&id).cloned()
     }
 }
@@ -1041,13 +1031,7 @@ impl ModuleRef {
 /// Trait that encapsulates a module resolution service.
 pub trait ModuleResolver: SendSync {
     /// Resolve a module based on a path string.
-    fn resolve(
-        &self,
-        _: &Engine,
-        scope: Scope,
-        path: &str,
-        pos: Position,
-    ) -> Result<Module, Box<EvalAltResult>>;
+    fn resolve(&self, _: &Engine, path: &str, pos: Position) -> Result<Module, Box<EvalAltResult>>;
 }
 
 /// Re-export module resolvers.
@@ -1171,10 +1155,9 @@ mod file {
         pub fn create_module<P: Into<PathBuf>>(
             &self,
             engine: &Engine,
-            scope: Scope,
             path: &str,
         ) -> Result<Module, Box<EvalAltResult>> {
-            self.resolve(engine, scope, path, Default::default())
+            self.resolve(engine, path, Default::default())
         }
     }
 
@@ -1182,7 +1165,6 @@ mod file {
         fn resolve(
             &self,
             engine: &Engine,
-            scope: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {
@@ -1196,7 +1178,7 @@ mod file {
                 .compile_file(file_path)
                 .map_err(|err| err.new_position(pos))?;
 
-            Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| err.new_position(pos))
+            Module::eval_ast_as_new(Scope::new(), &ast, engine).map_err(|err| err.new_position(pos))
         }
     }
 }
@@ -1268,7 +1250,6 @@ mod stat {
         fn resolve(
             &self,
             _: &Engine,
-            _: Scope,
             path: &str,
             pos: Position,
         ) -> Result<Module, Box<EvalAltResult>> {
