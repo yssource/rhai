@@ -550,8 +550,15 @@ impl Dynamic {
     /// Convert the `Dynamic` into `String` and return it.
     /// Returns the name of the actual type if the cast fails.
     pub fn take_string(self) -> Result<String, &'static str> {
+        self.take_immutable_string()
+            .map(ImmutableString::into_owned)
+    }
+
+    /// Convert the `Dynamic` into `ImmutableString` and return it.
+    /// Returns the name of the actual type if the cast fails.
+    pub(crate) fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
-            Union::Str(s) => Ok(s.into_owned()),
+            Union::Str(s) => Ok(s),
             _ => Err(self.type_name()),
         }
     }
@@ -615,7 +622,7 @@ impl<T: Variant + Clone> From<HashMap<String, T>> for Dynamic {
         Self(Union::Map(Box::new(
             value
                 .into_iter()
-                .map(|(k, v)| (k, Dynamic::from(v)))
+                .map(|(k, v)| (k.into(), Dynamic::from(v)))
                 .collect(),
         )))
     }

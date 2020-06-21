@@ -408,7 +408,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name == prop)
+                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop)
                     .map(|(_, expr)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -434,7 +434,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name == s.0.as_ref())
+                m.0.into_iter().find(|((name, _), _)| *name == s.0)
                     .map(|(_, expr)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -472,7 +472,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // "xxx" in #{...}
             (Expr::StringConstant(a), Expr::Map(b)) => {
                 state.set_dirty();
-                if b.0.iter().find(|((name, _), _)| name == a.0.as_ref()).is_some() {
+                if b.0.iter().find(|((name, _), _)| *name == a.0).is_some() {
                     Expr::True(a.1)
                 } else {
                     Expr::False(a.1)
@@ -483,7 +483,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 let ch = a.0.to_string();
 
-                if b.0.iter().find(|((name, _), _)| name == &ch).is_some() {
+                if b.0.iter().find(|((name, _), _)| name.as_str() == ch.as_str()).is_some() {
                     Expr::True(a.1)
                 } else {
                     Expr::False(a.1)

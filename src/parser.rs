@@ -464,7 +464,7 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Box<(StaticVec<Expr>, Position)>),
     /// #{ name:expr, ... }
-    Map(Box<(StaticVec<((String, Position), Expr)>, Position)>),
+    Map(Box<(StaticVec<((ImmutableString, Position), Expr)>, Position)>),
     /// lhs in rhs
     In(Box<(Expr, Expr, Position)>),
     /// lhs && rhs
@@ -1196,7 +1196,7 @@ fn parse_map_literal(
                 }
 
                 let expr = parse_expr(input, state, settings.level_up())?;
-                map.push(((name, pos), expr));
+                map.push(((Into::<ImmutableString>::into(name), pos), expr));
             }
         }
 

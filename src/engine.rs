@@ -38,7 +38,7 @@ pub type Array = Vec<Dynamic>;
 ///
 /// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
-pub type Map = HashMap<String, Dynamic>;
+pub type Map = HashMap<ImmutableString, Dynamic>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
@@ -1389,7 +1389,7 @@ impl Engine {
                 // val_map[idx]
                 Ok(if create {
                     let index = idx
-                        .take_string()
+                        .take_immutable_string()
                         .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
                     map.entry(index).or_insert(Default::default()).into()
@@ -1398,7 +1398,7 @@ impl Engine {
                         .downcast_ref::<String>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
-                    map.get_mut(index)
+                    map.get_mut(index.as_str())
                         .map(Target::from)
                         .unwrap_or_else(|| Target::from(()))
                 })
@@ -1498,7 +1498,9 @@ impl Engine {
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
                 // Only allows String or char
                 Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(s.as_str()).into()),
-                Dynamic(Union::Char(c)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
+                Dynamic(Union::Char(c)) => {
+                    Ok(rhs_value.contains_key(c.to_string().as_str()).into())
+                }
                 _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
             },
             Dynamic(Union::Str(rhs_value)) => match lhs_value {
