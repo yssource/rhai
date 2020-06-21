@@ -3,6 +3,9 @@ Variables
 
 {{#include ../links.md}}
 
+Valid Names
+-----------
+
 Variables in Rhai follow normal C naming rules (i.e. must contain only ASCII letters, digits and underscores '`_`').
 
 Variable names must start with an ASCII letter or an underscore '`_`', must contain at least one ASCII letter,
@@ -11,9 +14,21 @@ and must start with an ASCII letter before a digit.
 Therefore, names like '`_`', '`_42`', '`3a`' etc. are not legal variable names, but '`_c3po`' and '`r2d2`' are.
 Variable names are also case _sensitive_.
 
-Variables are defined using the `let` keyword. A variable defined within a statement block is _local_ to that block.
+Variable names cannot be the same as a [keyword].
+
+
+Declare a Variable
+------------------
+
+Variables are declared using the `let` keyword.
+
+Variables do not have to be given an initial value.
+If none is provided, then it defaults to [`()`].
+
+A variable defined within a statement block is _local_ to that block.
 
 ```rust
+let x;              // ok - value is '()'
 let x = 3;          // ok
 let _x = 42;        // ok
 let x_ = 42;        // also ok

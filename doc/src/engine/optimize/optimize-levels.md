@@ -3,10 +3,7 @@ Optimization Levels
 
 {{#include ../../links.md}}
 
-Set Optimization Level
----------------------
-
-There are actually three levels of optimizations: `None`, `Simple` and `Full`.
+There are three levels of optimization: `None`, `Simple` and `Full`.
 
 * `None` is obvious - no optimization on the AST is performed.
 
@@ -15,6 +12,10 @@ There are actually three levels of optimizations: `None`, `Simple` and `Full`.
 
 * `Full` is _much_ more aggressive, _including_ running functions on constant arguments to determine their result.
   One benefit to this is that many more optimization opportunities arise, especially with regards to comparison operators.
+
+
+Set Optimization Level
+---------------------
 
 An [`Engine`]'s optimization level is set via a call to `Engine::set_optimization_level`:
 

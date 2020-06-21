@@ -42,4 +42,4 @@ Features
 Documentation
 -------------
 
-See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai script engine and language.
+See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai scripting engine and language.

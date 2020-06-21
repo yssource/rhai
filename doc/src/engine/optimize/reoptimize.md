@@ -3,15 +3,38 @@ Re-Optimize an AST
 
 {{#include ../../links.md}}
 
-If it is ever needed to _re_-optimize an `AST`, use the `optimize_ast` method:
+Sometimes it is more efficient to store one single, large script with delimited code blocks guarded by
+constant variables.  This script is compiled once to an `AST`.
+
+Then, depending on the execution environment, constants are passed into the [`Engine`] and the `AST`
+is _re_-optimized based on those constants via the `Engine::optimize_ast` method,
+effectively pruning out unused code sections.
+
+The final, optimized `AST` is then used for evaluations.
 
 ```rust
-// Compile script to AST
-let ast = engine.compile("40 + 2")?;
+// Compile master script to AST
+let master_ast = engine.compile(
+r"
+    if SCENARIO_1 {
+        do_work();
+    } else if SCENARIO_2 {
+        do_something();
+    } else if SCENARIO_3 {
+        do_something_else();
+    } else {
+        do_nothing();
+    }
+")?;
 
-// Create a new 'Scope' - put constants in it to aid optimization if using 'OptimizationLevel::Full'
-let scope = Scope::new();
+// Create a new 'Scope' - put constants in it to aid optimization
+let mut scope = Scope::new();
+scope.push_constant("SCENARIO_1", true);
+scope.push_constant("SCENARIO_2", false);
+scope.push_constant("SCENARIO_3", false);
 
 // Re-optimize the AST
-let ast = engine.optimize_ast(&scope, &ast, OptimizationLevel::Full);
+let new_ast = engine.optimize_ast(&scope, master_ast.clone(), OptimizationLevel::Simple);
+
+// 'new_ast' is essentially: 'do_work()'
 ```

@@ -7,8 +7,8 @@ For many applications in which Rhai is embedded, it is necessary to customize th
 are resolved.  For instance, modules may need to be loaded from script texts stored in a database,
 not in the file system.
 
-A module resolver must implement the trait `rhai::ModuleResolver`, which contains only one function:
-`resolve`.
+A module resolver must implement the trait [`rhai::ModuleResolver`]({{rootUrl}}/rust/traits.md),
+which contains only one function: `resolve`.
 
 When Rhai prepares to load a module, `ModuleResolver::resolve` is called with the name
 of the _module path_ (i.e. the path specified in the [`import`] statement). Upon success, it should

@@ -23,8 +23,8 @@
 [`eval_expression_with_scope`]: {{rootUrl}}/engine/expressions.md
 [raw `Engine`]: {{rootUrl}}/engine/raw.md
 [built-in operators]: {{rootUrl}}/engine/raw.md#built-in-operators
-[package]: {{rootUrl}}/rust/packages.md
-[packages]: {{rootUrl}}/rust/packages.md
+[package]: {{rootUrl}}/rust/packages/index.md
+[packages]: {{rootUrl}}/rust/packages/index.md
 [`Scope`]: {{rootUrl}}/rust/scope.md
 
 [`type_of()`]: {{rootUrl}}/language/type-of.md
@@ -40,6 +40,9 @@
 
 [`print`]: {{rootUrl}}/language/print-debug.md
 [`debug`]: {{rootUrl}}/language/print-debug.md
+
+[keywords]: {{rootUrl}}/appendix/keywords.md
+[keyword]: {{rootUrl}}/appendix/keywords.md
 
 [variable]: {{rootUrl}}/language/variables.md
 [variables]: {{rootUrl}}/language/variables.md
@@ -63,9 +66,9 @@
 [function]: {{rootUrl}}/language/functions.md
 [functions]: {{rootUrl}}/language/functions.md
 
-[`Module`]: {{rootUrl}}/language/modules.md
-[module]: {{rootUrl}}/language/modules.md
-[modules]: {{rootUrl}}/language/modules.md
+[`Module`]: {{rootUrl}}/language/modules/index.md
+[module]: {{rootUrl}}/language/modules/index.md
+[modules]: {{rootUrl}}/language/modules/index.md
 [`export`]: {{rootUrl}}/language/modules/export.md
 [`import`]: {{rootUrl}}/language/modules/import.md
 
@@ -80,7 +83,7 @@
 [maximum size of object maps]: {{rootUrl}}/safety/max-map-size.md
 [progress]:/safety/progress.md
 
-[script optimization]: {{rootUrl}}/engine/optimize.md
+[script optimization]: {{rootUrl}}/engine/optimize/index.md
 [`OptimizationLevel::Full`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::Simple`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::None`]: {{rootUrl}}/engine/optimize/optimize-levels.md

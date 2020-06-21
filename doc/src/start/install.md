@@ -3,15 +3,15 @@ Install the Rhai Crate
 
 {{#include ../links.md}}
 
-Install the Rhai crate from [`crates.io`](https:/crates.io/crates/rhai/) by adding this line
-under `dependencies` in `Cargo.toml`:
+Install the Rhai crate from [`crates.io`](https:/crates.io/crates/rhai/), start by looking up the
+latest version and adding this line under `dependencies` in `Cargo.toml`:
 
 ```toml
 [dependencies]
-rhai = "0.15.2"
+rhai = "{{version}}"    # assuming {{version}} is the latest version
 ```
 
-Use the latest released crate version on [`crates.io`](https:/crates.io/crates/rhai/):
+Or to automatically use the latest released crate version on [`crates.io`](https:/crates.io/crates/rhai/):
 
 ```toml
 [dependencies]

@@ -44,13 +44,13 @@ fn test_side_effects_command() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let mut scope = Scope::new();
 
-    // Create the command object with initial state, handled by an `Rc`.
+    // Create the command object with initial state, handled by an `Arc`.
     let command = Arc::new(Mutex::new(Command { state: 12 }));
     assert_eq!(command.lock().unwrap().get(), 12);
 
     // Create the wrapper.
     let wrapper = CommandWrapper {
-        command: command.clone(), // Notice this clones the `Rc` only
+        command: command.clone(), // Notice this clones the `Arc` only
     };
 
     // Make the wrapper a singleton in the script environment.

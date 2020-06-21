@@ -13,7 +13,8 @@ print(x * 2);       // prints 84
 x = 123;            // <- syntax error: cannot assign to constant
 ```
 
-Constants must be assigned a _value_, not an expression.
+Unlike variables which need not have initial values (default to [`()`]),
+constants must be assigned one, and it must be a constant _value_, not an expression.
 
 ```rust
 const x = 40 + 2;   // <- syntax error: cannot assign expression to constant

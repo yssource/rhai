@@ -4,10 +4,12 @@ Optional Features
 {{#include ../links.md}}
 
 By default, Rhai includes all the standard functionalities in a small, tight package.
-Most features are here to opt-**out** of certain functionalities that are not needed.
 
-Excluding unneeded functionalities can result in smaller, faster builds
-as well as more control over what a script can (or cannot) do.
+Most features are here to opt-**out** of certain functionalities that are not needed.
+Notice that this deviates from Rust norm where features are _additive_.
+
+Excluding unneeded functionalities can result in smaller, faster builds as well as
+more control over what a script can (or cannot) do.
 
 | Feature       | Description                                                                                                                                                                                            |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -38,7 +40,7 @@ The `Cargo.toml` configuration below turns on these six features:
 
 ```toml
 [dependencies]
-rhai = { version = "0.15.2", features = [ "sync", "unchecked", "only_i32", "no_float", "no_module", "no_function" ] }
+rhai = { version = "{{version}}", features = [ "sync", "unchecked", "only_i32", "no_float", "no_module", "no_function" ] }
 ```
 
 The resulting scripting engine supports only the `i32` integer numeral type (and no others like `u32` or `i16`),
