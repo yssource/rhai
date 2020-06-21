@@ -9,6 +9,11 @@ Breaking changes
 
 * The trait function `ModuleResolver::resolve` no longer takes a `Scope` as argument.
 
+Enhancements
+------------
+
+* [The Rhai Book](https://schungx.github.io/rhai) is online.  Most content in the original `README` was transferred to the Book.
+
 
 Version 0.15.1
 ==============
