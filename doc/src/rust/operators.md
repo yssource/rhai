@@ -17,6 +17,10 @@ Similarly, comparison operators including `==`, `!=` etc. are all implemented as
 with the stark exception of `&&` and `||`. Because they [_short-circuit_]({{rootUrl}}/language/logic.md#boolean-operators),
 `&&` and `||` are handled specially and _not_ via a function; as a result, overriding them has no effect at all.
 
+
+Overload Operator via Rust Function
+----------------------------------
+
 Operator functions cannot be defined as a script function (because operators syntax are not valid function names).
 
 However, operator functions _can_ be registered to the [`Engine`] via the methods
@@ -47,6 +51,10 @@ engine.register_fn("+", mixed_add);                 // register '+' operator for
 
 let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an error)
 ```
+
+
+Considerations
+--------------
 
 Normally, use operator overloading for [custom types] only.
 

@@ -26,7 +26,7 @@ Due to this intended usage, Rhai deliberately keeps the language simple and smal
 such as classes, inheritance, first-class functions, closures, concurrency, byte-codes, JIT etc.
 
 Avoid the temptation to write full-fledge program logic entirely in Rhai - that use case is best fulfilled by
-more complete languages such as JS or Lua.
+more complete languages such as JavaScript or Lua.
 
 Therefore, in actual practice, it is usually best to expose a Rust API into Rhai for scripts to call.
 All your core functionalities should be in Rust.

@@ -17,7 +17,7 @@ let script = "let y = x;";      // build a script
 script +=    "y += foo(y);";
 script +=    "x + y";
 
-let result = eval(script);      // <- look, JS, we can also do this!
+let result = eval(script);      // <- look, JavaScript, we can also do this!
 
 print("Answer: " + result);     // prints 42
 

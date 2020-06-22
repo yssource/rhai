@@ -29,30 +29,25 @@ fn get_any_value() -> Result<Dynamic, Box<EvalAltResult>> {
     Ok((42_i64).into())                         // standard types can use 'into()'
 }
 
-fn main() -> Result<(), Box<EvalAltResult>>
-{
-    let engine = Engine::new();
+let mut engine = Engine::new();
 
-    engine.register_fn("add", add_len);
-    engine.register_fn("add_str", add_len_str);
+engine.register_fn("add", add_len);
+engine.register_fn("add_str", add_len_str);
 
-    let result = engine.eval::<i64>(r#"add(40, "xx")"#)?;
+let result = engine.eval::<i64>(r#"add(40, "xx")"#)?;
 
-    println!("Answer: {}", result);             // prints 42
+println!("Answer: {}", result);             // prints 42
 
-    let result = engine.eval::<i64>(r#"add_str(40, "xx")"#)?;
+let result = engine.eval::<i64>(r#"add_str(40, "xx")"#)?;
 
-    println!("Answer: {}", result);             // prints 42
+println!("Answer: {}", result);             // prints 42
 
-    // Functions that return Dynamic values must use register_result_fn()
-    engine.register_result_fn("get_any_value", get_any_value);
+// Functions that return Dynamic values must use register_result_fn()
+engine.register_result_fn("get_any_value", get_any_value);
 
-    let result = engine.eval::<i64>("get_any_value()")?;
+let result = engine.eval::<i64>("get_any_value()")?;
 
-    println!("Answer: {}", result);             // prints 42
-
-    Ok(())
-}
+println!("Answer: {}", result);             // prints 42
 ```
 
 To create a [`Dynamic`] value, use the `Dynamic::from` method.

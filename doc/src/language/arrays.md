@@ -38,6 +38,7 @@ The following methods (mostly defined in the [`BasicArrayPackage`]({{rootUrl}}/r
 | `clear`                   | _none_                                                                | empties the array                                                                                    |
 | `truncate`                | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
+
 Examples
 --------
 

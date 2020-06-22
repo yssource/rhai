@@ -43,18 +43,14 @@ impl ModuleResolver for MyModuleResolver {
     }
 }
 
-fn main() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new();
+let mut engine = Engine::new();
 
-    // Set the custom module resolver into the 'Engine'.
-    engine.set_module_resolver(Some(MyModuleResolver {}));
+// Set the custom module resolver into the 'Engine'.
+engine.set_module_resolver(Some(MyModuleResolver {}));
 
-    engine.consume(r#"
-        import "hello" as foo;  // this 'import' statement will call
-                                // 'MyModuleResolver::resolve' with "hello" as path
-        foo:bar();
-    "#)?;
-
-    Ok(())
-}
+engine.consume(r#"
+    import "hello" as foo;  // this 'import' statement will call
+                            // 'MyModuleResolver::resolve' with "hello" as path
+    foo:bar();
+"#)?;
 ```

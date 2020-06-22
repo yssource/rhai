@@ -9,6 +9,9 @@ A custom type with an indexer function defined can use the bracket '`[]`' notati
 
 Indexers are disabled when the [`no_index`] feature is used.
 
+For efficiency reasons, indexers **cannot** be used to overload (i.e. override) built-in indexing operations for
+[arrays] and [object maps].
+
 ```rust
 #[derive(Clone)]
 struct TestStruct {
@@ -28,7 +31,7 @@ impl TestStruct {
     }
 }
 
-let engine = Engine::new();
+let mut engine = Engine::new();
 
 engine.register_type::<TestStruct>();
 
@@ -42,6 +45,3 @@ let result = engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
-
-For efficiency reasons, indexers **cannot** be used to overload (i.e. override) built-in indexing operations for
-[arrays] and [object maps].

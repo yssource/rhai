@@ -17,14 +17,11 @@ fn show_it<T: Display>(x: &mut T) {
     println!("put up a good show: {}!", x)
 }
 
-fn main()
-{
-    let engine = Engine::new();
+let mut engine = Engine::new();
 
-    engine.register_fn("print", show_it::<i64>);
-    engine.register_fn("print", show_it::<bool>);
-    engine.register_fn("print", show_it::<ImmutableString>);
-}
+engine.register_fn("print", show_it::<i64>);
+engine.register_fn("print", show_it::<bool>);
+engine.register_fn("print", show_it::<ImmutableString>);
 ```
 
 The above example shows how to register multiple functions

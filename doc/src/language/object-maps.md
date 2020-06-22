@@ -61,7 +61,7 @@ Examples
 let y = #{              // object map literal with 3 properties
     a: 1,
     bar: "hello",
-    "baz!$@": 123.456,  // like JS, you can use any string as property names...
+    "baz!$@": 123.456,  // like JavaScript, you can use any string as property names...
     "": false,          // even the empty string!
 
     a: 42               // <- syntax error: duplicated property name

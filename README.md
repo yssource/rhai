@@ -21,7 +21,7 @@ Supported targets and builds
 Features
 --------
 
-* Easy-to-use language similar to JS+Rust with dynamic typing.
+* Easy-to-use language similar to JavaScript+Rust with dynamic typing.
 * Tight integration with native Rust [functions](https://schungx.github.io/rhai/rust/functions.html) and [types]([#custom-types-and-methods](https://schungx.github.io/rhai/rust/custom.html)), including [getters/setters](https://schungx.github.io/rhai/rust/getters-setters.html), [methods](https://schungx.github.io/rhai/rust/custom.html) and [indexers](https://schungx.github.io/rhai/rust/indexers.html).
 * Freely pass Rust variables/constants into a script via an external [`Scope`](https://schungx.github.io/rhai/rust/scope.html).
 * Easily [call a script-defined function](https://schungx.github.io/rhai/engine/call-fn.html) from Rust.

@@ -2,7 +2,7 @@
 //!
 //! Rhai is a tiny, simple and very fast embedded scripting language for Rust
 //! that gives you a safe and easy way to add scripting to your applications.
-//! It provides a familiar syntax based on JS and Rust and a simple Rust interface.
+//! It provides a familiar syntax based on JavaScript and Rust and a simple Rust interface.
 //! Here is a quick example.
 //!
 //! First, the contents of `my_script.rhai`:

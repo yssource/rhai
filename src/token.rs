@@ -677,12 +677,12 @@ impl<'a> TokenIterator<'a> {
                                     _ => unreachable!(),
                                 });
 
-                                while let Some(next_char_in_hex) = self.peek_next() {
-                                    if !valid.contains(&next_char_in_hex) {
+                                while let Some(next_char_in_escape_seq) = self.peek_next() {
+                                    if !valid.contains(&next_char_in_escape_seq) {
                                         break;
                                     }
 
-                                    result.push(next_char_in_hex);
+                                    result.push(next_char_in_escape_seq);
                                     self.eat_next();
                                 }
                             }

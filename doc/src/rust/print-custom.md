@@ -3,8 +3,9 @@ Printing for Custom Types
 
 {{#include ../links.md}}
 
-To use custom types for [`print`] and [`debug`], or convert its value into a [string], it is necessary that the following
-functions be registered (assuming the custom type is `T : Display + Debug`):
+To use custom types for [`print`] and [`debug`], or convert its value into a [string],
+it is necessary that the following functions be registered (assuming the custom type
+is `T : Display + Debug`):
 
 | Function    | Signature                                                     | Typical implementation                | Usage                                                                                   |
 | ----------- | ------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------- |

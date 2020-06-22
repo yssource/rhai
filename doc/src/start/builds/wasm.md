@@ -14,8 +14,40 @@ But anyhow, do it because you _can_!
 When building for WASM, certain features will not be available, such as the script file API's and loading modules
 from external script files.
 
-Also look into [minimal builds] to reduce generated WASM size.  As of this version, a typical, full-featured
-Rhai scripting engine compiles to a single WASM file less than 200KB gzipped. When excluding features that are
-marginal in WASM environment, the gzipped payload can be further shrunk to 160KB.
+
+Size
+----
+
+Also look into [minimal builds] to reduce generated WASM size.
+
+As of this version, a typical, full-featured Rhai scripting engine compiles to a single WASM file
+less than 200KB gzipped.
+
+When excluding features that are marginal in WASM environment, the gzipped payload can be
+further shrunk to 160KB.
+
+
+Speed
+-----
 
 In benchmark tests, a WASM build runs scripts roughly 1.7-2.2x slower than a native optimized release build.
+
+
+Common Features
+---------------
+
+Some Rhai functionalities are not necessary in a WASM environment, so the following features
+are typically used for a WASM build:
+
+|    Feature    | Description                                                                                                                                                                                                                      |
+| :-----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`unchecked`] | When a WASM module panics, it doesn't crash the entire web app; however this also disables [maximum number of operations] and [progress] tracking so a script can still run indefinitely - the web app must terminate it itself. |
+| [`only_i32`]  | JavaScript has only one `number` type and we're only supporting `wasm32` here (so far).                                                                                                                                          |
+| [`no_module`] | A WASM module cannot load modules from the file system, so usually this is not needed, but the savings are minimal; alternatively, a custom [module resolver] can be provided that loads other Rhai scripts.                     |
+
+The following features are typically _not_ used because they don't make sense in a WASM build:
+
+|  Feature   | Why unnecessary                 |
+| :--------: | ------------------------------- |
+|  [`sync`]  | WASM is single-threaded.        |
+| [`no_std`] | `std` lib works fine with WASM. |

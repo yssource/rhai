@@ -6,7 +6,7 @@ Features
 Easy
 ----
 
-* Easy-to-use language similar to JS+Rust with dynamic typing.
+* Easy-to-use language similar to JavaScript+Rust with dynamic typing.
 
 * Tight integration with native Rust [functions]({{rootUrl}}/rust/functions.md) and [types]({{rootUrl}}/rust/custom.md), including [getters/setters]({{rootUrl}}/rust/getters-setters.md), [methods]({{rootUrl}}/rust/custom.md) and [indexers]({{rootUrl}}/rust/indexers.md).
 

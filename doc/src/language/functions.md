@@ -105,4 +105,4 @@ Unlike C/C++, functions in Rhai can be defined _anywhere_ at global level.
 A function does not need to be defined prior to being used in a script;
 a statement in the script can freely call a function defined afterwards.
 
-This is similar to Rust and many other modern languages, such as JS's `function` keyword.
+This is similar to Rust and many other modern languages, such as JavaScript's `function` keyword.
