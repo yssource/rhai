@@ -13,6 +13,7 @@ Enhancements
 ------------
 
 * [The Rhai Book](https://schungx.github.io/rhai) is online.  Most content in the original `README` was transferred to the Book.
+* New feature `internals` to expose internal data structures (e.g. the AST nodes).
 
 
 Version 0.15.1

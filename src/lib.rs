@@ -63,8 +63,9 @@
 //! | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                  |
 //! | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                              |
 //! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and `AST` are all `Send + Sync`. |
+//! | `internals`   | Expose internal data structures (beware they may be volatile from version to version).                                            |
 //!
-//! See [The Rhai Book](https://schungx.github.io/rhai/) for details on the Rhai script engine and language.
+//! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai script engine and language.
 
 #![cfg_attr(feature = "no_std", no_std)]
 
@@ -125,3 +126,23 @@ pub mod module_resolvers {
 
 #[cfg(not(feature = "no_optimize"))]
 pub use optimize::OptimizationLevel;
+
+// Expose internal data structures.
+
+#[cfg(feature = "internals")]
+pub use token::Token;
+
+#[cfg(feature = "internals")]
+pub use parser::Expr;
+
+#[cfg(feature = "internals")]
+pub use parser::Stmt;
+
+#[cfg(feature = "internals")]
+pub use module::ModuleRef;
+
+#[cfg(feature = "internals")]
+pub use utils::StaticVec;
+
+#[cfg(feature = "internals")]
+pub use parser::ReturnType;

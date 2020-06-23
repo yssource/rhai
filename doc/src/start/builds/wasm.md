@@ -47,7 +47,8 @@ are typically used for a WASM build:
 
 The following features are typically _not_ used because they don't make sense in a WASM build:
 
-|  Feature   | Why unnecessary                 |
-| :--------: | ------------------------------- |
-|  [`sync`]  | WASM is single-threaded.        |
-| [`no_std`] | `std` lib works fine with WASM. |
+|    Feature    | Why unnecessary                                                    |
+| :-----------: | ------------------------------------------------------------------ |
+|   [`sync`]    | WASM is single-threaded.                                           |
+|  [`no_std`]   | `std` lib works fine with WASM.                                    |
+| [`internals`] | WASM usually doesn't need to access Rhai internal data structures. |

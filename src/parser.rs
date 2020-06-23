@@ -65,7 +65,14 @@ impl AST {
     }
 
     /// Get the statements.
+    #[cfg(not(feature = "internals"))]
     pub(crate) fn statements(&self) -> &Vec<Stmt> {
+        &self.0
+    }
+
+    /// Get the statements.
+    #[cfg(feature = "internals")]
+    pub fn statements(&self) -> &Vec<Stmt> {
         &self.0
     }
 
@@ -74,8 +81,15 @@ impl AST {
         &mut self.0
     }
 
-    /// Get the script-defined functions.
+    /// Get the internal `Module` containing all script-defined functions.
+    #[cfg(not(feature = "internals"))]
     pub(crate) fn lib(&self) -> &Module {
+        &self.1
+    }
+
+    /// Get the internal `Module` containing all script-defined functions.
+    #[cfg(feature = "internals")]
+    pub fn lib(&self) -> &Module {
         &self.1
     }
 
