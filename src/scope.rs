@@ -444,8 +444,36 @@ impl<'a> Scope<'a> {
     }
 
     /// Get an iterator to entries in the Scope.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &Entry> {
+    pub(crate) fn to_iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev() // Always search a Scope in reverse order
+    }
+
+    /// Get an iterator to entries in the Scope.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Dynamic, Scope};
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push("x", 42_i64);
+    /// my_scope.push("foo", "hello".to_string());
+    ///
+    /// let mut iter = my_scope.iter();
+    ///
+    /// let (name, value) = iter.next().unwrap();
+    /// assert_eq!(name, "x");
+    /// assert_eq!(value.clone().cast::<i64>(), 42);
+    ///
+    /// let (name, value) = iter.next().unwrap();
+    /// assert_eq!(name, "foo");
+    /// assert_eq!(value.clone().cast::<String>(), "hello");
+    /// ```
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
+        self.0
+            .iter()
+            .map(|Entry { name, value, .. }| (name.as_ref(), value))
     }
 }
 

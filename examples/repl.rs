@@ -48,6 +48,7 @@ fn print_error(input: &str, err: EvalAltResult) {
 fn print_help() {
     println!("help       => print this help");
     println!("quit, exit => quit");
+    println!("scope      => print all variables in the scope");
     println!("ast        => print the last AST");
     println!("astu       => print the last raw, un-optimized AST");
     println!(r"end a line with '\' to continue to the next line.");
@@ -110,6 +111,13 @@ fn main() {
                 continue;
             }
             "exit" | "quit" => break, // quit
+            "scope" => {
+                scope
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, (name, value))| println!("[{}] {} = {:?}", i + 1, name, value));
+                continue;
+            }
             "astu" => {
                 // print the last un-optimized AST
                 println!("{:#?}", &ast_u);
