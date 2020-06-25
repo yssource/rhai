@@ -1,6 +1,6 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::fn_native::SendSync;
+use crate::fn_native::{FnPtr, SendSync};
 use crate::module::Module;
 use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
@@ -139,6 +139,8 @@ pub enum Union {
     #[cfg(not(feature = "no_object"))]
     Map(Box<Map>),
     Module(Box<Module>),
+    #[cfg(not(feature = "no_function"))]
+    FnPtr(FnPtr),
     Variant(Box<Box<dyn Variant>>),
 }
 
@@ -176,6 +178,8 @@ impl Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(_) => TypeId::of::<Map>(),
             Union::Module(_) => TypeId::of::<Module>(),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(_) => TypeId::of::<FnPtr>(),
             Union::Variant(value) => (***value).type_id(),
         }
     }
@@ -195,6 +199,8 @@ impl Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(_) => "map",
             Union::Module(_) => "sub-scope",
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(_) => "Fn",
 
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(target_arch = "wasm32"))]
@@ -219,6 +225,8 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
             Union::Module(value) => fmt::Debug::fmt(value, f),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(target_arch = "wasm32"))]
@@ -243,6 +251,8 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
             Union::Module(value) => fmt::Debug::fmt(value, f),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(target_arch = "wasm32"))]
@@ -267,6 +277,8 @@ impl Clone for Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value) => Self(Union::Map(value.clone())),
             Union::Module(ref value) => Self(Union::Module(value.clone())),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(ref value) => Self(Union::FnPtr(value.clone())),
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
         }
     }
@@ -396,6 +408,8 @@ impl Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
             Union::Module(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(value) => unsafe_try_cast(value),
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).ok(),
         }
     }
@@ -439,6 +453,8 @@ impl Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
             Union::Module(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(value) => unsafe_try_cast(value).unwrap(),
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).unwrap(),
         }
     }
@@ -454,8 +470,7 @@ impl Dynamic {
         match &self.0 {
             Union::Unit(value) => <dyn Any>::downcast_ref::<T>(value),
             Union::Bool(value) => <dyn Any>::downcast_ref::<T>(value),
-            Union::Str(value) => (value as &dyn Any)
-                .downcast_ref::<T>()
+            Union::Str(value) => <dyn Any>::downcast_ref::<T>(value)
                 .or_else(|| <dyn Any>::downcast_ref::<T>(value.as_ref())),
             Union::Char(value) => <dyn Any>::downcast_ref::<T>(value),
             Union::Int(value) => <dyn Any>::downcast_ref::<T>(value),
@@ -466,6 +481,8 @@ impl Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
             Union::Module(value) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(value) => <dyn Any>::downcast_ref::<T>(value),
             Union::Variant(value) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
         }
     }
@@ -491,6 +508,8 @@ impl Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
             Union::Module(value) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+            #[cfg(not(feature = "no_function"))]
+            Union::FnPtr(value) => <dyn Any>::downcast_mut::<T>(value),
             Union::Variant(value) => value.as_mut().as_mut_any().downcast_mut::<T>(),
         }
     }
@@ -556,6 +575,15 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
+
+    /// Cast the `Dynamic` as a `FnPtr` and return the function name.
+    /// Returns the name of the actual type if the cast fails.
+    pub(crate) fn as_fn_name(&self) -> Result<&str, &'static str> {
+        match &self.0 {
+            Union::FnPtr(f) => Ok(f.fn_name()),
+            _ => Err(self.type_name()),
+        }
+    }
 }
 
 impl From<()> for Dynamic {
@@ -614,6 +642,12 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<HashMap<K, T>> for Dynam
                 .map(|(k, v)| (k.into(), Dynamic::from(v)))
                 .collect(),
         )))
+    }
+}
+#[cfg(not(feature = "no_function"))]
+impl From<FnPtr> for Dynamic {
+    fn from(value: FnPtr) -> Self {
+        Self(Union::FnPtr(value))
     }
 }
 

@@ -3,7 +3,8 @@
 use crate::any::{Dynamic, Union, Variant};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
-use crate::fn_native::{CallableFunction, Callback, FnCallArgs};
+use crate::fn_native::{CallableFunction, Callback, FnCallArgs, FnPtr};
+use crate::fn_register::RegisterResultFn;
 use crate::module::{resolvers, Module, ModuleResolver};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackageLibrary, PackagesCollection, StandardPackage};
@@ -11,7 +12,7 @@ use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, St
 use crate::r#unsafe::{unsafe_cast_var_name_to_lifetime, unsafe_mut_cast_to_lifetime};
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::token::Position;
+use crate::token::{Position, Token};
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
@@ -71,11 +72,13 @@ pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";
 pub const KEYWORD_EVAL: &str = "eval";
+pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const FN_TO_STRING: &str = "to_string";
 pub const FN_GET: &str = "get$";
 pub const FN_SET: &str = "set$";
 pub const FN_IDX_GET: &str = "$index$get$";
 pub const FN_IDX_SET: &str = "$index$set$";
+pub const FN_FN_PTR: &str = "Fn";
 
 /// A type specifying the method of chaining.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -954,6 +957,14 @@ impl Engine {
                 false,
             )),
 
+            // Fn
+            FN_FN_PTR if args.len() == 1 && !self.has_override(lib, hashes) => {
+                Err(Box::new(EvalAltResult::ErrorRuntime(
+                    "'Fn' should not be called in method style. Try Fn(...);".into(),
+                    Position::none(),
+                )))
+            }
+
             // eval - reaching this point it must be a method-style call
             KEYWORD_EVAL if args.len() == 1 && !self.has_override(lib, hashes) => {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
@@ -1124,18 +1135,31 @@ impl Engine {
                         // Get a reference to the mutation target Dynamic
                         let (result, updated) = {
                             let obj = target.as_mut();
-                            let mut arg_values: StaticVec<_> = once(obj)
-                                .chain(
-                                    idx_val
-                                        .downcast_mut::<StaticVec<Dynamic>>()
-                                        .unwrap()
-                                        .iter_mut(),
-                                )
-                                .collect();
+                            let idx = idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap();
+
+                            // Check if it is a FnPtr call
+                            let (fn_name, mut arg_values, hash_fn, is_native) =
+                                if name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+                                    // Redirect function name
+                                    let name = obj.as_fn_name().unwrap();
+                                    // Recalculate hash
+                                    let hash = calc_fn_hash(empty(), name, idx.len(), empty());
+                                    // Arguments are passed as-is
+                                    (name, idx.iter_mut().collect::<StaticVec<_>>(), hash, false)
+                                } else {
+                                    // Attached object pointer in front of the arguments
+                                    (
+                                        name.as_ref(),
+                                        once(obj).chain(idx.iter_mut()).collect::<StaticVec<_>>(),
+                                        *hash,
+                                        *native,
+                                    )
+                                };
+
                             let args = arg_values.as_mut();
 
                             self.exec_fn_call(
-                                state, lib, name, *native, *hash, args, is_ref, def_val, 0,
+                                state, lib, fn_name, is_native, hash_fn, args, is_ref, def_val, 0,
                             )
                             .map_err(|err| EvalAltResult::new_position(err, *pos))?
                         };
@@ -1696,6 +1720,27 @@ impl Engine {
             Expr::FnCall(x) if x.1.is_none() => {
                 let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
                 let def_val = def_val.as_ref();
+
+                // Handle Fn
+                if name == FN_FN_PTR && args_expr.len() == 1 {
+                    let hash_fn =
+                        calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
+
+                    if !self.has_override(lib, (hash_fn, *hash)) {
+                        // Fn - only in function call style
+                        let expr = args_expr.get(0);
+                        let arg_value = self.eval_expr(scope, state, lib, expr, level)?;
+                        return arg_value
+                            .take_immutable_string()
+                            .map(|s| FnPtr::from(s).into())
+                            .map_err(|type_name| {
+                                Box::new(EvalAltResult::ErrorMismatchOutputType(
+                                    type_name.into(),
+                                    Position::none(),
+                                ))
+                            });
+                    }
+                }
 
                 // Handle eval
                 if name == KEYWORD_EVAL && args_expr.len() == 1 {

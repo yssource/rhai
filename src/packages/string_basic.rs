@@ -1,5 +1,6 @@
 use crate::def_package;
 use crate::engine::{FN_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
+use crate::fn_native::FnPtr;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 
@@ -34,8 +35,9 @@ macro_rules! reg_op {
 }
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
-    reg_op!(lib, KEYWORD_PRINT, to_string, INT, bool, char);
-    reg_op!(lib, FN_TO_STRING, to_string, INT, bool, char);
+    reg_op!(lib, KEYWORD_PRINT, to_string, INT, bool, char, FnPtr);
+    reg_op!(lib, FN_TO_STRING, to_string, INT, bool, char, FnPtr);
+    lib.set_fn_1_mut(KEYWORD_DEBUG, |f: &mut FnPtr| Ok(f.to_string()));
 
     lib.set_fn_0(KEYWORD_PRINT, || Ok("".to_string()));
     lib.set_fn_1(KEYWORD_PRINT, |_: ()| Ok("".to_string()));

@@ -65,6 +65,8 @@
 
 [function]: {{rootUrl}}/language/functions.md
 [functions]: {{rootUrl}}/language/functions.md
+[function pointer]: {{rootUrl}}/language/fn-ptr.md
+[function pointers]: {{rootUrl}}/language/fn-ptr.md
 
 [`Module`]: {{rootUrl}}/language/modules/index.md
 [module]: {{rootUrl}}/language/modules/index.md

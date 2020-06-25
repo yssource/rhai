@@ -9,6 +9,11 @@ Breaking changes
 
 * The trait function `ModuleResolver::resolve` no longer takes a `Scope` as argument.
 
+New features
+------------
+
+* Support for _function pointers_ via `Fn(name)` and `Fn.call(...)` syntax - a poor man's first-class function.
+
 Enhancements
 ------------
 

@@ -1,4 +1,5 @@
 use super::arithmetic::ArithmeticPackage;
+use super::fn_basic::BasicFnPackage;
 use super::iter_basic::BasicIteratorPackage;
 use super::logic::LogicPackage;
 use super::string_basic::BasicStringPackage;
@@ -10,4 +11,5 @@ def_package!(crate:CorePackage:"_Core_ package containing basic facilities.", li
     LogicPackage::init(lib);
     BasicStringPackage::init(lib);
     BasicIteratorPackage::init(lib);
+    BasicFnPackage::init(lib);
 });

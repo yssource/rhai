@@ -18,6 +18,7 @@ Built-In Packages
 | `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)                                                              |    No     |      Yes      |
 | `BasicArrayPackage`    | Basic [array] functions (not available under `no_index`)                                               |    No     |      Yes      |
 | `BasicMapPackage`      | Basic [object map] functions (not available under `no_object`)                                         |    No     |      Yes      |
+| `BasicFnPackage`       | Basic methods for [function pointers].                                                                 |    Yes    |      Yes      |
 | `EvalPackage`          | Disable [`eval`]                                                                                       |    No     |      No       |
 | `CorePackage`          | Basic essentials                                                                                       |    Yes    |      Yes      |
 | `StandardPackage`      | Standard library (default for `Engine::new`)                                                           |    No     |      Yes      |

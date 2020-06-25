@@ -71,6 +71,7 @@ The Rhai Scripting Language
    14. [Functions](language/functions.md)
        1. [Function Overloading](language/overload.md)
        2. [Call Method as Function](language/method.md)
+       3. [Function Pointers](language/fn-ptr.md)
    15. [Print and Debug](language/print-debug.md)
    16. [Modules](language/modules/index.md)
        1. [Export Variables, Functions and Sub-Modules](language/modules/export.md)

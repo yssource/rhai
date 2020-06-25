@@ -11,9 +11,12 @@ It doesn't attempt to be a new language. For example:
 * No traits...  so it is also not Rust. Do your Rusty stuff in Rust.
 
 * No structures/records - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
+
   There is, however, a built-in [object map] type which is adequate for most uses.
 
 * No first-class functions - Code your functions in Rust instead, and register them with Rhai.
+
+  There is, however, support for simple [function pointers] allowing runtime dispatch by function name.
 
 * No garbage collection - this should be expected, so...
 

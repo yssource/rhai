@@ -45,3 +45,44 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(engine.eval::<String>(r#"type_of(Fn("abc"))"#)?, "Fn");
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(x) { 40 + x }
+
+                let fn_name = "f";
+                fn_name += "oo";
+
+                let f = Fn(fn_name);
+                f.call(2)
+            "#
+        )?,
+        42
+    );
+
+    assert!(matches!(
+        *engine.eval::<INT>(r#"let f = Fn("abc"); f.call(0)"#).expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with("abc (")
+    ));
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(x) { 40 + x }
+
+                let x = #{ action: Fn("foo") };
+                x.action.call(2)
+            "#
+        )?,
+        42
+    );
+
+    Ok(())
+}

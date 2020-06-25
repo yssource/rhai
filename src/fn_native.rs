@@ -2,6 +2,7 @@ use crate::any::Dynamic;
 use crate::engine::Engine;
 use crate::parser::ScriptFnDef;
 use crate::result::EvalAltResult;
+use crate::utils::ImmutableString;
 
 use crate::stdlib::{boxed::Box, fmt, rc::Rc, sync::Arc};
 
@@ -53,8 +54,37 @@ pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
+/// A general function pointer.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
+pub struct FnPtr(ImmutableString);
+
+impl FnPtr {
+    /// Get the name of the function.
+    pub fn fn_name(&self) -> &str {
+        self.get_fn_name().as_ref()
+    }
+    /// Get the name of the function.
+    pub(crate) fn get_fn_name(&self) -> &ImmutableString {
+        &self.0
+    }
+}
+
+impl fmt::Display for FnPtr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Fn({})", self.0)
+    }
+}
+
+impl<S: Into<ImmutableString>> From<S> for FnPtr {
+    fn from(value: S) -> Self {
+        Self(value.into())
+    }
+}
+
+/// A general function trail object.
 #[cfg(not(feature = "sync"))]
 pub type FnAny = dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+/// A general function trail object.
 #[cfg(feature = "sync")]
 pub type FnAny =
     dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;

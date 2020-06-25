@@ -35,6 +35,8 @@ Dynamic
 
 * Organize code base with dynamically-loadable [modules].
 
+* [Function pointers].
+
 Safe
 ----
 

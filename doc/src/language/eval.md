@@ -28,7 +28,7 @@ eval("{ let z = y }");          // to keep a variable local, use a statement blo
 
 print("z = " + z);              // <- error: variable 'z' not found
 
-"print(42)".eval();             // <- nope... method-call style doesn't work
+"print(42)".eval();             // <- nope... method-call style doesn't work with 'eval'
 ```
 
 Script segments passed to `eval` execute inside the current [`Scope`], so they can access and modify _everything_,
