@@ -10,6 +10,9 @@ use crate::token::Position;
 
 use crate::stdlib::{any::TypeId, boxed::Box};
 
+#[cfg(feature = "no_std")]
+use crate::alloc::string::ToString;
+
 // Register array utility functions
 fn push<T: Variant + Clone>(list: &mut Array, item: T) -> FuncReturn<()> {
     list.push(Dynamic::from(item));
