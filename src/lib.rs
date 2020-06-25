@@ -130,19 +130,25 @@ pub use optimize::OptimizationLevel;
 // Expose internal data structures.
 
 #[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use token::Token;
 
 #[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use parser::Expr;
 
 #[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use parser::Stmt;
 
 #[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use module::ModuleRef;
 
 #[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use utils::StaticVec;
 
 #[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use parser::ReturnType;

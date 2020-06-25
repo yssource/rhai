@@ -22,6 +22,7 @@ use crate::stdlib::path::PathBuf;
 ///
 /// Currently, `EvalAltResult` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum EvalAltResult {
     /// Syntax error.
     ErrorParsing(ParseErrorType, Position),

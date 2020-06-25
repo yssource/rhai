@@ -7,6 +7,7 @@ use crate::stdlib::{boxed::Box, char, error::Error, fmt, string::String};
 
 /// Error when tokenizing the script text.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[non_exhaustive]
 pub enum LexError {
     /// An unexpected character is encountered when tokenizing the script text.
     UnexpectedChar(char),
@@ -60,6 +61,7 @@ impl LexError {
 /// They still exist so that the application can turn features on and off without going through
 /// massive code changes to remove/add back enum variants in match statements.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[non_exhaustive]
 pub enum ParseErrorType {
     /// Error in the script text. Wrapped value is the error message.
     BadInput(String),

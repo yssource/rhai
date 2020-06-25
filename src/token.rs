@@ -202,9 +202,11 @@ pub enum Token {
     PowerOfAssign,
     #[cfg(not(feature = "no_function"))]
     Private,
+    #[cfg(not(feature = "no_module"))]
     Import,
     #[cfg(not(feature = "no_module"))]
     Export,
+    #[cfg(not(feature = "no_module"))]
     As,
     LexError(Box<LexError>),
     EOF,
@@ -776,9 +778,11 @@ impl<'a> TokenIterator<'a> {
                             "in" => Token::In,
                             #[cfg(not(feature = "no_function"))]
                             "private" => Token::Private,
+                            #[cfg(not(feature = "no_module"))]
                             "import" => Token::Import,
                             #[cfg(not(feature = "no_module"))]
                             "export" => Token::Export,
+                            #[cfg(not(feature = "no_module"))]
                             "as" => Token::As,
 
                             #[cfg(not(feature = "no_function"))]

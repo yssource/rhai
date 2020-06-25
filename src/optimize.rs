@@ -628,7 +628,7 @@ fn optimize(
 
     // Add constants from the scope into the state
     scope
-        .iter()
+        .to_iter()
         .filter(|ScopeEntry { typ, expr, .. }| {
             // Get all the constants with definite constant expressions
             *typ == ScopeEntryType::Constant

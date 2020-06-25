@@ -71,15 +71,16 @@ pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";
 pub const KEYWORD_EVAL: &str = "eval";
-pub const FUNC_TO_STRING: &str = "to_string";
-pub const FUNC_GETTER: &str = "get$";
-pub const FUNC_SETTER: &str = "set$";
-pub const FUNC_INDEXER_GET: &str = "$index$get$";
-pub const FUNC_INDEXER_SET: &str = "$index$set$";
+pub const FN_TO_STRING: &str = "to_string";
+pub const FN_GET: &str = "get$";
+pub const FN_SET: &str = "set$";
+pub const FN_IDX_GET: &str = "$index$get$";
+pub const FN_IDX_SET: &str = "$index$set$";
 
 /// A type specifying the method of chaining.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 enum ChainType {
+    None,
     Index,
     Dot,
 }
@@ -338,15 +339,15 @@ impl Default for Engine {
 
 /// Make getter function
 pub fn make_getter(id: &str) -> String {
-    format!("{}{}", FUNC_GETTER, id)
+    format!("{}{}", FN_GET, id)
 }
 
 /// Extract the property name from a getter function name.
 fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
     {
-        if fn_name.starts_with(FUNC_GETTER) {
-            Some(&fn_name[FUNC_GETTER.len()..])
+        if fn_name.starts_with(FN_GET) {
+            Some(&fn_name[FN_GET.len()..])
         } else {
             None
         }
@@ -359,15 +360,15 @@ fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
 
 /// Make setter function
 pub fn make_setter(id: &str) -> String {
-    format!("{}{}", FUNC_SETTER, id)
+    format!("{}{}", FN_SET, id)
 }
 
 /// Extract the property name from a setter function name.
 fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
     {
-        if fn_name.starts_with(FUNC_SETTER) {
-            Some(&fn_name[FUNC_SETTER.len()..])
+        if fn_name.starts_with(FN_SET) {
+            Some(&fn_name[FN_SET.len()..])
         } else {
             None
         }
@@ -802,7 +803,7 @@ impl Engine {
         }
 
         // index getter function not found?
-        if fn_name == FUNC_INDEXER_GET && args.len() == 2 {
+        if fn_name == FN_IDX_GET && args.len() == 2 {
             return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]",
@@ -814,7 +815,7 @@ impl Engine {
         }
 
         // index setter function not found?
-        if fn_name == FUNC_INDEXER_SET {
+        if fn_name == FN_IDX_SET {
             return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]=",
@@ -1022,17 +1023,18 @@ impl Engine {
         level: usize,
         mut new_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        if chain_type == ChainType::None {
+            panic!();
+        }
+
         let is_ref = target.is_ref();
         let is_value = target.is_value();
 
-        #[inline(always)]
-        fn get_chain_type(expr: &Expr) -> ChainType {
-            match expr {
-                Expr::Index(_) => ChainType::Index,
-                Expr::Dot(_) => ChainType::Dot,
-                _ => unreachable!(),
-            }
-        }
+        let next_chain = match rhs {
+            Expr::Index(_) => ChainType::Index,
+            Expr::Dot(_) => ChainType::Dot,
+            _ => ChainType::None,
+        };
 
         // Pop the last index value
         let mut idx_val = idx_values.pop();
@@ -1046,7 +1048,6 @@ impl Engine {
                     // xxx[idx].expr... | xxx[idx][expr]...
                     Expr::Dot(x) | Expr::Index(x) => {
                         let (idx, expr, pos) = x.as_ref();
-                        let next_chain = get_chain_type(rhs);
                         let idx_pos = idx.position();
                         let this_ptr = &mut self
                             .get_indexed_mut(state, lib, target, idx_val, idx_pos, false)?;
@@ -1064,17 +1065,16 @@ impl Engine {
                             // Indexed value is an owned value - the only possibility is an indexer
                             // Try to call an index setter
                             Ok(this_ptr) if this_ptr.is_value() => {
-                                let fn_name = FUNC_INDEXER_SET;
                                 let args =
                                     &mut [target.as_mut(), &mut idx_val2, &mut new_val.unwrap()];
 
                                 self.exec_fn_call(
-                                    state, lib, fn_name, true, 0, args, is_ref, None, 0,
+                                    state, lib, FN_IDX_SET, true, 0, args, is_ref, None, 0,
                                 )
                                 .or_else(|err| match *err {
                                     // If there is no index setter, no need to set it back because the indexer is read-only
                                     EvalAltResult::ErrorFunctionNotFound(s, _)
-                                        if s == FUNC_INDEXER_SET =>
+                                        if s == FN_IDX_SET =>
                                     {
                                         Ok(Default::default())
                                     }
@@ -1090,7 +1090,6 @@ impl Engine {
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
                                 EvalAltResult::ErrorIndexingType(_, _) => {
-                                    let fn_name = FUNC_INDEXER_SET;
                                     let args = &mut [
                                         target.as_mut(),
                                         &mut idx_val2,
@@ -1098,7 +1097,7 @@ impl Engine {
                                     ];
 
                                     self.exec_fn_call(
-                                        state, lib, fn_name, true, 0, args, is_ref, None, 0,
+                                        state, lib, FN_IDX_SET, true, 0, args, is_ref, None, 0,
                                     )?;
                                 }
                                 // Error
@@ -1189,7 +1188,6 @@ impl Engine {
                     // {xxx:map}.prop[expr] | {xxx:map}.prop.expr
                     Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
                         let (prop, expr, pos) = x.as_ref();
-                        let next_chain = get_chain_type(rhs);
 
                         let mut val = if let Expr::Property(p) = prop {
                             let ((prop, _, _), _) = p.as_ref();
@@ -1207,7 +1205,6 @@ impl Engine {
                     // xxx.prop[expr] | xxx.prop.expr
                     Expr::Index(x) | Expr::Dot(x) => {
                         let (prop, expr, pos) = x.as_ref();
-                        let next_chain = get_chain_type(rhs);
                         let args = &mut [target.as_mut(), &mut Default::default()];
 
                         let (mut val, updated) = if let Expr::Property(p) = prop {
@@ -1454,10 +1451,9 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             _ => {
-                let fn_name = FUNC_INDEXER_GET;
                 let type_name = self.map_type_name(val.type_name());
                 let args = &mut [val, &mut idx];
-                self.exec_fn_call(state, lib, fn_name, true, 0, args, is_ref, None, 0)
+                self.exec_fn_call(state, lib, FN_IDX_GET, true, 0, args, is_ref, None, 0)
                     .map(|(v, _)| v.into())
                     .map_err(|_| {
                         Box::new(EvalAltResult::ErrorIndexingType(

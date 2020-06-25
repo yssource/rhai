@@ -72,6 +72,7 @@ impl AST {
 
     /// Get the statements.
     #[cfg(feature = "internals")]
+    #[deprecated(note = "this method is volatile and may change")]
     pub fn statements(&self) -> &Vec<Stmt> {
         &self.0
     }
@@ -89,6 +90,7 @@ impl AST {
 
     /// Get the internal `Module` containing all script-defined functions.
     #[cfg(feature = "internals")]
+    #[deprecated(note = "this method is volatile and may change")]
     pub fn lib(&self) -> &Module {
         &self.1
     }

@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, FUNC_INDEXER_GET, FUNC_INDEXER_SET};
+use crate::engine::{make_getter, make_setter, Engine, FN_IDX_GET, FN_IDX_SET};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::parser::{
     FnAccess,
@@ -557,7 +557,7 @@ impl Module {
         &mut self,
         func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        self.set_fn_2_mut(FUNC_INDEXER_GET, func)
+        self.set_fn_2_mut(FN_IDX_GET, func)
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -673,7 +673,7 @@ impl Module {
         };
         let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<A>()];
         self.set_fn(
-            FUNC_INDEXER_SET,
+            FN_IDX_SET,
             Public,
             &args,
             CallableFunction::from_method(Box::new(f)),

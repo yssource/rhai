@@ -417,7 +417,7 @@ impl<'a> Scope<'a> {
     pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
         match self.get_index(name) {
             None => self.push(name, value),
-            Some((_, EntryType::Constant)) => unreachable!("variable {} is constant", name),
+            Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
             Some((index, EntryType::Normal)) => {
                 self.0.get_mut(index).unwrap().value = Dynamic::from(value)
             }

@@ -2,8 +2,8 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::{
-    get_script_function_by_signature, make_getter, make_setter, Engine, State, FUNC_INDEXER_GET,
-    FUNC_INDEXER_SET,
+    get_script_function_by_signature, make_getter, make_setter, Engine, State, FN_IDX_GET,
+    FN_IDX_SET,
 };
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
@@ -323,7 +323,7 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FUNC_INDEXER_GET, callback);
+        self.register_fn(FN_IDX_GET, callback);
     }
 
     /// Register an index setter for a registered type with the `Engine`.
@@ -371,7 +371,7 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FUNC_INDEXER_SET, callback);
+        self.register_fn(FN_IDX_SET, callback);
     }
 
     /// Shorthand for register both index getter and setter functions for a registered type with the `Engine`.
