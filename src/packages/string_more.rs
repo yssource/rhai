@@ -10,11 +10,9 @@ use crate::utils::StaticVec;
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
 
-#[cfg(feature = "no_std")]
-use crate::alloc::boxed::Box;
-
 use crate::stdlib::{
     any::TypeId,
+    boxed::Box,
     fmt::Display,
     format,
     string::{String, ToString},

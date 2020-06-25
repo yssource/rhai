@@ -8,10 +8,7 @@ use crate::parser::{ImmutableString, INT};
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
-use crate::stdlib::{any::TypeId, boxed::Box};
-
-#[cfg(feature = "no_std")]
-use crate::alloc::string::ToString;
+use crate::stdlib::{any::TypeId, boxed::Box, string::ToString};
 
 // Register array utility functions
 fn push<T: Variant + Clone>(list: &mut Array, item: T) -> FuncReturn<()> {
