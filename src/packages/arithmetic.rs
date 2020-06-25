@@ -267,6 +267,19 @@ macro_rules! reg_op {
         $( $lib.set_fn_2($op, $func::<$par>); )*
     };
 }
+macro_rules! reg_sign {
+    ($lib:expr, $op:expr, $ret:ty, $($par:ty),*) => {
+        $( $lib.set_fn_1($op, |value: $par| -> Result<$ret, _> {
+            Ok(if value == (0 as $par) {
+                (0 as $ret)
+            } else if value < (0 as $par) {
+                (-1 as $ret)
+            } else {
+                (1 as $ret)
+            })
+        }); )*
+    };
+}
 
 def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
     #[cfg(not(feature = "only_i32"))]
@@ -321,6 +334,11 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
                 reg_op!(lib, "%", modulo_u, i128, u128);
             }
         }
+
+        reg_sign!(lib, "sign", INT, i8, i16, i32, i64);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        reg_sign!(lib, "sign", INT, i128);
     }
 
     // Basic arithmetic for floating-point - no need to check
@@ -330,6 +348,8 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
         reg_op!(lib, "-", sub_u, f32);
         reg_op!(lib, "*", mul_u, f32);
         reg_op!(lib, "/", div_u, f32);
+        reg_sign!(lib, "sign", f32, f32);
+        reg_sign!(lib, "sign", f64, f64);
     }
 
     #[cfg(not(feature = "only_i32"))]
