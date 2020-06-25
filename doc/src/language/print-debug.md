@@ -7,8 +7,11 @@ The `print` and `debug` functions default to printing to `stdout`, with `debug` 
 
 ```rust
 print("hello");         // prints hello to stdout
+
 print(1 + 2 + 3);       // prints 6 to stdout
+
 print("hello" + 42);    // prints hello42 to stdout
+
 debug("world!");        // prints "world!" to stdout using debug formatting
 ```
 
