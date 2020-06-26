@@ -620,7 +620,7 @@ fn scan_comment(
 }
 
 /// Get the next token.
-fn get_next_token(
+pub fn get_next_token(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
     pos: &mut Position,

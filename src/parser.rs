@@ -15,7 +15,7 @@ use crate::stdlib::{
     boxed::Box,
     char,
     collections::HashMap,
-    format,
+    fmt, format,
     iter::empty,
     mem,
     num::NonZeroUsize,
@@ -200,6 +200,25 @@ pub struct ScriptFnDef {
     pub body: Stmt,
     /// Position of the function definition.
     pub pos: Position,
+}
+
+impl fmt::Display for ScriptFnDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}{}({})",
+            match self.access {
+                FnAccess::Public => "",
+                FnAccess::Private => "private ",
+            },
+            self.name,
+            self.params
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
 }
 
 /// `return`/`throw` statement.

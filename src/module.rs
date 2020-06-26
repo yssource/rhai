@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{make_getter, make_setter, Engine, FN_IDX_GET, FN_IDX_SET};
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync, Shared};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
@@ -65,9 +65,26 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<module vars={:?}, functions={}>",
-            self.variables,
-            self.functions.len(),
+            "Module(\n    vars: {}\n    functions: {}\n)",
+            self.variables
+                .keys()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.iter_fn()
+                .map(|(name, access, _, f)| match f {
+                    CallableFunction::Script(s) => s.to_string(),
+                    _ => format!(
+                        "{}{}()",
+                        match access {
+                            FnAccess::Public => "",
+                            FnAccess::Private => "private ",
+                        },
+                        name
+                    ),
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
         )
     }
 }
@@ -835,6 +852,15 @@ impl Module {
         &self,
     ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, CallableFunction)> {
         self.functions.values()
+    }
+
+    /// Get an iterator over all script-defined functions in the module.
+    pub fn iter_script_fn<'a>(&'a self) -> impl Iterator<Item = Shared<ScriptFnDef>> + 'a {
+        self.functions
+            .values()
+            .map(|(_, _, _, f)| f)
+            .filter(|f| f.is_script())
+            .map(|f| f.get_shared_fn_def())
     }
 
     /// Create a new `Module` by evaluating an `AST`.
