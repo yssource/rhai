@@ -12,6 +12,7 @@ use crate::engine::Array;
 
 use crate::stdlib::{
     any::TypeId,
+    boxed::Box,
     fmt::Display,
     format,
     string::{String, ToString},

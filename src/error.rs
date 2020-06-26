@@ -3,7 +3,7 @@
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
-use crate::stdlib::{boxed::Box, char, error::Error, fmt, string::String};
+use crate::stdlib::{boxed::Box, char, error::Error, fmt, string::{String, ToString}};
 
 /// Error when tokenizing the script text.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
