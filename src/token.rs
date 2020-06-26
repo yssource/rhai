@@ -434,15 +434,15 @@ impl From<Token> for String {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string (0 = unlimited).
-    max_string_size: usize,
+    pub max_string_size: usize,
     /// Can the next token be a unary operator?
-    can_be_unary: bool,
+    pub non_unary: bool,
     /// Is the tokenizer currently inside a block comment?
-    comment_level: usize,
+    pub comment_level: usize,
     /// Return `None` at the end of the stream instead of `Some(Token::EOF)`?
-    end_with_none: bool,
+    pub end_with_none: bool,
     /// Include comments?
-    include_comments: bool,
+    pub include_comments: bool,
 }
 
 /// Trait that encapsulates a peekable character input stream.
@@ -620,7 +620,23 @@ fn scan_comment(
 }
 
 /// Get the next token.
-pub fn get_next_token(
+fn get_next_token(
+    stream: &mut impl InputStream,
+    state: &mut TokenizeState,
+    pos: &mut Position,
+) -> Option<(Token, Position)> {
+    let result = get_next_token_inner(stream, state, pos);
+
+    // Save the last token's state
+    if let Some((token, _)) = &result {
+        state.non_unary = !token.is_next_unary();
+    }
+
+    result
+}
+
+/// Get the next token.
+fn get_next_token_inner(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
     pos: &mut Position,
@@ -628,7 +644,7 @@ pub fn get_next_token(
     // Still inside a comment?
     if state.comment_level > 0 {
         let start_pos = *pos;
-        let mut comment = Default::default();
+        let mut comment = String::new();
         scan_comment(stream, state, pos, &mut comment);
 
         if state.include_comments {
@@ -872,10 +888,10 @@ pub fn get_next_token(
                 eat_next(stream, pos);
                 return Some((Token::PlusAssign, start_pos));
             }
-            ('+', _) if state.can_be_unary => return Some((Token::UnaryPlus, start_pos)),
+            ('+', _) if !state.non_unary => return Some((Token::UnaryPlus, start_pos)),
             ('+', _) => return Some((Token::Plus, start_pos)),
 
-            ('-', '0'..='9') if state.can_be_unary => negated = true,
+            ('-', '0'..='9') if !state.non_unary => negated = true,
             ('-', '0'..='9') => return Some((Token::Minus, start_pos)),
             ('-', '=') => {
                 eat_next(stream, pos);
@@ -887,7 +903,7 @@ pub fn get_next_token(
                 ))),
                 start_pos,
             )),
-            ('-', _) if state.can_be_unary => return Some((Token::UnaryMinus, start_pos)),
+            ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
             ('*', '=') => {
@@ -903,7 +919,7 @@ pub fn get_next_token(
                 let mut comment = if state.include_comments {
                     "//".to_string()
                 } else {
-                    Default::default()
+                    String::new()
                 };
 
                 while let Some(c) = stream.get_next() {
@@ -930,7 +946,7 @@ pub fn get_next_token(
                 let mut comment = if state.include_comments {
                     "/*".to_string()
                 } else {
-                    Default::default()
+                    String::new()
                 };
                 scan_comment(stream, state, pos, &mut comment);
 
@@ -1103,7 +1119,7 @@ pub fn get_next_token(
     }
 }
 
-/// An type that implements the `InputStream` trait.
+/// A type that implements the `InputStream` trait.
 /// Multiple charaacter streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
     /// The input character streams.
@@ -1157,11 +1173,7 @@ impl<'a> Iterator for TokenIterator<'a> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        get_next_token(&mut self.stream, &mut self.state, &mut self.pos).map(|x| {
-            // Save the last token's state
-            self.state.can_be_unary = x.0.is_next_unary();
-            x
-        })
+        get_next_token(&mut self.stream, &mut self.state, &mut self.pos)
     }
 }
 
@@ -1170,7 +1182,7 @@ pub fn lex<'a>(input: &'a [&'a str], max_string_size: usize) -> TokenIterator<'a
     TokenIterator {
         state: TokenizeState {
             max_string_size,
-            can_be_unary: true,
+            non_unary: false,
             comment_level: 0,
             end_with_none: false,
             include_comments: false,
