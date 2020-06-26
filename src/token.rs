@@ -632,7 +632,6 @@ pub fn get_next_token(
         scan_comment(stream, state, pos, &mut comment);
 
         if state.include_comments {
-            println!("Comment ({}): {}", start_pos, comment);
             return Some((Token::Comment(comment), start_pos));
         }
     }
@@ -920,7 +919,6 @@ pub fn get_next_token(
                 }
 
                 if state.include_comments {
-                    println!("Comment ({}): {}", start_pos, comment);
                     return Some((Token::Comment(comment), start_pos));
                 }
             }
@@ -937,7 +935,6 @@ pub fn get_next_token(
                 scan_comment(stream, state, pos, &mut comment);
 
                 if state.include_comments {
-                    println!("Comment ({}): {}", start_pos, comment);
                     return Some((Token::Comment(comment), start_pos));
                 }
             }
