@@ -132,7 +132,7 @@ impl CallableFunction {
             Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
         }
     }
-    /// Is this a pure native Rust method-call?
+    /// Is this a native Rust method function?
     pub fn is_method(&self) -> bool {
         match self {
             Self::Method(_) => true,

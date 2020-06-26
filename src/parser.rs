@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine};
+use crate::engine::{make_getter, make_setter, Engine, KEYWORD_THIS};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
@@ -1847,19 +1847,8 @@ fn parse_binary_op(
 
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
-                let mut rhs = args.pop();
+                let rhs = args.pop();
                 let current_lhs = args.pop();
-
-                match &mut rhs {
-                    // current_lhs.rhs(...) - method call
-                    Expr::FnCall(x) => {
-                        let ((id, _, _), _, hash, args, _) = x.as_mut();
-                        // Recalculate function call hash because there is an additional argument
-                        *hash = calc_fn_hash(empty(), id, args.len() + 1, empty());
-                    }
-                    _ => (),
-                }
-
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 
@@ -2057,6 +2046,16 @@ fn parse_let(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
+    // Check if the name is allowed
+    match name.as_str() {
+        KEYWORD_THIS => {
+            return Err(
+                PERR::BadInput(LexError::MalformedIdentifier(name).to_string()).into_err(pos),
+            )
+        }
+        _ => (),
+    }
+
     // let name = ...
     if match_token(input, Token::Equals)? {
         // let name = expr
@@ -2073,7 +2072,7 @@ fn parse_let(
                 state.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(((name, pos), init_value))))
             }
-            // const name = expr - error
+            // const name = expr: error
             ScopeEntryType::Constant => {
                 Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
             }

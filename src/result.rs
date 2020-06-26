@@ -39,6 +39,8 @@ pub enum EvalAltResult {
     /// An error has occurred inside a called function.
     /// Wrapped values re the name of the function and the interior error.
     ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
+    /// Access to `this` that is not bounded.
+    ErrorUnboundedThis(Position),
     /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
     ErrorBooleanArgMismatch(String, Position),
     /// Non-character value encountered where a character is required.
@@ -110,6 +112,7 @@ impl EvalAltResult {
             Self::ErrorParsing(p, _) => p.desc(),
             Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
+            Self::ErrorUnboundedThis(_) => "'this' is not bounded",
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorCharMismatch(_) => "Character expected",
             Self::ErrorNumericIndexExpr(_) => {
@@ -184,6 +187,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorIndexingType(_, _)
             | Self::ErrorNumericIndexExpr(_)
             | Self::ErrorStringIndexExpr(_)
+            | Self::ErrorUnboundedThis(_)
             | Self::ErrorImportExpr(_)
             | Self::ErrorLogicGuard(_)
             | Self::ErrorFor(_)
@@ -270,6 +274,7 @@ impl EvalAltResult {
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
+            | Self::ErrorUnboundedThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)
@@ -309,6 +314,7 @@ impl EvalAltResult {
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
+            | Self::ErrorUnboundedThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)

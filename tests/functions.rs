@@ -19,28 +19,33 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_object"))]
     assert_eq!(
-        engine.eval::<INT>("fn add(x, n) { x + n } let x = 40; x.add(2)")?,
+        engine.eval::<INT>("fn add(n) { this + n } let x = 40; x.add(2)")?,
         42
     );
 
     #[cfg(not(feature = "no_object"))]
     assert_eq!(
-        engine.eval::<INT>("fn add(x, n) { x += n; } let x = 40; x.add(2); x")?,
-        40
+        engine.eval::<INT>("fn add(n) { this += n; } let x = 40; x.add(2); x")?,
+        42
     );
 
     assert_eq!(engine.eval::<INT>("fn mul2(x) { x * 2 } mul2(21)")?, 42);
 
+    assert_eq!(
+        engine.eval::<INT>("fn mul2(x) { x *= 2 } let a = 21; mul2(a); a")?,
+        21
+    );
+
     #[cfg(not(feature = "no_object"))]
     assert_eq!(
-        engine.eval::<INT>("fn mul2(x) { x * 2 } let x = 21; x.mul2()")?,
+        engine.eval::<INT>("fn mul2() { this * 2 } let x = 21; x.mul2()")?,
         42
     );
 
     #[cfg(not(feature = "no_object"))]
     assert_eq!(
-        engine.eval::<INT>("fn mul2(x) { x *= 2; } let x = 21; x.mul2(); x")?,
-        21
+        engine.eval::<INT>("fn mul2() { this *= 2; } let x = 21; x.mul2(); x")?,
+        42
     );
 
     Ok(())

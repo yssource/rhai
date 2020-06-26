@@ -1,18 +1,24 @@
 Rhai Release Notes
 ==================
 
-Version 0.15.2
+Version 0.16.0
 ==============
+
+The major new feature in this version is OOP - well, poor man's OOP, that is.
 
 Breaking changes
 ----------------
 
 * The trait function `ModuleResolver::resolve` no longer takes a `Scope` as argument.
+* Functions defined in script now differentiates between using method-call style and normal function-call style.
+  The method-call style will bind the object to the `this` parameter instead of consuming the first parameter.
 
 New features
 ------------
 
 * Support for _function pointers_ via `Fn(name)` and `Fn.call(...)` syntax - a poor man's first-class function.
+* Support for calling script-defined functions in method-call style with `this` binding to the object.
+* Special support in object maps for OOP.
 
 Enhancements
 ------------

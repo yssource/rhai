@@ -37,6 +37,8 @@ Dynamic
 
 * Dynamic dispatch via [function pointers].
 
+* Some support for [OOP].
+
 Safe
 ----
 

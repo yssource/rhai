@@ -53,29 +53,6 @@ fn foo() { x }      // <- syntax error: variable 'x' doesn't exist
 ```
 
 
-Arguments Passed by Value
-------------------------
-
-Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
-Therefore, functions with the same name and same _number_ of parameters are equivalent.
-
-It is important to remember that all arguments are passed by _value_, so all Rhai script-defined functions
-are _pure_ (i.e. they never modify their arguments).
-Any update to an argument will **not** be reflected back to the caller.
-
-This can introduce subtle bugs, if not careful, especially when using the _method-call_ style.
-
-```rust
-fn change(s) {      // 's' is passed by value
-    s = 42;         // only a COPY of 's' is changed
-}
-
-let x = 500;
-x.change();         // de-sugars to 'change(x)'
-x == 500;           // 'x' is NOT changed!
-```
-
-
 Global Definitions Only
 ----------------------
 
@@ -106,3 +83,47 @@ A function does not need to be defined prior to being used in a script;
 a statement in the script can freely call a function defined afterwards.
 
 This is similar to Rust and many other modern languages, such as JavaScript's `function` keyword.
+
+
+Arguments Passed by Value
+------------------------
+
+Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
+Therefore, functions with the same name and same _number_ of parameters are equivalent.
+
+It is important to remember that all arguments are passed by _value_, so all Rhai script-defined functions
+are _pure_ (i.e. they never modify their arguments).
+Any update to an argument will **not** be reflected back to the caller.
+
+```rust
+fn change(s) {      // 's' is passed by value
+    s = 42;         // only a COPY of 's' is changed
+}
+
+let x = 500;
+
+change(x);
+
+x == 500;           // 'x' is NOT changed!
+```
+
+
+`this` - Simulating an Object Method
+-----------------------------------
+
+Functions can also be called in method-call style.  When this is the case, the keyword '`this`'
+binds to the object in the method call and can be changed.
+
+```rust
+fn change() {       // not that the object does not need a parameter
+    this = 42;      // 'this' binds to the object in method-call
+}
+
+let x = 500;
+
+x.change();         // call 'change' in method-call style, 'this' binds to 'x'
+
+x == 42;            // 'x' is changed!
+
+change();           // <- error: `this` is unbounded
+```

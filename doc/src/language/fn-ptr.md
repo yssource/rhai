@@ -1,6 +1,8 @@
 Function Pointers
 =================
 
+{{#include ../links.md}}
+
 It is possible to store a _function pointer_ in a variable just like a normal value.
 In fact, internally a function pointer simply stores the _name_ of the function as a string.
 

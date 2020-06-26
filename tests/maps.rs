@@ -250,3 +250,25 @@ fn test_map_json() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(not(feature = "no_function"))]
+fn test_map_oop() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let obj = #{ data: 40, action: Fn("abc") };
+
+                fn abc(x) { this.data += x; }
+
+                obj.action(2);
+                obj.data
+        "#,
+        )?,
+        42
+    );
+
+    Ok(())
+}

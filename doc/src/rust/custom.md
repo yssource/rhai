@@ -97,16 +97,17 @@ println!("result: {}", result.field);               // prints 42
 Method-Call Style vs. Function-Call Style
 ----------------------------------------
 
-In fact, any function with a first argument that is a `&mut` reference can be used
+Any function with a first argument that is a `&mut` reference can be used
 as method calls because internally they are the same thing: methods on a type is
 implemented as a functions taking a `&mut` first argument.
+This design is similar to Rust.
 
 ```rust
 fn foo(ts: &mut TestStruct) -> i64 {
     ts.field
 }
 
-engine.register_fn("foo", foo);                     // register ad hoc function with correct signature
+engine.register_fn("foo", foo);                     // register a Rust native function
 
 let result = engine.eval::<i64>(
     "let x = new_ts(); x.foo()"                     // 'foo' can be called like a method on 'x'

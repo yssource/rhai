@@ -57,13 +57,13 @@ if the first one already proves the condition wrong.
 Single boolean operators `&` and `|` always evaluate both operands.
 
 ```rust
-this() || that();       // that() is not evaluated if this() is true
+a() || b();             // b() is not evaluated if a() is true
 
-this() && that();       // that() is not evaluated if this() is false
+a() && b();             // b() is not evaluated if a() is false
 
-this() | that();        // both this() and that() are evaluated
+a() | b();              // both a() and b() are evaluated
 
-this() & that();        // both this() and that() are evaluated
+a() & b();              // both a() and b() are evaluated
 ```
 
 Compound Assignment Operators

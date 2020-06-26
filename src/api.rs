@@ -996,7 +996,7 @@ impl Engine {
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.lib(), &mut None, stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -1062,7 +1062,7 @@ impl Engine {
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
+                self.eval_stmt(scope, &mut state, ast.lib(), &mut None, stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -1203,7 +1203,16 @@ impl Engine {
         let mut state = State::new();
         let args = args.as_mut();
 
-        self.call_script_fn(scope, &mut state, ast.lib(), name, fn_def, args, 0)
+        self.call_script_fn(
+            scope,
+            &mut state,
+            ast.lib(),
+            &mut None,
+            name,
+            fn_def,
+            args,
+            0,
+        )
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.

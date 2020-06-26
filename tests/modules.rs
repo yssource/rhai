@@ -1,9 +1,7 @@
 #![cfg(not(feature = "no_module"))]
 use rhai::{
-    module_resolvers, Dynamic, Engine, EvalAltResult, Module, ParseError, ParseErrorType, Scope,
-    INT,
+    module_resolvers, Engine, EvalAltResult, Module, ParseError, ParseErrorType, Scope, INT,
 };
-use std::any::TypeId;
 
 #[test]
 fn test_module() {
