@@ -18,7 +18,7 @@ use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     collections::HashMap,
-    fmt,
+    fmt, format,
     iter::empty,
     mem,
     num::NonZeroUsize,
