@@ -6,18 +6,31 @@ Special Support for OOP via Object Maps
 [Object maps] can be used to simulate object-oriented programming ([OOP]) by storing data
 as properties and methods as properties holding [function pointers].
 
-If an [object map]'s property holding a [function pointer] is called in method-call style,
-it calls the function referenced by the [function pointer].
+If an [object map]'s property holds a [function pointer], the property can simply be called like
+a normal method in method-call syntax.  This is a _short-hand_ to avoid the more verbose syntax
+of using the `call` function keyword.
+
+When a property holding a [function pointer] is called like a method, what happens next depends
+on whether the target function is a native Rust function or a script-defined function.
+
+If it is a registered native Rust method function, then it is called directly.
+
+If it is a script-defined function, the `this` variable within the function body is bound
+to the [object map] before the function is called.  There is no way to simulate this behavior
+via a normal function-call syntax because all scripted function arguments are passed by value.
 
 ```rust
-fn do_action(x) { print(this + x); }        // 'this' binds to the object when called
+fn do_action(x) { print(this.data + x); }   // 'this' binds to the object when called
 
 let obj = #{
                 data: 40,
                 action: Fn("do_action")     // 'action' holds a function pointer to 'do_action'
            };
 
-obj.action(2);                              // prints 42
+obj.action(2);                              // Short-hand syntax: prints 42
 
-obj.action.call(2);                         // <- the above de-sugars to this
+// To achieve the above with normal function pointer calls:
+fn do_action(map, x) { print(map.data + x); }
+
+obj.action.call(obj, 2);                    // this call cannot mutate 'obj'
 ```
