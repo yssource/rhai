@@ -131,15 +131,11 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use token::Token;
+pub use token::{get_next_token, parse_string_literal, InputStream, Token, TokenizeState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use parser::Expr;
-
-#[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
-pub use parser::Stmt;
+pub use parser::{Expr, ReturnType, Stmt};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
@@ -148,7 +144,3 @@ pub use module::ModuleRef;
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
 pub use utils::StaticVec;
-
-#[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
-pub use parser::ReturnType;
