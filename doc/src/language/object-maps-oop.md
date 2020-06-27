@@ -3,7 +3,7 @@ Special Support for OOP via Object Maps
 
 {{#include ../links.md}}
 
-[Object maps] can be used to simulate object-oriented programming ([OOP]) by storing data
+[Object maps] can be used to simulate [object-oriented programming (OOP)][OOP] by storing data
 as properties and methods as properties holding [function pointers].
 
 If an [object map]'s property holds a [function pointer], the property can simply be called like

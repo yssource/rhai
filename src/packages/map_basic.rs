@@ -40,6 +40,17 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
         },
     );
     lib.set_fn_2_mut(
+        "fill_with",
+        |map1: &mut Map, map2: Map| {
+            map2.into_iter().for_each(|(key, value)| {
+                if !map1.contains_key(key.as_str()) {
+                    map1.insert(key, value);
+                }
+            });
+            Ok(())
+        },
+    );
+    lib.set_fn_2_mut(
         "+=",
         |map1: &mut Map, map2: Map| {
             map2.into_iter().for_each(|(key, value)| {

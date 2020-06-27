@@ -13,7 +13,8 @@ It doesn't attempt to be a new language. For example:
 * No structures/records - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
 
   There is, however, a built-in [object map] type which is adequate for most uses.
-  It is possible to simulate [OOP] by storing [function pointers] in [object map] properties, turning them into _methods_.
+  It is possible to simulate [object-oriented programming (OOP)][OOP] by storing [function pointers]
+  in [object map] properties, turning them into _methods_.
 
 * No first-class functions - Code your functions in Rust instead, and register them with Rhai.
 

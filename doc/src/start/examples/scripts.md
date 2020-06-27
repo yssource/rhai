@@ -20,6 +20,7 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 | [`function_decl3.rhai`](https://github.com/jonathandturner/rhai/tree/master/scripts/function_decl3.rhai) | A [function] with many parameters                                             |
 | [`if1.rhai`](https://github.com/jonathandturner/rhai/tree/master/scripts/if1.rhai)                       | [`if`](#if-statement) example                                                 |
 | [`loop.rhai`](https://github.com/jonathandturner/rhai/tree/master/scripts/loop.rhai)                     | Count-down [`loop`](#infinite-loop) in Rhai, emulating a `do` .. `while` loop |
+| [`oop.rhai`](https://github.com/jonathandturner/rhai/tree/master/scripts/oop.rhai)                       | Simulate [object-oriented programming (OOP)][OOP]                             |
 | [`op1.rhai`](https://github.com/jonathandturner/rhai/tree/master/scripts/op1.rhai)                       | Just simple addition                                                          |
 | [`op2.rhai`](https://github.com/jonathandturner/rhai/tree/master/scripts/op2.rhai)                       | Simple addition and multiplication                                            |
 | [`op3.rhai`](https://github.com/jonathandturner/rhai/tree/master/scripts/op3.rhai)                       | Change evaluation order with parenthesis                                      |
