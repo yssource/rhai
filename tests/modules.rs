@@ -81,7 +81,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                 import "hello" as h1;
                 import "hello" as h2;
                 h1::sum(h2::answer, -10, 3, 7)
-    "#
+            "#
         )?,
         42
     );
@@ -102,7 +102,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                         }
 
                         sum
-            "#
+                    "#
                 )
                 .expect_err("should error"),
             EvalAltResult::ErrorTooManyModules(_)
@@ -125,7 +125,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                         }
 
                         sum
-            "#
+                    "#
                 )
                 .expect_err("should error"),
             EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
@@ -143,7 +143,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                 for x in range(0, 10) {
                     foo();
                 }
-    "#,
+            "#,
         )?;
     }
 
@@ -164,35 +164,35 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
 
     let ast = engine.compile(
         r#"
-        // Functions become module functions
-        fn calc(x) {
-            x + 1
-        }
-        fn add_len(x, y) {
-            x + len(y)
-        }
-        private fn hidden() {
-            throw "you shouldn't see me!";
-        }
-    
-        // Imported modules become sub-modules
-        import "another module" as extra;
-    
-        // Variables defined at global level become module variables
-        const x = 123;
-        let foo = 41;
-        let hello;
-    
-        // Final variable values become constant module variable values
-        foo = calc(foo);
-        hello = "hello, " + foo + " worlds!";
+            // Functions become module functions
+            fn calc(x) {
+                x + 1
+            }
+            fn add_len(x, y) {
+                x + len(y)
+            }
+            private fn hidden() {
+                throw "you shouldn't see me!";
+            }
+        
+            // Imported modules become sub-modules
+            import "another module" as extra;
+        
+            // Variables defined at global level become module variables
+            const x = 123;
+            let foo = 41;
+            let hello;
+        
+            // Final variable values become constant module variable values
+            foo = calc(foo);
+            hello = "hello, " + foo + " worlds!";
 
-        export
-            x as abc,
-            foo,
-            hello,
-            extra as foobar;
-    "#,
+            export
+                x as abc,
+                foo,
+                hello,
+                extra as foobar;
+        "#,
     )?;
 
     let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
