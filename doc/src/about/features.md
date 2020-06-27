@@ -8,7 +8,7 @@ Easy
 
 * Easy-to-use language similar to JavaScript+Rust with dynamic typing.
 
-* Tight integration with native Rust [functions]({{rootUrl}}/rust/functions.md) and [types]({{rootUrl}}/rust/custom.md), including [getters/setters]({{rootUrl}}/rust/getters-setters.md), [methods]({{rootUrl}}/rust/custom.md) and [indexers]({{rootUrl}}/rust/indexers.md).
+* Tight integration with native Rust [functions] and [types][custom types], including [getters/setters]({{rootUrl}}/rust/getters-setters.md), [methods][custom type] and [indexers]({{rootUrl}}/rust/indexers.md).
 
 * Freely pass Rust variables/constants into a script via an external [`Scope`].
 
@@ -24,7 +24,7 @@ Fast
 
 * Fairly efficient evaluation (1 million iterations in 0.25 sec on a single core, 2.3 GHz Linux VM).
 
-* Scripts are [optimized]({{rootUrl}}/engine/optimize.md) (useful for template-based machine-generated scripts) for repeated evaluations.
+* Scripts are [optimized][script optimization] (useful for template-based machine-generated scripts) for repeated evaluations.
 
 Dynamic
 -------
@@ -50,7 +50,7 @@ Rugged
 
 * Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 
-* Protected against malicious attacks (such as [stack-overflow]({{rootUrl}}/safety/max-call-stack.md), [over-sized data]({{rootUrl}}/safety/max-string-size.md), and [runaway scripts]({{rootUrl}}/safety/max-operations.md) etc.) that may come from untrusted third-party user-land scripts.
+* Protected against malicious attacks (such as [stack-overflow][maximum call stack depth], [over-sized data][maximum length of strings], and [runaway scripts][maximum number of operations] etc.) that may come from untrusted third-party user-land scripts.
 
 * Track script evaluation [progress] and manually terminate a script run.
 

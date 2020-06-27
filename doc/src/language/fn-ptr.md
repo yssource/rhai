@@ -12,7 +12,7 @@ Call a function pointer using the `call` method, which needs to be called in met
 Built-in methods
 ----------------
 
-The following standard methods (mostly defined in the [`BasicFnPackage`]({{rootUrl}}/rust/packages.md) but excluded if
+The following standard methods (mostly defined in the [`BasicFnPackage`][packages] but excluded if
 using a [raw `Engine`]) operate on [strings]:
 
 | Function                   | Parameter(s) | Description                                                           |

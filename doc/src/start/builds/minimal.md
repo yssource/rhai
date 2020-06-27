@@ -45,7 +45,7 @@ Both of these have little code size savings.
 Use a Raw [`Engine`]
 -------------------
 
-[`Engine::new_raw`](#raw-engine) creates a _raw_ engine.
+[`Engine::new_raw`][raw `Engine`] creates a _raw_ engine.
 A _raw_ engine supports, out of the box, only a very [restricted set]({{rootUrl}}/engine/raw.md#built-in-operators)
 of basic arithmetic and logical operators.
 

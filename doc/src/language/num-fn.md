@@ -6,7 +6,7 @@ Numeric Functions
 Integer Functions
 ----------------
 
-The following standard functions (defined in the [`BasicMathPackage`]({{rootUrl}}/rust/packages.md) but excluded if using a [raw `Engine`])
+The following standard functions (defined in the [`BasicMathPackage`][packages] but excluded if using a [raw `Engine`])
 operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
 | Function     | Description                                                     |
@@ -18,7 +18,7 @@ operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 Floating-Point Functions
 -----------------------
 
-The following standard functions (defined in the [`BasicMathPackage`]({{rootUrl}}/rust/packages.md) but excluded if using a [raw `Engine`])
+The following standard functions (defined in the [`BasicMathPackage`][packages] but excluded if using a [raw `Engine`])
 operate on `f64` only:
 
 | Category         | Functions                                                             |

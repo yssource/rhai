@@ -17,6 +17,7 @@
 [WASM]: {{rootUrl}}/start/builds/wasm.md
 
 [`Engine`]: {{rootUrl}}/engine/hello-world.md
+[traits]: {{rootUrl}}/rust/traits.md
 [`private`]: {{rootUrl}}/engine/call-fn.md
 [`Func`]: {{rootUrl}}/engine/func.md
 [`eval_expression`]: {{rootUrl}}/engine/expressions.md
@@ -37,6 +38,8 @@
 
 [custom type]: {{rootUrl}}/rust/custom.md
 [custom types]: {{rootUrl}}/rust/custom.md
+
+[`instant::Instant`]: https://crates.io/crates/instant
 
 [`print`]: {{rootUrl}}/language/print-debug.md
 [`debug`]: {{rootUrl}}/language/print-debug.md
@@ -78,7 +81,6 @@
 [`eval`]: {{rootUrl}}/language/eval.md
 
 [OOP]: {{rootUrl}}/language/oop.md
-
 
 [maximum statement depth]: {{rootUrl}}/safety/max-stmt-depth.md
 [maximum call stack depth]: {{rootUrl}}/safety/max-call-stack.md

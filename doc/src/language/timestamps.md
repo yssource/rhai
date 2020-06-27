@@ -3,12 +3,12 @@
 
 {{#include ../links.md}}
 
-Timestamps are provided by the [`BasicTimePackage`]({{rootUrl}}/rust/packages.md) (excluded if using a [raw `Engine`])
+Timestamps are provided by the [`BasicTimePackage`][packages] (excluded if using a [raw `Engine`])
 via the `timestamp` function.
 
 Timestamps are not available under [`no_std`].
 
-The Rust type of a timestamp is `std::time::Instant` ([`instant::Instant`](https://crates.io/crates/instant) in [WASM] builds).
+The Rust type of a timestamp is `std::time::Instant` ([`instant::Instant`] in [WASM] builds).
 
 [`type_of()`] a timestamp returns `"timestamp"`.
 
@@ -16,7 +16,7 @@ The Rust type of a timestamp is `std::time::Instant` ([`instant::Instant`](https
 Built-in Functions
 -----------------
 
-The following methods (defined in the [`BasicTimePackage`]({{rootUrl}}/rust/packages.md) but excluded if using a [raw `Engine`]) operate on timestamps:
+The following methods (defined in the [`BasicTimePackage`][packages] but excluded if using a [raw `Engine`]) operate on timestamps:
 
 | Function                      | Parameter(s)                       | Description                                              |
 | ----------------------------- | ---------------------------------- | -------------------------------------------------------- |

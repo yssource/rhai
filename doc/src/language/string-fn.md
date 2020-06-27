@@ -3,7 +3,7 @@ Built-in String Functions
 
 {{#include ../links.md}}
 
-The following standard methods (mostly defined in the [`MoreStringPackage`]({{rootUrl}}/rust/packages.md) but excluded if
+The following standard methods (mostly defined in the [`MoreStringPackage`][packages] but excluded if
 using a [raw `Engine`]) operate on [strings]:
 
 | Function                  | Parameter(s)                                                 | Description                                                                                       |

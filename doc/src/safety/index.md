@@ -21,7 +21,7 @@ The most important resources to watch out for are:
   Alternatively, it may create a degenerated deep expression with so many levels that the parser exhausts the call stack
   when parsing the expression; or even deeply-nested statement blocks, if nested deep enough.
 
-  Another way to cause a stack overflow is to load a [self-referencing module]({{rootUrl}}/language/modules/import.md).
+  Another way to cause a stack overflow is to load a [self-referencing module][`import`].
 
 * **Overflows**: A malicious script may deliberately cause numeric over-flows and/or under-flows, divide by zero, and/or
   create bad floating-point representations, in order to crash the system.

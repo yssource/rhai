@@ -10,8 +10,7 @@ of modules to zero does _not_ indicate unlimited modules, but disallows loading 
 
 A script attempting to load more than the maximum number of modules will terminate with an error result.
 
-This limit can also be used to stop [`import`-loops]({{rootUrl}}/language/modules/import.md)
-(i.e. cycles of modules referring to each other).
+This limit can also be used to stop [`import`-loops][`import`] (i.e. cycles of modules referring to each other).
 
 This check can be disabled via the [`unchecked`] feature for higher performance
 (but higher risks as well).
