@@ -1,7 +1,6 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
-use crate::any::{Dynamic, Union, Variant};
-use crate::module::Module;
+use crate::any::{Dynamic, Variant};
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
@@ -14,9 +13,6 @@ pub enum EntryType {
     Normal,
     /// Immutable constant value.
     Constant,
-    /// Name of a module, allowing member access with the :: operator.
-    /// This is for internal use only.
-    Module,
 }
 
 /// An entry in the Scope.
@@ -171,32 +167,6 @@ impl<'a> Scope<'a> {
         self.push_dynamic_value(name, EntryType::Normal, value, false);
     }
 
-    /// Add (push) a new module to the Scope.
-    ///
-    /// Modules are used for accessing member variables, functions and plugins under a namespace.
-    #[cfg(not(feature = "no_module"))]
-    pub fn push_module<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Module) {
-        self.push_module_internal(name, value);
-    }
-
-    /// Add (push) a new module to the Scope.
-    ///
-    /// Modules are used for accessing member variables, functions and plugins under a namespace.
-    pub(crate) fn push_module_internal<K: Into<Cow<'a, str>>>(
-        &mut self,
-        name: K,
-        mut value: Module,
-    ) {
-        value.index_all_sub_modules();
-
-        self.push_dynamic_value(
-            name,
-            EntryType::Module,
-            Dynamic(Union::Module(Box::new(value))),
-            false,
-        );
-    }
-
     /// Add (push) a new constant to the Scope.
     ///
     /// Constants are immutable and cannot be assigned to.  Their values never change.
@@ -312,65 +282,25 @@ impl<'a> Scope<'a> {
         self.0
             .iter()
             .rev() // Always search a Scope in reverse order
-            .any(|Entry { name: key, typ, .. }| match typ {
-                EntryType::Normal | EntryType::Constant => name == key,
-                EntryType::Module => false,
-            })
+            .any(|Entry { name: key, .. }| name == key)
     }
 
     /// Find an entry in the Scope, starting from the last.
-    ///
-    /// modules are ignored.
     pub(crate) fn get_index(&self, name: &str) -> Option<(usize, EntryType)> {
         self.0
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
-            .find_map(|(index, Entry { name: key, typ, .. })| match typ {
-                EntryType::Normal | EntryType::Constant => {
-                    if name == key {
-                        Some((index, *typ))
-                    } else {
-                        None
-                    }
+            .find_map(|(index, Entry { name: key, typ, .. })| {
+                if name == key {
+                    Some((index, *typ))
+                } else {
+                    None
                 }
-                EntryType::Module => None,
             })
-    }
-
-    /// Find a module in the Scope, starting from the last.
-    pub(crate) fn get_module_index(&self, name: &str) -> Option<usize> {
-        self.0
-            .iter()
-            .enumerate()
-            .rev() // Always search a Scope in reverse order
-            .find_map(|(index, Entry { name: key, typ, .. })| match typ {
-                EntryType::Module => {
-                    if name == key {
-                        Some(index)
-                    } else {
-                        None
-                    }
-                }
-                EntryType::Normal | EntryType::Constant => None,
-            })
-    }
-
-    /// Find a module in the Scope, starting from the last entry.
-    #[cfg(not(feature = "no_module"))]
-    pub fn find_module(&mut self, name: &str) -> Option<&mut Module> {
-        self.find_module_internal(name)
-    }
-
-    /// Find a module in the Scope, starting from the last entry.
-    pub(crate) fn find_module_internal(&mut self, name: &str) -> Option<&mut Module> {
-        let index = self.get_module_index(name)?;
-        self.get_mut(index).0.downcast_mut::<Module>()
     }
 
     /// Get the value of an entry in the Scope, starting from the last.
-    ///
-    /// modules are ignored.
     ///
     /// # Examples
     ///
@@ -386,10 +316,7 @@ impl<'a> Scope<'a> {
         self.0
             .iter()
             .rev()
-            .find(|Entry { name: key, typ, .. }| match typ {
-                EntryType::Normal | EntryType::Constant => name == key,
-                EntryType::Module => false,
-            })
+            .find(|Entry { name: key, .. }| name == key)
             .and_then(|Entry { value, .. }| value.downcast_ref::<T>().cloned())
     }
 
@@ -421,8 +348,6 @@ impl<'a> Scope<'a> {
             Some((index, EntryType::Normal)) => {
                 self.0.get_mut(index).unwrap().value = Dynamic::from(value)
             }
-            // modules cannot be modified
-            Some((_, EntryType::Module)) => unreachable!(),
         }
     }
 

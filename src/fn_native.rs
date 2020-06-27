@@ -124,6 +124,17 @@ impl fmt::Debug for CallableFunction {
     }
 }
 
+impl fmt::Display for CallableFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Pure(_) => write!(f, "NativePureFunction"),
+            Self::Method(_) => write!(f, "NativeMethod"),
+            Self::Iterator(_) => write!(f, "NativeIterator"),
+            CallableFunction::Script(s) => fmt::Display::fmt(s, f),
+        }
+    }
+}
+
 impl CallableFunction {
     /// Is this a pure native Rust function?
     pub fn is_pure(&self) -> bool {

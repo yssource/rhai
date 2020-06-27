@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::{
-    get_script_function_by_signature, make_getter, make_setter, Engine, State, FN_IDX_GET,
+    get_script_function_by_signature, make_getter, make_setter, Engine, Imports, State, FN_IDX_GET,
     FN_IDX_SET,
 };
 use crate::error::ParseError;
@@ -973,7 +973,8 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let (result, _) = self.eval_ast_with_scope_raw(scope, ast)?;
+        let mut mods = Imports::new();
+        let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -986,17 +987,18 @@ impl Engine {
     }
 
     /// Evaluate an `AST` with own scope.
-    pub(crate) fn eval_ast_with_scope_raw(
+    pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
-        ast: &AST,
+        mods: &mut Imports,
+        ast: &'a AST,
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
         let mut state = State::new();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.lib(), &mut None, stmt, 0)
+                self.eval_stmt(scope, mods, &mut state, ast.lib(), &mut None, stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -1058,11 +1060,12 @@ impl Engine {
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
         let mut state = State::new();
+        let mut mods = Default::default();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.lib(), &mut None, stmt, 0)
+                self.eval_stmt(scope, &mut mods, &mut state, ast.lib(), &mut None, stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -1201,10 +1204,12 @@ impl Engine {
             })?;
 
         let mut state = State::new();
+        let mut mods = Imports::new();
         let args = args.as_mut();
 
         self.call_script_fn(
             scope,
+            &mut mods,
             &mut state,
             ast.lib(),
             &mut None,

@@ -15,11 +15,11 @@ use crate::stdlib::{
     boxed::Box,
     char,
     collections::HashMap,
-    format,
+    fmt, format,
     iter::empty,
     mem,
     num::NonZeroUsize,
-    ops::{Add, Deref, DerefMut},
+    ops::Add,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -202,6 +202,25 @@ pub struct ScriptFnDef {
     pub pos: Position,
 }
 
+impl fmt::Display for ScriptFnDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}{}({})",
+            match self.access {
+                FnAccess::Public => "",
+                FnAccess::Private => "private ",
+            },
+            self.name,
+            self.params
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
+}
+
 /// `return`/`throw` statement.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum ReturnType {
@@ -214,9 +233,11 @@ pub enum ReturnType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 struct ParseState {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(String, ScopeEntryType)>,
+    pub stack: Vec<(String, ScopeEntryType)>,
+    /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
+    pub modules: Vec<String>,
     /// Maximum levels of expression nesting.
-    max_expr_depth: usize,
+    pub max_expr_depth: usize,
     /// Maximum length of a string.
     pub max_string_size: usize,
     /// Maximum length of an array.
@@ -245,15 +266,12 @@ impl ParseState {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return zero when the variable name is not found in the `ParseState`.
-    pub fn find(&self, name: &str) -> Option<NonZeroUsize> {
+    pub fn find_var(&self, name: &str) -> Option<NonZeroUsize> {
         self.stack
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (n, typ))| match typ {
-                ScopeEntryType::Normal | ScopeEntryType::Constant => *n == name,
-                ScopeEntryType::Module => false,
-            })
+            .find(|(_, (n, _))| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
     /// Find a module by name in the `ParseState`, searching in reverse.
@@ -261,29 +279,12 @@ impl ParseState {
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return zero when the variable name is not found in the `ParseState`.
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
-        self.stack
+        self.modules
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (n, typ))| match typ {
-                ScopeEntryType::Module => *n == name,
-                ScopeEntryType::Normal | ScopeEntryType::Constant => false,
-            })
+            .find(|(_, n)| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
-    }
-}
-
-impl Deref for ParseState {
-    type Target = Vec<(String, ScopeEntryType)>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.stack
-    }
-}
-
-impl DerefMut for ParseState {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.stack
     }
 }
 
@@ -1279,7 +1280,7 @@ fn parse_primary(
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
-            let index = state.find(&s);
+            let index = state.find_var(&s);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         Token::LeftParen => parse_paren_expr(input, state, settings.level_up())?,
@@ -1469,7 +1470,7 @@ fn make_assignment_stmt<'a>(
         // var (indexed) = rhs
         Expr::Variable(x) => {
             let ((name, name_pos), _, _, index) = x.as_ref();
-            match state.stack[(state.len() - index.unwrap().get())].1 {
+            match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => {
                     Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
                 }
@@ -1477,7 +1478,6 @@ fn make_assignment_stmt<'a>(
                 ScopeEntryType::Constant => {
                     Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
                 }
-                ScopeEntryType::Module => unreachable!(),
             }
         }
         // xxx[???] = rhs, xxx.??? = rhs
@@ -1489,7 +1489,7 @@ fn make_assignment_stmt<'a>(
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
                 let ((name, name_pos), _, _, index) = x.as_ref();
-                match state.stack[(state.len() - index.unwrap().get())].1 {
+                match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => {
                         Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
                     }
@@ -1497,7 +1497,6 @@ fn make_assignment_stmt<'a>(
                     ScopeEntryType::Constant => {
                         Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
                     }
-                    ScopeEntryType::Module => unreachable!(),
                 }
             }
             // expr[???] = rhs, expr.??? = rhs
@@ -2017,13 +2016,13 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, settings.level_up())?;
 
-    let prev_len = state.len();
-    state.push((name.clone(), ScopeEntryType::Normal));
+    let prev_len = state.stack.len();
+    state.stack.push((name.clone(), ScopeEntryType::Normal));
 
     settings.is_breakable = true;
     let body = parse_block(input, state, settings.level_up())?;
 
-    state.truncate(prev_len);
+    state.stack.truncate(prev_len);
 
     Ok(Stmt::For(Box::new((name, expr, body))))
 }
@@ -2064,34 +2063,30 @@ fn parse_let(
         match var_type {
             // let name = expr
             ScopeEntryType::Normal => {
-                state.push((name.clone(), ScopeEntryType::Normal));
+                state.stack.push((name.clone(), ScopeEntryType::Normal));
                 Ok(Stmt::Let(Box::new(((name, pos), Some(init_value)))))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
-                state.push((name.clone(), ScopeEntryType::Constant));
+                state.stack.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(((name, pos), init_value))))
             }
             // const name = expr: error
             ScopeEntryType::Constant => {
                 Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
             }
-            // Variable cannot be a module
-            ScopeEntryType::Module => unreachable!(),
         }
     } else {
         // let name
         match var_type {
             ScopeEntryType::Normal => {
-                state.push((name.clone(), ScopeEntryType::Normal));
+                state.stack.push((name.clone(), ScopeEntryType::Normal));
                 Ok(Stmt::Let(Box::new(((name, pos), None))))
             }
             ScopeEntryType::Constant => {
-                state.push((name.clone(), ScopeEntryType::Constant));
+                state.stack.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(((name, pos), Expr::Unit(pos)))))
             }
-            // Variable cannot be a module
-            ScopeEntryType::Module => unreachable!(),
         }
     }
 }
@@ -2127,7 +2122,7 @@ fn parse_import(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
-    state.push((name.clone(), ScopeEntryType::Module));
+    state.modules.push(name.clone());
     Ok(Stmt::Import(Box::new((expr, (name, settings.pos)))))
 }
 
@@ -2214,7 +2209,7 @@ fn parse_block(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = StaticVec::new();
-    let prev_len = state.len();
+    let prev_len = state.stack.len();
 
     while !match_token(input, Token::RightBrace)? {
         // Parse statements inside the block
@@ -2254,7 +2249,7 @@ fn parse_block(
         }
     }
 
-    state.truncate(prev_len);
+    state.stack.truncate(prev_len);
 
     Ok(Stmt::Block(Box::new((statements, settings.pos))))
 }
@@ -2389,7 +2384,7 @@ fn parse_fn(
                 (Token::RightParen, _) => (),
                 _ => match input.next().unwrap() {
                     (Token::Identifier(s), pos) => {
-                        state.push((s.clone(), ScopeEntryType::Normal));
+                        state.stack.push((s.clone(), ScopeEntryType::Normal));
                         params.push((s, pos))
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),

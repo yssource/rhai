@@ -1,6 +1,6 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
-use crate::engine::{Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
@@ -122,6 +122,7 @@ fn call_fn_with_constant_arguments(
         .engine
         .call_fn_raw(
             &mut Scope::new(),
+            &mut Imports::new(),
             &mut Default::default(),
             state.lib,
             fn_name,

@@ -12,6 +12,7 @@ Breaking changes
 * The trait function `ModuleResolver::resolve` no longer takes a `Scope` as argument.
 * Functions defined in script now differentiates between using method-call style and normal function-call style.
   The method-call style will bind the object to the `this` parameter instead of consuming the first parameter.
+* Imported modules are no longer stored in the `Scope`.  `Scope::push_module` is removed.
 
 New features
 ------------
