@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{make_getter, make_setter, Engine, Imports, FN_IDX_GET, FN_IDX_SET};
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync, Shared};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
@@ -19,7 +19,7 @@ use crate::stdlib::{
     boxed::Box,
     cell::RefCell,
     collections::HashMap,
-    fmt,
+    fmt, format,
     iter::empty,
     mem,
     num::NonZeroUsize,
@@ -890,6 +890,15 @@ impl Module {
         &self,
     ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, CallableFunction)> {
         self.functions.values()
+    }
+
+    /// Get an iterator over all script-defined functions in the module.
+    pub fn iter_script_fn<'a>(&'a self) -> impl Iterator<Item = Shared<ScriptFnDef>> + 'a {
+        self.functions
+            .values()
+            .map(|(_, _, _, f)| f)
+            .filter(|f| f.is_script())
+            .map(|f| f.get_shared_fn_def())
     }
 
     /// Create a new `Module` by evaluating an `AST`.
