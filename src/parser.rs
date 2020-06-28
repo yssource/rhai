@@ -2016,13 +2016,13 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, settings.level_up())?;
 
-    let prev_len = state.stack.len();
+    let prev_stack_len = state.stack.len();
     state.stack.push((name.clone(), ScopeEntryType::Normal));
 
     settings.is_breakable = true;
     let body = parse_block(input, state, settings.level_up())?;
 
-    state.stack.truncate(prev_len);
+    state.stack.truncate(prev_stack_len);
 
     Ok(Stmt::For(Box::new((name, expr, body))))
 }
@@ -2209,7 +2209,8 @@ fn parse_block(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = StaticVec::new();
-    let prev_len = state.stack.len();
+    let prev_stack_len = state.stack.len();
+    let prev_mods_len = state.modules.len();
 
     while !match_token(input, Token::RightBrace)? {
         // Parse statements inside the block
@@ -2249,7 +2250,8 @@ fn parse_block(
         }
     }
 
-    state.stack.truncate(prev_len);
+    state.stack.truncate(prev_stack_len);
+    state.modules.truncate(prev_mods_len);
 
     Ok(Stmt::Block(Box::new((statements, settings.pos))))
 }

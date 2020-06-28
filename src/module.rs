@@ -218,17 +218,19 @@ impl Module {
     }
 
     /// Get a mutable reference to a modules-qualified variable.
+    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     pub(crate) fn get_qualified_var_mut(
         &mut self,
-        name: &str,
         hash_var: u64,
-        pos: Position,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
-        self.all_variables
-            .get_mut(&hash_var)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.to_string(), pos)))
+        self.all_variables.get_mut(&hash_var).ok_or_else(|| {
+            Box::new(EvalAltResult::ErrorVariableNotFound(
+                String::new(),
+                Position::none(),
+            ))
+        })
     }
 
     /// Set a script-defined function into the module.
@@ -839,17 +841,17 @@ impl Module {
     }
 
     /// Get a modules-qualified function.
+    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
     pub(crate) fn get_qualified_fn(
         &mut self,
-        name: &str,
         hash_qualified_fn: u64,
     ) -> Result<&CallableFunction, Box<EvalAltResult>> {
         self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {
             Box::new(EvalAltResult::ErrorFunctionNotFound(
-                name.to_string(),
+                String::new(),
                 Position::none(),
             ))
         })

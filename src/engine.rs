@@ -4,7 +4,7 @@ use crate::any::{Dynamic, Union, Variant};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::fn_native::{CallableFunction, Callback, FnCallArgs, FnPtr};
-use crate::module::{resolvers, Module, ModuleResolver};
+use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, Stmt, AST, INT};
@@ -393,6 +393,39 @@ fn default_print(s: &str) {
     println!("{}", s);
 }
 
+/// Search for a module within an imports stack.
+/// Position in `EvalAltResult` is None and must be set afterwards.
+fn search_imports<'s>(
+    mods: &'s mut Imports,
+    state: &mut State,
+    modules: &Box<ModuleRef>,
+) -> Result<&'s mut Module, Box<EvalAltResult>> {
+    let (root, root_pos) = modules.get(0);
+
+    // Qualified - check if the root module is directly indexed
+    let index = if state.always_search {
+        None
+    } else {
+        modules.index()
+    };
+
+    Ok(if let Some(index) = index {
+        let offset = mods.len() - index.get();
+        &mut mods.get_mut(offset).unwrap().1
+    } else {
+        mods.iter_mut()
+            .rev()
+            .find(|(n, _)| n == root)
+            .map(|(_, m)| m)
+            .ok_or_else(|| {
+                Box::new(EvalAltResult::ErrorModuleNotFound(
+                    root.to_string(),
+                    *root_pos,
+                ))
+            })?
+    })
+}
+
 /// Search for a variable within the scope
 fn search_scope<'s, 'a>(
     scope: &'s mut Scope,
@@ -416,29 +449,16 @@ fn search_scope<'s, 'a>(
     }
 
     // Check if it is qualified
-    if let Some(modules) = modules.as_ref() {
-        // Qualified - check if the root module is directly indexed
-        let index = if state.always_search {
-            None
-        } else {
-            modules.index()
-        };
-
-        let module = if let Some(index) = index {
-            let offset = mods.len() - index.get();
-            &mut mods.get_mut(offset).unwrap().1
-        } else {
-            // Find the root module in the scope
-            let (id, root_pos) = modules.get(0);
-
-            mods.iter_mut()
-                .rev()
-                .find(|(n, _)| n == id)
-                .map(|(_, m)| m)
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos)))?
-        };
-
-        let target = module.get_qualified_var_mut(name, *hash_var, *pos)?;
+    if let Some(modules) = modules {
+        let module = search_imports(mods, state, modules)?;
+        let target = module
+            .get_qualified_var_mut(*hash_var)
+            .map_err(|err| match *err {
+                EvalAltResult::ErrorVariableNotFound(_, _) => Box::new(
+                    EvalAltResult::ErrorVariableNotFound(format!("{}{}", modules, name), *pos),
+                ),
+                _ => err.new_position(*pos),
+            })?;
 
         // Module variables are constant
         Ok((target, name, ScopeEntryType::Constant, *pos))
@@ -1952,29 +1972,10 @@ impl Engine {
 
                 let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
-                let (id, root_pos) = modules.get(0); // First module
-
-                let index = if state.always_search {
-                    None
-                } else {
-                    modules.index()
-                };
-
-                let module = if let Some(index) = index {
-                    let offset = mods.len() - index.get();
-                    &mut mods.get_mut(offset).unwrap().1
-                } else {
-                    mods.iter_mut()
-                        .rev()
-                        .find(|(n, _)| n == id)
-                        .map(|(_, m)| m)
-                        .ok_or_else(|| {
-                            Box::new(EvalAltResult::ErrorModuleNotFound(id.into(), *root_pos))
-                        })?
-                };
+                let module = search_imports(mods, state, modules)?;
 
                 // First search in script-defined functions (can override built-in)
-                let func = match module.get_qualified_fn(name, *hash_script) {
+                let func = match module.get_qualified_fn(*hash_script) {
                     Err(err) if matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) => {
                         // Then search in Rust functions
                         self.inc_operations(state)
@@ -1990,7 +1991,7 @@ impl Engine {
                         // 3) The final hash is the XOR of the two hashes.
                         let hash_qualified_fn = *hash_script ^ hash_fn_args;
 
-                        module.get_qualified_fn(name, hash_qualified_fn)
+                        module.get_qualified_fn(hash_qualified_fn)
                     }
                     r => r,
                 };
@@ -2009,13 +2010,18 @@ impl Engine {
                     Ok(f) => {
                         f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
                     }
-                    Err(err)
-                        if def_val.is_some()
-                            && matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) =>
-                    {
-                        Ok(def_val.clone().unwrap())
-                    }
-                    Err(err) => Err(err),
+                    Err(err) => match *err {
+                        EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
+                            Ok(def_val.clone().unwrap())
+                        }
+                        EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                            Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+                                format!("{}{}", modules, name),
+                                *pos,
+                            )))
+                        }
+                        _ => Err(err.new_position(*pos)),
+                    },
                 }
             }
 
