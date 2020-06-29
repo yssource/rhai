@@ -11,6 +11,8 @@ Other online documentation resources for Rhai:
 
 * [`LIB.RS`](https://lib.rs/crates/rhai) - Rhai library info
 
+* [Online Playground][playground] - Run scripts directly from editor
+
 Other cool projects to check out:
 
 * [ChaiScript](http://chaiscript.com/) - A strong inspiration for Rhai.  An embedded scripting language for C++ that I helped created many moons ago, now being led by my cousin.

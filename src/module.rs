@@ -901,7 +901,7 @@ impl Module {
             .map(|f| f.get_shared_fn_def())
     }
 
-    /// Create a new `Module` by evaluating an `AST`.
+    /// Create a new `Module` by evaluating an [`AST`].
     ///
     /// # Examples
     ///

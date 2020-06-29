@@ -453,6 +453,22 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
+pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
+    let mut first_alphabetic = false;
+
+    for ch in name {
+        match ch {
+            '_' => (),
+            _ if char::is_ascii_alphabetic(&ch) => first_alphabetic = true,
+            _ if !first_alphabetic => return false,
+            _ if char::is_ascii_alphanumeric(&ch) => (),
+            _ => return false,
+        }
+    }
+
+    first_alphabetic
+}
+
 /// Parse a string literal wrapped by `enclosing_char`.
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
@@ -783,13 +799,9 @@ fn get_next_token_inner(
                     }
                 }
 
-                let is_valid_identifier = result
-                    .iter()
-                    .find(|&ch| char::is_ascii_alphanumeric(ch)) // first alpha-numeric character
-                    .map(char::is_ascii_alphabetic) // is a letter
-                    .unwrap_or(false); // if no alpha-numeric at all - syntax error
+                let is_valid_identifier = is_valid_identifier(result.iter().cloned());
 
-                let identifier: String = result.iter().collect();
+                let identifier: String = result.into_iter().collect();
 
                 if !is_valid_identifier {
                     return Some((

@@ -14,7 +14,7 @@ more control over what a script can (or cannot) do.
 | Feature       | Description                                                                                                                                                                                                |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `unchecked`   | Disable arithmetic checking (such as over-flows and division by zero), call stack depth limit, operations count limit and modules loading limit.<br/>Beware that a bad script may panic the entire system! |
-| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and `AST`, are all `Send + Sync`.                                           |
+| `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, all Rhai types, including [`Engine`], [`Scope`] and [`AST`], are all `Send + Sync`.                                         |
 | `no_optimize` | Disable [script optimization].                                                                                                                                                                             |
 | `no_float`    | Disable floating-point numbers and math.                                                                                                                                                                   |
 | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                                                                                           |
@@ -24,7 +24,7 @@ more control over what a script can (or cannot) do.
 | `no_function` | Disable script-defined [functions].                                                                                                                                                                        |
 | `no_module`   | Disable loading external [modules].                                                                                                                                                                        |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                                                       |
-| `internals`   | Expose internal data structures (e.g. `AST` nodes). Beware that Rhai internals are volatile and may change from version to version.                                                                        |
+| `internals`   | Expose internal data structures (e.g. [`AST`] nodes). Beware that Rhai internals are volatile and may change from version to version.                                                                      |
 
 
 Example

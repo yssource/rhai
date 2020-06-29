@@ -235,7 +235,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
         *engine
             .eval_with_scope::<()>(&mut scope, r#"import "testing" as ttt; ttt::hidden()"#)
             .expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "hidden"
+        EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "ttt::hidden"
     ));
 
     Ok(())

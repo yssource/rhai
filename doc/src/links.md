@@ -15,11 +15,13 @@
 
 [minimal builds]: {{rootUrl}}/start/builds/minimal.md
 [WASM]: {{rootUrl}}/start/builds/wasm.md
+[playground]: https://alvinhochun.github.io/rhai-demo
 
 [`Engine`]: {{rootUrl}}/engine/hello-world.md
 [traits]: {{rootUrl}}/rust/traits.md
 [`private`]: {{rootUrl}}/engine/call-fn.md
 [`Func`]: {{rootUrl}}/engine/func.md
+[`AST`]: {{rootUrl}}/engine/compile.md
 [`eval_expression`]: {{rootUrl}}/engine/expressions.md
 [`eval_expression_with_scope`]: {{rootUrl}}/engine/expressions.md
 [raw `Engine`]: {{rootUrl}}/engine/raw.md
@@ -38,6 +40,8 @@
 
 [custom type]: {{rootUrl}}/rust/custom.md
 [custom types]: {{rootUrl}}/rust/custom.md
+[getters/setters]: {{rootUrl}}/rust/getters-setters.md
+[indexers]: {{rootUrl}}/rust/indexers.md
 
 [`instant::Instant`]: https://crates.io/crates/instant
 
@@ -70,6 +74,8 @@
 [functions]: {{rootUrl}}/language/functions.md
 [function pointer]: {{rootUrl}}/language/fn-ptr.md
 [function pointers]: {{rootUrl}}/language/fn-ptr.md
+[function namespace]: {{rootUrl}}/language/fn-namespaces.md
+[function namespaces]: {{rootUrl}}/language/fn-namespaces.md
 
 [`Module`]: {{rootUrl}}/language/modules/index.md
 [module]: {{rootUrl}}/language/modules/index.md
@@ -89,7 +95,7 @@
 [maximum length of strings]: {{rootUrl}}/safety/max-string-size.md
 [maximum size of arrays]: {{rootUrl}}/safety/max-array-size.md
 [maximum size of object maps]: {{rootUrl}}/safety/max-map-size.md
-[progress]:/safety/progress.md
+[progress]: {{rootUrl}}/safety/progress.md
 
 [script optimization]: {{rootUrl}}/engine/optimize/index.md
 [`OptimizationLevel::Full`]: {{rootUrl}}/engine/optimize/optimize-levels.md

@@ -8,10 +8,10 @@ use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackageLibrary, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, Stmt, AST, INT};
-use crate::r#unsafe::{unsafe_cast_var_name_to_lifetime, unsafe_mut_cast_to_lifetime};
+use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::token::Position;
+use crate::token::{is_valid_identifier, Position};
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
@@ -75,6 +75,7 @@ pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";
 pub const KEYWORD_EVAL: &str = "eval";
+pub const KEYWORD_FN_PTR: &str = "Fn";
 pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
@@ -82,7 +83,6 @@ pub const FN_GET: &str = "get$";
 pub const FN_SET: &str = "set$";
 pub const FN_IDX_GET: &str = "$index$get$";
 pub const FN_IDX_SET: &str = "$index$set$";
-pub const FN_FN_PTR: &str = "Fn";
 
 /// A type specifying the method of chaining.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -729,10 +729,17 @@ impl Engine {
 
             // Replace the first reference with a reference to the clone, force-casting the lifetime.
             // Keep the original reference.  Must remember to restore it later with `restore_first_arg_of_method_call`.
-            let this_pointer = mem::replace(
-                args.get_mut(0).unwrap(),
-                unsafe_mut_cast_to_lifetime(this_copy),
-            );
+            //
+            // # Safety
+            //
+            // Blindly casting a a reference to another lifetime saves on allocations and string cloning,
+            // but must be used with the utmost care.
+            //
+            // We can do this here because, at the end of this scope, we'd restore the original reference
+            // with `restore_first_arg_of_method_call`. Therefore this shorter lifetime does not get "out".
+            let this_pointer = mem::replace(args.get_mut(0).unwrap(), unsafe {
+                mem::transmute(this_copy)
+            });
 
             *old_this_ptr = Some(this_pointer);
         }
@@ -1020,7 +1027,7 @@ impl Engine {
             )),
 
             // Fn
-            FN_FN_PTR if args.len() == 1 && !self.has_override(lib, hashes) => {
+            KEYWORD_FN_PTR if args.len() == 1 && !self.has_override(lib, hashes) => {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'Fn' should not be called in method style. Try Fn(...);".into(),
                     Position::none(),
@@ -1133,7 +1140,7 @@ impl Engine {
                             state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| EvalAltResult::new_position(err, *pos))
+                        .map_err(|err| err.new_position(*pos))
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
@@ -1162,9 +1169,9 @@ impl Engine {
                             }
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                obj_ptr.set_value(new_val.unwrap()).map_err(|err| {
-                                    EvalAltResult::new_position(err, rhs.position())
-                                })?;
+                                obj_ptr
+                                    .set_value(new_val.unwrap())
+                                    .map_err(|err| err.new_position(rhs.position()))?;
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
@@ -1205,11 +1212,12 @@ impl Engine {
                         let (result, updated) = {
                             let obj = target.as_mut();
                             let idx = idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap();
+                            let mut fn_name = name.as_ref();
 
                             // Check if it is a FnPtr call
-                            if name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+                            if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
                                 // Redirect function name
-                                let fn_name = obj.as_fn_name().unwrap();
+                                fn_name = obj.as_str().unwrap();
                                 // Recalculate hash
                                 let hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
                                 // Arguments are passed as-is
@@ -1222,25 +1230,20 @@ impl Engine {
                                     def_val, level,
                                 )
                             } else {
-                                let mut fn_name = name.clone();
-                                let mut redirected = None;
+                                let redirected: Option<ImmutableString>;
                                 let mut hash = *hash;
 
                                 // Check if it is a map method call in OOP style
                                 if let Some(map) = obj.downcast_ref::<Map>() {
-                                    if let Some(val) = map.get(name.as_ref()) {
+                                    if let Some(val) = map.get(fn_name) {
                                         if let Some(f) = val.downcast_ref::<FnPtr>() {
                                             // Remap the function name
                                             redirected = Some(f.get_fn_name().clone());
-                                            fn_name = redirected.as_ref().unwrap().as_str().into();
+                                            fn_name = redirected.as_ref().unwrap();
 
                                             // Recalculate the hash based on the new function name
-                                            hash = calc_fn_hash(
-                                                empty(),
-                                                fn_name.as_ref(),
-                                                idx.len(),
-                                                empty(),
-                                            );
+                                            hash =
+                                                calc_fn_hash(empty(), fn_name, idx.len(), empty());
                                         }
                                     }
                                 };
@@ -1249,14 +1252,13 @@ impl Engine {
                                 let mut arg_values =
                                     once(obj).chain(idx.iter_mut()).collect::<StaticVec<_>>();
                                 let args = arg_values.as_mut();
-                                let fn_name = fn_name.as_ref();
 
                                 self.exec_fn_call(
                                     state, lib, fn_name, *native, hash, args, is_ref, true,
                                     def_val, level,
                                 )
                             }
-                            .map_err(|err| EvalAltResult::new_position(err, *pos))?
+                            .map_err(|err| err.new_position(*pos))?
                         };
 
                         // Feed the changed temp value back
@@ -1277,7 +1279,7 @@ impl Engine {
                             self.get_indexed_mut(state, lib, target, index, *pos, true, level)?;
 
                         val.set_value(new_val.unwrap())
-                            .map_err(|err| EvalAltResult::new_position(err, rhs.position()))?;
+                            .map_err(|err| err.new_position(rhs.position()))?;
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
@@ -1297,7 +1299,7 @@ impl Engine {
                             state, lib, setter, true, 0, &mut args, is_ref, true, None, level,
                         )
                         .map(|(v, _)| (v, true))
-                        .map_err(|err| EvalAltResult::new_position(err, *pos))
+                        .map_err(|err| err.new_position(*pos))
                     }
                     // xxx.id
                     Expr::Property(x) => {
@@ -1307,7 +1309,7 @@ impl Engine {
                             state, lib, getter, true, 0, &mut args, is_ref, true, None, level,
                         )
                         .map(|(v, _)| (v, false))
-                        .map_err(|err| EvalAltResult::new_position(err, *pos))
+                        .map_err(|err| err.new_position(*pos))
                     }
                     // {xxx:map}.prop[expr] | {xxx:map}.prop.expr
                     Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
@@ -1325,7 +1327,7 @@ impl Engine {
                             state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| EvalAltResult::new_position(err, *pos))
+                        .map_err(|err| err.new_position(*pos))
                     }
                     // xxx.prop[expr] | xxx.prop.expr
                     Expr::Index(x) | Expr::Dot(x) => {
@@ -1338,7 +1340,7 @@ impl Engine {
                             self.exec_fn_call(
                                 state, lib, getter, true, 0, args, is_ref, true, None, level,
                             )
-                            .map_err(|err| EvalAltResult::new_position(err, *pos))?
+                            .map_err(|err| err.new_position(*pos))?
                         } else {
                             unreachable!();
                         };
@@ -1350,7 +1352,7 @@ impl Engine {
                                 state, lib, this_ptr, target, expr, idx_values, next_chain, level,
                                 new_val,
                             )
-                            .map_err(|err| EvalAltResult::new_position(err, *pos))?;
+                            .map_err(|err| err.new_position(*pos))?;
 
                         // Feed the value back via a setter just in case it has been updated
                         if updated || may_be_changed {
@@ -1364,7 +1366,7 @@ impl Engine {
                                 .or_else(|err| match *err {
                                     // If there is no setter, no need to feed it back because the property is read-only
                                     EvalAltResult::ErrorDotExpr(_, _) => Ok(Default::default()),
-                                    err => Err(EvalAltResult::new_position(Box::new(err), *pos)),
+                                    _ => Err(err.new_position(*pos)),
                                 })?;
                             }
                         }
@@ -1413,7 +1415,7 @@ impl Engine {
                 let (var_name, var_pos) = &x.0;
 
                 self.inc_operations(state)
-                    .map_err(|err| EvalAltResult::new_position(err, *var_pos))?;
+                    .map_err(|err| err.new_position(*var_pos))?;
 
                 let (target, _, typ, pos) = search_scope(scope, mods, state, this_ptr, dot_lhs)?;
 
@@ -1433,7 +1435,7 @@ impl Engine {
                     state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
                 )
                 .map(|(v, _)| v)
-                .map_err(|err| EvalAltResult::new_position(err, *op_pos))
+                .map_err(|err| err.new_position(*op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
             expr if new_val.is_some() => {
@@ -1449,7 +1451,7 @@ impl Engine {
                     state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
                 )
                 .map(|(v, _)| v)
-                .map_err(|err| EvalAltResult::new_position(err, *op_pos))
+                .map_err(|err| err.new_position(*op_pos))
             }
         }
     }
@@ -1472,7 +1474,7 @@ impl Engine {
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
         self.inc_operations(state)
-            .map_err(|err| EvalAltResult::new_position(err, expr.position()))?;
+            .map_err(|err| err.new_position(expr.position()))?;
 
         match expr {
             Expr::FnCall(x) if x.1.is_none() => {
@@ -1627,7 +1629,7 @@ impl Engine {
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)
-            .map_err(|err| EvalAltResult::new_position(err, rhs.position()))?;
+            .map_err(|err| err.new_position(rhs.position()))?;
 
         let lhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?;
         let rhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?;
@@ -1655,7 +1657,7 @@ impl Engine {
                             &mut scope, mods, state, lib, op, hashes, args, false, false,
                             def_value, level,
                         )
-                        .map_err(|err| EvalAltResult::new_position(err, rhs.position()))?;
+                        .map_err(|err| err.new_position(rhs.position()))?;
                     if r.as_bool().unwrap_or(false) {
                         return Ok(true.into());
                     }
@@ -1694,7 +1696,7 @@ impl Engine {
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)
-            .map_err(|err| EvalAltResult::new_position(err, expr.position()))?;
+            .map_err(|err| err.new_position(expr.position()))?;
 
         let result = match expr {
             Expr::Expr(x) => self.eval_expr(scope, mods, state, lib, this_ptr, x.as_ref(), level),
@@ -1728,7 +1730,7 @@ impl Engine {
                 let (lhs_ptr, name, typ, pos) =
                     search_scope(scope, mods, state, this_ptr, lhs_expr)?;
                 self.inc_operations(state)
-                    .map_err(|err| EvalAltResult::new_position(err, pos))?;
+                    .map_err(|err| err.new_position(pos))?;
 
                 match typ {
                     // Assignment to constant variable
@@ -1769,7 +1771,7 @@ impl Engine {
                                     state, lib, op, true, hash, args, false, false, None, level,
                                 )
                                 .map(|(v, _)| v)
-                                .map_err(|err| EvalAltResult::new_position(err, *op_pos))?;
+                                .map_err(|err| err.new_position(*op_pos))?;
                         }
                         Ok(Default::default())
                     }
@@ -1795,7 +1797,7 @@ impl Engine {
                     ];
                     self.exec_fn_call(state, lib, op, true, hash, args, false, false, None, level)
                         .map(|(v, _)| v)
-                        .map_err(|err| EvalAltResult::new_position(err, *op_pos))?
+                        .map_err(|err| err.new_position(*op_pos))?
                 });
 
                 match lhs_expr {
@@ -1859,8 +1861,8 @@ impl Engine {
                 let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
                 let def_val = def_val.as_ref();
 
-                // Handle Fn
-                if name == FN_FN_PTR && args_expr.len() == 1 {
+                // Handle Fn()
+                if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
                     let hash_fn =
                         calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
@@ -1871,17 +1873,27 @@ impl Engine {
                             self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                         return arg_value
                             .take_immutable_string()
-                            .map(|s| FnPtr::from(s).into())
                             .map_err(|type_name| {
                                 Box::new(EvalAltResult::ErrorMismatchOutputType(
                                     type_name.into(),
-                                    Position::none(),
+                                    expr.position(),
                                 ))
-                            });
+                            })
+                            .and_then(|s| {
+                                if is_valid_identifier(s.chars()) {
+                                    Ok(s)
+                                } else {
+                                    Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+                                        s.to_string(),
+                                        expr.position(),
+                                    )))
+                                }
+                            })
+                            .map(|s| FnPtr::from(s).into());
                     }
                 }
 
-                // Handle eval
+                // Handle eval()
                 if name == KEYWORD_EVAL && args_expr.len() == 1 {
                     let hash_fn =
                         calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
@@ -1894,7 +1906,7 @@ impl Engine {
                             self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                         let result = self
                             .eval_script_expr(scope, mods, state, lib, &script)
-                            .map_err(|err| EvalAltResult::new_position(err, expr.position()));
+                            .map_err(|err| err.new_position(expr.position()));
 
                         if scope.len() != prev_len {
                             // IMPORTANT! If the eval defines new variables in the current scope,
@@ -1932,7 +1944,7 @@ impl Engine {
                                 search_scope(scope, mods, state, this_ptr, lhs)?;
 
                             self.inc_operations(state)
-                                .map_err(|err| EvalAltResult::new_position(err, pos))?;
+                                .map_err(|err| err.new_position(pos))?;
 
                             args = once(target).chain(arg_values.iter_mut()).collect();
 
@@ -1957,7 +1969,7 @@ impl Engine {
                     state, lib, name, *native, *hash, args, is_ref, false, def_val, level,
                 )
                 .map(|(v, _)| v)
-                .map_err(|err| EvalAltResult::new_position(err, *pos))
+                .map_err(|err| err.new_position(*pos))
             }
 
             // Module-qualified function call
@@ -1979,7 +1991,7 @@ impl Engine {
                     Err(err) if matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) => {
                         // Then search in Rust functions
                         self.inc_operations(state)
-                            .map_err(|err| EvalAltResult::new_position(err, *pos))?;
+                            .map_err(|err| err.new_position(*pos))?;
 
                         // Qualified Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -2005,7 +2017,7 @@ impl Engine {
                         self.call_script_fn(
                             &mut scope, &mut mods, state, lib, &mut None, name, fn_def, args, level,
                         )
-                        .map_err(|err| EvalAltResult::new_position(err, *pos))
+                        .map_err(|err| err.new_position(*pos))
                     }
                     Ok(f) => {
                         f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
@@ -2071,6 +2083,7 @@ impl Engine {
         };
 
         self.check_data_size(result)
+            .map_err(|err| err.new_position(expr.position()))
     }
 
     /// Evaluate a statement
@@ -2085,7 +2098,7 @@ impl Engine {
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)
-            .map_err(|err| EvalAltResult::new_position(err, stmt.position()))?;
+            .map_err(|err| err.new_position(stmt.position()))?;
 
         let result = match stmt {
             // No-op
@@ -2200,7 +2213,7 @@ impl Engine {
                     for loop_var in func(iter_type) {
                         *scope.get_mut(index).0 = loop_var;
                         self.inc_operations(state)
-                            .map_err(|err| EvalAltResult::new_position(err, stmt.position()))?;
+                            .map_err(|err| err.new_position(stmt.position()))?;
 
                         match self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level) {
                             Ok(_) => (),
@@ -2368,9 +2381,11 @@ impl Engine {
         };
 
         self.check_data_size(result)
+            .map_err(|err| err.new_position(stmt.position()))
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
+    /// Position in `EvalAltResult` may be None and should be set afterwards.
     fn check_data_size(
         &self,
         result: Result<Dynamic, Box<EvalAltResult>>,

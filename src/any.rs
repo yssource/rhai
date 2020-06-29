@@ -545,6 +545,7 @@ impl Dynamic {
     pub fn as_str(&self) -> Result<&str, &'static str> {
         match &self.0 {
             Union::Str(s) => Ok(s),
+            Union::FnPtr(f) => Ok(f.fn_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -561,15 +562,7 @@ impl Dynamic {
     pub(crate) fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s) => Ok(s),
-            _ => Err(self.type_name()),
-        }
-    }
-
-    /// Cast the `Dynamic` as a `FnPtr` and return the function name.
-    /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn as_fn_name(&self) -> Result<&str, &'static str> {
-        match &self.0 {
-            Union::FnPtr(f) => Ok(f.fn_name()),
+            Union::FnPtr(f) => Ok(f.take_fn_name()),
             _ => Err(self.type_name()),
         }
     }

@@ -3,8 +3,10 @@ Install the Rhai Crate
 
 {{#include ../links.md}}
 
-Install the Rhai crate from [`crates.io`](https:/crates.io/crates/rhai/), start by looking up the
-latest version and adding this line under `dependencies` in `Cargo.toml`:
+In order to use Rhai in a project, the Rhai crate must first be made a dependency.
+
+The easiest way is to install the Rhai crate from [`crates.io`](https:/crates.io/crates/rhai/),
+starting by looking up the latest version and adding this line under `dependencies` in the project's `Cargo.toml`:
 
 ```toml
 [dependencies]

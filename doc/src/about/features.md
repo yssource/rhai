@@ -8,7 +8,7 @@ Easy
 
 * Easy-to-use language similar to JavaScript+Rust with dynamic typing.
 
-* Tight integration with native Rust [functions] and [types][custom types], including [getters/setters]({{rootUrl}}/rust/getters-setters.md), [methods][custom type] and [indexers]({{rootUrl}}/rust/indexers.md).
+* Tight integration with native Rust [functions] and [types][custom types], including [getters/setters], [methods][custom type] and [indexers].
 
 * Freely pass Rust variables/constants into a script via an external [`Scope`].
 

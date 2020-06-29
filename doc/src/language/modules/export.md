@@ -3,9 +3,9 @@ Export Variables, Functions and Sub-Modules in Module
 
 {{#include ../../links.md}}
 
-A _module_ is a single script (or pre-compiled `AST`) containing global variables, functions and sub-modules.
+A _module_ is a single script (or pre-compiled [`AST`]) containing global variables, functions and sub-modules.
 
-A module can be created from a script via the `Module::eval_ast_as_new` method. When given an `AST`,
+A module can be created from a script via the `Module::eval_ast_as_new` method. When given an [`AST`],
 it is first evaluated, then the following items are exposed as members of the new module:
 
 * Global variables - essentially all variables that remain in the [`Scope`] at the end of a script run - that are exported. Variables not exported (via the `export` statement) remain hidden.

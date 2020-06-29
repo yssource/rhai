@@ -3,9 +3,9 @@ Call Method as Function
 
 {{#include ../links.md}}
 
-Property getters/setters and methods in a Rust custom type registered with the [`Engine`] can be called
+Property [getters/setters] and [methods][custom types] in a Rust custom type registered with the [`Engine`] can be called
 just like a regular function.  In fact, like Rust, property getters/setters and object methods
-are registered as regular functions in Rhai that take a first `&mut` parameter.
+are registered as regular [functions] in Rhai that take a first `&mut` parameter.
 
 Unlike functions defined in script (for which all arguments are passed by _value_),
 native Rust functions may mutate the object (or the first argument if called in normal function call style).

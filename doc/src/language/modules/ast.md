@@ -3,7 +3,7 @@ Create a Module from an AST
 
 {{#include ../../links.md}}
 
-It is easy to convert a pre-compiled `AST` into a module: just use `Module::eval_ast_as_new`.
+It is easy to convert a pre-compiled [`AST`] into a module: just use `Module::eval_ast_as_new`.
 
 Don't forget the [`export`] statement, otherwise there will be no variables exposed by the module
 other than non-[`private`] functions (unless that's intentional).

@@ -49,7 +49,7 @@ pub use crate::utils::ImmutableString;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
-/// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, [`AST`] is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone, Default)]
 pub struct AST(
     /// Global statements.
@@ -59,7 +59,7 @@ pub struct AST(
 );
 
 impl AST {
-    /// Create a new `AST`.
+    /// Create a new [`AST`].
     pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
         Self(statements, lib)
     }
@@ -95,16 +95,16 @@ impl AST {
         &self.1
     }
 
-    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second `AST` is simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
+    /// The second [`AST`] is simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
     ///
-    /// All script-defined functions in the second `AST` overwrite similarly-named functions
-    /// in the first `AST` with the same number of parameters.
+    /// All script-defined functions in the second [`AST`] overwrite similarly-named functions
+    /// in the first [`AST`] with the same number of parameters.
     ///
     /// # Example
     ///
@@ -157,13 +157,13 @@ impl AST {
         Self::new(ast, functions)
     }
 
-    /// Clear all function definitions in the `AST`.
+    /// Clear all function definitions in the [`AST`].
     #[cfg(not(feature = "no_function"))]
     pub fn clear_functions(&mut self) {
         self.1 = Default::default();
     }
 
-    /// Clear all statements in the `AST`, leaving only function definitions.
+    /// Clear all statements in the [`AST`], leaving only function definitions.
     #[cfg(not(feature = "no_function"))]
     pub fn retain_functions(&mut self) {
         self.0 = vec![];
@@ -802,22 +802,22 @@ fn parse_call_expr(
     mut modules: Option<Box<ModuleRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, _) = input.peek().unwrap();
+    let (token, token_pos) = input.peek().unwrap();
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut args = StaticVec::new();
 
     match token {
-        // id <EOF>
+        // id( <EOF>
         Token::EOF => {
             return Err(PERR::MissingToken(
                 Token::RightParen.into(),
                 format!("to close the arguments list of this function call '{}'", id),
             )
-            .into_err(settings.pos))
+            .into_err(*token_pos))
         }
-        // id <error>
-        Token::LexError(err) => return Err(err.into_err(settings.pos)),
+        // id( <error>
+        Token::LexError(err) => return Err(err.into_err(*token_pos)),
         // id()
         Token::RightParen => {
             eat_token(input, Token::RightParen);
@@ -1259,8 +1259,8 @@ fn parse_primary(
     state: &mut ParseState,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, pos1) = input.peek().unwrap();
-    settings.pos = *pos1;
+    let (token, token_pos) = input.peek().unwrap();
+    settings.pos = *token_pos;
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let (token, _) = match token {

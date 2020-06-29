@@ -67,6 +67,10 @@ impl FnPtr {
     pub(crate) fn get_fn_name(&self) -> &ImmutableString {
         &self.0
     }
+    /// Get the name of the function.
+    pub(crate) fn take_fn_name(self) -> ImmutableString {
+        self.0
+    }
 }
 
 impl fmt::Display for FnPtr {

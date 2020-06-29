@@ -31,10 +31,12 @@ Features
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting engine can be made `Send + Sync` (via the [`sync`] feature).
 * Sand-boxed - the scripting engine, if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
-* Rugged - protection against malicious attacks (such as [stack-overflow](https://schungx.github.io/rhai/safety/max-call-stack.html), [over-sized data](https://schungx.github.io/rhai/safety/max-string-size.html), and [runaway scripts](https://schungx.github.io/rhai/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
+* Rugged - protected against malicious attacks (such as [stack-overflow](https://schungx.github.io/rhai/safety/max-call-stack.html), [over-sized data](https://schungx.github.io/rhai/safety/max-string-size.html), and [runaway scripts](https://schungx.github.io/rhai/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://schungx.github.io/rhai/safety/progress.html) and manually terminate a script run.
 * [Function overloading](https://schungx.github.io/rhai/language/overload.html).
 * [Operator overloading](https://schungx.github.io/rhai/rust/operators.html).
+* Dynamic dispatch via [function pointers](https://schungx.github.io/rhai/language/fn-ptr.html).
+* Some support for [object-oriented programming (OOP)](https://schungx.github.io/rhai/language/oop.html).
 * Organize code base with dynamically-loadable [modules](https://schungx.github.io/rhai/language/modules.html).
 * Scripts are [optimized](https://schungx.github.io/rhai/engine/optimize.html) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](https://schungx.github.io/rhai/start/builds/minimal.html) by excluding unneeded language [features](https://schungx.github.io/rhai/start/features.html).
@@ -43,3 +45,9 @@ Documentation
 -------------
 
 See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai scripting engine and language.
+
+Playground
+----------
+
+An [Online Playground](https://alvinhochun.github.io/rhai-demo/) is available with syntax-highlighting editor.
+Scripts can be evaluated directly from the editor.

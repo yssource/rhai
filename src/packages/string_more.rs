@@ -245,16 +245,21 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             let ch = *args[2].downcast_ref::< char>().unwrap();
             let s = args[0].downcast_mut::<ImmutableString>().unwrap();
 
-            let copy = s.make_mut();
-            for _ in 0..copy.chars().count() - len as usize {
-                copy.push(ch);
+            let orig_len = s.chars().count();
+
+            if orig_len < len as usize {
+                let p = s.make_mut();
+
+                for _ in 0..(len as usize - orig_len) {
+                    p.push(ch);
+                }
             }
 
-            if engine.max_string_size > 0 && copy.len() > engine.max_string_size {
+            if engine.max_string_size > 0 && s.len() > engine.max_string_size {
                 Err(Box::new(EvalAltResult::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     engine.max_string_size,
-                    copy.len(),
+                    s.len(),
                     Position::none(),
                 )))
             } else {

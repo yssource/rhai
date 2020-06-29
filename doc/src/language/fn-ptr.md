@@ -54,7 +54,34 @@ let fn_name = "hello";      // the function name does not have to exist yet
 
 let hello = Fn(fn_name + "_world");
 
-hello.call(0);              // error: function not found - "hello_world (i64)"
+hello.call(0);              // error: function not found - 'hello_world (i64)'
+```
+
+
+Global Namespace Only
+--------------------
+
+Because of their dynamic nature, function pointers cannot refer to functions in a _module_ [namespace][function namespace]
+(i.e. functions in [`import`]-ed modules).  They can only refer to functions within the global [namespace][function namespace].
+See [function namespaces] for more details.
+
+```rust
+import "foo" as f;          // assume there is 'f::do_something()'
+
+f::do_something();          // works!
+
+let p = Fn("f::do_something");
+
+p.call();                   // error: function not found - 'f::do_something'
+
+fn do_something_now() {     // call it from a local function
+    import "foo" as f;
+    f::do_something();
+}
+
+let p = Fn("do_something_now");
+
+p.call();                   // works!
 ```
 
 

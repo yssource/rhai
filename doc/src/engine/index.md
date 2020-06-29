@@ -1,7 +1,7 @@
 Using the Engine
 ================
 
-{{#include links.md}}
+{{#include ../links.md}}
 
 Rhai's interpreter resides in the [`Engine`] type under the master `rhai` namespace.
 

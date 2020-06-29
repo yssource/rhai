@@ -3,7 +3,7 @@ Compile a Script (to AST)
 
 {{#include ../links.md}}
 
-To repeatedly evaluate a script, _compile_ it first into an AST (abstract syntax tree) form:
+To repeatedly evaluate a script, _compile_ it first into an `AST` (abstract syntax tree) form:
 
 ```rust
 // Compile to an AST and store it for later evaluations
