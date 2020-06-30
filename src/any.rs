@@ -137,7 +137,6 @@ pub enum Union {
     Array(Box<Array>),
     #[cfg(not(feature = "no_object"))]
     Map(Box<Map>),
-    #[cfg(not(feature = "no_function"))]
     FnPtr(FnPtr),
     Variant(Box<Box<dyn Variant>>),
 }
@@ -175,7 +174,6 @@ impl Dynamic {
             Union::Array(_) => TypeId::of::<Array>(),
             #[cfg(not(feature = "no_object"))]
             Union::Map(_) => TypeId::of::<Map>(),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(_) => TypeId::of::<FnPtr>(),
             Union::Variant(value) => (***value).type_id(),
         }
@@ -195,7 +193,6 @@ impl Dynamic {
             Union::Array(_) => "array",
             #[cfg(not(feature = "no_object"))]
             Union::Map(_) => "map",
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(_) => "Fn",
 
             #[cfg(not(feature = "no_std"))]
@@ -220,7 +217,6 @@ impl fmt::Display for Dynamic {
             Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
@@ -245,7 +241,6 @@ impl fmt::Debug for Dynamic {
             Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => write!(f, "#{:?}", value),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
@@ -270,7 +265,6 @@ impl Clone for Dynamic {
             Union::Array(ref value) => Self(Union::Array(value.clone())),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value) => Self(Union::Map(value.clone())),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(ref value) => Self(Union::FnPtr(value.clone())),
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
         }
@@ -400,7 +394,6 @@ impl Dynamic {
             Union::Array(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(value) => unsafe_try_cast(value),
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).ok(),
         }
@@ -444,7 +437,6 @@ impl Dynamic {
             Union::Array(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => *unsafe_cast_box::<_, T>(value).unwrap(),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(value) => unsafe_try_cast(value).unwrap(),
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).unwrap(),
         }
@@ -471,7 +463,6 @@ impl Dynamic {
             Union::Array(value) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(value) => <dyn Any>::downcast_ref::<T>(value),
             Union::Variant(value) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
         }
@@ -497,7 +488,6 @@ impl Dynamic {
             Union::Array(value) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
             #[cfg(not(feature = "no_object"))]
             Union::Map(value) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
-            #[cfg(not(feature = "no_function"))]
             Union::FnPtr(value) => <dyn Any>::downcast_mut::<T>(value),
             Union::Variant(value) => value.as_mut().as_mut_any().downcast_mut::<T>(),
         }
@@ -626,7 +616,6 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<HashMap<K, T>> for Dynam
         )))
     }
 }
-#[cfg(not(feature = "no_function"))]
 impl From<FnPtr> for Dynamic {
     fn from(value: FnPtr) -> Self {
         Self(Union::FnPtr(value))

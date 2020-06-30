@@ -250,6 +250,7 @@ fn test_module_export() -> Result<(), Box<EvalAltResult>> {
         ParseError(x, _) if *x == ParseErrorType::WrongExport
     ));
 
+    #[cfg(not(feature = "no_function"))]
     assert!(matches!(
         engine.compile(r"fn abc(x) { export x; }").expect_err("should error"),
         ParseError(x, _) if *x == ParseErrorType::WrongExport

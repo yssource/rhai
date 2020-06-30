@@ -104,6 +104,9 @@ pub use token::Position;
 pub use utils::calc_fn_spec as calc_fn_hash;
 
 #[cfg(not(feature = "no_function"))]
+pub use parser::FnAccess;
+
+#[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;
 
 #[cfg(not(feature = "no_index"))]
@@ -135,7 +138,7 @@ pub use token::{get_next_token, parse_string_literal, InputStream, Token, Tokeni
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use parser::{Expr, FnAccess, ReturnType, ScriptFnDef, Stmt};
+pub use parser::{Expr, ReturnType, ScriptFnDef, Stmt};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]

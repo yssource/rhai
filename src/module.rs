@@ -859,12 +859,53 @@ impl Module {
 
     /// Merge another module into this module.
     pub fn merge(&mut self, other: &Self) {
+        self.merge_filtered(other, |_, _, _| true)
+    }
+
+    /// Merge another module into this module, with only selected functions based on a filter predicate.
+    pub(crate) fn merge_filtered(
+        &mut self,
+        other: &Self,
+        filter: impl Fn(FnAccess, &str, usize) -> bool,
+    ) {
         self.variables
             .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
-        self.functions
-            .extend(other.functions.iter().map(|(&k, v)| (k, v.clone())));
+
+        self.functions.extend(
+            other
+                .functions
+                .iter()
+                .filter(|(_, (_, _, _, v))| match v {
+                    CallableFunction::Pure(_)
+                    | CallableFunction::Method(_)
+                    | CallableFunction::Iterator(_) => true,
+                    CallableFunction::Script(ref f) => {
+                        filter(f.access, f.name.as_str(), f.params.len())
+                    }
+                })
+                .map(|(&k, v)| (k, v.clone())),
+        );
+
         self.type_iterators
             .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
+
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.indexed = false;
+    }
+
+    /// Filter out the functions, retaining only some based on a filter predicate.
+    pub(crate) fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
+        self.functions.retain(|_, (_, _, _, v)| match v {
+            CallableFunction::Pure(_)
+            | CallableFunction::Method(_)
+            | CallableFunction::Iterator(_) => true,
+            CallableFunction::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
+        });
+
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.indexed = false;
     }
 
     /// Get the number of variables in the module.

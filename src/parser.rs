@@ -116,8 +116,15 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
-    /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo("!")"#)?;
+    /// let ast1 = engine.compile(r#"
+    ///                 fn foo(x) { 42 + x }
+    ///                 foo(1)
+    ///             "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 foo("!")
+    ///             "#)?;
     ///
     /// let ast = ast1.merge(&ast2);    // Merge 'ast2' into 'ast1'
     ///
@@ -138,6 +145,65 @@ impl AST {
     /// # }
     /// ```
     pub fn merge(&self, other: &Self) -> Self {
+        self.merge_filtered(other, |_, _, _| true)
+    }
+
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
+    /// is returned.
+    ///
+    /// The second [`AST`] is simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
+    ///
+    /// All script-defined functions in the second [`AST`] are first selected based on a filter
+    /// predicate, then overwrite similarly-named functions in the first [`AST`] with the
+    /// same number of parameters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast1 = engine.compile(r#"
+    ///                 fn foo(x) { 42 + x }
+    ///                 foo(1)
+    ///             "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 fn error() { 0 }
+    ///                 foo("!")
+    ///             "#)?;
+    ///
+    /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// let ast = ast1.merge_filtered(&ast2, |_, name, params| name == "error" && params == 0);
+    ///
+    /// // 'ast' is essentially:
+    /// //
+    /// //    fn foo(n) { 42 + n }      // <- definition of 'ast1::foo' is not overwritten
+    /// //                              //    because 'ast2::foo' is filtered away
+    /// //    foo(1)                    // <- notice this will be 43 instead of "hello1",
+    /// //                              //    but it is no longer the return value
+    /// //    fn error() { 0 }          // <- this function passes the filter and is merged
+    /// //    foo("!")                  // <- returns "42!"
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "42!");
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn merge_filtered(
+        &self,
+        other: &Self,
+        filter: impl Fn(FnAccess, &str, usize) -> bool,
+    ) -> Self {
         let Self(statements, functions) = self;
 
         let ast = match (statements.is_empty(), other.0.is_empty()) {
@@ -152,9 +218,37 @@ impl AST {
         };
 
         let mut functions = functions.clone();
-        functions.merge(&other.1);
+        functions.merge_filtered(&other.1, filter);
 
         Self::new(ast, functions)
+    }
+
+    /// Filter out the functions, retaining only some based on a filter predicate.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let mut ast = engine.compile(r#"
+    ///                         fn foo(n) { n + 1 }
+    ///                         fn bar() { print("hello"); }
+    ///                     "#)?;
+    ///
+    /// // Remove all functions except 'foo(_)'
+    /// ast.retain_functions(|_, name, params| name == "foo" && params == 1);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_function"))]
+    pub fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
+        self.1.retain_functions(filter);
     }
 
     /// Clear all function definitions in the [`AST`].
@@ -164,8 +258,7 @@ impl AST {
     }
 
     /// Clear all statements in the [`AST`], leaving only function definitions.
-    #[cfg(not(feature = "no_function"))]
-    pub fn retain_functions(&mut self) {
+    pub fn clear_statements(&mut self) {
         self.0 = vec![];
     }
 }
@@ -185,6 +278,15 @@ pub enum FnAccess {
     Private,
     /// Public function.
     Public,
+}
+
+impl fmt::Display for FnAccess {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Private => write!(f, "private"),
+            Self::Public => write!(f, "public"),
+        }
+    }
 }
 
 /// A scripted function definition.

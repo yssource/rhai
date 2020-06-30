@@ -15,6 +15,7 @@ The following are reserved keywords in Rhai:
 | `return`                                          | Return values         |                             |
 | `throw`                                           | throw exceptions      |                             |
 | `import`, `export`, `as`                          | Modules               |        [`no_module`]        |
+| `Fn`, `call`                                      | Function pointers     |                             |
 | `type_of`, `print`, `debug`, `eval`               | Special functions     |                             |
 
 Keywords cannot be the name of a [function] or [variable], unless the relevant feature is enabled.

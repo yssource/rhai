@@ -14,6 +14,7 @@ Breaking changes
   The method-call style will bind the object to the `this` parameter instead of consuming the first parameter.
 * Imported modules are no longer stored in the `Scope`.  `Scope::push_module` is removed.
   Therefore, cannot rely on module imports to persist across invocations using a `Scope`.
+* `AST::retain_functions` is used for another purpose. The old `AST::retain_functions` is renamed to `AST::clear_statements`.
 
 New features
 ------------
@@ -21,6 +22,7 @@ New features
 * Support for _function pointers_ via `Fn(name)` and `Fn.call(...)` syntax - a poor man's first-class function.
 * Support for calling script-defined functions in method-call style with `this` binding to the object.
 * Special support in object maps for OOP.
+* Expanded the `AST` API for fine-tuned manipulation of functions.
 
 Enhancements
 ------------

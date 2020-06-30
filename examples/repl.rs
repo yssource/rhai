@@ -166,7 +166,6 @@ fn main() {
         }
 
         // Throw away all the statements, leaving only the functions
-        #[cfg(not(feature = "no_function"))]
-        main_ast.retain_functions();
+        main_ast.clear_statements();
     }
 }
