@@ -2194,6 +2194,7 @@ fn parse_let(
 }
 
 /// Parse an import statement.
+#[cfg(not(feature = "no_module"))]
 fn parse_import(
     input: &mut TokenStream,
     state: &mut ParseState,
@@ -2444,6 +2445,8 @@ fn parse_stmt(
 
         Token::Let => parse_let(input, state, Normal, settings.level_up()),
         Token::Const => parse_let(input, state, Constant, settings.level_up()),
+
+        #[cfg(not(feature = "no_module"))]
         Token::Import => parse_import(input, state, settings.level_up()),
 
         #[cfg(not(feature = "no_module"))]

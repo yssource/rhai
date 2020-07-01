@@ -1,10 +1,20 @@
 Rhai Release Notes
 ==================
 
+Version 0.16.1
+==============
+
+Bug fix release to fix errors when compiling with features.
+
+
 Version 0.16.0
 ==============
 
 The major new feature in this version is OOP - well, poor man's OOP, that is.
+
+The `README` is officially transferred to [The Rhai Book](https://schungx.github.io/rhai).
+
+An online [Playground](https://alvinhochun.github.io/rhai-demo/) is available.
 
 Breaking changes
 ----------------

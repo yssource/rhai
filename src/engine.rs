@@ -2407,7 +2407,13 @@ impl Engine {
                     let mut maps = 0;
 
                     arr.iter().for_each(|value| match value {
-                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                        Dynamic(Union::Array(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        #[cfg(not(feature = "no_object"))]
+                        Dynamic(Union::Map(_)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2423,7 +2429,13 @@ impl Engine {
                     let mut maps = 0;
 
                     map.values().for_each(|value| match value {
-                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                        #[cfg(not(feature = "no_index"))]
+                        Dynamic(Union::Array(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        Dynamic(Union::Map(_)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;

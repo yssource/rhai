@@ -35,6 +35,7 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
         EvalAltResult::ErrorDataTooLarge(_, 10, 13, _)
     ));
 
+    #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine
             .eval::<String>(
@@ -92,6 +93,8 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
             .expect_err("should error"),
         EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
     ));
+
+    #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine
             .eval::<Array>(
