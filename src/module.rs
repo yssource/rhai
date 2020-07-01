@@ -2,28 +2,30 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, FUNC_INDEXER_GET, FUNC_INDEXER_SET};
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
+use crate::engine::{make_getter, make_setter, Engine, Imports, FN_IDX_GET, FN_IDX_SET};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync, Shared};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
     ScriptFnDef, AST,
 };
 use crate::result::EvalAltResult;
-use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
+use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::token::{Position, Token};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
+    cell::RefCell,
     collections::HashMap,
-    fmt,
+    fmt, format,
     iter::empty,
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     string::{String, ToString},
+    sync::RwLock,
     vec,
     vec::Vec,
 };
@@ -35,7 +37,7 @@ pub type FuncReturn<T> = Result<T, Box<EvalAltResult>>;
 /// external Rust functions, and script-defined functions.
 ///
 /// Not available under the `no_module` feature.
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct Module {
     /// Sub-modules.
     modules: HashMap<String, Module>,
@@ -59,16 +61,44 @@ pub struct Module {
     /// Flattened collection of all external Rust functions, native or scripted,
     /// including those in sub-modules.
     all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
+
+    /// Is the module indexed?
+    indexed: bool,
 }
 
 impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<module vars={:?}, functions={}>",
-            self.variables,
-            self.functions.len(),
+            "Module(\n    modules: {}\n    vars: {}\n    functions: {}\n)",
+            self.modules
+                .keys()
+                .map(|k| k.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.variables
+                .iter()
+                .map(|(k, v)| format!("{}={:?}", k, v))
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.functions
+                .values()
+                .map(|(_, _, _, f)| f.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
         )
+    }
+}
+
+impl Clone for Module {
+    fn clone(&self) -> Self {
+        // Only clone the index at the top level
+        Self {
+            all_variables: self.all_variables.clone(),
+            all_functions: self.all_functions.clone(),
+            indexed: self.indexed,
+            ..self.do_clone(false)
+        }
     }
 }
 
@@ -102,6 +132,24 @@ impl Module {
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
             functions: HashMap::with_capacity_and_hasher(capacity, StraightHasherBuilder),
+            ..Default::default()
+        }
+    }
+
+    /// Clone the module, optionally skipping the index.
+    fn do_clone(&self, clone_index: bool) -> Self {
+        Self {
+            modules: if clone_index {
+                self.modules.clone()
+            } else {
+                self.modules
+                    .iter()
+                    .map(|(k, m)| (k.clone(), m.do_clone(clone_index)))
+                    .collect()
+            },
+            variables: self.variables.clone(),
+            functions: self.functions.clone(),
+            type_iterators: self.type_iterators.clone(),
             ..Default::default()
         }
     }
@@ -166,20 +214,23 @@ impl Module {
     /// ```
     pub fn set_var(&mut self, name: impl Into<String>, value: impl Variant + Clone) {
         self.variables.insert(name.into(), Dynamic::from(value));
+        self.indexed = false;
     }
 
     /// Get a mutable reference to a modules-qualified variable.
+    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     pub(crate) fn get_qualified_var_mut(
         &mut self,
-        name: &str,
         hash_var: u64,
-        pos: Position,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
-        self.all_variables
-            .get_mut(&hash_var)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.to_string(), pos)))
+        self.all_variables.get_mut(&hash_var).ok_or_else(|| {
+            Box::new(EvalAltResult::ErrorVariableNotFound(
+                String::new(),
+                Position::none(),
+            ))
+        })
     }
 
     /// Set a script-defined function into the module.
@@ -197,6 +248,7 @@ impl Module {
                 fn_def.into(),
             ),
         );
+        self.indexed = false;
     }
 
     /// Does a sub-module exist in the module?
@@ -263,6 +315,7 @@ impl Module {
     /// ```
     pub fn set_sub_module(&mut self, name: impl Into<String>, sub_module: Module) {
         self.modules.insert(name.into(), sub_module.into());
+        self.indexed = false;
     }
 
     /// Does the particular Rust function exist in the module?
@@ -301,6 +354,8 @@ impl Module {
 
         self.functions
             .insert(hash_fn, (name, access, params, func.into()));
+
+        self.indexed = false;
 
         hash_fn
     }
@@ -557,7 +612,7 @@ impl Module {
         &mut self,
         func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        self.set_fn_2_mut(FUNC_INDEXER_GET, func)
+        self.set_fn_2_mut(FN_IDX_GET, func)
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -673,7 +728,7 @@ impl Module {
         };
         let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<A>()];
         self.set_fn(
-            FUNC_INDEXER_SET,
+            FN_IDX_SET,
             Public,
             &args,
             CallableFunction::from_method(Box::new(f)),
@@ -786,17 +841,17 @@ impl Module {
     }
 
     /// Get a modules-qualified function.
+    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
     pub(crate) fn get_qualified_fn(
         &mut self,
-        name: &str,
         hash_qualified_fn: u64,
     ) -> Result<&CallableFunction, Box<EvalAltResult>> {
         self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {
             Box::new(EvalAltResult::ErrorFunctionNotFound(
-                name.to_string(),
+                String::new(),
                 Position::none(),
             ))
         })
@@ -804,12 +859,53 @@ impl Module {
 
     /// Merge another module into this module.
     pub fn merge(&mut self, other: &Self) {
+        self.merge_filtered(other, |_, _, _| true)
+    }
+
+    /// Merge another module into this module, with only selected functions based on a filter predicate.
+    pub(crate) fn merge_filtered(
+        &mut self,
+        other: &Self,
+        filter: impl Fn(FnAccess, &str, usize) -> bool,
+    ) {
         self.variables
             .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
-        self.functions
-            .extend(other.functions.iter().map(|(&k, v)| (k, v.clone())));
+
+        self.functions.extend(
+            other
+                .functions
+                .iter()
+                .filter(|(_, (_, _, _, v))| match v {
+                    CallableFunction::Pure(_)
+                    | CallableFunction::Method(_)
+                    | CallableFunction::Iterator(_) => true,
+                    CallableFunction::Script(ref f) => {
+                        filter(f.access, f.name.as_str(), f.params.len())
+                    }
+                })
+                .map(|(&k, v)| (k, v.clone())),
+        );
+
         self.type_iterators
             .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
+
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.indexed = false;
+    }
+
+    /// Filter out the functions, retaining only some based on a filter predicate.
+    pub(crate) fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
+        self.functions.retain(|_, (_, _, _, v)| match v {
+            CallableFunction::Pure(_)
+            | CallableFunction::Method(_)
+            | CallableFunction::Iterator(_) => true,
+            CallableFunction::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
+        });
+
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.indexed = false;
     }
 
     /// Get the number of variables in the module.
@@ -837,7 +933,16 @@ impl Module {
         self.functions.values()
     }
 
-    /// Create a new `Module` by evaluating an `AST`.
+    /// Get an iterator over all script-defined functions in the module.
+    pub fn iter_script_fn<'a>(&'a self) -> impl Iterator<Item = Shared<ScriptFnDef>> + 'a {
+        self.functions
+            .values()
+            .map(|(_, _, _, f)| f)
+            .filter(|f| f.is_script())
+            .map(|f| f.get_shared_fn_def())
+    }
+
+    /// Create a new `Module` by evaluating an [`AST`].
     ///
     /// # Examples
     ///
@@ -855,32 +960,27 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_module"))]
     pub fn eval_ast_as_new(mut scope: Scope, ast: &AST, engine: &Engine) -> FuncReturn<Self> {
+        let mut mods = Imports::new();
+
         // Run the script
-        engine.eval_ast_with_scope_raw(&mut scope, &ast)?;
+        engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast)?;
 
         // Create new module
         let mut module = Module::new();
 
-        scope.into_iter().for_each(
-            |ScopeEntry {
-                 typ, value, alias, ..
-             }| {
-                match typ {
-                    // Variables with an alias left in the scope become module variables
-                    ScopeEntryType::Normal | ScopeEntryType::Constant if alias.is_some() => {
-                        module.variables.insert(*alias.unwrap(), value);
-                    }
-                    // Modules left in the scope become sub-modules
-                    ScopeEntryType::Module if alias.is_some() => {
-                        module
-                            .modules
-                            .insert(*alias.unwrap(), value.cast::<Module>());
-                    }
-                    // Variables and modules with no alias are private and not exported
-                    _ => (),
+        scope
+            .into_iter()
+            .for_each(|ScopeEntry { value, alias, .. }| {
+                // Variables with an alias left in the scope become module variables
+                if alias.is_some() {
+                    module.variables.insert(*alias.unwrap(), value);
                 }
-            },
-        );
+            });
+
+        // Modules left in the scope become sub-modules
+        mods.into_iter().for_each(|(alias, m)| {
+            module.modules.insert(alias.to_string(), m);
+        });
 
         module.merge(ast.lib());
 
@@ -945,6 +1045,10 @@ impl Module {
             }
         }
 
+        if self.indexed {
+            return;
+        }
+
         let mut variables = Vec::new();
         let mut functions = Vec::new();
 
@@ -952,6 +1056,7 @@ impl Module {
 
         self.all_variables = variables.into_iter().collect();
         self.all_functions = functions.into_iter().collect();
+        self.indexed = true;
     }
 
     /// Does a type iterator exist in the module?
@@ -962,6 +1067,7 @@ impl Module {
     /// Set a type iterator into the module.
     pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) {
         self.type_iterators.insert(typ, func);
+        self.indexed = false;
     }
 
     /// Get the specified type iterator.
@@ -1055,6 +1161,8 @@ mod file {
 
     /// Module resolution service that loads module script files from the file system.
     ///
+    /// Script files are cached so they are are not reloaded and recompiled in subsequent requests.
+    ///
     /// The `new_with_path` and `new_with_path_and_extension` constructor functions
     /// allow specification of a base directory with module path used as a relative path offset
     /// to the base directory. The script file is then forced to be in a specified extension
@@ -1073,10 +1181,16 @@ mod file {
     /// let mut engine = Engine::new();
     /// engine.set_module_resolver(Some(resolver));
     /// ```
-    #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Hash)]
+    #[derive(Debug)]
     pub struct FileModuleResolver {
         path: PathBuf,
         extension: String,
+
+        #[cfg(not(feature = "sync"))]
+        cache: RefCell<HashMap<PathBuf, AST>>,
+
+        #[cfg(feature = "sync")]
+        cache: RwLock<HashMap<PathBuf, AST>>,
     }
 
     impl Default for FileModuleResolver {
@@ -1129,6 +1243,7 @@ mod file {
             Self {
                 path: path.into(),
                 extension: extension.into(),
+                cache: Default::default(),
             }
         }
 
@@ -1173,12 +1288,45 @@ mod file {
             file_path.push(path);
             file_path.set_extension(&self.extension); // Force extension
 
-            // Compile it
-            let ast = engine
-                .compile_file(file_path)
-                .map_err(|err| err.new_position(pos))?;
+            let scope = Default::default();
 
-            Module::eval_ast_as_new(Scope::new(), &ast, engine).map_err(|err| err.new_position(pos))
+            // See if it is cached
+            let (module, ast) = {
+                #[cfg(not(feature = "sync"))]
+                let c = self.cache.borrow();
+                #[cfg(feature = "sync")]
+                let c = self.cache.read().unwrap();
+
+                match c.get(&file_path) {
+                    Some(ast) => (
+                        Module::eval_ast_as_new(scope, ast, engine)
+                            .map_err(|err| err.new_position(pos))?,
+                        None,
+                    ),
+                    None => {
+                        // Load the file and compile it if not found
+                        let ast = engine
+                            .compile_file(file_path.clone())
+                            .map_err(|err| err.new_position(pos))?;
+
+                        (
+                            Module::eval_ast_as_new(scope, &ast, engine)
+                                .map_err(|err| err.new_position(pos))?,
+                            Some(ast),
+                        )
+                    }
+                }
+            };
+
+            if let Some(ast) = ast {
+                // Put it into the cache
+                #[cfg(not(feature = "sync"))]
+                self.cache.borrow_mut().insert(file_path, ast);
+                #[cfg(feature = "sync")]
+                self.cache.write().unwrap().insert(file_path, ast);
+            }
+
+            Ok(module)
         }
     }
 }
@@ -1222,7 +1370,7 @@ mod stat {
         /// let mut resolver = StaticModuleResolver::new();
         ///
         /// let module = Module::new();
-        /// resolver.insert("hello".to_string(), module);
+        /// resolver.insert("hello", module);
         ///
         /// let mut engine = Engine::new();
         /// engine.set_module_resolver(Some(resolver));
@@ -1232,17 +1380,43 @@ mod stat {
         }
     }
 
-    impl Deref for StaticModuleResolver {
-        type Target = HashMap<String, Module>;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
+    impl StaticModuleResolver {
+        /// Add a module keyed by its path.
+        pub fn insert<S: Into<String>>(&mut self, path: S, mut module: Module) {
+            module.index_all_sub_modules();
+            self.0.insert(path.into(), module);
         }
-    }
-
-    impl DerefMut for StaticModuleResolver {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.0
+        /// Remove a module given its path.
+        pub fn remove(&mut self, path: &str) -> Option<Module> {
+            self.0.remove(path)
+        }
+        /// Does the path exist?
+        pub fn contains_path(&self, path: &str) -> bool {
+            self.0.contains_key(path)
+        }
+        /// Get an iterator of all the modules.
+        pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
+            self.0.iter().map(|(k, v)| (k.as_str(), v))
+        }
+        /// Get a mutable iterator of all the modules.
+        pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Module)> {
+            self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
+        }
+        /// Get an iterator of all the module paths.
+        pub fn paths(&self) -> impl Iterator<Item = &str> {
+            self.0.keys().map(String::as_str)
+        }
+        /// Get an iterator of all the modules.
+        pub fn values(&self) -> impl Iterator<Item = &Module> {
+            self.0.values()
+        }
+        /// Get a mutable iterator of all the modules.
+        pub fn values_mut(&mut self) -> impl Iterator<Item = &mut Module> {
+            self.0.values_mut()
+        }
+        /// Remove all modules.
+        pub fn clear(&mut self) {
+            self.0.clear();
         }
     }
 

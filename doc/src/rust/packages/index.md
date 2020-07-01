@@ -1,7 +1,7 @@
 Packages
 ========
 
-{{#include ../links.md}}
+{{#include ../../links.md}}
 
 Standard built-in Rhai features are provided in various _packages_ that can be loaded via a call to `Engine::load_package`.
 

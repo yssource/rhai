@@ -41,12 +41,12 @@ fn pad<T: Variant + Clone>(engine: &Engine, args: &mut [&mut Dynamic]) -> FuncRe
         }
     }
 
-    if len >= 0 {
-        let item = args[2].downcast_ref::<T>().unwrap().clone();
+    if len > 0 {
+        let item = args[2].clone();
         let list = args[0].downcast_mut::<Array>().unwrap();
 
-        while list.len() < len as usize {
-            push(list, item.clone())?;
+        if len as usize > list.len() {
+            list.resize(len as usize, item);
         }
     }
     Ok(())

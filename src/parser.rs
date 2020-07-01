@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine};
+use crate::engine::{make_getter, make_setter, Engine, KEYWORD_THIS};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
@@ -15,11 +15,11 @@ use crate::stdlib::{
     boxed::Box,
     char,
     collections::HashMap,
-    format,
+    fmt, format,
     iter::empty,
     mem,
     num::NonZeroUsize,
-    ops::{Add, Deref, DerefMut},
+    ops::Add,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -49,7 +49,7 @@ pub use crate::utils::ImmutableString;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
-/// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, [`AST`] is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone, Default)]
 pub struct AST(
     /// Global statements.
@@ -59,13 +59,21 @@ pub struct AST(
 );
 
 impl AST {
-    /// Create a new `AST`.
+    /// Create a new [`AST`].
     pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
         Self(statements, lib)
     }
 
     /// Get the statements.
+    #[cfg(not(feature = "internals"))]
     pub(crate) fn statements(&self) -> &Vec<Stmt> {
+        &self.0
+    }
+
+    /// Get the statements.
+    #[cfg(feature = "internals")]
+    #[deprecated(note = "this method is volatile and may change")]
+    pub fn statements(&self) -> &Vec<Stmt> {
         &self.0
     }
 
@@ -74,21 +82,29 @@ impl AST {
         &mut self.0
     }
 
-    /// Get the script-defined functions.
+    /// Get the internal `Module` containing all script-defined functions.
+    #[cfg(not(feature = "internals"))]
     pub(crate) fn lib(&self) -> &Module {
         &self.1
     }
 
-    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
+    /// Get the internal `Module` containing all script-defined functions.
+    #[cfg(feature = "internals")]
+    #[deprecated(note = "this method is volatile and may change")]
+    pub fn lib(&self) -> &Module {
+        &self.1
+    }
+
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second `AST` is simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
+    /// The second [`AST`] is simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
     ///
-    /// All script-defined functions in the second `AST` overwrite similarly-named functions
-    /// in the first `AST` with the same number of parameters.
+    /// All script-defined functions in the second [`AST`] overwrite similarly-named functions
+    /// in the first [`AST`] with the same number of parameters.
     ///
     /// # Example
     ///
@@ -100,8 +116,15 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast1 = engine.compile(r#"fn foo(x) { 42 + x } foo(1)"#)?;
-    /// let ast2 = engine.compile(r#"fn foo(n) { "hello" + n } foo("!")"#)?;
+    /// let ast1 = engine.compile(r#"
+    ///                 fn foo(x) { 42 + x }
+    ///                 foo(1)
+    ///             "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 foo("!")
+    ///             "#)?;
     ///
     /// let ast = ast1.merge(&ast2);    // Merge 'ast2' into 'ast1'
     ///
@@ -122,6 +145,65 @@ impl AST {
     /// # }
     /// ```
     pub fn merge(&self, other: &Self) -> Self {
+        self.merge_filtered(other, |_, _, _| true)
+    }
+
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
+    /// is returned.
+    ///
+    /// The second [`AST`] is simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
+    ///
+    /// All script-defined functions in the second [`AST`] are first selected based on a filter
+    /// predicate, then overwrite similarly-named functions in the first [`AST`] with the
+    /// same number of parameters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast1 = engine.compile(r#"
+    ///                 fn foo(x) { 42 + x }
+    ///                 foo(1)
+    ///             "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 fn error() { 0 }
+    ///                 foo("!")
+    ///             "#)?;
+    ///
+    /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// let ast = ast1.merge_filtered(&ast2, |_, name, params| name == "error" && params == 0);
+    ///
+    /// // 'ast' is essentially:
+    /// //
+    /// //    fn foo(n) { 42 + n }      // <- definition of 'ast1::foo' is not overwritten
+    /// //                              //    because 'ast2::foo' is filtered away
+    /// //    foo(1)                    // <- notice this will be 43 instead of "hello1",
+    /// //                              //    but it is no longer the return value
+    /// //    fn error() { 0 }          // <- this function passes the filter and is merged
+    /// //    foo("!")                  // <- returns "42!"
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "42!");
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn merge_filtered(
+        &self,
+        other: &Self,
+        filter: impl Fn(FnAccess, &str, usize) -> bool,
+    ) -> Self {
         let Self(statements, functions) = self;
 
         let ast = match (statements.is_empty(), other.0.is_empty()) {
@@ -136,20 +218,47 @@ impl AST {
         };
 
         let mut functions = functions.clone();
-        functions.merge(&other.1);
+        functions.merge_filtered(&other.1, filter);
 
         Self::new(ast, functions)
     }
 
-    /// Clear all function definitions in the `AST`.
+    /// Filter out the functions, retaining only some based on a filter predicate.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let mut ast = engine.compile(r#"
+    ///                         fn foo(n) { n + 1 }
+    ///                         fn bar() { print("hello"); }
+    ///                     "#)?;
+    ///
+    /// // Remove all functions except 'foo(_)'
+    /// ast.retain_functions(|_, name, params| name == "foo" && params == 1);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_function"))]
+    pub fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
+        self.1.retain_functions(filter);
+    }
+
+    /// Clear all function definitions in the [`AST`].
     #[cfg(not(feature = "no_function"))]
     pub fn clear_functions(&mut self) {
         self.1 = Default::default();
     }
 
-    /// Clear all statements in the `AST`, leaving only function definitions.
-    #[cfg(not(feature = "no_function"))]
-    pub fn retain_functions(&mut self) {
+    /// Clear all statements in the [`AST`], leaving only function definitions.
+    pub fn clear_statements(&mut self) {
         self.0 = vec![];
     }
 }
@@ -171,6 +280,15 @@ pub enum FnAccess {
     Public,
 }
 
+impl fmt::Display for FnAccess {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Private => write!(f, "private"),
+            Self::Public => write!(f, "public"),
+        }
+    }
+}
+
 /// A scripted function definition.
 #[derive(Debug, Clone)]
 pub struct ScriptFnDef {
@@ -186,6 +304,25 @@ pub struct ScriptFnDef {
     pub pos: Position,
 }
 
+impl fmt::Display for ScriptFnDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}{}({})",
+            match self.access {
+                FnAccess::Public => "",
+                FnAccess::Private => "private ",
+            },
+            self.name,
+            self.params
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
+}
+
 /// `return`/`throw` statement.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum ReturnType {
@@ -198,9 +335,11 @@ pub enum ReturnType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 struct ParseState {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(String, ScopeEntryType)>,
+    pub stack: Vec<(String, ScopeEntryType)>,
+    /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
+    pub modules: Vec<String>,
     /// Maximum levels of expression nesting.
-    max_expr_depth: usize,
+    pub max_expr_depth: usize,
     /// Maximum length of a string.
     pub max_string_size: usize,
     /// Maximum length of an array.
@@ -229,15 +368,12 @@ impl ParseState {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return zero when the variable name is not found in the `ParseState`.
-    pub fn find(&self, name: &str) -> Option<NonZeroUsize> {
+    pub fn find_var(&self, name: &str) -> Option<NonZeroUsize> {
         self.stack
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (n, typ))| match typ {
-                ScopeEntryType::Normal | ScopeEntryType::Constant => *n == name,
-                ScopeEntryType::Module => false,
-            })
+            .find(|(_, (n, _))| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
     /// Find a module by name in the `ParseState`, searching in reverse.
@@ -245,29 +381,12 @@ impl ParseState {
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return zero when the variable name is not found in the `ParseState`.
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
-        self.stack
+        self.modules
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (n, typ))| match typ {
-                ScopeEntryType::Module => *n == name,
-                ScopeEntryType::Normal | ScopeEntryType::Constant => false,
-            })
+            .find(|(_, n)| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
-    }
-}
-
-impl Deref for ParseState {
-    type Target = Vec<(String, ScopeEntryType)>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.stack
-    }
-}
-
-impl DerefMut for ParseState {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.stack
     }
 }
 
@@ -464,7 +583,7 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Box<(StaticVec<Expr>, Position)>),
     /// #{ name:expr, ... }
-    Map(Box<(StaticVec<((String, Position), Expr)>, Position)>),
+    Map(Box<(StaticVec<((ImmutableString, Position), Expr)>, Position)>),
     /// lhs in rhs
     In(Box<(Expr, Expr, Position)>),
     /// lhs && rhs
@@ -785,22 +904,22 @@ fn parse_call_expr(
     mut modules: Option<Box<ModuleRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, _) = input.peek().unwrap();
+    let (token, token_pos) = input.peek().unwrap();
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut args = StaticVec::new();
 
     match token {
-        // id <EOF>
+        // id( <EOF>
         Token::EOF => {
             return Err(PERR::MissingToken(
                 Token::RightParen.into(),
                 format!("to close the arguments list of this function call '{}'", id),
             )
-            .into_err(settings.pos))
+            .into_err(*token_pos))
         }
-        // id <error>
-        Token::LexError(err) => return Err(err.into_err(settings.pos)),
+        // id( <error>
+        Token::LexError(err) => return Err(err.into_err(*token_pos)),
         // id()
         Token::RightParen => {
             eat_token(input, Token::RightParen);
@@ -1196,7 +1315,7 @@ fn parse_map_literal(
                 }
 
                 let expr = parse_expr(input, state, settings.level_up())?;
-                map.push(((name, pos), expr));
+                map.push(((Into::<ImmutableString>::into(name), pos), expr));
             }
         }
 
@@ -1242,8 +1361,8 @@ fn parse_primary(
     state: &mut ParseState,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, pos1) = input.peek().unwrap();
-    settings.pos = *pos1;
+    let (token, token_pos) = input.peek().unwrap();
+    settings.pos = *token_pos;
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let (token, _) = match token {
@@ -1263,7 +1382,7 @@ fn parse_primary(
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
-            let index = state.find(&s);
+            let index = state.find_var(&s);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         Token::LeftParen => parse_paren_expr(input, state, settings.level_up())?,
@@ -1453,7 +1572,7 @@ fn make_assignment_stmt<'a>(
         // var (indexed) = rhs
         Expr::Variable(x) => {
             let ((name, name_pos), _, _, index) = x.as_ref();
-            match state.stack[(state.len() - index.unwrap().get())].1 {
+            match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => {
                     Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
                 }
@@ -1461,7 +1580,6 @@ fn make_assignment_stmt<'a>(
                 ScopeEntryType::Constant => {
                     Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
                 }
-                ScopeEntryType::Module => unreachable!(),
             }
         }
         // xxx[???] = rhs, xxx.??? = rhs
@@ -1473,7 +1591,7 @@ fn make_assignment_stmt<'a>(
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
                 let ((name, name_pos), _, _, index) = x.as_ref();
-                match state.stack[(state.len() - index.unwrap().get())].1 {
+                match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => {
                         Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
                     }
@@ -1481,7 +1599,6 @@ fn make_assignment_stmt<'a>(
                     ScopeEntryType::Constant => {
                         Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
                     }
-                    ScopeEntryType::Module => unreachable!(),
                 }
             }
             // expr[???] = rhs, expr.??? = rhs
@@ -1831,19 +1948,8 @@ fn parse_binary_op(
 
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
-                let mut rhs = args.pop();
+                let rhs = args.pop();
                 let current_lhs = args.pop();
-
-                match &mut rhs {
-                    // current_lhs.rhs(...) - method call
-                    Expr::FnCall(x) => {
-                        let ((id, _, _), _, hash, args, _) = x.as_mut();
-                        // Recalculate function call hash because there is an additional argument
-                        *hash = calc_fn_hash(empty(), id, args.len() + 1, empty());
-                    }
-                    _ => (),
-                }
-
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 
@@ -2012,13 +2118,13 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, settings.level_up())?;
 
-    let prev_len = state.len();
-    state.push((name.clone(), ScopeEntryType::Normal));
+    let prev_stack_len = state.stack.len();
+    state.stack.push((name.clone(), ScopeEntryType::Normal));
 
     settings.is_breakable = true;
     let body = parse_block(input, state, settings.level_up())?;
 
-    state.truncate(prev_len);
+    state.stack.truncate(prev_stack_len);
 
     Ok(Stmt::For(Box::new((name, expr, body))))
 }
@@ -2041,6 +2147,16 @@ fn parse_let(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
+    // Check if the name is allowed
+    match name.as_str() {
+        KEYWORD_THIS => {
+            return Err(
+                PERR::BadInput(LexError::MalformedIdentifier(name).to_string()).into_err(pos),
+            )
+        }
+        _ => (),
+    }
+
     // let name = ...
     if match_token(input, Token::Equals)? {
         // let name = expr
@@ -2049,34 +2165,30 @@ fn parse_let(
         match var_type {
             // let name = expr
             ScopeEntryType::Normal => {
-                state.push((name.clone(), ScopeEntryType::Normal));
+                state.stack.push((name.clone(), ScopeEntryType::Normal));
                 Ok(Stmt::Let(Box::new(((name, pos), Some(init_value)))))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
-                state.push((name.clone(), ScopeEntryType::Constant));
+                state.stack.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(((name, pos), init_value))))
             }
-            // const name = expr - error
+            // const name = expr: error
             ScopeEntryType::Constant => {
                 Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
             }
-            // Variable cannot be a module
-            ScopeEntryType::Module => unreachable!(),
         }
     } else {
         // let name
         match var_type {
             ScopeEntryType::Normal => {
-                state.push((name.clone(), ScopeEntryType::Normal));
+                state.stack.push((name.clone(), ScopeEntryType::Normal));
                 Ok(Stmt::Let(Box::new(((name, pos), None))))
             }
             ScopeEntryType::Constant => {
-                state.push((name.clone(), ScopeEntryType::Constant));
+                state.stack.push((name.clone(), ScopeEntryType::Constant));
                 Ok(Stmt::Const(Box::new(((name, pos), Expr::Unit(pos)))))
             }
-            // Variable cannot be a module
-            ScopeEntryType::Module => unreachable!(),
         }
     }
 }
@@ -2112,7 +2224,7 @@ fn parse_import(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
-    state.push((name.clone(), ScopeEntryType::Module));
+    state.modules.push(name.clone());
     Ok(Stmt::Import(Box::new((expr, (name, settings.pos)))))
 }
 
@@ -2199,7 +2311,8 @@ fn parse_block(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = StaticVec::new();
-    let prev_len = state.len();
+    let prev_stack_len = state.stack.len();
+    let prev_mods_len = state.modules.len();
 
     while !match_token(input, Token::RightBrace)? {
         // Parse statements inside the block
@@ -2239,7 +2352,8 @@ fn parse_block(
         }
     }
 
-    state.truncate(prev_len);
+    state.stack.truncate(prev_stack_len);
+    state.modules.truncate(prev_mods_len);
 
     Ok(Stmt::Block(Box::new((statements, settings.pos))))
 }
@@ -2374,7 +2488,7 @@ fn parse_fn(
                 (Token::RightParen, _) => (),
                 _ => match input.next().unwrap() {
                     (Token::Identifier(s), pos) => {
-                        state.push((s.clone(), ScopeEntryType::Normal));
+                        state.stack.push((s.clone(), ScopeEntryType::Normal));
                         params.push((s, pos))
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),

@@ -6,10 +6,10 @@ use crate::engine::Map;
 use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 
-use crate::stdlib::{string::ToString, vec::Vec};
+use crate::stdlib::vec::Vec;
 
 fn map_get_keys(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
-    Ok(map.iter().map(|(k, _)| k.to_string().into()).collect())
+    Ok(map.iter().map(|(k, _)| k.clone().into()).collect())
 }
 fn map_get_values(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
     Ok(map.iter().map(|(_, v)| v.clone()).collect())
@@ -35,6 +35,17 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
         |map1: &mut Map, map2: Map| {
             map2.into_iter().for_each(|(key, value)| {
                 map1.insert(key, value);
+            });
+            Ok(())
+        },
+    );
+    lib.set_fn_2_mut(
+        "fill_with",
+        |map1: &mut Map, map2: Map| {
+            map2.into_iter().for_each(|(key, value)| {
+                if !map1.contains_key(key.as_str()) {
+                    map1.insert(key, value);
+                }
             });
             Ok(())
         },

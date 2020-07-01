@@ -2,8 +2,8 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::{
-    get_script_function_by_signature, make_getter, make_setter, Engine, State, FUNC_INDEXER_GET,
-    FUNC_INDEXER_SET,
+    get_script_function_by_signature, make_getter, make_setter, Engine, Imports, State, FN_IDX_GET,
+    FN_IDX_SET,
 };
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
@@ -323,7 +323,7 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FUNC_INDEXER_GET, callback);
+        self.register_fn(FN_IDX_GET, callback);
     }
 
     /// Register an index setter for a registered type with the `Engine`.
@@ -371,7 +371,7 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FUNC_INDEXER_SET, callback);
+        self.register_fn(FN_IDX_SET, callback);
     }
 
     /// Shorthand for register both index getter and setter functions for a registered type with the `Engine`.
@@ -422,7 +422,7 @@ impl Engine {
         self.register_indexer_set(setter);
     }
 
-    /// Compile a string into an `AST`, which can be used later for evaluation.
+    /// Compile a string into an [`AST`], which can be used later for evaluation.
     ///
     /// # Example
     ///
@@ -445,7 +445,7 @@ impl Engine {
         self.compile_with_scope(&Scope::new(), script)
     }
 
-    /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
+    /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
@@ -488,7 +488,7 @@ impl Engine {
     }
 
     /// When passed a list of strings, first join the strings into one large script,
-    /// and then compile them into an `AST` using own scope, which can be used later for evaluation.
+    /// and then compile them into an [`AST`] using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
@@ -541,7 +541,7 @@ impl Engine {
         self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
 
-    /// Join a list of strings and compile into an `AST` using own scope at a specific optimization level.
+    /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
@@ -577,7 +577,7 @@ impl Engine {
         Ok(contents)
     }
 
-    /// Compile a script file into an `AST`, which can be used later for evaluation.
+    /// Compile a script file into an [`AST`], which can be used later for evaluation.
     ///
     /// # Example
     ///
@@ -603,7 +603,7 @@ impl Engine {
         self.compile_file_with_scope(&Scope::new(), path)
     }
 
-    /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
+    /// Compile a script file into an [`AST`] using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
@@ -685,7 +685,7 @@ impl Engine {
         self.eval_ast_with_scope(&mut scope, &ast)
     }
 
-    /// Compile a string containing an expression into an `AST`,
+    /// Compile a string containing an expression into an [`AST`],
     /// which can be used later for evaluation.
     ///
     /// # Example
@@ -709,7 +709,7 @@ impl Engine {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
 
-    /// Compile a string containing an expression into an `AST` using own scope,
+    /// Compile a string containing an expression into an [`AST`] using own scope,
     /// which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
@@ -917,7 +917,7 @@ impl Engine {
         self.eval_ast_with_scope(scope, &ast)
     }
 
-    /// Evaluate an `AST`.
+    /// Evaluate an [`AST`].
     ///
     /// # Example
     ///
@@ -939,7 +939,7 @@ impl Engine {
         self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
 
-    /// Evaluate an `AST` with own scope.
+    /// Evaluate an [`AST`] with own scope.
     ///
     /// # Example
     ///
@@ -973,7 +973,8 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let (result, _) = self.eval_ast_with_scope_raw(scope, ast)?;
+        let mut mods = Imports::new();
+        let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
         let return_type = self.map_type_name(result.type_name());
 
@@ -985,18 +986,19 @@ impl Engine {
         });
     }
 
-    /// Evaluate an `AST` with own scope.
-    pub(crate) fn eval_ast_with_scope_raw(
+    /// Evaluate an [`AST`] with own scope.
+    pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
-        ast: &AST,
+        mods: &mut Imports,
+        ast: &'a AST,
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
         let mut state = State::new();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
+                self.eval_stmt(scope, mods, &mut state, ast.lib(), &mut None, stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -1050,7 +1052,7 @@ impl Engine {
         self.consume_ast_with_scope(&mut Scope::new(), ast)
     }
 
-    /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
+    /// Evaluate an [`AST`] with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume_ast_with_scope(
         &self,
@@ -1058,11 +1060,12 @@ impl Engine {
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
         let mut state = State::new();
+        let mut mods = Default::default();
 
         ast.statements()
             .iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut state, ast.lib(), stmt, 0)
+                self.eval_stmt(scope, &mut mods, &mut state, ast.lib(), &mut None, stmt, 0)
             })
             .map_or_else(
                 |err| match *err {
@@ -1073,7 +1076,7 @@ impl Engine {
             )
     }
 
-    /// Call a script function defined in an `AST` with multiple arguments.
+    /// Call a script function defined in an [`AST`] with multiple arguments.
     /// Arguments are passed as a tuple.
     ///
     /// # Example
@@ -1130,7 +1133,7 @@ impl Engine {
         });
     }
 
-    /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
+    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments.
     ///
     /// # Example
     ///
@@ -1176,7 +1179,7 @@ impl Engine {
         self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())
     }
 
-    /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
+    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments.
     ///
     /// ## WARNING
     ///
@@ -1201,20 +1204,31 @@ impl Engine {
             })?;
 
         let mut state = State::new();
+        let mut mods = Imports::new();
         let args = args.as_mut();
 
-        self.call_script_fn(scope, &mut state, ast.lib(), name, fn_def, args, 0)
+        self.call_script_fn(
+            scope,
+            &mut mods,
+            &mut state,
+            ast.lib(),
+            &mut None,
+            name,
+            fn_def,
+            args,
+            0,
+        )
     }
 
-    /// Optimize the `AST` with constants defined in an external Scope.
-    /// An optimized copy of the `AST` is returned while the original `AST` is consumed.
+    /// Optimize the [`AST`] with constants defined in an external Scope.
+    /// An optimized copy of the [`AST`] is returned while the original [`AST`] is consumed.
     ///
     /// Although optimization is performed by default during compilation, sometimes it is necessary to
     /// _re_-optimize an AST. For example, when working with constants that are passed in via an
-    /// external scope, it will be more efficient to optimize the `AST` once again to take advantage
+    /// external scope, it will be more efficient to optimize the [`AST`] once again to take advantage
     /// of the new constants.
     ///
-    /// With this method, it is no longer necessary to recompile a large script. The script `AST` can be
+    /// With this method, it is no longer necessary to recompile a large script. The script [`AST`] can be
     /// compiled just once. Before evaluation, constants are passed into the `Engine` via an external scope
     /// (i.e. with `scope.push_constant(...)`). Then, the `AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]

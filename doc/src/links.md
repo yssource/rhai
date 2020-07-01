@@ -10,21 +10,24 @@
 [`no_function`]: {{rootUrl}}/start/features.md
 [`no_module`]: {{rootUrl}}/start/features.md
 [`no_std`]: {{rootUrl}}/start/features.md
-
 [`no-std`]: {{rootUrl}}/start/features.md
+[`internals`]: {{rootUrl}}/start/features.md
 
 [minimal builds]: {{rootUrl}}/start/builds/minimal.md
 [WASM]: {{rootUrl}}/start/builds/wasm.md
+[playground]: https://alvinhochun.github.io/rhai-demo
 
 [`Engine`]: {{rootUrl}}/engine/hello-world.md
+[traits]: {{rootUrl}}/rust/traits.md
 [`private`]: {{rootUrl}}/engine/call-fn.md
 [`Func`]: {{rootUrl}}/engine/func.md
+[`AST`]: {{rootUrl}}/engine/compile.md
 [`eval_expression`]: {{rootUrl}}/engine/expressions.md
 [`eval_expression_with_scope`]: {{rootUrl}}/engine/expressions.md
 [raw `Engine`]: {{rootUrl}}/engine/raw.md
 [built-in operators]: {{rootUrl}}/engine/raw.md#built-in-operators
-[package]: {{rootUrl}}/rust/packages.md
-[packages]: {{rootUrl}}/rust/packages.md
+[package]: {{rootUrl}}/rust/packages/index.md
+[packages]: {{rootUrl}}/rust/packages/index.md
 [`Scope`]: {{rootUrl}}/rust/scope.md
 
 [`type_of()`]: {{rootUrl}}/language/type-of.md
@@ -37,9 +40,16 @@
 
 [custom type]: {{rootUrl}}/rust/custom.md
 [custom types]: {{rootUrl}}/rust/custom.md
+[getters/setters]: {{rootUrl}}/rust/getters-setters.md
+[indexers]: {{rootUrl}}/rust/indexers.md
+
+[`instant::Instant`]: https://crates.io/crates/instant
 
 [`print`]: {{rootUrl}}/language/print-debug.md
 [`debug`]: {{rootUrl}}/language/print-debug.md
+
+[keywords]: {{rootUrl}}/appendix/keywords.md
+[keyword]: {{rootUrl}}/appendix/keywords.md
 
 [variable]: {{rootUrl}}/language/variables.md
 [variables]: {{rootUrl}}/language/variables.md
@@ -62,14 +72,21 @@
 
 [function]: {{rootUrl}}/language/functions.md
 [functions]: {{rootUrl}}/language/functions.md
+[function pointer]: {{rootUrl}}/language/fn-ptr.md
+[function pointers]: {{rootUrl}}/language/fn-ptr.md
+[function namespace]: {{rootUrl}}/language/fn-namespaces.md
+[function namespaces]: {{rootUrl}}/language/fn-namespaces.md
 
-[`Module`]: {{rootUrl}}/language/modules.md
-[module]: {{rootUrl}}/language/modules.md
-[modules]: {{rootUrl}}/language/modules.md
+[`Module`]: {{rootUrl}}/language/modules/index.md
+[module]: {{rootUrl}}/language/modules/index.md
+[modules]: {{rootUrl}}/language/modules/index.md
+[module resolver]: {{rootUrl}}/language/modules/imp-resolver.md
 [`export`]: {{rootUrl}}/language/modules/export.md
 [`import`]: {{rootUrl}}/language/modules/import.md
 
 [`eval`]: {{rootUrl}}/language/eval.md
+
+[OOP]: {{rootUrl}}/language/oop.md
 
 [maximum statement depth]: {{rootUrl}}/safety/max-stmt-depth.md
 [maximum call stack depth]: {{rootUrl}}/safety/max-call-stack.md
@@ -78,9 +95,9 @@
 [maximum length of strings]: {{rootUrl}}/safety/max-string-size.md
 [maximum size of arrays]: {{rootUrl}}/safety/max-array-size.md
 [maximum size of object maps]: {{rootUrl}}/safety/max-map-size.md
-[progress]:/safety/progress.md
+[progress]: {{rootUrl}}/safety/progress.md
 
-[script optimization]: {{rootUrl}}/engine/optimize.md
+[script optimization]: {{rootUrl}}/engine/optimize/index.md
 [`OptimizationLevel::Full`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::Simple`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::None`]: {{rootUrl}}/engine/optimize/optimize-levels.md

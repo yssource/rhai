@@ -1,6 +1,6 @@
 [package]
 name = "rhai"
-version = "0.15.2"
+version = "0.16.0"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung"]
 description = "Embedded scripting for Rust"
@@ -33,6 +33,7 @@ no_index = []       # no arrays and indexing
 no_object = []      # no custom objects
 no_function = []    # no script-defined functions
 no_module = []      # no modules
+internals = []      # expose internal data structures
 
 # compiling for no-std
 no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]

@@ -1,7 +1,7 @@
 Script Optimization
 ===================
 
-{{#include ../links.md}}
+{{#include ../../links.md}}
 
 Rhai includes an _optimizer_ that tries to optimize a script after parsing.
 This can reduce resource utilization and increase execution speed.

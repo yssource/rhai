@@ -3,6 +3,9 @@ Import a Module
 
 {{#include ../../links.md}}
 
+`import` Statement
+-----------------
+
 A module can be _imported_ via the `import` statement, and its members are accessed via '`::`' similar to C++.
 
 ```rust
@@ -17,10 +20,14 @@ print(lock::status);            // module variables are constants
 lock::status = "off";           // <- runtime error - cannot modify a constant
 ```
 
+
+Scoped Imports
+--------------
+
 `import` statements are _scoped_, meaning that they are only accessible inside the scope that they're imported.
 
 They can appear anywhere a normal statement can be, but in the vast majority of cases `import` statements are
-group at the beginning of a script. It is, however, not advised to deviate from this common practice unless
+group at the beginning of a script. It is not advised to deviate from this common practice unless
 there is a _Very Good Reason™_.
 
 Especially, do not place an `import` statement within a loop; doing so will repeatedly re-load the same module
@@ -43,4 +50,33 @@ for x in range(0, 1000) {
 
     c.encrypt(something);
 }
+```
+
+
+Recursive Imports
+----------------
+
+Beware of _import cycles_ - i.e. recursively loading the same module. This is a sure-fire way to
+cause a stack overflow in the [`Engine`], unless stopped by setting a limit for [maximum number of modules].
+
+For instance, importing itself always causes an infinite recursion:
+
+```rust
+// This file is 'hello.rhai'
+
+import "hello" as foo;          // import itself - infinite recursion!
+
+foo::do_something();
+```
+
+Modules cross-referencing also cause infinite recursion:
+
+```rust
+// This file is 'hello.rhai' - references 'world.rhai'
+import "world" as foo;
+foo::do_something();
+
+// This file is 'world.rhai' - references 'hello.rhai'
+import "hello" as bar;
+bar::do_something_else();
 ```

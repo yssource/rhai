@@ -39,7 +39,7 @@ The index notation allows setting/getting properties of arbitrary names (even th
 Built-in Functions
 -----------------
 
-The following methods (defined in the [`BasicMapPackage`]({{rootUrl}}/rust/packages.md) but excluded if using a [raw `Engine`])
+The following methods (defined in the [`BasicMapPackage`][packages] but excluded if using a [raw `Engine`])
 operate on object maps:
 
 | Function               | Parameter(s)                        | Description                                                                                                                              |
@@ -50,6 +50,7 @@ operate on object maps:
 | `remove`               | property name                       | removes a certain property and returns it ([`()`] if the property does not exist)                                                        |
 | `+=` operator, `mixin` | second object map                   | mixes in all the properties of the second object map to the first (values of properties with the same names replace the existing values) |
 | `+` operator           | first object map, second object map | merges the first object map with the second                                                                                              |
+| `fill_with`            | second object map                   | adds in all properties of the second object map that do not exist in the object map                                                      |
 | `keys`                 | _none_                              | returns an [array] of all the property names (in random order), not available under [`no_index`]                                         |
 | `values`               | _none_                              | returns an [array] of all the property values (in random order), not available under [`no_index`]                                        |
 
@@ -61,7 +62,7 @@ Examples
 let y = #{              // object map literal with 3 properties
     a: 1,
     bar: "hello",
-    "baz!$@": 123.456,  // like JS, you can use any string as property names...
+    "baz!$@": 123.456,  // like JavaScript, you can use any string as property names...
     "": false,          // even the empty string!
 
     a: 42               // <- syntax error: duplicated property name

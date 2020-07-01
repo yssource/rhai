@@ -2,7 +2,7 @@
 //!
 //! Rhai is a tiny, simple and very fast embedded scripting language for Rust
 //! that gives you a safe and easy way to add scripting to your applications.
-//! It provides a familiar syntax based on JS and Rust and a simple Rust interface.
+//! It provides a familiar syntax based on JavaScript and Rust and a simple Rust interface.
 //! Here is a quick example.
 //!
 //! First, the contents of `my_script.rhai`:
@@ -62,9 +62,10 @@
 //! | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                  |
 //! | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                  |
 //! | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                              |
-//! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and `AST` are all `Send + Sync`. |
+//! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and [`AST`] are all `Send + Sync`. |
+//! | `internals`   | Expose internal data structures (beware they may be volatile from version to version).                                            |
 //!
-//! See [The Rhai Book](https://schungx.github.io/rhai/) for details on the Rhai script engine and language.
+//! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai script engine and language.
 
 #![cfg_attr(feature = "no_std", no_std)]
 
@@ -103,6 +104,9 @@ pub use token::Position;
 pub use utils::calc_fn_spec as calc_fn_hash;
 
 #[cfg(not(feature = "no_function"))]
+pub use parser::FnAccess;
+
+#[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;
 
 #[cfg(not(feature = "no_index"))]
@@ -125,3 +129,21 @@ pub mod module_resolvers {
 
 #[cfg(not(feature = "no_optimize"))]
 pub use optimize::OptimizationLevel;
+
+// Expose internal data structures.
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
+pub use token::{get_next_token, parse_string_literal, InputStream, Token, TokenizeState};
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
+pub use parser::{Expr, ReturnType, ScriptFnDef, Stmt};
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
+pub use module::ModuleRef;
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
+pub use utils::StaticVec;

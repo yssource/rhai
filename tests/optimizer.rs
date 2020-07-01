@@ -38,19 +38,13 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
 
     let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } }")?;
 
-    assert_eq!(
-        format!("{:?}", ast),
-        "AST([], <module vars={}, functions=0>)"
-    );
+    assert!(format!("{:?}", ast).starts_with("AST([], Module("));
 
     engine.set_optimization_level(OptimizationLevel::Full);
 
     let ast = engine.compile("if 1 == 2 { 42 }")?;
 
-    assert_eq!(
-        format!("{:?}", ast),
-        "AST([], <module vars={}, functions=0>)"
-    );
+    assert!(format!("{:?}", ast).starts_with("AST([], Module("));
 
     Ok(())
 }

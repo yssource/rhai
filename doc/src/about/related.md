@@ -5,8 +5,13 @@ Related Resources
 
 Other online documentation resources for Rhai:
 
-* [`DOCS.RS`](https://docs.rs/rhai)
+* [`crates.io`](https://crates.io/crates/rhai/) - Rhai crate
 
+* [`DOCS.RS`](https://docs.rs/rhai) - Rhai API documentation
+
+* [`LIB.RS`](https://lib.rs/crates/rhai) - Rhai library info
+
+* [Online Playground][playground] - Run scripts directly from editor
 
 Other cool projects to check out:
 

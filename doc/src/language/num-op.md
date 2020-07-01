@@ -22,19 +22,19 @@ number = -5 - +5;
 Binary Operators
 ----------------
 
-| Operator | Description                                          | Integers only |
-| -------- | ---------------------------------------------------- | :-----------: |
-| `+`      | Plus                                                 |               |
-| `-`      | Minus                                                |               |
-| `*`      | Multiply                                             |               |
-| `/`      | Divide (integer division if acting on integer types) |               |
-| `%`      | Modulo (remainder)                                   |               |
-| `~`      | Power                                                |               |
-| `&`      | Binary _And_ bit-mask                                |      Yes      |
-| `|`      | Binary _Or_ bit-mask                                 |      Yes      |
-| `^`      | Binary _Xor_ bit-mask                                |      Yes      |
-| `<<`     | Left bit-shift                                       |      Yes      |
-| `>>`     | Right bit-shift                                      |      Yes      |
+| Operator        | Description                                          | Integers only |
+| --------------- | ---------------------------------------------------- | :-----------: |
+| `+`             | Plus                                                 |               |
+| `-`             | Minus                                                |               |
+| `*`             | Multiply                                             |               |
+| `/`             | Divide (integer division if acting on integer types) |               |
+| `%`             | Modulo (remainder)                                   |               |
+| `~`             | Power                                                |               |
+| `&`             | Bit-wise _And_                                       |      Yes      |
+| <code>\|</code> | Bit-wise _Or_                                        |      Yes      |
+| `^`             | Bit-wise _Xor_                                       |      Yes      |
+| `<<`            | Left bit-shift                                       |      Yes      |
+| `>>`            | Right bit-shift                                      |      Yes      |
 
 ```rust
 let x = (1 + 2) * (6 - 4) / 2;  // arithmetic, with parentheses

@@ -1,4 +1,5 @@
 {
+	"version": "0.16.0",
 	"rootUrl": "",
 	"rootUrlX": "/rhai"
 }

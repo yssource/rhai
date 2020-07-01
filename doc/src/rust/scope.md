@@ -20,40 +20,35 @@ then the same state is threaded through multiple invocations:
 ```rust
 use rhai::{Engine, Scope, EvalAltResult};
 
-fn main() -> Result<(), Box<EvalAltResult>>
-{
-    let engine = Engine::new();
+let engine = Engine::new();
 
-    // First create the state
-    let mut scope = Scope::new();
+// First create the state
+let mut scope = Scope::new();
 
-    // Then push (i.e. add) some initialized variables into the state.
-    // Remember the system number types in Rhai are i64 (i32 if 'only_i32') ond f64.
-    // Better stick to them or it gets hard working with the script.
-    scope.push("y", 42_i64);
-    scope.push("z", 999_i64);
+// Then push (i.e. add) some initialized variables into the state.
+// Remember the system number types in Rhai are i64 (i32 if 'only_i32') ond f64.
+// Better stick to them or it gets hard working with the script.
+scope.push("y", 42_i64);
+scope.push("z", 999_i64);
 
-    // 'set_value' adds a variable when one doesn't exist
-    scope.set_value("s", "hello, world!".to_string());  // remember to use 'String', not '&str'
+// 'set_value' adds a variable when one doesn't exist
+scope.set_value("s", "hello, world!".to_string());  // remember to use 'String', not '&str'
 
-    // First invocation
-    engine.eval_with_scope::<()>(&mut scope, r"
-        let x = 4 + 5 - y + z + s.len;
-        y = 1;
-    ")?;
+// First invocation
+engine.eval_with_scope::<()>(&mut scope, r"
+    let x = 4 + 5 - y + z + s.len;
+    y = 1;
+")?;
 
-    // Second invocation using the same state
-    let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
+// Second invocation using the same state
+let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
 
-    println!("result: {}", result);                     // prints 979
+println!("result: {}", result);                     // prints 979
 
-    // Variable y is changed in the script - read it with 'get_value'
-    assert_eq!(scope.get_value::<i64>("y").expect("variable y should exist"), 1);
+// Variable y is changed in the script - read it with 'get_value'
+assert_eq!(scope.get_value::<i64>("y").expect("variable y should exist"), 1);
 
-    // We can modify scope variables directly with 'set_value'
-    scope.set_value("y", 42_i64);
-    assert_eq!(scope.get_value::<i64>("y").expect("variable y should exist"), 42);
-
-    Ok(())
-}
+// We can modify scope variables directly with 'set_value'
+scope.set_value("y", 42_i64);
+assert_eq!(scope.get_value::<i64>("y").expect("variable y should exist"), 42);
 ```

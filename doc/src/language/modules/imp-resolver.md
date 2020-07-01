@@ -7,8 +7,8 @@ For many applications in which Rhai is embedded, it is necessary to customize th
 are resolved.  For instance, modules may need to be loaded from script texts stored in a database,
 not in the file system.
 
-A module resolver must implement the trait `rhai::ModuleResolver`, which contains only one function:
-`resolve`.
+A module resolver must implement the trait [`rhai::ModuleResolver`][traits],
+which contains only one function: `resolve`.
 
 When Rhai prepares to load a module, `ModuleResolver::resolve` is called with the name
 of the _module path_ (i.e. the path specified in the [`import`] statement). Upon success, it should
@@ -43,18 +43,14 @@ impl ModuleResolver for MyModuleResolver {
     }
 }
 
-fn main() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new();
+let mut engine = Engine::new();
 
-    // Set the custom module resolver into the 'Engine'.
-    engine.set_module_resolver(Some(MyModuleResolver {}));
+// Set the custom module resolver into the 'Engine'.
+engine.set_module_resolver(Some(MyModuleResolver {}));
 
-    engine.consume(r#"
-        import "hello" as foo;  // this 'import' statement will call
-                                // 'MyModuleResolver::resolve' with "hello" as path
-        foo:bar();
-    "#)?;
-
-    Ok(())
-}
+engine.consume(r#"
+    import "hello" as foo;  // this 'import' statement will call
+                            // 'MyModuleResolver::resolve' with "hello" as path
+    foo:bar();
+"#)?;
 ```

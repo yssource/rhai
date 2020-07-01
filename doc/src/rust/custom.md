@@ -26,21 +26,16 @@ impl TestStruct {
     }
 }
 
-fn main() -> Result<(), Box<EvalAltResult>>
-{
-    let engine = Engine::new();
+let mut engine = Engine::new();
 
-    engine.register_type::<TestStruct>();
+engine.register_type::<TestStruct>();
 
-    engine.register_fn("update", TestStruct::update);
-    engine.register_fn("new_ts", TestStruct::new);
+engine.register_fn("update", TestStruct::update);
+engine.register_fn("new_ts", TestStruct::new);
 
-    let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
+let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 
-    println!("result: {}", result.field);           // prints 42
-
-    Ok(())
-}
+println!("result: {}", result.field);           // prints 42
 ```
 
 Register a Custom Type
@@ -66,7 +61,7 @@ impl TestStruct {
     }
 }
 
-let engine = Engine::new();
+let mut engine = Engine::new();
 
 engine.register_type::<TestStruct>();
 ```
@@ -102,15 +97,17 @@ println!("result: {}", result.field);               // prints 42
 Method-Call Style vs. Function-Call Style
 ----------------------------------------
 
-In fact, any function with a first argument that is a `&mut` reference can be used as method calls because
-internally they are the same thing: methods on a type is implemented as a functions taking a `&mut` first argument.
+Any function with a first argument that is a `&mut` reference can be used
+as method calls because internally they are the same thing: methods on a type is
+implemented as a functions taking a `&mut` first argument.
+This design is similar to Rust.
 
 ```rust
 fn foo(ts: &mut TestStruct) -> i64 {
     ts.field
 }
 
-engine.register_fn("foo", foo);                     // register ad hoc function with correct signature
+engine.register_fn("foo", foo);                     // register a Rust native function
 
 let result = engine.eval::<i64>(
     "let x = new_ts(); x.foo()"                     // 'foo' can be called like a method on 'x'
@@ -119,8 +116,8 @@ let result = engine.eval::<i64>(
 println!("result: {}", result);                     // prints 1
 ```
 
-Under [`no_object`], however, the _method_ style of function calls (i.e. calling a function as an object-method)
-is no longer supported.
+Under [`no_object`], however, the _method_ style of function calls
+(i.e. calling a function as an object-method) is no longer supported.
 
 ```rust
 // Below is a syntax error under 'no_object' because 'clear' cannot be called in method style.

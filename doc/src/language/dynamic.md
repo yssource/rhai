@@ -27,6 +27,8 @@ if type_of(mystery) == "i64" {
     print("Hey, I got an array here!");
 } else if type_of(mystery) == "map" {
     print("Hey, I got an object map here!");
+} else if type_of(mystery) == "Fn" {
+    print("Hey, I got a function pointer here!");
 } else if type_of(mystery) == "TestStruct" {
     print("Hey, I got the TestStruct custom type here!");
 } else {

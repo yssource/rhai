@@ -28,7 +28,7 @@ impl TestStruct {
     }
 }
 
-let engine = Engine::new();
+let mut engine = Engine::new();
 
 engine.register_type::<TestStruct>();
 
