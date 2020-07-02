@@ -876,12 +876,10 @@ impl Module {
                 .functions
                 .iter()
                 .filter(|(_, (_, _, _, v))| match v {
-                    CallableFunction::Pure(_)
-                    | CallableFunction::Method(_)
-                    | CallableFunction::Iterator(_) => true,
                     CallableFunction::Script(ref f) => {
                         filter(f.access, f.name.as_str(), f.params.len())
                     }
+                    _ => true,
                 })
                 .map(|(&k, v)| (k, v.clone())),
         );
@@ -897,10 +895,8 @@ impl Module {
     /// Filter out the functions, retaining only some based on a filter predicate.
     pub(crate) fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
         self.functions.retain(|_, (_, _, _, v)| match v {
-            CallableFunction::Pure(_)
-            | CallableFunction::Method(_)
-            | CallableFunction::Iterator(_) => true,
             CallableFunction::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
+            _ => true,
         });
 
         self.all_functions.clear();

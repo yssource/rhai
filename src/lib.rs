@@ -84,6 +84,10 @@ mod module;
 mod optimize;
 pub mod packages;
 mod parser;
+#[cfg(not(feature = "no_module"))]
+pub mod plugin;
+#[cfg(feature = "no_module")]
+mod plugin;
 mod result;
 mod scope;
 mod stdlib;
@@ -95,7 +99,7 @@ pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
 pub use fn_native::IteratorFn;
-pub use fn_register::{RegisterFn, RegisterResultFn};
+pub use fn_register::{RegisterFn, RegisterPlugin, RegisterResultFn};
 pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};
 pub use result::EvalAltResult;
