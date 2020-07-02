@@ -196,7 +196,6 @@ impl Dynamic {
             Union::FnPtr(_) => "Fn",
 
             #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
             Union::Variant(value) => (***value).type_name(),
         }
@@ -220,7 +219,6 @@ impl fmt::Display for Dynamic {
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "?"),
         }
@@ -244,7 +242,6 @@ impl fmt::Debug for Dynamic {
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
