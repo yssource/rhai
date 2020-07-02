@@ -197,16 +197,16 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
-            | Self::ErrorTerminated(_) => write!(f, "{}", desc)?,
+            | Self::ErrorTerminated(_) => f.write_str(desc)?,
 
-            Self::ErrorRuntime(s, _) => write!(f, "{}", if s.is_empty() { desc } else { s })?,
+            Self::ErrorRuntime(s, _) => f.write_str(if s.is_empty() { desc } else { s })?,
 
             Self::ErrorAssignmentToConstant(s, _) => write!(f, "{}: '{}'", desc, s)?,
             Self::ErrorMismatchOutputType(s, _) => write!(f, "{}: {}", desc, s)?,
-            Self::ErrorArithmetic(s, _) => write!(f, "{}", s)?,
+            Self::ErrorArithmetic(s, _) => f.write_str(s)?,
 
-            Self::ErrorLoopBreak(_, _) => write!(f, "{}", desc)?,
-            Self::Return(_, _) => write!(f, "{}", desc)?,
+            Self::ErrorLoopBreak(_, _) => f.write_str(desc)?,
+            Self::Return(_, _) => f.write_str(desc)?,
 
             Self::ErrorBooleanArgMismatch(op, _) => {
                 write!(f, "{} operator expects boolean operands", op)?
@@ -215,7 +215,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 write!(f, "{}: {} < 0", desc, index)?
             }
-            Self::ErrorArrayBounds(0, _, _) => write!(f, "{}", desc)?,
+            Self::ErrorArrayBounds(0, _, _) => f.write_str(desc)?,
             Self::ErrorArrayBounds(1, index, _) => write!(
                 f,
                 "Array index {} is out of bounds: only one element in the array",
@@ -229,7 +229,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorStringBounds(_, index, _) if *index < 0 => {
                 write!(f, "{}: {} < 0", desc, index)?
             }
-            Self::ErrorStringBounds(0, _, _) => write!(f, "{}", desc)?,
+            Self::ErrorStringBounds(0, _, _) => f.write_str(desc)?,
             Self::ErrorStringBounds(1, index, _) => write!(
                 f,
                 "String index {} is out of bounds: only one character in the string",

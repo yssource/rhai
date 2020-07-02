@@ -49,7 +49,7 @@ impl fmt::Display for LexError {
                 "Length of string literal exceeds the maximum limit ({})",
                 max
             ),
-            Self::ImproperSymbol(s) => write!(f, "{}", s),
+            Self::ImproperSymbol(s) => f.write_str(s),
         }
     }
 }
@@ -185,18 +185,16 @@ impl fmt::Display for ParseErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
-                write!(f, "{}", if s.is_empty() { self.desc() } else { s })
+                f.write_str(if s.is_empty() { self.desc() } else { s })
             }
             Self::ForbiddenConstantExpr(s) => {
                 write!(f, "Expecting a constant to assign to '{}'", s)
             }
             Self::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s),
 
-            Self::MalformedIndexExpr(s) => {
-                write!(f, "{}", if s.is_empty() { self.desc() } else { s })
-            }
+            Self::MalformedIndexExpr(s) => f.write_str(if s.is_empty() { self.desc() } else { s }),
 
-            Self::MalformedInExpr(s) => write!(f, "{}", if s.is_empty() { self.desc() } else { s }),
+            Self::MalformedInExpr(s) => f.write_str(if s.is_empty() { self.desc() } else { s }),
 
             Self::DuplicatedProperty(s) => {
                 write!(f, "Duplicated property '{}' for object map literal", s)
@@ -222,12 +220,12 @@ impl fmt::Display for ParseErrorType {
 
             Self::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s),
 
-            Self::AssignmentToConstant(s) if s.is_empty() => write!(f, "{}", self.desc()),
+            Self::AssignmentToConstant(s) if s.is_empty() => f.write_str(self.desc()),
             Self::AssignmentToConstant(s) => write!(f, "Cannot assign to constant '{}'", s),
             Self::LiteralTooLarge(typ, max) => {
                 write!(f, "{} exceeds the maximum limit ({})", typ, max)
             }
-            _ => write!(f, "{}", self.desc()),
+            _ => f.write_str(self.desc()),
         }
     }
 }

@@ -26,7 +26,7 @@ Features
 * Freely pass Rust variables/constants into a script via an external [`Scope`](https://schungx.github.io/rhai/rust/scope.html).
 * Easily [call a script-defined function](https://schungx.github.io/rhai/engine/call-fn.html) from Rust.
 * Fairly low compile-time overhead.
-* Fairly efficient evaluation (1 million iterations in 0.25 sec on a single core, 2.3 GHz Linux VM).
+* Fairly efficient evaluation (1 million iterations in 0.4 sec on a single core, 2.3 GHz Linux VM).
 * Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
   one single source file, all with names starting with `"unsafe_"`).
 * Re-entrant scripting engine can be made `Send + Sync` (via the [`sync`] feature).
