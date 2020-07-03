@@ -39,6 +39,8 @@ Dynamic
 
 * Some support for [object-oriented programming (OOP)][OOP].
 
+* Serialization/deserialization support via [`serde`].
+
 Safe
 ----
 

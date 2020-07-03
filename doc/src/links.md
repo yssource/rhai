@@ -29,6 +29,7 @@
 [package]: {{rootUrl}}/rust/packages/index.md
 [packages]: {{rootUrl}}/rust/packages/index.md
 [`Scope`]: {{rootUrl}}/rust/scope.md
+[`serde`]: {{rootUrl}}/rust/serde.md
 
 [`type_of()`]: {{rootUrl}}/language/type-of.md
 [`to_string()`]: {{rootUrl}}/language/values-and-types.md

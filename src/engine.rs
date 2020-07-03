@@ -35,7 +35,7 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
-/// Hash map of `Dynamic` values with `String` keys.
+/// Hash map of `Dynamic` values with `ImmutableString` keys.
 ///
 /// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
