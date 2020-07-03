@@ -976,11 +976,12 @@ impl Engine {
         let mut mods = Imports::new();
         let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
-        let return_type = self.map_type_name(result.type_name());
+        let typ = self.map_type_name(result.type_name());
 
         return result.try_cast::<T>().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.into(),
+                self.map_type_name(type_name::<T>()).into(),
+                typ.into(),
                 Position::none(),
             ))
         });
@@ -1123,11 +1124,12 @@ impl Engine {
         let mut arg_values = args.into_vec();
         let result = self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())?;
 
-        let return_type = self.map_type_name(result.type_name());
+        let typ = self.map_type_name(result.type_name());
 
         return result.try_cast().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.into(),
+                self.map_type_name(type_name::<T>()).into(),
+                typ.into(),
                 Position::none(),
             ))
         });

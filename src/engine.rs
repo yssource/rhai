@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{Dynamic, Union, Variant};
+use crate::any::{map_std_type_name, Dynamic, Union, Variant};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::fn_native::{CallableFunction, Callback, FnCallArgs, FnPtr};
@@ -18,7 +18,7 @@ use crate::utils::StaticVec;
 use crate::parser::FLOAT;
 
 use crate::stdlib::{
-    any::TypeId,
+    any::{type_name, TypeId},
     borrow::Cow,
     boxed::Box,
     collections::HashMap,
@@ -816,9 +816,10 @@ impl Engine {
                 // See if the function match print/debug (which requires special processing)
                 return Ok(match fn_name {
                     KEYWORD_PRINT => (
-                        (self.print)(result.as_str().map_err(|type_name| {
+                        (self.print)(result.as_str().map_err(|typ| {
                             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                type_name.into(),
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
                                 Position::none(),
                             ))
                         })?)
@@ -826,9 +827,10 @@ impl Engine {
                         false,
                     ),
                     KEYWORD_DEBUG => (
-                        (self.debug)(result.as_str().map_err(|type_name| {
+                        (self.debug)(result.as_str().map_err(|typ| {
                             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                type_name.into(),
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
                                 Position::none(),
                             ))
                         })?)
@@ -1064,8 +1066,12 @@ impl Engine {
         lib: &Module,
         script: &Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let script = script.as_str().map_err(|type_name| {
-            EvalAltResult::ErrorMismatchOutputType(type_name.into(), Position::none())
+        let script = script.as_str().map_err(|typ| {
+            EvalAltResult::ErrorMismatchOutputType(
+                self.map_type_name(type_name::<ImmutableString>()).into(),
+                typ.into(),
+                Position::none(),
+            )
         })?;
 
         // Compile the script text
@@ -1873,9 +1879,10 @@ impl Engine {
                             self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                         return arg_value
                             .take_immutable_string()
-                            .map_err(|type_name| {
+                            .map_err(|typ| {
                                 Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                    type_name.into(),
+                                    self.map_type_name(type_name::<ImmutableString>()).into(),
+                                    typ.into(),
                                     expr.position(),
                                 ))
                             })
@@ -2524,7 +2531,7 @@ impl Engine {
         self.type_names
             .get(name)
             .map(String::as_str)
-            .unwrap_or(name)
+            .unwrap_or(map_std_type_name(name))
     }
 }
 

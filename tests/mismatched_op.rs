@@ -6,14 +6,14 @@ fn test_mismatched_op() {
 
     assert!(matches!(
         *engine.eval::<INT>(r#""hello, " + "world!""#).expect_err("expects error"),
-        EvalAltResult::ErrorMismatchOutputType(err, _) if err == "string"
+        EvalAltResult::ErrorMismatchOutputType(need, actual, _) if need == std::any::type_name::<INT>() && actual == "string"
     ));
 }
 
 #[test]
 #[cfg(not(feature = "no_object"))]
 fn test_mismatched_op_custom_type() {
-    #[derive(Clone)]
+    #[derive(Debug, Clone)]
     struct TestStruct {
         x: INT,
     }
@@ -28,19 +28,14 @@ fn test_mismatched_op_custom_type() {
     engine.register_type_with_name::<TestStruct>("TestStruct");
     engine.register_fn("new_ts", TestStruct::new);
 
-    let r = engine
-        .eval::<INT>("60 + new_ts()")
-        .expect_err("expects error");
-
-    #[cfg(feature = "only_i32")]
     assert!(matches!(
-        *r,
-        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i32, TestStruct)"
+        *engine.eval::<INT>("60 + new_ts()").expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(err, _) if err == format!("+ ({}, TestStruct)", std::any::type_name::<INT>())
     ));
 
-    #[cfg(not(feature = "only_i32"))]
     assert!(matches!(
-        *r,
-        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "+ (i64, TestStruct)"
+        *engine.eval::<TestStruct>("42").expect_err("should error"),
+        EvalAltResult::ErrorMismatchOutputType(need, actual, _)
+            if need == "TestStruct" && actual == std::any::type_name::<INT>()
     ));
 }

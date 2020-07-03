@@ -74,8 +74,8 @@ pub enum EvalAltResult {
     /// Assignment to a constant variable.
     ErrorAssignmentToConstant(String, Position),
     /// Returned type is not the same as the required output type.
-    /// Wrapped value is the type of the actual result.
-    ErrorMismatchOutputType(String, Position),
+    /// Wrapped values are the type requested and type of the actual result.
+    ErrorMismatchOutputType(String, String, Position),
     /// Inappropriate member access.
     ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
@@ -141,7 +141,7 @@ impl EvalAltResult {
                 "Assignment to an unsupported left-hand side expression"
             }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
-            Self::ErrorMismatchOutputType(_, _) => "Output type is incorrect",
+            Self::ErrorMismatchOutputType(_, _, _) => "Output type is incorrect",
             Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
@@ -202,7 +202,9 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorRuntime(s, _) => f.write_str(if s.is_empty() { desc } else { s })?,
 
             Self::ErrorAssignmentToConstant(s, _) => write!(f, "{}: '{}'", desc, s)?,
-            Self::ErrorMismatchOutputType(s, _) => write!(f, "{}: {}", desc, s)?,
+            Self::ErrorMismatchOutputType(r, s, _) => {
+                write!(f, "{} (expecting {}): {}", desc, s, r)?
+            }
             Self::ErrorArithmetic(s, _) => f.write_str(s)?,
 
             Self::ErrorLoopBreak(_, _) => f.write_str(desc)?,
@@ -289,7 +291,7 @@ impl EvalAltResult {
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
-            | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorMismatchOutputType(_, _, pos)
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
@@ -329,7 +331,7 @@ impl EvalAltResult {
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
-            | Self::ErrorMismatchOutputType(_, pos)
+            | Self::ErrorMismatchOutputType(_, _, pos)
             | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)

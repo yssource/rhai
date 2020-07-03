@@ -4,6 +4,10 @@ Rhai Release Notes
 Version 0.17.0
 ==============
 
+Breaking changes
+----------------
+
+* `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
 
 Version 0.16.1
 ==============

@@ -202,6 +202,27 @@ impl Dynamic {
     }
 }
 
+/// Map the name of a standard type into a friendly form.
+pub(crate) fn map_std_type_name(name: &str) -> &str {
+    if name == type_name::<String>() {
+        "string"
+    } else if name == type_name::<ImmutableString>() {
+        "string"
+    } else if name == type_name::<&str>() {
+        "string"
+    } else if name == type_name::<Map>() {
+        "map"
+    } else if name == type_name::<Array>() {
+        "array"
+    } else if name == type_name::<FnPtr>() {
+        "Fn"
+    } else if name == type_name::<Instant>() {
+        "timestamp"
+    } else {
+        name
+    }
+}
+
 impl fmt::Display for Dynamic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
