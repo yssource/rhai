@@ -210,15 +210,20 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
         "string"
     } else if name == type_name::<&str>() {
         "string"
-    } else if name == type_name::<Map>() {
-        "map"
-    } else if name == type_name::<Array>() {
-        "array"
     } else if name == type_name::<FnPtr>() {
         "Fn"
     } else if name == type_name::<Instant>() {
         "timestamp"
     } else {
+        #[cfg(not(feature = "no_index"))]
+        if name == type_name::<Array>() {
+            return "array";
+        }
+        #[cfg(not(feature = "no_object"))]
+        if name == type_name::<Map>() {
+            return "map";
+        }
+
         name
     }
 }

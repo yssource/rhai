@@ -13,10 +13,46 @@ A [`Dynamic`] can be seamlessly converted to and from a type that implements `se
 Serialization
 -------------
 
-Serialization by [`serde`](https://crates.io/crates/serde) is not yet implemented.
+While it is simple to serialize a Rust type to `JSON` via `serde`,
+then use [`Engine::parse_json`]({{rootUrl}}/language/json.md) to convert it into an [object map],
+Rhai supports serializing a [`Dynamic`] directly via `serde` without going through the `JSON` step.
 
-It is simple to serialize a Rust type to `JSON` via `serde`, then use [`Engine::parse_json`]({{rootUrl}}/language/json.md) to convert
-it into an [object map].
+The function `rhai::see::to_dynamic` automatically converts any Rust type that implements `serde::Serialize`
+into a [`Dynamic`].
+
+In particular, Rust `struct`'s (or any type that is marked as a `serde` map) are converted into [object maps]
+while Rust `Vec`'s (or any type that is marked as a `serde` sequence) are converted into [arrays].
+
+```rust
+use rhai::{Dynamic, Map};
+use rhai::ser::to_dynamic;
+
+#[derive(Debug, serde::Serialize)]
+struct Point {
+    x: f64,
+    y: f64
+}
+
+#[derive(Debug, serde::Serialize)]
+struct MyStruct {
+    a: i64,
+    b: Vec<String>,
+    c: bool,
+    d: Point
+}
+
+let x = MyStruct {
+    a: 42,
+    b: vec![ "hello".into(), "world".into() ],
+    c: true,
+    d: Point { x: 123.456, y: 999.0 }
+};
+
+// Convert the 'MyStruct' into a 'Dynamic'
+let map: Dynamic = to_dynamic(x);
+
+map.is::<Map>() == true;
+```
 
 
 Deserialization

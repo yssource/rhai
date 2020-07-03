@@ -1,7 +1,7 @@
 #![cfg(feature = "serde")]
 
-use rhai::{de::from_dynamic, Dynamic, Engine, EvalAltResult, INT};
-use serde::Deserialize;
+use rhai::{de::from_dynamic, ser::to_dynamic, Dynamic, Engine, EvalAltResult, INT};
+use serde::{Deserialize, Serialize};
 
 #[cfg(not(feature = "no_index"))]
 use rhai::Array;
@@ -9,36 +9,115 @@ use rhai::Array;
 use rhai::Map;
 
 #[test]
-fn test_serde_de_primary_types() {
-    assert_eq!(42_u16, from_dynamic(&Dynamic::from(42_u16)).unwrap());
-    assert_eq!(42 as INT, from_dynamic(&(42 as INT).into()).unwrap());
-    assert_eq!(true, from_dynamic(&true.into()).unwrap());
-    assert_eq!((), from_dynamic(&().into()).unwrap());
+fn test_serde_ser_primary_types() -> Result<(), Box<EvalAltResult>> {
+    assert_eq!(
+        to_dynamic(42_u64)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+    assert_eq!(to_dynamic(u64::MAX)?.type_name(), "u64");
+    assert_eq!(
+        to_dynamic(42 as INT)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+    assert_eq!(to_dynamic(true)?.type_name(), "bool");
+    assert_eq!(to_dynamic(())?.type_name(), "()");
 
     #[cfg(not(feature = "no_float"))]
     {
-        assert_eq!(123.456_f64, from_dynamic(&123.456_f64.into()).unwrap());
-        assert_eq!(
-            123.456_f32,
-            from_dynamic(&Dynamic::from(123.456_f32)).unwrap()
-        );
+        assert_eq!(to_dynamic(123.456_f64)?.type_name(), "f64");
+        assert_eq!(to_dynamic(123.456_f32)?.type_name(), "f32");
     }
 
-    assert_eq!(
-        "hello",
-        from_dynamic::<String>(&"hello".to_string().into()).unwrap()
-    );
+    assert_eq!(to_dynamic("hello".to_string())?.type_name(), "string");
+
+    Ok(())
 }
 
 #[test]
 #[cfg(not(feature = "no_index"))]
-fn test_serde_de_array() {
+fn test_serde_ser_array() -> Result<(), Box<EvalAltResult>> {
     let arr: Vec<INT> = vec![123, 456, 42, 999];
-    assert_eq!(arr, from_dynamic::<Vec<INT>>(&arr.clone().into()).unwrap());
+
+    let d = to_dynamic(arr)?;
+    assert!(d.is::<Array>());
+    assert_eq!(d.cast::<Array>().len(), 4);
+
+    Ok(())
 }
 
 #[test]
-fn test_serde_de_struct() {
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_ser_struct() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Debug, Serialize, PartialEq)]
+    struct Hello {
+        a: INT,
+        b: bool,
+    }
+
+    #[derive(Debug, Serialize, PartialEq)]
+    struct Test {
+        int: u32,
+        seq: Vec<String>,
+        obj: Hello,
+    }
+
+    let x = Test {
+        int: 42,
+        seq: vec!["hello".into(), "kitty".into(), "world".into()],
+        obj: Hello { a: 123, b: true },
+    };
+
+    let d = to_dynamic(x)?;
+
+    assert!(d.is::<Map>());
+
+    let mut map = d.cast::<Map>();
+    let mut obj = map.remove("obj").unwrap().cast::<Map>();
+    let mut seq = map.remove("seq").unwrap().cast::<Array>();
+
+    assert_eq!(obj.remove("a").unwrap().cast::<INT>(), 123);
+    assert!(obj.remove("b").unwrap().cast::<bool>());
+    assert_eq!(map.remove("int").unwrap().cast::<INT>(), 42);
+    assert_eq!(seq.len(), 3);
+    assert_eq!(seq.remove(1).cast::<String>(), "kitty");
+
+    Ok(())
+}
+
+#[test]
+fn test_serde_de_primary_types() -> Result<(), Box<EvalAltResult>> {
+    assert_eq!(42_u16, from_dynamic(&Dynamic::from(42_u16))?);
+    assert_eq!(42 as INT, from_dynamic(&(42 as INT).into())?);
+    assert_eq!(true, from_dynamic(&true.into())?);
+    assert_eq!((), from_dynamic(&().into())?);
+
+    #[cfg(not(feature = "no_float"))]
+    {
+        assert_eq!(123.456_f64, from_dynamic(&123.456_f64.into())?);
+        assert_eq!(123.456_f32, from_dynamic(&Dynamic::from(123.456_f32))?);
+    }
+
+    assert_eq!(
+        "hello",
+        from_dynamic::<String>(&"hello".to_string().into())?
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_index"))]
+fn test_serde_de_array() -> Result<(), Box<EvalAltResult>> {
+    let arr: Vec<INT> = vec![123, 456, 42, 999];
+    assert_eq!(arr, from_dynamic::<Vec<INT>>(&arr.clone().into())?);
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_de_struct() -> Result<(), Box<EvalAltResult>> {
     #[derive(Debug, Deserialize, PartialEq)]
     struct Hello {
         a: INT,
@@ -69,10 +148,15 @@ fn test_serde_de_struct() {
         seq: vec!["hello".into(), "kitty".into(), "world".into()],
         obj: Hello { a: 123, b: true },
     };
-    assert_eq!(expected, from_dynamic(&map.into()).unwrap());
+    assert_eq!(expected, from_dynamic(&map.into())?);
+
+    Ok(())
 }
 
 #[test]
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_float"))]
 fn test_serde_de_script() -> Result<(), Box<EvalAltResult>> {
     #[derive(Debug, Deserialize)]
     struct Point {
@@ -102,7 +186,7 @@ fn test_serde_de_script() -> Result<(), Box<EvalAltResult>> {
     )?;
 
     // Convert the 'Dynamic' object map into 'MyStruct'
-    let x: MyStruct = from_dynamic(&result)?;
+    let _: MyStruct = from_dynamic(&result)?;
 
     Ok(())
 }

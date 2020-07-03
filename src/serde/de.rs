@@ -26,8 +26,8 @@ pub struct DynamicDeserializer<'a> {
     value: &'a Dynamic,
 }
 
-impl<'a> DynamicDeserializer<'a> {
-    pub fn from_dynamic(value: &'a Dynamic) -> Self {
+impl<'de> DynamicDeserializer<'de> {
+    pub fn from_dynamic(value: &'de Dynamic) -> Self {
         Self { value }
     }
     pub fn type_error<R, T>(&self) -> Result<T, Box<EvalAltResult>> {

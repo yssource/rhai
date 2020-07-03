@@ -130,6 +130,10 @@ pub mod module_resolvers {
 }
 
 #[cfg(feature = "serde")]
+pub mod ser {
+    pub use crate::serde::ser::to_dynamic;
+}
+#[cfg(feature = "serde")]
 pub mod de {
     pub use crate::serde::de::from_dynamic;
 }
