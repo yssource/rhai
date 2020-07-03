@@ -1701,7 +1701,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         // lhs.func()
         (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
-        (lhs, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
+        (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
     })
 }
 

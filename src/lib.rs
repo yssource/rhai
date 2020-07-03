@@ -87,6 +87,7 @@ pub mod packages;
 mod parser;
 mod result;
 mod scope;
+#[cfg(feature = "serde")]
 mod serde;
 mod stdlib;
 mod token;
