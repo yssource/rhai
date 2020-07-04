@@ -1,6 +1,7 @@
 #[cfg(not(feature = "serde"))]
 fn main() {
-    println!("This example requires the feature `serde`. Use `cargo run --features serde --example serde`.");
+    println!(r#"This example requires the "serde" feature which is not enabled by default."#);
+    println!("Try: cargo run --features serde --example serde");
 }
 
 #[cfg(feature = "serde")]
@@ -14,14 +15,15 @@ fn main() {
 mod example {
     use rhai::{de::from_dynamic, ser::to_dynamic};
     use rhai::{Dynamic, Engine, Map};
+    use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, Serialize, Deserialize)]
     struct Point {
         x: f64,
         y: f64,
     }
 
-    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, Serialize, Deserialize)]
     struct MyStruct {
         a: i64,
         b: Vec<String>,
