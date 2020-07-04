@@ -190,42 +190,38 @@ fn modulo_u<T: Rem>(x: T, y: T) -> FuncReturn<<T as Rem>::Output> {
 // Checked power
 pub(crate) fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
     #[cfg(not(feature = "only_i32"))]
-    {
-        if y > (u32::MAX as INT) {
-            Err(Box::new(EvalAltResult::ErrorArithmetic(
-                format!("Integer raised to too large an index: {} ~ {}", x, y),
+    if y > (u32::MAX as INT) {
+        Err(Box::new(EvalAltResult::ErrorArithmetic(
+            format!("Integer raised to too large an index: {} ~ {}", x, y),
+            Position::none(),
+        )))
+    } else if y < 0 {
+        Err(Box::new(EvalAltResult::ErrorArithmetic(
+            format!("Integer raised to a negative index: {} ~ {}", x, y),
+            Position::none(),
+        )))
+    } else {
+        x.checked_pow(y as u32).ok_or_else(|| {
+            Box::new(EvalAltResult::ErrorArithmetic(
+                format!("Power overflow: {} ~ {}", x, y),
                 Position::none(),
-            )))
-        } else if y < 0 {
-            Err(Box::new(EvalAltResult::ErrorArithmetic(
-                format!("Integer raised to a negative index: {} ~ {}", x, y),
-                Position::none(),
-            )))
-        } else {
-            x.checked_pow(y as u32).ok_or_else(|| {
-                Box::new(EvalAltResult::ErrorArithmetic(
-                    format!("Power overflow: {} ~ {}", x, y),
-                    Position::none(),
-                ))
-            })
-        }
+            ))
+        })
     }
 
     #[cfg(feature = "only_i32")]
-    {
-        if y < 0 {
-            Err(Box::new(EvalAltResult::ErrorArithmetic(
-                format!("Integer raised to a negative index: {} ~ {}", x, y),
+    if y < 0 {
+        Err(Box::new(EvalAltResult::ErrorArithmetic(
+            format!("Integer raised to a negative index: {} ~ {}", x, y),
+            Position::none(),
+        )))
+    } else {
+        x.checked_pow(y as u32).ok_or_else(|| {
+            Box::new(EvalAltResult::ErrorArithmetic(
+                format!("Power overflow: {} ~ {}", x, y),
                 Position::none(),
-            )))
-        } else {
-            x.checked_pow(y as u32).ok_or_else(|| {
-                Box::new(EvalAltResult::ErrorArithmetic(
-                    format!("Power overflow: {} ~ {}", x, y),
-                    Position::none(),
-                ))
-            })
-        }
+            ))
+        })
     }
 }
 // Unchecked integer power - may panic on overflow or if the power index is too high (> u32::MAX)

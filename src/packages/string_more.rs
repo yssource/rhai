@@ -231,15 +231,13 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
             // Check if string will be over max size limit
             #[cfg(not(feature = "unchecked"))]
-            {
-                if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
-                    return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                        "Length of string".to_string(),
-                        engine.max_string_size,
-                        len as usize,
-                        Position::none(),
-                    )));
-                }
+            if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
+                return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                    "Length of string".to_string(),
+                    engine.max_string_size,
+                    len as usize,
+                    Position::none(),
+                )));
             }
 
             if len > 0 {

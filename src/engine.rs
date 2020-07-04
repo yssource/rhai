@@ -353,17 +353,14 @@ pub fn make_getter(id: &str) -> String {
 /// Extract the property name from a getter function name.
 fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    {
-        if fn_name.starts_with(FN_GET) {
-            Some(&fn_name[FN_GET.len()..])
-        } else {
-            None
-        }
-    }
-    #[cfg(feature = "no_object")]
-    {
+    if fn_name.starts_with(FN_GET) {
+        Some(&fn_name[FN_GET.len()..])
+    } else {
         None
     }
+
+    #[cfg(feature = "no_object")]
+    None
 }
 
 /// Make setter function
@@ -374,17 +371,14 @@ pub fn make_setter(id: &str) -> String {
 /// Extract the property name from a setter function name.
 fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    {
-        if fn_name.starts_with(FN_SET) {
-            Some(&fn_name[FN_SET.len()..])
-        } else {
-            None
-        }
-    }
-    #[cfg(feature = "no_object")]
-    {
+    if fn_name.starts_with(FN_SET) {
+        Some(&fn_name[FN_SET.len()..])
+    } else {
         None
     }
+
+    #[cfg(feature = "no_object")]
+    None
 }
 
 /// Print/debug to stdout
@@ -701,12 +695,10 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        {
-            if level > self.max_call_stack_depth {
-                return Err(Box::new(
-                    EvalAltResult::ErrorStackOverflow(Position::none()),
-                ));
-            }
+        if level > self.max_call_stack_depth {
+            return Err(Box::new(
+                EvalAltResult::ErrorStackOverflow(Position::none()),
+            ));
         }
 
         let mut this_copy: Dynamic = Default::default();
@@ -2344,21 +2336,19 @@ impl Engine {
                     .try_cast::<ImmutableString>()
                 {
                     #[cfg(not(feature = "no_module"))]
-                    {
-                        if let Some(resolver) = &self.module_resolver {
-                            let mut module = resolver.resolve(self, &path, expr.position())?;
-                            module.index_all_sub_modules();
-                            mods.push((name.clone().into(), module));
+                    if let Some(resolver) = &self.module_resolver {
+                        let mut module = resolver.resolve(self, &path, expr.position())?;
+                        module.index_all_sub_modules();
+                        mods.push((name.clone().into(), module));
 
-                            state.modules += 1;
+                        state.modules += 1;
 
-                            Ok(Default::default())
-                        } else {
-                            Err(Box::new(EvalAltResult::ErrorModuleNotFound(
-                                path.to_string(),
-                                expr.position(),
-                            )))
-                        }
+                        Ok(Default::default())
+                    } else {
+                        Err(Box::new(EvalAltResult::ErrorModuleNotFound(
+                            path.to_string(),
+                            expr.position(),
+                        )))
                     }
 
                     #[cfg(feature = "no_module")]
@@ -2509,13 +2499,11 @@ impl Engine {
         state.operations += 1;
 
         #[cfg(not(feature = "unchecked"))]
-        {
-            // Guard against too many operations
-            if self.max_operations > 0 && state.operations > self.max_operations {
-                return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
-                    Position::none(),
-                )));
-            }
+        // Guard against too many operations
+        if self.max_operations > 0 && state.operations > self.max_operations {
+            return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
+                Position::none(),
+            )));
         }
 
         // Report progress - only in steps
@@ -2641,26 +2629,24 @@ fn run_builtin_binary_op(
     }
 
     #[cfg(not(feature = "no_float"))]
-    {
-        if args_type == TypeId::of::<FLOAT>() {
-            let x = *x.downcast_ref::<FLOAT>().unwrap();
-            let y = *y.downcast_ref::<FLOAT>().unwrap();
+    if args_type == TypeId::of::<FLOAT>() {
+        let x = *x.downcast_ref::<FLOAT>().unwrap();
+        let y = *y.downcast_ref::<FLOAT>().unwrap();
 
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                "-" => return Ok(Some((x - y).into())),
-                "*" => return Ok(Some((x * y).into())),
-                "/" => return Ok(Some((x / y).into())),
-                "%" => return Ok(Some((x % y).into())),
-                "~" => return pow_f_f(x, y).map(Into::into).map(Some),
-                "==" => return Ok(Some((x == y).into())),
-                "!=" => return Ok(Some((x != y).into())),
-                ">" => return Ok(Some((x > y).into())),
-                ">=" => return Ok(Some((x >= y).into())),
-                "<" => return Ok(Some((x < y).into())),
-                "<=" => return Ok(Some((x <= y).into())),
-                _ => (),
-            }
+        match op {
+            "+" => return Ok(Some((x + y).into())),
+            "-" => return Ok(Some((x - y).into())),
+            "*" => return Ok(Some((x * y).into())),
+            "/" => return Ok(Some((x / y).into())),
+            "%" => return Ok(Some((x % y).into())),
+            "~" => return pow_f_f(x, y).map(Into::into).map(Some),
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            _ => (),
         }
     }
 
@@ -2737,20 +2723,18 @@ fn run_builtin_op_assignment(
     }
 
     #[cfg(not(feature = "no_float"))]
-    {
-        if args_type == TypeId::of::<FLOAT>() {
-            let x = x.downcast_mut::<FLOAT>().unwrap();
-            let y = *y.downcast_ref::<FLOAT>().unwrap();
+    if args_type == TypeId::of::<FLOAT>() {
+        let x = x.downcast_mut::<FLOAT>().unwrap();
+        let y = *y.downcast_ref::<FLOAT>().unwrap();
 
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                "-=" => return Ok(Some(*x -= y)),
-                "*=" => return Ok(Some(*x *= y)),
-                "/=" => return Ok(Some(*x /= y)),
-                "%=" => return Ok(Some(*x %= y)),
-                "~=" => return Ok(Some(*x = pow_f_f(*x, y)?)),
-                _ => (),
-            }
+        match op {
+            "+=" => return Ok(Some(*x += y)),
+            "-=" => return Ok(Some(*x -= y)),
+            "*=" => return Ok(Some(*x *= y)),
+            "/=" => return Ok(Some(*x /= y)),
+            "%=" => return Ok(Some(*x %= y)),
+            "~=" => return Ok(Some(*x = pow_f_f(*x, y)?)),
+            _ => (),
         }
     }
 

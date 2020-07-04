@@ -27,13 +27,9 @@ pub type Shared<T> = Arc<T>;
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     #[cfg(not(feature = "sync"))]
-    {
-        Rc::make_mut(value)
-    }
+    return Rc::make_mut(value);
     #[cfg(feature = "sync")]
-    {
-        Arc::make_mut(value)
-    }
+    return Arc::make_mut(value);
 }
 
 /// Consume a `Shared` resource, assuming that it is unique (i.e. not shared).
@@ -43,13 +39,9 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
 /// Panics if the resource is shared (i.e. has other outstanding references).
 pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
     #[cfg(not(feature = "sync"))]
-    {
-        Rc::try_unwrap(value).map_err(|_| ()).unwrap()
-    }
+    return Rc::try_unwrap(value).map_err(|_| ()).unwrap();
     #[cfg(feature = "sync")]
-    {
-        Arc::try_unwrap(value).map_err(|_| ()).unwrap()
-    }
+    return Arc::try_unwrap(value).map_err(|_| ()).unwrap();
 }
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];

@@ -1495,13 +1495,9 @@ fn parse_unary(
                         .map(|i| Expr::IntegerConstant(Box::new((i, pos))))
                         .or_else(|| {
                             #[cfg(not(feature = "no_float"))]
-                            {
-                                Some(Expr::FloatConstant(Box::new((-(x.0 as FLOAT), pos))))
-                            }
+                            return Some(Expr::FloatConstant(Box::new((-(x.0 as FLOAT), pos))));
                             #[cfg(feature = "no_float")]
-                            {
-                                None
-                            }
+                            return None;
                         })
                         .ok_or_else(|| LexError::MalformedNumber(format!("-{}", x.0)).into_err(pos))
                 }
@@ -2618,7 +2614,6 @@ impl Engine {
                 };
 
                 match input.peek().unwrap() {
-                    #[cfg(not(feature = "no_function"))]
                     (Token::Fn, pos) => {
                         let mut state = ParseState::new(
                             self.max_function_expr_depth,

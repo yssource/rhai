@@ -346,10 +346,8 @@ impl Dynamic {
         }
 
         #[cfg(not(feature = "no_float"))]
-        {
-            if let Some(result) = <dyn Any>::downcast_ref::<FLOAT>(&value) {
-                return result.clone().into();
-            }
+        if let Some(result) = <dyn Any>::downcast_ref::<FLOAT>(&value) {
+            return result.clone().into();
         }
 
         let mut boxed = Box::new(value);

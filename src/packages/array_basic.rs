@@ -30,15 +30,13 @@ fn pad<T: Variant + Clone>(engine: &Engine, args: &mut [&mut Dynamic]) -> FuncRe
 
     // Check if array will be over max size limit
     #[cfg(not(feature = "unchecked"))]
-    {
-        if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
-            return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                engine.max_array_size,
-                len as usize,
-                Position::none(),
-            )));
-        }
+    if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
+        return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+            "Size of array".to_string(),
+            engine.max_array_size,
+            len as usize,
+            Position::none(),
+        )));
     }
 
     if len > 0 {

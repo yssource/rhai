@@ -22,7 +22,7 @@ Fast
 
 * Fairly low compile-time overhead.
 
-* Fairly efficient evaluation (1 million iterations in 0.4 sec on a single core, 2.3 GHz Linux VM).
+* Fairly efficient evaluation (1 million iterations in 0.3 sec on a single core, 2.3 GHz Linux VM).
 
 * Scripts are [optimized][script optimization] (useful for template-based machine-generated scripts) for repeated evaluations.
 
