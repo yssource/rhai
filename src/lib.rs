@@ -125,17 +125,23 @@ pub use parser::FLOAT;
 pub use module::ModuleResolver;
 
 /// Module containing all built-in _module resolvers_ available to Rhai.
+///
+/// Not available under the `no_module` feature.
 #[cfg(not(feature = "no_module"))]
 pub mod module_resolvers {
     pub use crate::module::resolvers::*;
 }
 
 /// Serialization support for [`serde`](https://crates.io/crates/serde).
+///
+/// Requires the `serde` feature.
 #[cfg(feature = "serde")]
 pub mod ser {
     pub use crate::serde::ser::to_dynamic;
 }
 /// Deserialization support for [`serde`](https://crates.io/crates/serde).
+///
+/// Requires the `serde` feature.
 #[cfg(feature = "serde")]
 pub mod de {
     pub use crate::serde::de::from_dynamic;

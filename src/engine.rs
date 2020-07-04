@@ -216,6 +216,7 @@ impl State {
 }
 
 /// Get a script-defined function definition from a module.
+#[cfg(not(feature = "no_function"))]
 pub fn get_script_function_by_signature<'a>(
     module: &'a Module,
     name: &str,
@@ -767,22 +768,23 @@ impl Engine {
         .or_else(|| self.packages.get_fn(hash_fn));
 
         if let Some(func) = func {
-            // Calling pure function but the first argument is a reference?
-            normalize_first_arg(
-                is_ref && (func.is_pure() || (func.is_script() && !is_method)),
-                &mut this_copy,
-                &mut old_this_ptr,
-                args,
-            );
+            #[cfg(not(feature = "no_function"))]
+            let need_normalize = is_ref && (func.is_pure() || (func.is_script() && !is_method));
+            #[cfg(feature = "no_function")]
+            let need_normalize = is_ref && func.is_pure();
 
+            // Calling pure function but the first argument is a reference?
+            normalize_first_arg(need_normalize, &mut this_copy, &mut old_this_ptr, args);
+
+            #[cfg(not(feature = "no_function"))]
             if func.is_script() {
                 // Run scripted function
                 let fn_def = func.get_fn_def();
 
                 // Method call of script function - map first argument to `this`
-                if is_method {
+                return if is_method {
                     let (first, rest) = args.split_at_mut(1);
-                    return Ok((
+                    Ok((
                         self.call_script_fn(
                             scope,
                             mods,
@@ -795,7 +797,7 @@ impl Engine {
                             level,
                         )?,
                         false,
-                    ));
+                    ))
                 } else {
                     let result = self.call_script_fn(
                         scope, mods, state, lib, &mut None, fn_name, fn_def, args, level,
@@ -804,42 +806,42 @@ impl Engine {
                     // Restore the original reference
                     restore_first_arg(old_this_ptr, args);
 
-                    return Ok((result, false));
+                    Ok((result, false))
                 };
-            } else {
-                // Run external function
-                let result = func.get_native_fn()(self, args)?;
-
-                // Restore the original reference
-                restore_first_arg(old_this_ptr, args);
-
-                // See if the function match print/debug (which requires special processing)
-                return Ok(match fn_name {
-                    KEYWORD_PRINT => (
-                        (self.print)(result.as_str().map_err(|typ| {
-                            Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                Position::none(),
-                            ))
-                        })?)
-                        .into(),
-                        false,
-                    ),
-                    KEYWORD_DEBUG => (
-                        (self.debug)(result.as_str().map_err(|typ| {
-                            Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                Position::none(),
-                            ))
-                        })?)
-                        .into(),
-                        false,
-                    ),
-                    _ => (result, func.is_method()),
-                });
             }
+
+            // Run external function
+            let result = func.get_native_fn()(self, args)?;
+
+            // Restore the original reference
+            restore_first_arg(old_this_ptr, args);
+
+            // See if the function match print/debug (which requires special processing)
+            return Ok(match fn_name {
+                KEYWORD_PRINT => (
+                    (self.print)(result.as_str().map_err(|typ| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            self.map_type_name(type_name::<ImmutableString>()).into(),
+                            typ.into(),
+                            Position::none(),
+                        ))
+                    })?)
+                    .into(),
+                    false,
+                ),
+                KEYWORD_DEBUG => (
+                    (self.debug)(result.as_str().map_err(|typ| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            self.map_type_name(type_name::<ImmutableString>()).into(),
+                            typ.into(),
+                            Position::none(),
+                        ))
+                    })?)
+                    .into(),
+                    false,
+                ),
+                _ => (result, func.is_method()),
+            });
         }
 
         // See if it is built in.
@@ -2016,6 +2018,7 @@ impl Engine {
                 };
 
                 match func {
+                    #[cfg(not(feature = "no_function"))]
                     Ok(f) if f.is_script() => {
                         let args = args.as_mut();
                         let fn_def = f.get_fn_def();

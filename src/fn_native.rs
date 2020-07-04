@@ -114,6 +114,7 @@ pub enum CallableFunction {
     /// An iterator function.
     Iterator(IteratorFn),
     /// A script-defined function.
+    #[cfg(not(feature = "no_function"))]
     Script(Shared<ScriptFnDef>),
 }
 
@@ -123,6 +124,8 @@ impl fmt::Debug for CallableFunction {
             Self::Pure(_) => write!(f, "NativePureFunction"),
             Self::Method(_) => write!(f, "NativeMethod"),
             Self::Iterator(_) => write!(f, "NativeIterator"),
+
+            #[cfg(not(feature = "no_function"))]
             Self::Script(fn_def) => fmt::Debug::fmt(fn_def, f),
         }
     }
@@ -134,6 +137,8 @@ impl fmt::Display for CallableFunction {
             Self::Pure(_) => write!(f, "NativePureFunction"),
             Self::Method(_) => write!(f, "NativeMethod"),
             Self::Iterator(_) => write!(f, "NativeIterator"),
+
+            #[cfg(not(feature = "no_function"))]
             CallableFunction::Script(s) => fmt::Display::fmt(s, f),
         }
     }
@@ -144,24 +149,34 @@ impl CallableFunction {
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Pure(_) => true,
-            Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
+            Self::Method(_) | Self::Iterator(_) => false,
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => false,
         }
     }
     /// Is this a native Rust method function?
     pub fn is_method(&self) -> bool {
         match self {
             Self::Method(_) => true,
-            Self::Pure(_) | Self::Iterator(_) | Self::Script(_) => false,
+            Self::Pure(_) | Self::Iterator(_) => false,
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => false,
         }
     }
     /// Is this an iterator function?
     pub fn is_iter(&self) -> bool {
         match self {
             Self::Iterator(_) => true,
-            Self::Pure(_) | Self::Method(_) | Self::Script(_) => false,
+            Self::Pure(_) | Self::Method(_) => false,
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => false,
         }
     }
     /// Is this a Rhai-scripted function?
+    #[cfg(not(feature = "no_function"))]
     pub fn is_script(&self) -> bool {
         match self {
             Self::Script(_) => true,
@@ -176,7 +191,10 @@ impl CallableFunction {
     pub fn get_native_fn(&self) -> &FnAny {
         match self {
             Self::Pure(f) | Self::Method(f) => f.as_ref(),
-            Self::Iterator(_) | Self::Script(_) => unreachable!(),
+            Self::Iterator(_) => unreachable!(),
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => unreachable!(),
         }
     }
     /// Get a shared reference to a script-defined function definition.
@@ -184,6 +202,7 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Script`.
+    #[cfg(not(feature = "no_function"))]
     pub fn get_shared_fn_def(&self) -> Shared<ScriptFnDef> {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
@@ -195,6 +214,7 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Script`.
+    #[cfg(not(feature = "no_function"))]
     pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
@@ -209,7 +229,10 @@ impl CallableFunction {
     pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
             Self::Iterator(f) => *f,
-            Self::Pure(_) | Self::Method(_) | Self::Script(_) => unreachable!(),
+            Self::Pure(_) | Self::Method(_) => unreachable!(),
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => unreachable!(),
         }
     }
     /// Create a new `CallableFunction::Pure`.
@@ -228,12 +251,14 @@ impl From<IteratorFn> for CallableFunction {
     }
 }
 
+#[cfg(not(feature = "no_function"))]
 impl From<ScriptFnDef> for CallableFunction {
     fn from(func: ScriptFnDef) -> Self {
         Self::Script(func.into())
     }
 }
 
+#[cfg(not(feature = "no_function"))]
 impl From<Shared<ScriptFnDef>> for CallableFunction {
     fn from(func: Shared<ScriptFnDef>) -> Self {
         Self::Script(func)

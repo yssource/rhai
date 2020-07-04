@@ -29,7 +29,7 @@ Features
 * Fairly efficient evaluation (1 million iterations in 0.4 sec on a single core, 2.3 GHz Linux VM).
 * Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
   one single source file, all with names starting with `"unsafe_"`).
-* Re-entrant scripting engine can be made `Send + Sync` (via the [`sync`] feature).
+* Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
 * Sand-boxed - the scripting engine, if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 * Rugged - protected against malicious attacks (such as [stack-overflow](https://schungx.github.io/rhai/safety/max-call-stack.html), [over-sized data](https://schungx.github.io/rhai/safety/max-string-size.html), and [runaway scripts](https://schungx.github.io/rhai/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://schungx.github.io/rhai/safety/progress.html) and manually terminate a script run.
@@ -38,7 +38,7 @@ Features
 * Dynamic dispatch via [function pointers](https://schungx.github.io/rhai/language/fn-ptr.html).
 * Some support for [object-oriented programming (OOP)](https://schungx.github.io/rhai/language/oop.html).
 * Organize code base with dynamically-loadable [modules](https://schungx.github.io/rhai/language/modules.html).
-* Serialization/deserialization support via [serde](https://crates.io/crates/serde)
+* Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).
 * Scripts are [optimized](https://schungx.github.io/rhai/engine/optimize.html) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](https://schungx.github.io/rhai/start/builds/minimal.html) by excluding unneeded language [features](https://schungx.github.io/rhai/start/features.html).
 

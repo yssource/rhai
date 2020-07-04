@@ -1,10 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{
-    get_script_function_by_signature, make_getter, make_setter, Engine, Imports, State, FN_IDX_GET,
-    FN_IDX_SET,
-};
+use crate::engine::{make_getter, make_setter, Engine, Imports, State, FN_IDX_GET, FN_IDX_SET};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
@@ -18,6 +15,9 @@ use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
+
+#[cfg(not(feature = "no_function"))]
+use crate::engine::get_script_function_by_signature;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -1189,6 +1189,7 @@ impl Engine {
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
@@ -1240,12 +1241,16 @@ impl Engine {
         mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
+        #[cfg(not(feature = "no_function"))]
         let lib = ast
             .lib()
             .iter_fn()
             .filter(|(_, _, _, f)| f.is_script())
             .map(|(_, _, _, f)| f.get_fn_def().clone())
             .collect();
+
+        #[cfg(feature = "no_function")]
+        let lib = Default::default();
 
         let stmt = mem::take(ast.statements_mut());
         optimize_into_ast(self, scope, stmt, lib, optimization_level)
