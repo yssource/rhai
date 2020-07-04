@@ -4,10 +4,19 @@ Rhai Release Notes
 Version 0.17.0
 ==============
 
+This version adds [`serde`](https://crates.io/crates/serde) support for working with `Dynamic` values (particularly _object maps_).
+
 Breaking changes
 ----------------
 
 * `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
+
+New features
+------------
+
+* New `serde` feature to allow serializating/deserializating to/from `Dynamic` values using [`serde`](https://crates.io/crates/serde).
+  This is particularly useful when converting a Rust `struct` to a `Dynamic` _object map_ and back.
+
 
 Version 0.16.1
 ==============

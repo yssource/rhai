@@ -13,15 +13,20 @@ A [`Dynamic`] can be seamlessly converted to and from a type that implements `se
 Serialization
 -------------
 
-While it is simple to serialize a Rust type to `JSON` via `serde`,
-then use [`Engine::parse_json`]({{rootUrl}}/language/json.md) to convert it into an [object map],
-Rhai supports serializing a [`Dynamic`] directly via `serde` without going through the `JSON` step.
-
-The function `rhai::see::to_dynamic` automatically converts any Rust type that implements `serde::Serialize`
+The function `rhai::ser::to_dynamic` automatically converts any Rust type that implements `serde::Serialize`
 into a [`Dynamic`].
+
+This is usually not necessary because using [`Dynamic::from`][`Dynamic`] is much easier and is essentially
+the same thing.  The only difference is treatment for integer values.  `Dynamic::from` will keep the different
+integer types intact, while `rhai::ser::to_dynamic` will convert them all into [`INT`][standard types]
+(i.e. the system integer type which is `i64` or `i32` depending on the [`only_i32`] feature).
 
 In particular, Rust `struct`'s (or any type that is marked as a `serde` map) are converted into [object maps]
 while Rust `Vec`'s (or any type that is marked as a `serde` sequence) are converted into [arrays].
+
+While it is also simple to serialize a Rust type to `JSON` via `serde`,
+then use [`Engine::parse_json`]({{rootUrl}}/language/json.md) to convert it into an [object map],
+`rhai::ser::to_dynamic` serializes it to [`Dynamic`] directly via `serde` without going through the `JSON` step.
 
 ```rust
 use rhai::{Dynamic, Map};

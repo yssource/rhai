@@ -21,7 +21,7 @@ num-traits = { version = "0.2.11", default-features = false }
 
 [features]
 #default = ["unchecked", "sync", "no_optimize", "no_float", "only_i32", "no_index", "no_object", "no_function", "no_module"]
-default = []
+default = ["serde"]
 plugins = []
 unchecked = []      # unchecked arithmetic
 sync = []           # restrict to only types that implement Send + Sync
@@ -73,3 +73,9 @@ optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 instant= { version = "0.1.4", features = ["wasm-bindgen"] } # WASM implementation of std::time::Instant
+
+[package.metadata.docs.rs]
+features = ["serde"]
+
+[package.metadata.playground]
+features = ["serde"]

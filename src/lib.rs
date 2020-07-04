@@ -63,7 +63,7 @@
 //! | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                  |
 //! | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                              |
 //! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and [`AST`] are all `Send + Sync`. |
-//! | `serde`       | Enable serialization/deserialization via [`serde`]. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies. |
+//! | `serde`       | Enable serialization/deserialization via `serde`. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies. |
 //! | `internals`   | Expose internal data structures (beware they may be volatile from version to version).                                            |
 //!
 //! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai script engine and language.
@@ -130,10 +130,12 @@ pub mod module_resolvers {
     pub use crate::module::resolvers::*;
 }
 
+/// Serialization support for [`serde`](https://crates.io/crates/serde).
 #[cfg(feature = "serde")]
 pub mod ser {
     pub use crate::serde::ser::to_dynamic;
 }
+/// Deserialization support for [`serde`](https://crates.io/crates/serde).
 #[cfg(feature = "serde")]
 pub mod de {
     pub use crate::serde::de::from_dynamic;
