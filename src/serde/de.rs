@@ -7,7 +7,10 @@ use crate::result::EvalAltResult;
 use crate::token::Position;
 use crate::utils::ImmutableString;
 
-use serde::de::{DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Visitor};
+use serde::de::{
+    DeserializeSeed, Deserializer, EnumAccess, Error, IntoDeserializer, MapAccess, SeqAccess,
+    VariantAccess, Visitor,
+};
 use serde::Deserialize;
 
 #[cfg(not(feature = "no_index"))]
@@ -384,9 +387,30 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _: V,
+        visitor: V,
     ) -> Result<V::Value, Box<EvalAltResult>> {
-        self.type_error()
+        if let Ok(s) = self.value.as_str() {
+            visitor.visit_enum(s.into_deserializer())
+        } else {
+            #[cfg(not(feature = "no_object"))]
+            if let Some(map) = self.value.downcast_ref::<Map>() {
+                let mut iter = map.iter();
+                let first = iter.next();
+                let second = iter.next();
+                if let (Some((key, value)), None) = (first, second) {
+                    visitor.visit_enum(EnumDeserializer {
+                        tag: &key,
+                        content: DynamicDeserializer::from_dynamic(value),
+                    })
+                } else {
+                    self.type_error()
+                }
+            } else {
+                self.type_error()
+            }
+            #[cfg(feature = "no_object")]
+            return self.type_error();
+        }
     }
 
     fn deserialize_identifier<V: Visitor<'de>>(
@@ -492,5 +516,59 @@ where
         seed.deserialize(&mut DynamicDeserializer::from_dynamic(
             self.values.next().unwrap(),
         ))
+    }
+}
+
+#[cfg(not(feature = "no_object"))]
+struct EnumDeserializer<'t, 'de: 't> {
+    tag: &'t str,
+    content: DynamicDeserializer<'de>,
+}
+
+#[cfg(not(feature = "no_object"))]
+impl<'t, 'de> EnumAccess<'de> for EnumDeserializer<'t, 'de> {
+    type Error = Box<EvalAltResult>;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        seed.deserialize(self.tag.into_deserializer())
+            .map(|v| (v, self))
+    }
+}
+
+#[cfg(not(feature = "no_object"))]
+impl<'t, 'de> VariantAccess<'de> for EnumDeserializer<'t, 'de> {
+    type Error = Box<EvalAltResult>;
+
+    fn unit_variant(mut self) -> Result<(), Self::Error> {
+        Deserialize::deserialize(&mut self.content)
+    }
+
+    fn newtype_variant_seed<T>(mut self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        seed.deserialize(&mut self.content)
+    }
+
+    fn tuple_variant<V>(mut self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.content.deserialize_tuple(len, visitor)
+    }
+
+    fn struct_variant<V>(
+        mut self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.content.deserialize_struct("", fields, visitor)
     }
 }
