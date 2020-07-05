@@ -89,6 +89,7 @@ mod result;
 mod scope;
 #[cfg(feature = "serde")]
 mod serde;
+mod settings;
 mod stdlib;
 mod token;
 mod r#unsafe;

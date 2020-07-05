@@ -6,7 +6,7 @@ use crate::error::ParseErrorType;
 use crate::fn_native::{CallableFunction, Callback, FnCallArgs, FnPtr};
 use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
 use crate::optimize::OptimizationLevel;
-use crate::packages::{Package, PackageLibrary, PackagesCollection, StandardPackage};
+use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, Stmt, AST, INT};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
@@ -21,7 +21,7 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     borrow::Cow,
     boxed::Box,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     format,
     iter::{empty, once},
     mem,
@@ -266,7 +266,10 @@ pub struct Engine {
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
-    pub(crate) type_names: HashMap<String, String>,
+    pub(crate) type_names: Option<HashMap<String, String>>,
+
+    /// A hash-set containing tokens to disable.
+    pub(crate) disable_tokens: Option<HashSet<String>>,
 
     /// Callback closure for implementing the `print` command.
     pub(crate) print: Callback<str, ()>,
@@ -313,7 +316,8 @@ impl Default for Engine {
             #[cfg(any(feature = "no_module", feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
 
-            type_names: Default::default(),
+            type_names: None,
+            disable_tokens: None,
 
             // default print/debug implementations
             print: Box::new(default_print),
@@ -492,7 +496,9 @@ impl Engine {
             global_module: Default::default(),
             module_resolver: None,
 
-            type_names: Default::default(),
+            type_names: None,
+            disable_tokens: None,
+
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
             progress: None,
@@ -512,158 +518,6 @@ impl Engine {
             max_array_size: 0,
             max_map_size: 0,
         }
-    }
-
-    /// Load a new package into the `Engine`.
-    ///
-    /// When searching for functions, packages loaded later are preferred.
-    /// In other words, loaded packages are searched in reverse order.
-    pub fn load_package(&mut self, package: PackageLibrary) {
-        // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package);
-    }
-
-    /// Load a new package into the `Engine`.
-    ///
-    /// When searching for functions, packages loaded later are preferred.
-    /// In other words, loaded packages are searched in reverse order.
-    pub fn load_packages(&mut self, package: PackageLibrary) {
-        // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package);
-    }
-
-    /// Control whether and how the `Engine` will optimize an AST after compilation.
-    ///
-    /// Not available under the `no_optimize` feature.
-    #[cfg(not(feature = "no_optimize"))]
-    pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) {
-        self.optimization_level = optimization_level
-    }
-
-    /// The current optimization level.
-    /// It controls whether and how the `Engine` will optimize an AST after compilation.
-    ///
-    /// Not available under the `no_optimize` feature.
-    #[cfg(not(feature = "no_optimize"))]
-    pub fn optimization_level(&self) -> OptimizationLevel {
-        self.optimization_level
-    }
-
-    /// Set the maximum levels of function calls allowed for a script in order to avoid
-    /// infinite recursion and stack overflows.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_call_levels(&mut self, levels: usize) {
-        self.max_call_stack_depth = levels
-    }
-
-    /// The maximum levels of function calls allowed for a script.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_call_levels(&self) -> usize {
-        self.max_call_stack_depth
-    }
-
-    /// Set the maximum number of operations allowed for a script to run to avoid
-    /// consuming too much resources (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_operations(&mut self, operations: u64) {
-        self.max_operations = if operations == u64::MAX {
-            0
-        } else {
-            operations
-        };
-    }
-
-    /// The maximum number of operations allowed for a script to run (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_operations(&self) -> u64 {
-        self.max_operations
-    }
-
-    /// Set the maximum number of imported modules allowed for a script.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_modules(&mut self, modules: usize) {
-        self.max_modules = modules;
-    }
-
-    /// The maximum number of imported modules allowed for a script.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_modules(&self) -> usize {
-        self.max_modules
-    }
-
-    /// Set the depth limits for expressions (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_expr_depths(&mut self, max_expr_depth: usize, max_function_expr_depth: usize) {
-        self.max_expr_depth = if max_expr_depth == usize::MAX {
-            0
-        } else {
-            max_expr_depth
-        };
-        self.max_function_expr_depth = if max_function_expr_depth == usize::MAX {
-            0
-        } else {
-            max_function_expr_depth
-        };
-    }
-
-    /// The depth limit for expressions (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_expr_depth(&self) -> usize {
-        self.max_expr_depth
-    }
-
-    /// The depth limit for expressions in functions (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_function_expr_depth(&self) -> usize {
-        self.max_function_expr_depth
-    }
-
-    /// Set the maximum length of strings (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_string_size(&mut self, max_size: usize) {
-        self.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
-    }
-
-    /// The maximum length of strings (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_string_size(&self) -> usize {
-        self.max_string_size
-    }
-
-    /// Set the maximum length of arrays (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_index"))]
-    pub fn set_max_array_size(&mut self, max_size: usize) {
-        self.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
-    }
-
-    /// The maximum length of arrays (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_index"))]
-    pub fn max_array_size(&self) -> usize {
-        self.max_array_size
-    }
-
-    /// Set the maximum length of object maps (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_object"))]
-    pub fn set_max_map_size(&mut self, max_size: usize) {
-        self.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
-    }
-
-    /// The maximum length of object maps (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_object"))]
-    pub fn max_map_size(&self) -> usize {
-        self.max_map_size
-    }
-
-    /// Set the module resolution service used by the `Engine`.
-    ///
-    /// Not available under the `no_module` feature.
-    #[cfg(not(feature = "no_module"))]
-    pub fn set_module_resolver(&mut self, resolver: Option<impl ModuleResolver + 'static>) {
-        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn ModuleResolver>);
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
@@ -2520,8 +2374,8 @@ impl Engine {
     /// Map a type_name into a pretty-print name
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
-            .get(name)
-            .map(String::as_str)
+            .as_ref()
+            .and_then(|t| t.get(name).map(String::as_str))
             .unwrap_or(map_std_type_name(name))
     }
 }

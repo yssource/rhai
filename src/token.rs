@@ -10,7 +10,9 @@ use crate::parser::FLOAT;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    char, fmt,
+    char,
+    collections::HashSet,
+    fmt,
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
@@ -19,7 +21,7 @@ use crate::stdlib::{
 
 type LERR = LexError;
 
-pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
+pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
 
 /// A location (line number + character position) in the input script.
 ///
@@ -137,7 +139,7 @@ pub enum Token {
     FloatConstant(FLOAT),
     Identifier(String),
     CharConstant(char),
-    StringConst(String),
+    StringConstant(String),
     LeftBrace,
     RightBrace,
     LeftParen,
@@ -226,8 +228,8 @@ impl Token {
             CharConstant(c) => c.to_string().into(),
             LexError(err) => err.to_string().into(),
 
-            token => (match token {
-                StringConst(_) => "string",
+            token => match token {
+                StringConstant(_) => "string",
                 LeftBrace => "{",
                 RightBrace => "}",
                 LeftParen => "(",
@@ -292,13 +294,15 @@ impl Token {
                 PowerOfAssign => "~=",
                 #[cfg(not(feature = "no_function"))]
                 Private => "private",
+                #[cfg(not(feature = "no_module"))]
                 Import => "import",
                 #[cfg(not(feature = "no_module"))]
                 Export => "export",
+                #[cfg(not(feature = "no_module"))]
                 As => "as",
                 EOF => "{EOF}",
                 _ => unreachable!("operator should be match in outer scope"),
-            })
+            }
             .into(),
         }
     }
@@ -422,6 +426,41 @@ impl Token {
             _ => false,
         }
     }
+
+    /// Is this token an operator?
+    pub fn is_operator(&self) -> bool {
+        use Token::*;
+
+        match self {
+            LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
+            | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
+            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | MapStart | Equals
+            | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo
+            | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
+            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
+            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
+
+            _ => false,
+        }
+    }
+
+    /// Is this token a keyword?
+    pub fn is_keyword(&self) -> bool {
+        use Token::*;
+
+        match self {
+            #[cfg(not(feature = "no_function"))]
+            Fn | Private => true,
+
+            #[cfg(not(feature = "no_module"))]
+            Import | Export | As => true,
+
+            True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
+            | Return | Throw => true,
+
+            _ => false,
+        }
+    }
 }
 
 impl From<Token> for String {
@@ -431,7 +470,7 @@ impl From<Token> for String {
 }
 
 /// State of the tokenizer.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string (0 = unlimited).
     pub max_string_size: usize,
@@ -644,7 +683,7 @@ pub fn get_next_token(
     let result = get_next_token_inner(stream, state, pos);
 
     // Save the last token's state
-    if let Some((token, _)) = &result {
+    if let Some((ref token, _)) = result {
         state.non_unary = !token.is_next_unary();
     }
 
@@ -848,7 +887,7 @@ fn get_next_token_inner(
             ('"', _) => return parse_string_literal(stream, state, pos, '"')
                                 .map_or_else(
                                     |err| Some((Token::LexError(Box::new(err.0)), err.1)),
-                                    |out| Some((Token::StringConst(out), start_pos)),
+                                    |out| Some((Token::StringConstant(out), start_pos)),
                                 ),
 
             // ' - character literal
@@ -1118,7 +1157,7 @@ fn get_next_token_inner(
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),
-            (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(ch))), start_pos)),
+            (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedInput(ch.to_string()))), start_pos)),
         }
     }
 
@@ -1172,7 +1211,9 @@ impl InputStream for MultiInputsStream<'_> {
 }
 
 /// An iterator on a `Token` stream.
-pub struct TokenIterator<'a> {
+pub struct TokenIterator<'a, 't> {
+    /// Disable certain tokens.
+    pub disable_tokens: Option<&'t HashSet<String>>,
     /// Current state.
     state: TokenizeState,
     /// Current position.
@@ -1181,17 +1222,49 @@ pub struct TokenIterator<'a> {
     stream: MultiInputsStream<'a>,
 }
 
-impl<'a> Iterator for TokenIterator<'a> {
+impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        get_next_token(&mut self.stream, &mut self.state, &mut self.pos)
+        match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
+            None => None,
+            r @ Some(_) if self.disable_tokens.is_none() => r,
+            Some((token, pos))
+                if token.is_operator()
+                    && self
+                        .disable_tokens
+                        .unwrap()
+                        .contains(token.syntax().as_ref()) =>
+            {
+                // Convert disallowed operators into lex errors
+                Some((
+                    Token::LexError(Box::new(LexError::UnexpectedInput(token.syntax().into()))),
+                    pos,
+                ))
+            }
+            Some((token, pos))
+                if token.is_keyword()
+                    && self
+                        .disable_tokens
+                        .unwrap()
+                        .contains(token.syntax().as_ref()) =>
+            {
+                // Convert disallowed keywords into identifiers
+                Some((Token::Identifier(token.syntax().into()), pos))
+            }
+            r => r,
+        }
     }
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a>(input: &'a [&'a str], max_string_size: usize) -> TokenIterator<'a> {
+pub fn lex<'a, 't>(
+    input: &'a [&'a str],
+    max_string_size: usize,
+    disable_tokens: Option<&'t HashSet<String>>,
+) -> TokenIterator<'a, 't> {
     TokenIterator {
+        disable_tokens,
         state: TokenizeState {
             max_string_size,
             non_unary: false,

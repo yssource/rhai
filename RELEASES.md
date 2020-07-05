@@ -4,7 +4,10 @@ Rhai Release Notes
 Version 0.17.0
 ==============
 
-This version adds [`serde`](https://crates.io/crates/serde) support for working with `Dynamic` values (particularly _object maps_).
+This version adds:
+
+* [`serde`](https://crates.io/crates/serde) support for working with `Dynamic` values (particularly _object maps_)
+* Ability to surgically disable keywords and/or operators in the language
 
 Breaking changes
 ----------------
@@ -16,6 +19,7 @@ New features
 
 * New `serde` feature to allow serializating/deserializating to/from `Dynamic` values using [`serde`](https://crates.io/crates/serde).
   This is particularly useful when converting a Rust `struct` to a `Dynamic` _object map_ and back.
+* `Engine::disable_symbol` to surgically disable keywords and/or operators.
 
 
 Version 0.16.1

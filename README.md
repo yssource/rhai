@@ -39,6 +39,7 @@ Features
 * Some support for [object-oriented programming (OOP)](https://schungx.github.io/rhai/language/oop.html).
 * Organize code base with dynamically-loadable [modules](https://schungx.github.io/rhai/language/modules.html).
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).
+* Surgically disable keywords and operators to restrict the language.
 * Scripts are [optimized](https://schungx.github.io/rhai/engine/optimize.html) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](https://schungx.github.io/rhai/start/builds/minimal.html) by excluding unneeded language [features](https://schungx.github.io/rhai/start/features.html).
 

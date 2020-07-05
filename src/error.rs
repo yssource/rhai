@@ -5,7 +5,6 @@ use crate::token::Position;
 
 use crate::stdlib::{
     boxed::Box,
-    char,
     error::Error,
     fmt,
     string::{String, ToString},
@@ -15,8 +14,8 @@ use crate::stdlib::{
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 #[non_exhaustive]
 pub enum LexError {
-    /// An unexpected character is encountered when tokenizing the script text.
-    UnexpectedChar(char),
+    /// An unexpected symbol is encountered when tokenizing the script text.
+    UnexpectedInput(String),
     /// A string literal is not terminated before a new-line or EOF.
     UnterminatedString,
     /// An identifier is in an invalid format.
@@ -38,7 +37,7 @@ impl Error for LexError {}
 impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnexpectedChar(c) => write!(f, "Unexpected '{}'", c),
+            Self::UnexpectedInput(s) => write!(f, "Unexpected '{}'", s),
             Self::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
             Self::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
             Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),

@@ -1272,7 +1272,7 @@ fn parse_map_literal(
             _ => {
                 let (name, pos) = match input.next().unwrap() {
                     (Token::Identifier(s), pos) => (s, pos),
-                    (Token::StringConst(s), pos) => (s, pos),
+                    (Token::StringConstant(s), pos) => (s, pos),
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                     (_, pos) if map.is_empty() => {
                         return Err(PERR::MissingToken(
@@ -1380,7 +1380,7 @@ fn parse_primary(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, settings.pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
-        Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
+        Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
             let index = state.find_var(&s);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
