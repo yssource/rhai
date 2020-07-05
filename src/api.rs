@@ -32,6 +32,38 @@ use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 /// Engine public API
 impl Engine {
+    /// Register a function with the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.  It takes a list of `TypeId`'s indicating the actual types of the parameters.
+    ///
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`.
+    /// The arguments are guaranteed to be of the correct types matching the `TypeId`'s.
+    ///
+    /// To get access to a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    ///
+    /// To get access to a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// Notice that this will _consume_ the argument, replacing it with `()`.
+    ///
+    /// To get access to the first mutable parameter, use `args.get_mut(0).unwrap()`
+    #[deprecated(note = "this function is volatile and may change")]
+    pub fn register_raw_fn(
+        &mut self,
+        name: &str,
+        args: &[TypeId],
+
+        #[cfg(not(feature = "sync"))] func: impl Fn(&Engine, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
+            + 'static,
+
+        #[cfg(feature = "sync")] func: impl Fn(&Engine, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        self.global_module.set_fn_var_args(name, args, func);
+    }
+
     /// Register a custom type for use with the `Engine`.
     /// The type must implement `Clone`.
     ///
@@ -1127,7 +1159,7 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let result = self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast, name, &mut None, arg_values.as_mut())?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1140,7 +1172,15 @@ impl Engine {
         });
     }
 
-    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments.
+    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments
+    /// and optionally a value for binding to the 'this' pointer.
+    ///
+    /// ## WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
     ///
     /// # Example
     ///
@@ -1148,7 +1188,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_function"))]
     /// # {
-    /// use rhai::{Engine, Scope};
+    /// use rhai::{Engine, Scope, Dynamic};
     ///
     /// let engine = Engine::new();
     ///
@@ -1156,20 +1196,27 @@ impl Engine {
     ///     fn add(x, y) { len(x) + y + foo }
     ///     fn add1(x)   { len(x) + 1 + foo }
     ///     fn bar()     { foo/2 }
+    ///     fn action(x) { this += x; }         // function using 'this' pointer
     /// ")?;
     ///
     /// let mut scope = Scope::new();
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", vec![ String::from("abc").into(), 123_i64.into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", None, [ String::from("abc").into(), 123_i64.into() ])?;
+    /// //                                                           ^^^^ no 'this' pointer
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", vec![ String::from("abc").into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", None, [ String::from("abc").into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result= engine.call_fn_dynamic(&mut scope, &ast, "bar", vec![])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
+    ///
+    /// let mut value: Dynamic = 1_i64.into();
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                              ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// assert_eq!(value.as_int().unwrap(), 42);
     /// # }
     /// # Ok(())
     /// # }
@@ -1180,10 +1227,10 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         name: &str,
-        arg_values: impl IntoIterator<Item = Dynamic>,
+        mut this_ptr: Option<&mut Dynamic>,
+        mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut arg_values: StaticVec<_> = arg_values.into_iter().collect();
-        self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())
+        self.call_fn_dynamic_raw(scope, ast, name, &mut this_ptr, arg_values.as_mut())
     }
 
     /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments.
@@ -1200,6 +1247,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         name: &str,
+        this_ptr: &mut Option<&mut Dynamic>,
         arg_values: &mut [Dynamic],
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
@@ -1220,7 +1268,7 @@ impl Engine {
             &mut mods,
             &mut state,
             ast.lib(),
-            &mut None,
+            this_ptr,
             name,
             fn_def,
             args,

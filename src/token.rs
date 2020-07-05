@@ -12,7 +12,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     char,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt,
     iter::Peekable,
     str::{Chars, FromStr},

@@ -14,6 +14,7 @@ Breaking changes
 ----------------
 
 * `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
+* `Engine::call_fn_dynamic` take an extra argument, allowing a `Dynamic` value to be bound to the `this` pointer.
 
 New features
 ------------
@@ -22,6 +23,7 @@ New features
   This is particularly useful when converting a Rust `struct` to a `Dynamic` _object map_ and back.
 * `Engine::disable_symbol` to surgically disable keywords and/or operators.
 * `Engine::register_custom_operator` to define a custom operator.
+* New low-level API `Engine::register_raw_fn`.
 
 
 Version 0.16.1

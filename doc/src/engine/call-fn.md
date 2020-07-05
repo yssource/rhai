@@ -55,10 +55,35 @@ let result: i64 = engine.call_fn(&mut scope, &ast, "hello", () )?;
 let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
+
+`Engine::call_fn_dynamic`
+------------------------
+
 For more control, construct all arguments as `Dynamic` values and use `Engine::call_fn_dynamic`, passing it
 anything that implements `IntoIterator<Item = Dynamic>` (such as a simple `Vec<Dynamic>`):
 
 ```rust
-let result: Dynamic = engine.call_fn_dynamic(&mut scope, &ast, "hello",
-                            vec![ String::from("abc").into(), 123_i64.into() ])?;
+let result: Dynamic = engine.call_fn_dynamic(
+                            &mut scope,     // scope to use
+                            &ast,           // AST to use
+                            "hello",        // function entry-point
+                            None,           // 'this' pointer, if any
+                            [ String::from("abc").into(), 123_i64.into() ])?;   // arguments
+```
+
+
+Binding the `this` Pointer
+-------------------------
+
+`Engine::call_fn_dynamic` can also bind a value to the `this` pointer of a script-defined function.
+
+```rust
+let ast = engine.compile("fn action(x) { this += x; }")?;
+
+let mut value: Dynamic = 1_i64.into();
+
+let result = engine.call_fn_dynamic(&mut scope, &ast, "action", Some(&mut value), [ 41_i64.into() ])?;
+//                                                              ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+
+assert_eq!(value.as_int().unwrap(), 42);
 ```
