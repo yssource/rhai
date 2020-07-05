@@ -196,10 +196,35 @@ impl Dynamic {
             Union::FnPtr(_) => "Fn",
 
             #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
             Union::Variant(value) => (***value).type_name(),
         }
+    }
+}
+
+/// Map the name of a standard type into a friendly form.
+pub(crate) fn map_std_type_name(name: &str) -> &str {
+    if name == type_name::<String>() {
+        "string"
+    } else if name == type_name::<ImmutableString>() {
+        "string"
+    } else if name == type_name::<&str>() {
+        "string"
+    } else if name == type_name::<FnPtr>() {
+        "Fn"
+    } else if name == type_name::<Instant>() {
+        "timestamp"
+    } else {
+        #[cfg(not(feature = "no_index"))]
+        if name == type_name::<Array>() {
+            return "array";
+        }
+        #[cfg(not(feature = "no_object"))]
+        if name == type_name::<Map>() {
+            return "map";
+        }
+
+        name
     }
 }
 
@@ -220,7 +245,6 @@ impl fmt::Display for Dynamic {
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "?"),
         }
@@ -244,7 +268,6 @@ impl fmt::Debug for Dynamic {
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(_) => write!(f, "<dynamic>"),
         }
@@ -323,10 +346,8 @@ impl Dynamic {
         }
 
         #[cfg(not(feature = "no_float"))]
-        {
-            if let Some(result) = <dyn Any>::downcast_ref::<FLOAT>(&value) {
-                return result.clone().into();
-            }
+        if let Some(result) = <dyn Any>::downcast_ref::<FLOAT>(&value) {
+            return result.clone().into();
         }
 
         let mut boxed = Box::new(value);

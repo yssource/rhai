@@ -551,11 +551,17 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
-            if state.lib.iter_fn().find(|(_, _, _, f)| {
+            #[cfg(not(feature = "no_function"))]
+            let has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
                 &fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
-            }).is_some() {
+            }).is_some();
+
+            #[cfg(feature = "no_function")]
+            const has_script_fn: bool = false;
+
+            if has_script_fn {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);

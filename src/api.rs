@@ -1,10 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{
-    get_script_function_by_signature, make_getter, make_setter, Engine, Imports, State, FN_IDX_GET,
-    FN_IDX_SET,
-};
+use crate::engine::{make_getter, make_setter, Engine, Imports, State, FN_IDX_GET, FN_IDX_SET};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
@@ -18,6 +15,9 @@ use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
+
+#[cfg(not(feature = "no_function"))]
+use crate::engine::get_script_function_by_signature;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -118,8 +118,13 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) {
+        if self.type_names.is_none() {
+            self.type_names = Some(Default::default());
+        }
         // Add the pretty-print type name into the map
         self.type_names
+            .as_mut()
+            .unwrap()
             .insert(type_name::<T>().to_string(), name.to_string());
     }
 
@@ -548,7 +553,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts, self.max_string_size);
+        let stream = lex(scripts, self);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
@@ -673,7 +678,7 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
         let ast =
             self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
@@ -754,7 +759,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
         {
             let mut peekable = stream.peekable();
             self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -909,7 +914,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -976,11 +981,12 @@ impl Engine {
         let mut mods = Imports::new();
         let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
-        let return_type = self.map_type_name(result.type_name());
+        let typ = self.map_type_name(result.type_name());
 
         return result.try_cast::<T>().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.into(),
+                self.map_type_name(type_name::<T>()).into(),
+                typ.into(),
                 Position::none(),
             ))
         });
@@ -1041,7 +1047,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
@@ -1123,11 +1129,12 @@ impl Engine {
         let mut arg_values = args.into_vec();
         let result = self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())?;
 
-        let return_type = self.map_type_name(result.type_name());
+        let typ = self.map_type_name(result.type_name());
 
         return result.try_cast().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.into(),
+                self.map_type_name(type_name::<T>()).into(),
+                typ.into(),
                 Position::none(),
             ))
         });
@@ -1187,6 +1194,7 @@ impl Engine {
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
@@ -1238,12 +1246,16 @@ impl Engine {
         mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
+        #[cfg(not(feature = "no_function"))]
         let lib = ast
             .lib()
             .iter_fn()
             .filter(|(_, _, _, f)| f.is_script())
             .map(|(_, _, _, f)| f.get_fn_def().clone())
             .collect();
+
+        #[cfg(feature = "no_function")]
+        let lib = Default::default();
 
         let stmt = mem::take(ast.statements_mut());
         optimize_into_ast(self, scope, stmt, lib, optimization_level)

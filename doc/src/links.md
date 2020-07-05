@@ -29,6 +29,7 @@
 [package]: {{rootUrl}}/rust/packages/index.md
 [packages]: {{rootUrl}}/rust/packages/index.md
 [`Scope`]: {{rootUrl}}/rust/scope.md
+[`serde`]: {{rootUrl}}/rust/serde.md
 
 [`type_of()`]: {{rootUrl}}/language/type-of.md
 [`to_string()`]: {{rootUrl}}/language/values-and-types.md
@@ -101,3 +102,7 @@
 [`OptimizationLevel::Full`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::Simple`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::None`]: {{rootUrl}}/engine/optimize/optimize-levels.md
+
+[disable keywords and operators]: {{rootUrl}}/engine/disable.md
+[custom operator]: {{rootUrl}}/engine/custom-op.md
+[custom operators]: {{rootUrl}}/engine/custom-op.md

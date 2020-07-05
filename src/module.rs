@@ -236,6 +236,7 @@ impl Module {
     /// Set a script-defined function into the module.
     ///
     /// If there is an existing function of the same name and number of arguments, it is replaced.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) {
         // None + function name + number of arguments.
         let hash_script = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
@@ -876,6 +877,7 @@ impl Module {
                 .functions
                 .iter()
                 .filter(|(_, (_, _, _, v))| match v {
+                    #[cfg(not(feature = "no_function"))]
                     CallableFunction::Script(ref f) => {
                         filter(f.access, f.name.as_str(), f.params.len())
                     }
@@ -893,6 +895,7 @@ impl Module {
     }
 
     /// Filter out the functions, retaining only some based on a filter predicate.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
         self.functions.retain(|_, (_, _, _, v)| match v {
             CallableFunction::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
@@ -930,6 +933,7 @@ impl Module {
     }
 
     /// Get an iterator over all script-defined functions in the module.
+    #[cfg(not(feature = "no_function"))]
     pub fn iter_script_fn<'a>(&'a self) -> impl Iterator<Item = Shared<ScriptFnDef>> + 'a {
         self.functions
             .values()
@@ -1014,6 +1018,7 @@ impl Module {
                     Public => (),
                 }
 
+                #[cfg(not(feature = "no_function"))]
                 if func.is_script() {
                     let fn_def = func.get_shared_fn_def();
                     // Qualifiers + function name + number of arguments.
@@ -1024,20 +1029,21 @@ impl Module {
                         empty(),
                     );
                     functions.push((hash_qualified_script, fn_def.into()));
-                } else {
-                    // Qualified Rust functions are indexed in two steps:
-                    // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + number of arguments.
-                    let hash_qualified_script =
-                        calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
-                    // 2) Calculate a second hash with no qualifiers, empty function name,
-                    //    zero number of arguments, and the actual list of argument `TypeId`'.s
-                    let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
-                    // 3) The final hash is the XOR of the two hashes.
-                    let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
-
-                    functions.push((hash_qualified_fn, func.clone()));
+                    continue;
                 }
+
+                // Qualified Rust functions are indexed in two steps:
+                // 1) Calculate a hash in a similar manner to script-defined functions,
+                //    i.e. qualifiers + function name + number of arguments.
+                let hash_qualified_script =
+                    calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
+                // 2) Calculate a second hash with no qualifiers, empty function name,
+                //    zero number of arguments, and the actual list of argument `TypeId`'.s
+                let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
+                // 3) The final hash is the XOR of the two hashes.
+                let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
+
+                functions.push((hash_qualified_fn, func.clone()));
             }
         }
 

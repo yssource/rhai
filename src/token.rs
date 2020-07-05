@@ -1,5 +1,6 @@
 //! Main module defining the lexer and parser.
 
+use crate::engine::Engine;
 use crate::error::LexError;
 use crate::parser::INT;
 use crate::utils::StaticVec;
@@ -10,7 +11,9 @@ use crate::parser::FLOAT;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    char, fmt,
+    char,
+    collections::{HashMap, HashSet},
+    fmt,
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
@@ -19,7 +22,7 @@ use crate::stdlib::{
 
 type LERR = LexError;
 
-pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
+pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
 
 /// A location (line number + character position) in the input script.
 ///
@@ -137,7 +140,7 @@ pub enum Token {
     FloatConstant(FLOAT),
     Identifier(String),
     CharConstant(char),
-    StringConst(String),
+    StringConstant(String),
     LeftBrace,
     RightBrace,
     LeftParen,
@@ -210,6 +213,7 @@ pub enum Token {
     As,
     LexError(Box<LexError>),
     Comment(String),
+    Custom(String),
     EOF,
 }
 
@@ -222,12 +226,13 @@ impl Token {
             IntegerConstant(i) => i.to_string().into(),
             #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
-            Identifier(s) => s.clone().into(),
+            StringConstant(_) => "string".into(),
             CharConstant(c) => c.to_string().into(),
+            Identifier(s) => s.clone().into(),
+            Custom(s) => s.clone().into(),
             LexError(err) => err.to_string().into(),
 
-            token => (match token {
-                StringConst(_) => "string",
+            token => match token {
                 LeftBrace => "{",
                 RightBrace => "}",
                 LeftParen => "(",
@@ -292,13 +297,15 @@ impl Token {
                 PowerOfAssign => "~=",
                 #[cfg(not(feature = "no_function"))]
                 Private => "private",
+                #[cfg(not(feature = "no_module"))]
                 Import => "import",
                 #[cfg(not(feature = "no_module"))]
                 Export => "export",
+                #[cfg(not(feature = "no_module"))]
                 As => "as",
                 EOF => "{EOF}",
                 _ => unreachable!("operator should be match in outer scope"),
-            })
+            }
             .into(),
         }
     }
@@ -320,9 +327,9 @@ impl Token {
 
         match self {
             LexError(_)      |
-            LeftBrace        | // (+expr) - is unary
+            LeftBrace        | // {+expr} - is unary
             // RightBrace    | {expr} - expr not unary & is closing
-            LeftParen        | // {-expr} - is unary
+            LeftParen        | // (-expr) - is unary
             // RightParen    | (expr) - expr not unary & is closing
             LeftBracket      | // [-expr] - is unary
             // RightBracket  | [expr] - expr not unary & is closing
@@ -367,14 +374,14 @@ impl Token {
             Throw            |
             PowerOf          |
             In               |
-            PowerOfAssign => true,
+            PowerOfAssign    => true,
 
             _ => false,
         }
     }
 
     /// Get the precedence number of the token.
-    pub fn precedence(&self) -> u8 {
+    pub fn precedence(&self, custom: Option<&HashMap<String, u8>>) -> u8 {
         use Token::*;
 
         match self {
@@ -383,24 +390,27 @@ impl Token {
             | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
             | PowerOfAssign => 0,
 
-            Or | XOr | Pipe => 40,
+            Or | XOr | Pipe => 30,
 
-            And | Ampersand => 50,
+            And | Ampersand => 60,
 
             LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo | EqualsTo
-            | NotEqualsTo => 60,
+            | NotEqualsTo => 90,
 
-            In => 70,
+            In => 110,
 
-            Plus | Minus => 80,
+            Plus | Minus => 130,
 
-            Divide | Multiply | PowerOf => 90,
+            Divide | Multiply | PowerOf => 160,
 
-            LeftShift | RightShift => 100,
+            LeftShift | RightShift => 190,
 
-            Modulo => 110,
+            Modulo => 210,
 
-            Period => 120,
+            Period => 240,
+
+            // Custom operators
+            Custom(s) => custom.map_or(0, |c| *c.get(s).unwrap()),
 
             _ => 0,
         }
@@ -422,6 +432,41 @@ impl Token {
             _ => false,
         }
     }
+
+    /// Is this token an operator?
+    pub fn is_operator(&self) -> bool {
+        use Token::*;
+
+        match self {
+            LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
+            | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
+            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | MapStart | Equals
+            | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo
+            | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
+            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
+            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
+
+            _ => false,
+        }
+    }
+
+    /// Is this token a keyword?
+    pub fn is_keyword(&self) -> bool {
+        use Token::*;
+
+        match self {
+            #[cfg(not(feature = "no_function"))]
+            Fn | Private => true,
+
+            #[cfg(not(feature = "no_module"))]
+            Import | Export | As => true,
+
+            True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
+            | Return | Throw => true,
+
+            _ => false,
+        }
+    }
 }
 
 impl From<Token> for String {
@@ -431,7 +476,7 @@ impl From<Token> for String {
 }
 
 /// State of the tokenizer.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string (0 = unlimited).
     pub max_string_size: usize,
@@ -644,7 +689,7 @@ pub fn get_next_token(
     let result = get_next_token_inner(stream, state, pos);
 
     // Save the last token's state
-    if let Some((token, _)) = &result {
+    if let Some((ref token, _)) = result {
         state.non_unary = !token.is_next_unary();
     }
 
@@ -848,7 +893,7 @@ fn get_next_token_inner(
             ('"', _) => return parse_string_literal(stream, state, pos, '"')
                                 .map_or_else(
                                     |err| Some((Token::LexError(Box::new(err.0)), err.1)),
-                                    |out| Some((Token::StringConst(out), start_pos)),
+                                    |out| Some((Token::StringConstant(out), start_pos)),
                                 ),
 
             // ' - character literal
@@ -1118,7 +1163,7 @@ fn get_next_token_inner(
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),
-            (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(ch))), start_pos)),
+            (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedInput(ch.to_string()))), start_pos)),
         }
     }
 
@@ -1172,7 +1217,9 @@ impl InputStream for MultiInputsStream<'_> {
 }
 
 /// An iterator on a `Token` stream.
-pub struct TokenIterator<'a> {
+pub struct TokenIterator<'a, 'e> {
+    /// Reference to the scripting `Engine`.
+    engine: &'e Engine,
     /// Current state.
     state: TokenizeState,
     /// Current position.
@@ -1181,19 +1228,47 @@ pub struct TokenIterator<'a> {
     stream: MultiInputsStream<'a>,
 }
 
-impl<'a> Iterator for TokenIterator<'a> {
+impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        get_next_token(&mut self.stream, &mut self.state, &mut self.pos)
+        match (
+            get_next_token(&mut self.stream, &mut self.state, &mut self.pos),
+            self.engine.disabled_symbols.as_ref(),
+            self.engine.custom_keywords.as_ref(),
+        ) {
+            (None, _, _) => None,
+            (r @ Some(_), None, None) => r,
+            (Some((token, pos)), Some(disabled), _)
+                if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>
+            {
+                // Convert disallowed operators into lex errors
+                Some((
+                    Token::LexError(Box::new(LexError::UnexpectedInput(token.syntax().into()))),
+                    pos,
+                ))
+            }
+            (Some((token, pos)), Some(disabled), _)
+                if token.is_keyword() && disabled.contains(token.syntax().as_ref()) =>
+            {
+                // Convert disallowed keywords into identifiers
+                Some((Token::Identifier(token.syntax().into()), pos))
+            }
+            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
+                // Convert custom keywords
+                Some((Token::Custom(s), pos))
+            }
+            (r, _, _) => r,
+        }
     }
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a>(input: &'a [&'a str], max_string_size: usize) -> TokenIterator<'a> {
+pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a, 'e> {
     TokenIterator {
+        engine,
         state: TokenizeState {
-            max_string_size,
+            max_string_size: engine.max_string_size,
             non_unary: false,
             comment_level: 0,
             end_with_none: false,

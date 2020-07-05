@@ -33,17 +33,16 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
                     let seconds = (ts2 - ts1).as_secs();
 
                     #[cfg(not(feature = "unchecked"))]
-                    {
-                        if seconds > (MAX_INT as u64) {
-                            return Err(Box::new(EvalAltResult::ErrorArithmetic(
-                                format!(
-                                    "Integer overflow for timestamp duration: {}",
-                                    -(seconds as i64)
-                                ),
-                                Position::none(),
-                            )));
-                        }
+                    if seconds > (MAX_INT as u64) {
+                        return Err(Box::new(EvalAltResult::ErrorArithmetic(
+                            format!(
+                                "Integer overflow for timestamp duration: {}",
+                                -(seconds as i64)
+                            ),
+                            Position::none(),
+                        )));
                     }
+
                     return Ok(-(seconds as INT));
                 }
             } else {
@@ -55,14 +54,13 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
                     let seconds = (ts1 - ts2).as_secs();
 
                     #[cfg(not(feature = "unchecked"))]
-                    {
-                        if seconds > (MAX_INT as u64) {
-                            return Err(Box::new(EvalAltResult::ErrorArithmetic(
-                                format!("Integer overflow for timestamp duration: {}", seconds),
-                                Position::none(),
-                            )));
-                        }
+                    if seconds > (MAX_INT as u64) {
+                        return Err(Box::new(EvalAltResult::ErrorArithmetic(
+                            format!("Integer overflow for timestamp duration: {}", seconds),
+                            Position::none(),
+                        )));
                     }
+
                     return Ok(seconds as INT);
                 }
             }
@@ -86,14 +84,13 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
         let seconds = timestamp.elapsed().as_secs();
 
         #[cfg(not(feature = "unchecked"))]
-        {
-            if seconds > (MAX_INT as u64) {
-                return Err(Box::new(EvalAltResult::ErrorArithmetic(
-                    format!("Integer overflow for timestamp.elapsed: {}", seconds),
-                    Position::none(),
-                )));
-            }
+        if seconds > (MAX_INT as u64) {
+            return Err(Box::new(EvalAltResult::ErrorArithmetic(
+                format!("Integer overflow for timestamp.elapsed: {}", seconds),
+                Position::none(),
+            )));
         }
+
         Ok(seconds as INT)
     }
 

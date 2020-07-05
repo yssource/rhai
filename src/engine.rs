@@ -1,12 +1,12 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{Dynamic, Union, Variant};
+use crate::any::{map_std_type_name, Dynamic, Union, Variant};
 use crate::calc_fn_hash;
 use crate::error::ParseErrorType;
 use crate::fn_native::{CallableFunction, Callback, FnCallArgs, FnPtr};
 use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
 use crate::optimize::OptimizationLevel;
-use crate::packages::{Package, PackageLibrary, PackagesCollection, StandardPackage};
+use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, Stmt, AST, INT};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
@@ -18,10 +18,10 @@ use crate::utils::StaticVec;
 use crate::parser::FLOAT;
 
 use crate::stdlib::{
-    any::TypeId,
+    any::{type_name, TypeId},
     borrow::Cow,
     boxed::Box,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     format,
     iter::{empty, once},
     mem,
@@ -35,7 +35,7 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
-/// Hash map of `Dynamic` values with `String` keys.
+/// Hash map of `Dynamic` values with `ImmutableString` keys.
 ///
 /// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
@@ -216,6 +216,7 @@ impl State {
 }
 
 /// Get a script-defined function definition from a module.
+#[cfg(not(feature = "no_function"))]
 pub fn get_script_function_by_signature<'a>(
     module: &'a Module,
     name: &str,
@@ -265,7 +266,12 @@ pub struct Engine {
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
-    pub(crate) type_names: HashMap<String, String>,
+    pub(crate) type_names: Option<HashMap<String, String>>,
+
+    /// A hashset containing symbols to disable.
+    pub(crate) disabled_symbols: Option<HashSet<String>>,
+    /// A hashset containing custom keywords and precedence to recognize.
+    pub(crate) custom_keywords: Option<HashMap<String, u8>>,
 
     /// Callback closure for implementing the `print` command.
     pub(crate) print: Callback<str, ()>,
@@ -312,7 +318,9 @@ impl Default for Engine {
             #[cfg(any(feature = "no_module", feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
 
-            type_names: Default::default(),
+            type_names: None,
+            disabled_symbols: None,
+            custom_keywords: None,
 
             // default print/debug implementations
             print: Box::new(default_print),
@@ -352,17 +360,14 @@ pub fn make_getter(id: &str) -> String {
 /// Extract the property name from a getter function name.
 fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    {
-        if fn_name.starts_with(FN_GET) {
-            Some(&fn_name[FN_GET.len()..])
-        } else {
-            None
-        }
-    }
-    #[cfg(feature = "no_object")]
-    {
+    if fn_name.starts_with(FN_GET) {
+        Some(&fn_name[FN_GET.len()..])
+    } else {
         None
     }
+
+    #[cfg(feature = "no_object")]
+    None
 }
 
 /// Make setter function
@@ -373,17 +378,14 @@ pub fn make_setter(id: &str) -> String {
 /// Extract the property name from a setter function name.
 fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    {
-        if fn_name.starts_with(FN_SET) {
-            Some(&fn_name[FN_SET.len()..])
-        } else {
-            None
-        }
-    }
-    #[cfg(feature = "no_object")]
-    {
+    if fn_name.starts_with(FN_SET) {
+        Some(&fn_name[FN_SET.len()..])
+    } else {
         None
     }
+
+    #[cfg(feature = "no_object")]
+    None
 }
 
 /// Print/debug to stdout
@@ -497,7 +499,10 @@ impl Engine {
             global_module: Default::default(),
             module_resolver: None,
 
-            type_names: Default::default(),
+            type_names: None,
+            disabled_symbols: None,
+            custom_keywords: None,
+
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
             progress: None,
@@ -517,158 +522,6 @@ impl Engine {
             max_array_size: 0,
             max_map_size: 0,
         }
-    }
-
-    /// Load a new package into the `Engine`.
-    ///
-    /// When searching for functions, packages loaded later are preferred.
-    /// In other words, loaded packages are searched in reverse order.
-    pub fn load_package(&mut self, package: PackageLibrary) {
-        // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package);
-    }
-
-    /// Load a new package into the `Engine`.
-    ///
-    /// When searching for functions, packages loaded later are preferred.
-    /// In other words, loaded packages are searched in reverse order.
-    pub fn load_packages(&mut self, package: PackageLibrary) {
-        // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package);
-    }
-
-    /// Control whether and how the `Engine` will optimize an AST after compilation.
-    ///
-    /// Not available under the `no_optimize` feature.
-    #[cfg(not(feature = "no_optimize"))]
-    pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) {
-        self.optimization_level = optimization_level
-    }
-
-    /// The current optimization level.
-    /// It controls whether and how the `Engine` will optimize an AST after compilation.
-    ///
-    /// Not available under the `no_optimize` feature.
-    #[cfg(not(feature = "no_optimize"))]
-    pub fn optimization_level(&self) -> OptimizationLevel {
-        self.optimization_level
-    }
-
-    /// Set the maximum levels of function calls allowed for a script in order to avoid
-    /// infinite recursion and stack overflows.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_call_levels(&mut self, levels: usize) {
-        self.max_call_stack_depth = levels
-    }
-
-    /// The maximum levels of function calls allowed for a script.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_call_levels(&self) -> usize {
-        self.max_call_stack_depth
-    }
-
-    /// Set the maximum number of operations allowed for a script to run to avoid
-    /// consuming too much resources (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_operations(&mut self, operations: u64) {
-        self.max_operations = if operations == u64::MAX {
-            0
-        } else {
-            operations
-        };
-    }
-
-    /// The maximum number of operations allowed for a script to run (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_operations(&self) -> u64 {
-        self.max_operations
-    }
-
-    /// Set the maximum number of imported modules allowed for a script.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_modules(&mut self, modules: usize) {
-        self.max_modules = modules;
-    }
-
-    /// The maximum number of imported modules allowed for a script.
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_modules(&self) -> usize {
-        self.max_modules
-    }
-
-    /// Set the depth limits for expressions (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_expr_depths(&mut self, max_expr_depth: usize, max_function_expr_depth: usize) {
-        self.max_expr_depth = if max_expr_depth == usize::MAX {
-            0
-        } else {
-            max_expr_depth
-        };
-        self.max_function_expr_depth = if max_function_expr_depth == usize::MAX {
-            0
-        } else {
-            max_function_expr_depth
-        };
-    }
-
-    /// The depth limit for expressions (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_expr_depth(&self) -> usize {
-        self.max_expr_depth
-    }
-
-    /// The depth limit for expressions in functions (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_function_expr_depth(&self) -> usize {
-        self.max_function_expr_depth
-    }
-
-    /// Set the maximum length of strings (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_string_size(&mut self, max_size: usize) {
-        self.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
-    }
-
-    /// The maximum length of strings (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    pub fn max_string_size(&self) -> usize {
-        self.max_string_size
-    }
-
-    /// Set the maximum length of arrays (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_index"))]
-    pub fn set_max_array_size(&mut self, max_size: usize) {
-        self.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
-    }
-
-    /// The maximum length of arrays (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_index"))]
-    pub fn max_array_size(&self) -> usize {
-        self.max_array_size
-    }
-
-    /// Set the maximum length of object maps (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_object"))]
-    pub fn set_max_map_size(&mut self, max_size: usize) {
-        self.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
-    }
-
-    /// The maximum length of object maps (0 for unlimited).
-    #[cfg(not(feature = "unchecked"))]
-    #[cfg(not(feature = "no_object"))]
-    pub fn max_map_size(&self) -> usize {
-        self.max_map_size
-    }
-
-    /// Set the module resolution service used by the `Engine`.
-    ///
-    /// Not available under the `no_module` feature.
-    #[cfg(not(feature = "no_module"))]
-    pub fn set_module_resolver(&mut self, resolver: Option<impl ModuleResolver + 'static>) {
-        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn ModuleResolver>);
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
@@ -700,12 +553,10 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        {
-            if level > self.max_call_stack_depth {
-                return Err(Box::new(
-                    EvalAltResult::ErrorStackOverflow(Position::none()),
-                ));
-            }
+        if level > self.max_call_stack_depth {
+            return Err(Box::new(
+                EvalAltResult::ErrorStackOverflow(Position::none()),
+            ));
         }
 
         let mut this_copy: Dynamic = Default::default();
@@ -767,22 +618,23 @@ impl Engine {
         .or_else(|| self.packages.get_fn(hash_fn));
 
         if let Some(func) = func {
-            // Calling pure function but the first argument is a reference?
-            normalize_first_arg(
-                is_ref && (func.is_pure() || (func.is_script() && !is_method)),
-                &mut this_copy,
-                &mut old_this_ptr,
-                args,
-            );
+            #[cfg(not(feature = "no_function"))]
+            let need_normalize = is_ref && (func.is_pure() || (func.is_script() && !is_method));
+            #[cfg(feature = "no_function")]
+            let need_normalize = is_ref && func.is_pure();
 
+            // Calling pure function but the first argument is a reference?
+            normalize_first_arg(need_normalize, &mut this_copy, &mut old_this_ptr, args);
+
+            #[cfg(not(feature = "no_function"))]
             if func.is_script() {
                 // Run scripted function
                 let fn_def = func.get_fn_def();
 
                 // Method call of script function - map first argument to `this`
-                if is_method {
+                return if is_method {
                     let (first, rest) = args.split_at_mut(1);
-                    return Ok((
+                    Ok((
                         self.call_script_fn(
                             scope,
                             mods,
@@ -795,7 +647,7 @@ impl Engine {
                             level,
                         )?,
                         false,
-                    ));
+                    ))
                 } else {
                     let result = self.call_script_fn(
                         scope, mods, state, lib, &mut None, fn_name, fn_def, args, level,
@@ -804,40 +656,42 @@ impl Engine {
                     // Restore the original reference
                     restore_first_arg(old_this_ptr, args);
 
-                    return Ok((result, false));
+                    Ok((result, false))
                 };
-            } else {
-                // Run external function
-                let result = func.get_native_fn()(self, args)?;
-
-                // Restore the original reference
-                restore_first_arg(old_this_ptr, args);
-
-                // See if the function match print/debug (which requires special processing)
-                return Ok(match fn_name {
-                    KEYWORD_PRINT => (
-                        (self.print)(result.as_str().map_err(|type_name| {
-                            Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                type_name.into(),
-                                Position::none(),
-                            ))
-                        })?)
-                        .into(),
-                        false,
-                    ),
-                    KEYWORD_DEBUG => (
-                        (self.debug)(result.as_str().map_err(|type_name| {
-                            Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                type_name.into(),
-                                Position::none(),
-                            ))
-                        })?)
-                        .into(),
-                        false,
-                    ),
-                    _ => (result, func.is_method()),
-                });
             }
+
+            // Run external function
+            let result = func.get_native_fn()(self, args)?;
+
+            // Restore the original reference
+            restore_first_arg(old_this_ptr, args);
+
+            // See if the function match print/debug (which requires special processing)
+            return Ok(match fn_name {
+                KEYWORD_PRINT => (
+                    (self.print)(result.as_str().map_err(|typ| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            self.map_type_name(type_name::<ImmutableString>()).into(),
+                            typ.into(),
+                            Position::none(),
+                        ))
+                    })?)
+                    .into(),
+                    false,
+                ),
+                KEYWORD_DEBUG => (
+                    (self.debug)(result.as_str().map_err(|typ| {
+                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            self.map_type_name(type_name::<ImmutableString>()).into(),
+                            typ.into(),
+                            Position::none(),
+                        ))
+                    })?)
+                    .into(),
+                    false,
+                ),
+                _ => (result, func.is_method()),
+            });
         }
 
         // See if it is built in.
@@ -1064,8 +918,12 @@ impl Engine {
         lib: &Module,
         script: &Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let script = script.as_str().map_err(|type_name| {
-            EvalAltResult::ErrorMismatchOutputType(type_name.into(), Position::none())
+        let script = script.as_str().map_err(|typ| {
+            EvalAltResult::ErrorMismatchOutputType(
+                self.map_type_name(type_name::<ImmutableString>()).into(),
+                typ.into(),
+                Position::none(),
+            )
         })?;
 
         // Compile the script text
@@ -1873,9 +1731,10 @@ impl Engine {
                             self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                         return arg_value
                             .take_immutable_string()
-                            .map_err(|type_name| {
+                            .map_err(|typ| {
                                 Box::new(EvalAltResult::ErrorMismatchOutputType(
-                                    type_name.into(),
+                                    self.map_type_name(type_name::<ImmutableString>()).into(),
+                                    typ.into(),
                                     expr.position(),
                                 ))
                             })
@@ -2009,6 +1868,7 @@ impl Engine {
                 };
 
                 match func {
+                    #[cfg(not(feature = "no_function"))]
                     Ok(f) if f.is_script() => {
                         let args = args.as_mut();
                         let fn_def = f.get_fn_def();
@@ -2335,21 +2195,19 @@ impl Engine {
                     .try_cast::<ImmutableString>()
                 {
                     #[cfg(not(feature = "no_module"))]
-                    {
-                        if let Some(resolver) = &self.module_resolver {
-                            let mut module = resolver.resolve(self, &path, expr.position())?;
-                            module.index_all_sub_modules();
-                            mods.push((name.clone().into(), module));
+                    if let Some(resolver) = &self.module_resolver {
+                        let mut module = resolver.resolve(self, &path, expr.position())?;
+                        module.index_all_sub_modules();
+                        mods.push((name.clone().into(), module));
 
-                            state.modules += 1;
+                        state.modules += 1;
 
-                            Ok(Default::default())
-                        } else {
-                            Err(Box::new(EvalAltResult::ErrorModuleNotFound(
-                                path.to_string(),
-                                expr.position(),
-                            )))
-                        }
+                        Ok(Default::default())
+                    } else {
+                        Err(Box::new(EvalAltResult::ErrorModuleNotFound(
+                            path.to_string(),
+                            expr.position(),
+                        )))
                     }
 
                     #[cfg(feature = "no_module")]
@@ -2408,7 +2266,13 @@ impl Engine {
                     let mut maps = 0;
 
                     arr.iter().for_each(|value| match value {
-                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                        Dynamic(Union::Array(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        #[cfg(not(feature = "no_object"))]
+                        Dynamic(Union::Map(_)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2424,7 +2288,13 @@ impl Engine {
                     let mut maps = 0;
 
                     map.values().for_each(|value| match value {
-                        Dynamic(Union::Array(_)) | Dynamic(Union::Map(_)) => {
+                        #[cfg(not(feature = "no_index"))]
+                        Dynamic(Union::Array(_)) => {
+                            let (a, m, _) = calc_size(value);
+                            arrays += a;
+                            maps += m;
+                        }
+                        Dynamic(Union::Map(_)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2488,13 +2358,11 @@ impl Engine {
         state.operations += 1;
 
         #[cfg(not(feature = "unchecked"))]
-        {
-            // Guard against too many operations
-            if self.max_operations > 0 && state.operations > self.max_operations {
-                return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
-                    Position::none(),
-                )));
-            }
+        // Guard against too many operations
+        if self.max_operations > 0 && state.operations > self.max_operations {
+            return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
+                Position::none(),
+            )));
         }
 
         // Report progress - only in steps
@@ -2511,9 +2379,9 @@ impl Engine {
     /// Map a type_name into a pretty-print name
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
-            .get(name)
-            .map(String::as_str)
-            .unwrap_or(name)
+            .as_ref()
+            .and_then(|t| t.get(name).map(String::as_str))
+            .unwrap_or(map_std_type_name(name))
     }
 }
 
@@ -2620,26 +2488,24 @@ fn run_builtin_binary_op(
     }
 
     #[cfg(not(feature = "no_float"))]
-    {
-        if args_type == TypeId::of::<FLOAT>() {
-            let x = *x.downcast_ref::<FLOAT>().unwrap();
-            let y = *y.downcast_ref::<FLOAT>().unwrap();
+    if args_type == TypeId::of::<FLOAT>() {
+        let x = *x.downcast_ref::<FLOAT>().unwrap();
+        let y = *y.downcast_ref::<FLOAT>().unwrap();
 
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                "-" => return Ok(Some((x - y).into())),
-                "*" => return Ok(Some((x * y).into())),
-                "/" => return Ok(Some((x / y).into())),
-                "%" => return Ok(Some((x % y).into())),
-                "~" => return pow_f_f(x, y).map(Into::into).map(Some),
-                "==" => return Ok(Some((x == y).into())),
-                "!=" => return Ok(Some((x != y).into())),
-                ">" => return Ok(Some((x > y).into())),
-                ">=" => return Ok(Some((x >= y).into())),
-                "<" => return Ok(Some((x < y).into())),
-                "<=" => return Ok(Some((x <= y).into())),
-                _ => (),
-            }
+        match op {
+            "+" => return Ok(Some((x + y).into())),
+            "-" => return Ok(Some((x - y).into())),
+            "*" => return Ok(Some((x * y).into())),
+            "/" => return Ok(Some((x / y).into())),
+            "%" => return Ok(Some((x % y).into())),
+            "~" => return pow_f_f(x, y).map(Into::into).map(Some),
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            _ => (),
         }
     }
 
@@ -2716,20 +2582,18 @@ fn run_builtin_op_assignment(
     }
 
     #[cfg(not(feature = "no_float"))]
-    {
-        if args_type == TypeId::of::<FLOAT>() {
-            let x = x.downcast_mut::<FLOAT>().unwrap();
-            let y = *y.downcast_ref::<FLOAT>().unwrap();
+    if args_type == TypeId::of::<FLOAT>() {
+        let x = x.downcast_mut::<FLOAT>().unwrap();
+        let y = *y.downcast_ref::<FLOAT>().unwrap();
 
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                "-=" => return Ok(Some(*x -= y)),
-                "*=" => return Ok(Some(*x *= y)),
-                "/=" => return Ok(Some(*x /= y)),
-                "%=" => return Ok(Some(*x %= y)),
-                "~=" => return Ok(Some(*x = pow_f_f(*x, y)?)),
-                _ => (),
-            }
+        match op {
+            "+=" => return Ok(Some(*x += y)),
+            "-=" => return Ok(Some(*x -= y)),
+            "*=" => return Ok(Some(*x *= y)),
+            "/=" => return Ok(Some(*x /= y)),
+            "%=" => return Ok(Some(*x %= y)),
+            "~=" => return Ok(Some(*x = pow_f_f(*x, y)?)),
+            _ => (),
         }
     }
 

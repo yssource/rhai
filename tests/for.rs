@@ -39,7 +39,7 @@ fn test_for_string() -> Result<(), Box<EvalAltResult>> {
         let sum = 0;
 
         for ch in s {
-            sum += ch.to_int();
+            sum += to_int(ch);
         }
 
         sum

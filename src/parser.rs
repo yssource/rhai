@@ -332,36 +332,26 @@ pub enum ReturnType {
     Exception,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
-struct ParseState {
+#[derive(Clone)]
+struct ParseState<'e> {
+    /// Reference to the scripting `Engine`.
+    engine: &'e Engine,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    pub stack: Vec<(String, ScopeEntryType)>,
+    stack: Vec<(String, ScopeEntryType)>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    pub modules: Vec<String>,
+    modules: Vec<String>,
     /// Maximum levels of expression nesting.
-    pub max_expr_depth: usize,
-    /// Maximum length of a string.
-    pub max_string_size: usize,
-    /// Maximum length of an array.
-    pub max_array_size: usize,
-    /// Maximum number of properties in a map.
-    pub max_map_size: usize,
+    max_expr_depth: usize,
 }
 
-impl ParseState {
+impl<'e> ParseState<'e> {
     /// Create a new `ParseState`.
-    pub fn new(
-        max_expr_depth: usize,
-        max_string_size: usize,
-        max_array_size: usize,
-        max_map_size: usize,
-    ) -> Self {
+    pub fn new(engine: &'e Engine, max_expr_depth: usize) -> Self {
         Self {
+            engine,
             max_expr_depth,
-            max_string_size,
-            max_array_size,
-            max_map_size,
-            ..Default::default()
+            stack: Default::default(),
+            modules: Default::default(),
         }
     }
     /// Find a variable by name in the `ParseState`, searching in reverse.
@@ -1206,10 +1196,10 @@ fn parse_array_literal(
     let mut arr = StaticVec::new();
 
     while !input.peek().unwrap().0.is_eof() {
-        if state.max_array_size > 0 && arr.len() >= state.max_array_size {
+        if state.engine.max_array_size > 0 && arr.len() >= state.engine.max_array_size {
             return Err(PERR::LiteralTooLarge(
                 "Size of array literal".to_string(),
-                state.max_array_size,
+                state.engine.max_array_size,
             )
             .into_err(input.peek().unwrap().1));
         }
@@ -1272,7 +1262,7 @@ fn parse_map_literal(
             _ => {
                 let (name, pos) = match input.next().unwrap() {
                     (Token::Identifier(s), pos) => (s, pos),
-                    (Token::StringConst(s), pos) => (s, pos),
+                    (Token::StringConstant(s), pos) => (s, pos),
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                     (_, pos) if map.is_empty() => {
                         return Err(PERR::MissingToken(
@@ -1306,10 +1296,10 @@ fn parse_map_literal(
                     }
                 };
 
-                if state.max_map_size > 0 && map.len() >= state.max_map_size {
+                if state.engine.max_map_size > 0 && map.len() >= state.engine.max_map_size {
                     return Err(PERR::LiteralTooLarge(
                         "Number of properties in object map literal".to_string(),
-                        state.max_map_size,
+                        state.engine.max_map_size,
                     )
                     .into_err(input.peek().unwrap().1));
                 }
@@ -1380,7 +1370,7 @@ fn parse_primary(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, settings.pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
-        Token::StringConst(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
+        Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
             let index = state.find_var(&s);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
@@ -1495,13 +1485,9 @@ fn parse_unary(
                         .map(|i| Expr::IntegerConstant(Box::new((i, pos))))
                         .or_else(|| {
                             #[cfg(not(feature = "no_float"))]
-                            {
-                                Some(Expr::FloatConstant(Box::new((-(x.0 as FLOAT), pos))))
-                            }
+                            return Some(Expr::FloatConstant(Box::new((-(x.0 as FLOAT), pos))));
                             #[cfg(feature = "no_float")]
-                            {
-                                None
-                            }
+                            return None;
                         })
                         .ok_or_else(|| LexError::MalformedNumber(format!("-{}", x.0)).into_err(pos))
                 }
@@ -1701,7 +1687,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         // lhs.func()
         (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
-        _ => unreachable!(),
+        (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
     })
 }
 
@@ -1870,7 +1856,8 @@ fn parse_binary_op(
 
     loop {
         let (current_op, _) = input.peek().unwrap();
-        let precedence = current_op.precedence();
+        let custom = state.engine.custom_keywords.as_ref();
+        let precedence = current_op.precedence(custom);
         let bind_right = current_op.is_bind_right();
 
         // Bind left to the parent lhs expression if precedence is higher
@@ -1883,7 +1870,7 @@ fn parse_binary_op(
 
         let rhs = parse_unary(input, state, settings)?;
 
-        let next_precedence = input.peek().unwrap().0.precedence();
+        let next_precedence = input.peek().unwrap().0.precedence(custom);
 
         // Bind to right if the next operator has higher precedence
         // If same precedence, then check if the operator binds right
@@ -1951,6 +1938,19 @@ fn parse_binary_op(
                 let rhs = args.pop();
                 let current_lhs = args.pop();
                 make_dot_expr(current_lhs, rhs, pos)?
+            }
+
+            Token::Custom(s)
+                if state
+                    .engine
+                    .custom_keywords
+                    .as_ref()
+                    .map(|c| c.contains_key(&s))
+                    .unwrap_or(false) =>
+            {
+                // Accept non-native functions for custom operators
+                let op = (op.0, false, op.2);
+                Expr::FnCall(Box::new((op, None, hash, args, None)))
             }
 
             op_token => return Err(PERR::UnknownOperator(op_token.into()).into_err(pos)),
@@ -2194,6 +2194,7 @@ fn parse_let(
 }
 
 /// Parse an import statement.
+#[cfg(not(feature = "no_module"))]
 fn parse_import(
     input: &mut TokenStream,
     state: &mut ParseState,
@@ -2444,6 +2445,8 @@ fn parse_stmt(
 
         Token::Let => parse_let(input, state, Normal, settings.level_up()),
         Token::Const => parse_let(input, state, Constant, settings.level_up()),
+
+        #[cfg(not(feature = "no_module"))]
         Token::Import => parse_import(input, state, settings.level_up()),
 
         #[cfg(not(feature = "no_module"))]
@@ -2468,7 +2471,7 @@ fn parse_fn(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let name = match input.next().unwrap() {
-        (Token::Identifier(s), _) => s,
+        (Token::Identifier(s), _) | (Token::Custom(s), _) => s,
         (_, pos) => return Err(PERR::FnMissingName.into_err(pos)),
     };
 
@@ -2556,12 +2559,7 @@ impl Engine {
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let mut state = ParseState::new(
-            self.max_expr_depth,
-            self.max_string_size,
-            self.max_array_size,
-            self.max_map_size,
-        );
+        let mut state = ParseState::new(self, self.max_expr_depth);
         let settings = ParseSettings {
             allow_if_expr: false,
             allow_stmt_expr: false,
@@ -2597,12 +2595,7 @@ impl Engine {
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
         let mut statements = Vec::<Stmt>::new();
         let mut functions = HashMap::<u64, ScriptFnDef, _>::with_hasher(StraightHasherBuilder);
-        let mut state = ParseState::new(
-            self.max_expr_depth,
-            self.max_string_size,
-            self.max_array_size,
-            self.max_map_size,
-        );
+        let mut state = ParseState::new(self, self.max_expr_depth);
 
         while !input.peek().unwrap().0.is_eof() {
             // Collect all the function definitions
@@ -2615,14 +2608,8 @@ impl Engine {
                 };
 
                 match input.peek().unwrap() {
-                    #[cfg(not(feature = "no_function"))]
                     (Token::Fn, pos) => {
-                        let mut state = ParseState::new(
-                            self.max_function_expr_depth,
-                            self.max_string_size,
-                            self.max_array_size,
-                            self.max_map_size,
-                        );
+                        let mut state = ParseState::new(self, self.max_function_expr_depth);
                         let settings = ParseSettings {
                             allow_if_expr: true,
                             allow_stmt_expr: true,

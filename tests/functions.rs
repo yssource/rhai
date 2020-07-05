@@ -52,6 +52,7 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_object"))]
 fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
