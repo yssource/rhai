@@ -49,6 +49,20 @@ impl<'de> DynamicDeserializer<'de> {
             Position::none(),
         )))
     }
+    fn deserialize_int<V: Visitor<'de>>(
+        &mut self,
+        v: crate::INT,
+        visitor: V,
+    ) -> Result<V::Value, Box<EvalAltResult>> {
+        #[cfg(not(feature = "only_i32"))]
+        {
+            visitor.visit_i64(v)
+        }
+        #[cfg(feature = "only_i32")]
+        {
+            visitor.visit_i32(v)
+        }
+    }
 }
 
 /// Deserialize a `Dynamic` value into a Rust type that implements `serde::Deserialize`.
@@ -159,51 +173,87 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
     }
 
     fn deserialize_i8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<i8>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_i8(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else {
+            self.value
+                .downcast_ref::<i8>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_i8(x))
+        }
     }
 
     fn deserialize_i16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<i16>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_i16(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else {
+            self.value
+                .downcast_ref::<i16>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_i16(x))
+        }
     }
 
     fn deserialize_i32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<i32>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_i32(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else if cfg!(feature = "only_i32") {
+            self.type_error()
+        } else {
+            self.value
+                .downcast_ref::<i32>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_i32(x))
+        }
     }
 
     fn deserialize_i64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<i64>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_i64(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else if cfg!(not(feature = "only_i32")) {
+            self.type_error()
+        } else {
+            self.value
+                .downcast_ref::<i64>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_i64(x))
+        }
     }
 
     fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<u8>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_u8(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else {
+            self.value
+                .downcast_ref::<u8>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_u8(x))
+        }
     }
 
     fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<u16>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_u16(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else {
+            self.value
+                .downcast_ref::<u16>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_u16(x))
+        }
     }
 
     fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<u32>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_u32(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else {
+            self.value
+                .downcast_ref::<u32>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_u32(x))
+        }
     }
 
     fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
-            .downcast_ref::<u64>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_u64(x))
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else {
+            self.value
+                .downcast_ref::<u64>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_u64(x))
+        }
     }
 
     fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {

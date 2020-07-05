@@ -34,6 +34,38 @@ fn test_serde_ser_primary_types() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+fn test_serde_ser_integer_types() -> Result<(), Box<EvalAltResult>> {
+    assert_eq!(to_dynamic(42_i8)?.type_name(), std::any::type_name::<INT>());
+    assert_eq!(
+        to_dynamic(42_i16)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+    assert_eq!(
+        to_dynamic(42_i32)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+    assert_eq!(
+        to_dynamic(42_i64)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+    assert_eq!(to_dynamic(42_u8)?.type_name(), std::any::type_name::<INT>());
+    assert_eq!(
+        to_dynamic(42_u16)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+    assert_eq!(
+        to_dynamic(42_u32)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+    assert_eq!(
+        to_dynamic(42_u64)?.type_name(),
+        std::any::type_name::<INT>()
+    );
+
+    Ok(())
+}
+
+#[test]
 #[cfg(not(feature = "no_index"))]
 fn test_serde_ser_array() -> Result<(), Box<EvalAltResult>> {
     let arr: Vec<INT> = vec![123, 456, 42, 999];
@@ -102,6 +134,20 @@ fn test_serde_de_primary_types() -> Result<(), Box<EvalAltResult>> {
         "hello",
         from_dynamic::<String>(&"hello".to_string().into())?
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_serde_de_integer_types() -> Result<(), Box<EvalAltResult>> {
+    assert_eq!(42_i8, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42_i16, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42_i32, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42_i64, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42_u8, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42_u16, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42_u32, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42_u64, from_dynamic(&Dynamic::from(42 as INT))?);
 
     Ok(())
 }
