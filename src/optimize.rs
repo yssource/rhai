@@ -382,23 +382,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             stmt => Expr::Stmt(Box::new((stmt, x.1))),
         },
         // id op= expr
-        Expr::Assignment(x) => match x.2 {
-            //id = id2 op= rhs
-            Expr::Assignment(x2) if x.1.is_empty() => match (x.0, &x2.0) {
-                // var = var op= expr2 -> var op= expr2
-                (Expr::Variable(a), Expr::Variable(b))
-                    if a.1.is_none() && b.1.is_none() && a.0 == b.0 && a.3 == b.3 =>
-                {
-                    // Assignment to the same variable - fold
-                    state.set_dirty();
-                    Expr::Assignment(Box::new((Expr::Variable(a), x2.1, optimize_expr(x2.2, state), x.3)))
-                }
-                // expr1 = expr2 op= rhs
-                (expr1, _) => Expr::Assignment(Box::new((expr1, x.1, optimize_expr(Expr::Assignment(x2), state), x.3))),
-            },
-            // expr = rhs
-            expr => Expr::Assignment(Box::new((x.0, x.1, optimize_expr(expr, state), x.3))),
-        },
+        Expr::Assignment(x) => Expr::Assignment(Box::new((x.0, x.1, optimize_expr(x.2, state), x.3))),
 
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
