@@ -2,6 +2,7 @@ use crate::engine::Engine;
 use crate::module::ModuleResolver;
 use crate::optimize::OptimizationLevel;
 use crate::packages::PackageLibrary;
+use crate::token::is_valid_identifier;
 
 impl Engine {
     /// Load a new package into the `Engine`.
@@ -194,10 +195,60 @@ impl Engine {
     /// # }
     /// ```
     pub fn disable_symbol(&mut self, symbol: &str) {
-        if self.disable_tokens.is_none() {
-            self.disable_tokens = Some(Default::default());
+        if self.disabled_symbols.is_none() {
+            self.disabled_symbols = Some(Default::default());
         }
 
-        self.disable_tokens.as_mut().unwrap().insert(symbol.into());
+        self.disabled_symbols
+            .as_mut()
+            .unwrap()
+            .insert(symbol.into());
+    }
+
+    /// Register a custom operator into the language.
+    ///
+    /// The operator must be a valid identifier (i.e. it cannot be a symbol).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, RegisterFn};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register a custom operator called 'foo' and give it
+    /// // a precedence of 140 (i.e. between +|- and *|/).
+    /// engine.register_custom_operator("foo", 140).unwrap();
+    ///
+    /// // Register a binary function named 'foo'
+    /// engine.register_fn("foo", |x: i64, y: i64| (x * y) - (x + y));
+    ///
+    /// assert_eq!(
+    ///     engine.eval_expression::<i64>("1 + 2 * 3 foo 4 - 5 / 6")?,
+    ///     15
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn register_custom_operator(
+        &mut self,
+        keyword: &str,
+        precedence: u8,
+    ) -> Result<(), String> {
+        if !is_valid_identifier(keyword.chars()) {
+            return Err(format!("not a valid identifier: '{}'", keyword).into());
+        }
+
+        if self.custom_keywords.is_none() {
+            self.custom_keywords = Some(Default::default());
+        }
+
+        self.custom_keywords
+            .as_mut()
+            .unwrap()
+            .insert(keyword.into(), precedence);
+
+        Ok(())
     }
 }

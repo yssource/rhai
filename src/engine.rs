@@ -268,8 +268,10 @@ pub struct Engine {
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: Option<HashMap<String, String>>,
 
-    /// A hash-set containing tokens to disable.
-    pub(crate) disable_tokens: Option<HashSet<String>>,
+    /// A hashset containing symbols to disable.
+    pub(crate) disabled_symbols: Option<HashSet<String>>,
+    /// A hashset containing custom keywords and precedence to recognize.
+    pub(crate) custom_keywords: Option<HashMap<String, u8>>,
 
     /// Callback closure for implementing the `print` command.
     pub(crate) print: Callback<str, ()>,
@@ -317,7 +319,8 @@ impl Default for Engine {
             module_resolver: None,
 
             type_names: None,
-            disable_tokens: None,
+            disabled_symbols: None,
+            custom_keywords: None,
 
             // default print/debug implementations
             print: Box::new(default_print),
@@ -497,7 +500,8 @@ impl Engine {
             module_resolver: None,
 
             type_names: None,
-            disable_tokens: None,
+            disabled_symbols: None,
+            custom_keywords: None,
 
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),

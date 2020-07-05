@@ -66,3 +66,5 @@ Flexible
 * Supports [most build targets](targets.md) including `no-std` and [WASM].
 
 * Surgically [disable keywords and operators] to restrict the language.
+
+* [Custom operators].

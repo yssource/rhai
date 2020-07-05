@@ -1,5 +1,6 @@
 //! Main module defining the lexer and parser.
 
+use crate::engine::Engine;
 use crate::error::LexError;
 use crate::parser::INT;
 use crate::utils::StaticVec;
@@ -11,7 +12,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     char,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt,
     iter::Peekable,
     str::{Chars, FromStr},
@@ -212,6 +213,7 @@ pub enum Token {
     As,
     LexError(Box<LexError>),
     Comment(String),
+    Custom(String),
     EOF,
 }
 
@@ -224,12 +226,13 @@ impl Token {
             IntegerConstant(i) => i.to_string().into(),
             #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
-            Identifier(s) => s.clone().into(),
+            StringConstant(_) => "string".into(),
             CharConstant(c) => c.to_string().into(),
+            Identifier(s) => s.clone().into(),
+            Custom(s) => s.clone().into(),
             LexError(err) => err.to_string().into(),
 
             token => match token {
-                StringConstant(_) => "string",
                 LeftBrace => "{",
                 RightBrace => "}",
                 LeftParen => "(",
@@ -324,9 +327,9 @@ impl Token {
 
         match self {
             LexError(_)      |
-            LeftBrace        | // (+expr) - is unary
+            LeftBrace        | // {+expr} - is unary
             // RightBrace    | {expr} - expr not unary & is closing
-            LeftParen        | // {-expr} - is unary
+            LeftParen        | // (-expr) - is unary
             // RightParen    | (expr) - expr not unary & is closing
             LeftBracket      | // [-expr] - is unary
             // RightBracket  | [expr] - expr not unary & is closing
@@ -371,14 +374,14 @@ impl Token {
             Throw            |
             PowerOf          |
             In               |
-            PowerOfAssign => true,
+            PowerOfAssign    => true,
 
             _ => false,
         }
     }
 
     /// Get the precedence number of the token.
-    pub fn precedence(&self) -> u8 {
+    pub fn precedence(&self, custom: Option<&HashMap<String, u8>>) -> u8 {
         use Token::*;
 
         match self {
@@ -387,24 +390,27 @@ impl Token {
             | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
             | PowerOfAssign => 0,
 
-            Or | XOr | Pipe => 40,
+            Or | XOr | Pipe => 30,
 
-            And | Ampersand => 50,
+            And | Ampersand => 60,
 
             LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo | EqualsTo
-            | NotEqualsTo => 60,
+            | NotEqualsTo => 90,
 
-            In => 70,
+            In => 110,
 
-            Plus | Minus => 80,
+            Plus | Minus => 130,
 
-            Divide | Multiply | PowerOf => 90,
+            Divide | Multiply | PowerOf => 160,
 
-            LeftShift | RightShift => 100,
+            LeftShift | RightShift => 190,
 
-            Modulo => 110,
+            Modulo => 210,
 
-            Period => 120,
+            Period => 240,
+
+            // Custom operators
+            Custom(s) => custom.map_or(0, |c| *c.get(s).unwrap()),
 
             _ => 0,
         }
@@ -1211,9 +1217,9 @@ impl InputStream for MultiInputsStream<'_> {
 }
 
 /// An iterator on a `Token` stream.
-pub struct TokenIterator<'a, 't> {
-    /// Disable certain tokens.
-    pub disable_tokens: Option<&'t HashSet<String>>,
+pub struct TokenIterator<'a, 'e> {
+    /// Reference to the scripting `Engine`.
+    engine: &'e Engine,
     /// Current state.
     state: TokenizeState,
     /// Current position.
@@ -1226,15 +1232,15 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
-            None => None,
-            r @ Some(_) if self.disable_tokens.is_none() => r,
-            Some((token, pos))
-                if token.is_operator()
-                    && self
-                        .disable_tokens
-                        .unwrap()
-                        .contains(token.syntax().as_ref()) =>
+        match (
+            get_next_token(&mut self.stream, &mut self.state, &mut self.pos),
+            self.engine.disabled_symbols.as_ref(),
+            self.engine.custom_keywords.as_ref(),
+        ) {
+            (None, _, _) => None,
+            (r @ Some(_), None, None) => r,
+            (Some((token, pos)), Some(disabled), _)
+                if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>
             {
                 // Convert disallowed operators into lex errors
                 Some((
@@ -1242,31 +1248,27 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                     pos,
                 ))
             }
-            Some((token, pos))
-                if token.is_keyword()
-                    && self
-                        .disable_tokens
-                        .unwrap()
-                        .contains(token.syntax().as_ref()) =>
+            (Some((token, pos)), Some(disabled), _)
+                if token.is_keyword() && disabled.contains(token.syntax().as_ref()) =>
             {
                 // Convert disallowed keywords into identifiers
                 Some((Token::Identifier(token.syntax().into()), pos))
             }
-            r => r,
+            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
+                // Convert custom keywords
+                Some((Token::Custom(s), pos))
+            }
+            (r, _, _) => r,
         }
     }
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a, 't>(
-    input: &'a [&'a str],
-    max_string_size: usize,
-    disable_tokens: Option<&'t HashSet<String>>,
-) -> TokenIterator<'a, 't> {
+pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a, 'e> {
     TokenIterator {
-        disable_tokens,
+        engine,
         state: TokenizeState {
-            max_string_size,
+            max_string_size: engine.max_string_size,
             non_unary: false,
             comment_level: 0,
             end_with_none: false,

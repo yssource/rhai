@@ -104,3 +104,5 @@
 [`OptimizationLevel::None`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 
 [disable keywords and operators]: {{rootUrl}}/engine/disable.md
+[custom operator]: {{rootUrl}}/engine/custom-op.md
+[custom operators]: {{rootUrl}}/engine/custom-op.md

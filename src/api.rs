@@ -553,7 +553,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts, self.max_string_size, self.disable_tokens.as_ref());
+        let stream = lex(scripts, self);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
@@ -678,7 +678,7 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
-        let stream = lex(&scripts, self.max_string_size, self.disable_tokens.as_ref());
+        let stream = lex(&scripts, self);
         let ast =
             self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
@@ -759,7 +759,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size, self.disable_tokens.as_ref());
+        let stream = lex(&scripts, self);
         {
             let mut peekable = stream.peekable();
             self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -914,7 +914,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size, self.disable_tokens.as_ref());
+        let stream = lex(&scripts, self);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -1047,7 +1047,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size, self.disable_tokens.as_ref());
+        let stream = lex(&scripts, self);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
