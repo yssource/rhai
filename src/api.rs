@@ -1325,8 +1325,7 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let result =
-            self.call_fn_dynamic_raw(scope, ast.lib(), name, &mut None, arg_values.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast, name, &mut None, arg_values.as_mut())?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1370,19 +1369,19 @@ impl Engine {
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, ast.into(), "add", None, [ String::from("abc").into(), 123_i64.into() ])?;
-    /// //                                                                 ^^^^ no 'this' pointer
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", None, [ String::from("abc").into(), 123_i64.into() ])?;
+    /// //                                                           ^^^^ no 'this' pointer
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, ast.into(), "add1", None, [ String::from("abc").into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", None, [ String::from("abc").into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, ast.into(), "bar", None, [])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     ///
     /// let mut value: Dynamic = 1_i64.into();
-    /// let result = engine.call_fn_dynamic(&mut scope, ast.into(), "action", Some(&mut value), [ 41_i64.into() ])?;
-    /// //                                                                    ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                              ^^^^^^^^^^^^^^^^ binding the 'this' pointer
     /// assert_eq!(value.as_int().unwrap(), 42);
     /// # }
     /// # Ok(())
@@ -1392,7 +1391,7 @@ impl Engine {
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
-        lib: &Module,
+        lib: impl AsRef<Module>,
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
@@ -1412,11 +1411,12 @@ impl Engine {
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
-        lib: &Module,
+        lib: impl AsRef<Module>,
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         arg_values: &mut [Dynamic],
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let lib = lib.as_ref();
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let fn_def =
             get_script_function_by_signature(lib, name, args.len(), true).ok_or_else(|| {

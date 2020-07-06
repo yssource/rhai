@@ -16,7 +16,7 @@ use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait 
 fn safe_divide(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     if y == 0 {
         // Return an error if y is zero
-        Err("Division by zero!".into())         // short-cut to create Box<EvalAltResult::ErrorRuntime>
+        Err("Division by zero!".into())         // shortcut to create Box<EvalAltResult::ErrorRuntime>
     } else {
         Ok((x / y).into())                      // convert result into 'Dynamic'
     }

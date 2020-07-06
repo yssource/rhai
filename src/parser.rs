@@ -66,14 +66,14 @@ impl AST {
 
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
-    pub(crate) fn statements(&self) -> &Vec<Stmt> {
+    pub(crate) fn statements(&self) -> &[Stmt] {
         &self.0
     }
 
     /// Get the statements.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
-    pub fn statements(&self) -> &Vec<Stmt> {
+    pub fn statements(&self) -> &[Stmt] {
         &self.0
     }
 
@@ -298,9 +298,15 @@ impl Add<Self> for &AST {
     }
 }
 
-impl<'a> From<&'a AST> for &'a Module {
-    fn from(ast: &'a AST) -> Self {
-        ast.lib()
+impl AsRef<[Stmt]> for AST {
+    fn as_ref(&self) -> &[Stmt] {
+        self.statements()
+    }
+}
+
+impl AsRef<Module> for AST {
+    fn as_ref(&self) -> &Module {
+        self.lib()
     }
 }
 

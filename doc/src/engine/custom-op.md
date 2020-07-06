@@ -18,8 +18,8 @@ use rhai::{Engine, RegisterFn};
 let mut engine = Engine::new();
 
 // Register a custom operator called 'foo' and give it
-// a precedence of 140 (i.e. between +|- and *|/)
-engine.register_custom_operator("foo", 140).unwrap();
+// a precedence of 160 (i.e. between +|- and *|/)
+engine.register_custom_operator("foo", 160).unwrap();
 
 // Register the implementation of the customer operator as a function
 engine.register_fn("foo", |x: i64, y: i64| (x * y) - (x + y));
@@ -49,7 +49,7 @@ Therefore, the following are equivalent (assuming `foo` has been registered as a
 A script using custom operators can always be pre-processed, via a pre-processor application,
 into a syntax that uses the corresponding function calls.
 
-Using `Engine::register_custom_operator` merely enables a convenient short-cut.
+Using `Engine::register_custom_operator` merely enables a convenient shortcut.
 
 
 Must Follow Variable Naming
@@ -71,7 +71,7 @@ All custom operators must be _binary_ (i.e. they take two operands).
 _Unary_ custom operators are not supported.
 
 ```rust
-engine.register_custom_operator("foo", 140).unwrap();
+engine.register_custom_operator("foo", 160).unwrap();
 
 engine.register_fn("foo", |x: i64| x * x);
 
@@ -91,12 +91,12 @@ The following _precedence table_ show the built-in precedence of standard Rhai o
 | Assignments         | `=`, `+=`, `-=`, `*=`, `/=`, `~=`, `%=`,<br/>`<<=`, `>>=`, `&=`, <code>\|=</code>, `^=` |         0          |
 | Logic and bit masks |                        <code>\|\|</code>,  <code>\|</code>, `^`                         |         30         |
 | Logic and bit masks |                                        `&`, `&&`                                        |         60         |
-| Comparisons         |                            `==`, `!=`, `>`, `>=`, `<`, `<=`                             |         90         |
-|                     |                                          `in`                                           |        110         |
-| Arithmetic          |                                        `+`, `-`                                         |        130         |
-| Arithmetic          |                                      `*`, `/`, `~`                                      |        160         |
-| Bit-shifts          |                                       `<<`, `>>`                                        |        190         |
-| Arithmetic          |                                           `%`                                           |        210         |
+| Comparisons         |                                       `==`, `!=`                                        |         90         |
+| Comparisons         |                                  `>`, `>=`, `<`, `<=`                                   |        110         |
+|                     |                                          `in`                                           |        130         |
+| Arithmetic          |                                        `+`, `-`                                         |        150         |
+| Arithmetic          |                                   `*`, `/`, `~`, `%`                                    |        180         |
+| Bit-shifts          |                                       `<<`, `>>`                                        |        210         |
 | Object              |                                 `.` _(binds to right)_                                  |        240         |
 | _Others_            |                                                                                         |         0          |
 

@@ -20,6 +20,7 @@
 [`Engine`]: {{rootUrl}}/engine/hello-world.md
 [traits]: {{rootUrl}}/rust/traits.md
 [`private`]: {{rootUrl}}/engine/call-fn.md
+[`call_fn`]: {{rootUrl}}/engine/call-fn.md
 [`Func`]: {{rootUrl}}/engine/func.md
 [`AST`]: {{rootUrl}}/engine/compile.md
 [`eval_expression`]: {{rootUrl}}/engine/expressions.md

@@ -102,6 +102,12 @@ impl Clone for Module {
     }
 }
 
+impl AsRef<Module> for Module {
+    fn as_ref(&self) -> &Module {
+        self
+    }
+}
+
 impl Module {
     /// Create a new module.
     ///
