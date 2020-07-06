@@ -7,7 +7,7 @@ fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
 
     engine.eval_with_scope::<()>(&mut scope, "let x = 4 + 5")?;
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 9);
-    engine.eval_with_scope::<()>(&mut scope, "x = x + 1; x = x + 2;")?;
+    engine.eval_with_scope::<()>(&mut scope, "x += 1; x += 2;")?;
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 12);
 
     scope.set_value("x", 42 as INT);

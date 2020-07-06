@@ -32,7 +32,7 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
                 x + y
             }
             fn hello(x) {
-                x = x * foo;
+                x *= foo;
                 foo = 1;
                 x
             }

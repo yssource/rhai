@@ -10,10 +10,10 @@ fn test_while() -> Result<(), Box<EvalAltResult>> {
                 let x = 0;
 
                 while x < 10 {
-                    x = x + 1;
+                    x += 1;
                     if x > 5 { break; }
                     if x > 3 { continue; }
-                    x = x + 3;
+                    x += 3;
                 }
                 
                 x

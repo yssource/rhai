@@ -14,7 +14,7 @@ fn test_loop() -> Result<(), Box<EvalAltResult>> {
 					if i < 10 {
 						i += 1;
 						if x > 20 { continue; }
-						x = x + i;
+						x += i;
 					} else {
 						break;
 					}
