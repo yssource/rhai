@@ -162,7 +162,7 @@ impl Serializer for &mut DynamicSerializer {
         #[cfg(not(feature = "only_i32"))]
         return self.serialize_i64(i64::from(v));
         #[cfg(feature = "only_i32")]
-        if v > i32::MAX as u64 {
+        if v > i32::MAX as u32 {
             return Ok(Dynamic::from(v));
         } else {
             return self.serialize_i32(v as i32);
