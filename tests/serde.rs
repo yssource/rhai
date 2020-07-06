@@ -135,7 +135,6 @@ fn test_serde_ser_unit_enum() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-#[ignore = "failing test"]
 #[cfg(not(feature = "no_object"))]
 fn test_serde_ser_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
     #[derive(Serialize)]
