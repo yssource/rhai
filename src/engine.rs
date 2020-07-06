@@ -11,7 +11,7 @@ use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, St
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::token::{is_valid_identifier, Position};
+use crate::token::Position;
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
@@ -22,6 +22,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     collections::{HashMap, HashSet},
+    convert::TryFrom,
     format,
     iter::{empty, once},
     mem,
@@ -1735,6 +1736,7 @@ impl Engine {
                         let expr = args_expr.get(0);
                         let arg_value =
                             self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+
                         return arg_value
                             .take_immutable_string()
                             .map_err(|typ| {
@@ -1744,17 +1746,9 @@ impl Engine {
                                     expr.position(),
                                 ))
                             })
-                            .and_then(|s| {
-                                if is_valid_identifier(s.chars()) {
-                                    Ok(s)
-                                } else {
-                                    Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                                        s.to_string(),
-                                        expr.position(),
-                                    )))
-                                }
-                            })
-                            .map(|s| FnPtr::from(s).into());
+                            .and_then(|s| FnPtr::try_from(s))
+                            .map(Into::<Dynamic>::into)
+                            .map_err(|err| err.new_position(*pos));
                     }
                 }
 

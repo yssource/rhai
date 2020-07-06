@@ -98,7 +98,7 @@ mod utils;
 pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
-pub use fn_native::IteratorFn;
+pub use fn_native::{FnPtr, IteratorFn};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};
