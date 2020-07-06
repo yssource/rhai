@@ -1,5 +1,6 @@
 use crate::any::Dynamic;
 use crate::engine::Engine;
+use crate::module::Module;
 use crate::parser::ScriptFnDef;
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
@@ -80,11 +81,11 @@ impl<S: Into<ImmutableString>> From<S> for FnPtr {
 
 /// A general function trail object.
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(&Engine, &Module, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 /// A general function trail object.
 #[cfg(feature = "sync")]
 pub type FnAny =
-    dyn Fn(&Engine, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+    dyn Fn(&Engine, &Module, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;

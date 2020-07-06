@@ -15,7 +15,7 @@ Operators
 |       `<<`        | Left bit-shift                 |   Yes   |       Left        |
 |        `&`        | Bit-wise _And_, Boolean _And_  |   Yes   |       Left        |
 |  <code>\|</code>  | Bit-wise _Or_, Boolean _Or_    |   Yes   |       Left        |
-|        `^`        | Bit-wise _Xor_                 |   Yes   |       Left        |
+|        `^`        | Bit-wise _Xor_, Boolean _Xor_  |   Yes   |       Left        |
 |       `==`        | Equals to                      |   Yes   |       Left        |
 |       `~=`        | Not equals to                  |   Yes   |       Left        |
 |        `>`        | Greater than                   |   Yes   |       Left        |

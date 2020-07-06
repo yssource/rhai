@@ -15,8 +15,8 @@ use crate::stdlib::{boxed::Box, string::ToString};
 pub trait Func<ARGS, RET> {
     type Output;
 
-    /// Create a Rust anonymous function from an [`AST`].
-    /// The `Engine` and [`AST`] are consumed and basically embedded into the closure.
+    /// Create a Rust anonymous function from an `AST`.
+    /// The `Engine` and `AST` are consumed and basically embedded into the closure.
     ///
     /// # Examples
     ///

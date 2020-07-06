@@ -4,6 +4,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
+use crate::module::Module;
 use crate::parser::FnAccess;
 use crate::plugin::Plugin;
 use crate::result::EvalAltResult;
@@ -205,7 +206,7 @@ macro_rules! make_func {
 //                           ^ function parameter generic type name (A, B, C etc.)
 //                                           ^ dereferencing function
 
-		Box::new(move |_: &Engine, args: &mut FnCallArgs| {
+		Box::new(move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             // The arguments are assumed to be of the correct number and types!
 
 			#[allow(unused_variables, unused_mut)]

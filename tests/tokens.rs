@@ -24,8 +24,8 @@ fn test_tokens_custom_operator() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     // Register a custom operator called `foo` and give it
-    // a precedence of 140 (i.e. between +|- and *|/).
-    engine.register_custom_operator("foo", 140).unwrap();
+    // a precedence of 160 (i.e. between +|- and *|/).
+    engine.register_custom_operator("foo", 160).unwrap();
 
     // Register a binary function named `foo`
     engine.register_fn("foo", |x: INT, y: INT| (x * y) - (x + y));

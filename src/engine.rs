@@ -661,7 +661,7 @@ impl Engine {
             }
 
             // Run external function
-            let result = func.get_native_fn()(self, args)?;
+            let result = func.get_native_fn()(self, lib, args)?;
 
             // Restore the original reference
             restore_first_arg(old_this_ptr, args);
@@ -1616,7 +1616,7 @@ impl Engine {
                             .or_else(|| self.packages.get_fn(hash_fn))
                         {
                             // Overriding exact implementation
-                            func(self, &mut [lhs_ptr, &mut rhs_val])?;
+                            func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
@@ -1663,14 +1663,20 @@ impl Engine {
                     Expr::Variable(_) => unreachable!(),
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
-                    Expr::Index(_) => self.eval_dot_index_chain(
-                        scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
-                    ),
+                    Expr::Index(_) => {
+                        self.eval_dot_index_chain(
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
+                        )?;
+                        Ok(Default::default())
+                    }
                     // dot_lhs.dot_rhs op= rhs
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(_) => self.eval_dot_index_chain(
-                        scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
-                    ),
+                    Expr::Dot(_) => {
+                        self.eval_dot_index_chain(
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
+                        )?;
+                        Ok(Default::default())
+                    }
                     // Error assignment to constant
                     expr if expr.is_constant() => {
                         Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
@@ -1880,9 +1886,8 @@ impl Engine {
                         .map_err(|err| err.new_position(*pos))
                     }
                     Ok(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut(), *pos),
-                    Ok(f) => {
-                        f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
-                    }
+                    Ok(f) => f.get_native_fn()(self, lib, args.as_mut())
+                        .map_err(|err| err.new_position(*pos)),
                     Err(err) => match *err {
                         EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
                             Ok(def_val.clone().unwrap())
@@ -1966,15 +1971,7 @@ impl Engine {
             Stmt::Noop(_) => Ok(Default::default()),
 
             // Expression as statement
-            Stmt::Expr(expr) => {
-                let result = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-
-                Ok(match expr.as_ref() {
-                    // If it is a simple assignment, erase the result at the root
-                    Expr::Assignment(_) => Default::default(),
-                    _ => result,
-                })
-            }
+            Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
 
             // Block scope
             Stmt::Block(x) => {
@@ -2448,6 +2445,7 @@ fn run_builtin_binary_op(
         match op {
             "&" => return Ok(Some((x && y).into())),
             "|" => return Ok(Some((x || y).into())),
+            "^" => return Ok(Some((x ^ y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             _ => (),

@@ -12,7 +12,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     char,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt,
     iter::Peekable,
     str::{Chars, FromStr},
@@ -394,18 +394,17 @@ impl Token {
 
             And | Ampersand => 60,
 
-            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo | EqualsTo
-            | NotEqualsTo => 90,
+            EqualsTo | NotEqualsTo => 90,
 
-            In => 110,
+            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 110,
 
-            Plus | Minus => 130,
+            In => 130,
 
-            Divide | Multiply | PowerOf => 160,
+            Plus | Minus => 150,
 
-            LeftShift | RightShift => 190,
+            Divide | Multiply | PowerOf | Modulo => 180,
 
-            Modulo => 210,
+            LeftShift | RightShift => 210,
 
             Period => 240,
 
