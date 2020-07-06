@@ -298,6 +298,12 @@ impl Add<Self> for &AST {
     }
 }
 
+impl<'a> From<&'a AST> for &'a Module {
+    fn from(ast: &'a AST) -> Self {
+        ast.lib()
+    }
+}
+
 /// A type representing the access mode of a scripted function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnAccess {

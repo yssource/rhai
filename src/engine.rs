@@ -661,7 +661,7 @@ impl Engine {
             }
 
             // Run external function
-            let result = func.get_native_fn()(self, args)?;
+            let result = func.get_native_fn()(self, lib, args)?;
 
             // Restore the original reference
             restore_first_arg(old_this_ptr, args);
@@ -1616,7 +1616,7 @@ impl Engine {
                             .or_else(|| self.packages.get_fn(hash_fn))
                         {
                             // Overriding exact implementation
-                            func(self, &mut [lhs_ptr, &mut rhs_val])?;
+                            func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
@@ -1885,9 +1885,8 @@ impl Engine {
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
-                    Ok(f) => {
-                        f.get_native_fn()(self, args.as_mut()).map_err(|err| err.new_position(*pos))
-                    }
+                    Ok(f) => f.get_native_fn()(self, lib, args.as_mut())
+                        .map_err(|err| err.new_position(*pos)),
                     Err(err) => match *err {
                         EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
                             Ok(def_val.clone().unwrap())

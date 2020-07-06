@@ -1,7 +1,7 @@
 use crate::any::Dynamic;
 use crate::def_package;
 use crate::engine::Engine;
-use crate::module::FuncReturn;
+use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
 use crate::result::EvalAltResult;
 use crate::token::Position;
@@ -226,7 +226,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     lib.set_fn_var_args(
         "pad",
         &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
-        |engine: &Engine, args: &mut [&mut Dynamic]| {
+        |engine: &Engine, _: &Module, args: &mut [&mut Dynamic]| {
             let len = *args[1].downcast_ref::< INT>().unwrap();
 
             // Check if string will be over max size limit

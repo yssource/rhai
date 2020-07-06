@@ -373,9 +373,11 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         args: &[TypeId],
-        func: impl Fn(&Engine, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |engine: &Engine, args: &mut FnCallArgs| func(engine, args).map(Dynamic::from);
+        let f = move |engine: &Engine, lib: &Module, args: &mut FnCallArgs| {
+            func(engine, lib, args).map(Dynamic::from)
+        };
         self.set_fn(
             name,
             Public,
@@ -402,7 +404,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn() -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &mut FnCallArgs| func().map(Dynamic::from);
+        let f = move |_: &Engine, _: &Module, _: &mut FnCallArgs| func().map(Dynamic::from);
         let args = [];
         self.set_fn(
             name,
@@ -430,7 +432,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             func(mem::take(args[0]).cast::<A>()).map(Dynamic::from)
         };
         let args = [TypeId::of::<A>()];
@@ -460,7 +462,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
         let args = [TypeId::of::<A>()];
@@ -514,7 +516,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
 
@@ -550,7 +552,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
@@ -641,7 +643,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
@@ -683,7 +685,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let a = args[0].downcast_mut::<A>().unwrap();
@@ -720,7 +722,7 @@ impl Module {
         &mut self,
         func: impl Fn(&mut A, B, A) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<A>();
             let a = args[0].downcast_mut::<A>().unwrap();
@@ -762,7 +764,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let a = mem::take(args[0]).cast::<A>();
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
@@ -811,7 +813,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, args: &mut FnCallArgs| {
+        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let d = mem::take(args[3]).cast::<D>();
@@ -942,7 +944,7 @@ impl Module {
             .map(|f| f.get_shared_fn_def())
     }
 
-    /// Create a new `Module` by evaluating an [`AST`].
+    /// Create a new `Module` by evaluating an `AST`.
     ///
     /// # Examples
     ///

@@ -1,6 +1,7 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, Func, ImmutableString, ParseError, ParseErrorType, Scope, INT,
+    Dynamic, Engine, EvalAltResult, Func, ImmutableString, Module, ParseError, ParseErrorType,
+    Scope, INT,
 };
 
 #[test]
@@ -117,17 +118,6 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
 fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    let ast = engine.compile(
-        r#"
-            fn foo(x) { this += x; }
-
-            let x = 41;
-            x.bar("foo", 1);
-            x
-        "#,
-    )?;
-    let ast_clone = ast.clone();
-
     engine.register_raw_fn(
         "bar",
         &[
@@ -135,24 +125,29 @@ fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
             std::any::TypeId::of::<ImmutableString>(),
             std::any::TypeId::of::<INT>(),
         ],
-        move |engine: &Engine, args: &mut [&mut Dynamic]| {
+        move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
             let callback = args[1].clone().cast::<ImmutableString>();
             let value = args[2].clone();
             let this_ptr = args.get_mut(0).unwrap();
 
-            engine.call_fn_dynamic(
-                &mut Scope::new(),
-                &ast_clone,
-                &callback,
-                Some(this_ptr),
-                [value],
-            )?;
+            engine.call_fn_dynamic(&mut Scope::new(), lib, &callback, Some(this_ptr), [value])?;
 
             Ok(().into())
         },
     );
 
-    assert_eq!(engine.eval_ast::<INT>(&ast)?, 42);
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(x) { this += x; }
+
+                let x = 41;
+                x.bar("foo", 1);
+                x
+            "#
+        )?,
+        42
+    );
 
     Ok(())
 }
