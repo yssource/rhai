@@ -118,6 +118,236 @@ fn test_serde_ser_struct() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+fn test_serde_ser_unit_enum() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Serialize)]
+    enum MyEnum {
+        VariantFoo,
+        VariantBar,
+    }
+
+    let d = to_dynamic(MyEnum::VariantFoo)?;
+    assert_eq!("VariantFoo", d.as_str().unwrap());
+
+    let d = to_dynamic(MyEnum::VariantBar)?;
+    assert_eq!("VariantBar", d.as_str().unwrap());
+
+    Ok(())
+}
+
+#[test]
+#[ignore = "failing test"]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_ser_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Serialize)]
+    enum MyEnum {
+        VariantUnit,
+        #[cfg(not(feature = "no_index"))]
+        VariantUnitTuple(),
+        VariantNewtype(i32),
+        #[cfg(not(feature = "no_index"))]
+        VariantTuple(i32, i32),
+        VariantEmptyStruct {},
+        VariantStruct {
+            a: i32,
+        },
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantUnit)?;
+        assert_eq!("VariantUnit", d.as_str().unwrap());
+    }
+
+    #[cfg(not(feature = "no_index"))]
+    {
+        let d = to_dynamic(MyEnum::VariantUnitTuple())?;
+        let mut map = d.cast::<Map>();
+        let content = map.remove("VariantUnitTuple").unwrap().cast::<Array>();
+        assert!(map.is_empty());
+        assert!(content.is_empty());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantNewtype(123))?;
+        let mut map = d.cast::<Map>();
+        let content = map.remove("VariantNewtype").unwrap();
+        assert!(map.is_empty());
+        assert_eq!(Ok(123), content.as_int());
+    }
+
+    #[cfg(not(feature = "no_index"))]
+    {
+        let d = to_dynamic(MyEnum::VariantTuple(123, 456))?;
+        let mut map = d.cast::<Map>();
+        let content = map.remove("VariantTuple").unwrap().cast::<Array>();
+        assert!(map.is_empty());
+        assert_eq!(2, content.len());
+        assert_eq!(Ok(123), content[0].as_int());
+        assert_eq!(Ok(456), content[1].as_int());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantEmptyStruct {})?;
+        let mut map = d.cast::<Map>();
+        let map_inner = map.remove("VariantEmptyStruct").unwrap().cast::<Map>();
+        assert!(map.is_empty());
+        assert!(map_inner.is_empty());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantStruct { a: 123 })?;
+        let mut map = d.cast::<Map>();
+        let mut map_inner = map.remove("VariantStruct").unwrap().cast::<Map>();
+        assert!(map.is_empty());
+        assert_eq!(Ok(123), map_inner.remove("a").unwrap().as_int());
+        assert!(map_inner.is_empty());
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_ser_internally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Serialize)]
+    #[serde(tag = "tag")]
+    enum MyEnum {
+        VariantEmptyStruct {},
+        VariantStruct { a: i32 },
+    }
+
+    let d = to_dynamic(MyEnum::VariantEmptyStruct {})?;
+    let mut map = d.cast::<Map>();
+    assert_eq!(
+        Ok("VariantEmptyStruct"),
+        map.remove("tag").unwrap().as_str()
+    );
+    assert!(map.is_empty());
+
+    let d = to_dynamic(MyEnum::VariantStruct { a: 123 })?;
+    let mut map = d.cast::<Map>();
+    assert_eq!(Ok("VariantStruct"), map.remove("tag").unwrap().as_str());
+    assert_eq!(Ok(123), map.remove("a").unwrap().as_int());
+    assert!(map.is_empty());
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Serialize)]
+    #[serde(tag = "tag", content = "content")]
+    enum MyEnum {
+        VariantUnit,
+        #[cfg(not(feature = "no_index"))]
+        VariantUnitTuple(),
+        VariantNewtype(i32),
+        #[cfg(not(feature = "no_index"))]
+        VariantTuple(i32, i32),
+        VariantEmptyStruct {},
+        VariantStruct {
+            a: i32,
+        },
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantUnit)?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(Ok("VariantUnit"), map.remove("tag").unwrap().as_str());
+        assert!(map.is_empty());
+    }
+
+    #[cfg(not(feature = "no_index"))]
+    {
+        let d = to_dynamic(MyEnum::VariantUnitTuple())?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(Ok("VariantUnitTuple"), map.remove("tag").unwrap().as_str());
+        let content = map.remove("content").unwrap().cast::<Array>();
+        assert!(map.is_empty());
+        assert!(content.is_empty());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantNewtype(123))?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(Ok("VariantNewtype"), map.remove("tag").unwrap().as_str());
+        let content = map.remove("content").unwrap();
+        assert!(map.is_empty());
+        assert_eq!(Ok(123), content.as_int());
+    }
+
+    #[cfg(not(feature = "no_index"))]
+    {
+        let d = to_dynamic(MyEnum::VariantTuple(123, 456))?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(Ok("VariantTuple"), map.remove("tag").unwrap().as_str());
+        let content = map.remove("content").unwrap().cast::<Array>();
+        assert!(map.is_empty());
+        assert_eq!(2, content.len());
+        assert_eq!(Ok(123), content[0].as_int());
+        assert_eq!(Ok(456), content[1].as_int());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantEmptyStruct {})?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(
+            Ok("VariantEmptyStruct"),
+            map.remove("tag").unwrap().as_str()
+        );
+        let map_inner = map.remove("content").unwrap().cast::<Map>();
+        assert!(map.is_empty());
+        assert!(map_inner.is_empty());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantStruct { a: 123 })?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(Ok("VariantStruct"), map.remove("tag").unwrap().as_str());
+        let mut map_inner = map.remove("content").unwrap().cast::<Map>();
+        assert!(map.is_empty());
+        assert_eq!(Ok(123), map_inner.remove("a").unwrap().as_int());
+        assert!(map_inner.is_empty());
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_ser_untagged_enum() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Serialize)]
+    #[serde(untagged)]
+    enum MyEnum {
+        VariantEmptyStruct {},
+        VariantStruct1 { a: i32 },
+        VariantStruct2 { b: i32 },
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantEmptyStruct {})?;
+        let map = d.cast::<Map>();
+        assert!(map.is_empty());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantStruct1 { a: 123 })?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(Ok(123), map.remove("a").unwrap().as_int());
+        assert!(map.is_empty());
+    }
+
+    {
+        let d = to_dynamic(MyEnum::VariantStruct2 { b: 123 })?;
+        let mut map = d.cast::<Map>();
+        assert_eq!(Ok(123), map.remove("b").unwrap().as_int());
+        assert!(map.is_empty());
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_serde_de_primary_types() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(42_u16, from_dynamic(&Dynamic::from(42_u16))?);
     assert_eq!(42 as INT, from_dynamic(&(42 as INT).into())?);
