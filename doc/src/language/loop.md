@@ -12,7 +12,7 @@ Like C, `continue` can be used to skip to the next iteration, by-passing all fol
 let x = 10;
 
 loop {
-    x = x - 1;
+    x -= 1;
 
     if x > 5 { continue; }  // skip to the next iteration
 

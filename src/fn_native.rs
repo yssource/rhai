@@ -4,9 +4,10 @@ use crate::module::Module;
 use crate::parser::ScriptFnDef;
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
+use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 
-use crate::stdlib::{boxed::Box, fmt, rc::Rc, sync::Arc};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, rc::Rc, sync::Arc};
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -53,6 +54,10 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 pub struct FnPtr(ImmutableString);
 
 impl FnPtr {
+    /// Create a new function pointer.
+    pub(crate) fn new<S: Into<ImmutableString>>(name: S) -> Self {
+        Self(name.into())
+    }
     /// Get the name of the function.
     pub fn fn_name(&self) -> &str {
         self.get_fn_name().as_ref()
@@ -73,9 +78,36 @@ impl fmt::Display for FnPtr {
     }
 }
 
-impl<S: Into<ImmutableString>> From<S> for FnPtr {
-    fn from(value: S) -> Self {
-        Self(value.into())
+impl TryFrom<ImmutableString> for FnPtr {
+    type Error = Box<EvalAltResult>;
+
+    fn try_from(value: ImmutableString) -> Result<Self, Self::Error> {
+        if is_valid_identifier(value.chars()) {
+            Ok(Self(value))
+        } else {
+            Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+                value.to_string(),
+                Position::none(),
+            )))
+        }
+    }
+}
+
+impl TryFrom<String> for FnPtr {
+    type Error = Box<EvalAltResult>;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let s: ImmutableString = value.into();
+        Self::try_from(s)
+    }
+}
+
+impl TryFrom<&str> for FnPtr {
+    type Error = Box<EvalAltResult>;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let s: ImmutableString = value.into();
+        Self::try_from(s)
     }
 }
 

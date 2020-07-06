@@ -1046,8 +1046,8 @@ impl Engine {
     /// let mut scope = Scope::new();
     /// scope.push("x", 40_i64);
     ///
-    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 42);
-    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 44);
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x += 2; x")?, 42);
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x += 2; x")?, 44);
     ///
     /// // The variable in the scope is modified
     /// assert_eq!(scope.get_value::<i64>("x").expect("variable x should exist"), 44);
@@ -1160,7 +1160,7 @@ impl Engine {
     /// scope.push("x", 40_i64);
     ///
     /// // Compile a script to an AST and store it for later evaluation
-    /// let ast = engine.compile("x = x + 2; x")?;
+    /// let ast = engine.compile("x += 2; x")?;
     ///
     /// // Evaluate it
     /// assert_eq!(engine.eval_ast_with_scope::<i64>(&mut scope, &ast)?, 42);
