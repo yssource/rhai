@@ -15,6 +15,7 @@ Breaking changes
 
 * `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
 * `Engine::call_fn_dynamic` take an extra argument, allowing a `Dynamic` value to be bound to the `this` pointer.
+* Precedence of the `%` (modulo) operator is lowered to below `<<` ad `>>`. This is to handle the case of `x << 3 % 10`.
 
 New features
 ------------
@@ -25,6 +26,7 @@ New features
 * `Engine::register_custom_operator` to define a custom operator.
 * New low-level API `Engine::register_raw_fn`.
 * `AST::clone_functions_only`, `AST::clone_functions_only_filtered` and `AST::clone_statements_only` to clone only part of an `AST`.
+* The boolean `^` (XOR) operator is added.
 
 
 Version 0.16.1

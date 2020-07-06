@@ -2444,6 +2444,7 @@ fn run_builtin_binary_op(
         match op {
             "&" => return Ok(Some((x && y).into())),
             "|" => return Ok(Some((x || y).into())),
+            "^" => return Ok(Some((x ^ y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             _ => (),
