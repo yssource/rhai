@@ -49,7 +49,7 @@ pub use crate::utils::ImmutableString;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
-/// Currently, [`AST`] is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone, Default)]
 pub struct AST(
     /// Global statements.
@@ -59,7 +59,7 @@ pub struct AST(
 );
 
 impl AST {
-    /// Create a new [`AST`].
+    /// Create a new `AST`.
     pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
         Self(statements, lib)
     }
@@ -95,16 +95,43 @@ impl AST {
         &self.1
     }
 
-    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
+    /// Clone the `AST`'s functions into a new `AST`.
+    /// No statements are cloned.
+    ///
+    /// This operation is cheap because functions are shared.
+    pub fn clone_functions_only(&self) -> Self {
+        self.clone_functions_only_filtered(|_, _, _| true)
+    }
+
+    /// Clone the `AST`'s functions into a new `AST` based on a filter predicate.
+    /// No statements are cloned.
+    ///
+    /// This operation is cheap because functions are shared.
+    pub fn clone_functions_only_filtered(
+        &self,
+        filter: impl Fn(FnAccess, &str, usize) -> bool,
+    ) -> Self {
+        let mut functions: Module = Default::default();
+        functions.merge_filtered(&self.1, filter);
+        Self(Default::default(), functions)
+    }
+
+    /// Clone the `AST`'s script statements into a new `AST`.
+    /// No functions are cloned.
+    pub fn clone_statements_only(&self) -> Self {
+        Self(self.0.clone(), Default::default())
+    }
+
+    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second [`AST`] is simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
-    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
-    /// the second [`AST`] will essentially be dead code.
+    /// The second `AST` is simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
+    /// Of course, if the first `AST` uses a `return` statement at the end, then
+    /// the second `AST` will essentially be dead code.
     ///
-    /// All script-defined functions in the second [`AST`] overwrite similarly-named functions
-    /// in the first [`AST`] with the same number of parameters.
+    /// All script-defined functions in the second `AST` overwrite similarly-named functions
+    /// in the first `AST` with the same number of parameters.
     ///
     /// # Example
     ///
@@ -148,16 +175,16 @@ impl AST {
         self.merge_filtered(other, |_, _, _| true)
     }
 
-    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
+    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second [`AST`] is simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
-    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
-    /// the second [`AST`] will essentially be dead code.
+    /// The second `AST` is simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
+    /// Of course, if the first `AST` uses a `return` statement at the end, then
+    /// the second `AST` will essentially be dead code.
     ///
-    /// All script-defined functions in the second [`AST`] are first selected based on a filter
-    /// predicate, then overwrite similarly-named functions in the first [`AST`] with the
+    /// All script-defined functions in the second `AST` are first selected based on a filter
+    /// predicate, then overwrite similarly-named functions in the first `AST` with the
     /// same number of parameters.
     ///
     /// # Example
@@ -251,13 +278,13 @@ impl AST {
         self.1.retain_functions(filter);
     }
 
-    /// Clear all function definitions in the [`AST`].
+    /// Clear all function definitions in the `AST`.
     #[cfg(not(feature = "no_function"))]
     pub fn clear_functions(&mut self) {
         self.1 = Default::default();
     }
 
-    /// Clear all statements in the [`AST`], leaving only function definitions.
+    /// Clear all statements in the `AST`, leaving only function definitions.
     pub fn clear_statements(&mut self) {
         self.0 = vec![];
     }

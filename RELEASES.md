@@ -24,6 +24,7 @@ New features
 * `Engine::disable_symbol` to surgically disable keywords and/or operators.
 * `Engine::register_custom_operator` to define a custom operator.
 * New low-level API `Engine::register_raw_fn`.
+* `AST::clone_functions_only`, `AST::clone_functions_only_filtered` and `AST::clone_statements_only` to clone only part of an `AST`.
 
 
 Version 0.16.1
