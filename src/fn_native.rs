@@ -55,7 +55,7 @@ pub struct FnPtr(ImmutableString);
 
 impl FnPtr {
     /// Create a new function pointer.
-    pub(crate) fn new<S: Into<ImmutableString>>(name: S) -> Self {
+    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(name: S) -> Self {
         Self(name.into())
     }
     /// Get the name of the function.
