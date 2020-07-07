@@ -1,7 +1,7 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, Func, ImmutableString, Module, ParseError, ParseErrorType,
-    Scope, INT,
+    Dynamic, Engine, EvalAltResult, FnPtr, Func, ImmutableString, Module, ParseError,
+    ParseErrorType, Scope, INT,
 };
 
 #[test]
@@ -122,17 +122,23 @@ fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
         "bar",
         &[
             std::any::TypeId::of::<INT>(),
-            std::any::TypeId::of::<ImmutableString>(),
+            std::any::TypeId::of::<FnPtr>(),
             std::any::TypeId::of::<INT>(),
         ],
         move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-            let callback = args[1].clone().cast::<ImmutableString>();
+            let fp = std::mem::take(args[1]).cast::<FnPtr>();
             let value = args[2].clone();
             let this_ptr = args.get_mut(0).unwrap();
 
-            engine.call_fn_dynamic(&mut Scope::new(), lib, &callback, Some(this_ptr), [value])?;
+            engine.call_fn_dynamic(
+                &mut Scope::new(),
+                lib,
+                fp.fn_name(),
+                Some(this_ptr),
+                [value],
+            )?;
 
-            Ok(().into())
+            Ok(())
         },
     );
 
@@ -142,7 +148,7 @@ fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
                 fn foo(x) { this += x; }
 
                 let x = 41;
-                x.bar("foo", 1);
+                x.bar(Fn("foo"), 1);
                 x
             "#
         )?,

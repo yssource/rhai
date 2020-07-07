@@ -223,7 +223,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             Ok(())
         },
     );
-    lib.set_fn_var_args(
+    lib.set_raw_fn(
         "pad",
         &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
         |engine: &Engine, _: &Module, args: &mut [&mut Dynamic]| {

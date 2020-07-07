@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::{make_getter, make_setter, Engine, Imports, FN_IDX_GET, FN_IDX_SET};
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync, Shared};
+use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync, Shared};
 use crate::parser::{
     FnAccess,
     FnAccess::{Private, Public},
@@ -49,18 +49,14 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
 
     /// External Rust functions.
-    functions: HashMap<
-        u64,
-        (String, FnAccess, StaticVec<TypeId>, CallableFunction),
-        StraightHasherBuilder,
-    >,
+    functions: HashMap<u64, (String, FnAccess, StaticVec<TypeId>, Func), StraightHasherBuilder>,
 
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: HashMap<TypeId, IteratorFn>,
 
     /// Flattened collection of all external Rust functions, native or scripted,
     /// including those in sub-modules.
-    all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
+    all_functions: HashMap<u64, Func, StraightHasherBuilder>,
 
     /// Is the module indexed?
     indexed: bool,
@@ -346,18 +342,18 @@ impl Module {
     /// Set a Rust function into the module, returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
-    pub fn set_fn(
+    pub(crate) fn set_fn(
         &mut self,
         name: impl Into<String>,
         access: FnAccess,
-        params: &[TypeId],
-        func: CallableFunction,
+        arg_types: &[TypeId],
+        func: Func,
     ) -> u64 {
         let name = name.into();
 
-        let hash_fn = calc_fn_hash(empty(), &name, params.len(), params.iter().cloned());
+        let hash_fn = calc_fn_hash(empty(), &name, arg_types.len(), arg_types.iter().cloned());
 
-        let params = params.into_iter().cloned().collect();
+        let params = arg_types.into_iter().cloned().collect();
 
         self.functions
             .insert(hash_fn, (name, access, params, func.into()));
@@ -367,29 +363,72 @@ impl Module {
         hash_fn
     }
 
-    /// Set a Rust function taking a reference to the scripting `Engine`, plus a list of
-    /// mutable `Dynamic` references into the module, returning a hash key.
-    /// A list of `TypeId`'s is taken as the argument types.
+    /// Set a Rust function taking a reference to the scripting `Engine`, the current set of functions,
+    /// plus a list of mutable `Dynamic` references into the module, returning a hash key.
     ///
     /// Use this to register a built-in function which must reference settings on the scripting
-    /// `Engine` (e.g. to prevent growing an array beyond the allowed maximum size).
+    /// `Engine` (e.g. to prevent growing an array beyond the allowed maximum size), or to call a
+    /// script-defined function in the current evaluation context.
     ///
     /// If there is a similar existing Rust function, it is replaced.
-    pub(crate) fn set_fn_var_args<T: Variant + Clone>(
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// A list of `TypeId`'s is taken as the argument types.
+    ///
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
+    ///
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    ///
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// Notice that this will _consume_ the argument, replacing it with `()`.
+    ///
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// let hash = module.set_raw_fn("double_or_not",
+    ///                 // Pass parameter types via a slice with TypeId's
+    ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>() ],
+    ///                 // Fixed closure signature
+    ///                 |engine, lib, args| {
+    ///                     // 'args' is guaranteed to be the right length and of the correct types
+    ///
+    ///                     // Get the second parameter by 'consuming' it
+    ///                     let double = std::mem::take(args[1]).cast::<bool>();
+    ///                     // Since it is a primary type, it can also be cheaply copied
+    ///                     let double = args[1].clone().cast::<bool>();
+    ///                     // Get a mutable reference to the first argument.
+    ///                     let x = args[0].downcast_mut::<i64>().unwrap();
+    ///
+    ///                     let orig = *x;
+    ///
+    ///                     if double {
+    ///                         *x *= 2;            // the first argument can be mutated
+    ///                     }
+    ///
+    ///                     Ok(orig)                // return Result<T, Box<EvalAltResult>>
+    ///                 });
+    ///
+    /// assert!(module.contains_fn(hash));
+    /// ```
+    pub fn set_raw_fn<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        args: &[TypeId],
+        arg_types: &[TypeId],
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |engine: &Engine, lib: &Module, args: &mut FnCallArgs| {
             func(engine, lib, args).map(Dynamic::from)
         };
-        self.set_fn(
-            name,
-            Public,
-            args,
-            CallableFunction::from_method(Box::new(f)),
-        )
+        self.set_fn(name, Public, arg_types, Func::from_method(Box::new(f)))
     }
 
     /// Set a Rust function taking no parameters into the module, returning a hash key.
@@ -411,13 +450,8 @@ impl Module {
         func: impl Fn() -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, _: &mut FnCallArgs| func().map(Dynamic::from);
-        let args = [];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_pure(Box::new(f)),
-        )
+        let arg_types = [];
+        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -441,13 +475,8 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             func(mem::take(args[0]).cast::<A>()).map(Dynamic::from)
         };
-        let args = [TypeId::of::<A>()];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_pure(Box::new(f)),
-        )
+        let arg_types = [TypeId::of::<A>()];
+        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -471,13 +500,8 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
         };
-        let args = [TypeId::of::<A>()];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_method(Box::new(f)),
-        )
+        let arg_types = [TypeId::of::<A>()];
+        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
     }
 
     /// Set a Rust getter function taking one mutable parameter, returning a hash key.
@@ -528,13 +552,8 @@ impl Module {
 
             func(a, b).map(Dynamic::from)
         };
-        let args = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_pure(Box::new(f)),
-        )
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
+        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
@@ -564,13 +583,8 @@ impl Module {
 
             func(a, b).map(Dynamic::from)
         };
-        let args = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_method(Box::new(f)),
-        )
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
+        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
     }
 
     /// Set a Rust setter function taking two parameters (the first one mutable) into the module,
@@ -656,13 +670,8 @@ impl Module {
 
             func(a, b, c).map(Dynamic::from)
         };
-        let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_pure(Box::new(f)),
-        )
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
+        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -698,13 +707,8 @@ impl Module {
 
             func(a, b, c).map(Dynamic::from)
         };
-        let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_method(Box::new(f)),
-        )
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
+        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
     }
 
     /// Set a Rust index setter taking three parameters (the first one mutable) into the module,
@@ -735,12 +739,12 @@ impl Module {
 
             func(a, b, c).map(Dynamic::from)
         };
-        let args = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<A>()];
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<A>()];
         self.set_fn(
             FN_IDX_SET,
             Public,
-            &args,
-            CallableFunction::from_method(Box::new(f)),
+            &arg_types,
+            Func::from_method(Box::new(f)),
         )
     }
 
@@ -778,18 +782,13 @@ impl Module {
 
             func(a, b, c, d).map(Dynamic::from)
         };
-        let args = [
+        let arg_types = [
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             TypeId::of::<C>(),
             TypeId::of::<D>(),
         ];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_pure(Box::new(f)),
-        )
+        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
     }
 
     /// Set a Rust function taking four parameters (the first one mutable) into the module,
@@ -827,25 +826,20 @@ impl Module {
 
             func(a, b, c, d).map(Dynamic::from)
         };
-        let args = [
+        let arg_types = [
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             TypeId::of::<C>(),
             TypeId::of::<C>(),
         ];
-        self.set_fn(
-            name,
-            Public,
-            &args,
-            CallableFunction::from_method(Box::new(f)),
-        )
+        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
     }
 
     /// Get a Rust function.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
-    pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
+    pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&Func> {
         self.functions.get(&hash_fn).map(|(_, _, _, v)| v)
     }
 
@@ -857,7 +851,7 @@ impl Module {
     pub(crate) fn get_qualified_fn(
         &mut self,
         hash_qualified_fn: u64,
-    ) -> Result<&CallableFunction, Box<EvalAltResult>> {
+    ) -> Result<&Func, Box<EvalAltResult>> {
         self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {
             Box::new(EvalAltResult::ErrorFunctionNotFound(
                 String::new(),
@@ -886,9 +880,7 @@ impl Module {
                 .iter()
                 .filter(|(_, (_, _, _, v))| match v {
                     #[cfg(not(feature = "no_function"))]
-                    CallableFunction::Script(ref f) => {
-                        filter(f.access, f.name.as_str(), f.params.len())
-                    }
+                    Func::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
                     _ => true,
                 })
                 .map(|(&k, v)| (k, v.clone())),
@@ -906,7 +898,7 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     pub(crate) fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
         self.functions.retain(|_, (_, _, _, v)| match v {
-            CallableFunction::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
+            Func::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
             _ => true,
         });
 
@@ -936,7 +928,7 @@ impl Module {
     /// Get an iterator to the functions in the module.
     pub(crate) fn iter_fn(
         &self,
-    ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, CallableFunction)> {
+    ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, Func)> {
         self.functions.values()
     }
 
@@ -1003,7 +995,7 @@ impl Module {
             module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
-            functions: &mut Vec<(u64, CallableFunction)>,
+            functions: &mut Vec<(u64, Func)>,
         ) {
             for (name, m) in &module.modules {
                 // Index all the sub-modules first.

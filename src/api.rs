@@ -6,7 +6,7 @@ use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
-use crate::module::Module;
+use crate::module::{FuncReturn, Module};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::AST;
 use crate::result::EvalAltResult;
@@ -39,30 +39,23 @@ impl Engine {
     ///
     /// This function is very low level.  It takes a list of `TypeId`'s indicating the actual types of the parameters.
     ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`.
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
     /// The arguments are guaranteed to be of the correct types matching the `TypeId`'s.
     ///
-    /// To get access to a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
-    /// To get access to a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
-    /// To get access to the first mutable parameter, use `args.get_mut(0).unwrap()`
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn(
+    pub fn register_raw_fn<T: Variant + Clone>(
         &mut self,
         name: &str,
         arg_types: &[TypeId],
-
-        #[cfg(not(feature = "sync"))] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + 'static,
-
-        #[cfg(feature = "sync")] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + Send
-            + Sync
-            + 'static,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) {
-        self.global_module.set_fn_var_args(name, arg_types, func);
+        self.global_module.set_raw_fn(name, arg_types, func);
     }
 
     /// Register a function of no parameters with the `Engine`.
@@ -71,19 +64,12 @@ impl Engine {
     ///
     /// This function is very low level.
     #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_0(
+    pub fn register_raw_fn_0<T: Variant + Clone>(
         &mut self,
         name: &str,
-
-        #[cfg(not(feature = "sync"))] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + 'static,
-
-        #[cfg(feature = "sync")] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + Send
-            + Sync
-            + 'static,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) {
-        self.global_module.set_fn_var_args(name, &[], func);
+        self.global_module.set_raw_fn(name, &[], func);
     }
 
     /// Register a function of one parameter with the `Engine`.
@@ -92,30 +78,23 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`.
-    /// The argument is guaranteed to be of the correct type.
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
     ///
-    /// To get access to a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
-    /// To get access to a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
-    /// To get access to the first mutable parameter, use `args.get_mut(0).unwrap()`
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_1<A: Variant + Clone>(
+    pub fn register_raw_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: &str,
-
-        #[cfg(not(feature = "sync"))] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + 'static,
-
-        #[cfg(feature = "sync")] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + Send
-            + Sync
-            + 'static,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) {
         self.global_module
-            .set_fn_var_args(name, &[TypeId::of::<A>()], func);
+            .set_raw_fn(name, &[TypeId::of::<A>()], func);
     }
 
     /// Register a function of two parameters with the `Engine`.
@@ -124,30 +103,23 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`.
-    /// The arguments are guaranteed to be of the correct types.
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
     ///
-    /// To get access to a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
-    /// To get access to a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
-    /// To get access to the first mutable parameter, use `args.get_mut(0).unwrap()`
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_2<A: Variant + Clone, B: Variant + Clone>(
+    pub fn register_raw_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: &str,
-
-        #[cfg(not(feature = "sync"))] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + 'static,
-
-        #[cfg(feature = "sync")] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + Send
-            + Sync
-            + 'static,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) {
         self.global_module
-            .set_fn_var_args(name, &[TypeId::of::<A>(), TypeId::of::<B>()], func);
+            .set_raw_fn(name, &[TypeId::of::<A>(), TypeId::of::<B>()], func);
     }
 
     /// Register a function of three parameters with the `Engine`.
@@ -156,29 +128,27 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`.
-    /// The arguments are guaranteed to be of the correct types.
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
     ///
-    /// To get access to a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
-    /// To get access to a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
-    /// To get access to the first mutable parameter, use `args.get_mut(0).unwrap()`
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_3<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
+    pub fn register_raw_fn_3<
+        A: Variant + Clone,
+        B: Variant + Clone,
+        C: Variant + Clone,
+        T: Variant + Clone,
+    >(
         &mut self,
         name: &str,
-
-        #[cfg(not(feature = "sync"))] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + 'static,
-
-        #[cfg(feature = "sync")] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + Send
-            + Sync
-            + 'static,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) {
-        self.global_module.set_fn_var_args(
+        self.global_module.set_raw_fn(
             name,
             &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()],
             func,
@@ -191,34 +161,28 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`.
-    /// The arguments are guaranteed to be of the correct types.
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
     ///
-    /// To get access to a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
-    /// To get access to a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
-    /// To get access to the first mutable parameter, use `args.get_mut(0).unwrap()`
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated(note = "this function is volatile and may change")]
     pub fn register_raw_fn_4<
         A: Variant + Clone,
         B: Variant + Clone,
         C: Variant + Clone,
         D: Variant + Clone,
+        T: Variant + Clone,
     >(
         &mut self,
         name: &str,
-
-        #[cfg(not(feature = "sync"))] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + 'static,
-
-        #[cfg(feature = "sync")] func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>
-            + Send
-            + Sync
-            + 'static,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) {
-        self.global_module.set_fn_var_args(
+        self.global_module.set_raw_fn(
             name,
             &[
                 TypeId::of::<A>(),
@@ -1395,7 +1359,7 @@ impl Engine {
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> FuncReturn<Dynamic> {
         self.call_fn_dynamic_raw(scope, lib, name, &mut this_ptr, arg_values.as_mut())
     }
 
@@ -1415,7 +1379,7 @@ impl Engine {
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         arg_values: &mut [Dynamic],
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> FuncReturn<Dynamic> {
         let lib = lib.as_ref();
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let fn_def =
