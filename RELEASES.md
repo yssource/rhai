@@ -9,6 +9,7 @@ This version adds:
 * [`serde`](https://crates.io/crates/serde) support for working with `Dynamic` values (particularly _object maps_).
 * Ability to surgically disable keywords and/or operators in the language.
 * Ability to define custom operators (which must be valid identifiers).
+* Low-level API to register functions.
 
 Breaking changes
 ----------------
@@ -29,6 +30,7 @@ New features
 * `AST::clone_functions_only`, `AST::clone_functions_only_filtered` and `AST::clone_statements_only` to clone only part of an `AST`.
 * The boolean `^` (XOR) operator is added.
 * `FnPtr` is exposed as the function pointer type.
+* `rhai::module_resolvers::ModuleResolversCollection` added to try a list of module resolvers.
 
 
 Version 0.16.1

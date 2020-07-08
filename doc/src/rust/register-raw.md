@@ -75,15 +75,18 @@ Closure Signature
 
 The closure passed to `Engine::register_raw_fn` takes the following form:
 
-`Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> + 'static`
+`Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>> + 'static`
 
 where:
 
-* `engine` - a reference to the current [`Engine`], with all configurations and settings.
+* `T : Variant + Clone` - return type of the function.
 
-* `lib` - a reference to the current collection of script-defined functions, as a [`Module`].
+* `engine : &Engine` - the current [`Engine`], with all configurations and settings.
 
-* `args` - a reference to a slice containing `&mut` references to [`Dynamic`] values.
+* `lib : &Module` - the current global library of script-defined functions, as a [`Module`].
+  This is sometimes useful for calling a script-defined function within the same evaluation context using [`Engine::call_fn`][`call_fn`].
+
+* `args : &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
   The slice is guaranteed to contain enough arguments _of the correct types_.
 
 Remember, in Rhai, all arguments _except_ the _first_ one are always passed by _value_ (i.e. cloned).
@@ -100,11 +103,52 @@ To extract an argument from the `args` parameter (`&mut [&mut Dynamic]`), use th
 | ------------------------------ | -------------------------------------- | ---------------------------------------------------------- |
 | [Primary type][standard types] | `args[n].clone().cast::<T>()`          | Copy of value.                                             |
 | Custom type                    | `args[n].downcast_ref::<T>().unwrap()` | Immutable reference to value.                              |
-| Custom type (consumed)         | `mem::take(args[n]).cast::<T>()`       | The _consumed_ value.<br/>The original value becomes `()`. |
+| Custom type (consumed)         | `std::mem::take(args[n]).cast::<T>()`  | The _consumed_ value.<br/>The original value becomes `()`. |
 | `this` object                  | `args[0].downcast_mut::<T>().unwrap()` | Mutable reference to value.                                |
 
 When there is a mutable reference to the `this` object (i.e. the first argument),
 there can be no other immutable references to `args`, otherwise the Rust borrow checker will complain.
+
+
+Example - Passing a Function Pointer to a Rust Function
+------------------------------------------------------
+
+```rust
+use rhai::{Engine, Module, Dynamic, FnPtr};
+
+let mut engine = Engine::new();
+
+// Register a Rust function
+engine.register_raw_fn(
+    "bar",
+    &[
+        std::any::TypeId::of::<i64>(),                          // parameter types
+        std::any::TypeId::of::<FnPtr>(),
+        std::any::TypeId::of::<i64>(),
+    ],
+    move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+        // 'args' is guaranteed to contain enough arguments of the correct types
+
+        let fp = std::mem::take(args[1]).cast::<FnPtr>();       // 2nd argument - function pointer
+        let value = args[2].clone();                            // 3rd argument - function argument
+        let this_ptr = args.get_mut(0).unwrap();                // 1st argument - this pointer
+
+        // Use 'call_fn_dynamic' to call the function name.
+        // Pass 'lib' as the current global library of functions.
+        engine.call_fn_dynamic(&mut Scope::new(), lib, fp.fn_name(), Some(this_ptr), [value])?;
+
+        Ok(())
+    },
+);
+
+let result = engine.eval::<i64>(r#"
+                fn foo(x) { this += x; }    // script-defined function 'foo'
+
+                let x = 41;                 // object
+                x.bar(Fn("foo"), 1);        // pass 'foo' as function pointer
+                x
+"#)?;
+```
 
 
 Hold Multiple References

@@ -136,10 +136,10 @@ with a special "pretty-print" name, [`type_of()`] will return that name instead.
 engine.register_type::<TestStruct>();
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(x.type_of());                                 // prints "path::to::module::TestStruct"
+x.type_of() == "path::to::module::TestStruct";
 
 engine.register_type_with_name::<TestStruct>("Hello");
 engine.register_fn("new_ts", TestStruct::new);
 let x = new_ts();
-print(x.type_of());                                 // prints "Hello"
+x.type_of() == "Hello";
 ```
