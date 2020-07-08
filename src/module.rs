@@ -849,7 +849,7 @@ impl Module {
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
     pub(crate) fn get_qualified_fn(
-        &mut self,
+        &self,
         hash_qualified_fn: u64,
     ) -> Result<&Func, Box<EvalAltResult>> {
         self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {

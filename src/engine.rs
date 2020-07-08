@@ -399,6 +399,39 @@ fn default_print(s: &str) {
 /// Search for a module within an imports stack.
 /// Position in `EvalAltResult` is None and must be set afterwards.
 fn search_imports<'s>(
+    mods: &'s Imports,
+    state: &mut State,
+    modules: &Box<ModuleRef>,
+) -> Result<&'s Module, Box<EvalAltResult>> {
+    let (root, root_pos) = modules.get(0);
+
+    // Qualified - check if the root module is directly indexed
+    let index = if state.always_search {
+        None
+    } else {
+        modules.index()
+    };
+
+    Ok(if let Some(index) = index {
+        let offset = mods.len() - index.get();
+        &mods.get(offset).unwrap().1
+    } else {
+        mods.iter()
+            .rev()
+            .find(|(n, _)| n == root)
+            .map(|(_, m)| m)
+            .ok_or_else(|| {
+                Box::new(EvalAltResult::ErrorModuleNotFound(
+                    root.to_string(),
+                    *root_pos,
+                ))
+            })?
+    })
+}
+
+/// Search for a module within an imports stack.
+/// Position in `EvalAltResult` is None and must be set afterwards.
+fn search_imports_mut<'s>(
     mods: &'s mut Imports,
     state: &mut State,
     modules: &Box<ModuleRef>,
@@ -429,15 +462,49 @@ fn search_imports<'s>(
     })
 }
 
-/// Search for a variable within the scope
-fn search_scope<'s, 'a>(
+/// Search for a variable within the scope and imports
+fn search_namespace<'s, 'a>(
     scope: &'s mut Scope,
     mods: &'s mut Imports,
     state: &mut State,
     this_ptr: &'s mut Option<&mut Dynamic>,
     expr: &'a Expr,
 ) -> Result<(&'s mut Dynamic, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
-    let ((name, pos), modules, hash_var, index) = match expr {
+    match expr {
+        Expr::Variable(v) => match v.as_ref() {
+            // Qualified variable
+            ((name, pos), Some(modules), hash_var, _) => {
+                let module = search_imports_mut(mods, state, modules)?;
+                let target = module
+                    .get_qualified_var_mut(*hash_var)
+                    .map_err(|err| match *err {
+                        EvalAltResult::ErrorVariableNotFound(_, _) => {
+                            Box::new(EvalAltResult::ErrorVariableNotFound(
+                                format!("{}{}", modules, name),
+                                *pos,
+                            ))
+                        }
+                        _ => err.new_position(*pos),
+                    })?;
+
+                // Module variables are constant
+                Ok((target, name, ScopeEntryType::Constant, *pos))
+            }
+            // Normal variable access
+            _ => search_scope_only(scope, state, this_ptr, expr),
+        },
+        _ => unreachable!(),
+    }
+}
+
+/// Search for a variable within the scope
+fn search_scope_only<'s, 'a>(
+    scope: &'s mut Scope,
+    state: &mut State,
+    this_ptr: &'s mut Option<&mut Dynamic>,
+    expr: &'a Expr,
+) -> Result<(&'s mut Dynamic, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
+    let ((name, pos), _, _, index) = match expr {
         Expr::Variable(v) => v.as_ref(),
         _ => unreachable!(),
     };
@@ -451,37 +518,21 @@ fn search_scope<'s, 'a>(
         }
     }
 
-    // Check if it is qualified
-    if let Some(modules) = modules {
-        let module = search_imports(mods, state, modules)?;
-        let target = module
-            .get_qualified_var_mut(*hash_var)
-            .map_err(|err| match *err {
-                EvalAltResult::ErrorVariableNotFound(_, _) => Box::new(
-                    EvalAltResult::ErrorVariableNotFound(format!("{}{}", modules, name), *pos),
-                ),
-                _ => err.new_position(*pos),
-            })?;
+    // Check if it is directly indexed
+    let index = if state.always_search { None } else { *index };
 
-        // Module variables are constant
-        Ok((target, name, ScopeEntryType::Constant, *pos))
+    let index = if let Some(index) = index {
+        scope.len() - index.get()
     } else {
-        // Unqualified - check if it is directly indexed
-        let index = if state.always_search { None } else { *index };
+        // Find the variable in the scope
+        scope
+            .get_index(name)
+            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), *pos)))?
+            .0
+    };
 
-        let index = if let Some(index) = index {
-            scope.len() - index.get()
-        } else {
-            // Find the variable in the scope
-            scope
-                .get_index(name)
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), *pos)))?
-                .0
-        };
-
-        let (val, typ) = scope.get_mut(index);
-        Ok((val, name, typ, *pos))
-    }
+    let (val, typ) = scope.get_mut(index);
+    Ok((val, name, typ, *pos))
 }
 
 impl Engine {
@@ -1276,7 +1327,8 @@ impl Engine {
                 self.inc_operations(state)
                     .map_err(|err| err.new_position(*var_pos))?;
 
-                let (target, _, typ, pos) = search_scope(scope, mods, state, this_ptr, dot_lhs)?;
+                let (target, _, typ, pos) =
+                    search_namespace(scope, mods, state, this_ptr, dot_lhs)?;
 
                 // Constants cannot be modified
                 match typ {
@@ -1573,7 +1625,7 @@ impl Engine {
                 }
             }
             Expr::Variable(_) => {
-                let (val, _, _, _) = search_scope(scope, mods, state, this_ptr, expr)?;
+                let (val, _, _, _) = search_namespace(scope, mods, state, this_ptr, expr)?;
                 Ok(val.clone())
             }
             Expr::Property(_) => unreachable!(),
@@ -1587,7 +1639,7 @@ impl Engine {
                 let mut rhs_val =
                     self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
                 let (lhs_ptr, name, typ, pos) =
-                    search_scope(scope, mods, state, this_ptr, lhs_expr)?;
+                    search_namespace(scope, mods, state, this_ptr, lhs_expr)?;
                 self.inc_operations(state)
                     .map_err(|err| err.new_position(pos))?;
 
@@ -1800,7 +1852,7 @@ impl Engine {
                                 .collect::<Result<_, _>>()?;
 
                             let (target, _, _, pos) =
-                                search_scope(scope, mods, state, this_ptr, lhs)?;
+                                search_namespace(scope, mods, state, this_ptr, lhs)?;
 
                             self.inc_operations(state)
                                 .map_err(|err| err.new_position(pos))?;
@@ -1836,12 +1888,48 @@ impl Engine {
                 let ((name, _, pos), modules, hash_script, args_expr, def_val) = x.as_ref();
                 let modules = modules.as_ref().unwrap();
 
-                let mut arg_values = args_expr
-                    .iter()
-                    .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
-                    .collect::<Result<StaticVec<_>, _>>()?;
+                let mut arg_values: StaticVec<Dynamic>;
+                let mut args: StaticVec<_>;
 
-                let mut args: StaticVec<_> = arg_values.iter_mut().collect();
+                if args_expr.is_empty() {
+                    // No arguments
+                    args = Default::default();
+                } else {
+                    // See if the first argument is a variable (not module-qualified).
+                    // If so, convert to method-call style in order to leverage potential
+                    // &mut first argument and avoid cloning the value
+                    match args_expr.get(0) {
+                        // func(x, ...) -> x.func(...)
+                        Expr::Variable(x) if x.1.is_none() => {
+                            arg_values = args_expr
+                                .iter()
+                                .skip(1)
+                                .map(|expr| {
+                                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                                })
+                                .collect::<Result<_, _>>()?;
+
+                            let (target, _, _, pos) =
+                                search_scope_only(scope, state, this_ptr, args_expr.get(0))?;
+
+                            self.inc_operations(state)
+                                .map_err(|err| err.new_position(pos))?;
+
+                            args = once(target).chain(arg_values.iter_mut()).collect();
+                        }
+                        // func(..., ...) or func(mod::x, ...)
+                        _ => {
+                            arg_values = args_expr
+                                .iter()
+                                .map(|expr| {
+                                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                                })
+                                .collect::<Result<_, _>>()?;
+
+                            args = arg_values.iter_mut().collect();
+                        }
+                    }
+                }
 
                 let module = search_imports(mods, state, modules)?;
 
