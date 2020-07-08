@@ -213,6 +213,7 @@ pub enum Token {
     As,
     LexError(Box<LexError>),
     Comment(String),
+    Reserved(String),
     Custom(String),
     EOF,
 }
@@ -229,6 +230,7 @@ impl Token {
             StringConstant(_) => "string".into(),
             CharConstant(c) => c.to_string().into(),
             Identifier(s) => s.clone().into(),
+            Reserved(s) => s.clone().into(),
             Custom(s) => s.clone().into(),
             LexError(err) => err.to_string().into(),
 
@@ -339,7 +341,6 @@ impl Token {
             UnaryMinus       |
             Multiply         |
             Divide           |
-            Colon            |
             Comma            |
             Period           |
             Equals           |
@@ -750,7 +751,9 @@ fn get_next_token_inner(
                             }
                         }
                         // 0x????, 0o????, 0b????
-                        ch @ 'x' | ch @ 'X' | ch @ 'o' | ch @ 'O' | ch @ 'b' | ch @ 'B' if c == '0' => {
+                        ch @ 'x' | ch @ 'X' | ch @ 'o' | ch @ 'O' | ch @ 'b' | ch @ 'B'
+                            if c == '0' =>
+                        {
                             result.push(next_char);
                             eat_next(stream, pos);
 
@@ -889,42 +892,48 @@ fn get_next_token_inner(
             }
 
             // " - string literal
-            ('"', _) => return parse_string_literal(stream, state, pos, '"')
-                                .map_or_else(
-                                    |err| Some((Token::LexError(Box::new(err.0)), err.1)),
-                                    |out| Some((Token::StringConstant(out), start_pos)),
-                                ),
+            ('"', _) => {
+                return parse_string_literal(stream, state, pos, '"').map_or_else(
+                    |err| Some((Token::LexError(Box::new(err.0)), err.1)),
+                    |out| Some((Token::StringConstant(out), start_pos)),
+                )
+            }
 
             // ' - character literal
-            ('\'', '\'') => return Some((
-                Token::LexError(Box::new(LERR::MalformedChar("".to_string()))),
-                start_pos,
-            )),
-            ('\'', _) => return Some(
-                parse_string_literal(stream, state, pos, '\'')
-                    .map_or_else(
-                        |err| (Token::LexError(Box::new(err.0)), err.1),
-                        |result| {
-                            let mut chars = result.chars();
-                            let first = chars.next();
+            ('\'', '\'') => {
+                return Some((
+                    Token::LexError(Box::new(LERR::MalformedChar("".to_string()))),
+                    start_pos,
+                ))
+            }
+            ('\'', _) => {
+                return Some(parse_string_literal(stream, state, pos, '\'').map_or_else(
+                    |err| (Token::LexError(Box::new(err.0)), err.1),
+                    |result| {
+                        let mut chars = result.chars();
+                        let first = chars.next();
 
-                            if chars.next().is_some() {
-                                (
-                                    Token::LexError(Box::new(LERR::MalformedChar(result))),
-                                    start_pos,
-                                )
-                            } else {
-                                (Token::CharConstant(first.expect("should be Some")), start_pos)
-                            }
-                        },
-                    ),
-            ),
+                        if chars.next().is_some() {
+                            (
+                                Token::LexError(Box::new(LERR::MalformedChar(result))),
+                                start_pos,
+                            )
+                        } else {
+                            (
+                                Token::CharConstant(first.expect("should be Some")),
+                                start_pos,
+                            )
+                        }
+                    },
+                ))
+            }
 
             // Braces
             ('{', _) => return Some((Token::LeftBrace, start_pos)),
             ('}', _) => return Some((Token::RightBrace, start_pos)),
 
             // Parentheses
+            ('(', '*') => return Some((Token::Reserved("(*".into()), start_pos)),
             ('(', _) => return Some((Token::LeftParen, start_pos)),
             (')', _) => return Some((Token::RightParen, start_pos)),
 
@@ -953,15 +962,11 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::MinusAssign, start_pos));
             }
-            ('-', '>') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'->' is not a valid symbol. This is not C or C++!".to_string(),
-                ))),
-                start_pos,
-            )),
+            ('-', '>') => return Some((Token::Reserved("->".into()), start_pos)),
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
+            ('*', ')') => return Some((Token::Reserved("*)".into()), start_pos)),
             ('*', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::MultiplyAssign, start_pos));
@@ -1026,49 +1031,31 @@ fn get_next_token_inner(
 
                 // Warn against `===`
                 if stream.peek_next() == Some('=') {
-                    return Some((
-                            Token::LexError(Box::new(LERR::ImproperSymbol(
-                                "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
-                                    .to_string(),
-                            ))),
-                            start_pos,
-                        ));
+                    return Some((Token::Reserved("===".into()), start_pos));
                 }
 
                 return Some((Token::EqualsTo, start_pos));
             }
-            ('=', '>') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'=>' is not a valid symbol. This is not Rust! Should it be '>='?"
-                        .to_string(),
-                ))),
-                start_pos,
-            )),
+            ('=', '>') => return Some((Token::Reserved("=>".into()), start_pos)),
             ('=', _) => return Some((Token::Equals, start_pos)),
 
             (':', ':') => {
                 eat_next(stream, pos);
+
+                if stream.peek_next() == Some('<') {
+                    return Some((Token::Reserved("::<".into()), start_pos));
+                }
+
                 return Some((Token::DoubleColon, start_pos));
             }
-            (':', '=') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "':=' is not a valid assignment operator. This is not Pascal! Should it be simply '='?"
-                        .to_string(),
-                ))),
-                start_pos,
-            )),
+            (':', '=') => return Some((Token::Reserved(":=".into()), start_pos)),
             (':', _) => return Some((Token::Colon, start_pos)),
 
             ('<', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::LessThanEqualsTo, start_pos));
             }
-            ('<', '-') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'<-' is not a valid symbol. Should it be '<='?".to_string(),
-                ))),
-                start_pos,
-            )),
+            ('<', '-') => return Some((Token::Reserved("<-".into()), start_pos)),
             ('<', '<') => {
                 eat_next(stream, pos);
 
@@ -1106,15 +1093,8 @@ fn get_next_token_inner(
             ('!', '=') => {
                 eat_next(stream, pos);
 
-                // Warn against `!==`
                 if stream.peek_next() == Some('=') {
-                    return Some((
-                            Token::LexError(Box::new(LERR::ImproperSymbol(
-                                "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
-                                    .to_string(),
-                            ))),
-                            start_pos,
-                        ));
+                    return Some((Token::Reserved("!==".into()), start_pos));
                 }
 
                 return Some((Token::NotEqualsTo, start_pos));
@@ -1159,10 +1139,17 @@ fn get_next_token_inner(
             }
             ('~', _) => return Some((Token::PowerOf, start_pos)),
 
+            ('@', _) => return Some((Token::Reserved("@".into()), start_pos)),
+
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),
-            (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedInput(ch.to_string()))), start_pos)),
+            (ch, _) => {
+                return Some((
+                    Token::LexError(Box::new(LERR::UnexpectedInput(ch.to_string()))),
+                    start_pos,
+                ))
+            }
         }
     }
 
@@ -1237,6 +1224,41 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             self.engine.custom_keywords.as_ref(),
         ) {
             (None, _, _) => None,
+            (Some((Token::Reserved(s), pos)), None, None) => return Some((match s.as_str() {
+                "===" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
+                        .to_string(),
+                ))),
+                "!==" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
+                        .to_string(),
+                ))),
+                "->" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'->' is not a valid symbol. This is not C or C++!".to_string(),
+                ))),
+                "<-" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'<-' is not a valid symbol. This is not Go! Should it be '<='?".to_string(),
+                ))),
+                "=>" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'=>' is not a valid symbol. This is not Rust! Should it be '>='?"
+                        .to_string(),
+                ))),
+                ":=" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "':=' is not a valid assignment operator. This is not Go! Should it be simply '='?"
+                        .to_string(),
+                ))),
+                "::<" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?"
+                        .to_string(),
+                ))),
+                "(*" | "*)" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'(* .. *)' is not a valid comment style. This is not Pascal! Should it be '/* .. */'?"
+                        .to_string(),
+                ))),
+                token => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    format!("'{}' is not a valid symbol.", token)
+                ))),
+            }, pos)),
             (r @ Some(_), None, None) => r,
             (Some((token, pos)), Some(disabled), _)
                 if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>

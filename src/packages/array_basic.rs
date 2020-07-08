@@ -67,7 +67,7 @@ macro_rules! reg_tri {
 macro_rules! reg_pad {
     ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
         $({
-            $lib.set_fn_var_args($op,
+            $lib.set_raw_fn($op,
                 &[TypeId::of::<Array>(), TypeId::of::<INT>(), TypeId::of::<$par>()],
                 $func::<$par>
             );

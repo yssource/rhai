@@ -82,7 +82,7 @@
 [`Module`]: {{rootUrl}}/language/modules/index.md
 [module]: {{rootUrl}}/language/modules/index.md
 [modules]: {{rootUrl}}/language/modules/index.md
-[module resolver]: {{rootUrl}}/language/modules/imp-resolver.md
+[module resolver]: {{rootUrl}}/rust/modules/resolvers.md
 [`export`]: {{rootUrl}}/language/modules/export.md
 [`import`]: {{rootUrl}}/language/modules/import.md
 

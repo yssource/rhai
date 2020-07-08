@@ -39,17 +39,19 @@ engine.register_fn("+", strange_add);               // overload '+' operator for
 
 let result: i64 = engine.eval("1 + 0");             // the overloading version is used
 
-println!("result: {}", result);                     // prints 42
+result == 42;
 
 let result: f64 = engine.eval("1.0 + 0.0");         // '+' operator for two floats not overloaded
 
-println!("result: {}", result);                     // prints 1.0
+result == 1.0;
 
 fn mixed_add(a: i64, b: f64) -> f64 { (a as f64) + b }
 
 engine.register_fn("+", mixed_add);                 // register '+' operator for an integer and a float
 
-let result: i64 = engine.eval("1 + 1.0");           // prints 2.0 (normally an error)
+let result: i64 = engine.eval("1 + 1.0");           // <- normally an error...
+
+result == 2.0;                                      //    ... but not now
 ```
 
 

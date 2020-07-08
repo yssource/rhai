@@ -1,7 +1,11 @@
-Operators
-=========
+Operators and Symbols
+====================
 
 {{#include ../links.md}}
+
+
+Operators
+---------
 
 |     Operator      | Description                    | Binary? | Binding direction |
 | :---------------: | ------------------------------ | :-----: | :---------------: |
@@ -28,3 +32,21 @@ Operators
 |        `!`        | Boolean _Not_                  |   No    |       Left        |
 |    `[` .. `]`     | Indexing                       |   Yes   |       Right       |
 |        `.`        | Property access, Method call   |   Yes   |       Right       |
+
+
+Symbols
+-------
+
+| Symbol       | Description              |
+| ------------ | ------------------------ |
+| `:`          | Property value separator |
+| `::`         | Module path separator    |
+| `=>`         | _Reserved_               |
+| `->`         | _Reserved_               |
+| `<-`         | _Reserved_               |
+| `===`        | _Reserved_               |
+| `!==`        | _Reserved_               |
+| `:=`         | _Reserved_               |
+| `::<` .. `>` | _Reserved_               |
+| `@`          | _Reserved_               |
+| `(*` .. `*)` | _Reserved_               |
