@@ -110,5 +110,5 @@ The Rhai Scripting Language
    7. [Eval Statement](language/eval.md)
 9. [Appendix](appendix/index.md)
    1. [Keywords](appendix/keywords.md)
-   2. [Operators](appendix/operators.md)
+   2. [Operators and Symbols](appendix/operators.md)
    3. [Literals](appendix/literals.md)
