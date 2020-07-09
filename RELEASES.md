@@ -31,6 +31,7 @@ New features
 * The boolean `^` (XOR) operator is added.
 * `FnPtr` is exposed as the function pointer type.
 * `rhai::module_resolvers::ModuleResolversCollection` added to try a list of module resolvers.
+* It is now possible to mutate the first argument of a module-qualified function call when the argument is a simple variable (but not a module constant).
 
 
 Version 0.16.1

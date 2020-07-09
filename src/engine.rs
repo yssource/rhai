@@ -11,6 +11,7 @@ use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, St
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
+use crate::syntax::CustomSyntax;
 use crate::token::Position;
 use crate::utils::StaticVec;
 
@@ -82,8 +83,12 @@ pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
 pub const FN_GET: &str = "get$";
 pub const FN_SET: &str = "set$";
-pub const FN_IDX_GET: &str = "$index$get$";
-pub const FN_IDX_SET: &str = "$index$set$";
+pub const FN_IDX_GET: &str = "index$get$";
+pub const FN_IDX_SET: &str = "index$set$";
+pub const MARKER_EXPR: &str = "$expr$";
+pub const MARKER_STMT: &str = "$stmt$";
+pub const MARKER_BLOCK: &str = "$block$";
+pub const MARKER_IDENT: &str = "$ident$";
 
 /// A type specifying the method of chaining.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -273,6 +278,8 @@ pub struct Engine {
     pub(crate) disabled_symbols: Option<HashSet<String>>,
     /// A hashset containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: Option<HashMap<String, u8>>,
+    /// Custom syntax.
+    pub(crate) custom_syntax: Option<HashMap<String, CustomSyntax>>,
 
     /// Callback closure for implementing the `print` command.
     pub(crate) print: Callback<str, ()>,
@@ -322,6 +329,7 @@ impl Default for Engine {
             type_names: None,
             disabled_symbols: None,
             custom_keywords: None,
+            custom_syntax: None,
 
             // default print/debug implementations
             print: Box::new(default_print),
@@ -554,6 +562,7 @@ impl Engine {
             type_names: None,
             disabled_symbols: None,
             custom_keywords: None,
+            custom_syntax: None,
 
             print: Box::new(|_| {}),
             debug: Box::new(|_| {}),
@@ -1595,6 +1604,26 @@ impl Engine {
         }
     }
 
+    /// Evaluate an expression inside an AST.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.  It evaluates an expression from an AST.
+    #[cfg(feature = "internals")]
+    #[deprecated(note = "this method is volatile and may change")]
+    pub fn eval_expr_from_ast(
+        &self,
+        scope: &mut Scope,
+        mods: &mut Imports,
+        state: &mut State,
+        lib: &Module,
+        this_ptr: &mut Option<&mut Dynamic>,
+        expr: &Expr,
+        level: usize,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+    }
+
     /// Evaluate an expression
     fn eval_expr(
         &self,
@@ -2025,6 +2054,12 @@ impl Engine {
             Expr::True(_) => Ok(true.into()),
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
+
+            Expr::Custom(x) => {
+                let func = (x.0).1.as_ref();
+                let exprs = (x.0).0.as_ref();
+                func(self, scope, mods, state, lib, this_ptr, exprs, level)
+            }
 
             _ => unreachable!(),
         };

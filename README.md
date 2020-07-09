@@ -34,7 +34,8 @@ Features
 * Rugged - protected against malicious attacks (such as [stack-overflow](https://schungx.github.io/rhai/safety/max-call-stack.html), [over-sized data](https://schungx.github.io/rhai/safety/max-string-size.html), and [runaway scripts](https://schungx.github.io/rhai/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://schungx.github.io/rhai/safety/progress.html) and manually terminate a script run.
 * [Function overloading](https://schungx.github.io/rhai/language/overload.html).
-* [Operator overloading](https://schungx.github.io/rhai/rust/operators.html) and [custom operators](https://schungx.github.io/rhai/engine/custom-op.html).
+* [Operator overloading](https://schungx.github.io/rhai/rust/operators.html).
+* Support for use as a [DSL](https://schungx.github.io/rhai/engine/dsl.html) - [disabling keywords/operators](https://schungx.github.io/rhai/engine/disable.html), [custom operators](https://schungx.github.io/rhai/engine/custom-op.html).
 * Dynamic dispatch via [function pointers](https://schungx.github.io/rhai/language/fn-ptr.html).
 * Some support for [object-oriented programming (OOP)](https://schungx.github.io/rhai/language/oop.html).
 * Organize code base with dynamically-loadable [modules](https://schungx.github.io/rhai/language/modules.html).

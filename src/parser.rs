@@ -2,11 +2,16 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, KEYWORD_THIS};
+use crate::engine::{
+    make_getter, make_setter, Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
+    MARKER_STMT,
+};
 use crate::error::{LexError, ParseError, ParseErrorType};
+use crate::fn_native::Shared;
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
+use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
@@ -568,6 +573,15 @@ impl Stmt {
     }
 }
 
+#[derive(Clone)]
+pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
+
+impl fmt::Debug for CustomExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
 /// An expression.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -632,6 +646,8 @@ pub enum Expr {
     False(Position),
     /// ()
     Unit(Position),
+    /// Custom syntax
+    Custom(Box<(CustomExpr, Position)>),
 }
 
 impl Default for Expr {
@@ -726,6 +742,8 @@ impl Expr {
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
 
             Self::Dot(x) | Self::Index(x) => x.0.position(),
+
+            Self::Custom(x) => x.1,
         }
     }
 
@@ -758,6 +776,7 @@ impl Expr {
             Self::Assignment(x) => x.3 = new_pos,
             Self::Dot(x) => x.2 = new_pos,
             Self::Index(x) => x.2 = new_pos,
+            Self::Custom(x) => x.1 = new_pos,
         }
 
         self
@@ -861,6 +880,8 @@ impl Expr {
                 Token::LeftParen => true,
                 _ => false,
             },
+
+            Self::Custom(_) => false,
         }
     }
 
@@ -2024,6 +2045,85 @@ fn parse_expr(
     settings.pos = input.peek().unwrap().1;
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
+    // Check if it is a custom syntax.
+    if let Some(ref custom) = state.engine.custom_syntax {
+        let (token, pos) = input.peek().unwrap();
+        let token_pos = *pos;
+
+        match token {
+            Token::Custom(key) if custom.contains_key(key) => {
+                let custom = custom.get_key_value(key).unwrap();
+                let (key, syntax) = custom;
+
+                input.next().unwrap();
+
+                let mut exprs: StaticVec<Expr> = Default::default();
+
+                // Adjust the variables stack
+                match syntax.scope_delta {
+                    delta if delta > 0 => {
+                        state.stack.push(("".to_string(), ScopeEntryType::Normal))
+                    }
+                    delta if delta < 0 && state.stack.len() <= delta.abs() as usize => {
+                        state.stack.clear()
+                    }
+                    delta if delta < 0 => state
+                        .stack
+                        .truncate(state.stack.len() - delta.abs() as usize),
+                    _ => (),
+                }
+
+                for segment in syntax.segments.iter() {
+                    settings.pos = input.peek().unwrap().1;
+                    let settings = settings.level_up();
+
+                    match segment.as_str() {
+                        MARKER_IDENT => match input.next().unwrap() {
+                            (Token::Identifier(s), pos) => {
+                                exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
+                            }
+                            (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+                        },
+                        MARKER_EXPR => exprs.push(parse_expr(input, state, lib, settings)?),
+                        MARKER_STMT => {
+                            let stmt = parse_stmt(input, state, lib, settings)?
+                                .unwrap_or_else(|| Stmt::Noop(settings.pos));
+                            let pos = stmt.position();
+                            exprs.push(Expr::Stmt(Box::new((stmt, pos))))
+                        }
+                        MARKER_BLOCK => {
+                            let stmt = parse_block(input, state, lib, settings)?;
+                            let pos = stmt.position();
+                            exprs.push(Expr::Stmt(Box::new((stmt, pos))))
+                        }
+                        s => match input.peek().unwrap() {
+                            (Token::Custom(custom), _) if custom == s => {
+                                input.next().unwrap();
+                            }
+                            (t, _) if t.syntax().as_ref() == s => {
+                                input.next().unwrap();
+                            }
+                            (_, pos) => {
+                                return Err(PERR::MissingToken(
+                                    s.to_string(),
+                                    format!("for '{}' expression", key),
+                                )
+                                .into_err(*pos))
+                            }
+                        },
+                    }
+                }
+
+                return Ok(Expr::Custom(Box::new((
+                    CustomExpr(exprs, syntax.func.clone()),
+                    token_pos,
+                ))));
+            }
+            _ => (),
+        }
+    }
+
+    // Parse expression normally.
     let lhs = parse_unary(input, state, lib, settings.level_up())?;
     parse_binary_op(input, state, lib, 1, lhs, settings.level_up())
 }
@@ -2297,7 +2397,7 @@ fn parse_import(
 fn parse_export(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    _lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     settings.pos = eat_token(input, Token::Export);
