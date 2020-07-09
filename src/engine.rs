@@ -1012,6 +1012,81 @@ impl Engine {
         return Ok(result);
     }
 
+    /// Call a dot method.
+    fn call_method(
+        &self,
+        state: &mut State,
+        lib: &Module,
+        target: &mut Target,
+        expr: &Expr,
+        mut idx_val: Dynamic,
+        level: usize,
+    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        let ((name, native, pos), _, hash, _, def_val) = match expr {
+            Expr::FnCall(x) => x.as_ref(),
+            _ => unreachable!(),
+        };
+
+        let is_ref = target.is_ref();
+        let is_value = target.is_value();
+        let def_val = def_val.as_ref();
+
+        // Get a reference to the mutation target Dynamic
+        let obj = target.as_mut();
+        let idx = idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap();
+        let mut fn_name = name.as_ref();
+
+        // Check if it is a FnPtr call
+        let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+            // Redirect function name
+            fn_name = obj.as_str().unwrap();
+            // Recalculate hash
+            let hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
+            // Arguments are passed as-is
+            let mut arg_values = idx.iter_mut().collect::<StaticVec<_>>();
+            let args = arg_values.as_mut();
+
+            // Map it to name(args) in function-call style
+            self.exec_fn_call(
+                state, lib, fn_name, *native, hash, args, false, false, def_val, level,
+            )
+        } else {
+            let redirected: Option<ImmutableString>;
+            let mut hash = *hash;
+
+            // Check if it is a map method call in OOP style
+            if let Some(map) = obj.downcast_ref::<Map>() {
+                if let Some(val) = map.get(fn_name) {
+                    if let Some(f) = val.downcast_ref::<FnPtr>() {
+                        // Remap the function name
+                        redirected = Some(f.get_fn_name().clone());
+                        fn_name = redirected.as_ref().unwrap();
+
+                        // Recalculate the hash based on the new function name
+                        hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
+                    }
+                }
+            };
+
+            // Attached object pointer in front of the arguments
+            let mut arg_values = once(obj).chain(idx.iter_mut()).collect::<StaticVec<_>>();
+            let args = arg_values.as_mut();
+
+            self.exec_fn_call(
+                state, lib, fn_name, *native, hash, args, is_ref, true, def_val, level,
+            )
+        }
+        .map_err(|err| err.new_position(*pos))?;
+
+        // Feed the changed temp value back
+        if updated && !is_ref && !is_value {
+            let new_val = target.as_mut().clone();
+            target.set_value(new_val)?;
+        }
+
+        Ok((result, updated))
+    }
+
     /// Chain-evaluate a dot/index chain.
     /// Position in `EvalAltResult` is None and must be set afterwards.
     fn eval_dot_index_chain_helper(
@@ -1031,7 +1106,6 @@ impl Engine {
         }
 
         let is_ref = target.is_ref();
-        let is_value = target.is_value();
 
         let next_chain = match rhs {
             Expr::Index(_) => ChainType::Index,
@@ -1040,7 +1114,7 @@ impl Engine {
         };
 
         // Pop the last index value
-        let mut idx_val = idx_values.pop();
+        let idx_val = idx_values.pop();
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
@@ -1124,69 +1198,7 @@ impl Engine {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x) if x.1.is_none() => {
-                        let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
-                        let def_val = def_val.as_ref();
-
-                        // Get a reference to the mutation target Dynamic
-                        let (result, updated) = {
-                            let obj = target.as_mut();
-                            let idx = idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap();
-                            let mut fn_name = name.as_ref();
-
-                            // Check if it is a FnPtr call
-                            if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
-                                // Redirect function name
-                                fn_name = obj.as_str().unwrap();
-                                // Recalculate hash
-                                let hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
-                                // Arguments are passed as-is
-                                let mut arg_values = idx.iter_mut().collect::<StaticVec<_>>();
-                                let args = arg_values.as_mut();
-
-                                // Map it to name(args) in function-call style
-                                self.exec_fn_call(
-                                    state, lib, fn_name, *native, hash, args, false, false,
-                                    def_val, level,
-                                )
-                            } else {
-                                let redirected: Option<ImmutableString>;
-                                let mut hash = *hash;
-
-                                // Check if it is a map method call in OOP style
-                                if let Some(map) = obj.downcast_ref::<Map>() {
-                                    if let Some(val) = map.get(fn_name) {
-                                        if let Some(f) = val.downcast_ref::<FnPtr>() {
-                                            // Remap the function name
-                                            redirected = Some(f.get_fn_name().clone());
-                                            fn_name = redirected.as_ref().unwrap();
-
-                                            // Recalculate the hash based on the new function name
-                                            hash =
-                                                calc_fn_hash(empty(), fn_name, idx.len(), empty());
-                                        }
-                                    }
-                                };
-
-                                // Attached object pointer in front of the arguments
-                                let mut arg_values =
-                                    once(obj).chain(idx.iter_mut()).collect::<StaticVec<_>>();
-                                let args = arg_values.as_mut();
-
-                                self.exec_fn_call(
-                                    state, lib, fn_name, *native, hash, args, is_ref, true,
-                                    def_val, level,
-                                )
-                            }
-                            .map_err(|err| err.new_position(*pos))?
-                        };
-
-                        // Feed the changed temp value back
-                        if updated && !is_ref && !is_value {
-                            let new_val = target.as_mut().clone();
-                            target.set_value(new_val)?;
-                        }
-
-                        Ok((result, updated))
+                        self.call_method(state, lib, target, rhs, idx_val, level)
                     }
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_) => unreachable!(),
@@ -1230,16 +1242,26 @@ impl Engine {
                         .map(|(v, _)| (v, false))
                         .map_err(|err| err.new_position(*pos))
                     }
-                    // {xxx:map}.prop[expr] | {xxx:map}.prop.expr
+                    // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
-                        let (prop, expr, pos) = x.as_ref();
+                        let (sub_lhs, expr, pos) = x.as_ref();
 
-                        let mut val = if let Expr::Property(p) = prop {
-                            let ((prop, _, _), _) = p.as_ref();
-                            let index = prop.clone().into();
-                            self.get_indexed_mut(state, lib, target, index, *pos, false, level)?
-                        } else {
-                            unreachable!();
+                        let mut val = match sub_lhs {
+                            Expr::Property(p) => {
+                                let ((prop, _, _), _) = p.as_ref();
+                                let index = prop.clone().into();
+                                self.get_indexed_mut(state, lib, target, index, *pos, false, level)?
+                            }
+                            // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
+                            Expr::FnCall(x) if x.1.is_none() => {
+                                let (val, _) =
+                                    self.call_method(state, lib, target, sub_lhs, idx_val, level)?;
+                                val.into()
+                            }
+                            // {xxx:map}.module::fn_name(...) - syntax error
+                            Expr::FnCall(_) => unreachable!(),
+                            // Others - syntax error
+                            _ => unreachable!(),
                         };
 
                         self.eval_dot_index_chain_helper(
@@ -1248,49 +1270,72 @@ impl Engine {
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
-                    // xxx.prop[expr] | xxx.prop.expr
+                    // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) => {
-                        let (prop, expr, pos) = x.as_ref();
-                        let args = &mut [target.as_mut(), &mut Default::default()];
+                        let (sub_lhs, expr, pos) = x.as_ref();
 
-                        let (mut val, updated) = if let Expr::Property(p) = prop {
-                            let ((_, getter, _), _) = p.as_ref();
-                            let args = &mut args[..1];
-                            self.exec_fn_call(
-                                state, lib, getter, true, 0, args, is_ref, true, None, level,
-                            )
-                            .map_err(|err| err.new_position(*pos))?
-                        } else {
-                            unreachable!();
-                        };
-                        let val = &mut val;
-                        let target = &mut val.into();
+                        match sub_lhs {
+                            // xxx.prop[expr] | xxx.prop.expr
+                            Expr::Property(p) => {
+                                let ((_, getter, setter), _) = p.as_ref();
+                                let arg_values = &mut [target.as_mut(), &mut Default::default()];
+                                let args = &mut arg_values[..1];
+                                let (mut val, updated) = self
+                                    .exec_fn_call(
+                                        state, lib, getter, true, 0, args, is_ref, true, None,
+                                        level,
+                                    )
+                                    .map_err(|err| err.new_position(*pos))?;
 
-                        let (result, may_be_changed) = self
-                            .eval_dot_index_chain_helper(
-                                state, lib, this_ptr, target, expr, idx_values, next_chain, level,
-                                new_val,
-                            )
-                            .map_err(|err| err.new_position(*pos))?;
+                                let val = &mut val;
+                                let target = &mut val.into();
 
-                        // Feed the value back via a setter just in case it has been updated
-                        if updated || may_be_changed {
-                            if let Expr::Property(p) = prop {
-                                let ((_, _, setter), _) = p.as_ref();
-                                // Re-use args because the first &mut parameter will not be consumed
-                                args[1] = val;
-                                self.exec_fn_call(
-                                    state, lib, setter, true, 0, args, is_ref, true, None, level,
-                                )
-                                .or_else(|err| match *err {
-                                    // If there is no setter, no need to feed it back because the property is read-only
-                                    EvalAltResult::ErrorDotExpr(_, _) => Ok(Default::default()),
-                                    _ => Err(err.new_position(*pos)),
-                                })?;
+                                let (result, may_be_changed) = self
+                                    .eval_dot_index_chain_helper(
+                                        state, lib, this_ptr, target, expr, idx_values, next_chain,
+                                        level, new_val,
+                                    )
+                                    .map_err(|err| err.new_position(*pos))?;
+
+                                // Feed the value back via a setter just in case it has been updated
+                                if updated || may_be_changed {
+                                    // Re-use args because the first &mut parameter will not be consumed
+                                    arg_values[1] = val;
+                                    self.exec_fn_call(
+                                        state, lib, setter, true, 0, arg_values, is_ref, true,
+                                        None, level,
+                                    )
+                                    .or_else(
+                                        |err| match *err {
+                                            // If there is no setter, no need to feed it back because the property is read-only
+                                            EvalAltResult::ErrorDotExpr(_, _) => {
+                                                Ok(Default::default())
+                                            }
+                                            _ => Err(err.new_position(*pos)),
+                                        },
+                                    )?;
+                                }
+
+                                Ok((result, may_be_changed))
                             }
-                        }
+                            // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
+                            Expr::FnCall(x) if x.1.is_none() => {
+                                let (mut val, _) =
+                                    self.call_method(state, lib, target, sub_lhs, idx_val, level)?;
+                                let val = &mut val;
+                                let target = &mut val.into();
 
-                        Ok((result, may_be_changed))
+                                self.eval_dot_index_chain_helper(
+                                    state, lib, this_ptr, target, expr, idx_values, next_chain,
+                                    level, new_val,
+                                )
+                                .map_err(|err| err.new_position(*pos))
+                            }
+                            // xxx.module::fn_name(...) - syntax error
+                            Expr::FnCall(_) => unreachable!(),
+                            // Others - syntax error
+                            _ => unreachable!(),
+                        }
                     }
                     // Syntax error
                     _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
@@ -1325,7 +1370,7 @@ impl Engine {
         let idx_values = &mut StaticVec::new();
 
         self.eval_indexed_chain(
-            scope, mods, state, lib, this_ptr, dot_rhs, idx_values, 0, level,
+            scope, mods, state, lib, this_ptr, dot_rhs, chain_type, idx_values, 0, level,
         )?;
 
         match dot_lhs {
@@ -1389,6 +1434,7 @@ impl Engine {
         lib: &Module,
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
+        chain_type: ChainType,
         idx_values: &mut StaticVec<Dynamic>,
         size: usize,
         level: usize,
@@ -1415,12 +1461,29 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     Expr::Property(_) => Default::default(), // Store a placeholder in case of a property
+                    Expr::FnCall(x) if chain_type == ChainType::Dot && x.1.is_none() => {
+                        let arg_values = x
+                            .3
+                            .iter()
+                            .map(|arg_expr| {
+                                self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                            })
+                            .collect::<Result<StaticVec<Dynamic>, _>>()?;
+
+                        Dynamic::from(arg_values)
+                    }
+                    Expr::FnCall(_) => unreachable!(),
                     _ => self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?,
                 };
 
                 // Push in reverse order
+                let chain_type = match expr {
+                    Expr::Index(_) => ChainType::Index,
+                    Expr::Dot(_) => ChainType::Dot,
+                    _ => unreachable!(),
+                };
                 self.eval_indexed_chain(
-                    scope, mods, state, lib, this_ptr, rhs, idx_values, size, level,
+                    scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, size, level,
                 )?;
 
                 idx_values.push(lhs_val);

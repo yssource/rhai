@@ -89,6 +89,7 @@
 [`eval`]: {{rootUrl}}/language/eval.md
 
 [OOP]: {{rootUrl}}/language/oop.md
+[DSL]: {{rootUrl}}/engine/dsl.md
 
 [maximum statement depth]: {{rootUrl}}/safety/max-stmt-depth.md
 [maximum call stack depth]: {{rootUrl}}/safety/max-call-stack.md
@@ -107,3 +108,4 @@
 [disable keywords and operators]: {{rootUrl}}/engine/disable.md
 [custom operator]: {{rootUrl}}/engine/custom-op.md
 [custom operators]: {{rootUrl}}/engine/custom-op.md
+[custom syntax]: {{rootUrl}}/engine/custom-syntax.md

@@ -11,6 +11,11 @@ This version adds:
 * Ability to define custom operators (which must be valid identifiers).
 * Low-level API to register functions.
 
+Bug fixes
+---------
+
+* Fixed method calls in the middle of a dot chain.
+
 Breaking changes
 ----------------
 
