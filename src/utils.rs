@@ -356,10 +356,13 @@ impl<T> StaticVec<T> {
             panic!("nothing to pop!");
         }
 
-        let result = if self.is_fixed_storage() {
-            self.extract_from_list(self.len - 1)
+        if self.is_fixed_storage() {
+            let value = self.extract_from_list(self.len - 1);
+            self.len -= 1;
+            value
         } else {
             let value = self.more.pop().unwrap();
+            self.len -= 1;
 
             // Move back to the fixed list
             if self.more.len() == MAX_STATIC_VEC {
@@ -370,11 +373,7 @@ impl<T> StaticVec<T> {
             }
 
             value
-        };
-
-        self.len -= 1;
-
-        result
+        }
     }
     /// Remove a value from this `StaticVec` at a particular position.
     ///
@@ -386,18 +385,20 @@ impl<T> StaticVec<T> {
             panic!("index OOB in StaticVec");
         }
 
-        let result = if self.is_fixed_storage() {
+        if self.is_fixed_storage() {
             let value = self.extract_from_list(index);
 
             // Move all items one slot to the left
-            for x in index..self.len - 1 {
-                let orig_value = self.extract_from_list(x + 1);
-                self.set_into_list(x, orig_value, false);
+            for x in index + 1..self.len - 1 {
+                let orig_value = self.extract_from_list(x);
+                self.set_into_list(x - 1, orig_value, false);
             }
+            self.len -= 1;
 
             value
         } else {
             let value = self.more.remove(index);
+            self.len -= 1;
 
             // Move back to the fixed list
             if self.more.len() == MAX_STATIC_VEC {
@@ -408,11 +409,7 @@ impl<T> StaticVec<T> {
             }
 
             value
-        };
-
-        self.len -= 1;
-
-        result
+        }
     }
     /// Get the number of items in this `StaticVec`.
     #[inline(always)]
