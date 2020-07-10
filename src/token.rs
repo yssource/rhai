@@ -531,7 +531,7 @@ impl Token {
         }
     }
 
-    /// Is this token a keyword?
+    /// Is this token a standard keyword?
     pub fn is_keyword(&self) -> bool {
         use Token::*;
 
@@ -545,6 +545,22 @@ impl Token {
             True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
             | Return | Throw => true,
 
+            _ => false,
+        }
+    }
+
+    /// Is this token a reserved keyword?
+    pub fn is_reserved(&self) -> bool {
+        match self {
+            Self::Reserved(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Is this token a custom keyword?
+    pub fn is_custom(&self) -> bool {
+        match self {
+            Self::Custom(_) => true,
             _ => false,
         }
     }
@@ -987,7 +1003,10 @@ fn get_next_token_inner(
             ('}', _) => return Some((Token::RightBrace, start_pos)),
 
             // Parentheses
-            ('(', '*') => return Some((Token::Reserved("(*".into()), start_pos)),
+            ('(', '*') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("(*".into()), start_pos));
+            }
             ('(', _) => return Some((Token::LeftParen, start_pos)),
             (')', _) => return Some((Token::RightParen, start_pos)),
 
@@ -1017,11 +1036,17 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::MinusAssign, start_pos));
             }
-            ('-', '>') => return Some((Token::Reserved("->".into()), start_pos)),
+            ('-', '>') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("->".into()), start_pos));
+            }
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
-            ('*', ')') => return Some((Token::Reserved("*)".into()), start_pos)),
+            ('*', ')') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("*)".into()), start_pos));
+            }
             ('*', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::MultiplyAssign, start_pos));
@@ -1086,31 +1111,42 @@ fn get_next_token_inner(
 
                 // Warn against `===`
                 if stream.peek_next() == Some('=') {
+                    eat_next(stream, pos);
                     return Some((Token::Reserved("===".into()), start_pos));
                 }
 
                 return Some((Token::EqualsTo, start_pos));
             }
-            ('=', '>') => return Some((Token::Reserved("=>".into()), start_pos)),
+            ('=', '>') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("=>".into()), start_pos));
+            }
             ('=', _) => return Some((Token::Equals, start_pos)),
 
             (':', ':') => {
                 eat_next(stream, pos);
 
                 if stream.peek_next() == Some('<') {
+                    eat_next(stream, pos);
                     return Some((Token::Reserved("::<".into()), start_pos));
                 }
 
                 return Some((Token::DoubleColon, start_pos));
             }
-            (':', '=') => return Some((Token::Reserved(":=".into()), start_pos)),
+            (':', '=') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved(":=".into()), start_pos));
+            }
             (':', _) => return Some((Token::Colon, start_pos)),
 
             ('<', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::LessThanEqualsTo, start_pos));
             }
-            ('<', '-') => return Some((Token::Reserved("<-".into()), start_pos)),
+            ('<', '-') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("<-".into()), start_pos));
+            }
             ('<', '<') => {
                 eat_next(stream, pos);
 
@@ -1149,6 +1185,7 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 if stream.peek_next() == Some('=') {
+                    eat_next(stream, pos);
                     return Some((Token::Reserved("!==".into()), start_pos));
                 }
 
@@ -1321,6 +1358,17 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                 ))),
             }, pos)),
             (r @ Some(_), None, None) => r,
+            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
+                // Convert custom keywords
+                Some((Token::Custom(s), pos))
+            }
+            (Some((token, pos)), _, Some(custom))
+                if (token.is_keyword() || token.is_operator() || token.is_reserved())
+                    && custom.contains_key(token.syntax().as_ref()) =>
+            {
+                // Convert into custom keywords
+                Some((Token::Custom(token.syntax().into()), pos))
+            }
             (Some((token, pos)), Some(disabled), _)
                 if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>
             {
@@ -1335,10 +1383,6 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             {
                 // Convert disallowed keywords into identifiers
                 Some((Token::Identifier(token.syntax().into()), pos))
-            }
-            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
-                // Convert custom keywords
-                Some((Token::Custom(s), pos))
             }
             (r, _, _) => r,
         }
