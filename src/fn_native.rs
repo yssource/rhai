@@ -1,3 +1,4 @@
+//! Module containing interfaces with native-Rust functions.
 use crate::any::Dynamic;
 use crate::engine::Engine;
 use crate::module::Module;

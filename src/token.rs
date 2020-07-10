@@ -312,6 +312,87 @@ impl Token {
         }
     }
 
+    /// Reverse lookup a token from a piece of syntax.
+    pub fn lookup_from_syntax(syntax: &str) -> Option<Self> {
+        use Token::*;
+
+        Some(match syntax {
+            "{" => LeftBrace,
+            "}" => RightBrace,
+            "(" => LeftParen,
+            ")" => RightParen,
+            "[" => LeftBracket,
+            "]" => RightBracket,
+            "+" => Plus,
+            "-" => Minus,
+            "*" => Multiply,
+            "/" => Divide,
+            ";" => SemiColon,
+            ":" => Colon,
+            "::" => DoubleColon,
+            "," => Comma,
+            "." => Period,
+            "#{" => MapStart,
+            "=" => Equals,
+            "true" => True,
+            "false" => False,
+            "let" => Let,
+            "const" => Const,
+            "if" => If,
+            "else" => Else,
+            "while" => While,
+            "loop" => Loop,
+            "for" => For,
+            "in" => In,
+            "<" => LessThan,
+            ">" => GreaterThan,
+            "!" => Bang,
+            "<=" => LessThanEqualsTo,
+            ">=" => GreaterThanEqualsTo,
+            "==" => EqualsTo,
+            "!=" => NotEqualsTo,
+            "|" => Pipe,
+            "||" => Or,
+            "&" => Ampersand,
+            "&&" => And,
+            #[cfg(not(feature = "no_function"))]
+            "fn" => Fn,
+            "continue" => Continue,
+            "break" => Break,
+            "return" => Return,
+            "throw" => Throw,
+            "+=" => PlusAssign,
+            "-=" => MinusAssign,
+            "*=" => MultiplyAssign,
+            "/=" => DivideAssign,
+            "<<=" => LeftShiftAssign,
+            ">>=" => RightShiftAssign,
+            "&=" => AndAssign,
+            "|=" => OrAssign,
+            "^=" => XOrAssign,
+            "<<" => LeftShift,
+            ">>" => RightShift,
+            "^" => XOr,
+            "%" => Modulo,
+            "%=" => ModuloAssign,
+            "~" => PowerOf,
+            "~=" => PowerOfAssign,
+            #[cfg(not(feature = "no_function"))]
+            "private" => Private,
+            #[cfg(not(feature = "no_module"))]
+            "import" => Import,
+            #[cfg(not(feature = "no_module"))]
+            "export" => Export,
+            #[cfg(not(feature = "no_module"))]
+            "as" => As,
+            "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" => {
+                Reserved(syntax.into())
+            }
+
+            _ => return None,
+        })
+    }
+
     // Is this token EOF?
     pub fn is_eof(&self) -> bool {
         use Token::*;
@@ -450,7 +531,7 @@ impl Token {
         }
     }
 
-    /// Is this token a keyword?
+    /// Is this token a standard keyword?
     pub fn is_keyword(&self) -> bool {
         use Token::*;
 
@@ -464,6 +545,22 @@ impl Token {
             True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
             | Return | Throw => true,
 
+            _ => false,
+        }
+    }
+
+    /// Is this token a reserved keyword?
+    pub fn is_reserved(&self) -> bool {
+        match self {
+            Self::Reserved(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Is this token a custom keyword?
+    pub fn is_custom(&self) -> bool {
+        match self {
+            Self::Custom(_) => true,
             _ => false,
         }
     }
@@ -628,9 +725,9 @@ pub fn parse_string_literal(
 }
 
 /// Consume the next character.
-fn eat_next(stream: &mut impl InputStream, pos: &mut Position) {
-    stream.get_next();
+fn eat_next(stream: &mut impl InputStream, pos: &mut Position) -> Option<char> {
     pos.advance();
+    stream.get_next()
 }
 
 /// Scan for a block comment until the end.
@@ -858,35 +955,8 @@ fn get_next_token_inner(
                 }
 
                 return Some((
-                    match identifier.as_str() {
-                        "true" => Token::True,
-                        "false" => Token::False,
-                        "let" => Token::Let,
-                        "const" => Token::Const,
-                        "if" => Token::If,
-                        "else" => Token::Else,
-                        "while" => Token::While,
-                        "loop" => Token::Loop,
-                        "continue" => Token::Continue,
-                        "break" => Token::Break,
-                        "return" => Token::Return,
-                        "throw" => Token::Throw,
-                        "for" => Token::For,
-                        "in" => Token::In,
-                        #[cfg(not(feature = "no_function"))]
-                        "private" => Token::Private,
-                        #[cfg(not(feature = "no_module"))]
-                        "import" => Token::Import,
-                        #[cfg(not(feature = "no_module"))]
-                        "export" => Token::Export,
-                        #[cfg(not(feature = "no_module"))]
-                        "as" => Token::As,
-
-                        #[cfg(not(feature = "no_function"))]
-                        "fn" => Token::Fn,
-
-                        _ => Token::Identifier(identifier),
-                    },
+                    Token::lookup_from_syntax(&identifier)
+                        .unwrap_or_else(|| Token::Identifier(identifier)),
                     start_pos,
                 ));
             }
@@ -933,7 +1003,10 @@ fn get_next_token_inner(
             ('}', _) => return Some((Token::RightBrace, start_pos)),
 
             // Parentheses
-            ('(', '*') => return Some((Token::Reserved("(*".into()), start_pos)),
+            ('(', '*') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("(*".into()), start_pos));
+            }
             ('(', _) => return Some((Token::LeftParen, start_pos)),
             (')', _) => return Some((Token::RightParen, start_pos)),
 
@@ -947,6 +1020,7 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::MapStart, start_pos));
             }
+            ('#', _) => return Some((Token::Reserved("#".into()), start_pos)),
 
             // Operators
             ('+', '=') => {
@@ -962,11 +1036,17 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::MinusAssign, start_pos));
             }
-            ('-', '>') => return Some((Token::Reserved("->".into()), start_pos)),
+            ('-', '>') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("->".into()), start_pos));
+            }
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
-            ('*', ')') => return Some((Token::Reserved("*)".into()), start_pos)),
+            ('*', ')') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("*)".into()), start_pos));
+            }
             ('*', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::MultiplyAssign, start_pos));
@@ -1031,31 +1111,42 @@ fn get_next_token_inner(
 
                 // Warn against `===`
                 if stream.peek_next() == Some('=') {
+                    eat_next(stream, pos);
                     return Some((Token::Reserved("===".into()), start_pos));
                 }
 
                 return Some((Token::EqualsTo, start_pos));
             }
-            ('=', '>') => return Some((Token::Reserved("=>".into()), start_pos)),
+            ('=', '>') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("=>".into()), start_pos));
+            }
             ('=', _) => return Some((Token::Equals, start_pos)),
 
             (':', ':') => {
                 eat_next(stream, pos);
 
                 if stream.peek_next() == Some('<') {
+                    eat_next(stream, pos);
                     return Some((Token::Reserved("::<".into()), start_pos));
                 }
 
                 return Some((Token::DoubleColon, start_pos));
             }
-            (':', '=') => return Some((Token::Reserved(":=".into()), start_pos)),
+            (':', '=') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved(":=".into()), start_pos));
+            }
             (':', _) => return Some((Token::Colon, start_pos)),
 
             ('<', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::LessThanEqualsTo, start_pos));
             }
-            ('<', '-') => return Some((Token::Reserved("<-".into()), start_pos)),
+            ('<', '-') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("<-".into()), start_pos));
+            }
             ('<', '<') => {
                 eat_next(stream, pos);
 
@@ -1094,6 +1185,7 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 if stream.peek_next() == Some('=') {
+                    eat_next(stream, pos);
                     return Some((Token::Reserved("!==".into()), start_pos));
                 }
 
@@ -1163,40 +1255,42 @@ fn get_next_token_inner(
 }
 
 /// A type that implements the `InputStream` trait.
-/// Multiple charaacter streams are jointed together to form one single stream.
+/// Multiple character streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
     /// The input character streams.
     streams: StaticVec<Peekable<Chars<'a>>>,
+    /// The current stream index.
+    index: usize,
 }
 
 impl InputStream for MultiInputsStream<'_> {
     /// Get the next character
     fn get_next(&mut self) -> Option<char> {
         loop {
-            if self.streams.is_empty() {
+            if self.index >= self.streams.len() {
                 // No more streams
                 return None;
-            } else if let Some(ch) = self.streams[0].next() {
+            } else if let Some(ch) = self.streams[self.index].next() {
                 // Next character in current stream
                 return Some(ch);
             } else {
                 // Jump to the next stream
-                let _ = self.streams.remove(0);
+                self.index += 1;
             }
         }
     }
     /// Peek the next character
     fn peek_next(&mut self) -> Option<char> {
         loop {
-            if self.streams.is_empty() {
+            if self.index >= self.streams.len() {
                 // No more streams
                 return None;
-            } else if let Some(ch) = self.streams[0].peek() {
+            } else if let Some(&ch) = self.streams[self.index].peek() {
                 // Next character in current stream
-                return Some(*ch);
+                return Some(ch);
             } else {
                 // Jump to the next stream
-                let _ = self.streams.remove(0);
+                self.index += 1;
             }
         }
     }
@@ -1252,7 +1346,11 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                         .to_string(),
                 ))),
                 "(*" | "*)" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'(* .. *)' is not a valid comment style. This is not Pascal! Should it be '/* .. */'?"
+                    "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?"
+                        .to_string(),
+                ))),
+                "#" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'#' is not a valid symbol. Should it be '#{'?"
                         .to_string(),
                 ))),
                 token => Token::LexError(Box::new(LERR::ImproperSymbol(
@@ -1260,6 +1358,17 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                 ))),
             }, pos)),
             (r @ Some(_), None, None) => r,
+            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
+                // Convert custom keywords
+                Some((Token::Custom(s), pos))
+            }
+            (Some((token, pos)), _, Some(custom))
+                if (token.is_keyword() || token.is_operator() || token.is_reserved())
+                    && custom.contains_key(token.syntax().as_ref()) =>
+            {
+                // Convert into custom keywords
+                Some((Token::Custom(token.syntax().into()), pos))
+            }
             (Some((token, pos)), Some(disabled), _)
                 if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>
             {
@@ -1274,10 +1383,6 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             {
                 // Convert disallowed keywords into identifiers
                 Some((Token::Identifier(token.syntax().into()), pos))
-            }
-            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
-                // Convert custom keywords
-                Some((Token::Custom(s), pos))
             }
             (r, _, _) => r,
         }
@@ -1298,6 +1403,7 @@ pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a
         pos: Position::new(1, 0),
         stream: MultiInputsStream {
             streams: input.iter().map(|s| s.chars().peekable()).collect(),
+            index: 0,
         },
     }
 }

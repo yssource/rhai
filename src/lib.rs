@@ -95,6 +95,8 @@ mod scope;
 mod serde;
 mod settings;
 mod stdlib;
+#[cfg(feature = "internals")]
+mod syntax;
 mod token;
 mod r#unsafe;
 mod utils;
@@ -159,11 +161,19 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
+pub use error::LexError;
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use token::{get_next_token, parse_string_literal, InputStream, Token, TokenizeState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use parser::{Expr, ReturnType, ScriptFnDef, Stmt};
+pub use parser::{CustomExpr, Expr, ReturnType, ScriptFnDef, Stmt};
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
+pub use engine::{Imports, State as EvalState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]

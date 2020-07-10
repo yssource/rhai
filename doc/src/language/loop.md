@@ -3,9 +3,9 @@ Infinite `loop`
 
 {{#include ../links.md}}
 
-Infinite loops follow C syntax.
+Infinite loops follow Rust syntax.
 
-Like C, `continue` can be used to skip to the next iteration, by-passing all following statements;
+Like Rust, `continue` can be used to skip to the next iteration, by-passing all following statements;
 `break` can be used to break out of the loop unconditionally.
 
 ```rust

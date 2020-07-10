@@ -41,6 +41,7 @@ Symbols
 | ------------ | ------------------------ |
 | `:`          | Property value separator |
 | `::`         | Module path separator    |
+| `#`          | _Reserved_               |
 | `=>`         | _Reserved_               |
 | `->`         | _Reserved_               |
 | `<-`         | _Reserved_               |

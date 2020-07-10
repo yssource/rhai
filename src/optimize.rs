@@ -6,6 +6,9 @@ use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AS
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::utils::StaticVec;
 
+#[cfg(feature = "internals")]
+use crate::parser::CustomExpr;
+
 use crate::stdlib::{
     boxed::Box,
     iter::empty,
@@ -597,6 +600,15 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // Replace constant with value
             state.find_constant(&name).expect("should find constant in scope!").clone().set_position(pos)
         }
+
+        // Custom syntax
+        #[cfg(feature = "internals")]
+        Expr::Custom(x) => Expr::Custom(Box::new((
+            CustomExpr(
+                (x.0).0.into_iter().map(|expr| optimize_expr(expr, state)).collect(),
+                (x.0).1),
+            x.1
+        ))),
 
         // All other expressions - skip
         expr => expr,
