@@ -2,18 +2,22 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{
-    make_getter, make_setter, Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
-    MARKER_STMT,
-};
+use crate::engine::{make_getter, make_setter, Engine, KEYWORD_THIS};
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::fn_native::Shared;
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
+
+#[cfg(feature = "internals")]
+use crate::engine::{MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+
+#[cfg(feature = "internals")]
+use crate::fn_native::Shared;
+
+#[cfg(feature = "internals")]
+use crate::syntax::FnCustomSyntaxEval;
 
 use crate::stdlib::{
     borrow::Cow,
@@ -574,8 +578,10 @@ impl Stmt {
 }
 
 #[derive(Clone)]
+#[cfg(feature = "internals")]
 pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
 
+#[cfg(feature = "internals")]
 impl fmt::Debug for CustomExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
@@ -647,6 +653,7 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Custom syntax
+    #[cfg(feature = "internals")]
     Custom(Box<(CustomExpr, Position)>),
 }
 
@@ -743,6 +750,7 @@ impl Expr {
 
             Self::Dot(x) | Self::Index(x) => x.0.position(),
 
+            #[cfg(feature = "internals")]
             Self::Custom(x) => x.1,
         }
     }
@@ -776,6 +784,8 @@ impl Expr {
             Self::Assignment(x) => x.3 = new_pos,
             Self::Dot(x) => x.2 = new_pos,
             Self::Index(x) => x.2 = new_pos,
+
+            #[cfg(feature = "internals")]
             Self::Custom(x) => x.1 = new_pos,
         }
 
@@ -881,6 +891,7 @@ impl Expr {
                 _ => false,
             },
 
+            #[cfg(feature = "internals")]
             Self::Custom(_) => false,
         }
     }
@@ -895,6 +906,14 @@ impl Expr {
                 Self::Property(Box::new(((name.clone(), getter, setter), pos)))
             }
             _ => self,
+        }
+    }
+
+    #[cfg(feature = "internals")]
+    pub fn get_variable_name(&self) -> Option<&str> {
+        match self {
+            Self::Variable(x) => Some((x.0).0.as_str()),
+            _ => None,
         }
     }
 }
@@ -2046,6 +2065,7 @@ fn parse_expr(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // Check if it is a custom syntax.
+    #[cfg(feature = "internals")]
     if let Some(ref custom) = state.engine.custom_syntax {
         let (token, pos) = input.peek().unwrap();
         let token_pos = *pos;
@@ -2085,12 +2105,6 @@ fn parse_expr(
                             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
                         },
                         MARKER_EXPR => exprs.push(parse_expr(input, state, lib, settings)?),
-                        MARKER_STMT => {
-                            let stmt = parse_stmt(input, state, lib, settings)?
-                                .unwrap_or_else(|| Stmt::Noop(settings.pos));
-                            let pos = stmt.position();
-                            exprs.push(Expr::Stmt(Box::new((stmt, pos))))
-                        }
                         MARKER_BLOCK => {
                             let stmt = parse_block(input, state, lib, settings)?;
                             let pos = stmt.position();

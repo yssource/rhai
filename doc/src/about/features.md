@@ -67,4 +67,5 @@ Flexible
 
 * Surgically [disable keywords and operators] to restrict the language.
 
-* Use as a [DSL] by [disabling keywords/operators][disable keywords and operators], [custom operators] and defining [custom syntax].
+* Use as a [DSL] by [disabling keywords/operators][disable keywords and operators], [custom operators]
+  and extending the language with [custom syntax].

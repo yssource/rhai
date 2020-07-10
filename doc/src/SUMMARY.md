@@ -108,7 +108,7 @@ The Rhai Scripting Language
    5. [Use as DSL](engine/dsl.md)
       1. [Disable Keywords and/or Operators](engine/disable.md)
       2. [Custom Operators](engine/custom-op.md)
-      3. [Custom Syntax](engine/custom-syntax.md)
+      3. [Extending with Custom Syntax](engine/custom-syntax.md)
    6. [Eval Statement](language/eval.md)
 9. [Appendix](appendix/index.md)
    1. [Keywords](appendix/keywords.md)

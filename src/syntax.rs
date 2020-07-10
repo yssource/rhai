@@ -1,5 +1,8 @@
+//! Module containing implementation for custom syntax.
+#![cfg(feature = "internals")]
+
 use crate::any::Dynamic;
-use crate::engine::{Engine, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT, MARKER_STMT};
+use crate::engine::{Engine, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::LexError;
 use crate::fn_native::{SendSync, Shared};
 use crate::module::Module;
@@ -57,7 +60,7 @@ impl fmt::Debug for CustomSyntax {
 }
 
 impl Engine {
-    pub fn add_custom_syntax<S: AsRef<str> + ToString>(
+    pub fn register_custom_syntax<S: AsRef<str> + ToString>(
         &mut self,
         value: &[S],
         scope_delta: isize,
@@ -83,12 +86,28 @@ impl Engine {
         for s in value {
             let seg = match s.as_ref() {
                 // Markers not in first position
-                MARKER_EXPR | MARKER_STMT | MARKER_BLOCK | MARKER_IDENT if !segments.is_empty() => {
-                    s.to_string()
-                }
+                MARKER_EXPR | MARKER_BLOCK | MARKER_IDENT if !segments.is_empty() => s.to_string(),
                 // Standard symbols not in first position
-                s if !segments.is_empty() && Token::lookup_from_syntax(s).is_some() => s.into(),
-                // Custom keyword
+                s if !segments.is_empty() && Token::lookup_from_syntax(s).is_some() => {
+                    if self
+                        .disabled_symbols
+                        .as_ref()
+                        .map(|d| d.contains(s))
+                        .unwrap_or(false)
+                    {
+                        // If symbol is disabled, make it a custom keyword
+                        if self.custom_keywords.is_none() {
+                            self.custom_keywords = Some(Default::default());
+                        }
+
+                        if !self.custom_keywords.as_ref().unwrap().contains_key(s) {
+                            self.custom_keywords.as_mut().unwrap().insert(s.into(), 0);
+                        }
+                    }
+
+                    s.into()
+                }
+                // Identifier
                 s if is_valid_identifier(s.chars()) => {
                     if self.custom_keywords.is_none() {
                         self.custom_keywords = Some(Default::default());

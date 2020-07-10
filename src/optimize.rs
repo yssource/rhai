@@ -2,9 +2,12 @@ use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, CustomExpr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::utils::StaticVec;
+
+#[cfg(feature = "internals")]
+use crate::parser::CustomExpr;
 
 use crate::stdlib::{
     boxed::Box,
@@ -599,6 +602,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         }
 
         // Custom syntax
+        #[cfg(feature = "internals")]
         Expr::Custom(x) => Expr::Custom(Box::new((
             CustomExpr(
                 (x.0).0.into_iter().map(|expr| optimize_expr(expr, state)).collect(),

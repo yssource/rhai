@@ -91,6 +91,7 @@ mod scope;
 mod serde;
 mod settings;
 mod stdlib;
+#[cfg(feature = "internals")]
 mod syntax;
 mod token;
 mod r#unsafe;

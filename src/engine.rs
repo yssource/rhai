@@ -11,12 +11,14 @@ use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, St
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::CustomSyntax;
 use crate::token::Position;
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
+
+#[cfg(feature = "internals")]
+use crate::syntax::CustomSyntax;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -85,9 +87,12 @@ pub const FN_GET: &str = "get$";
 pub const FN_SET: &str = "set$";
 pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
+
+#[cfg(feature = "internals")]
 pub const MARKER_EXPR: &str = "$expr$";
-pub const MARKER_STMT: &str = "$stmt$";
+#[cfg(feature = "internals")]
 pub const MARKER_BLOCK: &str = "$block$";
+#[cfg(feature = "internals")]
 pub const MARKER_IDENT: &str = "$ident$";
 
 /// A type specifying the method of chaining.
@@ -279,6 +284,7 @@ pub struct Engine {
     /// A hashset containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: Option<HashMap<String, u8>>,
     /// Custom syntax.
+    #[cfg(feature = "internals")]
     pub(crate) custom_syntax: Option<HashMap<String, CustomSyntax>>,
 
     /// Callback closure for implementing the `print` command.
@@ -329,6 +335,8 @@ impl Default for Engine {
             type_names: None,
             disabled_symbols: None,
             custom_keywords: None,
+
+            #[cfg(feature = "internals")]
             custom_syntax: None,
 
             // default print/debug implementations
@@ -562,6 +570,8 @@ impl Engine {
             type_names: None,
             disabled_symbols: None,
             custom_keywords: None,
+
+            #[cfg(feature = "internals")]
             custom_syntax: None,
 
             print: Box::new(|_| {}),
@@ -1667,14 +1677,14 @@ impl Engine {
         }
     }
 
-    /// Evaluate an expression inside an AST.
+    /// Evaluate an expression tree.
     ///
     /// ## WARNING - Low Level API
     ///
     /// This function is very low level.  It evaluates an expression from an AST.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
-    pub fn eval_expr_from_ast(
+    pub fn eval_expression_tree(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -2118,6 +2128,7 @@ impl Engine {
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
 
+            #[cfg(feature = "internals")]
             Expr::Custom(x) => {
                 let func = (x.0).1.as_ref();
                 let exprs = (x.0).0.as_ref();

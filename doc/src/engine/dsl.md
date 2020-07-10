@@ -56,13 +56,17 @@ essentially custom statement types.
 
 The [`internals`] feature is needed to be able to define [custom syntax] in Rhai.
 
-For example:
+For example, the following is a SQL like syntax for some obscure DSL operation:
 
 ```rust
 let table = [..., ..., ..., ...];
 
-// Syntax = "select" $ident$ $ident$ "from" $expr$ "->" $ident$ ":" $expr$
-let total = select sum price from table -> row : row.weight > 50;
+// Syntax = "calculate" $ident$ $ident$ "from" $expr$ "->" $ident$ ":" $expr$
+let total = calculate sum price from table -> row : row.weight > 50;
+
+// Note: There is nothing special about the use of symbols; to make it look exactly like SQL:
+// Syntax = "SELECT" $ident$ "(" $ident$ ")" "FROM" $expr$ "AS" $ident$ "WHERE" $expr$
+let total = SELECT sum(price) FROM table AS row WHERE row.weight > 50;
 ```
 
 After registering this custom syntax with Rhai, it can be used anywhere inside a script as
