@@ -342,7 +342,11 @@ impl Module {
     /// Set a Rust function into the module, returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
-    pub(crate) fn set_fn(
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    pub fn set_fn(
         &mut self,
         name: impl Into<String>,
         access: FnAccess,

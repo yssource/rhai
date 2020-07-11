@@ -908,14 +908,6 @@ impl Expr {
             _ => self,
         }
     }
-
-    #[cfg(feature = "internals")]
-    pub fn get_variable_name(&self) -> Option<&str> {
-        match self {
-            Self::Variable(x) => Some((x.0).0.as_str()),
-            _ => None,
-        }
-    }
 }
 
 /// Consume a particular token, checking that it is the expected one.

@@ -76,9 +76,9 @@ For its evaluation, the callback function will receive the following list of par
 
 `exprs[0] = "sum"` - math operator  
 `exprs[1] = "price"` - field name  
-`exprs[2] = Expr(table)` - data source  
+`exprs[2] = Expression(table)` - data source  
 `exprs[3] = "row"` - loop variable name  
-`exprs[4] = Expr(row.wright > 50)` - expression  
+`exprs[4] = Expression(row.wright > 50)` - expression  
 
 The other identified, such as `"select"`, `"from"`, as as as symbols `->` and `:` are
 parsed in the order defined within the custom syntax.
