@@ -4,8 +4,8 @@ Rhai - Embedded Scripting for Rust
 ![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai)
 [![Travis (.org)](https://img.shields.io/travis/jonathandturner/rhai)](http://travis-ci.org/jonathandturner/rhai)
 [![license](https://img.shields.io/github/license/jonathandturner/rhai)](https://github.com/license/jonathandturner/rhai)
-[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https:/crates.io/crates/rhai/)
-![crates.io](https://img.shields.io/crates/d/rhai)
+[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https://crates.io/crates/rhai/)
+[![crates.io](https://img.shields.io/crates/d/rhai)](https://crates.io/crates/rhai/)
 [![API Docs](https://docs.rs/rhai/badge.svg)](https://docs.rs/rhai/)
 
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
