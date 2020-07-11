@@ -95,6 +95,36 @@ pub const MARKER_BLOCK: &str = "$block$";
 #[cfg(feature = "internals")]
 pub const MARKER_IDENT: &str = "$ident$";
 
+#[cfg(feature = "internals")]
+pub struct Expression<'a>(&'a Expr);
+
+#[cfg(feature = "internals")]
+impl<'a> From<&'a Expr> for Expression<'a> {
+    fn from(expr: &'a Expr) -> Self {
+        Self(expr)
+    }
+}
+
+#[cfg(feature = "internals")]
+impl Expression<'_> {
+    /// If this expression is a variable name, return it.  Otherwise `None`.
+    #[cfg(feature = "internals")]
+    pub fn get_variable_name(&self) -> Option<&str> {
+        match self.0 {
+            Expr::Variable(x) => Some((x.0).0.as_str()),
+            _ => None,
+        }
+    }
+    /// Get the expression.
+    pub(crate) fn expr(&self) -> &Expr {
+        &self.0
+    }
+    /// Get the position of this expression.
+    pub fn position(&self) -> Position {
+        self.0.position()
+    }
+}
+
 /// A type specifying the method of chaining.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 enum ChainType {
@@ -1691,10 +1721,10 @@ impl Engine {
         state: &mut State,
         lib: &Module,
         this_ptr: &mut Option<&mut Dynamic>,
-        expr: &Expr,
+        expr: &Expression,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+        self.eval_expr(scope, mods, state, lib, this_ptr, expr.expr(), level)
     }
 
     /// Evaluate an expression
@@ -2131,8 +2161,8 @@ impl Engine {
             #[cfg(feature = "internals")]
             Expr::Custom(x) => {
                 let func = (x.0).1.as_ref();
-                let exprs = (x.0).0.as_ref();
-                func(self, scope, mods, state, lib, this_ptr, exprs, level)
+                let ep: StaticVec<_> = (x.0).0.iter().map(|e| e.into()).collect();
+                func(self, scope, mods, state, lib, this_ptr, ep.as_ref(), level)
             }
 
             _ => unreachable!(),

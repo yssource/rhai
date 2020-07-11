@@ -2,11 +2,10 @@
 #![cfg(feature = "internals")]
 
 use crate::any::Dynamic;
-use crate::engine::{Engine, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::{Engine, Expression, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::LexError;
 use crate::fn_native::{SendSync, Shared};
 use crate::module::Module;
-use crate::parser::Expr;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Token};
@@ -28,7 +27,7 @@ pub type FnCustomSyntaxEval = dyn Fn(
     &mut State,
     &Module,
     &mut Option<&mut Dynamic>,
-    &[Expr],
+    &[Expression],
     usize,
 ) -> Result<Dynamic, Box<EvalAltResult>>;
 /// A general function trail object.
@@ -71,7 +70,7 @@ impl Engine {
                 &mut State,
                 &Module,
                 &mut Option<&mut Dynamic>,
-                &[Expr],
+                &[Expression],
                 usize,
             ) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync

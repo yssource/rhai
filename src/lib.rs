@@ -169,7 +169,7 @@ pub use parser::{CustomExpr, Expr, ReturnType, ScriptFnDef, Stmt};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use engine::{Imports, State as EvalState};
+pub use engine::{Expression, Imports, State as EvalState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]

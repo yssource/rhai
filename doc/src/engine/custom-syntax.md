@@ -1,5 +1,5 @@
-Extending Rhai with Custom Syntax
-================================
+Extend Rhai with Custom Syntax
+=============================
 
 {{#include ../links.md}}
 
@@ -131,7 +131,7 @@ Fn(
     state: &mut State,
     lib: &Module,
     this_ptr: &mut Option<&mut Dynamic>,
-    inputs: &[Expr],
+    inputs: &[Expression],
     level: usize
 ) -> Result<Dynamic, Box<EvalAltResult>>
 ```
@@ -144,7 +144,7 @@ where:
 * `state : &mut State` - mutable reference to the current evaluation state; **do not touch**.
 * `lib : &Module` - reference to the current collection of script-defined functions.
 * `this_ptr : &mut Option<&mut Dynamic>` - mutable reference to the current binding of the `this` pointer; **do not touch**.
-* `inputs : &[Expr]` - a list of input expression trees.
+* `inputs : &[Expression]` - a list of input expression trees.
 * `level : usize` - the current function call level.
 
 There are a lot of parameters, most of which should not be touched or Bad Things Happen™.
@@ -158,11 +158,11 @@ and statement blocks (`$block$) are provided.
 
 To access a particular argument, use the following patterns:
 
-| Argument type | Pattern (`n` = slot in `inputs`)         | Result type | Description        |
-| :-----------: | ---------------------------------------- | :---------: | ------------------ |
-|   `$ident$`   | `inputs[n].get_variable_name().unwrap()` |   `&str`    | name of a variable |
-|   `$expr$`    | `inputs.get(n).unwrap()`                 |   `Expr`    | an expression tree |
-|   `$block$`   | `inputs.get(n).unwrap()`                 |   `Expr`    | an expression tree |
+| Argument type | Pattern (`n` = slot in `inputs`)         | Result type  | Description        |
+| :-----------: | ---------------------------------------- | :----------: | ------------------ |
+|   `$ident$`   | `inputs[n].get_variable_name().unwrap()` |    `&str`    | name of a variable |
+|   `$expr$`    | `inputs.get(n).unwrap()`                 | `Expression` | an expression tree |
+|   `$block$`   | `inputs.get(n).unwrap()`                 | `Expression` | an expression tree |
 
 ### Evaluate an Expression Tree
 
@@ -213,7 +213,7 @@ fn implementation_func(
     state: &mut State,
     lib: &Module,
     this_ptr: &mut Option<&mut Dynamic>,
-    inputs: &[Expr],
+    inputs: &[Expression],
     level: usize
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let var_name = inputs[0].get_variable_name().unwrap().to_string();

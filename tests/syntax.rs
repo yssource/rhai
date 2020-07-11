@@ -1,6 +1,6 @@
 #![cfg(feature = "internals")]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, EvalState, Expr, Imports, LexError, Module, Scope, INT,
+    Dynamic, Engine, EvalAltResult, EvalState, Expression, Imports, LexError, Module, Scope, INT,
 };
 
 #[test]
@@ -24,7 +24,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
              state: &mut EvalState,
              lib: &Module,
              this_ptr: &mut Option<&mut Dynamic>,
-             inputs: &[Expr],
+             inputs: &[Expression],
              level: usize| {
                 let var_name = inputs[0].get_variable_name().unwrap().to_string();
                 let stmt = inputs.get(1).unwrap();
