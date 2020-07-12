@@ -13,8 +13,9 @@ use rhai::Engine;
 
 let mut engine = Engine::new();
 
-engine.disable_symbol("if");    // disable the 'if' keyword
-engine.disable_symbol("+=");    // disable the '+=' operator
+engine
+    .disable_symbol("if")       // disable the 'if' keyword
+    .disable_symbol("+=");      // disable the '+=' operator
 
 // The following all return parse errors.
 

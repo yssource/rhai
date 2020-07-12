@@ -214,9 +214,10 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
-    pub fn set_var(&mut self, name: impl Into<String>, value: impl Variant + Clone) {
+    pub fn set_var(&mut self, name: impl Into<String>, value: impl Variant + Clone) -> &mut Self {
         self.variables.insert(name.into(), Dynamic::from(value));
         self.indexed = false;
+        self
     }
 
     /// Get a mutable reference to a modules-qualified variable.
@@ -239,7 +240,7 @@ impl Module {
     ///
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
-    pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) {
+    pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) -> &mut Self {
         // None + function name + number of arguments.
         let hash_script = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
         self.functions.insert(
@@ -252,6 +253,7 @@ impl Module {
             ),
         );
         self.indexed = false;
+        self
     }
 
     /// Does a sub-module exist in the module?
@@ -316,9 +318,10 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
-    pub fn set_sub_module(&mut self, name: impl Into<String>, sub_module: Module) {
+    pub fn set_sub_module(&mut self, name: impl Into<String>, sub_module: Module) -> &mut Self {
         self.modules.insert(name.into(), sub_module.into());
         self.indexed = false;
+        self
     }
 
     /// Does the particular Rust function exist in the module?
@@ -865,7 +868,7 @@ impl Module {
     }
 
     /// Merge another module into this module.
-    pub fn merge(&mut self, other: &Self) {
+    pub fn merge(&mut self, other: &Self) -> &mut Self {
         self.merge_filtered(other, |_, _, _| true)
     }
 
@@ -874,7 +877,7 @@ impl Module {
         &mut self,
         other: &Self,
         filter: impl Fn(FnAccess, &str, usize) -> bool,
-    ) {
+    ) -> &mut Self {
         self.variables
             .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
 
@@ -896,11 +899,15 @@ impl Module {
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
+        self
     }
 
     /// Filter out the functions, retaining only some based on a filter predicate.
     #[cfg(not(feature = "no_function"))]
-    pub(crate) fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
+    pub(crate) fn retain_functions(
+        &mut self,
+        filter: impl Fn(FnAccess, &str, usize) -> bool,
+    ) -> &mut Self {
         self.functions.retain(|_, (_, _, _, v)| match v {
             Func::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
             _ => true,
@@ -909,6 +916,7 @@ impl Module {
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
+        self
     }
 
     /// Get the number of variables in the module.
@@ -1071,9 +1079,10 @@ impl Module {
     }
 
     /// Set a type iterator into the module.
-    pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) {
+    pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) -> &mut Self {
         self.type_iterators.insert(typ, func);
         self.indexed = false;
+        self
     }
 
     /// Get the specified type iterator.

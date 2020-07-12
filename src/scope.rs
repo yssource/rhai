@@ -97,8 +97,9 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.len(), 0);
     /// assert!(my_scope.is_empty());
     /// ```
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) -> &mut Self {
         self.0.clear();
+        self
     }
 
     /// Get the number of entries inside the Scope.
@@ -147,8 +148,12 @@ impl<'a> Scope<'a> {
     /// my_scope.push("x", 42_i64);
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
-    pub fn push<K: Into<Cow<'a, str>>, T: Variant + Clone>(&mut self, name: K, value: T) {
-        self.push_dynamic_value(name, EntryType::Normal, Dynamic::from(value), false);
+    pub fn push<K: Into<Cow<'a, str>>, T: Variant + Clone>(
+        &mut self,
+        name: K,
+        value: T,
+    ) -> &mut Self {
+        self.push_dynamic_value(name, EntryType::Normal, Dynamic::from(value), false)
     }
 
     /// Add (push) a new `Dynamic` entry to the Scope.
@@ -163,8 +168,8 @@ impl<'a> Scope<'a> {
     /// my_scope.push_dynamic("x", Dynamic::from(42_i64));
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
-    pub fn push_dynamic<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Dynamic) {
-        self.push_dynamic_value(name, EntryType::Normal, value, false);
+    pub fn push_dynamic<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Dynamic) -> &mut Self {
+        self.push_dynamic_value(name, EntryType::Normal, value, false)
     }
 
     /// Add (push) a new constant to the Scope.
@@ -185,8 +190,12 @@ impl<'a> Scope<'a> {
     /// my_scope.push_constant("x", 42_i64);
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
-    pub fn push_constant<K: Into<Cow<'a, str>>, T: Variant + Clone>(&mut self, name: K, value: T) {
-        self.push_dynamic_value(name, EntryType::Constant, Dynamic::from(value), true);
+    pub fn push_constant<K: Into<Cow<'a, str>>, T: Variant + Clone>(
+        &mut self,
+        name: K,
+        value: T,
+    ) -> &mut Self {
+        self.push_dynamic_value(name, EntryType::Constant, Dynamic::from(value), true)
     }
 
     /// Add (push) a new constant with a `Dynamic` value to the Scope.
@@ -208,8 +217,12 @@ impl<'a> Scope<'a> {
     /// my_scope.push_constant_dynamic("x", Dynamic::from(42_i64));
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
-    pub fn push_constant_dynamic<K: Into<Cow<'a, str>>>(&mut self, name: K, value: Dynamic) {
-        self.push_dynamic_value(name, EntryType::Constant, value, true);
+    pub fn push_constant_dynamic<K: Into<Cow<'a, str>>>(
+        &mut self,
+        name: K,
+        value: Dynamic,
+    ) -> &mut Self {
+        self.push_dynamic_value(name, EntryType::Constant, value, true)
     }
 
     /// Add (push) a new entry with a `Dynamic` value to the Scope.
@@ -219,7 +232,7 @@ impl<'a> Scope<'a> {
         entry_type: EntryType,
         value: Dynamic,
         map_expr: bool,
-    ) {
+    ) -> &mut Self {
         let expr = if map_expr {
             map_dynamic_to_expr(value.clone(), Position::none()).map(Box::new)
         } else {
@@ -233,6 +246,8 @@ impl<'a> Scope<'a> {
             value: value.into(),
             expr,
         });
+
+        self
     }
 
     /// Truncate (rewind) the Scope to a previous size.
@@ -261,8 +276,9 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.len(), 0);
     /// assert!(my_scope.is_empty());
     /// ```
-    pub fn rewind(&mut self, size: usize) {
+    pub fn rewind(&mut self, size: usize) -> &mut Self {
         self.0.truncate(size);
+        self
     }
 
     /// Does the scope contain the entry?
@@ -341,14 +357,17 @@ impl<'a> Scope<'a> {
     /// my_scope.set_value("x", 0_i64);
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
     /// ```
-    pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) {
+    pub fn set_value<T: Variant + Clone>(&mut self, name: &'a str, value: T) -> &mut Self {
         match self.get_index(name) {
-            None => self.push(name, value),
+            None => {
+                self.push(name, value);
+            }
             Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
             Some((index, EntryType::Normal)) => {
-                self.0.get_mut(index).unwrap().value = Dynamic::from(value)
+                self.0.get_mut(index).unwrap().value = Dynamic::from(value);
             }
         }
+        self
     }
 
     /// Get a mutable reference to an entry in the Scope.
@@ -358,9 +377,10 @@ impl<'a> Scope<'a> {
     }
 
     /// Update the access type of an entry in the Scope.
-    pub(crate) fn set_entry_alias(&mut self, index: usize, alias: String) {
+    pub(crate) fn set_entry_alias(&mut self, index: usize, alias: String) -> &mut Self {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
         entry.alias = Some(Box::new(alias));
+        self
     }
 
     /// Get an iterator to entries in the Scope.

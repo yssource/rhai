@@ -39,7 +39,7 @@ pub type FnCustomSyntaxEval = dyn Fn(
         &mut State,
         &Module,
         &mut Option<&mut Dynamic>,
-        &[Expr],
+        &[Expression],
         usize,
     ) -> Result<Dynamic, Box<EvalAltResult>>
     + Send
@@ -75,7 +75,7 @@ impl Engine {
             ) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> Result<(), Box<LexError>> {
+    ) -> Result<self, Box<LexError>> {
         if value.is_empty() {
             return Err(Box::new(LexError::ImproperSymbol("".to_string())));
         }
@@ -145,6 +145,6 @@ impl Engine {
             .unwrap()
             .insert(key, syntax.into());
 
-        Ok(())
+        Ok(self)
     }
 }

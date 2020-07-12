@@ -9,7 +9,7 @@ Support for custom types can be turned off via the [`no_object`] feature.
 
 ```rust
 use rhai::{Engine, EvalAltResult};
-use rhai::RegisterFn;
+use rhai::RegisterFn;                       // remember 'RegisterFn' is needed
 
 #[derive(Clone)]
 struct TestStruct {
@@ -28,14 +28,14 @@ impl TestStruct {
 
 let mut engine = Engine::new();
 
-engine.register_type::<TestStruct>();
-
-engine.register_fn("update", TestStruct::update);
-engine.register_fn("new_ts", TestStruct::new);
+engine
+    .register_type::<TestStruct>()          // most API's can be chained up
+    .register_fn("update", TestStruct::update)
+    .register_fn("new_ts", TestStruct::new);
 
 let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 
-println!("result: {}", result.field);           // prints 42
+println!("result: {}", result.field);       // prints 42
 ```
 
 Register a Custom Type
@@ -52,7 +52,7 @@ struct TestStruct {
 }
 
 impl TestStruct {
-    fn update(&mut self) {              // methods take &mut as first parameter
+    fn update(&mut self) {      // methods take &mut as first parameter
         self.field += 41;
     }
 
@@ -75,8 +75,9 @@ using one of the `Engine::register_XXX` API.
 Below, the `update` and `new` methods are registered using `Engine::register_fn`.
 
 ```rust
-engine.register_fn("update", TestStruct::update);   // registers 'update(&mut TestStruct)'
-engine.register_fn("new_ts", TestStruct::new);      // registers 'new()'
+engine
+    .register_fn("update", TestStruct::update)  // registers 'update(&mut TestStruct)'
+    .register_fn("new_ts", TestStruct::new);    // registers 'new()'
 ```
 
 ***Note**: Rhai follows the convention that methods of custom types take a `&mut` first parameter
@@ -107,13 +108,13 @@ fn foo(ts: &mut TestStruct) -> i64 {
     ts.field
 }
 
-engine.register_fn("foo", foo);                     // register a Rust native function
+engine.register_fn("foo", foo);         // register a Rust native function
 
 let result = engine.eval::<i64>(
-    "let x = new_ts(); x.foo()"                     // 'foo' can be called like a method on 'x'
+    "let x = new_ts(); x.foo()"         // 'foo' can be called like a method on 'x'
 )?;
 
-println!("result: {}", result);                     // prints 1
+println!("result: {}", result);         // prints 1
 ```
 
 Under [`no_object`], however, the _method_ style of function calls
@@ -133,13 +134,17 @@ If `Engine::register_type_with_name` is used to register the custom type
 with a special "pretty-print" name, [`type_of()`] will return that name instead.
 
 ```rust
-engine.register_type::<TestStruct>();
-engine.register_fn("new_ts", TestStruct::new);
+engine
+    .register_type::<TestStruct>()
+    .register_fn("new_ts", TestStruct::new);
+
 let x = new_ts();
 x.type_of() == "path::to::module::TestStruct";
 
-engine.register_type_with_name::<TestStruct>("Hello");
-engine.register_fn("new_ts", TestStruct::new);
+engine
+    .register_type_with_name::<TestStruct>("Hello")
+    .register_fn("new_ts", TestStruct::new);
+
 let x = new_ts();
 x.type_of() == "Hello";
 ```

@@ -120,7 +120,7 @@ pub trait RegisterFn<FN, ARGS, RET> {
     /// # Ok(())
     /// # }
     /// ```
-    fn register_fn(&mut self, name: &str, f: FN);
+    fn register_fn(&mut self, name: &str, f: FN) -> &mut Self;
 }
 
 /// Trait to register fallible custom functions returning `Result<Dynamic, Box<EvalAltResult>>` with the `Engine`.
@@ -150,7 +150,7 @@ pub trait RegisterResultFn<FN, ARGS> {
     /// engine.eval::<i64>("div(42, 0)")
     ///         .expect_err("expecting division by zero error!");
     /// ```
-    fn register_result_fn(&mut self, name: &str, f: FN);
+    fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self;
 }
 
 // These types are used to build a unique _marker_ tuple type for each combination
@@ -268,11 +268,12 @@ macro_rules! def_register {
             RET: Variant + Clone
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
-            fn register_fn(&mut self, name: &str, f: FN) {
+            fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_module.set_fn(name, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $clone),*))
                 );
+                self
             }
         }
 
@@ -281,11 +282,12 @@ macro_rules! def_register {
             FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
         > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
-            fn register_result_fn(&mut self, name: &str, f: FN) {
+            fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_module.set_fn(name, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $clone),*))
                 );
+                self
             }
         }
 

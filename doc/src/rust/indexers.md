@@ -38,8 +38,9 @@ engine.register_type::<TestStruct>();
 engine.register_fn("new_ts", TestStruct::new);
 
 // Shorthand: engine.register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
-engine.register_indexer_get(TestStruct::get_field);
-engine.register_indexer_set(TestStruct::set_field);
+engine
+    .register_indexer_get(TestStruct::get_field)
+    .register_indexer_set(TestStruct::set_field);
 
 let result = engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?;
 
