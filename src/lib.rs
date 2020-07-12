@@ -62,7 +62,8 @@
 //! | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                  |
 //! | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                  |
 //! | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                              |
-//! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and [`AST`] are all `Send + Sync`. |
+//! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and `AST` are all `Send + Sync`. |
+//! | `serde`       | Enable serialization/deserialization via `serde`. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies. |
 //! | `internals`   | Expose internal data structures (beware they may be volatile from version to version).                                            |
 //!
 //! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai script engine and language.
@@ -86,7 +87,12 @@ pub mod packages;
 mod parser;
 mod result;
 mod scope;
+#[cfg(feature = "serde")]
+mod serde;
+mod settings;
 mod stdlib;
+#[cfg(feature = "internals")]
+mod syntax;
 mod token;
 mod r#unsafe;
 mod utils;
@@ -94,7 +100,7 @@ mod utils;
 pub use any::Dynamic;
 pub use engine::Engine;
 pub use error::{ParseError, ParseErrorType};
-pub use fn_native::IteratorFn;
+pub use fn_native::{FnPtr, IteratorFn};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};
@@ -122,9 +128,26 @@ pub use parser::FLOAT;
 pub use module::ModuleResolver;
 
 /// Module containing all built-in _module resolvers_ available to Rhai.
+///
+/// Not available under the `no_module` feature.
 #[cfg(not(feature = "no_module"))]
 pub mod module_resolvers {
     pub use crate::module::resolvers::*;
+}
+
+/// Serialization support for [`serde`](https://crates.io/crates/serde).
+///
+/// Requires the `serde` feature.
+#[cfg(feature = "serde")]
+pub mod ser {
+    pub use crate::serde::ser::to_dynamic;
+}
+/// Deserialization support for [`serde`](https://crates.io/crates/serde).
+///
+/// Requires the `serde` feature.
+#[cfg(feature = "serde")]
+pub mod de {
+    pub use crate::serde::de::from_dynamic;
 }
 
 #[cfg(not(feature = "no_optimize"))]
@@ -134,11 +157,19 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
+pub use error::LexError;
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use token::{get_next_token, parse_string_literal, InputStream, Token, TokenizeState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use parser::{Expr, ReturnType, ScriptFnDef, Stmt};
+pub use parser::{CustomExpr, Expr, ReturnType, ScriptFnDef, Stmt};
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
+pub use engine::{Expression, Imports, State as EvalState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]

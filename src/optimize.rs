@@ -6,6 +6,9 @@ use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AS
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::utils::StaticVec;
 
+#[cfg(feature = "internals")]
+use crate::parser::CustomExpr;
+
 use crate::stdlib::{
     boxed::Box,
     iter::empty,
@@ -382,23 +385,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             stmt => Expr::Stmt(Box::new((stmt, x.1))),
         },
         // id op= expr
-        Expr::Assignment(x) => match x.2 {
-            //id = id2 op= rhs
-            Expr::Assignment(x2) if x.1.is_empty() => match (x.0, &x2.0) {
-                // var = var op= expr2 -> var op= expr2
-                (Expr::Variable(a), Expr::Variable(b))
-                    if a.1.is_none() && b.1.is_none() && a.0 == b.0 && a.3 == b.3 =>
-                {
-                    // Assignment to the same variable - fold
-                    state.set_dirty();
-                    Expr::Assignment(Box::new((Expr::Variable(a), x2.1, optimize_expr(x2.2, state), x.3)))
-                }
-                // expr1 = expr2 op= rhs
-                (expr1, _) => Expr::Assignment(Box::new((expr1, x.1, optimize_expr(Expr::Assignment(x2), state), x.3))),
-            },
-            // expr = rhs
-            expr => Expr::Assignment(Box::new((x.0, x.1, optimize_expr(expr, state), x.3))),
-        },
+        Expr::Assignment(x) => Expr::Assignment(Box::new((x.0, x.1, optimize_expr(x.2, state), x.3))),
 
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
@@ -551,11 +538,17 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
-            if state.lib.iter_fn().find(|(_, _, _, f)| {
+            #[cfg(not(feature = "no_function"))]
+            let has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
                 &fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
-            }).is_some() {
+            }).is_some();
+
+            #[cfg(feature = "no_function")]
+            const has_script_fn: bool = false;
+
+            if has_script_fn {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);
@@ -607,6 +600,15 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // Replace constant with value
             state.find_constant(&name).expect("should find constant in scope!").clone().set_position(pos)
         }
+
+        // Custom syntax
+        #[cfg(feature = "internals")]
+        Expr::Custom(x) => Expr::Custom(Box::new((
+            CustomExpr(
+                (x.0).0.into_iter().map(|expr| optimize_expr(expr, state)).collect(),
+                (x.0).1),
+            x.1
+        ))),
 
         // All other expressions - skip
         expr => expr,
@@ -730,7 +732,9 @@ pub fn optimize_into_ast(
                     }
                     .into()
                 })
-                .for_each(|fn_def| lib2.set_script_fn(fn_def));
+                .for_each(|fn_def| {
+                    lib2.set_script_fn(fn_def);
+                });
 
             functions
                 .into_iter()
@@ -759,11 +763,13 @@ pub fn optimize_into_ast(
                     };
                     fn_def.into()
                 })
-                .for_each(|fn_def| module.set_script_fn(fn_def));
+                .for_each(|fn_def| {
+                    module.set_script_fn(fn_def);
+                });
         } else {
-            functions
-                .into_iter()
-                .for_each(|fn_def| module.set_script_fn(fn_def));
+            functions.into_iter().for_each(|fn_def| {
+                module.set_script_fn(fn_def);
+            });
         }
 
         module

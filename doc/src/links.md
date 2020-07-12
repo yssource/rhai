@@ -20,6 +20,7 @@
 [`Engine`]: {{rootUrl}}/engine/hello-world.md
 [traits]: {{rootUrl}}/rust/traits.md
 [`private`]: {{rootUrl}}/engine/call-fn.md
+[`call_fn`]: {{rootUrl}}/engine/call-fn.md
 [`Func`]: {{rootUrl}}/engine/func.md
 [`AST`]: {{rootUrl}}/engine/compile.md
 [`eval_expression`]: {{rootUrl}}/engine/expressions.md
@@ -29,6 +30,7 @@
 [package]: {{rootUrl}}/rust/packages/index.md
 [packages]: {{rootUrl}}/rust/packages/index.md
 [`Scope`]: {{rootUrl}}/rust/scope.md
+[`serde`]: {{rootUrl}}/rust/serde.md
 
 [`type_of()`]: {{rootUrl}}/language/type-of.md
 [`to_string()`]: {{rootUrl}}/language/values-and-types.md
@@ -80,13 +82,14 @@
 [`Module`]: {{rootUrl}}/language/modules/index.md
 [module]: {{rootUrl}}/language/modules/index.md
 [modules]: {{rootUrl}}/language/modules/index.md
-[module resolver]: {{rootUrl}}/language/modules/imp-resolver.md
+[module resolver]: {{rootUrl}}/rust/modules/resolvers.md
 [`export`]: {{rootUrl}}/language/modules/export.md
 [`import`]: {{rootUrl}}/language/modules/import.md
 
 [`eval`]: {{rootUrl}}/language/eval.md
 
 [OOP]: {{rootUrl}}/language/oop.md
+[DSL]: {{rootUrl}}/engine/dsl.md
 
 [maximum statement depth]: {{rootUrl}}/safety/max-stmt-depth.md
 [maximum call stack depth]: {{rootUrl}}/safety/max-call-stack.md
@@ -101,3 +104,8 @@
 [`OptimizationLevel::Full`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::Simple`]: {{rootUrl}}/engine/optimize/optimize-levels.md
 [`OptimizationLevel::None`]: {{rootUrl}}/engine/optimize/optimize-levels.md
+
+[disable keywords and operators]: {{rootUrl}}/engine/disable.md
+[custom operator]: {{rootUrl}}/engine/custom-op.md
+[custom operators]: {{rootUrl}}/engine/custom-op.md
+[custom syntax]: {{rootUrl}}/engine/custom-syntax.md

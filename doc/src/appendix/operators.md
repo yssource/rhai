@@ -1,30 +1,53 @@
-Operators
-=========
+Operators and Symbols
+====================
 
 {{#include ../links.md}}
 
-|     Operator      | Description                    | Binary? |
-| :---------------: | ------------------------------ | :-----: |
-|        `+`        | Add                            |   Yes   |
-|        `-`        | Subtract, Minus                | Yes/No  |
-|        `*`        | Multiply                       |   Yes   |
-|        `/`        | Divide                         |   Yes   |
-|        `%`        | Modulo                         |   Yes   |
-|        `~`        | Power                          |   Yes   |
-|       `>>`        | Right bit-shift                |   Yes   |
-|       `<<`        | Left bit-shift                 |   Yes   |
-|        `&`        | Bit-wise _And_, Boolean _And_  |   Yes   |
-|  <code>\|</code>  | Bit-wise _Or_, Boolean _Or_    |   Yes   |
-|        `^`        | Bit-wise _Xor_                 |   Yes   |
-|       `==`        | Equals to                      |   Yes   |
-|       `~=`        | Not equals to                  |   Yes   |
-|        `>`        | Greater than                   |   Yes   |
-|       `>=`        | Greater than or equals to      |   Yes   |
-|        `<`        | Less than                      |   Yes   |
-|       `<=`        | Less than or equals to         |   Yes   |
-|       `>=`        | Greater than or equals to      |   Yes   |
-|       `&&`        | Boolean _And_ (short-circuits) |   Yes   |
-| <code>\|\|</code> | Boolean _Or_ (short-circuits)  |   Yes   |
-|        `!`        | Boolean _Not_                  |   No    |
-|    `[` .. `]`     | Indexing                       |   Yes   |
-|        `.`        | Property access, Method call   |   Yes   |
+
+Operators
+---------
+
+|     Operator      | Description                    | Binary? | Binding direction |
+| :---------------: | ------------------------------ | :-----: | :---------------: |
+|        `+`        | Add                            |   Yes   |       Left        |
+|        `-`        | Subtract, Minus                | Yes/No  |       Left        |
+|        `*`        | Multiply                       |   Yes   |       Left        |
+|        `/`        | Divide                         |   Yes   |       Left        |
+|        `%`        | Modulo                         |   Yes   |       Left        |
+|        `~`        | Power                          |   Yes   |       Left        |
+|       `>>`        | Right bit-shift                |   Yes   |       Left        |
+|       `<<`        | Left bit-shift                 |   Yes   |       Left        |
+|        `&`        | Bit-wise _And_, Boolean _And_  |   Yes   |       Left        |
+|  <code>\|</code>  | Bit-wise _Or_, Boolean _Or_    |   Yes   |       Left        |
+|        `^`        | Bit-wise _Xor_, Boolean _Xor_  |   Yes   |       Left        |
+|       `==`        | Equals to                      |   Yes   |       Left        |
+|       `~=`        | Not equals to                  |   Yes   |       Left        |
+|        `>`        | Greater than                   |   Yes   |       Left        |
+|       `>=`        | Greater than or equals to      |   Yes   |       Left        |
+|        `<`        | Less than                      |   Yes   |       Left        |
+|       `<=`        | Less than or equals to         |   Yes   |       Left        |
+|       `>=`        | Greater than or equals to      |   Yes   |       Left        |
+|       `&&`        | Boolean _And_ (short-circuits) |   Yes   |       Left        |
+| <code>\|\|</code> | Boolean _Or_ (short-circuits)  |   Yes   |       Left        |
+|        `!`        | Boolean _Not_                  |   No    |       Left        |
+|    `[` .. `]`     | Indexing                       |   Yes   |       Right       |
+|        `.`        | Property access, Method call   |   Yes   |       Right       |
+
+
+Symbols
+-------
+
+| Symbol       | Description              |
+| ------------ | ------------------------ |
+| `:`          | Property value separator |
+| `::`         | Module path separator    |
+| `#`          | _Reserved_               |
+| `=>`         | _Reserved_               |
+| `->`         | _Reserved_               |
+| `<-`         | _Reserved_               |
+| `===`        | _Reserved_               |
+| `!==`        | _Reserved_               |
+| `:=`         | _Reserved_               |
+| `::<` .. `>` | _Reserved_               |
+| `@`          | _Reserved_               |
+| `(*` .. `*)` | _Reserved_               |

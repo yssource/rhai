@@ -22,6 +22,8 @@ The `export` statement, which can only be at global level, exposes selected vari
 
 Variables not exported are _private_ and hidden to the outside.
 
+Everything exported from a module is **constant** (**read-only**).
+
 ```rust
 // This is a module script.
 
@@ -48,8 +50,6 @@ Functions
 All functions are automatically exported, _unless_ it is explicitly opt-out with the [`private`] prefix.
 
 Functions declared [`private`] are hidden to the outside.
-
-Everything exported from a module is **constant** (**read-only**).
 
 ```rust
 // This is a module script.

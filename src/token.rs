@@ -1,5 +1,6 @@
 //! Main module defining the lexer and parser.
 
+use crate::engine::Engine;
 use crate::error::LexError;
 use crate::parser::INT;
 use crate::utils::StaticVec;
@@ -10,7 +11,9 @@ use crate::parser::FLOAT;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    char, fmt,
+    char,
+    collections::HashMap,
+    fmt,
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
@@ -19,7 +22,7 @@ use crate::stdlib::{
 
 type LERR = LexError;
 
-pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
+pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
 
 /// A location (line number + character position) in the input script.
 ///
@@ -137,7 +140,7 @@ pub enum Token {
     FloatConstant(FLOAT),
     Identifier(String),
     CharConstant(char),
-    StringConst(String),
+    StringConstant(String),
     LeftBrace,
     RightBrace,
     LeftParen,
@@ -210,6 +213,8 @@ pub enum Token {
     As,
     LexError(Box<LexError>),
     Comment(String),
+    Reserved(String),
+    Custom(String),
     EOF,
 }
 
@@ -222,12 +227,14 @@ impl Token {
             IntegerConstant(i) => i.to_string().into(),
             #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
-            Identifier(s) => s.clone().into(),
+            StringConstant(_) => "string".into(),
             CharConstant(c) => c.to_string().into(),
+            Identifier(s) => s.clone().into(),
+            Reserved(s) => s.clone().into(),
+            Custom(s) => s.clone().into(),
             LexError(err) => err.to_string().into(),
 
-            token => (match token {
-                StringConst(_) => "string",
+            token => match token {
                 LeftBrace => "{",
                 RightBrace => "}",
                 LeftParen => "(",
@@ -292,15 +299,98 @@ impl Token {
                 PowerOfAssign => "~=",
                 #[cfg(not(feature = "no_function"))]
                 Private => "private",
+                #[cfg(not(feature = "no_module"))]
                 Import => "import",
                 #[cfg(not(feature = "no_module"))]
                 Export => "export",
+                #[cfg(not(feature = "no_module"))]
                 As => "as",
                 EOF => "{EOF}",
                 _ => unreachable!("operator should be match in outer scope"),
-            })
+            }
             .into(),
         }
+    }
+
+    /// Reverse lookup a token from a piece of syntax.
+    pub fn lookup_from_syntax(syntax: &str) -> Option<Self> {
+        use Token::*;
+
+        Some(match syntax {
+            "{" => LeftBrace,
+            "}" => RightBrace,
+            "(" => LeftParen,
+            ")" => RightParen,
+            "[" => LeftBracket,
+            "]" => RightBracket,
+            "+" => Plus,
+            "-" => Minus,
+            "*" => Multiply,
+            "/" => Divide,
+            ";" => SemiColon,
+            ":" => Colon,
+            "::" => DoubleColon,
+            "," => Comma,
+            "." => Period,
+            "#{" => MapStart,
+            "=" => Equals,
+            "true" => True,
+            "false" => False,
+            "let" => Let,
+            "const" => Const,
+            "if" => If,
+            "else" => Else,
+            "while" => While,
+            "loop" => Loop,
+            "for" => For,
+            "in" => In,
+            "<" => LessThan,
+            ">" => GreaterThan,
+            "!" => Bang,
+            "<=" => LessThanEqualsTo,
+            ">=" => GreaterThanEqualsTo,
+            "==" => EqualsTo,
+            "!=" => NotEqualsTo,
+            "|" => Pipe,
+            "||" => Or,
+            "&" => Ampersand,
+            "&&" => And,
+            #[cfg(not(feature = "no_function"))]
+            "fn" => Fn,
+            "continue" => Continue,
+            "break" => Break,
+            "return" => Return,
+            "throw" => Throw,
+            "+=" => PlusAssign,
+            "-=" => MinusAssign,
+            "*=" => MultiplyAssign,
+            "/=" => DivideAssign,
+            "<<=" => LeftShiftAssign,
+            ">>=" => RightShiftAssign,
+            "&=" => AndAssign,
+            "|=" => OrAssign,
+            "^=" => XOrAssign,
+            "<<" => LeftShift,
+            ">>" => RightShift,
+            "^" => XOr,
+            "%" => Modulo,
+            "%=" => ModuloAssign,
+            "~" => PowerOf,
+            "~=" => PowerOfAssign,
+            #[cfg(not(feature = "no_function"))]
+            "private" => Private,
+            #[cfg(not(feature = "no_module"))]
+            "import" => Import,
+            #[cfg(not(feature = "no_module"))]
+            "export" => Export,
+            #[cfg(not(feature = "no_module"))]
+            "as" => As,
+            "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" => {
+                Reserved(syntax.into())
+            }
+
+            _ => return None,
+        })
     }
 
     // Is this token EOF?
@@ -320,9 +410,9 @@ impl Token {
 
         match self {
             LexError(_)      |
-            LeftBrace        | // (+expr) - is unary
+            LeftBrace        | // {+expr} - is unary
             // RightBrace    | {expr} - expr not unary & is closing
-            LeftParen        | // {-expr} - is unary
+            LeftParen        | // (-expr) - is unary
             // RightParen    | (expr) - expr not unary & is closing
             LeftBracket      | // [-expr] - is unary
             // RightBracket  | [expr] - expr not unary & is closing
@@ -332,7 +422,6 @@ impl Token {
             UnaryMinus       |
             Multiply         |
             Divide           |
-            Colon            |
             Comma            |
             Period           |
             Equals           |
@@ -367,14 +456,14 @@ impl Token {
             Throw            |
             PowerOf          |
             In               |
-            PowerOfAssign => true,
+            PowerOfAssign    => true,
 
             _ => false,
         }
     }
 
     /// Get the precedence number of the token.
-    pub fn precedence(&self) -> u8 {
+    pub fn precedence(&self, custom: Option<&HashMap<String, u8>>) -> u8 {
         use Token::*;
 
         match self {
@@ -383,24 +472,26 @@ impl Token {
             | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
             | PowerOfAssign => 0,
 
-            Or | XOr | Pipe => 40,
+            Or | XOr | Pipe => 30,
 
-            And | Ampersand => 50,
+            And | Ampersand => 60,
 
-            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo | EqualsTo
-            | NotEqualsTo => 60,
+            EqualsTo | NotEqualsTo => 90,
 
-            In => 70,
+            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 110,
 
-            Plus | Minus => 80,
+            In => 130,
 
-            Divide | Multiply | PowerOf => 90,
+            Plus | Minus => 150,
 
-            LeftShift | RightShift => 100,
+            Divide | Multiply | PowerOf | Modulo => 180,
 
-            Modulo => 110,
+            LeftShift | RightShift => 210,
 
-            Period => 120,
+            Period => 240,
+
+            // Custom operators
+            Custom(s) => custom.map_or(0, |c| *c.get(s).unwrap()),
 
             _ => 0,
         }
@@ -422,6 +513,57 @@ impl Token {
             _ => false,
         }
     }
+
+    /// Is this token an operator?
+    pub fn is_operator(&self) -> bool {
+        use Token::*;
+
+        match self {
+            LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
+            | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
+            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | MapStart | Equals
+            | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo
+            | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
+            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
+            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
+
+            _ => false,
+        }
+    }
+
+    /// Is this token a standard keyword?
+    pub fn is_keyword(&self) -> bool {
+        use Token::*;
+
+        match self {
+            #[cfg(not(feature = "no_function"))]
+            Fn | Private => true,
+
+            #[cfg(not(feature = "no_module"))]
+            Import | Export | As => true,
+
+            True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
+            | Return | Throw => true,
+
+            _ => false,
+        }
+    }
+
+    /// Is this token a reserved keyword?
+    pub fn is_reserved(&self) -> bool {
+        match self {
+            Self::Reserved(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Is this token a custom keyword?
+    pub fn is_custom(&self) -> bool {
+        match self {
+            Self::Custom(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<Token> for String {
@@ -431,7 +573,7 @@ impl From<Token> for String {
 }
 
 /// State of the tokenizer.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string (0 = unlimited).
     pub max_string_size: usize,
@@ -583,9 +725,9 @@ pub fn parse_string_literal(
 }
 
 /// Consume the next character.
-fn eat_next(stream: &mut impl InputStream, pos: &mut Position) {
-    stream.get_next();
+fn eat_next(stream: &mut impl InputStream, pos: &mut Position) -> Option<char> {
     pos.advance();
+    stream.get_next()
 }
 
 /// Scan for a block comment until the end.
@@ -644,7 +786,7 @@ pub fn get_next_token(
     let result = get_next_token_inner(stream, state, pos);
 
     // Save the last token's state
-    if let Some((token, _)) = &result {
+    if let Some((ref token, _)) = result {
         state.non_unary = !token.is_next_unary();
     }
 
@@ -706,7 +848,9 @@ fn get_next_token_inner(
                             }
                         }
                         // 0x????, 0o????, 0b????
-                        ch @ 'x' | ch @ 'X' | ch @ 'o' | ch @ 'O' | ch @ 'b' | ch @ 'B' if c == '0' => {
+                        ch @ 'x' | ch @ 'X' | ch @ 'o' | ch @ 'O' | ch @ 'b' | ch @ 'B'
+                            if c == '0' =>
+                        {
                             result.push(next_char);
                             eat_next(stream, pos);
 
@@ -811,76 +955,58 @@ fn get_next_token_inner(
                 }
 
                 return Some((
-                    match identifier.as_str() {
-                        "true" => Token::True,
-                        "false" => Token::False,
-                        "let" => Token::Let,
-                        "const" => Token::Const,
-                        "if" => Token::If,
-                        "else" => Token::Else,
-                        "while" => Token::While,
-                        "loop" => Token::Loop,
-                        "continue" => Token::Continue,
-                        "break" => Token::Break,
-                        "return" => Token::Return,
-                        "throw" => Token::Throw,
-                        "for" => Token::For,
-                        "in" => Token::In,
-                        #[cfg(not(feature = "no_function"))]
-                        "private" => Token::Private,
-                        #[cfg(not(feature = "no_module"))]
-                        "import" => Token::Import,
-                        #[cfg(not(feature = "no_module"))]
-                        "export" => Token::Export,
-                        #[cfg(not(feature = "no_module"))]
-                        "as" => Token::As,
-
-                        #[cfg(not(feature = "no_function"))]
-                        "fn" => Token::Fn,
-
-                        _ => Token::Identifier(identifier),
-                    },
+                    Token::lookup_from_syntax(&identifier)
+                        .unwrap_or_else(|| Token::Identifier(identifier)),
                     start_pos,
                 ));
             }
 
             // " - string literal
-            ('"', _) => return parse_string_literal(stream, state, pos, '"')
-                                .map_or_else(
-                                    |err| Some((Token::LexError(Box::new(err.0)), err.1)),
-                                    |out| Some((Token::StringConst(out), start_pos)),
-                                ),
+            ('"', _) => {
+                return parse_string_literal(stream, state, pos, '"').map_or_else(
+                    |err| Some((Token::LexError(Box::new(err.0)), err.1)),
+                    |out| Some((Token::StringConstant(out), start_pos)),
+                )
+            }
 
             // ' - character literal
-            ('\'', '\'') => return Some((
-                Token::LexError(Box::new(LERR::MalformedChar("".to_string()))),
-                start_pos,
-            )),
-            ('\'', _) => return Some(
-                parse_string_literal(stream, state, pos, '\'')
-                    .map_or_else(
-                        |err| (Token::LexError(Box::new(err.0)), err.1),
-                        |result| {
-                            let mut chars = result.chars();
-                            let first = chars.next();
+            ('\'', '\'') => {
+                return Some((
+                    Token::LexError(Box::new(LERR::MalformedChar("".to_string()))),
+                    start_pos,
+                ))
+            }
+            ('\'', _) => {
+                return Some(parse_string_literal(stream, state, pos, '\'').map_or_else(
+                    |err| (Token::LexError(Box::new(err.0)), err.1),
+                    |result| {
+                        let mut chars = result.chars();
+                        let first = chars.next();
 
-                            if chars.next().is_some() {
-                                (
-                                    Token::LexError(Box::new(LERR::MalformedChar(result))),
-                                    start_pos,
-                                )
-                            } else {
-                                (Token::CharConstant(first.expect("should be Some")), start_pos)
-                            }
-                        },
-                    ),
-            ),
+                        if chars.next().is_some() {
+                            (
+                                Token::LexError(Box::new(LERR::MalformedChar(result))),
+                                start_pos,
+                            )
+                        } else {
+                            (
+                                Token::CharConstant(first.expect("should be Some")),
+                                start_pos,
+                            )
+                        }
+                    },
+                ))
+            }
 
             // Braces
             ('{', _) => return Some((Token::LeftBrace, start_pos)),
             ('}', _) => return Some((Token::RightBrace, start_pos)),
 
             // Parentheses
+            ('(', '*') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("(*".into()), start_pos));
+            }
             ('(', _) => return Some((Token::LeftParen, start_pos)),
             (')', _) => return Some((Token::RightParen, start_pos)),
 
@@ -894,6 +1020,7 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::MapStart, start_pos));
             }
+            ('#', _) => return Some((Token::Reserved("#".into()), start_pos)),
 
             // Operators
             ('+', '=') => {
@@ -909,15 +1036,17 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::MinusAssign, start_pos));
             }
-            ('-', '>') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'->' is not a valid symbol. This is not C or C++!".to_string(),
-                ))),
-                start_pos,
-            )),
+            ('-', '>') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("->".into()), start_pos));
+            }
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
+            ('*', ')') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("*)".into()), start_pos));
+            }
             ('*', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::MultiplyAssign, start_pos));
@@ -982,49 +1111,42 @@ fn get_next_token_inner(
 
                 // Warn against `===`
                 if stream.peek_next() == Some('=') {
-                    return Some((
-                            Token::LexError(Box::new(LERR::ImproperSymbol(
-                                "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
-                                    .to_string(),
-                            ))),
-                            start_pos,
-                        ));
+                    eat_next(stream, pos);
+                    return Some((Token::Reserved("===".into()), start_pos));
                 }
 
                 return Some((Token::EqualsTo, start_pos));
             }
-            ('=', '>') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'=>' is not a valid symbol. This is not Rust! Should it be '>='?"
-                        .to_string(),
-                ))),
-                start_pos,
-            )),
+            ('=', '>') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("=>".into()), start_pos));
+            }
             ('=', _) => return Some((Token::Equals, start_pos)),
 
             (':', ':') => {
                 eat_next(stream, pos);
+
+                if stream.peek_next() == Some('<') {
+                    eat_next(stream, pos);
+                    return Some((Token::Reserved("::<".into()), start_pos));
+                }
+
                 return Some((Token::DoubleColon, start_pos));
             }
-            (':', '=') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "':=' is not a valid assignment operator. This is not Pascal! Should it be simply '='?"
-                        .to_string(),
-                ))),
-                start_pos,
-            )),
+            (':', '=') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved(":=".into()), start_pos));
+            }
             (':', _) => return Some((Token::Colon, start_pos)),
 
             ('<', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::LessThanEqualsTo, start_pos));
             }
-            ('<', '-') => return Some((
-                Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'<-' is not a valid symbol. Should it be '<='?".to_string(),
-                ))),
-                start_pos,
-            )),
+            ('<', '-') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("<-".into()), start_pos));
+            }
             ('<', '<') => {
                 eat_next(stream, pos);
 
@@ -1062,15 +1184,9 @@ fn get_next_token_inner(
             ('!', '=') => {
                 eat_next(stream, pos);
 
-                // Warn against `!==`
                 if stream.peek_next() == Some('=') {
-                    return Some((
-                            Token::LexError(Box::new(LERR::ImproperSymbol(
-                                "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
-                                    .to_string(),
-                            ))),
-                            start_pos,
-                        ));
+                    eat_next(stream, pos);
+                    return Some((Token::Reserved("!==".into()), start_pos));
                 }
 
                 return Some((Token::NotEqualsTo, start_pos));
@@ -1115,10 +1231,17 @@ fn get_next_token_inner(
             }
             ('~', _) => return Some((Token::PowerOf, start_pos)),
 
+            ('@', _) => return Some((Token::Reserved("@".into()), start_pos)),
+
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),
-            (ch, _) => return Some((Token::LexError(Box::new(LERR::UnexpectedChar(ch))), start_pos)),
+            (ch, _) => {
+                return Some((
+                    Token::LexError(Box::new(LERR::UnexpectedInput(ch.to_string()))),
+                    start_pos,
+                ))
+            }
         }
     }
 
@@ -1132,47 +1255,51 @@ fn get_next_token_inner(
 }
 
 /// A type that implements the `InputStream` trait.
-/// Multiple charaacter streams are jointed together to form one single stream.
+/// Multiple character streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
     /// The input character streams.
     streams: StaticVec<Peekable<Chars<'a>>>,
+    /// The current stream index.
+    index: usize,
 }
 
 impl InputStream for MultiInputsStream<'_> {
     /// Get the next character
     fn get_next(&mut self) -> Option<char> {
         loop {
-            if self.streams.is_empty() {
+            if self.index >= self.streams.len() {
                 // No more streams
                 return None;
-            } else if let Some(ch) = self.streams[0].next() {
+            } else if let Some(ch) = self.streams[self.index].next() {
                 // Next character in current stream
                 return Some(ch);
             } else {
                 // Jump to the next stream
-                let _ = self.streams.remove(0);
+                self.index += 1;
             }
         }
     }
     /// Peek the next character
     fn peek_next(&mut self) -> Option<char> {
         loop {
-            if self.streams.is_empty() {
+            if self.index >= self.streams.len() {
                 // No more streams
                 return None;
-            } else if let Some(ch) = self.streams[0].peek() {
+            } else if let Some(&ch) = self.streams[self.index].peek() {
                 // Next character in current stream
-                return Some(*ch);
+                return Some(ch);
             } else {
                 // Jump to the next stream
-                let _ = self.streams.remove(0);
+                self.index += 1;
             }
         }
     }
 }
 
 /// An iterator on a `Token` stream.
-pub struct TokenIterator<'a> {
+pub struct TokenIterator<'a, 'e> {
+    /// Reference to the scripting `Engine`.
+    engine: &'e Engine,
     /// Current state.
     state: TokenizeState,
     /// Current position.
@@ -1181,19 +1308,93 @@ pub struct TokenIterator<'a> {
     stream: MultiInputsStream<'a>,
 }
 
-impl<'a> Iterator for TokenIterator<'a> {
+impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        get_next_token(&mut self.stream, &mut self.state, &mut self.pos)
+        match (
+            get_next_token(&mut self.stream, &mut self.state, &mut self.pos),
+            self.engine.disabled_symbols.as_ref(),
+            self.engine.custom_keywords.as_ref(),
+        ) {
+            (None, _, _) => None,
+            (Some((Token::Reserved(s), pos)), None, None) => return Some((match s.as_str() {
+                "===" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
+                        .to_string(),
+                ))),
+                "!==" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
+                        .to_string(),
+                ))),
+                "->" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'->' is not a valid symbol. This is not C or C++!".to_string(),
+                ))),
+                "<-" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'<-' is not a valid symbol. This is not Go! Should it be '<='?".to_string(),
+                ))),
+                "=>" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'=>' is not a valid symbol. This is not Rust! Should it be '>='?"
+                        .to_string(),
+                ))),
+                ":=" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "':=' is not a valid assignment operator. This is not Go! Should it be simply '='?"
+                        .to_string(),
+                ))),
+                "::<" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?"
+                        .to_string(),
+                ))),
+                "(*" | "*)" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?"
+                        .to_string(),
+                ))),
+                "#" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'#' is not a valid symbol. Should it be '#{'?"
+                        .to_string(),
+                ))),
+                token => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    format!("'{}' is not a valid symbol.", token)
+                ))),
+            }, pos)),
+            (r @ Some(_), None, None) => r,
+            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
+                // Convert custom keywords
+                Some((Token::Custom(s), pos))
+            }
+            (Some((token, pos)), _, Some(custom))
+                if (token.is_keyword() || token.is_operator() || token.is_reserved())
+                    && custom.contains_key(token.syntax().as_ref()) =>
+            {
+                // Convert into custom keywords
+                Some((Token::Custom(token.syntax().into()), pos))
+            }
+            (Some((token, pos)), Some(disabled), _)
+                if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>
+            {
+                // Convert disallowed operators into lex errors
+                Some((
+                    Token::LexError(Box::new(LexError::UnexpectedInput(token.syntax().into()))),
+                    pos,
+                ))
+            }
+            (Some((token, pos)), Some(disabled), _)
+                if token.is_keyword() && disabled.contains(token.syntax().as_ref()) =>
+            {
+                // Convert disallowed keywords into identifiers
+                Some((Token::Identifier(token.syntax().into()), pos))
+            }
+            (r, _, _) => r,
+        }
     }
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a>(input: &'a [&'a str], max_string_size: usize) -> TokenIterator<'a> {
+pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a, 'e> {
     TokenIterator {
+        engine,
         state: TokenizeState {
-            max_string_size,
+            max_string_size: engine.max_string_size,
             non_unary: false,
             comment_level: 0,
             end_with_none: false,
@@ -1202,6 +1403,7 @@ pub fn lex<'a>(input: &'a [&'a str], max_string_size: usize) -> TokenIterator<'a
         pos: Position::new(1, 0),
         stream: MultiInputsStream {
             streams: input.iter().map(|s| s.chars().peekable()).collect(),
+            index: 0,
         },
     }
 }

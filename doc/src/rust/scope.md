@@ -28,11 +28,11 @@ let mut scope = Scope::new();
 // Then push (i.e. add) some initialized variables into the state.
 // Remember the system number types in Rhai are i64 (i32 if 'only_i32') ond f64.
 // Better stick to them or it gets hard working with the script.
-scope.push("y", 42_i64);
-scope.push("z", 999_i64);
-
-// 'set_value' adds a variable when one doesn't exist
-scope.set_value("s", "hello, world!".to_string());  // remember to use 'String', not '&str'
+scope
+    .push("y", 42_i64)
+    .push("z", 999_i64)
+    .set_value("s", "hello, world!".to_string());   //'set_value' adds a variable when one doesn't exist
+                                                    // remember to use 'String', not '&str'
 
 // First invocation
 engine.eval_with_scope::<()>(&mut scope, r"

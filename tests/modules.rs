@@ -69,9 +69,14 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     let mut resolver = StaticModuleResolver::new();
 
     let mut module = Module::new();
+
     module.set_var("answer", 42 as INT);
     module.set_fn_4("sum".to_string(), |x: INT, y: INT, z: INT, w: INT| {
         Ok(x + y + z + w)
+    });
+    module.set_fn_1_mut("double".to_string(), |x: &mut INT| {
+        *x *= 2;
+        Ok(())
     });
 
     resolver.insert("hello", module);
@@ -85,6 +90,18 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                 import "hello" as h1;
                 import "hello" as h2;
                 h1::sum(h2::answer, -10, 3, 7)
+            "#
+        )?,
+        42
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                import "hello" as h;
+                let x = 21;
+                h::double(x);
+                x
             "#
         )?,
         42

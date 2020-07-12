@@ -1,7 +1,7 @@
 use crate::any::Dynamic;
 use crate::def_package;
 use crate::engine::Engine;
-use crate::module::FuncReturn;
+use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
 use crate::result::EvalAltResult;
 use crate::token::Position;
@@ -223,23 +223,21 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             Ok(())
         },
     );
-    lib.set_fn_var_args(
+    lib.set_raw_fn(
         "pad",
         &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
-        |engine: &Engine, args: &mut [&mut Dynamic]| {
+        |engine: &Engine, _: &Module, args: &mut [&mut Dynamic]| {
             let len = *args[1].downcast_ref::< INT>().unwrap();
 
             // Check if string will be over max size limit
             #[cfg(not(feature = "unchecked"))]
-            {
-                if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
-                    return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                        "Length of string".to_string(),
-                        engine.max_string_size,
-                        len as usize,
-                        Position::none(),
-                    )));
-                }
+            if engine.max_string_size > 0 && len > 0 && (len as usize) > engine.max_string_size {
+                return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                    "Length of string".to_string(),
+                    engine.max_string_size,
+                    len as usize,
+                    Position::none(),
+                )));
             }
 
             if len > 0 {

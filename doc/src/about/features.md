@@ -22,7 +22,7 @@ Fast
 
 * Fairly low compile-time overhead.
 
-* Fairly efficient evaluation (1 million iterations in 0.25 sec on a single core, 2.3 GHz Linux VM).
+* Fairly efficient evaluation (1 million iterations in 0.3 sec on a single core, 2.3 GHz Linux VM).
 
 * Scripts are [optimized][script optimization] (useful for template-based machine-generated scripts) for repeated evaluations.
 
@@ -38,6 +38,8 @@ Dynamic
 * Dynamic dispatch via [function pointers].
 
 * Some support for [object-oriented programming (OOP)][OOP].
+
+* Serialization/deserialization support via [`serde`].
 
 Safe
 ----
@@ -62,3 +64,8 @@ Flexible
 * Support for [minimal builds] by excluding unneeded language [features].
 
 * Supports [most build targets](targets.md) including `no-std` and [WASM].
+
+* Surgically [disable keywords and operators] to restrict the language.
+
+* Use as a [DSL] by [disabling keywords/operators][disable keywords and operators], [custom operators]
+  and extending the language with [custom syntax].

@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
 use crate::engine::{Array, Engine};
-use crate::module::FuncReturn;
+use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
 use crate::result::EvalAltResult;
 use crate::token::Position;
@@ -25,20 +25,22 @@ fn ins<T: Variant + Clone>(list: &mut Array, position: INT, item: T) -> FuncRetu
     }
     Ok(())
 }
-fn pad<T: Variant + Clone>(engine: &Engine, args: &mut [&mut Dynamic]) -> FuncReturn<()> {
+fn pad<T: Variant + Clone>(
+    engine: &Engine,
+    _: &Module,
+    args: &mut [&mut Dynamic],
+) -> FuncReturn<()> {
     let len = *args[1].downcast_ref::<INT>().unwrap();
 
     // Check if array will be over max size limit
     #[cfg(not(feature = "unchecked"))]
-    {
-        if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
-            return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                engine.max_array_size,
-                len as usize,
-                Position::none(),
-            )));
-        }
+    if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
+        return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+            "Size of array".to_string(),
+            engine.max_array_size,
+            len as usize,
+            Position::none(),
+        )));
     }
 
     if len > 0 {
@@ -65,7 +67,7 @@ macro_rules! reg_tri {
 macro_rules! reg_pad {
     ($lib:expr, $op:expr, $func:ident, $($par:ty),*) => {
         $({
-            $lib.set_fn_var_args($op,
+            $lib.set_raw_fn($op,
                 &[TypeId::of::<Array>(), TypeId::of::<INT>(), TypeId::of::<$par>()],
                 $func::<$par>
             );

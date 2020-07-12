@@ -4,6 +4,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
+use crate::module::Module;
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::utils::ImmutableString;
@@ -39,7 +40,7 @@ pub trait RegisterFn<FN, ARGS, RET> {
     /// # Ok(())
     /// # }
     /// ```
-    fn register_fn(&mut self, name: &str, f: FN);
+    fn register_fn(&mut self, name: &str, f: FN) -> &mut Self;
 }
 
 /// Trait to register fallible custom functions returning `Result<Dynamic, Box<EvalAltResult>>` with the `Engine`.
@@ -69,7 +70,7 @@ pub trait RegisterResultFn<FN, ARGS> {
     /// engine.eval::<i64>("div(42, 0)")
     ///         .expect_err("expecting division by zero error!");
     /// ```
-    fn register_result_fn(&mut self, name: &str, f: FN);
+    fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self;
 }
 
 // These types are used to build a unique _marker_ tuple type for each combination
@@ -119,7 +120,7 @@ macro_rules! make_func {
 //                           ^ function parameter generic type name (A, B, C etc.)
 //                                           ^ dereferencing function
 
-		Box::new(move |_: &Engine, args: &mut FnCallArgs| {
+		Box::new(move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             // The arguments are assumed to be of the correct number and types!
 
 			#[allow(unused_variables, unused_mut)]
@@ -181,11 +182,12 @@ macro_rules! def_register {
             RET: Variant + Clone
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
-            fn register_fn(&mut self, name: &str, f: FN) {
+            fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_module.set_fn(name, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $clone),*))
                 );
+                self
             }
         }
 
@@ -194,11 +196,12 @@ macro_rules! def_register {
             FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
         > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
-            fn register_result_fn(&mut self, name: &str, f: FN) {
+            fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_module.set_fn(name, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $clone),*))
                 );
+                self
             }
         }
 

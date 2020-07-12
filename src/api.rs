@@ -1,14 +1,12 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{
-    get_script_function_by_signature, make_getter, make_setter, Engine, Imports, State, FN_IDX_GET,
-    FN_IDX_SET,
-};
+use crate::engine::{make_getter, make_setter, Engine, Imports, State, FN_IDX_GET, FN_IDX_SET};
 use crate::error::ParseError;
 use crate::fn_call::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
+use crate::module::{FuncReturn, Module};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::AST;
 use crate::result::EvalAltResult;
@@ -18,6 +16,9 @@ use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
+
+#[cfg(not(feature = "no_function"))]
+use crate::engine::get_script_function_by_signature;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -32,6 +33,173 @@ use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
 
 /// Engine public API
 impl Engine {
+    /// Register a function of the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.  It takes a list of `TypeId`'s indicating the actual types of the parameters.
+    ///
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// The arguments are guaranteed to be of the correct types matching the `TypeId`'s.
+    ///
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    ///
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// Notice that this will _consume_ the argument, replacing it with `()`.
+    ///
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
+    #[deprecated(note = "this function is volatile and may change")]
+    pub fn register_raw_fn<T: Variant + Clone>(
+        &mut self,
+        name: &str,
+        arg_types: &[TypeId],
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> &mut Self {
+        self.global_module.set_raw_fn(name, arg_types, func);
+        self
+    }
+
+    /// Register a function of no parameters with the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    #[deprecated(note = "this function is volatile and may change")]
+    pub fn register_raw_fn_0<T: Variant + Clone>(
+        &mut self,
+        name: &str,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> &mut Self {
+        self.global_module.set_raw_fn(name, &[], func);
+        self
+    }
+
+    /// Register a function of one parameter with the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
+    ///
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    ///
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// Notice that this will _consume_ the argument, replacing it with `()`.
+    ///
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
+    #[deprecated(note = "this function is volatile and may change")]
+    pub fn register_raw_fn_1<A: Variant + Clone, T: Variant + Clone>(
+        &mut self,
+        name: &str,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> &mut Self {
+        self.global_module
+            .set_raw_fn(name, &[TypeId::of::<A>()], func);
+        self
+    }
+
+    /// Register a function of two parameters with the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
+    ///
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    ///
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// Notice that this will _consume_ the argument, replacing it with `()`.
+    ///
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
+    #[deprecated(note = "this function is volatile and may change")]
+    pub fn register_raw_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+        &mut self,
+        name: &str,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> &mut Self {
+        self.global_module
+            .set_raw_fn(name, &[TypeId::of::<A>(), TypeId::of::<B>()], func);
+        self
+    }
+
+    /// Register a function of three parameters with the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
+    ///
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    ///
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// Notice that this will _consume_ the argument, replacing it with `()`.
+    ///
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
+    #[deprecated(note = "this function is volatile and may change")]
+    pub fn register_raw_fn_3<
+        A: Variant + Clone,
+        B: Variant + Clone,
+        C: Variant + Clone,
+        T: Variant + Clone,
+    >(
+        &mut self,
+        name: &str,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> &mut Self {
+        self.global_module.set_raw_fn(
+            name,
+            &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()],
+            func,
+        );
+        self
+    }
+
+    /// Register a function of four parameters with the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// which is guaranteed to contain enough arguments of the correct types.
+    ///
+    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    ///
+    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// Notice that this will _consume_ the argument, replacing it with `()`.
+    ///
+    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
+    #[deprecated(note = "this function is volatile and may change")]
+    pub fn register_raw_fn_4<
+        A: Variant + Clone,
+        B: Variant + Clone,
+        C: Variant + Clone,
+        D: Variant + Clone,
+        T: Variant + Clone,
+    >(
+        &mut self,
+        name: &str,
+        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+    ) -> &mut Self {
+        self.global_module.set_raw_fn(
+            name,
+            &[
+                TypeId::of::<A>(),
+                TypeId::of::<B>(),
+                TypeId::of::<C>(),
+                TypeId::of::<D>(),
+            ],
+            func,
+        );
+        self
+    }
+
     /// Register a custom type for use with the `Engine`.
     /// The type must implement `Clone`.
     ///
@@ -69,8 +237,8 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_type<T: Variant + Clone>(&mut self) {
-        self.register_type_with_name::<T>(type_name::<T>());
+    pub fn register_type<T: Variant + Clone>(&mut self) -> &mut Self {
+        self.register_type_with_name::<T>(type_name::<T>())
     }
 
     /// Register a custom type for use with the `Engine`, with a pretty-print name
@@ -117,16 +285,23 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) {
+    pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
+        if self.type_names.is_none() {
+            self.type_names = Some(Default::default());
+        }
         // Add the pretty-print type name into the map
         self.type_names
+            .as_mut()
+            .unwrap()
             .insert(type_name::<T>().to_string(), name.to_string());
+        self
     }
 
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
-    pub fn register_iterator<T: Variant + Clone>(&mut self, f: IteratorFn) {
+    pub fn register_iterator<T: Variant + Clone>(&mut self, f: IteratorFn) -> &mut Self {
         self.global_module.set_iter(TypeId::of::<T>(), f);
+        self
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
@@ -170,11 +345,12 @@ impl Engine {
         &mut self,
         name: &str,
         callback: impl Fn(&mut T) -> U + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_getter(name), callback);
+        self.register_fn(&make_getter(name), callback)
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
@@ -218,11 +394,12 @@ impl Engine {
         &mut self,
         name: &str,
         callback: impl Fn(&mut T, U) + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_setter(name), callback);
+        self.register_fn(&make_setter(name), callback)
     }
 
     /// Shorthand for registering both getter and setter functions
@@ -269,12 +446,12 @@ impl Engine {
         name: &str,
         get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
         set_fn: impl Fn(&mut T, U) + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_get(name, get_fn);
-        self.register_set(name, set_fn);
+        self.register_get(name, get_fn).register_set(name, set_fn)
     }
 
     /// Register an index getter for a registered type with the `Engine`.
@@ -318,12 +495,13 @@ impl Engine {
     pub fn register_indexer_get<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FN_IDX_GET, callback);
+        self.register_fn(FN_IDX_GET, callback)
     }
 
     /// Register an index setter for a registered type with the `Engine`.
@@ -366,12 +544,13 @@ impl Engine {
     pub fn register_indexer_set<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FN_IDX_SET, callback);
+        self.register_fn(FN_IDX_SET, callback)
     }
 
     /// Shorthand for register both index getter and setter functions for a registered type with the `Engine`.
@@ -413,16 +592,17 @@ impl Engine {
         &mut self,
         getter: impl Fn(&mut T, X) -> U + SendSync + 'static,
         setter: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_indexer_get(getter);
-        self.register_indexer_set(setter);
+        self.register_indexer_get(getter)
+            .register_indexer_set(setter)
     }
 
-    /// Compile a string into an [`AST`], which can be used later for evaluation.
+    /// Compile a string into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
     ///
@@ -445,7 +625,7 @@ impl Engine {
         self.compile_with_scope(&Scope::new(), script)
     }
 
-    /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
+    /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
@@ -488,7 +668,7 @@ impl Engine {
     }
 
     /// When passed a list of strings, first join the strings into one large script,
-    /// and then compile them into an [`AST`] using own scope, which can be used later for evaluation.
+    /// and then compile them into an `AST` using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
@@ -541,14 +721,14 @@ impl Engine {
         self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
 
-    /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
+    /// Join a list of strings and compile into an `AST` using own scope at a specific optimization level.
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts, self.max_string_size);
+        let stream = lex(scripts, self);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
@@ -577,7 +757,7 @@ impl Engine {
         Ok(contents)
     }
 
-    /// Compile a script file into an [`AST`], which can be used later for evaluation.
+    /// Compile a script file into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
     ///
@@ -603,7 +783,7 @@ impl Engine {
         self.compile_file_with_scope(&Scope::new(), path)
     }
 
-    /// Compile a script file into an [`AST`] using own scope, which can be used later for evaluation.
+    /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using `OptimizationLevel::Full`.
@@ -673,7 +853,7 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
         let ast =
             self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
@@ -685,7 +865,7 @@ impl Engine {
         self.eval_ast_with_scope(&mut scope, &ast)
     }
 
-    /// Compile a string containing an expression into an [`AST`],
+    /// Compile a string containing an expression into an `AST`,
     /// which can be used later for evaluation.
     ///
     /// # Example
@@ -709,7 +889,7 @@ impl Engine {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
 
-    /// Compile a string containing an expression into an [`AST`] using own scope,
+    /// Compile a string containing an expression into an `AST` using own scope,
     /// which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
@@ -754,7 +934,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
         {
             let mut peekable = stream.peekable();
             self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -843,8 +1023,8 @@ impl Engine {
     /// let mut scope = Scope::new();
     /// scope.push("x", 40_i64);
     ///
-    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 42);
-    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x = x + 2; x")?, 44);
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x += 2; x")?, 42);
+    /// assert_eq!(engine.eval_with_scope::<i64>(&mut scope, "x += 2; x")?, 44);
     ///
     /// // The variable in the scope is modified
     /// assert_eq!(scope.get_value::<i64>("x").expect("variable x should exist"), 44);
@@ -909,7 +1089,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -917,7 +1097,7 @@ impl Engine {
         self.eval_ast_with_scope(scope, &ast)
     }
 
-    /// Evaluate an [`AST`].
+    /// Evaluate an `AST`.
     ///
     /// # Example
     ///
@@ -939,7 +1119,7 @@ impl Engine {
         self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
 
-    /// Evaluate an [`AST`] with own scope.
+    /// Evaluate an `AST` with own scope.
     ///
     /// # Example
     ///
@@ -957,7 +1137,7 @@ impl Engine {
     /// scope.push("x", 40_i64);
     ///
     /// // Compile a script to an AST and store it for later evaluation
-    /// let ast = engine.compile("x = x + 2; x")?;
+    /// let ast = engine.compile("x += 2; x")?;
     ///
     /// // Evaluate it
     /// assert_eq!(engine.eval_ast_with_scope::<i64>(&mut scope, &ast)?, 42);
@@ -976,17 +1156,18 @@ impl Engine {
         let mut mods = Imports::new();
         let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
-        let return_type = self.map_type_name(result.type_name());
+        let typ = self.map_type_name(result.type_name());
 
         return result.try_cast::<T>().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.into(),
+                self.map_type_name(type_name::<T>()).into(),
+                typ.into(),
                 Position::none(),
             ))
         });
     }
 
-    /// Evaluate an [`AST`] with own scope.
+    /// Evaluate an `AST` with own scope.
     pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
@@ -1041,7 +1222,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self.max_string_size);
+        let stream = lex(&scripts, self);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
@@ -1052,7 +1233,7 @@ impl Engine {
         self.consume_ast_with_scope(&mut Scope::new(), ast)
     }
 
-    /// Evaluate an [`AST`] with own scope, but throw away the result and only return error (if any).
+    /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     pub fn consume_ast_with_scope(
         &self,
@@ -1076,7 +1257,7 @@ impl Engine {
             )
     }
 
-    /// Call a script function defined in an [`AST`] with multiple arguments.
+    /// Call a script function defined in an `AST` with multiple arguments.
     /// Arguments are passed as a tuple.
     ///
     /// # Example
@@ -1121,19 +1302,28 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let result = self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast, name, &mut None, arg_values.as_mut())?;
 
-        let return_type = self.map_type_name(result.type_name());
+        let typ = self.map_type_name(result.type_name());
 
         return result.try_cast().ok_or_else(|| {
             Box::new(EvalAltResult::ErrorMismatchOutputType(
-                return_type.into(),
+                self.map_type_name(type_name::<T>()).into(),
+                typ.into(),
                 Position::none(),
             ))
         });
     }
 
-    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments.
+    /// Call a script function defined in an `AST` with multiple `Dynamic` arguments
+    /// and optionally a value for binding to the 'this' pointer.
+    ///
+    /// ## WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
     ///
     /// # Example
     ///
@@ -1141,7 +1331,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_function"))]
     /// # {
-    /// use rhai::{Engine, Scope};
+    /// use rhai::{Engine, Scope, Dynamic};
     ///
     /// let engine = Engine::new();
     ///
@@ -1149,20 +1339,27 @@ impl Engine {
     ///     fn add(x, y) { len(x) + y + foo }
     ///     fn add1(x)   { len(x) + 1 + foo }
     ///     fn bar()     { foo/2 }
+    ///     fn action(x) { this += x; }         // function using 'this' pointer
     /// ")?;
     ///
     /// let mut scope = Scope::new();
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", vec![ String::from("abc").into(), 123_i64.into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", None, [ String::from("abc").into(), 123_i64.into() ])?;
+    /// //                                                           ^^^^ no 'this' pointer
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", vec![ String::from("abc").into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", None, [ String::from("abc").into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result= engine.call_fn_dynamic(&mut scope, &ast, "bar", vec![])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
+    ///
+    /// let mut value: Dynamic = 1_i64.into();
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                              ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// assert_eq!(value.as_int().unwrap(), 42);
     /// # }
     /// # Ok(())
     /// # }
@@ -1171,15 +1368,15 @@ impl Engine {
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
-        ast: &AST,
+        lib: impl AsRef<Module>,
         name: &str,
-        arg_values: impl IntoIterator<Item = Dynamic>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut arg_values: StaticVec<_> = arg_values.into_iter().collect();
-        self.call_fn_dynamic_raw(scope, ast, name, arg_values.as_mut())
+        mut this_ptr: Option<&mut Dynamic>,
+        mut arg_values: impl AsMut<[Dynamic]>,
+    ) -> FuncReturn<Dynamic> {
+        self.call_fn_dynamic_raw(scope, lib, name, &mut this_ptr, arg_values.as_mut())
     }
 
-    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments.
+    /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
     ///
     /// ## WARNING
     ///
@@ -1187,16 +1384,19 @@ impl Engine {
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
-        ast: &AST,
+        lib: impl AsRef<Module>,
         name: &str,
+        this_ptr: &mut Option<&mut Dynamic>,
         arg_values: &mut [Dynamic],
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> FuncReturn<Dynamic> {
+        let lib = lib.as_ref();
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
-        let fn_def = get_script_function_by_signature(ast.lib(), name, args.len(), true)
-            .ok_or_else(|| {
+        let fn_def =
+            get_script_function_by_signature(lib, name, args.len(), true).ok_or_else(|| {
                 Box::new(EvalAltResult::ErrorFunctionNotFound(
                     name.into(),
                     Position::none(),
@@ -1208,27 +1408,19 @@ impl Engine {
         let args = args.as_mut();
 
         self.call_script_fn(
-            scope,
-            &mut mods,
-            &mut state,
-            ast.lib(),
-            &mut None,
-            name,
-            fn_def,
-            args,
-            0,
+            scope, &mut mods, &mut state, lib, this_ptr, name, fn_def, args, 0,
         )
     }
 
-    /// Optimize the [`AST`] with constants defined in an external Scope.
-    /// An optimized copy of the [`AST`] is returned while the original [`AST`] is consumed.
+    /// Optimize the `AST` with constants defined in an external Scope.
+    /// An optimized copy of the `AST` is returned while the original `AST` is consumed.
     ///
     /// Although optimization is performed by default during compilation, sometimes it is necessary to
     /// _re_-optimize an AST. For example, when working with constants that are passed in via an
-    /// external scope, it will be more efficient to optimize the [`AST`] once again to take advantage
+    /// external scope, it will be more efficient to optimize the `AST` once again to take advantage
     /// of the new constants.
     ///
-    /// With this method, it is no longer necessary to recompile a large script. The script [`AST`] can be
+    /// With this method, it is no longer necessary to recompile a large script. The script `AST` can be
     /// compiled just once. Before evaluation, constants are passed into the `Engine` via an external scope
     /// (i.e. with `scope.push_constant(...)`). Then, the `AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
@@ -1238,12 +1430,16 @@ impl Engine {
         mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
+        #[cfg(not(feature = "no_function"))]
         let lib = ast
             .lib()
             .iter_fn()
             .filter(|(_, _, _, f)| f.is_script())
             .map(|(_, _, _, f)| f.get_fn_def().clone())
             .collect();
+
+        #[cfg(feature = "no_function")]
+        let lib = Default::default();
 
         let stmt = mem::take(ast.statements_mut());
         optimize_into_ast(self, scope, stmt, lib, optimization_level)
@@ -1283,8 +1479,12 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_progress(&mut self, callback: impl Fn(&u64) -> bool + SendSync + 'static) {
+    pub fn on_progress(
+        &mut self,
+        callback: impl Fn(&u64) -> bool + SendSync + 'static,
+    ) -> &mut Self {
         self.progress = Some(Box::new(callback));
+        self
     }
 
     /// Override default action of `print` (print to stdout using `println!`)
@@ -1311,8 +1511,9 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
+    pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
         self.print = Box::new(callback);
+        self
     }
 
     /// Override default action of `debug` (print to stdout using `println!`)
@@ -1339,7 +1540,8 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
+    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
         self.debug = Box::new(callback);
+        self
     }
 }

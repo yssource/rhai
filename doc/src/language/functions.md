@@ -14,8 +14,9 @@ fn sub(x, y,) {     // trailing comma in parameters list is OK
     return x - y;
 }
 
-print(add(2, 3));   // prints 5
-print(sub(2, 3,));  // prints -1 - trailing comma in arguments list is OK
+add(2, 3) == 5;
+
+sub(2, 3,) == -1;  // trailing comma in arguments list is OK
 ```
 
 
@@ -35,8 +36,9 @@ fn add2(x) {
     return x + 2;   // explicit return
 }
 
-print(add(2, 3));   // prints 5
-print(add2(42));    // prints 44
+add(2, 3) == 5;
+
+add2(42) == 44;
 ```
 
 

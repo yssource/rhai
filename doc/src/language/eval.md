@@ -19,14 +19,14 @@ script +=    "x + y";
 
 let result = eval(script);      // <- look, JavaScript, we can also do this!
 
-print("Answer: " + result);     // prints 42
+result == 42;
 
-print("x = " + x);              // prints 10: functions call arguments are passed by value
-print("y = " + y);              // prints 32: variables defined in 'eval' persist!
+x == 10;                        // prints 10: functions call arguments are passed by value
+y == 32;                        // prints 32: variables defined in 'eval' persist!
 
 eval("{ let z = y }");          // to keep a variable local, use a statement block
 
-print("z = " + z);              // <- error: variable 'z' not found
+print(z);                       // <- error: variable 'z' not found
 
 "print(42)".eval();             // <- nope... method-call style doesn't work with 'eval'
 ```

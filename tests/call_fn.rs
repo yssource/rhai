@@ -1,5 +1,8 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, Func, ParseError, ParseErrorType, Scope, INT};
+use rhai::{
+    Dynamic, Engine, EvalAltResult, FnPtr, Func, ImmutableString, Module, ParseError,
+    ParseErrorType, Scope, INT,
+};
 
 #[test]
 fn test_fn() -> Result<(), Box<EvalAltResult>> {
@@ -29,7 +32,7 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
                 x + y
             }
             fn hello(x) {
-                x = x * foo;
+                x *= foo;
                 foo = 1;
                 x
             }
@@ -107,6 +110,50 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
         *calc_func(42, 123, 9).expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "calc"
     ));
+
+    Ok(())
+}
+
+#[test]
+fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.register_raw_fn(
+        "bar",
+        &[
+            std::any::TypeId::of::<INT>(),
+            std::any::TypeId::of::<FnPtr>(),
+            std::any::TypeId::of::<INT>(),
+        ],
+        move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+            let fp = std::mem::take(args[1]).cast::<FnPtr>();
+            let value = args[2].clone();
+            let this_ptr = args.get_mut(0).unwrap();
+
+            engine.call_fn_dynamic(
+                &mut Scope::new(),
+                lib,
+                fp.fn_name(),
+                Some(this_ptr),
+                [value],
+            )?;
+
+            Ok(())
+        },
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(x) { this += x; }
+
+                let x = 41;
+                x.bar(Fn("foo"), 1);
+                x
+            "#
+        )?,
+        42
+    );
 
     Ok(())
 }
