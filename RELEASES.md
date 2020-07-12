@@ -22,6 +22,7 @@ Breaking changes
 * `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
 * `Engine::call_fn_dynamic` take an extra argument, allowing a `Dynamic` value to be bound to the `this` pointer.
 * Precedence of the `%` (modulo) operator is lowered to below `<<` ad `>>`. This is to handle the case of `x << 3 % 10`.
+* Many configuration/setting API's now returns `&mut Self` so that the calls can be chained. This should not affect most code.
 
 New features
 ------------

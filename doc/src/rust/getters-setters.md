@@ -30,10 +30,10 @@ impl TestStruct {
 
 let mut engine = Engine::new();
 
-engine.register_type::<TestStruct>();
-
-engine.register_get_set("xyz", TestStruct::get_field, TestStruct::set_field);
-engine.register_fn("new_ts", TestStruct::new);
+    engine
+        .register_type::<TestStruct>()
+        .register_get_set("xyz", TestStruct::get_field, TestStruct::set_field)
+        .register_fn("new_ts", TestStruct::new);
 
 // Return result can be 'String' - Rhai will automatically convert it from 'ImmutableString'
 let result = engine.eval::<String>(r#"let a = new_ts(); a.xyz = "42"; a.xyz"#)?;

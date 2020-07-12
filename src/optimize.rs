@@ -732,7 +732,9 @@ pub fn optimize_into_ast(
                     }
                     .into()
                 })
-                .for_each(|fn_def| lib2.set_script_fn(fn_def));
+                .for_each(|fn_def| {
+                    lib2.set_script_fn(fn_def);
+                });
 
             functions
                 .into_iter()
@@ -761,11 +763,13 @@ pub fn optimize_into_ast(
                     };
                     fn_def.into()
                 })
-                .for_each(|fn_def| module.set_script_fn(fn_def));
+                .for_each(|fn_def| {
+                    module.set_script_fn(fn_def);
+                });
         } else {
-            functions
-                .into_iter()
-                .for_each(|fn_def| module.set_script_fn(fn_def));
+            functions.into_iter().for_each(|fn_def| {
+                module.set_script_fn(fn_def);
+            });
         }
 
         module

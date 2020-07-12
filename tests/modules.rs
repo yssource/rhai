@@ -69,6 +69,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     let mut resolver = StaticModuleResolver::new();
 
     let mut module = Module::new();
+
     module.set_var("answer", 42 as INT);
     module.set_fn_4("sum".to_string(), |x: INT, y: INT, z: INT, w: INT| {
         Ok(x + y + z + w)

@@ -54,8 +54,9 @@ impl Engine {
         name: &str,
         arg_types: &[TypeId],
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) {
+    ) -> &mut Self {
         self.global_module.set_raw_fn(name, arg_types, func);
+        self
     }
 
     /// Register a function of no parameters with the `Engine`.
@@ -68,8 +69,9 @@ impl Engine {
         &mut self,
         name: &str,
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) {
+    ) -> &mut Self {
         self.global_module.set_raw_fn(name, &[], func);
+        self
     }
 
     /// Register a function of one parameter with the `Engine`.
@@ -92,9 +94,10 @@ impl Engine {
         &mut self,
         name: &str,
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) {
+    ) -> &mut Self {
         self.global_module
             .set_raw_fn(name, &[TypeId::of::<A>()], func);
+        self
     }
 
     /// Register a function of two parameters with the `Engine`.
@@ -117,9 +120,10 @@ impl Engine {
         &mut self,
         name: &str,
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) {
+    ) -> &mut Self {
         self.global_module
             .set_raw_fn(name, &[TypeId::of::<A>(), TypeId::of::<B>()], func);
+        self
     }
 
     /// Register a function of three parameters with the `Engine`.
@@ -147,12 +151,13 @@ impl Engine {
         &mut self,
         name: &str,
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) {
+    ) -> &mut Self {
         self.global_module.set_raw_fn(
             name,
             &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()],
             func,
         );
+        self
     }
 
     /// Register a function of four parameters with the `Engine`.
@@ -181,7 +186,7 @@ impl Engine {
         &mut self,
         name: &str,
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) {
+    ) -> &mut Self {
         self.global_module.set_raw_fn(
             name,
             &[
@@ -192,6 +197,7 @@ impl Engine {
             ],
             func,
         );
+        self
     }
 
     /// Register a custom type for use with the `Engine`.
@@ -231,8 +237,8 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_type<T: Variant + Clone>(&mut self) {
-        self.register_type_with_name::<T>(type_name::<T>());
+    pub fn register_type<T: Variant + Clone>(&mut self) -> &mut Self {
+        self.register_type_with_name::<T>(type_name::<T>())
     }
 
     /// Register a custom type for use with the `Engine`, with a pretty-print name
@@ -279,7 +285,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) {
+    pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
         if self.type_names.is_none() {
             self.type_names = Some(Default::default());
         }
@@ -288,12 +294,14 @@ impl Engine {
             .as_mut()
             .unwrap()
             .insert(type_name::<T>().to_string(), name.to_string());
+        self
     }
 
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
-    pub fn register_iterator<T: Variant + Clone>(&mut self, f: IteratorFn) {
+    pub fn register_iterator<T: Variant + Clone>(&mut self, f: IteratorFn) -> &mut Self {
         self.global_module.set_iter(TypeId::of::<T>(), f);
+        self
     }
 
     /// Register a getter function for a member of a registered type with the `Engine`.
@@ -337,11 +345,12 @@ impl Engine {
         &mut self,
         name: &str,
         callback: impl Fn(&mut T) -> U + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_getter(name), callback);
+        self.register_fn(&make_getter(name), callback)
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
@@ -385,11 +394,12 @@ impl Engine {
         &mut self,
         name: &str,
         callback: impl Fn(&mut T, U) + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_setter(name), callback);
+        self.register_fn(&make_setter(name), callback)
     }
 
     /// Shorthand for registering both getter and setter functions
@@ -436,12 +446,12 @@ impl Engine {
         name: &str,
         get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
         set_fn: impl Fn(&mut T, U) + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_get(name, get_fn);
-        self.register_set(name, set_fn);
+        self.register_get(name, get_fn).register_set(name, set_fn)
     }
 
     /// Register an index getter for a registered type with the `Engine`.
@@ -485,12 +495,13 @@ impl Engine {
     pub fn register_indexer_get<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FN_IDX_GET, callback);
+        self.register_fn(FN_IDX_GET, callback)
     }
 
     /// Register an index setter for a registered type with the `Engine`.
@@ -533,12 +544,13 @@ impl Engine {
     pub fn register_indexer_set<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_fn(FN_IDX_SET, callback);
+        self.register_fn(FN_IDX_SET, callback)
     }
 
     /// Shorthand for register both index getter and setter functions for a registered type with the `Engine`.
@@ -580,13 +592,14 @@ impl Engine {
         &mut self,
         getter: impl Fn(&mut T, X) -> U + SendSync + 'static,
         setter: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
-    ) where
+    ) -> &mut Self
+    where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_indexer_get(getter);
-        self.register_indexer_set(setter);
+        self.register_indexer_get(getter)
+            .register_indexer_set(setter)
     }
 
     /// Compile a string into an `AST`, which can be used later for evaluation.
@@ -1466,8 +1479,12 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_progress(&mut self, callback: impl Fn(&u64) -> bool + SendSync + 'static) {
+    pub fn on_progress(
+        &mut self,
+        callback: impl Fn(&u64) -> bool + SendSync + 'static,
+    ) -> &mut Self {
         self.progress = Some(Box::new(callback));
+        self
     }
 
     /// Override default action of `print` (print to stdout using `println!`)
@@ -1494,8 +1511,9 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
+    pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
         self.print = Box::new(callback);
+        self
     }
 
     /// Override default action of `debug` (print to stdout using `println!`)
@@ -1522,7 +1540,8 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) {
+    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
         self.debug = Box::new(callback);
+        self
     }
 }

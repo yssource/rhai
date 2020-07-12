@@ -3,16 +3,17 @@ use std::sync::{Arc, RwLock};
 
 #[test]
 fn test_print() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new();
-
     let logbook = Arc::new(RwLock::new(Vec::<String>::new()));
 
     // Redirect print/debug output to 'log'
-    let log = logbook.clone();
-    engine.on_print(move |s| log.write().unwrap().push(format!("entry: {}", s)));
+    let log1 = logbook.clone();
+    let log2 = logbook.clone();
 
-    let log = logbook.clone();
-    engine.on_debug(move |s| log.write().unwrap().push(format!("DEBUG: {}", s)));
+    let mut engine = Engine::new();
+
+    engine
+        .on_print(move |s| log1.write().unwrap().push(format!("entry: {}", s)))
+        .on_debug(move |s| log2.write().unwrap().push(format!("DEBUG: {}", s)));
 
     // Evaluate script
     engine.eval::<()>("print(40 + 2)")?;

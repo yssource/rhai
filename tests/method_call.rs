@@ -21,10 +21,10 @@ fn test_method_call() -> Result<(), Box<EvalAltResult>> {
 
     let mut engine = Engine::new();
 
-    engine.register_type::<TestStruct>();
-
-    engine.register_fn("update", TestStruct::update);
-    engine.register_fn("new_ts", TestStruct::new);
+    engine
+        .register_type::<TestStruct>()
+        .register_fn("update", TestStruct::update)
+        .register_fn("new_ts", TestStruct::new);
 
     assert_eq!(
         engine.eval::<TestStruct>("let x = new_ts(); x.update(1000); x")?,

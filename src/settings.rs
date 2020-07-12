@@ -9,26 +9,19 @@ impl Engine {
     ///
     /// When searching for functions, packages loaded later are preferred.
     /// In other words, loaded packages are searched in reverse order.
-    pub fn load_package(&mut self, package: PackageLibrary) {
+    pub fn load_package(&mut self, package: PackageLibrary) -> &mut Self {
         // Push the package to the top - packages are searched in reverse order
         self.packages.push(package);
-    }
-
-    /// Load a new package into the `Engine`.
-    ///
-    /// When searching for functions, packages loaded later are preferred.
-    /// In other words, loaded packages are searched in reverse order.
-    pub fn load_packages(&mut self, package: PackageLibrary) {
-        // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package);
+        self
     }
 
     /// Control whether and how the `Engine` will optimize an AST after compilation.
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
-    pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) {
-        self.optimization_level = optimization_level
+    pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) -> &mut Self {
+        self.optimization_level = optimization_level;
+        self
     }
 
     /// The current optimization level.
@@ -43,8 +36,9 @@ impl Engine {
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
     #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_call_levels(&mut self, levels: usize) {
-        self.max_call_stack_depth = levels
+    pub fn set_max_call_levels(&mut self, levels: usize) -> &mut Self {
+        self.max_call_stack_depth = levels;
+        self
     }
 
     /// The maximum levels of function calls allowed for a script.
@@ -56,12 +50,13 @@ impl Engine {
     /// Set the maximum number of operations allowed for a script to run to avoid
     /// consuming too much resources (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_operations(&mut self, operations: u64) {
+    pub fn set_max_operations(&mut self, operations: u64) -> &mut Self {
         self.max_operations = if operations == u64::MAX {
             0
         } else {
             operations
         };
+        self
     }
 
     /// The maximum number of operations allowed for a script to run (0 for unlimited).
@@ -72,8 +67,9 @@ impl Engine {
 
     /// Set the maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_modules(&mut self, modules: usize) {
+    pub fn set_max_modules(&mut self, modules: usize) -> &mut Self {
         self.max_modules = modules;
+        self
     }
 
     /// The maximum number of imported modules allowed for a script.
@@ -84,7 +80,11 @@ impl Engine {
 
     /// Set the depth limits for expressions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_expr_depths(&mut self, max_expr_depth: usize, max_function_expr_depth: usize) {
+    pub fn set_max_expr_depths(
+        &mut self,
+        max_expr_depth: usize,
+        max_function_expr_depth: usize,
+    ) -> &mut Self {
         self.max_expr_depth = if max_expr_depth == usize::MAX {
             0
         } else {
@@ -95,6 +95,7 @@ impl Engine {
         } else {
             max_function_expr_depth
         };
+        self
     }
 
     /// The depth limit for expressions (0 for unlimited).
@@ -111,8 +112,9 @@ impl Engine {
 
     /// Set the maximum length of strings (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
-    pub fn set_max_string_size(&mut self, max_size: usize) {
+    pub fn set_max_string_size(&mut self, max_size: usize) -> &mut Self {
         self.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
+        self
     }
 
     /// The maximum length of strings (0 for unlimited).
@@ -124,8 +126,9 @@ impl Engine {
     /// Set the maximum length of arrays (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
-    pub fn set_max_array_size(&mut self, max_size: usize) {
+    pub fn set_max_array_size(&mut self, max_size: usize) -> &mut Self {
         self.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
+        self
     }
 
     /// The maximum length of arrays (0 for unlimited).
@@ -138,8 +141,9 @@ impl Engine {
     /// Set the maximum length of object maps (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
-    pub fn set_max_map_size(&mut self, max_size: usize) {
+    pub fn set_max_map_size(&mut self, max_size: usize) -> &mut Self {
         self.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
+        self
     }
 
     /// The maximum length of object maps (0 for unlimited).
@@ -153,8 +157,12 @@ impl Engine {
     ///
     /// Not available under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
-    pub fn set_module_resolver(&mut self, resolver: Option<impl ModuleResolver + 'static>) {
+    pub fn set_module_resolver(
+        &mut self,
+        resolver: Option<impl ModuleResolver + 'static>,
+    ) -> &mut Self {
         self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn ModuleResolver>);
+        self
     }
 
     /// Disable a particular keyword or operator in the language.
@@ -194,7 +202,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn disable_symbol(&mut self, symbol: &str) {
+    pub fn disable_symbol(&mut self, symbol: &str) -> &mut Self {
         if self.disabled_symbols.is_none() {
             self.disabled_symbols = Some(Default::default());
         }
@@ -203,6 +211,8 @@ impl Engine {
             .as_mut()
             .unwrap()
             .insert(symbol.into());
+
+        self
     }
 
     /// Register a custom operator into the language.
@@ -235,7 +245,7 @@ impl Engine {
         &mut self,
         keyword: &str,
         precedence: u8,
-    ) -> Result<(), String> {
+    ) -> Result<&mut Self, String> {
         if !is_valid_identifier(keyword.chars()) {
             return Err(format!("not a valid identifier: '{}'", keyword).into());
         }
@@ -249,6 +259,6 @@ impl Engine {
             .unwrap()
             .insert(keyword.into(), precedence);
 
-        Ok(())
+        Ok(self)
     }
 }
