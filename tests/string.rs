@@ -173,17 +173,16 @@ fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
         "foo"
     );
 
-    engine.register_fn("foo1", |s: &str| s.len() as INT);
-    engine.register_fn("foo2", |s: ImmutableString| s.len() as INT);
-    engine.register_fn("foo3", |s: String| s.len() as INT);
+    engine
+        .register_fn("foo1", |s: &str| s.len() as INT)
+        .register_fn("foo2", |s: ImmutableString| s.len() as INT)
+        .register_fn("foo3", |s: String| s.len() as INT)
+        .register_fn("foo4", |s: &mut ImmutableString| s.len() as INT);
 
     assert_eq!(engine.eval::<INT>(r#"foo1("hello")"#)?, 5);
     assert_eq!(engine.eval::<INT>(r#"foo2("hello")"#)?, 5);
-
-    assert!(matches!(
-        *engine.eval::<INT>(r#"foo3("hello")"#).expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "foo3 (&str | ImmutableString)"
-    ));
+    assert_eq!(engine.eval::<INT>(r#"foo3("hello")"#)?, 5);
+    assert_eq!(engine.eval::<INT>(r#"foo4("hello")"#)?, 5);
 
     Ok(())
 }
