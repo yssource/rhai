@@ -29,3 +29,16 @@ Turning on [`no_float`], and [`only_i32`] makes the key [`Dynamic`] data type on
 while normally it can be up to 16 bytes (e.g. on x86/x64 CPU's) in order to hold an `i64` or `f64`.
 
 Making [`Dynamic`] small helps performance due to better cache efficiency.
+
+
+Use `ImmutableString`
+--------------------
+
+Internally, Rhai uses _immutable_ [strings] instead of the Rust `String` type.  This is mainly to avoid excessive
+cloning when passing function arguments.
+
+The encapsulated immutable string type is `ImmutableString`.  It is cheap to clone (just an `Rc` or `Arc` reference
+count increment depending on the [`sync`] feature).
+
+Therefore, functions taking `String` parameters should use `ImmutableString` or `&str` (which maps to `ImmutableString`)
+for the best performance with Rhai.

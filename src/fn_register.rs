@@ -6,6 +6,7 @@ use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::module::Module;
 use crate::parser::FnAccess;
+use crate::r#unsafe::unsafe_cast_box;
 use crate::result::EvalAltResult;
 use crate::utils::ImmutableString;
 
@@ -105,6 +106,9 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
         let ref_str = data.as_str().unwrap();
         let ref_T = unsafe { mem::transmute::<_, &T>(&ref_str) };
         ref_T.clone()
+    } else if TypeId::of::<T>() == TypeId::of::<String>() {
+        // If T is String, data must be ImmutableString, so map directly to it
+        *unsafe_cast_box(Box::new(data.as_str().unwrap().to_string())).unwrap()
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
@@ -154,12 +158,14 @@ pub fn map_result(
     data
 }
 
-/// Remap `&str` to `ImmutableString`.
+/// Remap `&str` | `String` to `ImmutableString`.
 #[inline(always)]
 fn map_type_id<T: 'static>() -> TypeId {
     let id = TypeId::of::<T>();
 
     if id == TypeId::of::<&str>() {
+        TypeId::of::<ImmutableString>()
+    } else if id == TypeId::of::<String>() {
         TypeId::of::<ImmutableString>()
     } else {
         id

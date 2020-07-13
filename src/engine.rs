@@ -855,7 +855,7 @@ impl Engine {
                 fn_name,
                 args.iter()
                     .map(|name| if name.is::<ImmutableString>() {
-                        "&str | ImmutableString"
+                        "&str | ImmutableString | String"
                     } else {
                         self.map_type_name((*name).type_name())
                     })

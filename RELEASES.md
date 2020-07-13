@@ -7,8 +7,9 @@ Version 0.17.0
 This version adds:
 
 * [`serde`](https://crates.io/crates/serde) support for working with `Dynamic` values (particularly _object maps_).
-* Ability to surgically disable keywords and/or operators in the language.
-* Ability to define custom operators (which must be valid identifiers).
+* Surgically disable keywords and/or operators in the language.
+* Define custom operators.
+* Extend the language via custom syntax.
 * Low-level API to register functions.
 
 Bug fixes
@@ -22,7 +23,6 @@ Breaking changes
 * `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
 * `Engine::call_fn_dynamic` take an extra argument, allowing a `Dynamic` value to be bound to the `this` pointer.
 * Precedence of the `%` (modulo) operator is lowered to below `<<` ad `>>`. This is to handle the case of `x << 3 % 10`.
-* Many configuration/setting API's now returns `&mut Self` so that the calls can be chained. This should not affect most code.
 
 New features
 ------------
@@ -38,7 +38,8 @@ New features
 * `FnPtr` is exposed as the function pointer type.
 * `rhai::module_resolvers::ModuleResolversCollection` added to try a list of module resolvers.
 * It is now possible to mutate the first argument of a module-qualified function call when the argument is a simple variable (but not a module constant).
-
+* Many configuration/setting API's now returns `&mut Self` so that the calls can be chained.
+* `String` parameters in functions are supported (but inefficiently).
 
 Version 0.16.1
 ==============
