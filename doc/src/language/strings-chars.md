@@ -6,20 +6,25 @@ Strings and Characters
 String in Rhai contain any text sequence of valid Unicode characters.
 Internally strings are stored in UTF-8 encoding.
 
-Strings can be built up from other strings and types via the `+` operator (provided by the [`MoreStringPackage`][packages]
-but excluded if using a [raw `Engine`]). This is particularly useful when printing output.
+Strings can be built up from other strings and types via the `+` operator
+(provided by the [`MoreStringPackage`][packages] but excluded if using a [raw `Engine`]).
+This is particularly useful when printing output.
 
 [`type_of()`] a string returns `"string"`.
 
 The maximum allowed length of a string can be controlled via `Engine::set_max_string_size`
 (see [maximum length of strings]).
 
+
 The `ImmutableString` Type
 -------------------------
 
 All strings in Rhai are implemented as `ImmutableString` (see [standard types]).
 
-`ImmutableString` should be used in place of the standard Rust type `String` when registering functions.
+`ImmutableString` should be used in place of the standard Rust type `String` when registering functions
+because using `String` is very inefficient (the `String` must always be cloned).
+
+A alternative is to use `&str` which maps straight to `ImmutableString`.
 
 
 String and Character Literals
@@ -59,13 +64,13 @@ Unicode characters.
 
 Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
 
-In Rhai, there is also no separate concepts of `String` and `&str` as in Rust.
+In Rhai, there are also no separate concepts of `String` and `&str` as in Rust.
 
 
 Immutable Strings
 ----------------
 
-Rhai strings are _immutable_ and can be shared.
+Rhai use _immutable_ strings (type `ImmutableString`) and can be shared.
 
 Modifying a Rhai string actually causes it first to be cloned, and then the modification made to the copy.
 

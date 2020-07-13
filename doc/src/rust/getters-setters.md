@@ -5,6 +5,8 @@ Custom Type Getters and Setters
 
 A custom type can also expose members by registering `get` and/or `set` functions.
 
+Getters and setters each take a `&mut` reference to the first parameter.
+
 ```rust
 #[derive(Clone)]
 struct TestStruct {
