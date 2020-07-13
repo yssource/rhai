@@ -115,6 +115,7 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_object"))]
 fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 

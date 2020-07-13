@@ -4,6 +4,8 @@ use crate::optimize::OptimizationLevel;
 use crate::packages::PackageLibrary;
 use crate::token::is_valid_identifier;
 
+use crate::stdlib::{boxed::Box, format, string::String};
+
 impl Engine {
     /// Load a new package into the `Engine`.
     ///
