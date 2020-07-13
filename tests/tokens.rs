@@ -35,6 +35,7 @@ fn test_tokens_custom_operator() -> Result<(), Box<EvalAltResult>> {
         15
     );
 
+    #[cfg(not(feature = "no_function"))]
     assert_eq!(
         engine.eval::<INT>(
             r"

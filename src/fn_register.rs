@@ -10,7 +10,12 @@ use crate::r#unsafe::unsafe_cast_box;
 use crate::result::EvalAltResult;
 use crate::utils::ImmutableString;
 
-use crate::stdlib::{any::TypeId, boxed::Box, mem};
+use crate::stdlib::{
+    any::TypeId,
+    boxed::Box,
+    mem,
+    string::{String, ToString},
+};
 
 /// Trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {

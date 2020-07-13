@@ -212,9 +212,11 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
         "string"
     } else if name == type_name::<FnPtr>() {
         "Fn"
-    } else if name == type_name::<Instant>() {
-        "timestamp"
     } else {
+        #[cfg(not(feature = "no_std"))]
+        if name == type_name::<Instant>() {
+            return "timestamp";
+        }
         #[cfg(not(feature = "no_index"))]
         if name == type_name::<Array>() {
             return "array";

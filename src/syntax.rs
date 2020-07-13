@@ -75,7 +75,7 @@ impl Engine {
             ) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> Result<self, Box<LexError>> {
+    ) -> Result<&mut Self, Box<LexError>> {
         if value.is_empty() {
             return Err(Box::new(LexError::ImproperSymbol("".to_string())));
         }

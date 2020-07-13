@@ -26,7 +26,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    format,
+    fmt, format,
     iter::{empty, once},
     mem,
     string::{String, ToString},
@@ -96,6 +96,7 @@ pub const MARKER_BLOCK: &str = "$block$";
 pub const MARKER_IDENT: &str = "$ident$";
 
 #[cfg(feature = "internals")]
+#[derive(Debug, Clone)]
 pub struct Expression<'a>(&'a Expr);
 
 #[cfg(feature = "internals")]
@@ -344,6 +345,15 @@ pub struct Engine {
     pub(crate) max_array_size: usize,
     /// Maximum number of properties in a map.
     pub(crate) max_map_size: usize,
+}
+
+impl fmt::Debug for Engine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.id.as_ref() {
+            Some(id) => write!(f, "Engine({})", id),
+            None => f.write_str("Engine"),
+        }
+    }
 }
 
 impl Default for Engine {
@@ -1095,6 +1105,7 @@ impl Engine {
             let mut hash = *hash;
 
             // Check if it is a map method call in OOP style
+            #[cfg(not(feature = "no_object"))]
             if let Some(map) = obj.downcast_ref::<Map>() {
                 if let Some(val) = map.get(fn_name) {
                     if let Some(f) = val.downcast_ref::<FnPtr>() {

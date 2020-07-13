@@ -13,7 +13,7 @@ use crate::stdlib::{
     boxed::Box,
     char,
     collections::HashMap,
-    fmt,
+    fmt, format,
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},

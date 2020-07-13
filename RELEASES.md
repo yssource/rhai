@@ -7,10 +7,10 @@ Version 0.17.0
 This version adds:
 
 * [`serde`](https://crates.io/crates/serde) support for working with `Dynamic` values (particularly _object maps_).
+* Low-level API to register functions.
 * Surgically disable keywords and/or operators in the language.
 * Define custom operators.
 * Extend the language via custom syntax.
-* Low-level API to register functions.
 
 Bug fixes
 ---------
@@ -40,6 +40,7 @@ New features
 * It is now possible to mutate the first argument of a module-qualified function call when the argument is a simple variable (but not a module constant).
 * Many configuration/setting API's now returns `&mut Self` so that the calls can be chained.
 * `String` parameters in functions are supported (but inefficiently).
+
 
 Version 0.16.1
 ==============
