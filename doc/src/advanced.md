@@ -5,6 +5,12 @@ Advanced Topics
 
 This section covers advanced features such as:
 
-* [Script optimization]
+* Simulated [Object Oriented Programming][OOP].
 
-* The dreaded (or beloved for those with twisted tastes) [`eval`] statement
+* [`serde`] integration.
+
+* [Script optimization].
+
+* [Domain-Specific Languages][DSL].
+
+* The dreaded (or beloved for those with twisted tastes) [`eval`] statement.

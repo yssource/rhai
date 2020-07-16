@@ -18,8 +18,8 @@ Supported targets and builds
 * WebAssembly (WASM)
 * `no-std`
 
-Standard Features
-----------------
+Standard features
+-----------------
 
 * Easy-to-use language similar to JavaScript+Rust with dynamic typing.
 * Tight integration with native Rust [functions](https://schungx.github.io/rhai/rust/functions.html) and [types]([#custom-types-and-methods](https://schungx.github.io/rhai/rust/custom.html)), including [getters/setters](https://schungx.github.io/rhai/rust/getters-setters.html), [methods](https://schungx.github.io/rhai/rust/custom.html) and [indexers](https://schungx.github.io/rhai/rust/indexers.html).
@@ -39,19 +39,19 @@ Standard Features
 * Scripts are [optimized](https://schungx.github.io/rhai/engine/optimize.html) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Support for [minimal builds](https://schungx.github.io/rhai/start/builds/minimal.html) by excluding unneeded language [features](https://schungx.github.io/rhai/start/features.html).
 
-Protection Against Attacks
--------------------------
+Protection against attacks
+--------------------------
 
 * Sand-boxed - the scripting engine, if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 * Rugged - protected against malicious attacks (such as [stack-overflow](https://schungx.github.io/rhai/safety/max-call-stack.html), [over-sized data](https://schungx.github.io/rhai/safety/max-string-size.html), and [runaway scripts](https://schungx.github.io/rhai/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://schungx.github.io/rhai/safety/progress.html) and manually terminate a script run.
 
-For Those Who Actually Want Their Own Language
+For those who actually want their own language
 ---------------------------------------------
 
 * Use as a [DSL](https://schungx.github.io/rhai/engine/dsl.html).
-* Define [custom operators](https://schungx.github.io/rhai/engine/custom-op.html).
 * Restrict the language by surgically [disabling keywords and operators](https://schungx.github.io/rhai/engine/disable.html).
+* Define [custom operators](https://schungx.github.io/rhai/engine/custom-op.html).
 * Extend the language with [custom syntax](https://schungx.github.io/rhai/engine/custom-syntax.html).
 
 Documentation

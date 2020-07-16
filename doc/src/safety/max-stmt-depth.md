@@ -3,8 +3,8 @@ Maximum Statement Depth
 
 {{#include ../links.md}}
 
-Limiting How Deeply-Nested a Statement Can Be
---------------------------------------------
+Limit How Deeply-Nested a Statement Can Be
+-----------------------------------------
 
 Rhai by default limits statements and expressions nesting to a maximum depth of 128
 (which should be plenty) when they are at _global_ level, but only a depth of 32
