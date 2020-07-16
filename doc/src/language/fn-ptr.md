@@ -6,7 +6,7 @@ Function Pointers
 It is possible to store a _function pointer_ in a variable just like a normal value.
 In fact, internally a function pointer simply stores the _name_ of the function as a string.
 
-Call a function pointer using the `call` method, which needs to be called in method-call style.
+Call a function pointer using the `call` method.
 
 
 Built-in methods
@@ -40,7 +40,7 @@ func.call(1) == 42;         // call a function pointer with the 'call' method
 
 foo(1) == 42;               // <- the above de-sugars to this
 
-call(func, 1);              //<- error: 'call (Fn, i64)' is not a registered function
+call(func, 1);              // normal function call style also works for 'call'
 
 let len = Fn("len");        // 'Fn' also works with registered native Rust functions
 

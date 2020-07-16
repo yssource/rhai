@@ -7,7 +7,7 @@ use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::token::{Position, Token, TokenStream};
+use crate::token::{is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(feature = "internals")]
@@ -440,6 +440,8 @@ struct ParseSettings {
     pos: Position,
     /// Is the construct being parsed located at global level?
     is_global: bool,
+    /// Is the construct being parsed located at function definition level?
+    is_function_scope: bool,
     /// Is the current position inside a loop?
     is_breakable: bool,
     /// Is anonymous function allowed?
@@ -1460,6 +1462,21 @@ fn parse_primary(
             let index = state.find_var(&s);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
+        // Function call is allowed to have reserved keyword
+        Token::Reserved(s) if s != KEYWORD_THIS && input.peek().unwrap().0 == Token::LeftParen => {
+            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+        }
+        // Access to `this` as a variable is OK
+        Token::Reserved(s) if s == KEYWORD_THIS && input.peek().unwrap().0 != Token::LeftParen => {
+            if !settings.is_function_scope {
+                return Err(
+                    PERR::BadInput(format!("'{}' can only be used in functions", s))
+                        .into_err(settings.pos),
+                );
+            } else {
+                Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+            }
+        }
         Token::LeftParen => parse_paren_expr(input, state, lib, settings.level_up())?,
         #[cfg(not(feature = "no_index"))]
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
@@ -1538,6 +1555,7 @@ fn parse_primary(
         _ => (),
     }
 
+    // Make sure identifiers are valid
     Ok(root_expr)
 }
 
@@ -2315,16 +2333,6 @@ fn parse_let(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
-    // Check if the name is allowed
-    match name.as_str() {
-        KEYWORD_THIS => {
-            return Err(
-                PERR::BadInput(LexError::MalformedIdentifier(name).to_string()).into_err(pos),
-            )
-        }
-        _ => (),
-    }
-
     // let name = ...
     if match_token(input, Token::Equals)? {
         // let name = expr
@@ -2598,6 +2606,7 @@ fn parse_stmt(
                         allow_stmt_expr: true,
                         allow_anonymous_fn: true,
                         is_global: false,
+                        is_function_scope: true,
                         is_breakable: false,
                         level: 0,
                         pos: pos,
@@ -2695,7 +2704,11 @@ fn parse_fn(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let name = match input.next().unwrap() {
-        (Token::Identifier(s), _) | (Token::Custom(s), _) => s,
+        (Token::Identifier(s), _) | (Token::Custom(s), _) | (Token::Reserved(s), _)
+            if s != KEYWORD_THIS && is_valid_identifier(s.chars()) =>
+        {
+            s
+        }
         (_, pos) => return Err(PERR::FnMissingName.into_err(pos)),
     };
 
@@ -2790,6 +2803,7 @@ impl Engine {
             allow_stmt_expr: false,
             allow_anonymous_fn: false,
             is_global: true,
+            is_function_scope: false,
             is_breakable: false,
             level: 0,
             pos: Position::none(),
@@ -2829,6 +2843,7 @@ impl Engine {
                 allow_stmt_expr: true,
                 allow_anonymous_fn: true,
                 is_global: true,
+                is_function_scope: false,
                 is_breakable: false,
                 level: 0,
                 pos: Position::none(),

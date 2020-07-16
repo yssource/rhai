@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.18.0
 ==============
 
+New features
+------------
+
+* `call` can now be called function-call style for function pointers - this is to handle builds with `no_object`.
+* Disallow many keywords as variables, such as `print`, `eval`, `call`, `this` etc.
 
 
 Version 0.17.0

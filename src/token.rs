@@ -1,6 +1,10 @@
 //! Main module defining the lexer and parser.
 
-use crate::engine::Engine;
+use crate::engine::{
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_PRINT,
+    KEYWORD_THIS, KEYWORD_TYPE_OF,
+};
+
 use crate::error::LexError;
 use crate::parser::INT;
 use crate::utils::StaticVec;
@@ -388,6 +392,8 @@ impl Token {
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" => {
                 Reserved(syntax.into())
             }
+            KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
+            | KEYWORD_FN_PTR_CALL | KEYWORD_THIS => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -1353,9 +1359,10 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                     "'#' is not a valid symbol. Should it be '#{'?"
                         .to_string(),
                 ))),
-                token => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    format!("'{}' is not a valid symbol.", token)
+                token if !is_valid_identifier(token.chars()) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    format!("'{}' is a reserved symbol.", token)
                 ))),
+                _ => Token::Reserved(s)
             }, pos)),
             (r @ Some(_), None, None) => r,
             (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
