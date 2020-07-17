@@ -25,6 +25,7 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     fmt, format,
+    hash::Hash,
     iter::empty,
     mem,
     num::NonZeroUsize,
@@ -340,7 +341,7 @@ impl fmt::Display for FnAccess {
 }
 
 /// A scripted function definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ScriptFnDef {
     /// Function name.
     pub name: String,
@@ -374,7 +375,7 @@ impl fmt::Display for ScriptFnDef {
 }
 
 /// `return`/`throw` statement.
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 pub enum ReturnType {
     /// `return` statement.
     Return,
@@ -478,7 +479,7 @@ impl ParseSettings {
 ///
 /// Each variant is at most one pointer in size (for speed),
 /// with everything being allocated together in one single tuple.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum Stmt {
     /// No-op.
     Noop(Position),
@@ -590,6 +591,13 @@ impl fmt::Debug for CustomExpr {
     }
 }
 
+#[cfg(feature = "internals")]
+impl Hash for CustomExpr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 /// An expression.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -662,6 +670,18 @@ pub enum Expr {
 impl Default for Expr {
     fn default() -> Self {
         Self::Unit(Default::default())
+    }
+}
+
+impl Hash for Expr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::FloatConstant(x) => {
+                state.write(&x.0.to_le_bytes());
+                x.1.hash(state);
+            }
+            _ => self.hash(state),
+        }
     }
 }
 
@@ -1345,55 +1365,56 @@ fn parse_map_literal(
                 eat_token(input, Token::RightBrace);
                 break;
             }
-            _ => {
-                let (name, pos) = match input.next().unwrap() {
-                    (Token::Identifier(s), pos) => (s, pos),
-                    (Token::StringConstant(s), pos) => (s, pos),
-                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                    (_, pos) if map.is_empty() => {
-                        return Err(PERR::MissingToken(
-                            Token::RightBrace.into(),
-                            MISSING_RBRACE.into(),
-                        )
-                        .into_err(pos))
-                    }
-                    (Token::EOF, pos) => {
-                        return Err(PERR::MissingToken(
-                            Token::RightBrace.into(),
-                            MISSING_RBRACE.into(),
-                        )
-                        .into_err(pos))
-                    }
-                    (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
-                };
-
-                match input.next().unwrap() {
-                    (Token::Colon, _) => (),
-                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                    (_, pos) => {
-                        return Err(PERR::MissingToken(
-                            Token::Colon.into(),
-                            format!(
-                                "to follow the property '{}' in this object map literal",
-                                name
-                            ),
-                        )
-                        .into_err(pos))
-                    }
-                };
-
-                if state.engine.max_map_size > 0 && map.len() >= state.engine.max_map_size {
-                    return Err(PERR::LiteralTooLarge(
-                        "Number of properties in object map literal".to_string(),
-                        state.engine.max_map_size,
-                    )
-                    .into_err(input.peek().unwrap().1));
-                }
-
-                let expr = parse_expr(input, state, lib, settings.level_up())?;
-                map.push(((Into::<ImmutableString>::into(name), pos), expr));
-            }
+            _ => (),
         }
+
+        let (name, pos) = match input.next().unwrap() {
+            (Token::Identifier(s), pos) => (s, pos),
+            (Token::StringConstant(s), pos) => (s, pos),
+            (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+                return Err(PERR::Reserved(s).into_err(pos));
+            }
+            (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+            (_, pos) if map.is_empty() => {
+                return Err(
+                    PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                        .into_err(pos),
+                );
+            }
+            (Token::EOF, pos) => {
+                return Err(
+                    PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                        .into_err(pos),
+                );
+            }
+            (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
+        };
+
+        match input.next().unwrap() {
+            (Token::Colon, _) => (),
+            (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+            (_, pos) => {
+                return Err(PERR::MissingToken(
+                    Token::Colon.into(),
+                    format!(
+                        "to follow the property '{}' in this object map literal",
+                        name
+                    ),
+                )
+                .into_err(pos))
+            }
+        };
+
+        if state.engine.max_map_size > 0 && map.len() >= state.engine.max_map_size {
+            return Err(PERR::LiteralTooLarge(
+                "Number of properties in object map literal".to_string(),
+                state.engine.max_map_size,
+            )
+            .into_err(input.peek().unwrap().1));
+        }
+
+        let expr = parse_expr(input, state, lib, settings.level_up())?;
+        map.push(((Into::<ImmutableString>::into(name), pos), expr));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -1477,6 +1498,9 @@ fn parse_primary(
                 Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
             }
         }
+        Token::Reserved(s) if is_valid_identifier(s.chars()) => {
+            return Err(PERR::Reserved(s).into_err(settings.pos));
+        }
         Token::LeftParen => parse_paren_expr(input, state, lib, settings.level_up())?,
         #[cfg(not(feature = "no_index"))]
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
@@ -1488,7 +1512,7 @@ fn parse_primary(
         _ => {
             return Err(
                 PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(settings.pos)
-            )
+            );
         }
     };
 
@@ -1525,6 +1549,9 @@ fn parse_primary(
                     }
 
                     Expr::Variable(Box::new(((id2, pos2), modules, 0, index)))
+                }
+                (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
+                    return Err(PERR::Reserved(id2).into_err(pos2));
                 }
                 (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
             },
@@ -2112,6 +2139,9 @@ fn parse_expr(
                             (Token::Identifier(s), pos) => {
                                 exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
                             }
+                            (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+                                return Err(PERR::Reserved(s).into_err(pos));
+                            }
                             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
                         },
                         MARKER_EXPR => exprs.push(parse_expr(input, state, lib, settings)?),
@@ -2279,10 +2309,12 @@ fn parse_for(
     let name = match input.next().unwrap() {
         // Variable name
         (Token::Identifier(s), _) => s,
+        // Reserved keyword
+        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+            return Err(PERR::Reserved(s).into_err(pos));
+        }
         // Bad identifier
         (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-        // EOF
-        (Token::EOF, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         // Not a variable name
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
@@ -2329,6 +2361,9 @@ fn parse_let(
     // let name ...
     let (name, pos) = match input.next().unwrap() {
         (Token::Identifier(s), pos) => (s, pos),
+        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+            return Err(PERR::Reserved(s).into_err(pos));
+        }
         (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
@@ -2398,6 +2433,9 @@ fn parse_import(
     // import expr as name ...
     let (name, _) = match input.next().unwrap() {
         (Token::Identifier(s), pos) => (s, pos),
+        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+            return Err(PERR::Reserved(s).into_err(pos));
+        }
         (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
@@ -2422,6 +2460,9 @@ fn parse_export(
     loop {
         let (id, id_pos) = match input.next().unwrap() {
             (Token::Identifier(s), pos) => (s.clone(), pos),
+            (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+                return Err(PERR::Reserved(s).into_err(pos));
+            }
             (Token::LexError(err), pos) => return Err(err.into_err(pos)),
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
@@ -2429,6 +2470,10 @@ fn parse_export(
         let rename = if match_token(input, Token::As)? {
             match input.next().unwrap() {
                 (Token::Identifier(s), pos) => Some((s.clone(), pos)),
+                (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+                    return Err(PERR::Reserved(s).into_err(pos));
+                }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
             }
         } else {

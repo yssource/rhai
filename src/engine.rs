@@ -96,7 +96,7 @@ pub const MARKER_BLOCK: &str = "$block$";
 pub const MARKER_IDENT: &str = "$ident$";
 
 #[cfg(feature = "internals")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Expression<'a>(&'a Expr);
 
 #[cfg(feature = "internals")]
@@ -1088,10 +1088,10 @@ impl Engine {
         let idx = idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap();
         let mut fn_name = name.as_ref();
 
-        // Check if it is a FnPtr call
         let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+            // FnPtr call
             // Redirect function name
-            fn_name = obj.as_str().unwrap();
+            let fn_name = obj.as_str().unwrap();
             // Recalculate hash
             let hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
             // Arguments are passed as-is
@@ -1101,6 +1101,26 @@ impl Engine {
             // Map it to name(args) in function-call style
             self.exec_fn_call(
                 state, lib, fn_name, *native, hash, args, false, false, def_val, level,
+            )
+        } else if fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
+            // FnPtr call on object
+            // Redirect function name
+            let fn_name = idx[0]
+                .downcast_ref::<FnPtr>()
+                .unwrap()
+                .get_fn_name()
+                .clone();
+            // Recalculate hash
+            let hash = calc_fn_hash(empty(), &fn_name, idx.len() - 1, empty());
+            // Replace the first argument with the object pointer
+            let mut arg_values = once(obj)
+                .chain(idx.iter_mut().skip(1))
+                .collect::<StaticVec<_>>();
+            let args = arg_values.as_mut();
+
+            // Map it to name(args) in function-call style
+            self.exec_fn_call(
+                state, lib, &fn_name, *native, hash, args, is_ref, true, def_val, level,
             )
         } else {
             let redirected: Option<ImmutableString>;

@@ -156,6 +156,12 @@ impl<T> Drop for StaticVec<T> {
     }
 }
 
+impl<T: Hash> Hash for StaticVec<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.iter().for_each(|x| x.hash(state));
+    }
+}
+
 impl<T> Default for StaticVec<T> {
     fn default() -> Self {
         Self {

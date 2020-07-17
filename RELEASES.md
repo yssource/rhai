@@ -9,6 +9,7 @@ New features
 
 * `call` can now be called function-call style for function pointers - this is to handle builds with `no_object`.
 * Disallow many keywords as variables, such as `print`, `eval`, `call`, `this` etc.
+* `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
 
 
 Version 0.17.0
