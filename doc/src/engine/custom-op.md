@@ -21,7 +21,7 @@ let mut engine = Engine::new();
 // (i.e. between +|- and *|/)
 // Also register the implementation of the customer operator as a function
 engine
-    .register_custom_operator("foo", 160).unwrap()
+    .register_custom_operator("foo", 160)?
     .register_fn("foo", |x: i64, y: i64| (x * y) - (x + y));
 
 // The custom operator can be used in expressions
@@ -72,7 +72,7 @@ _Unary_ custom operators are not supported.
 
 ```rust
 engine
-    .register_custom_operator("foo", 160).unwrap()
+    .register_custom_operator("foo", 160)?
     .register_fn("foo", |x: i64| x * x);
 
 engine.eval::<i64>("1 + 2 * 3 foo 4 - 5 / 6")?; // error: function 'foo (i64, i64)' not found

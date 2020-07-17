@@ -1,15 +1,27 @@
 Rhai Release Notes
 ==================
 
+Version 0.18.0
+==============
+
+New features
+------------
+
+* `call` can now be called function-call style for function pointers - this is to handle builds with `no_object`.
+* Disallow many keywords as variables, such as `print`, `eval`, `call`, `this` etc.
+* `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
+
+
 Version 0.17.0
 ==============
 
 This version adds:
 
 * [`serde`](https://crates.io/crates/serde) support for working with `Dynamic` values (particularly _object maps_).
-* Ability to surgically disable keywords and/or operators in the language.
-* Ability to define custom operators (which must be valid identifiers).
 * Low-level API to register functions.
+* Surgically disable keywords and/or operators in the language.
+* Define custom operators.
+* Extend the language via custom syntax.
 
 Bug fixes
 ---------
@@ -22,7 +34,6 @@ Breaking changes
 * `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
 * `Engine::call_fn_dynamic` take an extra argument, allowing a `Dynamic` value to be bound to the `this` pointer.
 * Precedence of the `%` (modulo) operator is lowered to below `<<` ad `>>`. This is to handle the case of `x << 3 % 10`.
-* Many configuration/setting API's now returns `&mut Self` so that the calls can be chained. This should not affect most code.
 
 New features
 ------------
@@ -31,6 +42,7 @@ New features
   This is particularly useful when converting a Rust `struct` to a `Dynamic` _object map_ and back.
 * `Engine::disable_symbol` to surgically disable keywords and/or operators.
 * `Engine::register_custom_operator` to define a custom operator.
+* `Engine::register_custom_syntax` to define a custom syntax.
 * New low-level API `Engine::register_raw_fn` and `Engine::register_raw_fn_XXX`.
 * New low-level API `Module::set_raw_fn` mirroring `Engine::register_raw_fn`.
 * `AST::clone_functions_only`, `AST::clone_functions_only_filtered` and `AST::clone_statements_only` to clone only part of an `AST`.
@@ -38,6 +50,8 @@ New features
 * `FnPtr` is exposed as the function pointer type.
 * `rhai::module_resolvers::ModuleResolversCollection` added to try a list of module resolvers.
 * It is now possible to mutate the first argument of a module-qualified function call when the argument is a simple variable (but not a module constant).
+* Many configuration/setting API's now returns `&mut Self` so that the calls can be chained.
+* `String` parameters in functions are supported (but inefficiently).
 
 
 Version 0.16.1

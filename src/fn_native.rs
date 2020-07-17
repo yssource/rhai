@@ -8,7 +8,7 @@ use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 
-use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, rc::Rc, sync::Arc};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, rc::Rc, string::String, sync::Arc};
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -87,7 +87,7 @@ impl TryFrom<ImmutableString> for FnPtr {
             Ok(Self(value))
         } else {
             Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                value.to_string(),
+                value.into(),
                 Position::none(),
             )))
         }

@@ -26,7 +26,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    format,
+    fmt, format,
     iter::{empty, once},
     mem,
     string::{String, ToString},
@@ -96,6 +96,7 @@ pub const MARKER_BLOCK: &str = "$block$";
 pub const MARKER_IDENT: &str = "$ident$";
 
 #[cfg(feature = "internals")]
+#[derive(Debug, Clone, Hash)]
 pub struct Expression<'a>(&'a Expr);
 
 #[cfg(feature = "internals")]
@@ -344,6 +345,15 @@ pub struct Engine {
     pub(crate) max_array_size: usize,
     /// Maximum number of properties in a map.
     pub(crate) max_map_size: usize,
+}
+
+impl fmt::Debug for Engine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.id.as_ref() {
+            Some(id) => write!(f, "Engine({})", id),
+            None => f.write_str("Engine"),
+        }
+    }
 }
 
 impl Default for Engine {
@@ -855,7 +865,7 @@ impl Engine {
                 fn_name,
                 args.iter()
                     .map(|name| if name.is::<ImmutableString>() {
-                        "&str | ImmutableString"
+                        "&str | ImmutableString | String"
                     } else {
                         self.map_type_name((*name).type_name())
                     })
@@ -934,7 +944,7 @@ impl Engine {
     }
 
     // Has a system function an override?
-    fn has_override(&self, lib: &Module, (hash_fn, hash_script): (u64, u64)) -> bool {
+    fn has_override(&self, lib: &Module, hash_fn: u64, hash_script: u64) -> bool {
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
 
         // First check script-defined functions
@@ -976,13 +986,15 @@ impl Engine {
 
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(lib, hashes) => Ok((
-                self.map_type_name(args[0].type_name()).to_string().into(),
-                false,
-            )),
+            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1) => {
+                Ok((
+                    self.map_type_name(args[0].type_name()).to_string().into(),
+                    false,
+                ))
+            }
 
             // Fn
-            KEYWORD_FN_PTR if args.len() == 1 && !self.has_override(lib, hashes) => {
+            KEYWORD_FN_PTR if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1) => {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'Fn' should not be called in method style. Try Fn(...);".into(),
                     Position::none(),
@@ -990,7 +1002,7 @@ impl Engine {
             }
 
             // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL if args.len() == 1 && !self.has_override(lib, hashes) => {
+            KEYWORD_EVAL if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1) => {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     Position::none(),
@@ -1076,10 +1088,10 @@ impl Engine {
         let idx = idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap();
         let mut fn_name = name.as_ref();
 
-        // Check if it is a FnPtr call
         let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+            // FnPtr call
             // Redirect function name
-            fn_name = obj.as_str().unwrap();
+            let fn_name = obj.as_str().unwrap();
             // Recalculate hash
             let hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
             // Arguments are passed as-is
@@ -1090,11 +1102,32 @@ impl Engine {
             self.exec_fn_call(
                 state, lib, fn_name, *native, hash, args, false, false, def_val, level,
             )
+        } else if fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
+            // FnPtr call on object
+            // Redirect function name
+            let fn_name = idx[0]
+                .downcast_ref::<FnPtr>()
+                .unwrap()
+                .get_fn_name()
+                .clone();
+            // Recalculate hash
+            let hash = calc_fn_hash(empty(), &fn_name, idx.len() - 1, empty());
+            // Replace the first argument with the object pointer
+            let mut arg_values = once(obj)
+                .chain(idx.iter_mut().skip(1))
+                .collect::<StaticVec<_>>();
+            let args = arg_values.as_mut();
+
+            // Map it to name(args) in function-call style
+            self.exec_fn_call(
+                state, lib, &fn_name, *native, hash, args, is_ref, true, def_val, level,
+            )
         } else {
             let redirected: Option<ImmutableString>;
             let mut hash = *hash;
 
             // Check if it is a map method call in OOP style
+            #[cfg(not(feature = "no_object"))]
             if let Some(map) = obj.downcast_ref::<Map>() {
                 if let Some(val) = map.get(fn_name) {
                     if let Some(f) = val.downcast_ref::<FnPtr>() {
@@ -1915,7 +1948,7 @@ impl Engine {
                     let hash_fn =
                         calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
-                    if !self.has_override(lib, (hash_fn, *hash)) {
+                    if !self.has_override(lib, hash_fn, *hash) {
                         // Fn - only in function call style
                         let expr = args_expr.get(0);
                         let arg_value =
@@ -1941,7 +1974,7 @@ impl Engine {
                     let hash_fn =
                         calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
-                    if !self.has_override(lib, (hash_fn, *hash)) {
+                    if !self.has_override(lib, hash_fn, *hash) {
                         // eval - only in function call style
                         let prev_len = scope.len();
                         let expr = args_expr.get(0);
@@ -1961,6 +1994,36 @@ impl Engine {
                     }
                 }
 
+                // Handle call() - Redirect function call
+                let redirected;
+                let mut name = name.as_ref();
+                let mut args_expr = args_expr.as_ref();
+                let mut hash = *hash;
+
+                if name == KEYWORD_FN_PTR_CALL
+                    && args_expr.len() >= 1
+                    && !self.has_override(lib, 0, hash)
+                {
+                    let expr = args_expr.get(0).unwrap();
+                    let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+
+                    if fn_ptr.is::<FnPtr>() {
+                        // Redirect function name
+                        redirected = Some(fn_ptr.cast::<FnPtr>().take_fn_name());
+                        name = redirected.as_ref().unwrap();
+                        // Skip the first argument
+                        args_expr = &args_expr.as_ref()[1..];
+                        // Recalculate hash
+                        hash = calc_fn_hash(empty(), name, args_expr.len(), empty());
+                    } else {
+                        return Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
+                            self.map_type_name(type_name::<FnPtr>()).into(),
+                            fn_ptr.type_name().into(),
+                            expr.position(),
+                        )));
+                    }
+                }
+
                 // Normal function call - except for Fn and eval (handled above)
                 let mut arg_values: StaticVec<Dynamic>;
                 let mut args: StaticVec<_>;
@@ -1972,7 +2035,7 @@ impl Engine {
                 } else {
                     // See if the first argument is a variable, if so, convert to method-call style
                     // in order to leverage potential &mut first argument and avoid cloning the value
-                    match args_expr.get(0) {
+                    match args_expr.get(0).unwrap() {
                         // func(x, ...) -> x.func(...)
                         lhs @ Expr::Variable(_) => {
                             arg_values = args_expr
@@ -2009,7 +2072,7 @@ impl Engine {
 
                 let args = args.as_mut();
                 self.exec_fn_call(
-                    state, lib, name, *native, *hash, args, is_ref, false, def_val, level,
+                    state, lib, name, *native, hash, args, is_ref, false, def_val, level,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.new_position(*pos))

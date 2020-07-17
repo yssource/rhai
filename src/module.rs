@@ -25,10 +25,12 @@ use crate::stdlib::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     string::{String, ToString},
-    sync::RwLock,
     vec,
     vec::Vec,
 };
+
+#[cfg(not(feature = "no_std"))]
+use crate::stdlib::sync::RwLock;
 
 /// Return type of module-level Rust function.
 pub type FuncReturn<T> = Result<T, Box<EvalAltResult>>;

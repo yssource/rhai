@@ -3,8 +3,8 @@ Maximum Size of Object Maps
 
 {{#include ../links.md}}
 
-Limiting How Large Object Maps Can Grow
---------------------------------------
+Limit How Large Object Maps Can Grow
+-----------------------------------
 
 Rhai by default does not limit how large (i.e. the number of properties) an [object map] can be.
 

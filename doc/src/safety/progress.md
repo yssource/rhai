@@ -1,5 +1,5 @@
-Tracking Progress and Force-Termination
-======================================
+Track Progress and Force-Termination
+===================================
 
 {{#include ../links.md}}
 

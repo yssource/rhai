@@ -91,5 +91,5 @@ let result = engine.call_fn_dynamic(
                         [ 41_i64.into() ]
              )?;
 
-assert_eq!(value.as_int().unwrap(), 42);
+assert_eq!(value.as_int()?, 42);
 ```

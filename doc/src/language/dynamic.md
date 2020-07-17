@@ -66,7 +66,7 @@ item.is::<i64>() == true;                       // 'is' returns whether a 'Dynam
 let value = item.cast::<i64>();                 // if the element is 'i64', this succeeds; otherwise it panics
 let value: i64 = item.cast();                   // type can also be inferred
 
-let value = item.try_cast::<i64>().unwrap();    // 'try_cast' does not panic when the cast fails, but returns 'None'
+let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic when the cast fails, but returns 'None'
 ```
 
 Type Name

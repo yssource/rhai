@@ -3,8 +3,8 @@ Maximum Number of Operations
 
 {{#include ../links.md}}
 
-Limiting How Long a Script Can Run
----------------------------------
+Limit How Long a Script Can Run
+------------------------------
 
 Rhai by default does not limit how much time or CPU a script consumes.
 

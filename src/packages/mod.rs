@@ -52,7 +52,7 @@ pub type PackageLibrary = Shared<Module>;
 
 /// Type containing a collection of `PackageLibrary` instances.
 /// All function and type iterator keys in the loaded packages are indexed for fast access.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct PackagesCollection(StaticVec<PackageLibrary>);
 
 impl PackagesCollection {
