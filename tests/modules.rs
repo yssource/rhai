@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_module"))]
 use rhai::{
-    module_resolvers::StaticModuleResolver, Engine, EvalAltResult, Module, ParseError,
+    module_resolvers::StaticModuleResolver, Dynamic, Engine, EvalAltResult, Module, ParseError,
     ParseErrorType, Scope, INT,
 };
 
@@ -26,6 +26,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
 
     sub_module.set_sub_module("universe", sub_module2);
     module.set_sub_module("life", sub_module);
+    module.set_var("MYSTIC_NUMBER", Dynamic::from(42 as INT));
 
     assert!(module.contains_sub_module("life"));
     let m = module.get_sub_module("life").unwrap();
@@ -44,18 +45,16 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_module_resolver(Some(resolver));
 
-    let mut scope = Scope::new();
-
     assert_eq!(
-        engine.eval_with_scope::<INT>(
-            &mut scope,
-            r#"import "question" as q; q::life::universe::answer + 1"#
-        )?,
+        engine.eval::<INT>(r#"import "question" as q; q::MYSTIC_NUMBER"#)?,
         42
     );
     assert_eq!(
-        engine.eval_with_scope::<INT>(
-            &mut scope,
+        engine.eval::<INT>(r#"import "question" as q; q::life::universe::answer + 1"#)?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(
             r#"import "question" as q; q::life::universe::inc(q::life::universe::answer)"#
         )?,
         42
@@ -221,36 +220,30 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
     resolver2.insert("testing", module);
     engine.set_module_resolver(Some(resolver2));
 
-    let mut scope = Scope::new();
-
     assert_eq!(
-        engine.eval_with_scope::<INT>(&mut scope, r#"import "testing" as ttt; ttt::abc"#)?,
+        engine.eval::<INT>(r#"import "testing" as ttt; ttt::abc"#)?,
         123
     );
     assert_eq!(
-        engine.eval_with_scope::<INT>(&mut scope, r#"import "testing" as ttt; ttt::foo"#)?,
+        engine.eval::<INT>(r#"import "testing" as ttt; ttt::foo"#)?,
         42
     );
-    assert!(engine
-        .eval_with_scope::<bool>(&mut scope, r#"import "testing" as ttt; ttt::extra::foo"#)?);
+    assert!(engine.eval::<bool>(r#"import "testing" as ttt; ttt::extra::foo"#)?);
     assert_eq!(
-        engine.eval_with_scope::<String>(&mut scope, r#"import "testing" as ttt; ttt::hello"#)?,
+        engine.eval::<String>(r#"import "testing" as ttt; ttt::hello"#)?,
         "hello, 42 worlds!"
     );
     assert_eq!(
-        engine.eval_with_scope::<INT>(&mut scope, r#"import "testing" as ttt; ttt::calc(999)"#)?,
+        engine.eval::<INT>(r#"import "testing" as ttt; ttt::calc(999)"#)?,
         1000
     );
     assert_eq!(
-        engine.eval_with_scope::<INT>(
-            &mut scope,
-            r#"import "testing" as ttt; ttt::add_len(ttt::foo, ttt::hello)"#
-        )?,
+        engine.eval::<INT>(r#"import "testing" as ttt; ttt::add_len(ttt::foo, ttt::hello)"#)?,
         59
     );
     assert!(matches!(
         *engine
-            .eval_with_scope::<()>(&mut scope, r#"import "testing" as ttt; ttt::hidden()"#)
+            .consume(r#"import "testing" as ttt; ttt::hidden()"#)
             .expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "ttt::hidden"
     ));

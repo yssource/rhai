@@ -7,8 +7,11 @@ fn test_tokens_disabled() {
     engine.disable_symbol("if"); // disable the 'if' keyword
 
     assert!(matches!(
-        *engine.compile("let x = if true { 42 } else { 0 };").expect_err("should error").0,
-        ParseErrorType::MissingToken(ref token, _) if token == ";"
+        *engine
+            .compile("let x = if true { 42 } else { 0 };")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::Reserved(err) if err == "if"
     ));
 
     engine.disable_symbol("+="); // disable the '+=' operator

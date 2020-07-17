@@ -2151,9 +2151,6 @@ fn parse_expr(
                             exprs.push(Expr::Stmt(Box::new((stmt, pos))))
                         }
                         s => match input.peek().unwrap() {
-                            (Token::Custom(custom), _) if custom == s => {
-                                input.next().unwrap();
-                            }
                             (t, _) if t.syntax().as_ref() == s => {
                                 input.next().unwrap();
                             }
