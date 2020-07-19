@@ -18,6 +18,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     fmt,
+    hash::Hash,
     string::String,
     vec::Vec,
 };

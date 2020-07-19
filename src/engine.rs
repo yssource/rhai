@@ -87,6 +87,7 @@ pub const FN_GET: &str = "get$";
 pub const FN_SET: &str = "set$";
 pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
+pub const FN_ANONYMOUS: &str = "anon$";
 
 #[cfg(feature = "internals")]
 pub const MARKER_EXPR: &str = "$expr$";
@@ -654,7 +655,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         is_method: bool,
-        def_val: Option<&Dynamic>,
+        def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -815,7 +816,7 @@ impl Engine {
 
         // Return default value (if any)
         if let Some(val) = def_val {
-            return Ok((val.clone(), false));
+            return Ok((val.into(), false));
         }
 
         // Getter function not found?
@@ -976,7 +977,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         is_method: bool,
-        def_val: Option<&Dynamic>,
+        def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
@@ -1081,7 +1082,6 @@ impl Engine {
 
         let is_ref = target.is_ref();
         let is_value = target.is_value();
-        let def_val = def_val.as_ref();
 
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
@@ -1100,7 +1100,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, fn_name, *native, hash, args, false, false, def_val, level,
+                state, lib, fn_name, *native, hash, args, false, false, *def_val, level,
             )
         } else if fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
             // FnPtr call on object
@@ -1120,7 +1120,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, &fn_name, *native, hash, args, is_ref, true, def_val, level,
+                state, lib, &fn_name, *native, hash, args, is_ref, true, *def_val, level,
             )
         } else {
             let redirected: Option<ImmutableString>;
@@ -1146,7 +1146,7 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, fn_name, *native, hash, args, is_ref, true, def_val, level,
+                state, lib, fn_name, *native, hash, args, is_ref, true, *def_val, level,
             )
         }
         .map_err(|err| err.new_position(*pos))?;
@@ -1694,13 +1694,12 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value)) => {
                 let op = "==";
-                let def_value = false.into();
                 let mut scope = Scope::new();
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter_mut() {
+                    let def_value = Some(false);
                     let args = &mut [&mut lhs_value.clone(), value];
-                    let def_value = Some(&def_value);
 
                     let hashes = (
                         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
@@ -1782,6 +1781,7 @@ impl Engine {
             Expr::FloatConstant(x) => Ok(x.0.into()),
             Expr::StringConstant(x) => Ok(x.0.to_string().into()),
             Expr::CharConstant(x) => Ok(x.0.into()),
+            Expr::FnPointer(x) => Ok(FnPtr::new_unchecked(x.0.clone()).into()),
             Expr::Variable(x) if (x.0).0 == KEYWORD_THIS => {
                 if let Some(ref val) = this_ptr {
                     Ok((*val).clone())
@@ -1941,7 +1941,6 @@ impl Engine {
             // Normal function call
             Expr::FnCall(x) if x.1.is_none() => {
                 let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
-                let def_val = def_val.as_ref();
 
                 // Handle Fn()
                 if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
@@ -2072,7 +2071,7 @@ impl Engine {
 
                 let args = args.as_mut();
                 self.exec_fn_call(
-                    state, lib, name, *native, hash, args, is_ref, false, def_val, level,
+                    state, lib, name, *native, hash, args, is_ref, false, *def_val, level,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.new_position(*pos))
@@ -2166,7 +2165,7 @@ impl Engine {
                         .map_err(|err| err.new_position(*pos)),
                     Err(err) => match *err {
                         EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
-                            Ok(def_val.clone().unwrap())
+                            Ok(def_val.unwrap().into())
                         }
                         EvalAltResult::ErrorFunctionNotFound(_, _) => {
                             Err(Box::new(EvalAltResult::ErrorFunctionNotFound(

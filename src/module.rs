@@ -1098,7 +1098,7 @@ impl Module {
 ///
 /// A `StaticVec` is used because most module-level access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
 
 impl fmt::Debug for ModuleRef {
