@@ -67,9 +67,9 @@ features = ["compile-time-rng"]
 optional = true
 
 [dependencies.serde]
-package = "serde"
 version = "1.0.111"
-features = ["derive"]
+default_features = false
+features = ["derive", "alloc"]
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
