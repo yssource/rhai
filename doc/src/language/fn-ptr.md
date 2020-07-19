@@ -6,7 +6,7 @@ Function Pointers
 It is possible to store a _function pointer_ in a variable just like a normal value.
 In fact, internally a function pointer simply stores the _name_ of the function as a string.
 
-Call a function pointer using the `call` method, which needs to be called in method-call style.
+Call a function pointer using the `call` method.
 
 
 Built-in methods
@@ -40,7 +40,7 @@ func.call(1) == 42;         // call a function pointer with the 'call' method
 
 foo(1) == 42;               // <- the above de-sugars to this
 
-call(func, 1);              //<- error: 'call (Fn, i64)' is not a registered function
+call(func, 1);              // normal function call style also works for 'call'
 
 let len = Fn("len");        // 'Fn' also works with registered native Rust functions
 
@@ -66,20 +66,18 @@ Because of their dynamic nature, function pointers cannot refer to functions in 
 See [function namespaces] for more details.
 
 ```rust
-import "foo" as f;          // assume there is 'f::do_something()'
+import "foo" as f;          // assume there is 'f::do_work()'
 
-f::do_something();          // works!
+f::do_work();               // works!
 
-let p = Fn("f::do_something");
+let p = Fn("f::do_work");   // error: invalid function name
 
-p.call();                   // error: function not found - 'f::do_something'
-
-fn do_something_now() {     // call it from a local function
+fn do_work_now() {          // call it from a local function
     import "foo" as f;
-    f::do_something();
+    f::do_work();
 }
 
-let p = Fn("do_something_now");
+let p = Fn("do_work_now");
 
 p.call();                   // works!
 ```
@@ -134,3 +132,35 @@ let func = sign(x) + 1;
 // Dynamic dispatch
 map[func].call(42);
 ```
+
+
+Binding the `this` Pointer
+-------------------------
+
+When `call` is called as a _method_ but not on a `FnPtr` value, it is possible to dynamically dispatch
+to a function call while binding the object in the method call to the `this` pointer of the function.
+
+To achieve this, pass the `FnPtr` value as the _first_ argument to `call`:
+
+```rust
+fn add(x) { this += x; }    // define function which uses 'this'
+
+let func = Fn("add");       // function pointer to 'add'
+
+func.call(1);               // error: 'this' pointer is not bound
+
+let x = 41;
+
+func.call(x, 1);            // error: function 'add (i64, i64)' not found
+
+call(func, x, 1);           // error: function 'add (i64, i64)' not found
+
+x.call(func, 1);            // 'this' is bound to 'x', dispatched to 'func'
+
+x == 42;
+```
+
+Beware that this only works for _method-call_ style.  Normal function-call style cannot bind
+the `this` pointer (for syntactic reasons).
+
+Therefore, obviously, binding the `this` pointer is unsupported under [`no_function`].

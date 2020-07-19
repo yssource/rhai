@@ -3,8 +3,8 @@ Maximum Length of Strings
 
 {{#include ../links.md}}
 
-Limiting How Long Strings Can Grow
----------------------------------
+Limit How Long Strings Can Grow
+------------------------------
 
 Rhai by default does not limit how long a [string] can be.
 

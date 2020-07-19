@@ -68,11 +68,13 @@ These symbol types can be used:
 ### The First Symbol Must be a Keyword
 
 There is no specific limit on the combination and sequencing of each symbol type,
-except the _first_ symbol which must be a [custom keyword].
+except the _first_ symbol which must be a custom keyword that follows the naming rules
+of [variables].
 
-It _cannot_ be a [built-in keyword]({{rootUrl}}/appendix/keywords.md).
+The first symbol also cannot be a reserved [keyword], unless that keyword
+has been [disabled][disable keywords and operators].
 
-However, it _may_ be a built-in keyword that has been [disabled][disable keywords and operators].
+In other words, any valid identifier that is not an active [keyword] will work fine.
 
 ### The First Symbol Must be Unique
 

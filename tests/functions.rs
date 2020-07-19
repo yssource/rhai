@@ -52,12 +52,24 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-#[cfg(not(feature = "no_object"))]
 fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<String>(r#"type_of(Fn("abc"))"#)?, "Fn");
 
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(x) { 40 + x }
+
+                let f = Fn("foo");
+                call(f, 2)
+            "#
+        )?,
+        42
+    );
+
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(
         engine.eval::<INT>(
             r#"
@@ -73,11 +85,13 @@ fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
         42
     );
 
+    #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine.eval::<INT>(r#"let f = Fn("abc"); f.call(0)"#).expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with("abc (")
     ));
 
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(
         engine.eval::<INT>(
             r#"

@@ -20,8 +20,7 @@ engine
 // The following all return parse errors.
 
 engine.compile("let x = if true { 42 } else { 0 };")?;
-//                        ^ missing ';' after statement end
-//                      ^ 'if' is parsed as a variable name
+//                      ^ 'if' is rejected as a reserved keyword
 
 engine.compile("let x = 40 + 2; x += 1;")?;
 //                                ^ '+=' is not recognized as an operator

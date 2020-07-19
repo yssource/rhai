@@ -1,6 +1,10 @@
 //! Main module defining the lexer and parser.
 
-use crate::engine::Engine;
+use crate::engine::{
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_PRINT,
+    KEYWORD_THIS, KEYWORD_TYPE_OF,
+};
+
 use crate::error::LexError;
 use crate::parser::INT;
 use crate::utils::StaticVec;
@@ -275,8 +279,6 @@ impl Token {
                 Or => "||",
                 Ampersand => "&",
                 And => "&&",
-                #[cfg(not(feature = "no_function"))]
-                Fn => "fn",
                 Continue => "continue",
                 Break => "break",
                 Return => "return",
@@ -297,8 +299,12 @@ impl Token {
                 ModuloAssign => "%=",
                 PowerOf => "~",
                 PowerOfAssign => "~=",
+
+                #[cfg(not(feature = "no_function"))]
+                Fn => "fn",
                 #[cfg(not(feature = "no_function"))]
                 Private => "private",
+
                 #[cfg(not(feature = "no_module"))]
                 Import => "import",
                 #[cfg(not(feature = "no_module"))]
@@ -355,8 +361,6 @@ impl Token {
             "||" => Or,
             "&" => Ampersand,
             "&&" => And,
-            #[cfg(not(feature = "no_function"))]
-            "fn" => Fn,
             "continue" => Continue,
             "break" => Break,
             "return" => Return,
@@ -377,17 +381,30 @@ impl Token {
             "%=" => ModuloAssign,
             "~" => PowerOf,
             "~=" => PowerOfAssign,
+
+            #[cfg(not(feature = "no_function"))]
+            "fn" => Fn,
             #[cfg(not(feature = "no_function"))]
             "private" => Private,
+
             #[cfg(not(feature = "no_module"))]
             "import" => Import,
             #[cfg(not(feature = "no_module"))]
             "export" => Export,
             #[cfg(not(feature = "no_module"))]
             "as" => As,
+
+            #[cfg(feature = "no_function")]
+            "fn" | "private" => Reserved(syntax.into()),
+
+            #[cfg(feature = "no_module")]
+            "import" | "export" | "as" => Reserved(syntax.into()),
+
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" => {
                 Reserved(syntax.into())
             }
+            KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
+            | KEYWORD_FN_PTR_CALL | KEYWORD_THIS => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -1317,72 +1334,81 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             self.engine.disabled_symbols.as_ref(),
             self.engine.custom_keywords.as_ref(),
         ) {
+            // {EOF}
             (None, _, _) => None,
-            (Some((Token::Reserved(s), pos)), None, None) => return Some((match s.as_str() {
-                "===" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'===' is not a valid operator. This is not JavaScript! Should it be '=='?"
-                        .to_string(),
+            // Reserved keyword/symbol
+            (Some((Token::Reserved(s), pos)), disabled, custom) => Some((match
+                (s.as_str(), custom.map(|c| c.contains_key(&s)).unwrap_or(false))
+            {
+                ("===", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
                 ))),
-                "!==" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?"
-                        .to_string(),
+                ("!==", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?".to_string(),
                 ))),
-                "->" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'->' is not a valid symbol. This is not C or C++!".to_string(),
-                ))),
-                "<-" => Token::LexError(Box::new(LERR::ImproperSymbol(
+                ("->", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'->' is not a valid symbol. This is not C or C++!".to_string()))),
+                ("<-", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
                     "'<-' is not a valid symbol. This is not Go! Should it be '<='?".to_string(),
                 ))),
-                "=>" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'=>' is not a valid symbol. This is not Rust! Should it be '>='?"
-                        .to_string(),
+                ("=>", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'=>' is not a valid symbol. This is not Rust! Should it be '>='?".to_string(),
                 ))),
-                ":=" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "':=' is not a valid assignment operator. This is not Go! Should it be simply '='?"
-                        .to_string(),
+                (":=", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "':=' is not a valid assignment operator. This is not Go! Should it be simply '='?".to_string(),
                 ))),
-                "::<" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?"
-                        .to_string(),
+                ("::<", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?".to_string(),
                 ))),
-                "(*" | "*)" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?"
-                        .to_string(),
+                ("(*", false) | ("*)", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
                 ))),
-                "#" => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'#' is not a valid symbol. Should it be '#{'?"
-                        .to_string(),
+                ("#", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    "'#' is not a valid symbol. Should it be '#{'?".to_string(),
                 ))),
-                token => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    format!("'{}' is not a valid symbol.", token)
+                // Reserved keyword/operator that is custom.
+                (_, true) => Token::Custom(s),
+                // Reserved operator that is not custom.
+                (token, false) if !is_valid_identifier(token.chars()) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    format!("'{}' is a reserved symbol", token)
                 ))),
+                // Reserved keyword that is not custom and disabled.
+                (token, false) if disabled.map(|d| d.contains(token)).unwrap_or(false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                    format!("reserved symbol '{}' is disabled", token)
+                ))),
+                // Reserved keyword/operator that is not custom.
+                (_, false) => Token::Reserved(s),
             }, pos)),
-            (r @ Some(_), None, None) => r,
+            // Custom keyword
             (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
-                // Convert custom keywords
                 Some((Token::Custom(s), pos))
             }
-            (Some((token, pos)), _, Some(custom))
-                if (token.is_keyword() || token.is_operator() || token.is_reserved())
-                    && custom.contains_key(token.syntax().as_ref()) =>
+            // Custom standard keyword - must be disabled
+            (Some((token, pos)), Some(disabled), Some(custom))
+                if token.is_keyword() && custom.contains_key(token.syntax().as_ref()) =>
             {
-                // Convert into custom keywords
-                Some((Token::Custom(token.syntax().into()), pos))
+                if disabled.contains(token.syntax().as_ref()) {
+                    // Disabled standard keyword
+                    Some((Token::Custom(token.syntax().into()), pos))
+                } else {
+                    // Active standard keyword - should never be a custom keyword!
+                    unreachable!()
+                }
             }
+            // Disabled operator
             (Some((token, pos)), Some(disabled), _)
                 if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>
             {
-                // Convert disallowed operators into lex errors
                 Some((
                     Token::LexError(Box::new(LexError::UnexpectedInput(token.syntax().into()))),
                     pos,
                 ))
             }
+            // Disabled standard keyword
             (Some((token, pos)), Some(disabled), _)
                 if token.is_keyword() && disabled.contains(token.syntax().as_ref()) =>
             {
-                // Convert disallowed keywords into identifiers
-                Some((Token::Identifier(token.syntax().into()), pos))
+                Some((Token::Reserved(token.syntax().into()), pos))
             }
             (r, _, _) => r,
         }

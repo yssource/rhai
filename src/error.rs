@@ -98,6 +98,8 @@ pub enum ParseErrorType {
     PropertyExpected,
     /// Missing a variable name after the `let`, `const` or `for` keywords.
     VariableExpected,
+    /// An identifier is a reserved keyword.
+    Reserved(String),
     /// Missing an expression. Wrapped value is the expression type.
     ExprExpected(String),
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
@@ -163,6 +165,7 @@ impl ParseErrorType {
             Self::ForbiddenConstantExpr(_) => "Expecting a constant",
             Self::PropertyExpected => "Expecting name of a property",
             Self::VariableExpected => "Expecting name of a variable",
+            Self::Reserved(_) => "Invalid use of reserved keyword",
             Self::ExprExpected(_) => "Expecting an expression",
             Self::FnMissingName => "Expecting name in function declaration",
             Self::FnMissingParams(_) => "Expecting parameters in function declaration",
@@ -224,6 +227,7 @@ impl fmt::Display for ParseErrorType {
             Self::LiteralTooLarge(typ, max) => {
                 write!(f, "{} exceeds the maximum limit ({})", typ, max)
             }
+            Self::Reserved(s) => write!(f, "'{}' is a reserved keyword", s),
             _ => f.write_str(self.desc()),
         }
     }

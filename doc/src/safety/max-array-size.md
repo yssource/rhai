@@ -3,8 +3,8 @@ Maximum Size of Arrays
 
 {{#include ../links.md}}
 
-Limiting How Large Arrays Can Grow
----------------------------------
+Limit How Large Arrays Can Grow
+------------------------------
 
 Rhai by default does not limit how large an [array] can be.
 

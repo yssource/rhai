@@ -1,6 +1,17 @@
 Rhai Release Notes
 ==================
 
+Version 0.18.0
+==============
+
+New features
+------------
+
+* `call` can now be called function-call style for function pointers - this is to handle builds with `no_object`.
+* Disallow many keywords as variables, such as `print`, `eval`, `call`, `this` etc.
+* `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
+
+
 Version 0.17.0
 ==============
 
@@ -31,6 +42,7 @@ New features
   This is particularly useful when converting a Rust `struct` to a `Dynamic` _object map_ and back.
 * `Engine::disable_symbol` to surgically disable keywords and/or operators.
 * `Engine::register_custom_operator` to define a custom operator.
+* `Engine::register_custom_syntax` to define a custom syntax.
 * New low-level API `Engine::register_raw_fn` and `Engine::register_raw_fn_XXX`.
 * New low-level API `Module::set_raw_fn` mirroring `Engine::register_raw_fn`.
 * `AST::clone_functions_only`, `AST::clone_functions_only_filtered` and `AST::clone_statements_only` to clone only part of an `AST`.
