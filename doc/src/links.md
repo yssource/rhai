@@ -78,8 +78,8 @@
 [function pointers]: {{rootUrl}}/language/fn-ptr.md
 [function namespace]: {{rootUrl}}/language/fn-namespaces.md
 [function namespaces]: {{rootUrl}}/language/fn-namespaces.md
-[anonymous function]: {{rootUrl}}/language/fn-ptr.md#anonymous-functions
-[anonymous functions]: {{rootUrl}}/language/fn-ptr.md#anonymous-functions
+[anonymous function]: {{rootUrl}}/language/fn-anon.md
+[anonymous functions]: {{rootUrl}}/language/fn-anon.md
 
 [`Module`]: {{rootUrl}}/language/modules/index.md
 [module]: {{rootUrl}}/language/modules/index.md
