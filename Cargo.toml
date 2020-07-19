@@ -50,6 +50,7 @@ optional = true
 
 [dependencies.core-error]
 version = "0.0.0"
+default_features = false
 features = ["alloc"]
 optional = true
 
