@@ -25,7 +25,7 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     fmt, format,
-    hash::Hash,
+    hash::{Hash, Hasher},
     iter::empty,
     mem,
     num::NonZeroUsize,
@@ -674,7 +674,7 @@ impl Default for Expr {
 }
 
 impl Hash for Expr {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             Self::FloatConstant(x) => {
                 state.write(&x.0.to_le_bytes());

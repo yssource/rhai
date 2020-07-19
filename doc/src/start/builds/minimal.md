@@ -31,8 +31,8 @@ Opt-Out of Features
 ------------------
 
 Opt out of as many features as possible, if they are not needed, to reduce code size because, remember, by default
-all code is compiled in as what a script requires cannot be predicted. If a language feature is not needed,
-omitting them via special features is a prudent strategy to optimize the build for size.
+all code is compiled into the final binary since what a script requires cannot be predicted.
+If a language feature will never be needed, omitting it is a prudent strategy to optimize the build for size.
 
 Omitting arrays ([`no_index`]) yields the most code-size savings, followed by floating-point support
 ([`no_float`]), checked arithmetic/script resource limits ([`unchecked`]) and finally object maps and custom types ([`no_object`]).
