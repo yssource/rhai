@@ -30,6 +30,7 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
+#[cfg(feature = "sync")]
 use crate::stdlib::sync::RwLock;
 
 /// Return type of module-level Rust function.

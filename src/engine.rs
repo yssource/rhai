@@ -710,7 +710,7 @@ impl Engine {
         /// This function restores the first argument that was replaced by `normalize_first_arg_of_method_call`.
         fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCallArgs<'a>) {
             if let Some(this_pointer) = old_this_ptr {
-                mem::replace(args.get_mut(0).unwrap(), this_pointer);
+                args[0] = this_pointer;
             }
         }
 

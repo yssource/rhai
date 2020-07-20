@@ -7,6 +7,7 @@ use crate::token::Position;
 use crate::parser::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
+#[cfg(feature = "no_std")]
 use num_traits::*;
 
 use crate::stdlib::{boxed::Box, format, i32, i64};
