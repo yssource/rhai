@@ -608,6 +608,7 @@ impl Hash for CustomExpr {
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct FloatWrapper(pub FLOAT, pub Position);
 
+#[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.0.to_le_bytes());
