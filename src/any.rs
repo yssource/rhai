@@ -243,12 +243,15 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_index"))]
             Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(value) => write!(f, "#{:?}", value),
+            Union::Map(value) => {
+                f.write_str("#")?;
+                fmt::Debug::fmt(value, f)
+            }
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
-            Union::Variant(_) => write!(f, "?"),
+            Union::Variant(value) => write!(f, "{}", (*value).type_name()),
         }
     }
 }
@@ -266,12 +269,15 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_index"))]
             Union::Array(value) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(value) => write!(f, "#{:?}", value),
+            Union::Map(value) => {
+                f.write_str("#")?;
+                fmt::Debug::fmt(value, f)
+            }
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
-            Union::Variant(_) => write!(f, "<dynamic>"),
+            Union::Variant(value) => write!(f, "{}", (*value).type_name()),
         }
     }
 }
