@@ -643,7 +643,7 @@ pub enum Expr {
         )>,
     ),
     /// Property access.
-    Property(Box<((String, String, String), Position)>),
+    Property(Box<((ImmutableString, String, String), Position)>),
     /// { stmt }
     Stmt(Box<(Stmt, Position)>),
     /// Wrapped expression - should not be optimized away.
@@ -937,7 +937,7 @@ impl Expr {
                 let (name, pos) = x.0;
                 let getter = make_getter(&name);
                 let setter = make_setter(&name);
-                Self::Property(Box::new(((name.clone(), getter, setter), pos)))
+                Self::Property(Box::new(((name.into(), getter, setter), pos)))
             }
             _ => self,
         }
@@ -1834,7 +1834,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
 
             let getter = make_getter(&name);
             let setter = make_setter(&name);
-            let rhs = Expr::Property(Box::new(((name, getter, setter), pos)));
+            let rhs = Expr::Property(Box::new(((name.into(), getter, setter), pos)));
 
             Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }

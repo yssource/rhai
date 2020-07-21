@@ -188,7 +188,7 @@ impl Target<'_> {
         }
     }
     /// Update the value of the `Target`.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val,
@@ -419,12 +419,9 @@ pub fn make_getter(id: &str) -> String {
 fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
     if fn_name.starts_with(FN_GET) {
-        Some(&fn_name[FN_GET.len()..])
-    } else {
-        None
+        return Some(&fn_name[FN_GET.len()..]);
     }
 
-    #[cfg(feature = "no_object")]
     None
 }
 
@@ -437,12 +434,9 @@ pub fn make_setter(id: &str) -> String {
 fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
     if fn_name.starts_with(FN_SET) {
-        Some(&fn_name[FN_SET.len()..])
-    } else {
-        None
+        return Some(&fn_name[FN_SET.len()..]);
     }
 
-    #[cfg(feature = "no_object")]
     None
 }
 
@@ -454,7 +448,7 @@ fn default_print(s: &str) {
 }
 
 /// Search for a module within an imports stack.
-/// Position in `EvalAltResult` is None and must be set afterwards.
+/// Position in `EvalAltResult` is `None` and must be set afterwards.
 fn search_imports<'s>(
     mods: &'s Imports,
     state: &mut State,
@@ -487,7 +481,7 @@ fn search_imports<'s>(
 }
 
 /// Search for a module within an imports stack.
-/// Position in `EvalAltResult` is None and must be set afterwards.
+/// Position in `EvalAltResult` is `None` and must be set afterwards.
 fn search_imports_mut<'s>(
     mods: &'s mut Imports,
     state: &mut State,
@@ -637,7 +631,7 @@ impl Engine {
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -878,7 +872,7 @@ impl Engine {
     }
 
     /// Call a script-defined function.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -960,7 +954,7 @@ impl Engine {
     }
 
     /// Perform an actual function call, taking care of special functions
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -1023,7 +1017,7 @@ impl Engine {
     }
 
     /// Evaluate a text string as a script - used primarily for 'eval'.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     fn eval_script_expr(
         &self,
         scope: &mut Scope,
@@ -1161,7 +1155,7 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
@@ -1210,14 +1204,14 @@ impl Engine {
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
+                        let mut new_val = new_val.unwrap();
                         let mut idx_val2 = idx_val.clone();
 
                         match self.get_indexed_mut(state, lib, target, idx_val, pos, true, level) {
                             // Indexed value is an owned value - the only possibility is an indexer
                             // Try to call an index setter
                             Ok(obj_ptr) if obj_ptr.is_value() => {
-                                let args =
-                                    &mut [target.as_mut(), &mut idx_val2, &mut new_val.unwrap()];
+                                let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                 self.exec_fn_call(
                                     state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
@@ -1236,17 +1230,13 @@ impl Engine {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
                                 obj_ptr
-                                    .set_value(new_val.unwrap())
+                                    .set_value(new_val)
                                     .map_err(|err| err.new_position(rhs.position()))?;
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
                                 EvalAltResult::ErrorIndexingType(_, _) => {
-                                    let args = &mut [
-                                        target.as_mut(),
-                                        &mut idx_val2,
-                                        &mut new_val.unwrap(),
-                                    ];
+                                    let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                     self.exec_fn_call(
                                         state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
@@ -2632,7 +2622,7 @@ impl Engine {
     }
 
     /// Check if the number of operations stay within limit.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     fn inc_operations(&self, state: &mut State) -> Result<(), Box<EvalAltResult>> {
         state.operations += 1;
 

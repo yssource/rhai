@@ -400,7 +400,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop)
+                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop.as_str())
                     .map(|(_, expr)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
