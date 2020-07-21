@@ -6,7 +6,7 @@ Example Scripts
 Language Feature Scripts
 -----------------------
 
-There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` folder:
+There are also a number of examples scripts that showcase Rhai's features, all in the `scripts` directory:
 
 | Script                                                                                                   | Description                                                                   |
 | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |

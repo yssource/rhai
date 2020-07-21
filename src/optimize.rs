@@ -434,7 +434,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             (Expr::StringConstant(s), Expr::IntegerConstant(i)) if i.0 >= 0 && (i.0 as usize) < s.0.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                Expr::CharConstant(Box::new((s.0.chars().nth(i.0 as usize).expect("should get char"), s.1)))
+                Expr::CharConstant(Box::new((s.0.chars().nth(i.0 as usize).unwrap(), s.1)))
             }
             // lhs[rhs]
             (lhs, rhs) => Expr::Index(Box::new((optimize_expr(lhs, state), optimize_expr(rhs, state), x.2))),
@@ -614,7 +614,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(&name).expect("should find constant in scope!").clone().set_position(pos)
+            state.find_constant(&name).unwrap().clone().set_position(pos)
         }
 
         // Custom syntax
@@ -655,10 +655,7 @@ fn optimize(
                 && expr.as_ref().map(|v| v.is_constant()).unwrap_or(false)
         })
         .for_each(|ScopeEntry { name, expr, .. }| {
-            state.push_constant(
-                name.as_ref(),
-                (**expr.as_ref().expect("should be Some(expr)")).clone(),
-            )
+            state.push_constant(name.as_ref(), expr.as_ref().unwrap().as_ref().clone())
         });
 
     let orig_constants_len = state.constants.len();

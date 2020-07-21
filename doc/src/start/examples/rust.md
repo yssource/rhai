@@ -3,7 +3,7 @@ Rust Examples
 
 {{#include ../../links.md}}
 
-A number of examples can be found in the `examples` folder:
+A number of examples can be found in the `examples` directory:
 
 | Example                                                                                                                | Description                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,3 +29,12 @@ Examples can be run with the following command:
 ```bash
 cargo run --example {example_name}
 ```
+
+`no-std` Samples
+----------------
+
+To illustrate `no-std` builds, a number of sample applications are available under the `no_std` directory:
+
+| Example                                                                               | Environment |
+| ------------------------------------------------------------------------------------- | :---------: |
+| [`no_std_win`](https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_win) | Windows API |
