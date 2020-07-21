@@ -1,16 +1,25 @@
 #![cfg(feature = "internals")]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, EvalState, Expression, Imports, LexError, Module, Scope, INT,
+    Dynamic, Engine, EvalAltResult, EvalState, Expression, Imports, LexError, Module, ParseError,
+    ParseErrorType, Scope, INT,
 };
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
+    engine.consume("while false {}")?;
+
     // Disable 'while' and make sure it still works with custom syntax
     engine.disable_symbol("while");
-    engine.consume("while false {}").expect_err("should error");
-    engine.consume("let while = 0")?;
+    assert!(matches!(
+        *engine.compile("while false {}").expect_err("should error").0,
+        ParseErrorType::Reserved(err) if err == "while"
+    ));
+    assert!(matches!(
+        *engine.compile("let while = 0").expect_err("should error").0,
+        ParseErrorType::Reserved(err) if err == "while"
+    ));
 
     engine
         .register_custom_syntax(

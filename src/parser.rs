@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, KEYWORD_THIS};
+use crate::engine::{make_getter, make_setter, Engine, FN_ANONYMOUS, KEYWORD_THIS};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
@@ -25,7 +25,7 @@ use crate::stdlib::{
     char,
     collections::HashMap,
     fmt, format,
-    hash::Hash,
+    hash::{Hash, Hasher},
     iter::empty,
     mem,
     num::NonZeroUsize,
@@ -34,6 +34,12 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
+
+#[cfg(not(feature = "no_std"))]
+use crate::stdlib::collections::hash_map::DefaultHasher;
+
+#[cfg(feature = "no_std")]
+use ahash::AHasher;
 
 /// The system integer type.
 ///
@@ -598,21 +604,35 @@ impl Hash for CustomExpr {
     }
 }
 
+#[cfg(not(feature = "no_float"))]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub struct FloatWrapper(pub FLOAT, pub Position);
+
+#[cfg(not(feature = "no_float"))]
+impl Hash for FloatWrapper {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(&self.0.to_le_bytes());
+        self.1.hash(state);
+    }
+}
+
 /// An expression.
 ///
 /// Each variant is at most one pointer in size (for speed),
 /// with everything being allocated together in one single tuple.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum Expr {
     /// Integer constant.
     IntegerConstant(Box<(INT, Position)>),
     /// Floating-point constant.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(Box<(FLOAT, Position)>),
+    FloatConstant(Box<FloatWrapper>),
     /// Character constant.
     CharConstant(Box<(char, Position)>),
     /// String constant.
     StringConstant(Box<(ImmutableString, Position)>),
+    /// FnPtr constant.
+    FnPointer(Box<(ImmutableString, Position)>),
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
     Variable(
         Box<(
@@ -623,7 +643,7 @@ pub enum Expr {
         )>,
     ),
     /// Property access.
-    Property(Box<((String, String, String), Position)>),
+    Property(Box<((ImmutableString, String, String), Position)>),
     /// { stmt }
     Stmt(Box<(Stmt, Position)>),
     /// Wrapped expression - should not be optimized away.
@@ -637,7 +657,7 @@ pub enum Expr {
             Option<Box<ModuleRef>>,
             u64,
             StaticVec<Expr>,
-            Option<Dynamic>,
+            Option<bool>,
         )>,
     ),
     /// expr op= expr
@@ -670,18 +690,6 @@ pub enum Expr {
 impl Default for Expr {
     fn default() -> Self {
         Self::Unit(Default::default())
-    }
-}
-
-impl Hash for Expr {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Self::FloatConstant(x) => {
-                state.write(&x.0.to_le_bytes());
-                x.1.hash(state);
-            }
-            _ => self.hash(state),
-        }
     }
 }
 
@@ -758,6 +766,7 @@ impl Expr {
             Self::IntegerConstant(x) => x.1,
             Self::CharConstant(x) => x.1,
             Self::StringConstant(x) => x.1,
+            Self::FnPointer(x) => x.1,
             Self::Array(x) => x.1,
             Self::Map(x) => x.1,
             Self::Property(x) => x.1,
@@ -791,6 +800,7 @@ impl Expr {
             Self::IntegerConstant(x) => x.1 = new_pos,
             Self::CharConstant(x) => x.1 = new_pos,
             Self::StringConstant(x) => x.1 = new_pos,
+            Self::FnPointer(x) => x.1 = new_pos,
             Self::Array(x) => x.1 = new_pos,
             Self::Map(x) => x.1 = new_pos,
             Self::Variable(x) => (x.0).1 = new_pos,
@@ -847,6 +857,7 @@ impl Expr {
             Self::IntegerConstant(_)
             | Self::CharConstant(_)
             | Self::StringConstant(_)
+            | Self::FnPointer(_)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => true,
@@ -878,6 +889,7 @@ impl Expr {
 
             Self::IntegerConstant(_)
             | Self::CharConstant(_)
+            | Self::FnPointer(_)
             | Self::In(_)
             | Self::And(_)
             | Self::Or(_)
@@ -925,7 +937,7 @@ impl Expr {
                 let (name, pos) = x.0;
                 let getter = make_getter(&name);
                 let setter = make_setter(&name);
-                Self::Property(Box::new(((name.clone(), getter, setter), pos)))
+                Self::Property(Box::new(((name.into(), getter, setter), pos)))
             }
             _ => self,
         }
@@ -1476,7 +1488,7 @@ fn parse_primary(
     let mut root_expr = match token {
         Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, settings.pos))),
         #[cfg(not(feature = "no_float"))]
-        Token::FloatConstant(x) => Expr::FloatConstant(Box::new((x, settings.pos))),
+        Token::FloatConstant(x) => Expr::FloatConstant(Box::new(FloatWrapper(x, settings.pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
@@ -1616,7 +1628,10 @@ fn parse_unary(
                         .map(|i| Expr::IntegerConstant(Box::new((i, pos))))
                         .or_else(|| {
                             #[cfg(not(feature = "no_float"))]
-                            return Some(Expr::FloatConstant(Box::new((-(x.0 as FLOAT), pos))));
+                            return Some(Expr::FloatConstant(Box::new(FloatWrapper(
+                                -(x.0 as FLOAT),
+                                pos,
+                            ))));
                             #[cfg(feature = "no_float")]
                             return None;
                         })
@@ -1625,7 +1640,9 @@ fn parse_unary(
 
                 // Negative float
                 #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(x) => Ok(Expr::FloatConstant(Box::new((-x.0, x.1)))),
+                Expr::FloatConstant(x) => {
+                    Ok(Expr::FloatConstant(Box::new(FloatWrapper(-x.0, x.1))))
+                }
 
                 // Call negative function
                 expr => {
@@ -1664,8 +1681,37 @@ fn parse_unary(
                 None,
                 hash,
                 args,
-                Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
+                Some(false), // NOT operator, when operating on invalid operand, defaults to false
             ))))
+        }
+        // | ...
+        #[cfg(not(feature = "no_function"))]
+        Token::Pipe | Token::Or => {
+            let mut state = ParseState::new(
+                state.engine,
+                state.max_function_expr_depth,
+                state.max_function_expr_depth,
+            );
+
+            let settings = ParseSettings {
+                allow_if_expr: true,
+                allow_stmt_expr: true,
+                allow_anonymous_fn: true,
+                is_global: false,
+                is_function_scope: true,
+                is_breakable: false,
+                level: 0,
+                pos: *token_pos,
+            };
+
+            let (expr, func) = parse_anon_fn(input, &mut state, lib, settings)?;
+
+            // Qualifiers (none) + function name + number of arguments.
+            let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
+
+            lib.insert(hash, func);
+
+            Ok(expr)
         }
         // <EOF>
         Token::EOF => Err(PERR::UnexpectedEOF.into_err(settings.pos)),
@@ -1788,7 +1834,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
 
             let getter = make_getter(&name);
             let setter = make_setter(&name);
-            let rhs = Expr::Property(Box::new(((name, getter, setter), pos)));
+            let rhs = Expr::Property(Box::new(((name.into(), getter, setter), pos)));
 
             Expr::Dot(Box::new((lhs, rhs, op_pos)))
         }
@@ -2018,7 +2064,7 @@ fn parse_binary_op(
         settings.pos = pos;
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-        let cmp_def = Some(false.into());
+        let cmp_def = Some(false);
         let op = op_token.syntax();
         let hash = calc_fn_hash(empty(), &op, 2, empty());
         let op = (op, true, pos);
@@ -2041,7 +2087,7 @@ fn parse_binary_op(
             | Token::XOr => Expr::FnCall(Box::new((op, None, hash, args, None))),
 
             // '!=' defaults to true when passed invalid operands
-            Token::NotEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, Some(true.into())))),
+            Token::NotEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, Some(true)))),
 
             // Comparison operators default to false when passed invalid operands
             Token::EqualsTo
@@ -2151,9 +2197,6 @@ fn parse_expr(
                             exprs.push(Expr::Stmt(Box::new((stmt, pos))))
                         }
                         s => match input.peek().unwrap() {
-                            (Token::Custom(custom), _) if custom == s => {
-                                input.next().unwrap();
-                            }
                             (t, _) if t.syntax().as_ref() == s => {
                                 input.next().unwrap();
                             }
@@ -2765,32 +2808,28 @@ fn parse_fn(
     let mut params = Vec::new();
 
     if !match_token(input, Token::RightParen)? {
-        let end_err = format!("to close the parameters list of function '{}'", name);
         let sep_err = format!("to separate the parameters of function '{}'", name);
 
         loop {
-            match input.peek().unwrap() {
-                (Token::RightParen, _) => (),
-                _ => match input.next().unwrap() {
-                    (Token::Identifier(s), pos) => {
-                        state.stack.push((s.clone(), ScopeEntryType::Normal));
-                        params.push((s, pos))
-                    }
-                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                    (_, pos) => {
-                        return Err(
-                            PERR::MissingToken(Token::RightParen.into(), end_err).into_err(pos)
-                        )
-                    }
-                },
+            match input.next().unwrap() {
+                (Token::RightParen, _) => break,
+                (Token::Identifier(s), pos) => {
+                    state.stack.push((s.clone(), ScopeEntryType::Normal));
+                    params.push((s, pos))
+                }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        Token::RightParen.into(),
+                        format!("to close the parameters list of function '{}'", name),
+                    )
+                    .into_err(pos))
+                }
             }
 
             match input.next().unwrap() {
                 (Token::RightParen, _) => break,
                 (Token::Comma, _) => (),
-                (Token::Identifier(_), pos) => {
-                    return Err(PERR::MissingToken(Token::Comma.into(), sep_err).into_err(pos))
-                }
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (_, pos) => {
                     return Err(PERR::MissingToken(Token::Comma.into(), sep_err).into_err(pos))
@@ -2832,6 +2871,101 @@ fn parse_fn(
         body,
         pos: settings.pos,
     })
+}
+
+/// Parse an anonymous function definition.
+#[cfg(not(feature = "no_function"))]
+fn parse_anon_fn(
+    input: &mut TokenStream,
+    state: &mut ParseState,
+    lib: &mut FunctionsLib,
+    mut settings: ParseSettings,
+) -> Result<(Expr, ScriptFnDef), ParseError> {
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    let mut params = Vec::new();
+
+    if input.next().unwrap().0 != Token::Or {
+        if !match_token(input, Token::Pipe)? {
+            loop {
+                match input.next().unwrap() {
+                    (Token::Pipe, _) => break,
+                    (Token::Identifier(s), pos) => {
+                        state.stack.push((s.clone(), ScopeEntryType::Normal));
+                        params.push((s, pos))
+                    }
+                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                    (_, pos) => {
+                        return Err(PERR::MissingToken(
+                            Token::Pipe.into(),
+                            "to close the parameters list of anonymous function".into(),
+                        )
+                        .into_err(pos))
+                    }
+                }
+
+                match input.next().unwrap() {
+                    (Token::Pipe, _) => break,
+                    (Token::Comma, _) => (),
+                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                    (_, pos) => {
+                        return Err(PERR::MissingToken(
+                            Token::Comma.into(),
+                            "to separate the parameters of anonymous function".into(),
+                        )
+                        .into_err(pos))
+                    }
+                }
+            }
+        }
+    }
+
+    // Check for duplicating parameters
+    params
+        .iter()
+        .enumerate()
+        .try_for_each(|(i, (p1, _))| {
+            params
+                .iter()
+                .skip(i + 1)
+                .find(|(p2, _)| p2 == p1)
+                .map_or_else(|| Ok(()), |(p2, pos)| Err((p2, *pos)))
+        })
+        .map_err(|(p, pos)| PERR::FnDuplicatedParam("".to_string(), p.to_string()).into_err(pos))?;
+
+    // Parse function body
+    settings.is_breakable = false;
+    let pos = input.peek().unwrap().1;
+    let body = parse_stmt(input, state, lib, settings.level_up())
+        .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
+
+    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+
+    // Calculate hash
+    #[cfg(feature = "no_std")]
+    let mut s: AHasher = Default::default();
+    #[cfg(not(feature = "no_std"))]
+    let mut s = DefaultHasher::new();
+
+    s.write_usize(params.len());
+    params.iter().for_each(|a| a.hash(&mut s));
+    body.hash(&mut s);
+    let hash = s.finish();
+
+    // Create unique function name
+    let fn_name = format!("{}{}", FN_ANONYMOUS, hash);
+
+    let script = ScriptFnDef {
+        name: fn_name.clone(),
+        access: FnAccess::Public,
+        params,
+        body,
+        pos: settings.pos,
+    };
+
+    let expr = Expr::FnPointer(Box::new((fn_name.into(), settings.pos)));
+
+    Ok((expr, script))
 }
 
 impl Engine {
@@ -2954,7 +3088,7 @@ impl Engine {
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     match value.0 {
         #[cfg(not(feature = "no_float"))]
-        Union::Float(value) => Some(Expr::FloatConstant(Box::new((value, pos)))),
+        Union::Float(value) => Some(Expr::FloatConstant(Box::new(FloatWrapper(value, pos)))),
 
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),

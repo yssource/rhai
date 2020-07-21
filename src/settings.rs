@@ -2,7 +2,7 @@ use crate::engine::Engine;
 use crate::module::ModuleResolver;
 use crate::optimize::OptimizationLevel;
 use crate::packages::PackageLibrary;
-use crate::token::is_valid_identifier;
+use crate::token::{is_valid_identifier, Token};
 
 use crate::stdlib::{boxed::Box, format, string::String};
 
@@ -183,8 +183,7 @@ impl Engine {
     /// engine.disable_symbol("if");    // disable the 'if' keyword
     ///
     /// engine.compile("let x = if true { 42 } else { 0 };")?;
-    /// //                      ^ 'if' is parsed as a variable name
-    /// //                         ^ missing ';' after statement end
+    /// //                      ^ 'if' is rejected as a reserved keyword
     /// # Ok(())
     /// # }
     /// ```
@@ -252,6 +251,24 @@ impl Engine {
             return Err(format!("not a valid identifier: '{}'", keyword).into());
         }
 
+        match Token::lookup_from_syntax(keyword) {
+            // Standard identifiers, reserved keywords and custom keywords are OK
+            None | Some(Token::Reserved(_)) | Some(Token::Custom(_)) => (),
+            // Disabled keywords are also OK
+            Some(token)
+                if !self
+                    .disabled_symbols
+                    .as_ref()
+                    .map(|d| d.contains(token.syntax().as_ref()))
+                    .unwrap_or(false) =>
+            {
+                ()
+            }
+            // Active standard keywords cannot be made custom
+            Some(_) => return Err(format!("'{}' is a reserved keyword", keyword).into()),
+        }
+
+        // Add to custom keywords
         if self.custom_keywords.is_none() {
             self.custom_keywords = Some(Default::default());
         }

@@ -88,11 +88,16 @@ impl Engine {
                 MARKER_EXPR | MARKER_BLOCK | MARKER_IDENT if !segments.is_empty() => s.to_string(),
                 // Standard symbols not in first position
                 s if !segments.is_empty() && Token::lookup_from_syntax(s).is_some() => {
+                    // Make it a custom keyword/operator if it is a disabled standard keyword/operator
+                    // or a reserved keyword/operator.
                     if self
                         .disabled_symbols
                         .as_ref()
                         .map(|d| d.contains(s))
                         .unwrap_or(false)
+                        || Token::lookup_from_syntax(s)
+                            .map(|token| token.is_reserved())
+                            .unwrap_or(false)
                     {
                         // If symbol is disabled, make it a custom keyword
                         if self.custom_keywords.is_none() {

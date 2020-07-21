@@ -1,9 +1,12 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
-use crate::engine::{Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{
+    Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+};
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
+use crate::token::is_valid_identifier;
 use crate::utils::StaticVec;
 
 #[cfg(feature = "internals")]
@@ -397,7 +400,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop)
+                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop.as_str())
                     .map(|(_, expr)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -528,6 +531,19 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             Expr::FnCall(x)
         }
 
+        // Fn("...")
+        Expr::FnCall(x)
+            if x.1.is_none()
+            && (x.0).0 == KEYWORD_FN_PTR
+            && x.3.len() == 1
+            && matches!(x.3[0], Expr::StringConstant(_))
+        => {
+            match &x.3[0] {
+                Expr::StringConstant(s) if is_valid_identifier(s.0.chars()) => Expr::FnPointer(s.clone()),
+                _ => Expr::FnCall(x)
+            }
+        }
+
         // Eagerly call functions
         Expr::FnCall(mut x)
                 if x.1.is_none() // Non-qualified
@@ -571,7 +587,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                         Some(arg_for_type_of.to_string().into())
                     } else {
                         // Otherwise use the default value, if any
-                        def_value.clone()
+                        def_value.map(|v| v.into())
                     }
                 })
                 .and_then(|result| map_dynamic_to_expr(result, *pos))

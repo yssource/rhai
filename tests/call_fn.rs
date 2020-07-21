@@ -1,7 +1,6 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, FnPtr, Func, ImmutableString, Module, ParseError,
-    ParseErrorType, Scope, INT,
+    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseError, ParseErrorType, Scope, INT,
 };
 
 #[test]

@@ -163,4 +163,4 @@ x == 42;
 Beware that this only works for _method-call_ style.  Normal function-call style cannot bind
 the `this` pointer (for syntactic reasons).
 
-Therefore, obviously, binding the `this` pointer is unsupported under [`no_function`].
+Therefore, obviously, binding the `this` pointer is unsupported under [`no_object`].

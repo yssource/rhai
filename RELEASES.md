@@ -4,12 +4,17 @@ Rhai Release Notes
 Version 0.18.0
 ==============
 
+This version adds:
+
+* Anonymous functions (in closure syntax).  Simplifies creation of ad hoc functions.
+
 New features
 ------------
 
 * `call` can now be called function-call style for function pointers - this is to handle builds with `no_object`.
 * Disallow many keywords as variables, such as `print`, `eval`, `call`, `this` etc.
 * `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
+* Anonymous functions in the syntax of a closure, e.g. `|x, y, z| x + y - z`.
 
 
 Version 0.17.0
