@@ -35,6 +35,16 @@ cargo run --example {example_name}
 
 To illustrate `no-std` builds, a number of sample applications are available under the `no_std` directory:
 
-| Example                                                                               | Environment |
-| ------------------------------------------------------------------------------------- | :---------: |
-| [`no_std_win`](https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_win) | Windows API |
+| Sample                                                                                  | Description                                                                                           | Optimization |                     Allocator                     | Panics |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | :----------: | :-----------------------------------------------: | :----: |
+| [`no_std_test`](https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_test) | Bare-bones test application that evaluates a Rhai expression and sets the result as the return value. |     Size     | [`wee_alloc`](https://crates.io/crates/wee_alloc) | Abort  |
+
+`cargo run` cannot be used to run a `no-std` sample.  It must first be built:
+
+```bash
+cd no_std/no_std_test
+
+cargo +nightly build --release
+
+./target/release/no_std_test
+```

@@ -7,7 +7,7 @@ Raw `Engine`
 `Engine::new` creates a scripting [`Engine`] with common functionalities (e.g. printing to the console via `print`).
 
 In many controlled embedded environments, however, these may not be needed and unnecessarily occupy
-program code storage space.
+application code storage space.
 
 Use `Engine::new_raw` to create a _raw_ `Engine`, in which only a minimal set of
 basic arithmetic and logical operators are supported.

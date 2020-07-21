@@ -1,10 +1,10 @@
 [package]
-name = "no_std_win"
+name = "no_std_test"
 version = "0.1.0"
 edition = "2018"
 authors = ["Stephen Chung"]
-description = "no-std test application for the Windows API"
-homepage = "https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_win"
+description = "no-std test application"
+homepage = "https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_test"
 repository = "https://github.com/jonathandturner/rhai"
 
 [dependencies]

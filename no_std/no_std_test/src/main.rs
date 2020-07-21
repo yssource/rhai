@@ -1,4 +1,4 @@
-//! This is a `no-std` application for the Windows API that evaluates
+//! This is a `no-std` application for the that evaluates
 //! a simple expression and uses the result as the return value.
 
 #![no_std]

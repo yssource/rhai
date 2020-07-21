@@ -1,7 +1,7 @@
-`no-std` Sample for Windows API
-==============================
+`no-std` Test Sample
+====================
 
-This sample application is a bare-bones `no-std` build for the Windows API.
+This sample application is a bare-bones `no-std` build for testing.
 
 [`wee_alloc`](https://crates.io/crates/wee_alloc) is used as the allocator.
 
