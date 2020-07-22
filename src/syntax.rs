@@ -1,7 +1,7 @@
 //! Module containing implementation for custom syntax.
 use crate::any::Dynamic;
 use crate::engine::{Engine, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::error::{LexError, ParseError, ParseErrorType};
+use crate::error::{LexError, ParseError};
 use crate::fn_native::{SendSync, Shared};
 use crate::module::Module;
 use crate::parser::Expr;

@@ -20,9 +20,14 @@ The `ImmutableString` Type
 -------------------------
 
 All strings in Rhai are implemented as `ImmutableString` (see [standard types]).
+An `ImmutableString` does not change and can be shared.
 
-`ImmutableString` should be used in place of the standard Rust type `String` when registering functions
-because using `String` is very inefficient (the `String` must always be cloned).
+Modifying an `ImmutableString` causes it first to be cloned, and then the modification made to the copy.
+
+### **IMPORTANT** - Avoid `String` Parameters
+
+`ImmutableString` should be used in place of `String` for function parameters because using
+`String` is very inefficient (the `String` argument is cloned during every call).
 
 A alternative is to use `&str` which maps straight to `ImmutableString`.
 
@@ -65,14 +70,6 @@ Unicode characters.
 Individual characters within a Rhai string can also be replaced just as if the string is an array of Unicode characters.
 
 In Rhai, there are also no separate concepts of `String` and `&str` as in Rust.
-
-
-Immutable Strings
-----------------
-
-Rhai use _immutable_ strings (type `ImmutableString`) and can be shared.
-
-Modifying a Rhai string actually causes it first to be cloned, and then the modification made to the copy.
 
 
 Examples
