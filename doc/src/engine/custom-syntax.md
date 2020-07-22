@@ -126,32 +126,21 @@ Any custom syntax must include an _implementation_ of it.
 The function signature of an implementation is:
 
 ```rust
-Fn(
-    engine: &Engine,
-    scope: &mut Scope,
-    mods: &mut Imports,
-    state: &mut State,
-    lib: &Module,
-    this_ptr: &mut Option<&mut Dynamic>,
-    inputs: &[Expression],
-    level: usize
-) -> Result<Dynamic, Box<EvalAltResult>>
+Fn(engine: &Engine, context: &mut EvalContext, scope: &mut Scope, inputs: &[Expression])
+    -> Result<Dynamic, Box<EvalAltResult>>
 ```
 
 where:
 
-* `engine : &Engine` - reference to the current [`Engine`].
-* `scope : &mut Scope` - mutable reference to the current [`Scope`]; variables can be added to it.
-* `mods : &mut Imports` - mutable reference to the current collection of imported [`Module`]'s; **do not touch**.
-* `state : &mut State` - mutable reference to the current evaluation state; **do not touch**.
-* `lib : &Module` - reference to the current collection of script-defined functions.
-* `this_ptr : &mut Option<&mut Dynamic>` - mutable reference to the current binding of the `this` pointer; **do not touch**.
-* `inputs : &[Expression]` - a list of input expression trees.
-* `level : usize` - the current function call level.
+* `engine: &Engine` - reference to the current [`Engine`].
+* `context: &mut EvalContext` - mutable reference to the current evaluation _context_; **do not touch**.
+* `scope: &mut Scope` - mutable reference to the current [`Scope`]; variables can be added to it.
+* `inputs: &[Expression]` - a list of input expression trees.
 
-There are a lot of parameters, most of which should not be touched or Bad Things Happen™.
-They represent the running _content_ of a script evaluation and should simply be passed
-straight-through the the [`Engine`].
+#### WARNING - Lark's Vomit
+
+The `context` parameter contains the evaluation _context_ and should not be touched or Bad Things Happen™.
+It should simply be passed straight-through the the [`Engine`].
 
 ### Access Arguments
 
@@ -172,7 +161,7 @@ Use the `engine::eval_expression_tree` method to evaluate an expression tree.
 
 ```rust
 let expr = inputs.get(0).unwrap();
-let result = engine.eval_expression_tree(scope, mods, state, lib, this_ptr, expr, level)?;
+let result = engine.eval_expression_tree(context, scope, expr)?;
 ```
 
 As can be seem above, most arguments are simply passed straight-through to `engine::eval_expression_tree`.
@@ -210,13 +199,9 @@ The syntax is passed simply as a slice of `&str`.
 // Custom syntax implementation
 fn implementation_func(
     engine: &Engine,
+    context: &mut EvalContext,
     scope: &mut Scope,
-    mods: &mut Imports,
-    state: &mut State,
-    lib: &Module,
-    this_ptr: &mut Option<&mut Dynamic>,
-    inputs: &[Expression],
-    level: usize
+    inputs: &[Expression]
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let var_name = inputs[0].get_variable_name().unwrap().to_string();
     let stmt = inputs.get(1).unwrap();
@@ -227,15 +212,12 @@ fn implementation_func(
 
     loop {
         // Evaluate the statement block
-        engine.eval_expression_tree(scope, mods, state, lib, this_ptr, stmt, level)?;
+        engine.eval_expression_tree(context, scope, stmt)?;
 
         // Evaluate the condition expression
-        let stop = !engine
-            .eval_expression_tree(scope, mods, state, lib, this_ptr, condition, level)?
-            .as_bool()
-            .map_err(|_| EvalAltResult::ErrorBooleanArgMismatch(
-                "do-while".into(), expr.position()
-            ))?;
+        let stop = !engine.eval_expression_tree(context, scope, condition)?
+                          .as_bool().map_err(|_| EvalAltResult::ErrorBooleanArgMismatch(
+                                                    "do-while".into(), expr.position()))?;
 
         if stop {
             break;

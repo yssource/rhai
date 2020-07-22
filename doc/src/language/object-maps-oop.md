@@ -20,17 +20,21 @@ to the [object map] before the function is called.  There is no way to simulate 
 via a normal function-call syntax because all scripted function arguments are passed by value.
 
 ```rust
-fn do_action(x) { print(this.data + x); }   // 'this' binds to the object when called
+fn do_action(x) { this.data += x; }          // 'this' binds to the object when called
 
 let obj = #{
                 data: 40,
-                action: Fn("do_action")     // 'action' holds a function pointer to 'do_action'
+                action: Fn("do_action")      // 'action' holds a function pointer to 'do_action'
            };
 
-obj.action(2);                              // Short-hand syntax: prints 42
+obj.action(2);                               // Calls 'do_action' with `this` bound to 'obj'
 
-// To achieve the above with normal function pointer calls:
-fn do_action(map, x) { print(map.data + x); }
+obj.call(obj.action, 2);                     // The above de-sugars to this
 
-obj.action.call(obj, 2);                    // this call cannot mutate 'obj'
+obj.data == 42;
+
+// To achieve the above with normal function pointer call will fail.
+fn do_action(map, x) { map.data += x; }      // 'map' is a copy
+
+obj.action.call(obj, 2);                     // 'obj' is passed as a copy by value
 ```

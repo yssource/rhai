@@ -36,11 +36,9 @@ use ahash::AHasher;
 pub struct StraightHasher(u64);
 
 impl Hasher for StraightHasher {
-    #[inline(always)]
     fn finish(&self) -> u64 {
         self.0
     }
-    #[inline]
     fn write(&mut self, bytes: &[u8]) {
         let mut key = [0_u8; 8];
         key.copy_from_slice(&bytes[..8]); // Panics if fewer than 8 bytes
@@ -50,7 +48,6 @@ impl Hasher for StraightHasher {
 
 impl StraightHasher {
     /// Create a `StraightHasher`.
-    #[inline(always)]
     pub fn new() -> Self {
         Self(0)
     }
@@ -63,7 +60,6 @@ pub struct StraightHasherBuilder;
 impl BuildHasher for StraightHasherBuilder {
     type Hasher = StraightHasher;
 
-    #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
         StraightHasher::new()
     }
@@ -150,7 +146,6 @@ pub struct StaticVec<T> {
 const MAX_STATIC_VEC: usize = 4;
 
 impl<T> Drop for StaticVec<T> {
-    #[inline(always)]
     fn drop(&mut self) {
         self.clear();
     }
@@ -233,7 +228,6 @@ impl<T: 'static> IntoIterator for StaticVec<T> {
 
 impl<T> StaticVec<T> {
     /// Create a new `StaticVec`.
-    #[inline(always)]
     pub fn new() -> Self {
         Default::default()
     }
@@ -249,7 +243,6 @@ impl<T> StaticVec<T> {
         self.len = 0;
     }
     /// Extract a `MaybeUninit` into a concrete initialized type.
-    #[inline(always)]
     fn extract(value: MaybeUninit<T>) -> T {
         unsafe { value.assume_init() }
     }
@@ -311,7 +304,6 @@ impl<T> StaticVec<T> {
         );
     }
     /// Is data stored in fixed-size storage?
-    #[inline(always)]
     fn is_fixed_storage(&self) -> bool {
         self.len <= MAX_STATIC_VEC
     }
@@ -418,12 +410,10 @@ impl<T> StaticVec<T> {
         }
     }
     /// Get the number of items in this `StaticVec`.
-    #[inline(always)]
     pub fn len(&self) -> usize {
         self.len
     }
     /// Is this `StaticVec` empty?
-    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -664,48 +654,41 @@ pub struct ImmutableString(Shared<String>);
 impl Deref for ImmutableString {
     type Target = String;
 
-    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl AsRef<String> for ImmutableString {
-    #[inline(always)]
     fn as_ref(&self) -> &String {
         &self.0
     }
 }
 
 impl Borrow<str> for ImmutableString {
-    #[inline(always)]
     fn borrow(&self) -> &str {
         self.0.as_str()
     }
 }
 
 impl From<&str> for ImmutableString {
-    #[inline(always)]
     fn from(value: &str) -> Self {
         Self(value.to_string().into())
     }
 }
 impl From<String> for ImmutableString {
-    #[inline(always)]
     fn from(value: String) -> Self {
         Self(value.into())
     }
 }
 
 impl From<Box<String>> for ImmutableString {
-    #[inline(always)]
     fn from(value: Box<String>) -> Self {
         Self(value.into())
     }
 }
 
 impl From<ImmutableString> for String {
-    #[inline(always)]
     fn from(value: ImmutableString) -> Self {
         value.into_owned()
     }
@@ -714,49 +697,42 @@ impl From<ImmutableString> for String {
 impl FromStr for ImmutableString {
     type Err = ();
 
-    #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.to_string().into()))
     }
 }
 
 impl FromIterator<char> for ImmutableString {
-    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<String>().into())
     }
 }
 
 impl<'a> FromIterator<&'a char> for ImmutableString {
-    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = &'a char>>(iter: T) -> Self {
         Self(iter.into_iter().cloned().collect::<String>().into())
     }
 }
 
 impl<'a> FromIterator<&'a str> for ImmutableString {
-    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<String>().into())
     }
 }
 
 impl<'a> FromIterator<String> for ImmutableString {
-    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<String>().into())
     }
 }
 
 impl fmt::Display for ImmutableString {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self.0.as_str(), f)
     }
 }
 
 impl fmt::Debug for ImmutableString {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self.0.as_str(), f)
     }
@@ -891,7 +867,6 @@ impl Add<char> for &ImmutableString {
 }
 
 impl AddAssign<char> for ImmutableString {
-    #[inline(always)]
     fn add_assign(&mut self, rhs: char) {
         self.make_mut().push(rhs);
     }
@@ -906,7 +881,6 @@ impl ImmutableString {
     }
     /// Make sure that the `ImmutableString` is unique (i.e. no other outstanding references).
     /// Then return a mutable reference to the `String`.
-    #[inline(always)]
     pub fn make_mut(&mut self) -> &mut String {
         shared_make_mut(&mut self.0)
     }

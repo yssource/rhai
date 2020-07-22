@@ -1,9 +1,12 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
-use crate::engine::{Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{
+    Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+};
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
+use crate::token::is_valid_identifier;
 use crate::utils::StaticVec;
 
 #[cfg(feature = "internals")]
@@ -397,7 +400,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop)
+                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop.as_str())
                     .map(|(_, expr)| expr.set_position(pos))
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -431,7 +434,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             (Expr::StringConstant(s), Expr::IntegerConstant(i)) if i.0 >= 0 && (i.0 as usize) < s.0.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                Expr::CharConstant(Box::new((s.0.chars().nth(i.0 as usize).expect("should get char"), s.1)))
+                Expr::CharConstant(Box::new((s.0.chars().nth(i.0 as usize).unwrap(), s.1)))
             }
             // lhs[rhs]
             (lhs, rhs) => Expr::Index(Box::new((optimize_expr(lhs, state), optimize_expr(rhs, state), x.2))),
@@ -528,6 +531,19 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             Expr::FnCall(x)
         }
 
+        // Fn("...")
+        Expr::FnCall(x)
+            if x.1.is_none()
+            && (x.0).0 == KEYWORD_FN_PTR
+            && x.3.len() == 1
+            && matches!(x.3[0], Expr::StringConstant(_))
+        => {
+            match &x.3[0] {
+                Expr::StringConstant(s) if is_valid_identifier(s.0.chars()) => Expr::FnPointer(s.clone()),
+                _ => Expr::FnCall(x)
+            }
+        }
+
         // Eagerly call functions
         Expr::FnCall(mut x)
                 if x.1.is_none() // Non-qualified
@@ -571,7 +587,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                         Some(arg_for_type_of.to_string().into())
                     } else {
                         // Otherwise use the default value, if any
-                        def_value.clone()
+                        def_value.map(|v| v.into())
                     }
                 })
                 .and_then(|result| map_dynamic_to_expr(result, *pos))
@@ -598,7 +614,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(&name).expect("should find constant in scope!").clone().set_position(pos)
+            state.find_constant(&name).unwrap().clone().set_position(pos)
         }
 
         // Custom syntax
@@ -639,10 +655,7 @@ fn optimize(
                 && expr.as_ref().map(|v| v.is_constant()).unwrap_or(false)
         })
         .for_each(|ScopeEntry { name, expr, .. }| {
-            state.push_constant(
-                name.as_ref(),
-                (**expr.as_ref().expect("should be Some(expr)")).clone(),
-            )
+            state.push_constant(name.as_ref(), expr.as_ref().unwrap().as_ref().clone())
         });
 
     let orig_constants_len = state.constants.len();

@@ -18,7 +18,7 @@ use crate::utils::StaticVec;
 use crate::parser::FLOAT;
 
 #[cfg(feature = "internals")]
-use crate::syntax::CustomSyntax;
+use crate::syntax::{CustomSyntax, EvalContext};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -87,6 +87,7 @@ pub const FN_GET: &str = "get$";
 pub const FN_SET: &str = "set$";
 pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
+pub const FN_ANONYMOUS: &str = "anon$";
 
 #[cfg(feature = "internals")]
 pub const MARKER_EXPR: &str = "$expr$";
@@ -187,7 +188,7 @@ impl Target<'_> {
         }
     }
     /// Update the value of the `Target`.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val,
@@ -418,12 +419,9 @@ pub fn make_getter(id: &str) -> String {
 fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
     if fn_name.starts_with(FN_GET) {
-        Some(&fn_name[FN_GET.len()..])
-    } else {
-        None
+        return Some(&fn_name[FN_GET.len()..]);
     }
 
-    #[cfg(feature = "no_object")]
     None
 }
 
@@ -436,12 +434,9 @@ pub fn make_setter(id: &str) -> String {
 fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
     if fn_name.starts_with(FN_SET) {
-        Some(&fn_name[FN_SET.len()..])
-    } else {
-        None
+        return Some(&fn_name[FN_SET.len()..]);
     }
 
-    #[cfg(feature = "no_object")]
     None
 }
 
@@ -453,7 +448,7 @@ fn default_print(s: &str) {
 }
 
 /// Search for a module within an imports stack.
-/// Position in `EvalAltResult` is None and must be set afterwards.
+/// Position in `EvalAltResult` is `None` and must be set afterwards.
 fn search_imports<'s>(
     mods: &'s Imports,
     state: &mut State,
@@ -486,7 +481,7 @@ fn search_imports<'s>(
 }
 
 /// Search for a module within an imports stack.
-/// Position in `EvalAltResult` is None and must be set afterwards.
+/// Position in `EvalAltResult` is `None` and must be set afterwards.
 fn search_imports_mut<'s>(
     mods: &'s mut Imports,
     state: &mut State,
@@ -636,7 +631,7 @@ impl Engine {
     }
 
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -654,7 +649,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         is_method: bool,
-        def_val: Option<&Dynamic>,
+        def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -709,7 +704,7 @@ impl Engine {
         /// This function restores the first argument that was replaced by `normalize_first_arg_of_method_call`.
         fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCallArgs<'a>) {
             if let Some(this_pointer) = old_this_ptr {
-                mem::replace(args.get_mut(0).unwrap(), this_pointer);
+                args[0] = this_pointer;
             }
         }
 
@@ -815,7 +810,7 @@ impl Engine {
 
         // Return default value (if any)
         if let Some(val) = def_val {
-            return Ok((val.clone(), false));
+            return Ok((val.into(), false));
         }
 
         // Getter function not found?
@@ -877,7 +872,7 @@ impl Engine {
     }
 
     /// Call a script-defined function.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -959,7 +954,7 @@ impl Engine {
     }
 
     /// Perform an actual function call, taking care of special functions
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -976,7 +971,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         is_method: bool,
-        def_val: Option<&Dynamic>,
+        def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
@@ -1022,7 +1017,7 @@ impl Engine {
     }
 
     /// Evaluate a text string as a script - used primarily for 'eval'.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     fn eval_script_expr(
         &self,
         scope: &mut Scope,
@@ -1081,7 +1076,6 @@ impl Engine {
 
         let is_ref = target.is_ref();
         let is_value = target.is_value();
-        let def_val = def_val.as_ref();
 
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
@@ -1100,7 +1094,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, fn_name, *native, hash, args, false, false, def_val, level,
+                state, lib, fn_name, *native, hash, args, false, false, *def_val, level,
             )
         } else if fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
             // FnPtr call on object
@@ -1120,7 +1114,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, &fn_name, *native, hash, args, is_ref, true, def_val, level,
+                state, lib, &fn_name, *native, hash, args, is_ref, true, *def_val, level,
             )
         } else {
             let redirected: Option<ImmutableString>;
@@ -1146,7 +1140,7 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, fn_name, *native, hash, args, is_ref, true, def_val, level,
+                state, lib, fn_name, *native, hash, args, is_ref, true, *def_val, level,
             )
         }
         .map_err(|err| err.new_position(*pos))?;
@@ -1161,7 +1155,7 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
@@ -1210,14 +1204,14 @@ impl Engine {
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
+                        let mut new_val = new_val.unwrap();
                         let mut idx_val2 = idx_val.clone();
 
                         match self.get_indexed_mut(state, lib, target, idx_val, pos, true, level) {
                             // Indexed value is an owned value - the only possibility is an indexer
                             // Try to call an index setter
                             Ok(obj_ptr) if obj_ptr.is_value() => {
-                                let args =
-                                    &mut [target.as_mut(), &mut idx_val2, &mut new_val.unwrap()];
+                                let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                 self.exec_fn_call(
                                     state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
@@ -1236,17 +1230,13 @@ impl Engine {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
                                 obj_ptr
-                                    .set_value(new_val.unwrap())
+                                    .set_value(new_val)
                                     .map_err(|err| err.new_position(rhs.position()))?;
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
                                 EvalAltResult::ErrorIndexingType(_, _) => {
-                                    let args = &mut [
-                                        target.as_mut(),
-                                        &mut idx_val2,
-                                        &mut new_val.unwrap(),
-                                    ];
+                                    let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                     self.exec_fn_call(
                                         state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
@@ -1694,13 +1684,12 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value)) => {
                 let op = "==";
-                let def_value = false.into();
                 let mut scope = Scope::new();
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter_mut() {
+                    let def_value = Some(false);
                     let args = &mut [&mut lhs_value.clone(), value];
-                    let def_value = Some(&def_value);
 
                     let hashes = (
                         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
@@ -1749,15 +1738,19 @@ impl Engine {
     #[deprecated(note = "this method is volatile and may change")]
     pub fn eval_expression_tree(
         &self,
+        context: &mut EvalContext,
         scope: &mut Scope,
-        mods: &mut Imports,
-        state: &mut State,
-        lib: &Module,
-        this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expression,
-        level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.eval_expr(scope, mods, state, lib, this_ptr, expr.expr(), level)
+        self.eval_expr(
+            scope,
+            context.mods,
+            context.state,
+            context.lib,
+            context.this_ptr,
+            expr.expr(),
+            context.level,
+        )
     }
 
     /// Evaluate an expression
@@ -1782,9 +1775,10 @@ impl Engine {
             Expr::FloatConstant(x) => Ok(x.0.into()),
             Expr::StringConstant(x) => Ok(x.0.to_string().into()),
             Expr::CharConstant(x) => Ok(x.0.into()),
+            Expr::FnPointer(x) => Ok(FnPtr::new_unchecked(x.0.clone()).into()),
             Expr::Variable(x) if (x.0).0 == KEYWORD_THIS => {
-                if let Some(ref val) = this_ptr {
-                    Ok((*val).clone())
+                if let Some(val) = this_ptr {
+                    Ok(val.clone())
                 } else {
                     Err(Box::new(EvalAltResult::ErrorUnboundedThis((x.0).1)))
                 }
@@ -1839,15 +1833,16 @@ impl Engine {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
                             let hash = calc_fn_hash(empty(), op, 2, empty());
+                            // Clone the LHS value
                             let args = &mut [&mut lhs_ptr.clone(), &mut rhs_val];
-
-                            // Set variable value
-                            *lhs_ptr = self
+                            // Run function
+                            let (value, _) = self
                                 .exec_fn_call(
                                     state, lib, op, true, hash, args, false, false, None, level,
                                 )
-                                .map(|(v, _)| v)
                                 .map_err(|err| err.new_position(*op_pos))?;
+                            // Set value to LHS
+                            *lhs_ptr = value;
                         }
                         Ok(Default::default())
                     }
@@ -1941,7 +1936,6 @@ impl Engine {
             // Normal function call
             Expr::FnCall(x) if x.1.is_none() => {
                 let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
-                let def_val = def_val.as_ref();
 
                 // Handle Fn()
                 if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
@@ -2072,7 +2066,7 @@ impl Engine {
 
                 let args = args.as_mut();
                 self.exec_fn_call(
-                    state, lib, name, *native, hash, args, is_ref, false, def_val, level,
+                    state, lib, name, *native, hash, args, is_ref, false, *def_val, level,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.new_position(*pos))
@@ -2166,7 +2160,7 @@ impl Engine {
                         .map_err(|err| err.new_position(*pos)),
                     Err(err) => match *err {
                         EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
-                            Ok(def_val.clone().unwrap())
+                            Ok(def_val.unwrap().into())
                         }
                         EvalAltResult::ErrorFunctionNotFound(_, _) => {
                             Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
@@ -2225,7 +2219,14 @@ impl Engine {
             Expr::Custom(x) => {
                 let func = (x.0).1.as_ref();
                 let ep: StaticVec<_> = (x.0).0.iter().map(|e| e.into()).collect();
-                func(self, scope, mods, state, lib, this_ptr, ep.as_ref(), level)
+                let mut context = EvalContext {
+                    mods,
+                    state,
+                    lib,
+                    this_ptr,
+                    level,
+                };
+                func(self, &mut context, scope, ep.as_ref())
             }
 
             _ => unreachable!(),
@@ -2502,12 +2503,8 @@ impl Engine {
                 for ((id, id_pos), rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(id).map(|(i, _)| i) {
-                        let alias = rename
-                            .as_ref()
-                            .map(|(n, _)| n.clone())
-                            .unwrap_or_else(|| id.clone());
-
-                        scope.set_entry_alias(index, alias);
+                        let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);
+                        scope.set_entry_alias(index, alias.clone());
                     } else {
                         return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
                             id.into(),
@@ -2633,7 +2630,7 @@ impl Engine {
     }
 
     /// Check if the number of operations stay within limit.
-    /// Position in `EvalAltResult` is None and must be set afterwards.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     fn inc_operations(&self, state: &mut State) -> Result<(), Box<EvalAltResult>> {
         state.operations += 1;
 

@@ -12,6 +12,7 @@ use crate::stdlib::{
 };
 
 /// Cast a type into another type.
+#[inline(always)]
 pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
     if TypeId::of::<B>() == a.type_id() {
         // SAFETY: Just checked we have the right type. We explicitly forget the
@@ -28,6 +29,7 @@ pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
 }
 
 /// Cast a Boxed type into another type.
+#[inline(always)]
 pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, Box<X>> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {
@@ -51,6 +53,7 @@ pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, B
 ///
 /// Force-casting a local variable's lifetime to the current `Scope`'s larger lifetime saves
 /// on allocations and string cloning, thus avoids us having to maintain a chain of `Scope`'s.
+#[inline]
 pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str, state: &State) -> Cow<'s, str> {
     // If not at global level, we can force-cast
     if state.scope_level > 0 {

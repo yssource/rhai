@@ -206,6 +206,9 @@ impl fmt::Display for ParseErrorType {
 
             Self::FnMissingParams(s) => write!(f, "Expecting parameters for function '{}'", s),
 
+            Self::FnMissingBody(s) if s.is_empty() => {
+                f.write_str("Expecting body statement block for anonymous function")
+            }
             Self::FnMissingBody(s) => {
                 write!(f, "Expecting body statement block for function '{}'", s)
             }

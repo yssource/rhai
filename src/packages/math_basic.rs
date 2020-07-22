@@ -6,6 +6,10 @@ use crate::token::Position;
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
+#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "no_std")]
+use num_traits::*;
+
 use crate::stdlib::{boxed::Box, format, i32, i64};
 
 #[cfg(feature = "only_i32")]
