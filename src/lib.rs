@@ -173,6 +173,10 @@ pub use engine::{Expression, Imports, State as EvalState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
+pub use syntax::EvalContext;
+
+#[cfg(feature = "internals")]
+#[deprecated(note = "this type is volatile and may change")]
 pub use module::ModuleRef;
 
 #[cfg(feature = "internals")]

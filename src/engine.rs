@@ -18,7 +18,7 @@ use crate::utils::StaticVec;
 use crate::parser::FLOAT;
 
 #[cfg(feature = "internals")]
-use crate::syntax::CustomSyntax;
+use crate::syntax::{CustomSyntax, EvalContext};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -1738,15 +1738,19 @@ impl Engine {
     #[deprecated(note = "this method is volatile and may change")]
     pub fn eval_expression_tree(
         &self,
+        context: &mut EvalContext,
         scope: &mut Scope,
-        mods: &mut Imports,
-        state: &mut State,
-        lib: &Module,
-        this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expression,
-        level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.eval_expr(scope, mods, state, lib, this_ptr, expr.expr(), level)
+        self.eval_expr(
+            scope,
+            context.mods,
+            context.state,
+            context.lib,
+            context.this_ptr,
+            expr.expr(),
+            context.level,
+        )
     }
 
     /// Evaluate an expression
@@ -2215,7 +2219,14 @@ impl Engine {
             Expr::Custom(x) => {
                 let func = (x.0).1.as_ref();
                 let ep: StaticVec<_> = (x.0).0.iter().map(|e| e.into()).collect();
-                func(self, scope, mods, state, lib, this_ptr, ep.as_ref(), level)
+                let mut context = EvalContext {
+                    mods,
+                    state,
+                    lib,
+                    this_ptr,
+                    level,
+                };
+                func(self, &mut context, scope, ep.as_ref())
             }
 
             _ => unreachable!(),

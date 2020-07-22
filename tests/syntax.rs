@@ -1,8 +1,5 @@
 #![cfg(feature = "internals")]
-use rhai::{
-    Dynamic, Engine, EvalAltResult, EvalState, Expression, Imports, LexError, Module, ParseError,
-    ParseErrorType, Scope, INT,
-};
+use rhai::{Engine, EvalAltResult, EvalContext, Expression, LexError, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -28,13 +25,9 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             ],
             1,
             |engine: &Engine,
+             context: &mut EvalContext,
              scope: &mut Scope,
-             mods: &mut Imports,
-             state: &mut EvalState,
-             lib: &Module,
-             this_ptr: &mut Option<&mut Dynamic>,
-             inputs: &[Expression],
-             level: usize| {
+             inputs: &[Expression]| {
                 let var_name = inputs[0].get_variable_name().unwrap().to_string();
                 let stmt = inputs.get(1).unwrap();
                 let expr = inputs.get(2).unwrap();
@@ -42,10 +35,10 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
                 scope.push(var_name, 0 as INT);
 
                 loop {
-                    engine.eval_expression_tree(scope, mods, state, lib, this_ptr, stmt, level)?;
+                    engine.eval_expression_tree(context, scope, stmt)?;
 
                     if !engine
-                        .eval_expression_tree(scope, mods, state, lib, this_ptr, expr, level)?
+                        .eval_expression_tree(context, scope, expr)?
                         .as_bool()
                         .map_err(|_| {
                             EvalAltResult::ErrorBooleanArgMismatch(
@@ -78,7 +71,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
 
     // The first symbol must be an identifier
     assert!(matches!(
-        *engine.register_custom_syntax(&["!"], 0, |_, _, _, _, _, _, _, _| Ok(().into())).expect_err("should error"),
+        *engine.register_custom_syntax(&["!"], 0, |_, _, _, _| Ok(().into())).expect_err("should error"),
         LexError::ImproperSymbol(s) if s == "!"
     ));
 
