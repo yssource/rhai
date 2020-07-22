@@ -3,7 +3,7 @@ Rust Examples
 
 {{#include ../../links.md}}
 
-A number of examples can be found in the `examples` folder:
+A number of examples can be found in the `examples` directory:
 
 | Example                                                                                                                | Description                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -28,4 +28,23 @@ Examples can be run with the following command:
 
 ```bash
 cargo run --example {example_name}
+```
+
+`no-std` Samples
+----------------
+
+To illustrate `no-std` builds, a number of sample applications are available under the `no_std` directory:
+
+| Sample                                                                                  | Description                                                                                           | Optimization |                     Allocator                     | Panics |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | :----------: | :-----------------------------------------------: | :----: |
+| [`no_std_test`](https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_test) | Bare-bones test application that evaluates a Rhai expression and sets the result as the return value. |     Size     | [`wee_alloc`](https://crates.io/crates/wee_alloc) | Abort  |
+
+`cargo run` cannot be used to run a `no-std` sample.  It must first be built:
+
+```bash
+cd no_std/no_std_test
+
+cargo +nightly build --release
+
+./target/release/no_std_test
 ```

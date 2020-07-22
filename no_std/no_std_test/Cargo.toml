@@ -1,0 +1,24 @@
+[package]
+name = "no_std_test"
+version = "0.1.0"
+edition = "2018"
+authors = ["Stephen Chung"]
+description = "no-std test application"
+homepage = "https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_test"
+repository = "https://github.com/jonathandturner/rhai"
+
+[dependencies]
+rhai = { path = "../../", features = [ "no_std", "unchecked", "only_i32", "no_module" ], default_features = false }
+wee_alloc = { version = "0.4.5", default_features = false }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+opt-level = "z"             # optimize for size
+debug = false
+rpath = false
+lto = "fat"
+debug-assertions = false
+codegen-units = 1
+panic = "abort"

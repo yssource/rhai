@@ -16,6 +16,11 @@ New features
 * `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
 * Anonymous functions in the syntax of a closure, e.g. `|x, y, z| x + y - z`.
 
+Breaking changes
+----------------
+
+* Function signature for defining custom syntax is simplified.
+
 
 Version 0.17.0
 ==============

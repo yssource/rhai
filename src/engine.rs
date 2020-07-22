@@ -18,7 +18,7 @@ use crate::utils::StaticVec;
 use crate::parser::FLOAT;
 
 #[cfg(feature = "internals")]
-use crate::syntax::CustomSyntax;
+use crate::syntax::{CustomSyntax, EvalContext};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -1738,15 +1738,19 @@ impl Engine {
     #[deprecated(note = "this method is volatile and may change")]
     pub fn eval_expression_tree(
         &self,
+        context: &mut EvalContext,
         scope: &mut Scope,
-        mods: &mut Imports,
-        state: &mut State,
-        lib: &Module,
-        this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expression,
-        level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.eval_expr(scope, mods, state, lib, this_ptr, expr.expr(), level)
+        self.eval_expr(
+            scope,
+            context.mods,
+            context.state,
+            context.lib,
+            context.this_ptr,
+            expr.expr(),
+            context.level,
+        )
     }
 
     /// Evaluate an expression
@@ -1773,8 +1777,8 @@ impl Engine {
             Expr::CharConstant(x) => Ok(x.0.into()),
             Expr::FnPointer(x) => Ok(FnPtr::new_unchecked(x.0.clone()).into()),
             Expr::Variable(x) if (x.0).0 == KEYWORD_THIS => {
-                if let Some(ref val) = this_ptr {
-                    Ok((*val).clone())
+                if let Some(val) = this_ptr {
+                    Ok(val.clone())
                 } else {
                     Err(Box::new(EvalAltResult::ErrorUnboundedThis((x.0).1)))
                 }
@@ -1829,15 +1833,16 @@ impl Engine {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
                             let hash = calc_fn_hash(empty(), op, 2, empty());
+                            // Clone the LHS value
                             let args = &mut [&mut lhs_ptr.clone(), &mut rhs_val];
-
-                            // Set variable value
-                            *lhs_ptr = self
+                            // Run function
+                            let (value, _) = self
                                 .exec_fn_call(
                                     state, lib, op, true, hash, args, false, false, None, level,
                                 )
-                                .map(|(v, _)| v)
                                 .map_err(|err| err.new_position(*op_pos))?;
+                            // Set value to LHS
+                            *lhs_ptr = value;
                         }
                         Ok(Default::default())
                     }
@@ -2215,7 +2220,14 @@ impl Engine {
             Expr::Custom(x) => {
                 let func = (x.0).1.as_ref();
                 let ep: StaticVec<_> = (x.0).0.iter().map(|e| e.into()).collect();
-                func(self, scope, mods, state, lib, this_ptr, ep.as_ref(), level)
+                let mut context = EvalContext {
+                    mods,
+                    state,
+                    lib,
+                    this_ptr,
+                    level,
+                };
+                func(self, &mut context, scope, ep.as_ref())
             }
 
             _ => unreachable!(),
@@ -2492,12 +2504,8 @@ impl Engine {
                 for ((id, id_pos), rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(id).map(|(i, _)| i) {
-                        let alias = rename
-                            .as_ref()
-                            .map(|(n, _)| n.clone())
-                            .unwrap_or_else(|| id.clone());
-
-                        scope.set_entry_alias(index, alias);
+                        let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);
+                        scope.set_entry_alias(index, alias.clone());
                     } else {
                         return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
                             id.into(),

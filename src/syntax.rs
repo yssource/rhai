@@ -22,26 +22,13 @@ use crate::stdlib::{
 #[cfg(not(feature = "sync"))]
 pub type FnCustomSyntaxEval = dyn Fn(
     &Engine,
+    &mut EvalContext,
     &mut Scope,
-    &mut Imports,
-    &mut State,
-    &Module,
-    &mut Option<&mut Dynamic>,
     &[Expression],
-    usize,
 ) -> Result<Dynamic, Box<EvalAltResult>>;
 /// A general function trail object.
 #[cfg(feature = "sync")]
-pub type FnCustomSyntaxEval = dyn Fn(
-        &Engine,
-        &mut Scope,
-        &mut Imports,
-        &mut State,
-        &Module,
-        &mut Option<&mut Dynamic>,
-        &[Expression],
-        usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>>
+pub type FnCustomSyntaxEval = dyn Fn(&Engine, &mut EvalContext, &mut Scope, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
     + Send
     + Sync;
 
@@ -58,6 +45,14 @@ impl fmt::Debug for CustomSyntax {
     }
 }
 
+pub struct EvalContext<'a, 'b: 'a, 's, 'm, 't, 'd: 't> {
+    pub(crate) mods: &'a mut Imports<'b>,
+    pub(crate) state: &'s mut State,
+    pub(crate) lib: &'m Module,
+    pub(crate) this_ptr: &'t mut Option<&'d mut Dynamic>,
+    pub(crate) level: usize,
+}
+
 impl Engine {
     pub fn register_custom_syntax<S: AsRef<str> + ToString>(
         &mut self,
@@ -65,13 +60,9 @@ impl Engine {
         scope_delta: isize,
         func: impl Fn(
                 &Engine,
+                &mut EvalContext,
                 &mut Scope,
-                &mut Imports,
-                &mut State,
-                &Module,
-                &mut Option<&mut Dynamic>,
                 &[Expression],
-                usize,
             ) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
             + 'static,
