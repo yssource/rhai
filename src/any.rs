@@ -137,7 +137,7 @@ pub enum Union {
     Array(Box<Array>),
     #[cfg(not(feature = "no_object"))]
     Map(Box<Map>),
-    FnPtr(FnPtr),
+    FnPtr(Box<FnPtr>),
     Variant(Box<Box<dyn Variant>>),
 }
 
@@ -274,7 +274,7 @@ impl fmt::Debug for Dynamic {
                 f.write_str("#")?;
                 fmt::Debug::fmt(value, f)
             }
-            Union::FnPtr(value) => fmt::Display::fmt(value, f),
+            Union::FnPtr(value) => fmt::Debug::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
@@ -481,7 +481,7 @@ impl Dynamic {
         }
         if type_id == TypeId::of::<FnPtr>() {
             return match self.0 {
-                Union::FnPtr(value) => unsafe_try_cast(value),
+                Union::FnPtr(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
                 _ => None,
             };
         }
@@ -582,7 +582,7 @@ impl Dynamic {
         }
         if type_id == TypeId::of::<FnPtr>() {
             return match &self.0 {
-                Union::FnPtr(value) => <dyn Any>::downcast_ref::<T>(value),
+                Union::FnPtr(value) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
                 _ => None,
             };
         }
@@ -656,7 +656,7 @@ impl Dynamic {
         }
         if type_id == TypeId::of::<FnPtr>() {
             return match &mut self.0 {
-                Union::FnPtr(value) => <dyn Any>::downcast_mut::<T>(value),
+                Union::FnPtr(value) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
                 _ => None,
             };
         }
@@ -801,6 +801,11 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<HashMap<K, T>> for Dynam
 }
 impl From<FnPtr> for Dynamic {
     fn from(value: FnPtr) -> Self {
+        Box::new(value).into()
+    }
+}
+impl From<Box<FnPtr>> for Dynamic {
+    fn from(value: Box<FnPtr>) -> Self {
         Self(Union::FnPtr(value))
     }
 }

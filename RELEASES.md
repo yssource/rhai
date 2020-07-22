@@ -7,6 +7,7 @@ Version 0.18.0
 This version adds:
 
 * Anonymous functions (in closure syntax).  Simplifies creation of ad hoc functions.
+* Currying of function pointers.
 
 New features
 ------------
@@ -16,6 +17,7 @@ New features
 * `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
 * Anonymous functions in the syntax of a closure, e.g. `|x, y, z| x + y - z`.
 * Custom syntax now works even without the `internals` feature.
+* Currying of function pointers is supported via the `curry` keyword.
 
 Breaking changes
 ----------------

@@ -76,6 +76,7 @@ The Rhai Scripting Language
        3. [Namespaces](language/fn-namespaces.md)
        4. [Function Pointers](language/fn-ptr.md)
        5. [Anonymous Functions](language/fn-anon.md)
+       6. [Currying](language/fn-curry.md)
    15. [Print and Debug](language/print-debug.md)
    16. [Modules](language/modules/index.md)
        1. [Export Variables, Functions and Sub-Modules](language/modules/export.md)

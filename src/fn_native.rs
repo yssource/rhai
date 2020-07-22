@@ -50,13 +50,13 @@ pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 /// A general function pointer.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
-pub struct FnPtr(ImmutableString);
+#[derive(Debug, Clone, Default)]
+pub struct FnPtr(ImmutableString, Vec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
-    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(name: S) -> Self {
-        Self(name.into())
+    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(name: S, curry: Vec<Dynamic>) -> Self {
+        Self(name.into(), curry)
     }
     /// Get the name of the function.
     pub fn fn_name(&self) -> &str {
@@ -69,6 +69,10 @@ impl FnPtr {
     /// Get the name of the function.
     pub(crate) fn take_fn_name(self) -> ImmutableString {
         self.0
+    }
+    /// Get the curried data.
+    pub(crate) fn curry(&self) -> &[Dynamic] {
+        &self.1
     }
 }
 
@@ -83,7 +87,7 @@ impl TryFrom<ImmutableString> for FnPtr {
 
     fn try_from(value: ImmutableString) -> Result<Self, Self::Error> {
         if is_valid_identifier(value.chars()) {
-            Ok(Self(value))
+            Ok(Self(value, Default::default()))
         } else {
             Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 value.into(),

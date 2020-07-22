@@ -26,6 +26,7 @@ Keywords List
 | `fn` (lower-case `f`) | Function definition                      |   [`no_function`]   |
 |  `Fn` (capital `F`)   | Function to create a [function pointer]  |                     |
 |        `call`         | Call a [function pointer]                |                     |
+|        `curry`        | Curry a [function pointer]               |                     |
 |        `this`         | Reference to base object for method call |   [`no_function`]   |
 |       `type_of`       | Get type name of value                   |                     |
 |        `print`        | Print value                              |                     |
