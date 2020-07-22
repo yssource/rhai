@@ -15,6 +15,7 @@ New features
 * Disallow many keywords as variables, such as `print`, `eval`, `call`, `this` etc.
 * `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
 * Anonymous functions in the syntax of a closure, e.g. `|x, y, z| x + y - z`.
+* Custom syntax now works even without the `internals` feature.
 
 Breaking changes
 ----------------
@@ -48,7 +49,7 @@ Breaking changes
 New features
 ------------
 
-* New `serde` feature to allow serializating/deserializating to/from `Dynamic` values using [`serde`](https://crates.io/crates/serde).
+* New `serde` feature to allow serializing/deserializing to/from `Dynamic` values using [`serde`](https://crates.io/crates/serde).
   This is particularly useful when converting a Rust `struct` to a `Dynamic` _object map_ and back.
 * `Engine::disable_symbol` to surgically disable keywords and/or operators.
 * `Engine::register_custom_operator` to define a custom operator.

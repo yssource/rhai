@@ -33,18 +33,7 @@ Where This Might Be Useful
 * Where you just want to confuse your user and make their lives miserable, because you can.
 
 
-Step One - Start With `internals`
---------------------------------
-
-Since a custom syntax taps deeply into the `AST` and evaluation process of the `Engine`,
-the [`internals`] feature must be on in order to expose these necessary internal data structures.
-
-Beware that Rhai internal data structures are _volatile_ and may change without warning.
-
-Caveat emptor.
-
-
-Step Two - Design The Syntax
+Step One - Design The Syntax
 ---------------------------
 
 A custom syntax is simply a list of symbols.
@@ -116,8 +105,8 @@ print(hello);   // variable declared by a custom syntax persists!
 ```
 
 
-Step Three - Implementation
---------------------------
+Step Two - Implementation
+-------------------------
 
 Any custom syntax must include an _implementation_ of it.
 
@@ -164,8 +153,6 @@ let expr = inputs.get(0).unwrap();
 let result = engine.eval_expression_tree(context, scope, expr)?;
 ```
 
-As can be seem above, most arguments are simply passed straight-through to `engine::eval_expression_tree`.
-
 ### Declare Variables
 
 New variables maybe declared (usually with a variable name that is passed in via `$ident$).
@@ -179,14 +166,14 @@ In other words, any `scope.push(...)` calls must come _before_ any `engine::eval
 let var_name = inputs[0].get_variable_name().unwrap().to_string();
 let expr = inputs.get(1).unwrap();
 
-scope.push(var_name, 0 as INT);     // do this BEFORE engine.eval_expression_tree!
+scope.push(var_name, 0 as INT);     // do this BEFORE 'engine.eval_expression_tree'!
 
-let result = engine.eval_expression_tree(scope, mods, state, lib, this_ptr, expr, level)?;
+let result = engine.eval_expression_tree(context, scope, expr)?;
 ```
 
 
-Step Four - Register the Custom Syntax
--------------------------------------
+Step Three - Register the Custom Syntax
+--------------------------------------
 
 Use `Engine::register_custom_syntax` to register a custom syntax.
 
@@ -236,7 +223,7 @@ engine.register_custom_syntax(
 ```
 
 
-Step Five - Disable Unneeded Statement Types
+Step Four - Disable Unneeded Statement Types
 -------------------------------------------
 
 When a DSL needs a custom syntax, most likely than not it is extremely specialized.
@@ -254,13 +241,13 @@ custom syntax (plus possibly expressions).  But again, Don't Do It™ - unless y
 of what you're doing.
 
 
-Step Six - Document
--------------------
+Step Five - Document
+--------------------
 
 For custom syntax, documentation is crucial.
 
 Make sure there are _lots_ of examples for users to follow.
 
 
-Step Seven - Profit!
---------------------
+Step Six - Profit!
+------------------

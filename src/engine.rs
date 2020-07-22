@@ -11,14 +11,12 @@ use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, St
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
+use crate::syntax::{CustomSyntax, EvalContext, Expression};
 use crate::token::Position;
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
-
-#[cfg(feature = "internals")]
-use crate::syntax::{CustomSyntax, EvalContext};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -88,44 +86,9 @@ pub const FN_SET: &str = "set$";
 pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
 pub const FN_ANONYMOUS: &str = "anon$";
-
-#[cfg(feature = "internals")]
 pub const MARKER_EXPR: &str = "$expr$";
-#[cfg(feature = "internals")]
 pub const MARKER_BLOCK: &str = "$block$";
-#[cfg(feature = "internals")]
 pub const MARKER_IDENT: &str = "$ident$";
-
-#[cfg(feature = "internals")]
-#[derive(Debug, Clone, Hash)]
-pub struct Expression<'a>(&'a Expr);
-
-#[cfg(feature = "internals")]
-impl<'a> From<&'a Expr> for Expression<'a> {
-    fn from(expr: &'a Expr) -> Self {
-        Self(expr)
-    }
-}
-
-#[cfg(feature = "internals")]
-impl Expression<'_> {
-    /// If this expression is a variable name, return it.  Otherwise `None`.
-    #[cfg(feature = "internals")]
-    pub fn get_variable_name(&self) -> Option<&str> {
-        match self.0 {
-            Expr::Variable(x) => Some((x.0).0.as_str()),
-            _ => None,
-        }
-    }
-    /// Get the expression.
-    pub(crate) fn expr(&self) -> &Expr {
-        &self.0
-    }
-    /// Get the position of this expression.
-    pub fn position(&self) -> Position {
-        self.0.position()
-    }
-}
 
 /// A type specifying the method of chaining.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -316,7 +279,6 @@ pub struct Engine {
     /// A hashset containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: Option<HashMap<String, u8>>,
     /// Custom syntax.
-    #[cfg(feature = "internals")]
     pub(crate) custom_syntax: Option<HashMap<String, CustomSyntax>>,
 
     /// Callback closure for implementing the `print` command.
@@ -376,8 +338,6 @@ impl Default for Engine {
             type_names: None,
             disabled_symbols: None,
             custom_keywords: None,
-
-            #[cfg(feature = "internals")]
             custom_syntax: None,
 
             // default print/debug implementations
@@ -605,8 +565,6 @@ impl Engine {
             type_names: None,
             disabled_symbols: None,
             custom_keywords: None,
-
-            #[cfg(feature = "internals")]
             custom_syntax: None,
 
             print: Box::new(|_| {}),
@@ -1734,8 +1692,6 @@ impl Engine {
     /// ## WARNING - Low Level API
     ///
     /// This function is very low level.  It evaluates an expression from an AST.
-    #[cfg(feature = "internals")]
-    #[deprecated(note = "this method is volatile and may change")]
     pub fn eval_expression_tree(
         &self,
         context: &mut EvalContext,
@@ -2215,7 +2171,6 @@ impl Engine {
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
 
-            #[cfg(feature = "internals")]
             Expr::Custom(x) => {
                 let func = (x.0).1.as_ref();
                 let ep: StaticVec<_> = (x.0).0.iter().map(|e| e.into()).collect();

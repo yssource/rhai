@@ -1,14 +1,13 @@
 //! Module containing implementation for custom syntax.
-#![cfg(feature = "internals")]
-
 use crate::any::Dynamic;
-use crate::engine::{Engine, Expression, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::error::LexError;
+use crate::engine::{Engine, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::{SendSync, Shared};
 use crate::module::Module;
+use crate::parser::Expr;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use crate::token::{is_valid_identifier, Token};
+use crate::token::{is_valid_identifier, Position, Token};
 use crate::utils::StaticVec;
 
 use crate::stdlib::{
@@ -32,6 +31,33 @@ pub type FnCustomSyntaxEval = dyn Fn(&Engine, &mut EvalContext, &mut Scope, &[Ex
     + Send
     + Sync;
 
+#[derive(Debug, Clone, Hash)]
+pub struct Expression<'a>(&'a Expr);
+
+impl<'a> From<&'a Expr> for Expression<'a> {
+    fn from(expr: &'a Expr) -> Self {
+        Self(expr)
+    }
+}
+
+impl Expression<'_> {
+    /// If this expression is a variable name, return it.  Otherwise `None`.
+    pub fn get_variable_name(&self) -> Option<&str> {
+        match self.0 {
+            Expr::Variable(x) => Some((x.0).0.as_str()),
+            _ => None,
+        }
+    }
+    /// Get the expression.
+    pub(crate) fn expr(&self) -> &Expr {
+        &self.0
+    }
+    /// Get the position of this expression.
+    pub fn position(&self) -> Position {
+        self.0.position()
+    }
+}
+
 #[derive(Clone)]
 pub struct CustomSyntax {
     pub segments: StaticVec<String>,
@@ -45,6 +71,7 @@ impl fmt::Debug for CustomSyntax {
     }
 }
 
+#[derive(Debug)]
 pub struct EvalContext<'a, 'b: 'a, 's, 'm, 't, 'd: 't> {
     pub(crate) mods: &'a mut Imports<'b>,
     pub(crate) state: &'s mut State,
@@ -56,7 +83,7 @@ pub struct EvalContext<'a, 'b: 'a, 's, 'm, 't, 'd: 't> {
 impl Engine {
     pub fn register_custom_syntax<S: AsRef<str> + ToString>(
         &mut self,
-        value: &[S],
+        keywords: &[S],
         scope_delta: isize,
         func: impl Fn(
                 &Engine,
@@ -66,15 +93,18 @@ impl Engine {
             ) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> Result<&mut Self, Box<LexError>> {
-        if value.is_empty() {
-            return Err(Box::new(LexError::ImproperSymbol("".to_string())));
-        }
-
+    ) -> Result<&mut Self, Box<ParseError>> {
         let mut segments: StaticVec<_> = Default::default();
 
-        for s in value {
-            let seg = match s.as_ref() {
+        for s in keywords {
+            let s = s.as_ref().trim();
+
+            // skip empty keywords
+            if s.is_empty() {
+                continue;
+            }
+
+            let seg = match s {
                 // Markers not in first position
                 MARKER_EXPR | MARKER_BLOCK | MARKER_IDENT if !segments.is_empty() => s.to_string(),
                 // Standard symbols not in first position
@@ -115,12 +145,25 @@ impl Engine {
                     s.into()
                 }
                 // Anything else is an error
-                _ => return Err(Box::new(LexError::ImproperSymbol(s.to_string()))),
+                _ => {
+                    return Err(LexError::ImproperSymbol(format!(
+                        "Improper symbol for custom syntax: '{}'",
+                        s
+                    ))
+                    .into_err(Position::none())
+                    .into());
+                }
             };
 
             segments.push(seg);
         }
 
+        // If the syntax has no keywords, just ignore the registration
+        if segments.is_empty() {
+            return Ok(self);
+        }
+
+        // Remove the first keyword as the discriminator
         let key = segments.remove(0);
 
         let syntax = CustomSyntax {
