@@ -1,4 +1,4 @@
-//! This is a `no-std` application for the that evaluates
+//! This is a bare-bones `no-std` application that evaluates
 //! a simple expression and uses the result as the return value.
 
 #![no_std]
@@ -14,10 +14,12 @@ use rhai::{Engine, INT};
 
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
-    let engine = Engine::new();
+    // Notice that this is a _raw_ engine.
+    // To do anything useful, load a few packages from `rhai::packages`.
+    let engine = Engine::new_raw();
 
     // Evaluate a simple expression: 40 + 2
-    engine.eval::<INT>("40 + 2").unwrap() as isize
+    engine.eval_expression::<INT>("40 + 2").unwrap() as isize
 }
 
 #[alloc_error_handler]

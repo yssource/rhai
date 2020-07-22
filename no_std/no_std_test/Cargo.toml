@@ -8,7 +8,7 @@ homepage = "https://github.com/jonathandturner/rhai/tree/master/no_std/no_std_te
 repository = "https://github.com/jonathandturner/rhai"
 
 [dependencies]
-rhai = { path = "../../", features = [ "no_std" ], default_features = false }
+rhai = { path = "../../", features = [ "no_std", "unchecked", "only_i32", "no_module" ], default_features = false }
 wee_alloc = { version = "0.4.5", default_features = false }
 
 [profile.dev]
