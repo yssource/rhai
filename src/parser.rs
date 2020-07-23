@@ -2,22 +2,18 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, FN_ANONYMOUS, KEYWORD_THIS};
+use crate::engine::{
+    make_getter, make_setter, Engine, FN_ANONYMOUS, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR,
+    MARKER_IDENT,
+};
 use crate::error::{LexError, ParseError, ParseErrorType};
+use crate::fn_native::Shared;
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
+use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
-
-#[cfg(feature = "internals")]
-use crate::engine::{MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-
-#[cfg(feature = "internals")]
-use crate::fn_native::Shared;
-
-#[cfg(feature = "internals")]
-use crate::syntax::FnCustomSyntaxEval;
 
 use crate::stdlib::{
     borrow::Cow,
@@ -587,17 +583,14 @@ impl Stmt {
 }
 
 #[derive(Clone)]
-#[cfg(feature = "internals")]
 pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
 
-#[cfg(feature = "internals")]
 impl fmt::Debug for CustomExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
-#[cfg(feature = "internals")]
 impl Hash for CustomExpr {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
@@ -683,7 +676,6 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Custom syntax
-    #[cfg(feature = "internals")]
     Custom(Box<(CustomExpr, Position)>),
 }
 
@@ -781,7 +773,6 @@ impl Expr {
 
             Self::Dot(x) | Self::Index(x) => x.0.position(),
 
-            #[cfg(feature = "internals")]
             Self::Custom(x) => x.1,
         }
     }
@@ -816,8 +807,6 @@ impl Expr {
             Self::Assignment(x) => x.3 = new_pos,
             Self::Dot(x) => x.2 = new_pos,
             Self::Index(x) => x.2 = new_pos,
-
-            #[cfg(feature = "internals")]
             Self::Custom(x) => x.1 = new_pos,
         }
 
@@ -925,7 +914,6 @@ impl Expr {
                 _ => false,
             },
 
-            #[cfg(feature = "internals")]
             Self::Custom(_) => false,
         }
     }
@@ -2148,7 +2136,6 @@ fn parse_expr(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // Check if it is a custom syntax.
-    #[cfg(feature = "internals")]
     if let Some(ref custom) = state.engine.custom_syntax {
         let (token, pos) = input.peek().unwrap();
         let token_pos = *pos;

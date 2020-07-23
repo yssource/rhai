@@ -78,3 +78,35 @@ fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_fn_ptr_curry() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.register_fn("foo", |x: &mut INT, y: INT| *x + y);
+
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let f = Fn("foo");
+                let f2 = f.curry(40);
+                f2.call(2)
+            "#
+        )?,
+        42
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let f = Fn("foo");
+                let f2 = curry(f, 40);
+                call(f2, 2)
+            "#
+        )?,
+        42
+    );
+
+    Ok(())
+}

@@ -1,5 +1,6 @@
-#![cfg(feature = "internals")]
-use rhai::{Engine, EvalAltResult, EvalContext, Expression, LexError, ParseErrorType, Scope, INT};
+use rhai::{
+    Engine, EvalAltResult, EvalContext, Expression, ParseError, ParseErrorType, Scope, INT,
+};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -72,7 +73,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     // The first symbol must be an identifier
     assert!(matches!(
         *engine.register_custom_syntax(&["!"], 0, |_, _, _, _| Ok(().into())).expect_err("should error"),
-        LexError::ImproperSymbol(s) if s == "!"
+        ParseError(err, _) if *err == ParseErrorType::BadInput("Improper symbol for custom syntax: '!'".to_string())
     ));
 
     Ok(())
