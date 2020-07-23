@@ -2,6 +2,8 @@
 use rhai::{
     Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseError, ParseErrorType, Scope, INT,
 };
+use std::any::TypeId;
+use std::rc::Rc;
 
 #[test]
 fn test_fn() -> Result<(), Box<EvalAltResult>> {
@@ -153,6 +155,38 @@ fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
             "#
         )?,
         42
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_currying_with_registered_fn() -> Result<(), Box<EvalAltResult>> {
+    let mut module = Module::new();
+
+    module.set_raw_fn(
+        "call_with_arg",
+        &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
+        |engine: &Engine, module: &Module, args: &mut [&mut Dynamic]| {
+            std::mem::take(args[0])
+                .cast::<FnPtr>()
+                .call_dynamic(engine, module, None, [std::mem::take(args[1])])
+        },
+    );
+
+    let mut engine = Engine::new();
+    engine.load_package(Rc::new(module));
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let addition = |x, y| { x + y };
+                let curryed = addition.curry(100);
+
+                call_with_arg(curryed, 5)
+            "#
+        )?,
+        105
     );
 
     Ok(())
