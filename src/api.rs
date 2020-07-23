@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{make_getter, make_setter, Engine, Imports, State, FN_IDX_GET, FN_IDX_SET};
 use crate::error::ParseError;
-use crate::fn_call::FuncArgs;
+use crate::fn_args::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
 use crate::module::{FuncReturn, Module};

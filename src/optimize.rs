@@ -1,3 +1,5 @@
+//! Module implementing the AST optimizer.
+
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{

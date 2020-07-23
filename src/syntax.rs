@@ -1,4 +1,5 @@
-//! Module containing implementation for custom syntax.
+//! Module implementing custom syntax for `Engine`.
+
 use crate::any::Dynamic;
 use crate::engine::{Engine, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError};
@@ -187,5 +188,27 @@ impl Engine {
             .insert(key, syntax.into());
 
         Ok(self)
+    }
+
+    /// Evaluate an expression tree.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.  It evaluates an expression from an AST.
+    pub fn eval_expression_tree(
+        &self,
+        context: &mut EvalContext,
+        scope: &mut Scope,
+        expr: &Expression,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.eval_expr(
+            scope,
+            context.mods,
+            context.state,
+            context.lib,
+            context.this_ptr,
+            expr.expr(),
+            context.level,
+        )
     }
 }
