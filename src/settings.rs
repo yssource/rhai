@@ -1,3 +1,5 @@
+//! Configuration settings for `Engine`.
+
 use crate::engine::Engine;
 use crate::module::ModuleResolver;
 use crate::optimize::OptimizationLevel;

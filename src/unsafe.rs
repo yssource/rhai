@@ -1,4 +1,4 @@
-//! A module containing all unsafe code.
+//! A helper module containing unsafe utility functions.
 
 use crate::any::Variant;
 use crate::engine::State;

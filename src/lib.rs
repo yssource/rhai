@@ -77,6 +77,7 @@ mod any;
 mod api;
 mod engine;
 mod error;
+mod fn_args;
 mod fn_call;
 mod fn_func;
 mod fn_native;
