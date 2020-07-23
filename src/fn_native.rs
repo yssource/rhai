@@ -1,11 +1,12 @@
 //! Module containing interfaces with native-Rust functions.
 use crate::any::Dynamic;
 use crate::engine::Engine;
-use crate::module::Module;
+use crate::module::{Module, FuncReturn};
 use crate::parser::ScriptFnDef;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
+use crate::Scope;
 
 use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, rc::Rc, string::String, sync::Arc};
 
@@ -73,6 +74,31 @@ impl FnPtr {
     /// Get the curried data.
     pub(crate) fn curry(&self) -> &[Dynamic] {
         &self.1
+    }
+
+    /// A shortcut of `Engine::call_fn_dynamic` function that takes into
+    /// consideration curry-ed and passed arguments both.
+    pub fn call_dynamic(
+        &self,
+        engine: &Engine,
+        lib: impl AsRef<Module>,
+        mut this_ptr: Option<&mut Dynamic>,
+        mut arg_values: impl AsMut<[Dynamic]>
+    ) -> FuncReturn<Dynamic> {
+        let mut args: Vec<Dynamic> = self
+            .1
+            .iter()
+            .chain(arg_values.as_mut().iter())
+            .cloned()
+            .collect();
+
+        engine.call_fn_dynamic(
+            &mut Scope::new(),
+            lib,
+            &self.0.as_ref(),
+            this_ptr,
+            args
+        )
     }
 }
 
