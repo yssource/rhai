@@ -735,7 +735,7 @@ impl Dynamic {
     pub(crate) fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s) => Ok(s),
-            Union::FnPtr(f) => Ok(f.take_fn_name()),
+            Union::FnPtr(f) => Ok(f.take_data().0),
             _ => Err(self.type_name()),
         }
     }

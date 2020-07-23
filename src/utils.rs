@@ -387,7 +387,7 @@ impl<T> StaticVec<T> {
             let value = self.extract_from_list(index);
 
             // Move all items one slot to the left
-            for x in index + 1..self.len - 1 {
+            for x in index + 1..self.len {
                 let orig_value = self.extract_from_list(x);
                 self.set_into_list(x - 1, orig_value, false);
             }

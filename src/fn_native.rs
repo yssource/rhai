@@ -66,9 +66,9 @@ impl FnPtr {
     pub(crate) fn get_fn_name(&self) -> &ImmutableString {
         &self.0
     }
-    /// Get the name of the function.
-    pub(crate) fn take_fn_name(self) -> ImmutableString {
-        self.0
+    /// Get the underlying data of the function pointer.
+    pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
+        (self.0, self.1)
     }
     /// Get the curried data.
     pub(crate) fn curry(&self) -> &[Dynamic] {

@@ -167,7 +167,7 @@ impl Target<'_> {
                     .as_char()
                     .map_err(|_| EvalAltResult::ErrorCharMismatch(Position::none()))?;
 
-                let mut chars: StaticVec<char> = s.chars().collect();
+                let mut chars = s.chars().collect::<StaticVec<_>>();
                 let ch = chars[*index];
 
                 // See if changed - if so, update the String
@@ -1025,7 +1025,7 @@ impl Engine {
         lib: &Module,
         target: &mut Target,
         expr: &Expr,
-        mut idx_val: Dynamic,
+        idx_val: Dynamic,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         let ((name, native, pos), _, hash, _, def_val) = match expr {
@@ -1038,13 +1038,13 @@ impl Engine {
 
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
-        let idx = idx_val.downcast_mut::<StaticVec<Dynamic>>().unwrap();
+        let mut idx = idx_val.cast::<StaticVec<Dynamic>>();
         let mut fn_name = name.as_ref();
 
         let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
             // FnPtr call
             let fn_ptr = obj.downcast_ref::<FnPtr>().unwrap();
-            let mut curry: StaticVec<_> = fn_ptr.curry().iter().cloned().collect();
+            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             // Redirect function name
             let fn_name = fn_ptr.fn_name();
             // Recalculate hash
@@ -1062,16 +1062,16 @@ impl Engine {
             )
         } else if fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
             // FnPtr call on object
-            let fn_ptr = idx[0].downcast_ref::<FnPtr>().unwrap();
-            let mut curry: StaticVec<_> = fn_ptr.curry().iter().cloned().collect();
+            let fn_ptr = idx.remove(0).cast::<FnPtr>();
+            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             // Redirect function name
             let fn_name = fn_ptr.get_fn_name().clone();
             // Recalculate hash
-            let hash = calc_fn_hash(empty(), &fn_name, curry.len() + idx.len() - 1, empty());
+            let hash = calc_fn_hash(empty(), &fn_name, curry.len() + idx.len(), empty());
             // Replace the first argument with the object pointer, adding the curried arguments
             let mut arg_values = once(obj)
                 .chain(curry.iter_mut())
-                .chain(idx.iter_mut().skip(1))
+                .chain(idx.iter_mut())
                 .collect::<StaticVec<_>>();
             let args = arg_values.as_mut();
 
@@ -1085,7 +1085,12 @@ impl Engine {
             Ok((
                 FnPtr::new_unchecked(
                     fn_ptr.get_fn_name().clone(),
-                    fn_ptr.curry().iter().chain(idx.iter()).cloned().collect(),
+                    fn_ptr
+                        .curry()
+                        .iter()
+                        .cloned()
+                        .chain(idx.into_iter())
+                        .collect(),
                 )
                 .into(),
                 false,
@@ -1947,7 +1952,7 @@ impl Engine {
                         )));
                     }
 
-                    let fn_ptr = fn_ptr.downcast_ref::<FnPtr>().unwrap();
+                    let (fn_name, fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
 
                     let curry: StaticVec<_> = args_expr
                         .iter()
@@ -1956,13 +1961,8 @@ impl Engine {
                         .collect::<Result<_, _>>()?;
 
                     return Ok(FnPtr::new_unchecked(
-                        fn_ptr.get_fn_name().clone(),
-                        fn_ptr
-                            .curry()
-                            .iter()
-                            .cloned()
-                            .chain(curry.into_iter())
-                            .collect(),
+                        fn_name,
+                        fn_curry.into_iter().chain(curry.into_iter()).collect(),
                     )
                     .into());
                 }
@@ -2010,7 +2010,7 @@ impl Engine {
                         let fn_ptr = fn_name.cast::<FnPtr>();
                         curry = fn_ptr.curry().iter().cloned().collect();
                         // Redirect function name
-                        redirected = fn_ptr.take_fn_name();
+                        redirected = fn_ptr.take_data().0;
                         name = &redirected;
                         // Skip the first argument
                         args_expr = &args_expr.as_ref()[1..];
@@ -2227,7 +2227,7 @@ impl Engine {
 
             Expr::Custom(x) => {
                 let func = (x.0).1.as_ref();
-                let ep: StaticVec<_> = (x.0).0.iter().map(|e| e.into()).collect();
+                let ep = (x.0).0.iter().map(|e| e.into()).collect::<StaticVec<_>>();
                 let mut context = EvalContext {
                     mods,
                     state,
