@@ -17,7 +17,7 @@ use crate::stdlib::{
     sync::Arc,
 };
 
-/// A general function trail object.
+/// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
 pub type FnCustomSyntaxEval = dyn Fn(
     &Engine,
@@ -25,12 +25,13 @@ pub type FnCustomSyntaxEval = dyn Fn(
     &mut Scope,
     &[Expression],
 ) -> Result<Dynamic, Box<EvalAltResult>>;
-/// A general function trail object.
+/// A general expression evaluation trait object.
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxEval = dyn Fn(&Engine, &mut EvalContext, &mut Scope, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
     + Send
     + Sync;
 
+/// An expression sub-tree in an AST.
 #[derive(Debug, Clone, Hash)]
 pub struct Expression<'a>(&'a Expr);
 
@@ -71,6 +72,7 @@ impl fmt::Debug for CustomSyntax {
     }
 }
 
+/// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'a, 'b: 'a, 's, 'm, 't, 'd: 't> {
     pub(crate) mods: &'a mut Imports<'b>,

@@ -1,14 +1,14 @@
 //! Module containing interfaces with native-Rust functions.
 use crate::any::Dynamic;
 use crate::engine::Engine;
-use crate::module::{Module, FuncReturn};
+use crate::module::{FuncReturn, Module};
 use crate::parser::ScriptFnDef;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
-use crate::utils::ImmutableString;
+use crate::utils::{ImmutableString, StaticVec};
 use crate::Scope;
 
-use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, rc::Rc, string::String, sync::Arc};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, mem, rc::Rc, string::String, sync::Arc};
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -50,7 +50,8 @@ pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
-/// A general function pointer.
+/// A general function pointer, which may carry additional (i.e. curried) argument values
+/// to be passed onto a function during a call.
 #[derive(Debug, Clone, Default)]
 pub struct FnPtr(ImmutableString, Vec<Dynamic>);
 
@@ -71,34 +72,34 @@ impl FnPtr {
     pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
         (self.0, self.1)
     }
-    /// Get the curried data.
-    pub(crate) fn curry(&self) -> &[Dynamic] {
+    /// Get the curried arguments.
+    pub fn curry(&self) -> &[Dynamic] {
         &self.1
     }
 
-    /// A shortcut of `Engine::call_fn_dynamic` function that takes into
-    /// consideration curry-ed and passed arguments both.
+    /// Call the function pointer with curried arguments (if any).
+    ///
+    /// ## WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
     pub fn call_dynamic(
         &self,
         engine: &Engine,
         lib: impl AsRef<Module>,
-        mut this_ptr: Option<&mut Dynamic>,
-        mut arg_values: impl AsMut<[Dynamic]>
+        this_ptr: Option<&mut Dynamic>,
+        mut arg_values: impl AsMut<[Dynamic]>,
     ) -> FuncReturn<Dynamic> {
-        let mut args: Vec<Dynamic> = self
+        let args = self
             .1
             .iter()
-            .chain(arg_values.as_mut().iter())
             .cloned()
-            .collect();
+            .chain(arg_values.as_mut().iter_mut().map(|v| mem::take(v)))
+            .collect::<StaticVec<_>>();
 
-        engine.call_fn_dynamic(
-            &mut Scope::new(),
-            lib,
-            &self.0.as_ref(),
-            this_ptr,
-            args
-        )
+        engine.call_fn_dynamic(&mut Scope::new(), lib, self.0.as_str(), this_ptr, args)
     }
 }
 
