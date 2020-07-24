@@ -162,10 +162,12 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             Union::Variant(value) if value.is::<i16>() => self.deserialize_i16(visitor),
             Union::Variant(value) if value.is::<i32>() => self.deserialize_i32(visitor),
             Union::Variant(value) if value.is::<i64>() => self.deserialize_i64(visitor),
+            Union::Variant(value) if value.is::<i128>() => self.deserialize_i128(visitor),
             Union::Variant(value) if value.is::<u8>() => self.deserialize_u8(visitor),
             Union::Variant(value) if value.is::<u16>() => self.deserialize_u16(visitor),
             Union::Variant(value) if value.is::<u32>() => self.deserialize_u32(visitor),
             Union::Variant(value) if value.is::<u64>() => self.deserialize_u64(visitor),
+            Union::Variant(value) if value.is::<u128>() => self.deserialize_u128(visitor),
 
             Union::Variant(_) => self.type_error(),
         }
@@ -219,6 +221,18 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
+    fn deserialize_i128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else if cfg!(not(feature = "only_i32")) {
+            self.type_error()
+        } else {
+            self.value
+                .downcast_ref::<i128>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_i128(x))
+        }
+    }
+
     fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
@@ -256,6 +270,16 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.value
                 .downcast_ref::<u64>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_u64(x))
+        }
+    }
+
+    fn deserialize_u128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+        if let Ok(v) = self.value.as_int() {
+            self.deserialize_int(v, visitor)
+        } else {
+            self.value
+                .downcast_ref::<u128>()
+                .map_or_else(|| self.type_error(), |&x| visitor.visit_u128(x))
         }
     }
 
