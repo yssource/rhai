@@ -738,18 +738,18 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash));
     /// ```
-    pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone>(
+    pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
-        func: impl Fn(&mut A, B, A) -> FuncReturn<()> + SendSync + 'static,
+        func: impl Fn(&mut A, B, C) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
-            let c = mem::take(args[2]).cast::<A>();
+            let c = mem::take(args[2]).cast::<C>();
             let a = args[0].downcast_mut::<A>().unwrap();
 
             func(a, b, c).map(Dynamic::from)
         };
-        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<A>()];
+        let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             FN_IDX_SET,
             Public,
