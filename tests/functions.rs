@@ -104,5 +104,19 @@ fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
         42
     );
 
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(x) { this.data += x; }
+
+                let x = #{ data: 40, action: Fn("foo") };
+                x.action(2);
+                x.data
+            "#
+        )?,
+        42
+    );
+
     Ok(())
 }

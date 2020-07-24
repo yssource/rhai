@@ -11,7 +11,7 @@ use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, St
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::{CustomSyntax, EvalContext, Expression};
+use crate::syntax::{CustomSyntax, EvalContext};
 use crate::token::Position;
 use crate::utils::StaticVec;
 
@@ -1020,7 +1020,7 @@ impl Engine {
                     map.entry(index).or_insert(Default::default()).into()
                 } else {
                     let index = idx
-                        .downcast_ref::<String>()
+                        .downcast_ref::<ImmutableString>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
                     map.get_mut(index.as_str())
