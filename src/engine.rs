@@ -1052,17 +1052,20 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             _ => {
-                let type_name = self.map_type_name(val.type_name());
+                let val_type_name = val.type_name();
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(
                     state, lib, FN_IDX_GET, true, 0, args, is_ref, true, None, level,
                 )
                 .map(|(v, _)| v.into())
-                .map_err(|_| {
-                    Box::new(EvalAltResult::ErrorIndexingType(
-                        type_name.into(),
-                        Position::none(),
-                    ))
+                .map_err(|e| match *e {
+                    EvalAltResult::ErrorFunctionNotFound(..) => {
+                        Box::new(EvalAltResult::ErrorIndexingType(
+                            self.map_type_name(val_type_name).into(),
+                            Position::none(),
+                        ))
+                    }
+                    _ => e,
                 })
             }
 
