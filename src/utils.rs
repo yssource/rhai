@@ -15,7 +15,7 @@ use crate::stdlib::{
     iter::FromIterator,
     mem,
     mem::MaybeUninit,
-    ops::{Add, AddAssign, Deref, Drop, Index, IndexMut},
+    ops::{Add, AddAssign, Deref, DerefMut, Drop, Index, IndexMut},
     str::FromStr,
     string::{String, ToString},
     vec::Vec,
@@ -387,7 +387,7 @@ impl<T> StaticVec<T> {
             let value = self.extract_from_list(index);
 
             // Move all items one slot to the left
-            for x in index + 1..self.len - 1 {
+            for x in index + 1..self.len {
                 let orig_value = self.extract_from_list(x);
                 self.set_into_list(x - 1, orig_value, false);
             }
@@ -569,6 +569,19 @@ impl<T> AsMut<[T]> for StaticVec<T> {
         } else {
             &mut self.more[..]
         }
+    }
+}
+
+impl<T> Deref for StaticVec<T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
+impl<T> DerefMut for StaticVec<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.as_mut()
     }
 }
 

@@ -1,4 +1,5 @@
 //! Module which defines the function registration mechanism.
+
 #![allow(non_snake_case)]
 
 use crate::any::{Dynamic, Variant};

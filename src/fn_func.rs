@@ -1,4 +1,5 @@
 //! Module which defines the function registration mechanism.
+
 #![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 

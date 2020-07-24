@@ -76,6 +76,7 @@
 [functions]: {{rootUrl}}/language/functions.md
 [function pointer]: {{rootUrl}}/language/fn-ptr.md
 [function pointers]: {{rootUrl}}/language/fn-ptr.md
+[currying]: {{rootUrl}}/language/fn-curry.md
 [function namespace]: {{rootUrl}}/language/fn-namespaces.md
 [function namespaces]: {{rootUrl}}/language/fn-namespaces.md
 [anonymous function]: {{rootUrl}}/language/fn-anon.md

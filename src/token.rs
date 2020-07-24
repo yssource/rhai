@@ -1,8 +1,8 @@
 //! Main module defining the lexer and parser.
 
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_PRINT,
-    KEYWORD_THIS, KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
+    KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 
 use crate::error::LexError;
@@ -404,7 +404,7 @@ impl Token {
                 Reserved(syntax.into())
             }
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_THIS => Reserved(syntax.into()),
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS => Reserved(syntax.into()),
 
             _ => return None,
         })

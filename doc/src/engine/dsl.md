@@ -11,7 +11,7 @@ Expressions Only
 
 In many DSL scenarios, only evaluation of expressions is needed.
 
-The `Engine::eval_expression_XXX`[`eval_expression`] API can be used to restrict
+The [`Engine::eval_expression_XXX`][`eval_expression`] API can be used to restrict
 a script to expressions only.
 
 
@@ -21,8 +21,7 @@ Disable Keywords and/or Operators
 In some DSL scenarios, it is necessary to further restrict the language to exclude certain
 language features that are not necessary or dangerous to the application.
 
-For example, a DSL may disable the `while` loop altogether while keeping all other statement
-types intact.
+For example, a DSL may disable the `while` loop while keeping all other statement types intact.
 
 It is possible, in Rhai, to surgically [disable keywords and operators].
 
@@ -54,31 +53,29 @@ Custom Syntax
 For advanced DSL scenarios, it is possible to define entire expression [_syntax_][custom syntax] -
 essentially custom statement types.
 
-The [`internals`] feature is needed to be able to define [custom syntax] in Rhai.
-
-For example, the following is a SQL like syntax for some obscure DSL operation:
+For example, the following is a SQL-like syntax for some obscure DSL operation:
 
 ```rust
 let table = [..., ..., ..., ...];
 
-// Syntax = "calculate" $ident$ $ident$ "from" $expr$ "->" $ident$ ":" $expr$
+// Syntax = calculate $ident$ $ident$ from $expr$ -> $ident$ : $expr$
 let total = calculate sum price from table -> row : row.weight > 50;
 
-// Note: There is nothing special about the use of symbols; to make it look exactly like SQL:
-// Syntax = "SELECT" $ident$ "(" $ident$ ")" "FROM" $expr$ "AS" $ident$ "WHERE" $expr$
+// Note: There is nothing special about those symbols; to make it look exactly like SQL:
+// Syntax = SELECT $ident$ ( $ident$ ) FROM $expr$ AS $ident$ WHERE $expr$
 let total = SELECT sum(price) FROM table AS row WHERE row.weight > 50;
 ```
 
 After registering this custom syntax with Rhai, it can be used anywhere inside a script as
 a normal expression.
 
-For its evaluation, the callback function will receive the following list of parameters:
+For its evaluation, the callback function will receive the following list of inputs:
 
-`exprs[0] = "sum"` - math operator  
-`exprs[1] = "price"` - field name  
-`exprs[2] = Expression(table)` - data source  
-`exprs[3] = "row"` - loop variable name  
-`exprs[4] = Expression(row.wright > 50)` - expression  
+* `inputs[0] = "sum"` - math operator
+* `inputs[1] = "price"` - field name
+* `inputs[2] = Expression(table)` - data source
+* `inputs[3] = "row"` - loop variable name
+* `inputs[4] = Expression(row.wright > 50)` - filter predicate
 
-The other identified, such as `"select"`, `"from"`, as as as symbols `->` and `:` are
-parsed in the order defined within the custom syntax.
+Other identifiers, such as `"calculate"`, `"from"`, as well as symbols such as `->` and `:`,
+are parsed in the order defined within the custom syntax.

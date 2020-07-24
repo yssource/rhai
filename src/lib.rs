@@ -77,6 +77,7 @@ mod any;
 mod api;
 mod engine;
 mod error;
+mod fn_args;
 mod fn_call;
 mod fn_func;
 mod fn_native;
@@ -91,7 +92,6 @@ mod scope;
 mod serde;
 mod settings;
 mod stdlib;
-#[cfg(feature = "internals")]
 mod syntax;
 mod token;
 mod r#unsafe;
@@ -106,6 +106,7 @@ pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
+pub use syntax::{EvalContext, Expression};
 pub use token::Position;
 pub use utils::calc_fn_spec as calc_fn_hash;
 
@@ -169,11 +170,7 @@ pub use parser::{CustomExpr, Expr, ReturnType, ScriptFnDef, Stmt};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use engine::{Expression, Imports, State as EvalState};
-
-#[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
-pub use syntax::EvalContext;
+pub use engine::{Imports, State as EvalState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
