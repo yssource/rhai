@@ -2,13 +2,19 @@
 //! a simple expression and uses the result as the return value.
 
 #![no_std]
-#![feature(alloc_error_handler, start, core_intrinsics, lang_items)]
+#![feature(alloc_error_handler, start, core_intrinsics, lang_items, link_cfg)]
 
 extern crate alloc;
 extern crate wee_alloc;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
+// NB: Rust needs a CRT runtime on Windows MSVC.
+#[cfg(all(windows, target_env = "msvc"))]
+#[link(name = "msvcrt")]
+#[link(name = "libcmt")]
+extern {}
 
 use rhai::{Engine, INT};
 
