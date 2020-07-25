@@ -5,6 +5,7 @@ use crate::engine::Engine;
 use crate::module::{FuncReturn, Module};
 use crate::parser::ScriptFnDef;
 use crate::result::EvalAltResult;
+use crate::stdlib::vec::Vec;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::{ImmutableString, StaticVec};
 use crate::Scope;
