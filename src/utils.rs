@@ -92,7 +92,7 @@ pub fn calc_fn_spec<'a>(
     s.finish()
 }
 
-/// An array-like type that holds a number of values in static storage for no-allocation, quick access.
+/// [INTERNALS] An array-like type that holds a number of values in static storage for no-allocation, quick access.
 /// Exported under the `internals` feature only.
 ///
 /// If too many items are stored, it converts into using a `Vec`.

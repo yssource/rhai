@@ -38,7 +38,7 @@ pub type Array = Vec<Dynamic>;
 #[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<ImmutableString, Dynamic>;
 
-/// A stack of imported modules.
+/// [INTERNALS] A stack of imported modules.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -194,7 +194,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// A type that holds all the current states of the Engine.
+/// [INTERNALS] A type that holds all the current states of the Engine.
 /// Exported under the `internals` feature only.
 ///
 /// # Safety

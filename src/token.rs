@@ -136,7 +136,7 @@ impl fmt::Debug for Position {
     }
 }
 
-/// A language token.
+/// [INTERNALS] A Rhai language token.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -681,7 +681,7 @@ impl From<Token> for String {
     }
 }
 
-/// State of the tokenizer.
+/// [INTERNALS] State of the tokenizer.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -701,7 +701,7 @@ pub struct TokenizeState {
     pub include_comments: bool,
 }
 
-/// Trait that encapsulates a peekable character input stream.
+/// [INTERNALS] Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -730,7 +730,7 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
-/// Parse a string literal wrapped by `enclosing_char`.
+/// [INTERNALS] Parse a string literal wrapped by `enclosing_char`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -901,7 +901,7 @@ fn scan_comment(
     }
 }
 
-/// Get the next token from the `InputStream`.
+/// [INTERNALS] Get the next token from the `InputStream`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING

@@ -342,7 +342,7 @@ impl fmt::Display for FnAccess {
     }
 }
 
-/// A type containing information on a scripted function.
+/// [INTERNALS] A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -381,7 +381,7 @@ impl fmt::Display for ScriptFnDef {
     }
 }
 
-/// A type encapsulating the mode of a `return`/`throw` statement.
+/// [INTERNALS] A type encapsulating the mode of a `return`/`throw` statement.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -487,7 +487,7 @@ impl ParseSettings {
     }
 }
 
-/// A Rhai statement.
+/// [INTERNALS] A Rhai statement.
 /// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -593,7 +593,7 @@ impl Stmt {
     }
 }
 
-/// A type wrapping a custom syntax definition.
+/// [INTERNALS] A type wrapping a custom syntax definition.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -614,7 +614,7 @@ impl Hash for CustomExpr {
     }
 }
 
-/// A type wrapping a floating-point number.
+/// [INTERNALS] A type wrapping a floating-point number.
 /// Exported under the `internals` feature only.
 ///
 /// This type is mainly used to provide a standard `Hash` implementation
@@ -635,7 +635,7 @@ impl Hash for FloatWrapper {
     }
 }
 
-/// An expression sub-tree.
+/// [INTERNALS] An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),
