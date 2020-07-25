@@ -1063,7 +1063,7 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             #[cfg(not(feature = "no_index"))]
             _ => {
-                let type_name = self.map_type_name(val.type_name());
+                let type_name = val.type_name();
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(
                     state, lib, FN_IDX_GET, true, 0, args, is_ref, true, None, level,

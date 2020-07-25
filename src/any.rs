@@ -30,12 +30,24 @@ use crate::stdlib::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use instant::Instant;
 
+mod private {
+    use crate::fn_native::SendSync;
+    use crate::stdlib::any::Any;
+
+    /// A sealed trait that prevents other crates from implementing [Variant].
+    ///
+    /// [Variant]: super::Variant
+    pub trait Sealed {}
+
+    impl<T: Any + Clone + SendSync> Sealed for T {}
+}
+
 /// Trait to represent any type.
 ///
 /// Currently, `Variant` is not `Send` nor `Sync`, so it can practically be any type.
 /// Turn on the `sync` feature to restrict it to only types that implement `Send + Sync`.
 #[cfg(not(feature = "sync"))]
-pub trait Variant: Any {
+pub trait Variant: Any + private::Sealed {
     /// Convert this `Variant` trait object to `&dyn Any`.
     fn as_any(&self) -> &dyn Any;
 
@@ -53,10 +65,6 @@ pub trait Variant: Any {
 
     /// Clone into `Dynamic`.
     fn clone_into_dynamic(&self) -> Dynamic;
-
-    /// This trait may only be implemented by `rhai`.
-    #[doc(hidden)]
-    fn _closed(&self) -> _Private;
 }
 
 /// Trait to represent any type.
@@ -64,7 +72,7 @@ pub trait Variant: Any {
 /// `From<_>` is implemented for `i64` (`i32` if `only_i32`), `f64` (if not `no_float`),
 /// `bool`, `String`, `char`, `Vec<T>` (into `Array`) and `HashMap<String, T>` (into `Map`).
 #[cfg(feature = "sync")]
-pub trait Variant: Any + Send + Sync {
+pub trait Variant: Any + Send + Sync + private::Sealed {
     /// Convert this `Variant` trait object to `&dyn Any`.
     fn as_any(&self) -> &dyn Any;
 
@@ -82,10 +90,6 @@ pub trait Variant: Any + Send + Sync {
 
     /// Clone into `Dynamic`.
     fn clone_into_dynamic(&self) -> Dynamic;
-
-    /// This trait may only be implemented by `rhai`.
-    #[doc(hidden)]
-    fn _closed(&self) -> _Private;
 }
 
 impl<T: Any + Clone + SendSync> Variant for T {
@@ -106,9 +110,6 @@ impl<T: Any + Clone + SendSync> Variant for T {
     }
     fn clone_into_dynamic(&self) -> Dynamic {
         Dynamic::from(self.clone())
-    }
-    fn _closed(&self) -> _Private {
-        _Private
     }
 }
 
