@@ -346,7 +346,7 @@ impl fmt::Display for FnAccess {
 #[derive(Debug, Clone, Hash)]
 pub struct ScriptFnDef {
     /// Function name.
-    pub name: String,
+    pub name: ImmutableString,
     /// Function access mode.
     pub access: FnAccess,
     /// Names of function parameters.
@@ -2852,7 +2852,7 @@ fn parse_fn(
     let params = params.into_iter().map(|(p, _)| p).collect();
 
     Ok(ScriptFnDef {
-        name,
+        name: name.into(),
         access,
         params,
         body,
@@ -2940,7 +2940,7 @@ fn parse_anon_fn(
     let hash = s.finish();
 
     // Create unique function name
-    let fn_name = format!("{}{}", FN_ANONYMOUS, hash);
+    let fn_name: ImmutableString = format!("{}{:16x}", FN_ANONYMOUS, hash).into();
 
     let script = ScriptFnDef {
         name: fn_name.clone(),
@@ -2950,7 +2950,7 @@ fn parse_anon_fn(
         pos: settings.pos,
     };
 
-    let expr = Expr::FnPointer(Box::new((fn_name.into(), settings.pos)));
+    let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
     Ok((expr, script))
 }
