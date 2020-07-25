@@ -54,11 +54,13 @@ jobs:
   no_std_build:
     name: NoStdBuild
     runs-on: ${{matrix.os}}
-    # TODO: remove once build works.
-    continue-on-error: true
+    continue-on-error: ${{matrix.experimental}}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - {os: ubuntu-latest, flags: "--profile unix -Z unstable-options", experimental: false}
+          - {os: windows-latest, flags: "--profile windows -Z unstable-options", experimental: true}
+          - {os: macos-latest, flags: "--profile macos -Z unstable-options", experimental: false}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -71,4 +73,4 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --manifest-path=no_std/no_std_test/Cargo.toml
+        args: --manifest-path=no_std/no_std_test/Cargo.toml ${{matrix.flags}}

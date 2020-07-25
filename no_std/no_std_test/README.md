@@ -12,7 +12,9 @@ To Compile
 The nightly compiler is required:
 
 ```bash
-cargo +nightly build --release
+cargo +nightly build --release --profile unix -Z unstable-features
 ```
+
+Available profiles are: `unix`, `windows` and `macos`.
 
 The release build is optimized for size.  It can be changed to optimize on speed instead.
