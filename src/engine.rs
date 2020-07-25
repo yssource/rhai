@@ -39,6 +39,11 @@ pub type Array = Vec<Dynamic>;
 pub type Map = HashMap<ImmutableString, Dynamic>;
 
 /// A stack of imported modules.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 pub type Imports<'a> = Vec<(Cow<'a, str>, Module)>;
 
 #[cfg(not(feature = "unchecked"))]
@@ -190,11 +195,16 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 }
 
 /// A type that holds all the current states of the Engine.
+/// Exported under the `internals` feature only.
 ///
 /// # Safety
 ///
 /// This type uses some unsafe code, mainly for avoiding cloning of local variable names via
 /// direct lifetime casting.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.

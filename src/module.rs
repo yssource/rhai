@@ -1129,10 +1129,16 @@ impl Module {
 }
 
 /// A chain of module names to qualify a variable or function call.
-/// A `u64` hash key is kept for quick search purposes.
+/// Exported under the `internals` feature only.
+///
+/// A `u64` hash key is cached for quick search purposes.
 ///
 /// A `StaticVec` is used because most module-level access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
 

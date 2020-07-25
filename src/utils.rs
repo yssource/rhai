@@ -92,8 +92,11 @@ pub fn calc_fn_spec<'a>(
     s.finish()
 }
 
-/// A type to hold a number of values in static storage for no-allocation, quick access.
+/// An array-like type that holds a number of values in static storage for no-allocation, quick access.
+/// Exported under the `internals` feature only.
+///
 /// If too many items are stored, it converts into using a `Vec`.
+///
 ///
 /// This is essentially a knock-off of the [`staticvec`](https://crates.io/crates/staticvec) crate.
 /// This simplified implementation here is to avoid pulling in another crate.
@@ -130,6 +133,10 @@ pub fn calc_fn_spec<'a>(
 /// # Safety
 ///
 /// This type uses some unsafe code (mainly for uninitialized/unused array slots) for efficiency.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 //
 // TODO - remove unsafe code
 pub struct StaticVec<T> {
