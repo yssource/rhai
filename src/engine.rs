@@ -1050,6 +1050,7 @@ impl Engine {
                 }
             }
 
+            #[cfg(not(feature = "no_object"))]
             #[cfg(not(feature = "no_index"))]
             _ => {
                 let type_name = self.map_type_name(val.type_name());
@@ -1058,11 +1059,11 @@ impl Engine {
                     state, lib, FN_IDX_GET, true, 0, args, is_ref, true, None, level,
                 )
                 .map(|(v, _)| v.into())
-                .map_err(|_| {
-                    Box::new(EvalAltResult::ErrorIndexingType(
-                        type_name.into(),
-                        Position::none(),
-                    ))
+                .map_err(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(_, _) => Box::new(
+                        EvalAltResult::ErrorIndexingType(type_name.into(), Position::none()),
+                    ),
+                    _ => err,
                 })
             }
 
