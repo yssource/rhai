@@ -1,3 +1,5 @@
+cargo-features = ["named-profiles"]
+
 [package]
 name = "no_std_test"
 version = "0.1.0"
@@ -18,7 +20,17 @@ panic = "abort"
 opt-level = "z"             # optimize for size
 debug = false
 rpath = false
-lto = "fat"
 debug-assertions = false
 codegen-units = 1
 panic = "abort"
+
+[profile.unix]
+inherits = "release"
+lto = true
+
+[profile.windows]
+inherits = "release"
+
+[profile.macos]
+inherits = "release"
+lto = "fat"
