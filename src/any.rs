@@ -34,9 +34,9 @@ mod private {
     use crate::fn_native::SendSync;
     use crate::stdlib::any::Any;
 
-    /// A sealed trait that prevents other crates from implementing [Variant].
+    /// A sealed trait that prevents other crates from implementing [`Variant`].
     ///
-    /// [Variant]: super::Variant
+    /// [`Variant`]: super::Variant
     pub trait Sealed {}
 
     impl<T: Any + Clone + SendSync> Sealed for T {}
@@ -810,8 +810,3 @@ impl From<Box<FnPtr>> for Dynamic {
         Self(Union::FnPtr(value))
     }
 }
-
-/// Private type which ensures that `rhai::Any` and `rhai::AnyExt` can only
-/// be implemented by this crate.
-#[doc(hidden)]
-pub struct _Private;

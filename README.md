@@ -68,9 +68,13 @@ Scripts can be evaluated directly from the editor.
 License
 -------
 
-Licensed under either of <a href="LICENSE-APACHE.txt">Apache License, Version
-2.0</a> or <a href="LICENSE-MIT.txt">MIT license</a> at your option.
+Licensed under either:
 
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
-be dual licensed as above, without any additional terms or conditions.
+* [Apache License, Version 2.0](https://github.com/jonathandturner/rhai/blob/master/LICENSE-APACHE.txt), or
+* [MIT license](https://github.com/jonathandturner/rhai/blob/master/LICENSE-MIT.txt)
+
+at your option.
+
+Unless explicitly stated otherwise, any contribution intentionally submitted
+for inclusion in this crate, as defined in the Apache-2.0 license, shall
+be dual-licensed as above, without any additional terms or conditions.

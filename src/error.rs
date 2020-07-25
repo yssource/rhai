@@ -10,7 +10,12 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-/// Error when tokenizing the script text.
+/// [INTERNALS] Error encountered when tokenizing the script text.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 #[non_exhaustive]
 pub enum LexError {

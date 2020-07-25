@@ -758,6 +758,40 @@ impl Module {
         )
     }
 
+    /// Set a pair of Rust index getter and setter functions, returning both hash keys.
+    /// This is a shorthand for `set_indexer_get_fn` and `set_indexer_set_fn`.
+    ///
+    /// If there are similar existing Rust functions, they are replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::{Module, ImmutableString};
+    ///
+    /// let mut module = Module::new();
+    /// let (hash_get, hash_set) = module.set_indexer_get_set_fn(
+    ///     |x: &mut i64, y: ImmutableString| {
+    ///         Ok(*x + y.len() as i64)
+    ///     },
+    ///     |x: &mut i64, y: ImmutableString, value: i64| {
+    ///         *x = y.len() as i64 + value;
+    ///         Ok(())
+    ///     }
+    /// );
+    /// assert!(module.contains_fn(hash_get));
+    /// assert!(module.contains_fn(hash_set));
+    /// ```
+    pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+        &mut self,
+        getter: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
+        setter: impl Fn(&mut A, B, T) -> FuncReturn<()> + SendSync + 'static,
+    ) -> (u64, u64) {
+        (
+            self.set_indexer_get_fn(getter),
+            self.set_indexer_set_fn(setter),
+        )
+    }
+
     /// Set a Rust function taking four parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -1094,11 +1128,17 @@ impl Module {
     }
 }
 
-/// A chain of module names to qualify a variable or function call.
-/// A `u64` hash key is kept for quick search purposes.
+/// [INTERNALS] A chain of module names to qualify a variable or function call.
+/// Exported under the `internals` feature only.
+///
+/// A `u64` hash key is cached for quick search purposes.
 ///
 /// A `StaticVec` is used because most module-level access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
 
