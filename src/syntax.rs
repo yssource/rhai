@@ -12,7 +12,8 @@ use crate::token::{is_valid_identifier, Position, Token};
 use crate::utils::StaticVec;
 
 use crate::stdlib::{
-    fmt,
+    boxed::Box,
+    fmt, format,
     rc::Rc,
     string::{String, ToString},
     sync::Arc,

@@ -136,89 +136,181 @@ impl fmt::Debug for Position {
     }
 }
 
-/// Tokens.
+/// [INTERNALS] A Rhai language token.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
+    /// An `INT` constant.
     IntegerConstant(INT),
+    /// A `FLOAT` constaint.
+    ///
+    /// Never appears under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT),
+    /// An identifier.
     Identifier(String),
+    /// A character constant.
     CharConstant(char),
+    /// A string constant.
     StringConstant(String),
+    /// `{`
     LeftBrace,
+    /// `}`
     RightBrace,
+    /// `(`
     LeftParen,
+    /// `)`
     RightParen,
+    /// `[`
     LeftBracket,
+    /// `]`
     RightBracket,
+    /// `+`
     Plus,
+    /// `+` (unary)
     UnaryPlus,
+    /// `-`
     Minus,
+    /// `-` (unary)
     UnaryMinus,
+    /// `*`
     Multiply,
+    /// `/`
     Divide,
+    /// `%`
     Modulo,
+    /// `~`
     PowerOf,
+    /// `<<`
     LeftShift,
+    /// `>>`
     RightShift,
+    /// `;`
     SemiColon,
+    /// `:`
     Colon,
+    /// `::`
     DoubleColon,
+    /// `,`
     Comma,
+    /// `.`
     Period,
+    /// `#{`
     MapStart,
+    /// `=`
     Equals,
+    /// `true`
     True,
+    /// `false`
     False,
+    /// `let`
     Let,
+    /// `const`
     Const,
+    /// `if`
     If,
+    /// `else`
     Else,
+    /// `while`
     While,
+    /// `loop`
     Loop,
+    /// `for`
     For,
+    /// `in`
     In,
+    /// `<`
     LessThan,
+    /// `>`
     GreaterThan,
+    /// `<=`
     LessThanEqualsTo,
+    /// `>=`
     GreaterThanEqualsTo,
+    /// `==`
     EqualsTo,
+    /// `!=`
     NotEqualsTo,
+    /// `!`
     Bang,
+    /// `|`
     Pipe,
+    /// `||`
     Or,
+    /// `^`
     XOr,
+    /// `&`
     Ampersand,
+    /// `&&`
     And,
+    /// `fn`
+    ///
+    /// Never appears under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     Fn,
+    /// `continue`
     Continue,
+    /// `break`
     Break,
+    /// `return`
     Return,
+    /// `throw`
     Throw,
+    /// `+=`
     PlusAssign,
+    /// `-=`
     MinusAssign,
+    /// `*=`
     MultiplyAssign,
+    /// `/=`
     DivideAssign,
+    /// `<<=`
     LeftShiftAssign,
+    /// `>>=`
     RightShiftAssign,
+    /// `&=`
     AndAssign,
+    /// `|=`
     OrAssign,
+    /// `^=`
     XOrAssign,
+    /// `%=`
     ModuloAssign,
+    /// `~=`
     PowerOfAssign,
+    /// `private`
+    ///
+    /// Never appears under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     Private,
+    /// `import`
+    ///
+    /// Never appears under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     Import,
+    /// `export`
+    ///
+    /// Never appears under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     Export,
+    /// `as`
+    ///
+    /// Never appears under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     As,
+    /// A lexer error.
     LexError(Box<LexError>),
+    /// A comment block.
     Comment(String),
+    /// A reserved symbol.
     Reserved(String),
+    /// A custom keyword.
     Custom(String),
+    /// End of the input stream.
     EOF,
 }
 
@@ -566,7 +658,7 @@ impl Token {
         }
     }
 
-    /// Is this token a reserved keyword?
+    /// Is this token a reserved symbol?
     pub fn is_reserved(&self) -> bool {
         match self {
             Self::Reserved(_) => true,
@@ -589,7 +681,12 @@ impl From<Token> for String {
     }
 }
 
-/// State of the tokenizer.
+/// [INTERNALS] State of the tokenizer.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string (0 = unlimited).
@@ -604,7 +701,12 @@ pub struct TokenizeState {
     pub include_comments: bool,
 }
 
-/// Trait that encapsulates a peekable character input stream.
+/// [INTERNALS] Trait that encapsulates a peekable character input stream.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This trait is volatile and may change.
 pub trait InputStream {
     /// Get the next character
     fn get_next(&mut self) -> Option<char>;
@@ -628,7 +730,12 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
-/// Parse a string literal wrapped by `enclosing_char`.
+/// [INTERNALS] Parse a string literal wrapped by `enclosing_char`.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -794,7 +901,12 @@ fn scan_comment(
     }
 }
 
-/// Get the next token.
+/// [INTERNALS] Get the next token from the `InputStream`.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 pub fn get_next_token(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -808,6 +920,32 @@ pub fn get_next_token(
     }
 
     result
+}
+
+/// Test if the given character is a hex character.
+fn is_hex_char(c: char) -> bool {
+    match c {
+        'a'..='f' => true,
+        'A'..='F' => true,
+        '0'..='9' => true,
+        _ => false,
+    }
+}
+
+/// Test if the given character is an octal character.
+fn is_octal_char(c: char) -> bool {
+    match c {
+        '0'..='7' => true,
+        _ => false,
+    }
+}
+
+/// Test if the given character is a binary character.
+fn is_binary_char(c: char) -> bool {
+    match c {
+        '0' | '1' => true,
+        _ => false,
+    }
 }
 
 /// Get the next token.
@@ -872,18 +1010,9 @@ fn get_next_token_inner(
                             eat_next(stream, pos);
 
                             let valid = match ch {
-                                'x' | 'X' => [
-                                    'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C', 'D', 'E', 'F',
-                                    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_',
-                                ],
-                                'o' | 'O' => [
-                                    '0', '1', '2', '3', '4', '5', '6', '7', '_', '_', '_', '_',
-                                    '_', '_', '_', '_', '_', '_', '_', '_', '_', '_', '_',
-                                ],
-                                'b' | 'B' => [
-                                    '0', '1', '_', '_', '_', '_', '_', '_', '_', '_', '_', '_',
-                                    '_', '_', '_', '_', '_', '_', '_', '_', '_', '_', '_',
-                                ],
+                                'x' | 'X' => is_hex_char,
+                                'o' | 'O' => is_octal_char,
+                                'b' | 'B' => is_binary_char,
                                 _ => unreachable!(),
                             };
 
@@ -895,7 +1024,7 @@ fn get_next_token_inner(
                             });
 
                             while let Some(next_char_in_escape_seq) = stream.peek_next() {
-                                if !valid.contains(&next_char_in_escape_seq) {
+                                if !valid(next_char_in_escape_seq) {
                                     break;
                                 }
 

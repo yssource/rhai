@@ -342,11 +342,16 @@ impl fmt::Display for FnAccess {
     }
 }
 
-/// A scripted function definition.
+/// [INTERNALS] A type containing information on a scripted function.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub struct ScriptFnDef {
     /// Function name.
-    pub name: String,
+    pub name: ImmutableString,
     /// Function access mode.
     pub access: FnAccess,
     /// Names of function parameters.
@@ -376,7 +381,12 @@ impl fmt::Display for ScriptFnDef {
     }
 }
 
-/// `return`/`throw` statement.
+/// [INTERNALS] A type encapsulating the mode of a `return`/`throw` statement.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 pub enum ReturnType {
     /// `return` statement.
@@ -477,7 +487,8 @@ impl ParseSettings {
     }
 }
 
-/// A statement.
+/// [INTERNALS] A Rhai statement.
+/// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),
 /// with everything being allocated together in one single tuple.
@@ -582,6 +593,12 @@ impl Stmt {
     }
 }
 
+/// [INTERNALS] A type wrapping a custom syntax definition.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Clone)]
 pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
 
@@ -592,11 +609,20 @@ impl fmt::Debug for CustomExpr {
 }
 
 impl Hash for CustomExpr {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
 
+/// [INTERNALS] A type wrapping a floating-point number.
+/// Exported under the `internals` feature only.
+///
+/// This type is mainly used to provide a standard `Hash` implementation
+/// to floating-point numbers, allowing `Expr` to derive `Hash` automatically.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[cfg(not(feature = "no_float"))]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct FloatWrapper(pub FLOAT, pub Position);
@@ -609,10 +635,15 @@ impl Hash for FloatWrapper {
     }
 }
 
-/// An expression.
+/// [INTERNALS] An expression sub-tree.
+/// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),
 /// with everything being allocated together in one single tuple.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub enum Expr {
     /// Integer constant.
@@ -2852,7 +2883,7 @@ fn parse_fn(
     let params = params.into_iter().map(|(p, _)| p).collect();
 
     Ok(ScriptFnDef {
-        name,
+        name: name.into(),
         access,
         params,
         body,
@@ -2940,7 +2971,7 @@ fn parse_anon_fn(
     let hash = s.finish();
 
     // Create unique function name
-    let fn_name = format!("{}{}", FN_ANONYMOUS, hash);
+    let fn_name: ImmutableString = format!("{}{:16x}", FN_ANONYMOUS, hash).into();
 
     let script = ScriptFnDef {
         name: fn_name.clone(),
@@ -2950,7 +2981,7 @@ fn parse_anon_fn(
         pos: settings.pos,
     };
 
-    let expr = Expr::FnPointer(Box::new((fn_name.into(), settings.pos)));
+    let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
     Ok((expr, script))
 }

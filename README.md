@@ -64,3 +64,17 @@ Playground
 
 An [Online Playground](https://alvinhochun.github.io/rhai-demo/) is available with syntax-highlighting editor.
 Scripts can be evaluated directly from the editor.
+
+License
+-------
+
+Licensed under either:
+
+* [Apache License, Version 2.0](https://github.com/jonathandturner/rhai/blob/master/LICENSE-APACHE.txt), or
+* [MIT license](https://github.com/jonathandturner/rhai/blob/master/LICENSE-MIT.txt)
+
+at your option.
+
+Unless explicitly stated otherwise, any contribution intentionally submitted
+for inclusion in this crate, as defined in the Apache-2.0 license, shall
+be dual-licensed as above, without any additional terms or conditions.

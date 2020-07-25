@@ -18,6 +18,7 @@ New features
 * Anonymous functions in the syntax of a closure, e.g. `|x, y, z| x + y - z`.
 * Custom syntax now works even without the `internals` feature.
 * Currying of function pointers is supported via the `curry` keyword.
+* `Module::set_indexer_get_set_fn` is added as a shorthand of both `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn`.
 
 Breaking changes
 ----------------

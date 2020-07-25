@@ -456,7 +456,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // "xxx" in "xxxxx"
             (Expr::StringConstant(a), Expr::StringConstant(b)) => {
                 state.set_dirty();
-                if b.0.contains(a.0.as_ref()) { Expr::True(a.1) } else { Expr::False(a.1) }
+                if b.0.contains(a.0.as_str()) { Expr::True(a.1) } else { Expr::False(a.1) }
             }
             // 'x' in "xxxxx"
             (Expr::CharConstant(a), Expr::StringConstant(b)) => {
@@ -560,7 +560,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             let has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
-                &fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
+                fn_def.name.as_str() == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
             }).is_some();
 
             #[cfg(feature = "no_function")]

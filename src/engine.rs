@@ -11,7 +11,7 @@ use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, St
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::{CustomSyntax, EvalContext, Expression};
+use crate::syntax::{CustomSyntax, EvalContext};
 use crate::token::Position;
 use crate::utils::StaticVec;
 
@@ -38,7 +38,12 @@ pub type Array = Vec<Dynamic>;
 #[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<ImmutableString, Dynamic>;
 
-/// A stack of imported modules.
+/// [INTERNALS] A stack of imported modules.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 pub type Imports<'a> = Vec<(Cow<'a, str>, Module)>;
 
 #[cfg(not(feature = "unchecked"))]
@@ -189,12 +194,17 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// A type that holds all the current states of the Engine.
+/// [INTERNALS] A type that holds all the current states of the Engine.
+/// Exported under the `internals` feature only.
 ///
 /// # Safety
 ///
 /// This type uses some unsafe code, mainly for avoiding cloning of local variable names via
 /// direct lifetime casting.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
@@ -1020,7 +1030,7 @@ impl Engine {
                     map.entry(index).or_insert(Default::default()).into()
                 } else {
                     let index = idx
-                        .downcast_ref::<String>()
+                        .downcast_ref::<ImmutableString>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
                     map.get_mut(index.as_str())
@@ -1050,19 +1060,20 @@ impl Engine {
                 }
             }
 
+            #[cfg(not(feature = "no_object"))]
             #[cfg(not(feature = "no_index"))]
             _ => {
-                let type_name = self.map_type_name(val.type_name());
+                let type_name = val.type_name();
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(
                     state, lib, FN_IDX_GET, true, 0, args, is_ref, true, None, level,
                 )
                 .map(|(v, _)| v.into())
-                .map_err(|_| {
-                    Box::new(EvalAltResult::ErrorIndexingType(
-                        type_name.into(),
-                        Position::none(),
-                    ))
+                .map_err(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(_, _) => Box::new(
+                        EvalAltResult::ErrorIndexingType(type_name.into(), Position::none()),
+                    ),
+                    _ => err,
                 })
             }
 
