@@ -592,7 +592,7 @@ impl fmt::Debug for CustomExpr {
 }
 
 impl Hash for CustomExpr {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
