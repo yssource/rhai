@@ -150,6 +150,21 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
+    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Box<EvalAltResult>> {
+        #[cfg(not(feature = "only_i32"))]
+        if v > i64::MAX as i128 {
+            return Ok(Dynamic::from(v));
+        } else {
+            return self.serialize_i64(v as i64);
+        }
+        #[cfg(feature = "only_i32")]
+        if v > i32::MAX as i128 {
+            return Ok(Dynamic::from(v));
+        } else {
+            return self.serialize_i32(v as i32);
+        }
+    }
+
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "only_i32"))]
         return self.serialize_i64(i64::from(v));
@@ -184,6 +199,21 @@ impl Serializer for &mut DynamicSerializer {
         }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as u64 {
+            return Ok(Dynamic::from(v));
+        } else {
+            return self.serialize_i32(v as i32);
+        }
+    }
+
+    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Box<EvalAltResult>> {
+        #[cfg(not(feature = "only_i32"))]
+        if v > i64::MAX as u128 {
+            return Ok(Dynamic::from(v));
+        } else {
+            return self.serialize_i64(v as i64);
+        }
+        #[cfg(feature = "only_i32")]
+        if v > i32::MAX as u128 {
             return Ok(Dynamic::from(v));
         } else {
             return self.serialize_i32(v as i32);
