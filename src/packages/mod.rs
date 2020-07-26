@@ -24,7 +24,6 @@ pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
 pub use eval::EvalPackage;
-#[cfg(not(feature = "no_function"))]
 pub use fn_basic::BasicFnPackage;
 pub use iter_basic::BasicIteratorPackage;
 pub use logic::LogicPackage;

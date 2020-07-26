@@ -5,10 +5,14 @@ use crate::def_package;
 use crate::engine::{Array, Engine};
 use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
-use crate::result::EvalAltResult;
-use crate::token::Position;
 
-use crate::stdlib::{any::TypeId, boxed::Box, string::ToString};
+#[cfg(not(feature = "unchecked"))]
+use crate::{result::EvalAltResult, token::Position};
+
+use crate::stdlib::{any::TypeId, boxed::Box};
+
+#[cfg(not(feature = "unchecked"))]
+use crate::stdlib::string::ToString;
 
 // Register array utility functions
 fn push<T: Variant + Clone>(list: &mut Array, item: T) -> FuncReturn<()> {
@@ -26,7 +30,7 @@ fn ins<T: Variant + Clone>(list: &mut Array, position: INT, item: T) -> FuncRetu
     Ok(())
 }
 fn pad<T: Variant + Clone>(
-    engine: &Engine,
+    _engine: &Engine,
     _: &Module,
     args: &mut [&mut Dynamic],
 ) -> FuncReturn<()> {
@@ -34,10 +38,13 @@ fn pad<T: Variant + Clone>(
 
     // Check if array will be over max size limit
     #[cfg(not(feature = "unchecked"))]
-    if engine.max_array_size > 0 && len > 0 && (len as usize) > engine.max_array_size {
+    if _engine.limits.max_array_size > 0
+        && len > 0
+        && (len as usize) > _engine.limits.max_array_size
+    {
         return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
             "Size of array".to_string(),
-            engine.max_array_size,
+            _engine.limits.max_array_size,
             len as usize,
             Position::none(),
         )));

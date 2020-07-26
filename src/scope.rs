@@ -377,6 +377,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Update the access type of an entry in the Scope.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn set_entry_alias(&mut self, index: usize, alias: String) -> &mut Self {
         let entry = self.0.get_mut(index).expect("invalid index in Scope");
         entry.alias = Some(Box::new(alias));
@@ -384,6 +385,7 @@ impl<'a> Scope<'a> {
     }
 
     /// Get an iterator to entries in the Scope.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn into_iter(self) -> impl Iterator<Item = Entry<'a>> {
         self.0.into_iter()
     }

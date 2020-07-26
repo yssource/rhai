@@ -2,22 +2,29 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine, Imports, FN_IDX_GET, FN_IDX_SET};
-use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync, Shared};
-use crate::parser::{
-    FnAccess,
-    FnAccess::{Private, Public},
-    ScriptFnDef, AST,
-};
+use crate::engine::{make_getter, make_setter, Engine};
+use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync};
+use crate::parser::{FnAccess, FnAccess::Public};
 use crate::result::EvalAltResult;
-use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::token::{Position, Token};
 use crate::utils::{StaticVec, StraightHasherBuilder};
+
+#[cfg(not(feature = "no_function"))]
+use crate::{fn_native::Shared, parser::ScriptFnDef};
+
+#[cfg(not(feature = "no_module"))]
+use crate::{
+    engine::Imports,
+    parser::AST,
+    scope::{Entry as ScopeEntry, Scope},
+};
+
+#[cfg(not(feature = "no_index"))]
+use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    cell::RefCell,
     collections::HashMap,
     fmt, format,
     iter::empty,
@@ -25,10 +32,14 @@ use crate::stdlib::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     string::{String, ToString},
-    vec,
     vec::Vec,
 };
 
+#[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::cell::RefCell;
+
+#[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_std"))]
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::RwLock;
@@ -738,6 +749,8 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash));
     /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B, C) -> FuncReturn<()> + SendSync + 'static,
@@ -781,6 +794,8 @@ impl Module {
     /// assert!(module.contains_fn(hash_get));
     /// assert!(module.contains_fn(hash_set));
     /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
     pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         getter: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
@@ -909,11 +924,11 @@ impl Module {
         self.merge_filtered(other, |_, _, _| true)
     }
 
-    /// Merge another module into this module, with only selected functions based on a filter predicate.
+    /// Merge another module into this module, with only selected script-defined functions based on a filter predicate.
     pub(crate) fn merge_filtered(
         &mut self,
         other: &Self,
-        filter: impl Fn(FnAccess, &str, usize) -> bool,
+        _filter: impl Fn(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         self.variables
             .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -924,7 +939,7 @@ impl Module {
                 .iter()
                 .filter(|(_, (_, _, _, v))| match v {
                     #[cfg(not(feature = "no_function"))]
-                    Func::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
+                    Func::Script(ref f) => _filter(f.access, f.name.as_str(), f.params.len()),
                     _ => true,
                 })
                 .map(|(&k, v)| (k, v.clone())),
@@ -975,6 +990,7 @@ impl Module {
     }
 
     /// Get an iterator to the functions in the module.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn iter_fn(
         &self,
     ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, Func)> {
@@ -1038,6 +1054,7 @@ impl Module {
 
     /// Scan through all the sub-modules in the module build an index of all
     /// variables and external Rust functions via hashing.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn index_all_sub_modules(&mut self) {
         // Collect a particular module.
         fn index_module<'a>(
@@ -1063,8 +1080,8 @@ impl Module {
             for (name, access, params, func) in module.functions.values() {
                 match access {
                     // Private functions are not exported
-                    Private => continue,
-                    Public => (),
+                    FnAccess::Private => continue,
+                    FnAccess::Public => (),
                 }
 
                 #[cfg(not(feature = "no_function"))]
@@ -1100,10 +1117,13 @@ impl Module {
             return;
         }
 
-        let mut variables = Vec::new();
-        let mut functions = Vec::new();
+        let mut qualifiers: Vec<_> = Default::default();
+        let mut variables: Vec<_> = Default::default();
+        let mut functions: Vec<_> = Default::default();
 
-        index_module(self, &mut vec!["root"], &mut variables, &mut functions);
+        qualifiers.push("root");
+
+        index_module(self, &mut qualifiers, &mut variables, &mut functions);
 
         self.all_variables = variables.into_iter().collect();
         self.all_functions = functions.into_iter().collect();

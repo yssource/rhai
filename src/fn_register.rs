@@ -219,12 +219,11 @@ macro_rules! make_func {
 		Box::new(move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             // The arguments are assumed to be of the correct number and types!
 
-			#[allow(unused_variables, unused_mut)]
-			let mut drain = args.iter_mut();
+			let mut _drain = args.iter_mut();
 			$(
 			// Downcast every element, panic in case of a type mismatch (which shouldn't happen).
 			// Call the user-supplied function using ($convert) to access it either by value or by reference.
-			let $par = ($convert)(drain.next().unwrap());
+			let $par = ($convert)(_drain.next().unwrap());
 			)*
 
             // Call the function with each parameter value

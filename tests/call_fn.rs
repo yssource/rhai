@@ -166,9 +166,9 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
     module.set_raw_fn(
         "call_with_arg",
         &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
-        |engine: &Engine, module: &Module, args: &mut [&mut Dynamic]| {
+        |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
             let fn_ptr = std::mem::take(args[0]).cast::<FnPtr>();
-            fn_ptr.call_dynamic(engine, module, None, [std::mem::take(args[1])])
+            fn_ptr.call_dynamic(engine, lib, None, [std::mem::take(args[1])])
         },
     );
 
