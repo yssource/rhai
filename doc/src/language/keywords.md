@@ -5,18 +5,21 @@ Keywords
 
 The following are reserved keywords in Rhai:
 
-| Keywords                                          | Usage                 | Not available under feature |
-| ------------------------------------------------- | --------------------- | :-------------------------: |
-| `true`, `false`                                   | Boolean constants     |                             |
-| `let`, `const`                                    | Variable declarations |                             |
-| `if`, `else`                                      | Control flow          |                             |
-| `while`, `loop`, `for`, `in`, `continue`, `break` | Looping               |                             |
-| `fn`, `private`                                   | Functions             |       [`no_function`]       |
-| `return`                                          | Return values         |                             |
-| `throw`                                           | throw exceptions      |                             |
-| `import`, `export`, `as`                          | Modules               |        [`no_module`]        |
-| `Fn`, `call`                                      | Function pointers     |                             |
-| `type_of`, `print`, `debug`, `eval`               | Special functions     |                             |
+| Active keywords                                   | Reserved keywords                        | Usage                 | Inactive under feature |
+| ------------------------------------------------- | ---------------------------------------- | --------------------- | :--------------------: |
+| `true`, `false`                                   |                                          | Boolean constants     |                        |
+| `let`, `const`                                    | `var`, `static`                          | Variable declarations |                        |
+| `if`, `else`                                      | `then`, `goto`                           | Control flow          |                        |
+|                                                   | `switch`, `match`, `case`                | Matching              |                        |
+| `while`, `loop`, `for`, `in`, `continue`, `break` | `do`, `each`                             | Looping               |                        |
+| `fn`, `private`                                   | `public`, `new`                          | Functions             |    [`no_function`]     |
+| `return`                                          |                                          | Return values         |                        |
+| `throw`                                           | `try`, `catch`                           | Throw exceptions      |                        |
+| `import`, `export`, `as`                          | `use`, `with`, `module`, `package`       | Modules/packages      |     [`no_module`]      |
+| `Fn`, `call`, `curry`                             |                                          | Function pointers     |                        |
+|                                                   | `spawn`, `go`, `async`, `await`, `yield` | Threading/async       |                        |
+| `type_of`, `print`, `debug`, `eval`               |                                          | Special functions     |                        |
+|                                                   | `default`, `void`, `null`, `nil`         | Special values        |                        |
 
-Keywords cannot be the name of a [function] or [variable], unless the relevant feature is enabled.
-For example, `fn` is a valid variable name under [`no_function`].
+Keywords cannot become the name of a [function] or [variable], even when they are disabled.
+
