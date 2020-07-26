@@ -20,8 +20,11 @@ use crate::stdlib::{
     boxed::Box,
     fmt::Display,
     format,
-    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub},
+    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub},
 };
+
+#[cfg(feature = "unchecked")]
+use crate::stdlib::ops::{Shl, Shr};
 
 // Checked add
 pub(crate) fn add<T: Display + CheckedAdd>(x: T, y: T) -> FuncReturn<T> {
@@ -171,10 +174,12 @@ pub(crate) fn shr<T: Display + CheckedShr>(x: T, y: INT) -> FuncReturn<T> {
     })
 }
 // Unchecked left-shift - may panic if shifting by a negative number of bits
+#[cfg(feature = "unchecked")]
 pub(crate) fn shl_u<T: Shl<T>>(x: T, y: T) -> FuncReturn<<T as Shl<T>>::Output> {
     Ok(x.shl(y))
 }
 // Unchecked right-shift - may panic if shifting by a negative number of bits
+#[cfg(feature = "unchecked")]
 pub(crate) fn shr_u<T: Shr<T>>(x: T, y: T) -> FuncReturn<<T as Shr<T>>::Output> {
     Ok(x.shr(y))
 }
@@ -229,6 +234,7 @@ pub(crate) fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
     }
 }
 // Unchecked integer power - may panic on overflow or if the power index is too high (> u32::MAX)
+#[cfg(feature = "unchecked")]
 pub(crate) fn pow_i_i_u(x: INT, y: INT) -> FuncReturn<INT> {
     Ok(x.pow(y as u32))
 }

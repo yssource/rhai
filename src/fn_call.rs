@@ -864,10 +864,22 @@ impl Engine {
                 EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
                     Ok(def_val.unwrap().into())
                 }
-                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                EvalAltResult::ErrorFunctionNotFound(_, pos) => {
                     Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                        format!("{}{}", modules, name),
-                        Position::none(),
+                        format!(
+                            "{}{} ({})",
+                            modules,
+                            name,
+                            args.iter()
+                                .map(|a| if a.is::<ImmutableString>() {
+                                    "&str | ImmutableString | String"
+                                } else {
+                                    self.map_type_name((*a).type_name())
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                        pos,
                     )))
                 }
                 _ => Err(err),
