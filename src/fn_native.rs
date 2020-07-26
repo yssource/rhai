@@ -3,6 +3,7 @@
 use crate::any::Dynamic;
 use crate::engine::Engine;
 use crate::module::Module;
+use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
