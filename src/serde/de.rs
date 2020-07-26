@@ -8,17 +8,20 @@ use crate::token::Position;
 use crate::utils::ImmutableString;
 
 use serde::de::{
-    DeserializeSeed, Deserializer, EnumAccess, Error, IntoDeserializer, MapAccess, SeqAccess,
-    VariantAccess, Visitor,
+    DeserializeSeed, Deserializer, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor,
 };
 use serde::Deserialize;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
+
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
 
-use crate::stdlib::{any::type_name, fmt};
+#[cfg(not(feature = "no_object"))]
+use serde::de::{EnumAccess, VariantAccess};
+
+use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
@@ -46,8 +49,12 @@ impl<'de> DynamicDeserializer<'de> {
     }
     /// Shortcut for a type conversion error.
     fn type_error<T>(&self) -> Result<T, Box<EvalAltResult>> {
+        self.type_error_str(type_name::<T>())
+    }
+    /// Shortcut for a type conversion error.
+    fn type_error_str<T>(&self, error: &str) -> Result<T, Box<EvalAltResult>> {
         Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
-            type_name::<T>().into(),
+            error.into(),
             self.value.type_name().into(),
             Position::none(),
         )))
@@ -283,23 +290,23 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_f32<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
             .downcast_ref::<f32>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_f32(x));
+            .map_or_else(|| self.type_error(), |&x| _visitor.visit_f32(x));
 
         #[cfg(feature = "no_float")]
         return self.type_error_str("f32");
     }
 
-    fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_f64<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
             .downcast_ref::<f64>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_f64(x));
+            .map_or_else(|| self.type_error(), |&x| _visitor.visit_f64(x));
 
         #[cfg(feature = "no_float")]
         return self.type_error_str("f64");
@@ -359,11 +366,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_seq<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         return self.value.downcast_ref::<Array>().map_or_else(
             || self.type_error(),
-            |arr| visitor.visit_seq(IterateArray::new(arr.iter())),
+            |arr| _visitor.visit_seq(IterateArray::new(arr.iter())),
         );
 
         #[cfg(feature = "no_index")]
@@ -387,11 +394,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self.deserialize_seq(visitor)
     }
 
-    fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_map<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         return self.value.downcast_ref::<Map>().map_or_else(
             || self.type_error(),
-            |map| visitor.visit_map(IterateMap::new(map.keys(), map.values())),
+            |map| _visitor.visit_map(IterateMap::new(map.keys(), map.values())),
         );
 
         #[cfg(feature = "no_object")]
@@ -461,6 +468,7 @@ where
     iter: ITER,
 }
 
+#[cfg(not(feature = "no_index"))]
 impl<'a, ITER> IterateArray<'a, ITER>
 where
     ITER: Iterator<Item = &'a Dynamic>,
@@ -502,6 +510,7 @@ where
     values: VALUES,
 }
 
+#[cfg(not(feature = "no_object"))]
 impl<'a, KEYS, VALUES> IterateMap<'a, KEYS, VALUES>
 where
     KEYS: Iterator<Item = &'a ImmutableString>,

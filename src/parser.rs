@@ -2,10 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{
-    make_getter, make_setter, Engine, FN_ANONYMOUS, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR,
-    MARKER_IDENT,
-};
+use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::Shared;
 use crate::module::{Module, ModuleRef};
@@ -14,6 +11,12 @@ use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
+
+#[cfg(not(feature = "no_function"))]
+use crate::engine::FN_ANONYMOUS;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::{make_getter, make_setter};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -32,9 +35,11 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(feature = "no_function"))]
 use crate::stdlib::collections::hash_map::DefaultHasher;
 
 #[cfg(feature = "no_std")]
+#[cfg(not(feature = "no_function"))]
 use ahash::AHasher;
 
 /// The system integer type.
@@ -84,7 +89,7 @@ impl AST {
         &self.0
     }
 
-    /// Get the statements.
+    /// [INTERNALS] Get the statements.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
     pub fn statements(&self) -> &[Stmt] {
@@ -102,7 +107,7 @@ impl AST {
         &self.1
     }
 
-    /// Get the internal `Module` containing all script-defined functions.
+    /// [INTERNALS] Get the internal `Module` containing all script-defined functions.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
     pub fn lib(&self) -> &Module {
@@ -404,20 +409,28 @@ struct ParseState<'e> {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
+    #[cfg(not(feature = "unchecked"))]
     max_expr_depth: usize,
     /// Maximum levels of expression nesting in functions.
+    #[cfg(not(feature = "unchecked"))]
     max_function_expr_depth: usize,
 }
 
 impl<'e> ParseState<'e> {
     /// Create a new `ParseState`.
-    pub fn new(engine: &'e Engine, max_expr_depth: usize, max_function_expr_depth: usize) -> Self {
+    pub fn new(
+        engine: &'e Engine,
+        #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
+        #[cfg(not(feature = "unchecked"))] max_function_expr_depth: usize,
+    ) -> Self {
         Self {
             engine,
-            max_expr_depth,
-            max_function_expr_depth,
             stack: Default::default(),
             modules: Default::default(),
+            #[cfg(not(feature = "unchecked"))]
+            max_expr_depth,
+            #[cfg(not(feature = "unchecked"))]
+            max_function_expr_depth,
         }
     }
     /// Find a variable by name in the `ParseState`, searching in reverse.
@@ -476,6 +489,7 @@ impl ParseSettings {
         }
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
+    #[cfg(not(feature = "unchecked"))]
     pub fn ensure_level_within_max_limit(&self, limit: usize) -> Result<(), ParseError> {
         if limit == 0 {
             Ok(())
@@ -519,8 +533,10 @@ pub enum Stmt {
     /// return/throw
     ReturnWithVal(Box<((ReturnType, Position), Option<Expr>)>),
     /// import expr as module
+    #[cfg(not(feature = "no_module"))]
     Import(Box<(Expr, (String, Position))>),
     /// expr id as name, ...
+    #[cfg(not(feature = "no_module"))]
     Export(Box<StaticVec<((String, Position), Option<(String, Position)>)>>),
 }
 
@@ -544,7 +560,10 @@ impl Stmt {
             Stmt::While(x) => x.1.position(),
             Stmt::Loop(x) => x.position(),
             Stmt::For(x) => x.2.position(),
+
+            #[cfg(not(feature = "no_module"))]
             Stmt::Import(x) => (x.1).1,
+            #[cfg(not(feature = "no_module"))]
             Stmt::Export(x) => (x.get(0).0).1,
         }
     }
@@ -563,12 +582,13 @@ impl Stmt {
 
             Stmt::Let(_)
             | Stmt::Const(_)
-            | Stmt::Import(_)
-            | Stmt::Export(_)
             | Stmt::Expr(_)
             | Stmt::Continue(_)
             | Stmt::Break(_)
             | Stmt::ReturnWithVal(_) => false,
+
+            #[cfg(not(feature = "no_module"))]
+            Stmt::Import(_) | Stmt::Export(_) => false,
         }
     }
 
@@ -587,7 +607,10 @@ impl Stmt {
             Stmt::Let(_) | Stmt::Const(_) => false,
             Stmt::Block(x) => x.0.iter().all(Stmt::is_pure),
             Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_) => false,
+
+            #[cfg(not(feature = "no_module"))]
             Stmt::Import(_) => false,
+            #[cfg(not(feature = "no_module"))]
             Stmt::Export(_) => false,
         }
     }
@@ -950,6 +973,7 @@ impl Expr {
     }
 
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
+    #[cfg(not(feature = "no_object"))]
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
@@ -996,6 +1020,7 @@ fn parse_paren_expr(
     lib: &mut FunctionsLib,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     if match_token(input, Token::RightParen)? {
@@ -1028,6 +1053,8 @@ fn parse_call_expr(
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut args = StaticVec::new();
@@ -1141,6 +1168,7 @@ fn parse_call_expr(
 
 /// Parse an indexing chain.
 /// Indexing binds to the right, so this call parses all possible levels of indexing following in the input.
+#[cfg(not(feature = "no_index"))]
 fn parse_index_chain(
     input: &mut TokenStream,
     state: &mut ParseState,
@@ -1148,6 +1176,7 @@ fn parse_index_chain(
     lhs: Expr,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let idx_expr = parse_expr(input, state, lib, settings.level_up())?;
@@ -1321,21 +1350,25 @@ fn parse_index_chain(
 }
 
 /// Parse an array literal.
+#[cfg(not(feature = "no_index"))]
 fn parse_array_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut arr = StaticVec::new();
 
     while !input.peek().unwrap().0.is_eof() {
-        if state.engine.max_array_size > 0 && arr.len() >= state.engine.max_array_size {
+        #[cfg(not(feature = "unchecked"))]
+        if state.engine.limits.max_array_size > 0 && arr.len() >= state.engine.limits.max_array_size
+        {
             return Err(PERR::LiteralTooLarge(
                 "Size of array literal".to_string(),
-                state.engine.max_array_size,
+                state.engine.limits.max_array_size,
             )
             .into_err(input.peek().unwrap().1));
         }
@@ -1378,12 +1411,14 @@ fn parse_array_literal(
 }
 
 /// Parse a map literal.
+#[cfg(not(feature = "no_object"))]
 fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut map = StaticVec::new();
@@ -1436,10 +1471,11 @@ fn parse_map_literal(
             }
         };
 
-        if state.engine.max_map_size > 0 && map.len() >= state.engine.max_map_size {
+        #[cfg(not(feature = "unchecked"))]
+        if state.engine.limits.max_map_size > 0 && map.len() >= state.engine.limits.max_map_size {
             return Err(PERR::LiteralTooLarge(
                 "Number of properties in object map literal".to_string(),
-                state.engine.max_map_size,
+                state.engine.limits.max_map_size,
             )
             .into_err(input.peek().unwrap().1));
         }
@@ -1492,6 +1528,8 @@ fn parse_primary(
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
     settings.pos = *token_pos;
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let (token, _) = match token {
@@ -1626,6 +1664,8 @@ fn parse_unary(
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
     settings.pos = *token_pos;
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
@@ -1708,7 +1748,9 @@ fn parse_unary(
         Token::Pipe | Token::Or => {
             let mut state = ParseState::new(
                 state.engine,
+                #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
+                #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
             );
 
@@ -1809,6 +1851,8 @@ fn parse_op_assignment_stmt(
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
     settings.pos = *token_pos;
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let op = match token {
@@ -1835,6 +1879,7 @@ fn parse_op_assignment_stmt(
 }
 
 /// Make a dot expression.
+#[cfg(not(feature = "no_object"))]
 fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
         // idx_lhs[idx_expr].rhs
@@ -2048,6 +2093,8 @@ fn parse_binary_op(
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     settings.pos = lhs.position();
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut root = lhs;
@@ -2081,6 +2128,8 @@ fn parse_binary_op(
 
         settings = settings.level_up();
         settings.pos = pos;
+
+        #[cfg(not(feature = "unchecked"))]
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
         let cmp_def = Some(false);
@@ -2164,6 +2213,8 @@ fn parse_expr(
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     settings.pos = input.peek().unwrap().1;
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // Check if it is a custom syntax.
@@ -2291,6 +2342,8 @@ fn parse_if(
 ) -> Result<Stmt, ParseError> {
     // if ...
     settings.pos = eat_token(input, Token::If);
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // if guard { if_body }
@@ -2324,6 +2377,8 @@ fn parse_while(
 ) -> Result<Stmt, ParseError> {
     // while ...
     settings.pos = eat_token(input, Token::While);
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // while guard { body }
@@ -2346,6 +2401,8 @@ fn parse_loop(
 ) -> Result<Stmt, ParseError> {
     // loop ...
     settings.pos = eat_token(input, Token::Loop);
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // loop { body }
@@ -2364,6 +2421,8 @@ fn parse_for(
 ) -> Result<Stmt, ParseError> {
     // for ...
     settings.pos = eat_token(input, Token::For);
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // for name ...
@@ -2417,6 +2476,8 @@ fn parse_let(
 ) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
     settings.pos = input.next().unwrap().1;
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // let name ...
@@ -2475,6 +2536,8 @@ fn parse_import(
 ) -> Result<Stmt, ParseError> {
     // import ...
     settings.pos = eat_token(input, Token::Import);
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // import expr ...
@@ -2509,12 +2572,14 @@ fn parse_import(
 #[cfg(not(feature = "no_module"))]
 fn parse_export(
     input: &mut TokenStream,
-    state: &mut ParseState,
+    _state: &mut ParseState,
     _lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     settings.pos = eat_token(input, Token::Export);
-    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    #[cfg(not(feature = "unchecked"))]
+    settings.ensure_level_within_max_limit(_state.max_expr_depth)?;
 
     let mut exports = StaticVec::new();
 
@@ -2594,6 +2659,7 @@ fn parse_block(
         }
     };
 
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = StaticVec::new();
@@ -2657,6 +2723,8 @@ fn parse_expr_stmt(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     settings.pos = input.peek().unwrap().1;
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let expr = parse_expr(input, state, lib, settings.level_up())?;
@@ -2678,6 +2746,8 @@ fn parse_stmt(
         x => x,
     };
     settings.pos = *token_pos;
+
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
@@ -2703,7 +2773,9 @@ fn parse_stmt(
                 (Token::Fn, pos) => {
                     let mut state = ParseState::new(
                         state.engine,
+                        #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
+                        #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
                     );
 
@@ -2807,6 +2879,7 @@ fn parse_fn(
     access: FnAccess,
     mut settings: ParseSettings,
 ) -> Result<ScriptFnDef, ParseError> {
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let name = match input.next().unwrap() {
@@ -2899,6 +2972,7 @@ fn parse_anon_fn(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<(Expr, ScriptFnDef), ParseError> {
+    #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut params = Vec::new();
@@ -2994,7 +3068,15 @@ impl Engine {
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let mut functions = Default::default();
-        let mut state = ParseState::new(self, self.max_expr_depth, self.max_function_expr_depth);
+
+        let mut state = ParseState::new(
+            self,
+            #[cfg(not(feature = "unchecked"))]
+            self.limits.max_expr_depth,
+            #[cfg(not(feature = "unchecked"))]
+            self.limits.max_function_expr_depth,
+        );
+
         let settings = ParseSettings {
             allow_if_expr: false,
             allow_stmt_expr: false,
@@ -3032,7 +3114,14 @@ impl Engine {
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
         let mut statements: Vec<Stmt> = Default::default();
         let mut functions = Default::default();
-        let mut state = ParseState::new(self, self.max_expr_depth, self.max_function_expr_depth);
+
+        let mut state = ParseState::new(
+            self,
+            #[cfg(not(feature = "unchecked"))]
+            self.limits.max_expr_depth,
+            #[cfg(not(feature = "unchecked"))]
+            self.limits.max_function_expr_depth,
+        );
 
         while !input.peek().unwrap().0.is_eof() {
             let settings = ParseSettings {
