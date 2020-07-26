@@ -43,8 +43,9 @@ Reserved Keywords
 | `static`  | Variable declaration  |
 | `do`      | Looping               |
 | `each`    | Looping               |
-| `then`    | Conditional           |
-| `goto`    | Jump                  |
+| `then`    | Control flow          |
+| `goto`    | Control flow          |
+| `exit`    | Control flow          |
 | `switch`  | Matching              |
 | `match`   | Matching              |
 | `case`    | Matching              |

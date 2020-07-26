@@ -19,6 +19,7 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 use crate::{
     engine::{make_getter, make_setter, Map},
     fn_register::RegisterFn,
+    token::Token,
 };
 
 #[cfg(not(feature = "no_function"))]
@@ -590,7 +591,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts, self);
+        let stream = lex(scripts, None, self);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
@@ -715,7 +716,19 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
-        let stream = lex(&scripts, self);
+        let stream = lex(
+            &scripts,
+            if has_null {
+                Some(Box::new(|token| match token {
+                    // If `null` is present, make sure `null` is treated as a variable
+                    Token::Reserved(s) if s == "null" => Token::Identifier(s),
+                    _ => token,
+                }))
+            } else {
+                None
+            },
+            self,
+        );
         let ast =
             self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
@@ -796,7 +809,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts, self);
+        let stream = lex(&scripts, None, self);
         {
             let mut peekable = stream.peekable();
             self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -951,7 +964,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self);
+        let stream = lex(&scripts, None, self);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -1084,7 +1097,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self);
+        let stream = lex(&scripts, None, self);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }

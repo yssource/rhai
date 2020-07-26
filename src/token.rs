@@ -494,10 +494,9 @@ impl Token {
 
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
             | "new" | "use" | "module" | "package" | "var" | "static" | "with" | "do" | "each"
-            | "then" | "goto" | "switch" | "match" | "case" | "try" | "catch" | "default"
-            | "void" | "null" | "nil" | "spawn" | "go" | "async" | "await" | "yield" => {
-                Reserved(syntax.into())
-            }
+            | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try" | "catch"
+            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "async" | "await"
+            | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS => Reserved(syntax.into()),
@@ -670,6 +669,15 @@ impl Token {
         }
     }
 
+    /// Convert a token into a function name, if possible.
+    pub fn into_function_name(self) -> Result<String, Self> {
+        match self {
+            Self::Reserved(s) if is_keyword_function(&s) => Ok(s),
+            Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
+            _ => Err(self),
+        }
+    }
+
     /// Is this token a custom keyword?
     pub fn is_custom(&self) -> bool {
         match self {
@@ -716,6 +724,16 @@ pub trait InputStream {
     fn get_next(&mut self) -> Option<char>;
     /// Peek the next character
     fn peek_next(&mut self) -> Option<char>;
+}
+
+pub fn is_keyword_function(name: &str) -> bool {
+    name == KEYWORD_PRINT
+        || name == KEYWORD_DEBUG
+        || name == KEYWORD_TYPE_OF
+        || name == KEYWORD_EVAL
+        || name == KEYWORD_FN_PTR
+        || name == KEYWORD_FN_PTR_CALL
+        || name == KEYWORD_FN_PTR_CURRY
 }
 
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
@@ -1456,13 +1474,15 @@ pub struct TokenIterator<'a, 'e> {
     pos: Position,
     /// Input character stream.
     stream: MultiInputsStream<'a>,
+    /// A processor function (if any) that maps a token to another.
+    map: Option<Box<dyn Fn(Token) -> Token>>,
 }
 
 impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match (
+        let token = match (
             get_next_token(&mut self.stream, &mut self.state, &mut self.pos),
             self.engine.disabled_symbols.as_ref(),
             self.engine.custom_keywords.as_ref(),
@@ -1544,12 +1564,27 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                 Some((Token::Reserved(token.syntax().into()), pos))
             }
             (r, _, _) => r,
+        };
+
+        match token {
+            None => None,
+            Some((token, pos)) => {
+                if let Some(ref map) = self.map {
+                    Some((map(token), pos))
+                } else {
+                    Some((token, pos))
+                }
+            }
         }
     }
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a, 'e> {
+pub fn lex<'a, 'e>(
+    input: &'a [&'a str],
+    map: Option<Box<dyn Fn(Token) -> Token>>,
+    engine: &'e Engine,
+) -> TokenIterator<'a, 'e> {
     TokenIterator {
         engine,
         state: TokenizeState {
@@ -1567,5 +1602,6 @@ pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a
             streams: input.iter().map(|s| s.chars().peekable()).collect(),
             index: 0,
         },
+        map,
     }
 }
