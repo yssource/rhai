@@ -10,9 +10,12 @@ use crate::token::{is_valid_identifier, Position};
 use crate::utils::{ImmutableString, StaticVec};
 use crate::Scope;
 
-use crate::stdlib::{
-    boxed::Box, convert::TryFrom, fmt, mem, rc::Rc, string::String, sync::Arc, vec::Vec,
-};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, mem, string::String, vec::Vec};
+
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::rc::Rc;
+#[cfg(feature = "sync")]
+use crate::stdlib::sync::Arc;
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]

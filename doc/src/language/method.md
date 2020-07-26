@@ -4,8 +4,8 @@ Call Method as Function
 {{#include ../links.md}}
 
 
-First `&mut` Reference Parameter
--------------------------------
+First `&mut` Parameter
+----------------------
 
 Property [getters/setters] and [methods][custom types] in a Rust custom type registered with the [`Engine`] can be called
 just like a regular function.  In fact, like Rust, property getters/setters and object methods
@@ -37,19 +37,20 @@ array[0].update();  // <- call in method-call style will update 'a'
 ```
 
 
-Encouraged Usage
-----------------
+`&mut` is Efficient
+------------------
 
 Using a `&mut` first parameter is highly encouraged when using types that are expensive to clone,
 even when the intention is not to mutate that argument, because it avoids cloning that argument value.
 
-For primary types that are cheap to clone, including `ImmutableString`, this is not necessary.
+For primary types that are cheap to clone (e.g. those that implement `Copy`),
+including `ImmutableString`, this is not necessary.
 
 
 Avoid `&mut ImmutableString`
 ---------------------------
 
-`ImmutableString`, Rhai internal [string] type, is an exception.
+`ImmutableString`, Rhai's internal [string] type, is an exception.
 
 `ImmutableString` is cheap to clone, but expensive to take a mutable reference (because the underlying
 string must be cloned to make a private copy).

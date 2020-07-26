@@ -14,10 +14,13 @@ use crate::utils::StaticVec;
 use crate::stdlib::{
     boxed::Box,
     fmt, format,
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
 };
+
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::rc::Rc;
+#[cfg(feature = "sync")]
+use crate::stdlib::sync::Arc;
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]

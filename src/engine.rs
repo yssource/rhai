@@ -639,9 +639,7 @@ impl Engine {
                                 )
                                 .or_else(|err| match *err {
                                     // If there is no index setter, no need to set it back because the indexer is read-only
-                                    EvalAltResult::ErrorFunctionNotFound(s, _)
-                                        if s == FN_IDX_SET =>
-                                    {
+                                    EvalAltResult::ErrorFunctionNotFound(_, _) => {
                                         Ok(Default::default())
                                     }
                                     _ => Err(err),

@@ -74,6 +74,7 @@ impl PackagesCollection {
             .flatten()
     }
     /// Does the specified TypeId iterator exist in the `PackagesCollection`?
+    #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.0.iter().any(|p| p.contains_iter(id))
     }

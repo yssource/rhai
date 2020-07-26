@@ -66,8 +66,8 @@ let mut engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-Methods on Custom Type
----------------------
+Methods on The Custom Type
+-------------------------
 
 To use native custom types, methods and functions in Rhai scripts, simply register them
 using one of the `Engine::register_XXX` API.

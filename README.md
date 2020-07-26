@@ -2,7 +2,7 @@ Rhai - Embedded Scripting for Rust
 =================================
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai)
-[![Travis (.org)](https://img.shields.io/travis/jonathandturner/rhai)](http://travis-ci.org/jonathandturner/rhai)
+[![Build Status](https://github.com/jonathandturner/rhai/workflows/Build/badge.svg)](https://github.com/jonathandturner/rhai/actions)
 [![license](https://img.shields.io/github/license/jonathandturner/rhai)](https://github.com/license/jonathandturner/rhai)
 [![crates.io](https://img.shields.io/crates/v/rhai.svg)](https://crates.io/crates/rhai/)
 [![crates.io](https://img.shields.io/crates/d/rhai)](https://crates.io/crates/rhai/)
@@ -73,7 +73,7 @@ Licensed under either:
 * [Apache License, Version 2.0](https://github.com/jonathandturner/rhai/blob/master/LICENSE-APACHE.txt), or
 * [MIT license](https://github.com/jonathandturner/rhai/blob/master/LICENSE-MIT.txt)
 
-at your option.
+at your choice.
 
 Unless explicitly stated otherwise, any contribution intentionally submitted
 for inclusion in this crate, as defined in the Apache-2.0 license, shall
