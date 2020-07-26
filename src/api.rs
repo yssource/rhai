@@ -19,6 +19,7 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 use crate::{
     engine::{make_getter, make_setter, Map},
     fn_register::RegisterFn,
+    token::Token,
 };
 
 #[cfg(not(feature = "no_function"))]
@@ -59,147 +60,6 @@ impl Engine {
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
     ) -> &mut Self {
         self.global_module.set_raw_fn(name, arg_types, func);
-        self
-    }
-
-    /// Register a function of no parameters with the `Engine`.
-    ///
-    /// ## WARNING - Low Level API
-    ///
-    /// This function is very low level.
-    #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_0<T: Variant + Clone>(
-        &mut self,
-        name: &str,
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) -> &mut Self {
-        self.global_module.set_raw_fn(name, &[], func);
-        self
-    }
-
-    /// Register a function of one parameter with the `Engine`.
-    ///
-    /// ## WARNING - Low Level API
-    ///
-    /// This function is very low level.
-    ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
-    /// which is guaranteed to contain enough arguments of the correct types.
-    ///
-    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
-    ///
-    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
-    /// Notice that this will _consume_ the argument, replacing it with `()`.
-    ///
-    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
-    #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_1<A: Variant + Clone, T: Variant + Clone>(
-        &mut self,
-        name: &str,
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) -> &mut Self {
-        self.global_module
-            .set_raw_fn(name, &[TypeId::of::<A>()], func);
-        self
-    }
-
-    /// Register a function of two parameters with the `Engine`.
-    ///
-    /// ## WARNING - Low Level API
-    ///
-    /// This function is very low level.
-    ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
-    /// which is guaranteed to contain enough arguments of the correct types.
-    ///
-    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
-    ///
-    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
-    /// Notice that this will _consume_ the argument, replacing it with `()`.
-    ///
-    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
-    #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
-        &mut self,
-        name: &str,
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) -> &mut Self {
-        self.global_module
-            .set_raw_fn(name, &[TypeId::of::<A>(), TypeId::of::<B>()], func);
-        self
-    }
-
-    /// Register a function of three parameters with the `Engine`.
-    ///
-    /// ## WARNING - Low Level API
-    ///
-    /// This function is very low level.
-    ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
-    /// which is guaranteed to contain enough arguments of the correct types.
-    ///
-    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
-    ///
-    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
-    /// Notice that this will _consume_ the argument, replacing it with `()`.
-    ///
-    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
-    #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_3<
-        A: Variant + Clone,
-        B: Variant + Clone,
-        C: Variant + Clone,
-        T: Variant + Clone,
-    >(
-        &mut self,
-        name: &str,
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) -> &mut Self {
-        self.global_module.set_raw_fn(
-            name,
-            &[TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()],
-            func,
-        );
-        self
-    }
-
-    /// Register a function of four parameters with the `Engine`.
-    ///
-    /// ## WARNING - Low Level API
-    ///
-    /// This function is very low level.
-    ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
-    /// which is guaranteed to contain enough arguments of the correct types.
-    ///
-    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
-    ///
-    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
-    /// Notice that this will _consume_ the argument, replacing it with `()`.
-    ///
-    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
-    #[deprecated(note = "this function is volatile and may change")]
-    pub fn register_raw_fn_4<
-        A: Variant + Clone,
-        B: Variant + Clone,
-        C: Variant + Clone,
-        D: Variant + Clone,
-        T: Variant + Clone,
-    >(
-        &mut self,
-        name: &str,
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
-    ) -> &mut Self {
-        self.global_module.set_raw_fn(
-            name,
-            &[
-                TypeId::of::<A>(),
-                TypeId::of::<B>(),
-                TypeId::of::<C>(),
-                TypeId::of::<D>(),
-            ],
-            func,
-        );
         self
     }
 
@@ -731,7 +591,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts, self);
+        let stream = lex(scripts, None, self);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
@@ -856,7 +716,19 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let scripts = ["#", json.trim()];
-        let stream = lex(&scripts, self);
+        let stream = lex(
+            &scripts,
+            if has_null {
+                Some(Box::new(|token| match token {
+                    // If `null` is present, make sure `null` is treated as a variable
+                    Token::Reserved(s) if s == "null" => Token::Identifier(s),
+                    _ => token,
+                }))
+            } else {
+                None
+            },
+            self,
+        );
         let ast =
             self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
 
@@ -937,7 +809,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts, self);
+        let stream = lex(&scripts, None, self);
         {
             let mut peekable = stream.peekable();
             self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -1092,7 +964,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self);
+        let stream = lex(&scripts, None, self);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -1225,7 +1097,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, self);
+        let stream = lex(&scripts, None, self);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }

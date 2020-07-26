@@ -172,7 +172,7 @@ impl ParseErrorType {
             Self::VariableExpected => "Expecting name of a variable",
             Self::Reserved(_) => "Invalid use of reserved keyword",
             Self::ExprExpected(_) => "Expecting an expression",
-            Self::FnMissingName => "Expecting name in function declaration",
+            Self::FnMissingName => "Expecting function name in function declaration",
             Self::FnMissingParams(_) => "Expecting parameters in function declaration",
             Self::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
             Self::FnMissingBody(_) => "Expecting body statement block for function declaration",

@@ -9,7 +9,7 @@ use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::FnCustomSyntaxEval;
-use crate::token::{is_valid_identifier, Position, Token, TokenStream};
+use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
@@ -1044,7 +1044,7 @@ fn parse_paren_expr(
 }
 
 /// Parse a function call.
-fn parse_call_expr(
+fn parse_fn_call(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
@@ -1553,8 +1553,12 @@ fn parse_primary(
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         // Function call is allowed to have reserved keyword
-        Token::Reserved(s) if s != KEYWORD_THIS && input.peek().unwrap().0 == Token::LeftParen => {
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+        Token::Reserved(s) if input.peek().unwrap().0 == Token::LeftParen => {
+            if is_keyword_function(&s) {
+                Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+            } else {
+                return Err(PERR::Reserved(s).into_err(settings.pos));
+            }
         }
         // Access to `this` as a variable is OK
         Token::Reserved(s) if s == KEYWORD_THIS && input.peek().unwrap().0 != Token::LeftParen => {
@@ -1601,7 +1605,7 @@ fn parse_primary(
             (Expr::Variable(x), Token::LeftParen) => {
                 let ((name, pos), modules, _, _) = *x;
                 settings.pos = pos;
-                parse_call_expr(input, state, lib, name, modules, settings.level_up())?
+                parse_fn_call(input, state, lib, name, modules, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
@@ -2882,14 +2886,12 @@ fn parse_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let name = match input.next().unwrap() {
-        (Token::Identifier(s), _) | (Token::Custom(s), _) | (Token::Reserved(s), _)
-            if s != KEYWORD_THIS && is_valid_identifier(s.chars()) =>
-        {
-            s
-        }
-        (_, pos) => return Err(PERR::FnMissingName.into_err(pos)),
-    };
+    let (token, pos) = input.next().unwrap();
+
+    let name = token.into_function_name().map_err(|t| match t {
+        Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
+        _ => PERR::FnMissingName.into_err(pos),
+    })?;
 
     match input.peek().unwrap() {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),

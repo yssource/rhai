@@ -55,27 +55,12 @@ engine.register_fn("increment_by", |x: &mut i64, y: i64| x += y);
 ```
 
 
-Shortcuts
----------
+Function Signature
+------------------
 
-As usual with Rhai, there are shortcuts.  For functions of zero to four parameters, which should be
-the majority, use one of the `Engine::register_raw_fn_n` (where `n = 0..4`) methods:
+The function signature passed to `Engine::register_raw_fn` takes the following form:
 
-```rust
-// Specify parameter types as generics
-engine.register_raw_fn_2::<i64, i64>(
-    "increment_by",
-    |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| { ... }
-);
-```
-
-
-Closure Signature
------------------
-
-The closure passed to `Engine::register_raw_fn` takes the following form:
-
-`Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>> + 'static`
+> `Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>> + 'static`
 
 where:
 
@@ -113,6 +98,12 @@ there can be no other immutable references to `args`, otherwise the Rust borrow 
 Example - Passing a Function Pointer to a Rust Function
 ------------------------------------------------------
 
+The low-level API is useful when there is a need to interact with the scripting [`Engine`] within a function.
+
+The following example registers a function that takes a [function pointer] as an argument,
+then calls it within the same [`Engine`].  This way, a _callback_ function can be provided
+to a native Rust function.
+
 ```rust
 use rhai::{Engine, Module, Dynamic, FnPtr};
 
@@ -133,11 +124,10 @@ engine.register_raw_fn(
         let value = args[2].clone();                            // 3rd argument - function argument
         let this_ptr = args.get_mut(0).unwrap();                // 1st argument - this pointer
 
-        // Use 'call_fn_dynamic' to call the function name.
-        // Pass 'lib' as the current global library of functions.
-        engine.call_fn_dynamic(&mut Scope::new(), lib, fp.fn_name(), Some(this_ptr), [value])?;
-
-        Ok(())
+        // Use 'FnPtr::call_dynamic' to call the function pointer.
+        // Beware, only script-defined functions are supported by 'FnPtr::call_dynamic'.
+        // If it is a native Rust function, directly call it here in Rust instead!
+        fp.call_dynamic(engine, lib, Some(this_ptr), [value])
     },
 );
 
