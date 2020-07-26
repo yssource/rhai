@@ -131,15 +131,7 @@ fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
             let value = args[2].clone();
             let this_ptr = args.get_mut(0).unwrap();
 
-            engine.call_fn_dynamic(
-                &mut Scope::new(),
-                lib,
-                fp.fn_name(),
-                Some(this_ptr),
-                [value],
-            )?;
-
-            Ok(())
+            fp.call_dynamic(engine, lib, Some(this_ptr), [value])
         },
     );
 
