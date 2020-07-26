@@ -10,7 +10,10 @@ In many controlled embedded environments, however, these may not be needed and u
 application code storage space.
 
 Use `Engine::new_raw` to create a _raw_ `Engine`, in which only a minimal set of
-basic arithmetic and logical operators are supported.
+basic arithmetic and logical operators are supported (see below).
+
+To add more functionalities to a _raw_ `Engine`, load [packages] into it.
+
 
 Built-in Operators
 ------------------
@@ -20,7 +23,7 @@ Built-in Operators
 | `+`,                     | `+=`                         | `INT`, `FLOAT` (if not [`no_float`]), `ImmutableString`                       |
 | `-`, `*`, `/`, `%`, `~`, | `-=`, `*=`, `/=`, `%=`, `~=` | `INT`, `FLOAT` (if not [`no_float`])                                          |
 | `<<`, `>>`, `^`,         | `<<=`, `>>=`, `^=`           | `INT`                                                                         |
-| `&`, `|`,                | `&=`, `|=`                   | `INT`, `bool`                                                                 |
-| `&&`, `||`               |                              | `bool`                                                                        |
+| `&`, <code>\|</code>,    | `&=`, <code>\|=</code>       | `INT`, `bool`                                                                 |
+| `&&`, <code>\|\|</code>  |                              | `bool`                                                                        |
 | `==`, `!=`               |                              | `INT`, `FLOAT` (if not [`no_float`]), `bool`, `char`, `()`, `ImmutableString` |
 | `>`, `>=`, `<`, `<=`     |                              | `INT`, `FLOAT` (if not [`no_float`]), `char`, `()`, `ImmutableString`         |

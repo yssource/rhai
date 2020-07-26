@@ -2,16 +2,23 @@
 
 use crate::any::Dynamic;
 use crate::engine::Engine;
-use crate::module::{FuncReturn, Module};
-use crate::parser::ScriptFnDef;
+use crate::module::Module;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
-use crate::utils::{ImmutableString, StaticVec};
-use crate::Scope;
+use crate::utils::ImmutableString;
 
-use crate::stdlib::{
-    boxed::Box, convert::TryFrom, fmt, mem, rc::Rc, string::String, sync::Arc, vec::Vec,
-};
+#[cfg(not(feature = "no_function"))]
+use crate::{module::FuncReturn, parser::ScriptFnDef, scope::Scope, utils::StaticVec};
+
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, string::String, vec::Vec};
+
+#[cfg(not(feature = "no_function"))]
+use crate::stdlib::mem;
+
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::rc::Rc;
+#[cfg(feature = "sync")]
+use crate::stdlib::sync::Arc;
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -82,12 +89,17 @@ impl FnPtr {
 
     /// Call the function pointer with curried arguments (if any).
     ///
+    /// The function must be a script-defined function.  It cannot be a Rust function.
+    ///
+    /// To call a Rust function, just call it directly in Rust!
+    ///
     /// ## WARNING
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
+    #[cfg(not(feature = "no_function"))]
     pub fn call_dynamic(
         &self,
         engine: &Engine,

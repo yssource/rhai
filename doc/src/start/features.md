@@ -25,7 +25,7 @@ more control over what a script can (or cannot) do.
 | `no_module`   | Disable loading external [modules].                                                                                                                                                                        |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                                                       |
 | `serde`       | Enable serialization/deserialization via [`serde`]. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies.                                      |
-| `internals`   | Expose internal data structures (e.g. [`AST`] nodes) and enable defining [custom syntax]. Beware that Rhai internals are volatile and may change from version to version.                                  |
+| `internals`   | Expose internal data structures (e.g. [`AST`] nodes). Beware that Rhai internals are volatile and may change from version to version.                                                                      |
 
 
 Example
@@ -46,7 +46,7 @@ rhai = { version = "{{version}}", features = [ "sync", "unchecked", "only_i32", 
 ```
 
 The resulting scripting engine supports only the `i32` integer numeral type (and no others like `u32`, `i16` or `i64`),
-no floating-point, is `Send + Sync` (so it can be safely used across threads), does not support defining [functions]
+no floating-point, is `Send + Sync` (so it can be safely used across threads), and does not support defining [functions]
 nor loading external [modules].
 
 This configuration is perfect for an expression parser in a 32-bit embedded system without floating-point hardware.

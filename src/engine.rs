@@ -1,13 +1,13 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, Union, Variant};
+use crate::any::{map_std_type_name, Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, FnPtr};
-use crate::module::{resolvers, Module, ModuleRef, ModuleResolver};
+use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, FnAccess, ImmutableString, ReturnType, ScriptFnDef, Stmt};
+use crate::parser::{Expr, ReturnType, Stmt};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -15,8 +15,23 @@ use crate::syntax::{CustomSyntax, EvalContext};
 use crate::token::Position;
 use crate::utils::StaticVec;
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+use crate::any::Variant;
+
+#[cfg(not(feature = "no_function"))]
+use crate::parser::{FnAccess, ScriptFnDef};
+
+#[cfg(not(feature = "no_module"))]
+use crate::module::ModuleResolver;
+
+#[cfg(not(feature = "no_std"))]
+#[cfg(not(feature = "no_module"))]
+use crate::module::resolvers;
+
+#[cfg(any(not(feature = "no_object"), not(feature = "no_module")))]
+use crate::utils::ImmutableString;
+
 use crate::stdlib::{
-    any::TypeId,
     borrow::Cow,
     boxed::Box,
     collections::{HashMap, HashSet},
@@ -25,6 +40,9 @@ use crate::stdlib::{
     string::{String, ToString},
     vec::Vec,
 };
+
+#[cfg(not(feature = "no_index"))]
+use crate::stdlib::any::TypeId;
 
 /// Variable-sized array of `Dynamic` values.
 ///
@@ -66,13 +84,6 @@ pub const MAX_EXPR_DEPTH: usize = 128;
 #[cfg(not(debug_assertions))]
 pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
 
-#[cfg(feature = "unchecked")]
-pub const MAX_CALL_STACK_DEPTH: usize = usize::MAX;
-#[cfg(feature = "unchecked")]
-pub const MAX_EXPR_DEPTH: usize = 0;
-#[cfg(feature = "unchecked")]
-pub const MAX_FUNCTION_EXPR_DEPTH: usize = 0;
-
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";
@@ -82,16 +93,22 @@ pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
+#[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
+#[cfg(not(feature = "no_object"))]
 pub const FN_SET: &str = "set$";
+#[cfg(not(feature = "no_index"))]
 pub const FN_IDX_GET: &str = "index$get$";
+#[cfg(not(feature = "no_index"))]
 pub const FN_IDX_SET: &str = "index$set$";
+#[cfg(not(feature = "no_function"))]
 pub const FN_ANONYMOUS: &str = "anon$";
 pub const MARKER_EXPR: &str = "$expr$";
 pub const MARKER_BLOCK: &str = "$block$";
 pub const MARKER_IDENT: &str = "$ident$";
 
 /// A type specifying the method of chaining.
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum ChainType {
     None,
@@ -100,6 +117,7 @@ pub enum ChainType {
 }
 
 /// A type that encapsulates a mutation target for an expression with side effects.
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug)]
 pub enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
@@ -108,15 +126,19 @@ pub enum Target<'a> {
     Value(Dynamic),
     /// The target is a character inside a String.
     /// This is necessary because directly pointing to a char inside a String is impossible.
+    #[cfg(not(feature = "no_index"))]
     StringChar(&'a mut Dynamic, usize, Dynamic),
 }
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl Target<'_> {
     /// Is the `Target` a reference pointing to other data?
     pub fn is_ref(&self) -> bool {
         match self {
             Self::Ref(_) => true,
-            Self::Value(_) | Self::StringChar(_, _, _) => false,
+            Self::Value(_) => false,
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` an owned value?
@@ -124,22 +146,26 @@ impl Target<'_> {
         match self {
             Self::Ref(_) => false,
             Self::Value(_) => true,
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a specific type?
+    #[allow(dead_code)]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
             Target::Ref(r) => r.is::<T>(),
             Target::Value(r) => r.is::<T>(),
+            #[cfg(not(feature = "no_index"))]
             Target::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
-            Self::Ref(r) => r.clone(),        // Referenced value is cloned
-            Self::Value(v) => v,              // Owned value is simply taken
+            Self::Ref(r) => r.clone(), // Referenced value is cloned
+            Self::Value(v) => v,       // Owned value is simply taken
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }
     }
@@ -148,6 +174,7 @@ impl Target<'_> {
         match self {
             Self::Ref(r) => *r,
             Self::Value(ref mut r) => r,
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref mut r) => r,
         }
     }
@@ -161,6 +188,7 @@ impl Target<'_> {
                     Position::none(),
                 )))
             }
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(Dynamic(Union::Str(ref mut s)), index, _) => {
                 // Replace the character at the specified index position
                 let new_ch = new_val
@@ -176,18 +204,21 @@ impl Target<'_> {
                     *s = chars.iter().collect::<String>().into();
                 }
             }
-            _ => unreachable!(),
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar(_, _, _) => unreachable!(),
         }
 
         Ok(())
     }
 }
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
         Self::Ref(value)
     }
 }
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     fn from(value: T) -> Self {
         Self::Value(value.into())
@@ -249,6 +280,34 @@ pub fn get_script_function_by_signature<'a>(
     }
 }
 
+/// [INTERNALS] A type containing all the limits imposed by the `Engine`.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
+#[cfg(not(feature = "unchecked"))]
+pub struct Limits {
+    /// Maximum levels of call-stack to prevent infinite recursion.
+    ///
+    /// Defaults to 16 for debug builds and 128 for non-debug builds.
+    pub max_call_stack_depth: usize,
+    /// Maximum depth of statements/expressions at global level.
+    pub max_expr_depth: usize,
+    /// Maximum depth of statements/expressions in functions.
+    pub max_function_expr_depth: usize,
+    /// Maximum number of operations allowed to run.
+    pub max_operations: u64,
+    /// Maximum number of modules allowed to load.
+    pub max_modules: usize,
+    /// Maximum length of a string.
+    pub max_string_size: usize,
+    /// Maximum length of an array.
+    pub max_array_size: usize,
+    /// Maximum number of properties in a map.
+    pub max_map_size: usize,
+}
+
 /// Rhai main scripting engine.
 ///
 /// ```
@@ -275,6 +334,7 @@ pub struct Engine {
     pub(crate) packages: PackagesCollection,
 
     /// A module resolution service.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
@@ -296,24 +356,10 @@ pub struct Engine {
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
-    /// Maximum levels of call-stack to prevent infinite recursion.
-    ///
-    /// Defaults to 16 for debug builds and 128 for non-debug builds.
-    pub(crate) max_call_stack_depth: usize,
-    /// Maximum depth of statements/expressions at global level.
-    pub(crate) max_expr_depth: usize,
-    /// Maximum depth of statements/expressions in functions.
-    pub(crate) max_function_expr_depth: usize,
-    /// Maximum number of operations allowed to run.
-    pub(crate) max_operations: u64,
-    /// Maximum number of modules allowed to load.
-    pub(crate) max_modules: usize,
-    /// Maximum length of a string.
-    pub(crate) max_string_size: usize,
-    /// Maximum length of an array.
-    pub(crate) max_array_size: usize,
-    /// Maximum number of properties in a map.
-    pub(crate) max_map_size: usize,
+
+    /// Max limits.
+    #[cfg(not(feature = "unchecked"))]
+    pub(crate) limits: Limits,
 }
 
 impl fmt::Debug for Engine {
@@ -338,7 +384,8 @@ impl Default for Engine {
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(target_arch = "wasm32"))]
             module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
-            #[cfg(any(feature = "no_module", feature = "no_std", target_arch = "wasm32",))]
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
 
             type_names: None,
@@ -360,14 +407,17 @@ impl Default for Engine {
             #[cfg(not(feature = "no_optimize"))]
             optimization_level: OptimizationLevel::Simple,
 
-            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-            max_expr_depth: MAX_EXPR_DEPTH,
-            max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: 0,
-            max_modules: usize::MAX,
-            max_string_size: 0,
-            max_array_size: 0,
-            max_map_size: 0,
+            #[cfg(not(feature = "unchecked"))]
+            limits: Limits {
+                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+                max_expr_depth: MAX_EXPR_DEPTH,
+                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
+                max_operations: 0,
+                max_modules: usize::MAX,
+                max_string_size: 0,
+                max_array_size: 0,
+                max_map_size: 0,
+            },
         };
 
         engine.load_package(StandardPackage::new().get());
@@ -377,20 +427,24 @@ impl Default for Engine {
 }
 
 /// Make getter function
+#[cfg(not(feature = "no_object"))]
+#[inline(always)]
 pub fn make_getter(id: &str) -> String {
     format!("{}{}", FN_GET, id)
 }
 
 /// Make setter function
+#[cfg(not(feature = "no_object"))]
+#[inline(always)]
 pub fn make_setter(id: &str) -> String {
     format!("{}{}", FN_SET, id)
 }
 
 /// Print/debug to stdout
-fn default_print(s: &str) {
+fn default_print(_s: &str) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    println!("{}", s);
+    println!("{}", _s);
 }
 
 /// Search for a module within an imports stack.
@@ -546,6 +600,8 @@ impl Engine {
 
             packages: Default::default(),
             global_module: Default::default(),
+
+            #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
             type_names: None,
@@ -563,19 +619,23 @@ impl Engine {
             #[cfg(not(feature = "no_optimize"))]
             optimization_level: OptimizationLevel::Simple,
 
-            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-            max_expr_depth: MAX_EXPR_DEPTH,
-            max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-            max_operations: 0,
-            max_modules: usize::MAX,
-            max_string_size: 0,
-            max_array_size: 0,
-            max_map_size: 0,
+            #[cfg(not(feature = "unchecked"))]
+            limits: Limits {
+                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+                max_expr_depth: MAX_EXPR_DEPTH,
+                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
+                max_operations: 0,
+                max_modules: usize::MAX,
+                max_string_size: 0,
+                max_array_size: 0,
+                max_map_size: 0,
+            },
         }
     }
 
     /// Chain-evaluate a dot/index chain.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
@@ -586,7 +646,7 @@ impl Engine {
         idx_values: &mut StaticVec<Dynamic>,
         chain_type: ChainType,
         level: usize,
-        mut new_val: Option<Dynamic>,
+        mut _new_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
             panic!();
@@ -618,18 +678,19 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
-                            new_val,
+                            _new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
                     // xxx[rhs] = new_val
-                    _ if new_val.is_some() => {
-                        let mut new_val = new_val.unwrap();
+                    _ if _new_val.is_some() => {
+                        let mut new_val = _new_val.unwrap();
                         let mut idx_val2 = idx_val.clone();
 
                         match self.get_indexed_mut(state, lib, target, idx_val, pos, true, level) {
                             // Indexed value is an owned value - the only possibility is an indexer
                             // Try to call an index setter
+                            #[cfg(not(feature = "no_index"))]
                             Ok(obj_ptr) if obj_ptr.is_value() => {
                                 let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
@@ -639,9 +700,7 @@ impl Engine {
                                 )
                                 .or_else(|err| match *err {
                                     // If there is no index setter, no need to set it back because the indexer is read-only
-                                    EvalAltResult::ErrorFunctionNotFound(s, _)
-                                        if s == FN_IDX_SET =>
-                                    {
+                                    EvalAltResult::ErrorFunctionNotFound(_, _) => {
                                         Ok(Default::default())
                                     }
                                     _ => Err(err),
@@ -655,6 +714,7 @@ impl Engine {
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
+                                #[cfg(not(feature = "no_index"))]
                                 EvalAltResult::ErrorIndexingType(_, _) => {
                                     let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
@@ -686,13 +746,13 @@ impl Engine {
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_) => unreachable!(),
                     // {xxx:map}.id = ???
-                    Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
+                    Expr::Property(x) if target.is::<Map>() && _new_val.is_some() => {
                         let ((prop, _, _), pos) = x.as_ref();
                         let index = prop.clone().into();
                         let mut val =
                             self.get_indexed_mut(state, lib, target, index, *pos, true, level)?;
 
-                        val.set_value(new_val.unwrap())
+                        val.set_value(_new_val.unwrap())
                             .map_err(|err| err.new_position(rhs.position()))?;
                         Ok((Default::default(), true))
                     }
@@ -706,9 +766,9 @@ impl Engine {
                         Ok((val.clone_into_dynamic(), false))
                     }
                     // xxx.id = ???
-                    Expr::Property(x) if new_val.is_some() => {
+                    Expr::Property(x) if _new_val.is_some() => {
                         let ((_, _, setter), pos) = x.as_ref();
-                        let mut args = [target.as_mut(), new_val.as_mut().unwrap()];
+                        let mut args = [target.as_mut(), _new_val.as_mut().unwrap()];
                         self.exec_fn_call(
                             state, lib, setter, true, 0, &mut args, is_ref, true, None, level,
                         )
@@ -750,7 +810,7 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
-                            new_val,
+                            _new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
@@ -777,7 +837,7 @@ impl Engine {
                                 let (result, may_be_changed) = self
                                     .eval_dot_index_chain_helper(
                                         state, lib, this_ptr, target, expr, idx_values, next_chain,
-                                        level, new_val,
+                                        level, _new_val,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -812,7 +872,7 @@ impl Engine {
 
                                 self.eval_dot_index_chain_helper(
                                     state, lib, this_ptr, target, expr, idx_values, next_chain,
-                                    level, new_val,
+                                    level, _new_val,
                                 )
                                 .map_err(|err| err.new_position(*pos))
                             }
@@ -835,6 +895,7 @@ impl Engine {
     }
 
     /// Evaluate a dot/index chain.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
@@ -911,6 +972,7 @@ impl Engine {
     /// Any spill-overs are stored in `more`, which is dynamic.
     /// The fixed length array is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
     /// The total number of values is returned.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_indexed_chain(
         &self,
         scope: &mut Scope,
@@ -981,26 +1043,30 @@ impl Engine {
 
     /// Get the value at the indexed position of a base type
     /// Position in `EvalAltResult` may be None and should be set afterwards.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn get_indexed_mut<'a>(
         &self,
         state: &mut State,
-        lib: &Module,
+        _lib: &Module,
         target: &'a mut Target,
-        mut idx: Dynamic,
+        mut _idx: Dynamic,
         idx_pos: Position,
-        create: bool,
-        level: usize,
+        _create: bool,
+        _level: usize,
     ) -> Result<Target<'a>, Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
+        #[cfg(not(feature = "no_index"))]
+        #[cfg(not(feature = "no_object"))]
         let is_ref = target.is_ref();
+
         let val = target.as_mut();
 
         match val {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr)) => {
                 // val_array[idx]
-                let index = idx
+                let index = _idx
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
 
@@ -1022,14 +1088,14 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map)) => {
                 // val_map[idx]
-                Ok(if create {
-                    let index = idx
+                Ok(if _create {
+                    let index = _idx
                         .take_immutable_string()
                         .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
                     map.entry(index).or_insert(Default::default()).into()
                 } else {
-                    let index = idx
+                    let index = _idx
                         .downcast_ref::<ImmutableString>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
@@ -1043,7 +1109,7 @@ impl Engine {
             Dynamic(Union::Str(s)) => {
                 // val_string[idx]
                 let chars_len = s.chars().count();
-                let index = idx
+                let index = _idx
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
 
@@ -1064,9 +1130,9 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             _ => {
                 let type_name = val.type_name();
-                let args = &mut [val, &mut idx];
+                let args = &mut [val, &mut _idx];
                 self.exec_fn_call(
-                    state, lib, FN_IDX_GET, true, 0, args, is_ref, true, None, level,
+                    state, _lib, FN_IDX_GET, true, 0, args, is_ref, true, None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1077,7 +1143,7 @@ impl Engine {
                 })
             }
 
-            #[cfg(feature = "no_index")]
+            #[cfg(any(feature = "no_index", feature = "no_object"))]
             _ => Err(Box::new(EvalAltResult::ErrorIndexingType(
                 self.map_type_name(val.type_name()).into(),
                 Position::none(),
@@ -1254,7 +1320,7 @@ impl Engine {
                 let mut rhs_val =
                     self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
 
-                let new_val = Some(if op.is_empty() {
+                let _new_val = Some(if op.is_empty() {
                     // Normal assignment
                     rhs_val
                 } else {
@@ -1277,7 +1343,7 @@ impl Engine {
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
                         Ok(Default::default())
                     }
@@ -1285,7 +1351,7 @@ impl Engine {
                     #[cfg(not(feature = "no_object"))]
                     Expr::Dot(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
                         Ok(Default::default())
                     }
@@ -1641,19 +1707,20 @@ impl Engine {
             Stmt::Const(_) => unreachable!(),
 
             // Import statement
+            #[cfg(not(feature = "no_module"))]
             Stmt::Import(x) => {
-                let (expr, (name, pos)) = x.as_ref();
+                let (expr, (name, _pos)) = x.as_ref();
 
                 // Guard against too many modules
-                if state.modules >= self.max_modules {
-                    return Err(Box::new(EvalAltResult::ErrorTooManyModules(*pos)));
+                #[cfg(not(feature = "unchecked"))]
+                if state.modules >= self.limits.max_modules {
+                    return Err(Box::new(EvalAltResult::ErrorTooManyModules(*_pos)));
                 }
 
                 if let Some(path) = self
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
                     .try_cast::<ImmutableString>()
                 {
-                    #[cfg(not(feature = "no_module"))]
                     if let Some(resolver) = &self.module_resolver {
                         let mut module = resolver.resolve(self, &path, expr.position())?;
                         module.index_all_sub_modules();
@@ -1668,15 +1735,13 @@ impl Engine {
                             expr.position(),
                         )))
                     }
-
-                    #[cfg(feature = "no_module")]
-                    Ok(Default::default())
                 } else {
                     Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
                 }
             }
 
             // Export statement
+            #[cfg(not(feature = "no_module"))]
             Stmt::Export(list) => {
                 for ((id, id_pos), rename) in list.iter() {
                     // Mark scope variables as public
@@ -1698,8 +1763,18 @@ impl Engine {
             .map_err(|err| err.new_position(stmt.position()))
     }
 
+    #[cfg(feature = "unchecked")]
+    #[inline(always)]
+    fn check_data_size(
+        &self,
+        result: Result<Dynamic, Box<EvalAltResult>>,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        return result;
+    }
+
     /// Check a result to ensure that the data size is within allowable limit.
     /// Position in `EvalAltResult` may be None and should be set afterwards.
+    #[cfg(not(feature = "unchecked"))]
     fn check_data_size(
         &self,
         result: Result<Dynamic, Box<EvalAltResult>>,
@@ -1708,7 +1783,8 @@ impl Engine {
         return result;
 
         // If no data size limits, just return
-        if self.max_string_size + self.max_array_size + self.max_map_size == 0 {
+        if self.limits.max_string_size + self.limits.max_array_size + self.limits.max_map_size == 0
+        {
             return result;
         }
 
@@ -1768,37 +1844,37 @@ impl Engine {
             // Simply return all errors
             Err(_) => return result,
             // String with limit
-            Ok(Dynamic(Union::Str(_))) if self.max_string_size > 0 => (),
+            Ok(Dynamic(Union::Str(_))) if self.limits.max_string_size > 0 => (),
             // Array with limit
             #[cfg(not(feature = "no_index"))]
-            Ok(Dynamic(Union::Array(_))) if self.max_array_size > 0 => (),
+            Ok(Dynamic(Union::Array(_))) if self.limits.max_array_size > 0 => (),
             // Map with limit
             #[cfg(not(feature = "no_object"))]
-            Ok(Dynamic(Union::Map(_))) if self.max_map_size > 0 => (),
+            Ok(Dynamic(Union::Map(_))) if self.limits.max_map_size > 0 => (),
             // Everything else is simply returned
             Ok(_) => return result,
         };
 
         let (arr, map, s) = calc_size(result.as_ref().unwrap());
 
-        if s > self.max_string_size {
+        if s > self.limits.max_string_size {
             Err(Box::new(EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
-                self.max_string_size,
+                self.limits.max_string_size,
                 s,
                 Position::none(),
             )))
-        } else if arr > self.max_array_size {
+        } else if arr > self.limits.max_array_size {
             Err(Box::new(EvalAltResult::ErrorDataTooLarge(
                 "Size of array".to_string(),
-                self.max_array_size,
+                self.limits.max_array_size,
                 arr,
                 Position::none(),
             )))
-        } else if map > self.max_map_size {
+        } else if map > self.limits.max_map_size {
             Err(Box::new(EvalAltResult::ErrorDataTooLarge(
                 "Number of properties in object map".to_string(),
-                self.max_map_size,
+                self.limits.max_map_size,
                 map,
                 Position::none(),
             )))
@@ -1814,7 +1890,7 @@ impl Engine {
 
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
-        if self.max_operations > 0 && state.operations > self.max_operations {
+        if self.limits.max_operations > 0 && state.operations > self.limits.max_operations {
             return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
                 Position::none(),
             )));

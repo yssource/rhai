@@ -11,8 +11,8 @@ see [fallible functions]({{rootUrl}}/rust/fallible.md)).
 
 ```rust
 use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString};
-use rhai::RegisterFn;                           // use 'RegisterFn' trait for 'register_fn'
-use rhai::RegisterResultFn;                     // use 'RegisterResultFn' trait for 'register_result_fn'
+use rhai::RegisterFn;                       // use 'RegisterFn' trait for 'register_fn'
+use rhai::RegisterResultFn;                 // use 'RegisterResultFn' trait for 'register_result_fn'
 
 // Normal function that returns a standard type
 // Remember to use 'ImmutableString' and not 'String'
@@ -26,7 +26,7 @@ fn add_len_str(x: i64, s: &str) -> i64 {
 
 // Function that returns a 'Dynamic' value - must return a 'Result'
 fn get_any_value() -> Result<Dynamic, Box<EvalAltResult>> {
-    Ok((42_i64).into())                         // standard types can use 'into()'
+    Ok((42_i64).into())                     // standard types can use 'into()'
 }
 
 let mut engine = Engine::new();

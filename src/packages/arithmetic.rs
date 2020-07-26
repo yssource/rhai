@@ -1,8 +1,9 @@
 use crate::def_package;
 use crate::module::FuncReturn;
 use crate::parser::INT;
-use crate::result::EvalAltResult;
-use crate::token::Position;
+
+#[cfg(not(feature = "unchecked"))]
+use crate::{result::EvalAltResult, token::Position};
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -11,19 +12,25 @@ use crate::parser::FLOAT;
 #[cfg(feature = "no_std")]
 use num_traits::*;
 
+#[cfg(not(feature = "unchecked"))]
 use num_traits::{
     identities::Zero, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl,
     CheckedShr, CheckedSub,
 };
 
-use crate::stdlib::{
-    boxed::Box,
-    fmt::Display,
-    format,
-    ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub},
-};
+use crate::stdlib::ops::{BitAnd, BitOr, BitXor};
+
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
+use crate::stdlib::ops::{Add, Div, Mul, Neg, Rem, Sub};
+
+#[cfg(feature = "unchecked")]
+use crate::stdlib::ops::{Shl, Shr};
+
+#[cfg(not(feature = "unchecked"))]
+use crate::stdlib::{boxed::Box, fmt::Display, format};
 
 // Checked add
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn add<T: Display + CheckedAdd>(x: T, y: T) -> FuncReturn<T> {
     x.checked_add(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
@@ -33,6 +40,7 @@ pub(crate) fn add<T: Display + CheckedAdd>(x: T, y: T) -> FuncReturn<T> {
     })
 }
 // Checked subtract
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn sub<T: Display + CheckedSub>(x: T, y: T) -> FuncReturn<T> {
     x.checked_sub(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
@@ -42,6 +50,7 @@ pub(crate) fn sub<T: Display + CheckedSub>(x: T, y: T) -> FuncReturn<T> {
     })
 }
 // Checked multiply
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn mul<T: Display + CheckedMul>(x: T, y: T) -> FuncReturn<T> {
     x.checked_mul(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
@@ -51,6 +60,7 @@ pub(crate) fn mul<T: Display + CheckedMul>(x: T, y: T) -> FuncReturn<T> {
     })
 }
 // Checked divide
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn div<T>(x: T, y: T) -> FuncReturn<T>
 where
     T: Display + CheckedDiv + PartialEq + Zero,
@@ -71,6 +81,7 @@ where
     })
 }
 // Checked negative - e.g. -(i32::MIN) will overflow i32::MAX
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn neg<T: Display + CheckedNeg>(x: T) -> FuncReturn<T> {
     x.checked_neg().ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
@@ -80,6 +91,7 @@ pub(crate) fn neg<T: Display + CheckedNeg>(x: T) -> FuncReturn<T> {
     })
 }
 // Checked absolute
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> FuncReturn<T> {
     // FIX - We don't use Signed::abs() here because, contrary to documentation, it panics
     //       when the number is ::MIN instead of returning ::MIN itself.
@@ -95,26 +107,32 @@ pub(crate) fn abs<T: Display + CheckedNeg + PartialOrd + Zero>(x: T) -> FuncRetu
     }
 }
 // Unchecked add - may panic on overflow
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
 fn add_u<T: Add>(x: T, y: T) -> FuncReturn<<T as Add>::Output> {
     Ok(x + y)
 }
 // Unchecked subtract - may panic on underflow
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
 fn sub_u<T: Sub>(x: T, y: T) -> FuncReturn<<T as Sub>::Output> {
     Ok(x - y)
 }
 // Unchecked multiply - may panic on overflow
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
 fn mul_u<T: Mul>(x: T, y: T) -> FuncReturn<<T as Mul>::Output> {
     Ok(x * y)
 }
 // Unchecked divide - may panic when dividing by zero
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
 fn div_u<T: Div>(x: T, y: T) -> FuncReturn<<T as Div>::Output> {
     Ok(x / y)
 }
 // Unchecked negative - may panic on overflow
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
 fn neg_u<T: Neg>(x: T) -> FuncReturn<<T as Neg>::Output> {
     Ok(-x)
 }
 // Unchecked absolute - may panic on overflow
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
 fn abs_u<T>(x: T) -> FuncReturn<<T as Neg>::Output>
 where
     T: Neg + PartialOrd + Default + Into<<T as Neg>::Output>,
@@ -137,6 +155,7 @@ fn binary_xor<T: BitXor>(x: T, y: T) -> FuncReturn<<T as BitXor>::Output> {
     Ok(x ^ y)
 }
 // Checked left-shift
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn shl<T: Display + CheckedShl>(x: T, y: INT) -> FuncReturn<T> {
     // Cannot shift by a negative number of bits
     if y < 0 {
@@ -154,6 +173,7 @@ pub(crate) fn shl<T: Display + CheckedShl>(x: T, y: INT) -> FuncReturn<T> {
     })
 }
 // Checked right-shift
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn shr<T: Display + CheckedShr>(x: T, y: INT) -> FuncReturn<T> {
     // Cannot shift by a negative number of bits
     if y < 0 {
@@ -171,14 +191,17 @@ pub(crate) fn shr<T: Display + CheckedShr>(x: T, y: INT) -> FuncReturn<T> {
     })
 }
 // Unchecked left-shift - may panic if shifting by a negative number of bits
+#[cfg(feature = "unchecked")]
 pub(crate) fn shl_u<T: Shl<T>>(x: T, y: T) -> FuncReturn<<T as Shl<T>>::Output> {
     Ok(x.shl(y))
 }
 // Unchecked right-shift - may panic if shifting by a negative number of bits
+#[cfg(feature = "unchecked")]
 pub(crate) fn shr_u<T: Shr<T>>(x: T, y: T) -> FuncReturn<<T as Shr<T>>::Output> {
     Ok(x.shr(y))
 }
 // Checked modulo
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn modulo<T: Display + CheckedRem>(x: T, y: T) -> FuncReturn<T> {
     x.checked_rem(&y).ok_or_else(|| {
         Box::new(EvalAltResult::ErrorArithmetic(
@@ -188,10 +211,12 @@ pub(crate) fn modulo<T: Display + CheckedRem>(x: T, y: T) -> FuncReturn<T> {
     })
 }
 // Unchecked modulo - may panic if dividing by zero
+#[cfg(any(feature = "unchecked", not(feature = "no_float")))]
 fn modulo_u<T: Rem>(x: T, y: T) -> FuncReturn<<T as Rem>::Output> {
     Ok(x % y)
 }
 // Checked power
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
     #[cfg(not(feature = "only_i32"))]
     if y > (u32::MAX as INT) {
@@ -229,6 +254,7 @@ pub(crate) fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
     }
 }
 // Unchecked integer power - may panic on overflow or if the power index is too high (> u32::MAX)
+#[cfg(feature = "unchecked")]
 pub(crate) fn pow_i_i_u(x: INT, y: INT) -> FuncReturn<INT> {
     Ok(x.pow(y as u32))
 }
@@ -239,6 +265,7 @@ pub(crate) fn pow_f_f(x: FLOAT, y: FLOAT) -> FuncReturn<FLOAT> {
 }
 // Checked power
 #[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "unchecked"))]
 pub(crate) fn pow_f_i(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
     // Raise to power that is larger than an i32
     if y > (i32::MAX as INT) {

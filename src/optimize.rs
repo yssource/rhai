@@ -6,10 +6,13 @@ use crate::engine::{
     Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::token::is_valid_identifier;
 use crate::utils::StaticVec;
+
+#[cfg(not(feature = "no_function"))]
+use crate::parser::ReturnType;
 
 #[cfg(feature = "internals")]
 use crate::parser::CustomExpr;
@@ -249,6 +252,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
         // let id;
         stmt @ Stmt::Let(_) => stmt,
         // import expr as id;
+        #[cfg(not(feature = "no_module"))]
         Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1))),
         // { block }
         Stmt::Block(x) => {
@@ -290,6 +294,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 match expr {
                     Stmt::Let(x) if x.1.is_none() => removed = true,
                     Stmt::Let(x) if x.1.is_some() => removed = x.1.unwrap().is_pure(),
+                    #[cfg(not(feature = "no_module"))]
                     Stmt::Import(x) => removed = x.0.is_pure(),
                     _ => {
                         result.push(expr);
@@ -345,8 +350,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     state.set_dirty();
                     Stmt::Noop(pos)
                 }
-                // Only one let/import statement - leave it alone
-                [Stmt::Let(_)] | [Stmt::Import(_)] => Stmt::Block(Box::new((result.into(), pos))),
+                // Only one let statement - leave it alone
+                [Stmt::Let(_)] => Stmt::Block(Box::new((result.into(), pos))),
+                // Only one import statement - leave it alone
+                #[cfg(not(feature = "no_module"))]
+                [Stmt::Import(_)] => Stmt::Block(Box::new((result.into(), pos))),
                 // Only one statement - promote
                 [_] => {
                     state.set_dirty();
@@ -557,16 +565,16 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
+            let _has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
                 fn_def.name.as_str() == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
             }).is_some();
 
             #[cfg(feature = "no_function")]
-            const has_script_fn: bool = false;
+            let _has_script_fn: bool = false;
 
-            if has_script_fn {
+            if _has_script_fn {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);
@@ -686,7 +694,9 @@ fn optimize(
                         // Keep all variable declarations at this level
                         // and always keep the last return value
                         let keep = match stmt {
-                            Stmt::Let(_) | Stmt::Import(_) => true,
+                            Stmt::Let(_) => true,
+                            #[cfg(not(feature = "no_module"))]
+                            Stmt::Import(_) => true,
                             _ => i == num_statements - 1,
                         };
                         optimize_stmt(stmt, &mut state, keep)
@@ -721,7 +731,7 @@ pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     statements: Vec<Stmt>,
-    functions: Vec<ScriptFnDef>,
+    _functions: Vec<ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
     #[cfg(feature = "no_optimize")]
@@ -735,7 +745,7 @@ pub fn optimize_into_ast(
             // We only need the script library's signatures for optimization purposes
             let mut lib2 = Module::new();
 
-            functions
+            _functions
                 .iter()
                 .map(|fn_def| {
                     ScriptFnDef {
@@ -751,7 +761,7 @@ pub fn optimize_into_ast(
                     lib2.set_script_fn(fn_def);
                 });
 
-            functions
+            _functions
                 .into_iter()
                 .map(|mut fn_def| {
                     let pos = fn_def.body.position();
@@ -782,7 +792,7 @@ pub fn optimize_into_ast(
                     module.set_script_fn(fn_def);
                 });
         } else {
-            functions.into_iter().for_each(|fn_def| {
+            _functions.into_iter().for_each(|fn_def| {
                 module.set_script_fn(fn_def);
             });
         }

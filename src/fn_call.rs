@@ -3,26 +3,34 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    search_imports, search_namespace, search_scope_only, Engine, Imports, State, Target, FN_GET,
-    FN_IDX_GET, FN_IDX_SET, FN_SET, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
-    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
+    KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
-use crate::parser::{Expr, ImmutableString, ScriptFnDef, AST, INT};
-use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
+use crate::parser::{Expr, ImmutableString, AST, INT};
 use crate::result::EvalAltResult;
-use crate::scope::{EntryType as ScopeEntryType, Scope};
+use crate::scope::Scope;
 use crate::token::Position;
 use crate::utils::StaticVec;
+
+#[cfg(not(feature = "no_function"))]
+use crate::{
+    parser::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
+    scope::EntryType as ScopeEntryType,
+};
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
+#[cfg(not(feature = "no_index"))]
+use crate::engine::{FN_IDX_GET, FN_IDX_SET};
+
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::engine::{Map, Target, FN_GET, FN_SET};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -36,20 +44,22 @@ use crate::stdlib::{
 };
 
 /// Extract the property name from a getter function name.
-fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
+#[inline(always)]
+fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if fn_name.starts_with(FN_GET) {
-        return Some(&fn_name[FN_GET.len()..]);
+    if _fn_name.starts_with(FN_GET) {
+        return Some(&_fn_name[FN_GET.len()..]);
     }
 
     None
 }
 
 /// Extract the property name from a setter function name.
-fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
+#[inline(always)]
+fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if fn_name.starts_with(FN_SET) {
-        return Some(&fn_name[FN_SET.len()..]);
+    if _fn_name.starts_with(FN_SET) {
+        return Some(&_fn_name[FN_SET.len()..]);
     }
 
     None
@@ -106,17 +116,17 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_fn_raw(
         &self,
-        scope: &mut Scope,
-        mods: &mut Imports,
+        _scope: &mut Scope,
+        _mods: &mut Imports,
         state: &mut State,
         lib: &Module,
         fn_name: &str,
         (hash_fn, hash_script): (u64, u64),
         args: &mut FnCallArgs,
         is_ref: bool,
-        is_method: bool,
+        _is_method: bool,
         def_val: Option<bool>,
-        level: usize,
+        _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
@@ -125,7 +135,7 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        if level > self.max_call_stack_depth {
+        if _level > self.limits.max_call_stack_depth {
             return Err(Box::new(
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
@@ -151,7 +161,7 @@ impl Engine {
 
         if let Some(func) = func {
             #[cfg(not(feature = "no_function"))]
-            let need_normalize = is_ref && (func.is_pure() || (func.is_script() && !is_method));
+            let need_normalize = is_ref && (func.is_pure() || (func.is_script() && !_is_method));
             #[cfg(feature = "no_function")]
             let need_normalize = is_ref && func.is_pure();
 
@@ -164,25 +174,25 @@ impl Engine {
                 let fn_def = func.get_fn_def();
 
                 // Method call of script function - map first argument to `this`
-                return if is_method {
+                return if _is_method {
                     let (first, rest) = args.split_at_mut(1);
                     Ok((
                         self.call_script_fn(
-                            scope,
-                            mods,
+                            _scope,
+                            _mods,
                             state,
                             lib,
                             &mut Some(first[0]),
                             fn_name,
                             fn_def,
                             rest,
-                            level,
+                            _level,
                         )?,
                         false,
                     ))
                 } else {
                     let result = self.call_script_fn(
-                        scope, mods, state, lib, &mut None, fn_name, fn_def, args, level,
+                        _scope, _mods, state, lib, &mut None, fn_name, fn_def, args, _level,
                     )?;
 
                     // Restore the original reference
@@ -256,6 +266,7 @@ impl Engine {
         }
 
         // index getter function not found?
+        #[cfg(not(feature = "no_index"))]
         if fn_name == FN_IDX_GET && args.len() == 2 {
             return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 format!(
@@ -268,6 +279,7 @@ impl Engine {
         }
 
         // index setter function not found?
+        #[cfg(not(feature = "no_index"))]
         if fn_name == FN_IDX_SET {
             return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 format!(
@@ -305,6 +317,7 @@ impl Engine {
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn call_script_fn(
         &self,
         scope: &mut Scope,
@@ -486,6 +499,7 @@ impl Engine {
     }
 
     /// Call a dot method.
+    #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
         &self,
         state: &mut State,
@@ -506,9 +520,9 @@ impl Engine {
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
         let mut idx = idx_val.cast::<StaticVec<Dynamic>>();
-        let mut fn_name = name.as_ref();
+        let mut _fn_name = name.as_ref();
 
-        let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+        let (result, updated) = if _fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
             // FnPtr call
             let fn_ptr = obj.downcast_ref::<FnPtr>().unwrap();
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -527,7 +541,7 @@ impl Engine {
             self.exec_fn_call(
                 state, lib, fn_name, *native, hash, args, false, false, *def_val, level,
             )
-        } else if fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
+        } else if _fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
             // FnPtr call on object
             let fn_ptr = idx.remove(0).cast::<FnPtr>();
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -546,7 +560,7 @@ impl Engine {
             self.exec_fn_call(
                 state, lib, &fn_name, *native, hash, args, is_ref, true, *def_val, level,
             )
-        } else if fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
+        } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
             let fn_ptr = obj.downcast_ref::<FnPtr>().unwrap();
             Ok((
@@ -563,19 +577,20 @@ impl Engine {
                 false,
             ))
         } else {
+            #[cfg(not(feature = "no_object"))]
             let redirected;
-            let mut hash = *hash;
+            let mut _hash = *hash;
 
             // Check if it is a map method call in OOP style
             #[cfg(not(feature = "no_object"))]
             if let Some(map) = obj.downcast_ref::<Map>() {
-                if let Some(val) = map.get(fn_name) {
+                if let Some(val) = map.get(_fn_name) {
                     if let Some(f) = val.downcast_ref::<FnPtr>() {
                         // Remap the function name
                         redirected = f.get_fn_name().clone();
-                        fn_name = &redirected;
+                        _fn_name = &redirected;
                         // Recalculate the hash based on the new function name
-                        hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
+                        _hash = calc_fn_hash(empty(), _fn_name, idx.len(), empty());
                     }
                 }
             };
@@ -585,7 +600,7 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, fn_name, *native, hash, args, is_ref, true, *def_val, level,
+                state, lib, _fn_name, *native, _hash, args, is_ref, true, *def_val, level,
             )
         }
         .map_err(|err| err.new_position(*pos))?;
@@ -864,10 +879,22 @@ impl Engine {
                 EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
                     Ok(def_val.unwrap().into())
                 }
-                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                EvalAltResult::ErrorFunctionNotFound(_, pos) => {
                     Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                        format!("{}{}", modules, name),
-                        Position::none(),
+                        format!(
+                            "{}{} ({})",
+                            modules,
+                            name,
+                            args.iter()
+                                .map(|a| if a.is::<ImmutableString>() {
+                                    "&str | ImmutableString | String"
+                                } else {
+                                    self.map_type_name((*a).type_name())
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                        pos,
                     )))
                 }
                 _ => Err(err),

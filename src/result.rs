@@ -34,10 +34,10 @@ pub enum EvalAltResult {
     #[cfg(not(target_arch = "wasm32"))]
     ErrorReadingScriptFile(PathBuf, Position, std::io::Error),
 
-    /// Call to an unknown function. Wrapped value is the name of the function.
+    /// Call to an unknown function. Wrapped value is the signature of the function.
     ErrorFunctionNotFound(String, Position),
     /// An error has occurred inside a called function.
-    /// Wrapped values re the name of the function and the interior error.
+    /// Wrapped values are the name of the function and the interior error.
     ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
     /// Access to `this` that is not bounded.
     ErrorUnboundedThis(Position),

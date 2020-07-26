@@ -6,7 +6,7 @@ use crate::utils::ImmutableString;
 
 use serde::de::{Deserializer, Visitor};
 
-use crate::stdlib::any::type_name;
+use crate::stdlib::{any::type_name, boxed::Box};
 
 /// Deserializer for `ImmutableString`.
 pub struct ImmutableStringDeserializer<'a> {

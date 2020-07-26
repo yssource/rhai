@@ -1,20 +1,26 @@
 use crate::def_package;
 use crate::parser::INT;
-use crate::result::EvalAltResult;
-use crate::token::Position;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "unchecked"))]
+use crate::{result::EvalAltResult, token::Position};
+
+#[cfg(not(feature = "no_float"))]
 #[cfg(feature = "no_std")]
 use num_traits::*;
 
-use crate::stdlib::{boxed::Box, format, i32, i64};
+#[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "unchecked"))]
+use crate::stdlib::{boxed::Box, format};
 
 #[cfg(feature = "only_i32")]
+#[cfg(not(feature = "unchecked"))]
 pub const MAX_INT: INT = i32::MAX;
 #[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "unchecked"))]
 pub const MAX_INT: INT = i64::MAX;
 
 def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {

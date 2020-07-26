@@ -1549,7 +1549,10 @@ pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a
     TokenIterator {
         engine,
         state: TokenizeState {
-            max_string_size: engine.max_string_size,
+            #[cfg(not(feature = "unchecked"))]
+            max_string_size: engine.limits.max_string_size,
+            #[cfg(feature = "unchecked")]
+            max_string_size: 0,
             non_unary: false,
             comment_level: 0,
             end_with_none: false,

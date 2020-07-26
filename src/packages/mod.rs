@@ -24,7 +24,6 @@ pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
 pub use eval::EvalPackage;
-#[cfg(not(feature = "no_function"))]
 pub use fn_basic::BasicFnPackage;
 pub use iter_basic::BasicIteratorPackage;
 pub use logic::LogicPackage;
@@ -74,6 +73,7 @@ impl PackagesCollection {
             .flatten()
     }
     /// Does the specified TypeId iterator exist in the `PackagesCollection`?
+    #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.0.iter().any(|p| p.contains_iter(id))
     }
