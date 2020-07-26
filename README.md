@@ -73,7 +73,7 @@ Licensed under either:
 * [Apache License, Version 2.0](https://github.com/jonathandturner/rhai/blob/master/LICENSE-APACHE.txt), or
 * [MIT license](https://github.com/jonathandturner/rhai/blob/master/LICENSE-MIT.txt)
 
-at your option.
+at your choice.
 
 Unless explicitly stated otherwise, any contribution intentionally submitted
 for inclusion in this crate, as defined in the Apache-2.0 license, shall

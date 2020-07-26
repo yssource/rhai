@@ -3,7 +3,8 @@
 
 {{#include ../links.md}}
 
-Iterating through a range or an [array] is provided by the `for` ... `in` loop.
+Iterating through a range or an [array], or any type with a registered _iterator_,
+is provided by the `for` ... `in` loop.
 
 Like C, `continue` can be used to skip to the next iteration, by-passing all following statements;
 `break` can be used to break out of the loop unconditionally.

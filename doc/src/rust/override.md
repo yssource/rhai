@@ -12,7 +12,9 @@ fn to_int(num) {
     print("Ha! Gotcha! " + num);
 }
 
-print(to_int(123));     // what happens?
+let x = (123).to_int();
+
+print(x);               // what happens?
 ```
 
 A registered native Rust function, in turn, overrides any built-in function of the
