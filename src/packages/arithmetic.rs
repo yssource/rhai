@@ -18,6 +18,8 @@ use num_traits::{
     CheckedShr, CheckedSub,
 };
 
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
 use crate::stdlib::ops::{BitAnd, BitOr, BitXor};
 
 #[cfg(any(feature = "unchecked", not(feature = "no_float")))]
@@ -145,12 +147,18 @@ where
     }
 }
 // Bit operators
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
 fn binary_and<T: BitAnd>(x: T, y: T) -> FuncReturn<<T as BitAnd>::Output> {
     Ok(x & y)
 }
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
 fn binary_or<T: BitOr>(x: T, y: T) -> FuncReturn<<T as BitOr>::Output> {
     Ok(x | y)
 }
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
 fn binary_xor<T: BitXor>(x: T, y: T) -> FuncReturn<<T as BitXor>::Output> {
     Ok(x ^ y)
 }
