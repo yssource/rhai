@@ -1,10 +1,9 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, Imports, State};
+use crate::engine::{Engine, Imports, State};
 use crate::error::ParseError;
 use crate::fn_native::{IteratorFn, SendSync};
-use crate::fn_register::RegisterFn;
 use crate::module::{FuncReturn, Module};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parser::AST;
@@ -13,10 +12,14 @@ use crate::scope::Scope;
 use crate::token::{lex, Position};
 
 #[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
 use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::{
+    engine::{make_getter, make_setter, Map},
+    fn_register::RegisterFn,
+};
 
 #[cfg(not(feature = "no_function"))]
 use crate::{engine::get_script_function_by_signature, fn_args::FuncArgs, utils::StaticVec};
@@ -25,7 +28,6 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
     mem,
-    string::{String, ToString},
 };
 
 #[cfg(not(feature = "no_std"))]
@@ -294,7 +296,7 @@ impl Engine {
         self.type_names
             .as_mut()
             .unwrap()
-            .insert(type_name::<T>().to_string(), name.to_string());
+            .insert(type_name::<T>().into(), name.into());
         self
     }
 

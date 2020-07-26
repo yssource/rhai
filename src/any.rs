@@ -16,10 +16,12 @@ use crate::engine::Map;
 use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
-    collections::HashMap,
     fmt,
     string::String,
 };
+
+#[cfg(not(feature = "no_object"))]
+use crate::stdlib::collections::HashMap;
 
 #[cfg(not(feature = "no_index"))]
 use crate::stdlib::vec::Vec;

@@ -3,9 +3,9 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    search_imports, search_namespace, search_scope_only, Engine, Imports, State, Target, FN_GET,
-    FN_IDX_GET, FN_IDX_SET, FN_SET, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
-    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
+    KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -26,8 +26,11 @@ use crate::{
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
+#[cfg(not(feature = "no_index"))]
+use crate::engine::{FN_IDX_GET, FN_IDX_SET};
+
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::engine::{Map, Target, FN_GET, FN_SET};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -41,20 +44,22 @@ use crate::stdlib::{
 };
 
 /// Extract the property name from a getter function name.
-fn extract_prop_from_getter(fn_name: &str) -> Option<&str> {
+#[inline(always)]
+fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if fn_name.starts_with(FN_GET) {
-        return Some(&fn_name[FN_GET.len()..]);
+    if _fn_name.starts_with(FN_GET) {
+        return Some(&_fn_name[FN_GET.len()..]);
     }
 
     None
 }
 
 /// Extract the property name from a setter function name.
-fn extract_prop_from_setter(fn_name: &str) -> Option<&str> {
+#[inline(always)]
+fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if fn_name.starts_with(FN_SET) {
-        return Some(&fn_name[FN_SET.len()..]);
+    if _fn_name.starts_with(FN_SET) {
+        return Some(&_fn_name[FN_SET.len()..]);
     }
 
     None
@@ -261,6 +266,7 @@ impl Engine {
         }
 
         // index getter function not found?
+        #[cfg(not(feature = "no_index"))]
         if fn_name == FN_IDX_GET && args.len() == 2 {
             return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 format!(
@@ -273,6 +279,7 @@ impl Engine {
         }
 
         // index setter function not found?
+        #[cfg(not(feature = "no_index"))]
         if fn_name == FN_IDX_SET {
             return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 format!(
@@ -492,6 +499,7 @@ impl Engine {
     }
 
     /// Call a dot method.
+    #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
         &self,
         state: &mut State,
@@ -512,9 +520,9 @@ impl Engine {
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
         let mut idx = idx_val.cast::<StaticVec<Dynamic>>();
-        let mut fn_name = name.as_ref();
+        let mut _fn_name = name.as_ref();
 
-        let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+        let (result, updated) = if _fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
             // FnPtr call
             let fn_ptr = obj.downcast_ref::<FnPtr>().unwrap();
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -533,7 +541,7 @@ impl Engine {
             self.exec_fn_call(
                 state, lib, fn_name, *native, hash, args, false, false, *def_val, level,
             )
-        } else if fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
+        } else if _fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
             // FnPtr call on object
             let fn_ptr = idx.remove(0).cast::<FnPtr>();
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -552,7 +560,7 @@ impl Engine {
             self.exec_fn_call(
                 state, lib, &fn_name, *native, hash, args, is_ref, true, *def_val, level,
             )
-        } else if fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
+        } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
             let fn_ptr = obj.downcast_ref::<FnPtr>().unwrap();
             Ok((
@@ -569,19 +577,20 @@ impl Engine {
                 false,
             ))
         } else {
+            #[cfg(not(feature = "no_object"))]
             let redirected;
-            let mut hash = *hash;
+            let mut _hash = *hash;
 
             // Check if it is a map method call in OOP style
             #[cfg(not(feature = "no_object"))]
             if let Some(map) = obj.downcast_ref::<Map>() {
-                if let Some(val) = map.get(fn_name) {
+                if let Some(val) = map.get(_fn_name) {
                     if let Some(f) = val.downcast_ref::<FnPtr>() {
                         // Remap the function name
                         redirected = f.get_fn_name().clone();
-                        fn_name = &redirected;
+                        _fn_name = &redirected;
                         // Recalculate the hash based on the new function name
-                        hash = calc_fn_hash(empty(), fn_name, idx.len(), empty());
+                        _hash = calc_fn_hash(empty(), _fn_name, idx.len(), empty());
                     }
                 }
             };
@@ -591,7 +600,7 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, fn_name, *native, hash, args, is_ref, true, *def_val, level,
+                state, lib, _fn_name, *native, _hash, args, is_ref, true, *def_val, level,
             )
         }
         .map_err(|err| err.new_position(*pos))?;

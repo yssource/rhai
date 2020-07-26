@@ -1,13 +1,13 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, Union, Variant};
+use crate::any::{map_std_type_name, Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, ImmutableString, ReturnType, Stmt};
+use crate::parser::{Expr, ReturnType, Stmt};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -15,11 +15,21 @@ use crate::syntax::{CustomSyntax, EvalContext};
 use crate::token::Position;
 use crate::utils::StaticVec;
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+use crate::any::Variant;
+
 #[cfg(not(feature = "no_function"))]
 use crate::parser::{FnAccess, ScriptFnDef};
 
 #[cfg(not(feature = "no_module"))]
-use crate::module::{resolvers, ModuleResolver};
+use crate::module::ModuleResolver;
+
+#[cfg(not(feature = "no_std"))]
+#[cfg(not(feature = "no_module"))]
+use crate::module::resolvers;
+
+#[cfg(any(not(feature = "no_object"), not(feature = "no_module")))]
+use crate::utils::ImmutableString;
 
 use crate::stdlib::{
     borrow::Cow,
@@ -83,9 +93,13 @@ pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
+#[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
+#[cfg(not(feature = "no_object"))]
 pub const FN_SET: &str = "set$";
+#[cfg(not(feature = "no_index"))]
 pub const FN_IDX_GET: &str = "index$get$";
+#[cfg(not(feature = "no_index"))]
 pub const FN_IDX_SET: &str = "index$set$";
 #[cfg(not(feature = "no_function"))]
 pub const FN_ANONYMOUS: &str = "anon$";
@@ -94,6 +108,7 @@ pub const MARKER_BLOCK: &str = "$block$";
 pub const MARKER_IDENT: &str = "$ident$";
 
 /// A type specifying the method of chaining.
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum ChainType {
     None,
@@ -102,6 +117,7 @@ pub enum ChainType {
 }
 
 /// A type that encapsulates a mutation target for an expression with side effects.
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug)]
 pub enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
@@ -114,6 +130,7 @@ pub enum Target<'a> {
     StringChar(&'a mut Dynamic, usize, Dynamic),
 }
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl Target<'_> {
     /// Is the `Target` a reference pointing to other data?
     pub fn is_ref(&self) -> bool {
@@ -134,6 +151,7 @@ impl Target<'_> {
         }
     }
     /// Is the `Target` a specific type?
+    #[allow(dead_code)]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
             Target::Ref(r) => r.is::<T>(),
@@ -194,11 +212,13 @@ impl Target<'_> {
     }
 }
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
         Self::Ref(value)
     }
 }
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     fn from(value: T) -> Self {
         Self::Value(value.into())
@@ -407,20 +427,24 @@ impl Default for Engine {
 }
 
 /// Make getter function
+#[cfg(not(feature = "no_object"))]
+#[inline(always)]
 pub fn make_getter(id: &str) -> String {
     format!("{}{}", FN_GET, id)
 }
 
 /// Make setter function
+#[cfg(not(feature = "no_object"))]
+#[inline(always)]
 pub fn make_setter(id: &str) -> String {
     format!("{}{}", FN_SET, id)
 }
 
 /// Print/debug to stdout
-fn default_print(s: &str) {
+fn default_print(_s: &str) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    println!("{}", s);
+    println!("{}", _s);
 }
 
 /// Search for a module within an imports stack.
@@ -611,6 +635,7 @@ impl Engine {
 
     /// Chain-evaluate a dot/index chain.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
@@ -621,7 +646,7 @@ impl Engine {
         idx_values: &mut StaticVec<Dynamic>,
         chain_type: ChainType,
         level: usize,
-        mut new_val: Option<Dynamic>,
+        mut _new_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
             panic!();
@@ -653,18 +678,19 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
-                            new_val,
+                            _new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
                     // xxx[rhs] = new_val
-                    _ if new_val.is_some() => {
-                        let mut new_val = new_val.unwrap();
+                    _ if _new_val.is_some() => {
+                        let mut new_val = _new_val.unwrap();
                         let mut idx_val2 = idx_val.clone();
 
                         match self.get_indexed_mut(state, lib, target, idx_val, pos, true, level) {
                             // Indexed value is an owned value - the only possibility is an indexer
                             // Try to call an index setter
+                            #[cfg(not(feature = "no_index"))]
                             Ok(obj_ptr) if obj_ptr.is_value() => {
                                 let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
@@ -688,6 +714,7 @@ impl Engine {
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
+                                #[cfg(not(feature = "no_index"))]
                                 EvalAltResult::ErrorIndexingType(_, _) => {
                                     let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
@@ -719,13 +746,13 @@ impl Engine {
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_) => unreachable!(),
                     // {xxx:map}.id = ???
-                    Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
+                    Expr::Property(x) if target.is::<Map>() && _new_val.is_some() => {
                         let ((prop, _, _), pos) = x.as_ref();
                         let index = prop.clone().into();
                         let mut val =
                             self.get_indexed_mut(state, lib, target, index, *pos, true, level)?;
 
-                        val.set_value(new_val.unwrap())
+                        val.set_value(_new_val.unwrap())
                             .map_err(|err| err.new_position(rhs.position()))?;
                         Ok((Default::default(), true))
                     }
@@ -739,9 +766,9 @@ impl Engine {
                         Ok((val.clone_into_dynamic(), false))
                     }
                     // xxx.id = ???
-                    Expr::Property(x) if new_val.is_some() => {
+                    Expr::Property(x) if _new_val.is_some() => {
                         let ((_, _, setter), pos) = x.as_ref();
-                        let mut args = [target.as_mut(), new_val.as_mut().unwrap()];
+                        let mut args = [target.as_mut(), _new_val.as_mut().unwrap()];
                         self.exec_fn_call(
                             state, lib, setter, true, 0, &mut args, is_ref, true, None, level,
                         )
@@ -783,7 +810,7 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
-                            new_val,
+                            _new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
@@ -810,7 +837,7 @@ impl Engine {
                                 let (result, may_be_changed) = self
                                     .eval_dot_index_chain_helper(
                                         state, lib, this_ptr, target, expr, idx_values, next_chain,
-                                        level, new_val,
+                                        level, _new_val,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -845,7 +872,7 @@ impl Engine {
 
                                 self.eval_dot_index_chain_helper(
                                     state, lib, this_ptr, target, expr, idx_values, next_chain,
-                                    level, new_val,
+                                    level, _new_val,
                                 )
                                 .map_err(|err| err.new_position(*pos))
                             }
@@ -868,6 +895,7 @@ impl Engine {
     }
 
     /// Evaluate a dot/index chain.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
@@ -944,6 +972,7 @@ impl Engine {
     /// Any spill-overs are stored in `more`, which is dynamic.
     /// The fixed length array is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
     /// The total number of values is returned.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_indexed_chain(
         &self,
         scope: &mut Scope,
@@ -1014,6 +1043,7 @@ impl Engine {
 
     /// Get the value at the indexed position of a base type
     /// Position in `EvalAltResult` may be None and should be set afterwards.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn get_indexed_mut<'a>(
         &self,
         state: &mut State,
@@ -1021,12 +1051,13 @@ impl Engine {
         target: &'a mut Target,
         mut _idx: Dynamic,
         idx_pos: Position,
-        create: bool,
+        _create: bool,
         _level: usize,
     ) -> Result<Target<'a>, Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
         #[cfg(not(feature = "no_index"))]
+        #[cfg(not(feature = "no_object"))]
         let is_ref = target.is_ref();
 
         let val = target.as_mut();
@@ -1057,7 +1088,7 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map)) => {
                 // val_map[idx]
-                Ok(if create {
+                Ok(if _create {
                     let index = _idx
                         .take_immutable_string()
                         .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
@@ -1112,7 +1143,7 @@ impl Engine {
                 })
             }
 
-            #[cfg(feature = "no_index")]
+            #[cfg(any(feature = "no_index", feature = "no_object"))]
             _ => Err(Box::new(EvalAltResult::ErrorIndexingType(
                 self.map_type_name(val.type_name()).into(),
                 Position::none(),
@@ -1289,7 +1320,7 @@ impl Engine {
                 let mut rhs_val =
                     self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
 
-                let new_val = Some(if op.is_empty() {
+                let _new_val = Some(if op.is_empty() {
                     // Normal assignment
                     rhs_val
                 } else {
@@ -1312,7 +1343,7 @@ impl Engine {
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
                         Ok(Default::default())
                     }
@@ -1320,7 +1351,7 @@ impl Engine {
                     #[cfg(not(feature = "no_object"))]
                     Expr::Dot(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, new_val,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
                         Ok(Default::default())
                     }

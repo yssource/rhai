@@ -10,30 +10,36 @@ use crate::engine::Array;
 use crate::engine::Map;
 
 use serde::ser::{
-    Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
-    SerializeTupleStruct, Serializer,
+    Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
+    Serializer,
 };
 use serde::Serialize;
 
 #[cfg(not(any(feature = "no_object", feature = "no_index")))]
 use serde::ser::SerializeTupleVariant;
 
-use crate::stdlib::{fmt, mem};
+#[cfg(not(feature = "no_object"))]
+use serde::ser::SerializeStructVariant;
+
+use crate::stdlib::{boxed::Box, fmt, string::ToString};
+
+#[cfg(not(feature = "no_object"))]
+use crate::stdlib::mem;
 
 /// Serializer for `Dynamic` which is kept as a reference.
 pub struct DynamicSerializer {
     /// Buffer to hold a temporary key.
-    key: Dynamic,
+    _key: Dynamic,
     /// Buffer to hold a temporary value.
-    value: Dynamic,
+    _value: Dynamic,
 }
 
 impl DynamicSerializer {
     /// Create a `DynamicSerializer` from a `Dynamic` value.
-    pub fn new(value: Dynamic) -> Self {
+    pub fn new(_value: Dynamic) -> Self {
         Self {
-            key: Default::default(),
-            value,
+            _key: Default::default(),
+            _value,
         }
     }
 }
@@ -283,13 +289,13 @@ impl Serializer for &mut DynamicSerializer {
         self,
         _name: &'static str,
         _variant_index: u32,
-        variant: &'static str,
-        value: &T,
+        _variant: &'static str,
+        _value: &T,
     ) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         {
-            let content = to_dynamic(value)?;
-            make_variant(variant, content)
+            let content = to_dynamic(_value)?;
+            make_variant(_variant, content)
         }
         #[cfg(feature = "no_object")]
         return Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
@@ -371,13 +377,13 @@ impl Serializer for &mut DynamicSerializer {
         self,
         _name: &'static str,
         _variant_index: u32,
-        variant: &'static str,
-        len: usize,
+        _variant: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeStructVariant, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         return Ok(StructVariantSerializer {
-            variant,
-            map: Map::with_capacity(len),
+            variant: _variant,
+            map: Map::with_capacity(_len),
         });
         #[cfg(feature = "no_object")]
         return Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
@@ -399,7 +405,7 @@ impl SerializeSeq for DynamicSerializer {
         #[cfg(not(feature = "no_index"))]
         {
             let _value = _value.serialize(&mut *self)?;
-            let arr = self.value.downcast_mut::<Array>().unwrap();
+            let arr = self._value.downcast_mut::<Array>().unwrap();
             arr.push(_value);
             Ok(())
         }
@@ -410,7 +416,7 @@ impl SerializeSeq for DynamicSerializer {
     // Close the sequence.
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
-        return Ok(self.value);
+        return Ok(self._value);
         #[cfg(feature = "no_index")]
         unreachable!()
     }
@@ -427,7 +433,7 @@ impl SerializeTuple for DynamicSerializer {
         #[cfg(not(feature = "no_index"))]
         {
             let _value = _value.serialize(&mut *self)?;
-            let arr = self.value.downcast_mut::<Array>().unwrap();
+            let arr = self._value.downcast_mut::<Array>().unwrap();
             arr.push(_value);
             Ok(())
         }
@@ -437,7 +443,7 @@ impl SerializeTuple for DynamicSerializer {
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
-        return Ok(self.value);
+        return Ok(self._value);
         #[cfg(feature = "no_index")]
         unreachable!()
     }
@@ -454,7 +460,7 @@ impl SerializeTupleStruct for DynamicSerializer {
         #[cfg(not(feature = "no_index"))]
         {
             let _value = _value.serialize(&mut *self)?;
-            let arr = self.value.downcast_mut::<Array>().unwrap();
+            let arr = self._value.downcast_mut::<Array>().unwrap();
             arr.push(_value);
             Ok(())
         }
@@ -464,7 +470,7 @@ impl SerializeTupleStruct for DynamicSerializer {
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
-        return Ok(self.value);
+        return Ok(self._value);
         #[cfg(feature = "no_index")]
         unreachable!()
     }
@@ -474,10 +480,10 @@ impl SerializeMap for DynamicSerializer {
     type Ok = Dynamic;
     type Error = Box<EvalAltResult>;
 
-    fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<(), Box<EvalAltResult>> {
+    fn serialize_key<T: ?Sized + Serialize>(&mut self, _key: &T) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         {
-            self.key = key.serialize(&mut *self)?;
+            self._key = _key.serialize(&mut *self)?;
             Ok(())
         }
         #[cfg(feature = "no_object")]
@@ -486,11 +492,11 @@ impl SerializeMap for DynamicSerializer {
 
     fn serialize_value<T: ?Sized + Serialize>(
         &mut self,
-        value: &T,
+        _value: &T,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         {
-            let key = mem::take(&mut self.key)
+            let key = mem::take(&mut self._key)
                 .take_immutable_string()
                 .map_err(|typ| {
                     Box::new(EvalAltResult::ErrorMismatchOutputType(
@@ -499,9 +505,9 @@ impl SerializeMap for DynamicSerializer {
                         Position::none(),
                     ))
                 })?;
-            let value = value.serialize(&mut *self)?;
-            let map = self.value.downcast_mut::<Map>().unwrap();
-            map.insert(key, value);
+            let _value = _value.serialize(&mut *self)?;
+            let map = self._value.downcast_mut::<Map>().unwrap();
+            map.insert(key, _value);
             Ok(())
         }
         #[cfg(feature = "no_object")]
@@ -510,22 +516,22 @@ impl SerializeMap for DynamicSerializer {
 
     fn serialize_entry<K: ?Sized + Serialize, T: ?Sized + Serialize>(
         &mut self,
-        key: &K,
-        value: &T,
+        _key: &K,
+        _value: &T,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         {
-            let key: Dynamic = key.serialize(&mut *self)?;
-            let key = key.take_immutable_string().map_err(|typ| {
+            let _key: Dynamic = _key.serialize(&mut *self)?;
+            let _key = _key.take_immutable_string().map_err(|typ| {
                 Box::new(EvalAltResult::ErrorMismatchOutputType(
                     "string".into(),
                     typ.into(),
                     Position::none(),
                 ))
             })?;
-            let value = value.serialize(&mut *self)?;
-            let map = self.value.downcast_mut::<Map>().unwrap();
-            map.insert(key, value);
+            let _value = _value.serialize(&mut *self)?;
+            let map = self._value.downcast_mut::<Map>().unwrap();
+            map.insert(_key, _value);
             Ok(())
         }
         #[cfg(feature = "no_object")]
@@ -534,7 +540,7 @@ impl SerializeMap for DynamicSerializer {
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
-        return Ok(self.value);
+        return Ok(self._value);
         #[cfg(feature = "no_object")]
         unreachable!()
     }
@@ -546,14 +552,14 @@ impl SerializeStruct for DynamicSerializer {
 
     fn serialize_field<T: ?Sized + Serialize>(
         &mut self,
-        key: &'static str,
-        value: &T,
+        _key: &'static str,
+        _value: &T,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         {
-            let value = value.serialize(&mut *self)?;
-            let map = self.value.downcast_mut::<Map>().unwrap();
-            map.insert(key.into(), value);
+            let _value = _value.serialize(&mut *self)?;
+            let map = self._value.downcast_mut::<Map>().unwrap();
+            map.insert(_key.into(), _value);
             Ok(())
         }
         #[cfg(feature = "no_object")]
@@ -562,7 +568,7 @@ impl SerializeStruct for DynamicSerializer {
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
-        return Ok(self.value);
+        return Ok(self._value);
         #[cfg(feature = "no_object")]
         unreachable!()
     }

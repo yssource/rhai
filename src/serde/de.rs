@@ -8,17 +8,20 @@ use crate::token::Position;
 use crate::utils::ImmutableString;
 
 use serde::de::{
-    DeserializeSeed, Deserializer, EnumAccess, Error, IntoDeserializer, MapAccess, SeqAccess,
-    VariantAccess, Visitor,
+    DeserializeSeed, Deserializer, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor,
 };
 use serde::Deserialize;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
+
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
 
-use crate::stdlib::{any::type_name, fmt};
+#[cfg(not(feature = "no_object"))]
+use serde::de::{EnumAccess, VariantAccess};
+
+use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
@@ -391,11 +394,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self.deserialize_seq(visitor)
     }
 
-    fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_map<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         return self.value.downcast_ref::<Map>().map_or_else(
             || self.type_error(),
-            |map| visitor.visit_map(IterateMap::new(map.keys(), map.values())),
+            |map| _visitor.visit_map(IterateMap::new(map.keys(), map.values())),
         );
 
         #[cfg(feature = "no_object")]
@@ -507,6 +510,7 @@ where
     values: VALUES,
 }
 
+#[cfg(not(feature = "no_object"))]
 impl<'a, KEYS, VALUES> IterateMap<'a, KEYS, VALUES>
 where
     KEYS: Iterator<Item = &'a ImmutableString>,

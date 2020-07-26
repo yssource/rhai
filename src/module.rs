@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
-use crate::engine::{make_getter, make_setter, Engine};
+use crate::engine::Engine;
 use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync};
 use crate::parser::{FnAccess, FnAccess::Public};
 use crate::result::EvalAltResult;
@@ -20,7 +20,11 @@ use crate::{
 };
 
 #[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
 use crate::engine::{FN_IDX_GET, FN_IDX_SET};
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::{make_getter, make_setter};
 
 use crate::stdlib::{
     any::TypeId,
@@ -35,12 +39,13 @@ use crate::stdlib::{
     vec::Vec,
 };
 
+#[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::cell::RefCell;
 
-#[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_std"))]
+#[cfg(not(feature = "no_module"))]
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::RwLock;
 

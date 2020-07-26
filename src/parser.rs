@@ -2,9 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{
-    make_getter, make_setter, Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
-};
+use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::Shared;
 use crate::module::{Module, ModuleRef};
@@ -16,6 +14,9 @@ use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::FN_ANONYMOUS;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::{make_getter, make_setter};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -38,6 +39,7 @@ use crate::stdlib::{
 use crate::stdlib::collections::hash_map::DefaultHasher;
 
 #[cfg(feature = "no_std")]
+#[cfg(not(feature = "no_function"))]
 use ahash::AHasher;
 
 /// The system integer type.
@@ -971,6 +973,7 @@ impl Expr {
     }
 
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
+    #[cfg(not(feature = "no_object"))]
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
@@ -1408,6 +1411,7 @@ fn parse_array_literal(
 }
 
 /// Parse a map literal.
+#[cfg(not(feature = "no_object"))]
 fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
@@ -1875,6 +1879,7 @@ fn parse_op_assignment_stmt(
 }
 
 /// Make a dot expression.
+#[cfg(not(feature = "no_object"))]
 fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
         // idx_lhs[idx_expr].rhs
