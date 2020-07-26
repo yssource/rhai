@@ -22,18 +22,30 @@ fn main() -> Result<(), Box<EvalAltResult>>
 }
 ```
 
-`rhai::EvalAltResult` is a Rust `enum` containing all errors encountered during the parsing or evaluation process.
+Evaluate a script file directly:
+
+```rust
+// 'eval_file' takes a 'PathBuf'
+let result = engine.eval_file::<i64>("hello_world.rhai".into())?;
+```
 
 
-Evaluate a Script
-----------------
+Error Type
+----------
 
-The type parameter is used to specify the type of the return value, which _must_ match the actual type or an error is returned.
-Rhai is very strict here.
+`rhai::EvalAltResult` is the standard Rhai error type, which is a Rust `enum` containing all errors encountered
+during the parsing or evaluation process.
 
-Use [`Dynamic`] for uncertain return types.
+
+Return Type
+-----------
+
+The type parameter for `Engine::eval` is used to specify the type of the return value,
+which _must_ match the actual type or an error is returned. Rhai is very strict here.
 
 There are two ways to specify the return type - _turbofish_ notation, or type inference.
+
+Use [`Dynamic`] for uncertain return types.
 
 ```rust
 let result = engine.eval::<i64>("40 + 2")?;     // return type is i64, specified using 'turbofish' notation
@@ -45,10 +57,4 @@ result.is::<i64>() == true;
 let result: Dynamic = engine.eval("boo()")?;    // use 'Dynamic' if you're not sure what type it'll be!
 
 let result = engine.eval::<String>("40 + 2")?;  // returns an error because the actual return type is i64, not String
-```
-
-Evaluate a script file directly:
-
-```rust
-let result = engine.eval_file::<i64>("hello_world.rhai".into())?;   // 'eval_file' takes a 'PathBuf'
 ```

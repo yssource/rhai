@@ -30,7 +30,7 @@ impl ModuleResolver for MyModuleResolver {
         &self,
         engine: &Engine,    // reference to the current 'Engine'
         path: &str,         // the module path
-        pos: Position,      // location of the 'import' statement
+        pos: Position,      // position of the 'import' statement
     ) -> Result<Module, Box<EvalAltResult>> {
         // Check module path.
         if is_valid_module_path(path) {
