@@ -22,11 +22,10 @@ macro_rules! impl_args {
             fn into_vec(self) -> StaticVec<Dynamic> {
                 let ($($p,)*) = self;
 
-                #[allow(unused_mut)]
-                let mut v = StaticVec::new();
-                $(v.push($p.into_dynamic());)*
+                let mut _v = StaticVec::new();
+                $(_v.push($p.into_dynamic());)*
 
-                v
+                _v
             }
         }
 

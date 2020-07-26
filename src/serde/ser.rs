@@ -11,11 +11,14 @@ use crate::engine::Map;
 
 use serde::ser::{
     Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
-    SerializeTupleStruct, SerializeTupleVariant, Serializer,
+    SerializeTupleStruct, Serializer,
 };
 use serde::Serialize;
 
-use crate::stdlib::{any::type_name, fmt, mem};
+#[cfg(not(any(feature = "no_object", feature = "no_index")))]
+use serde::ser::SerializeTupleVariant;
+
+use crate::stdlib::{fmt, mem};
 
 /// Serializer for `Dynamic` which is kept as a reference.
 pub struct DynamicSerializer {
@@ -323,13 +326,13 @@ impl Serializer for &mut DynamicSerializer {
         self,
         _name: &'static str,
         _variant_index: u32,
-        variant: &'static str,
-        len: usize,
+        _variant: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Box<EvalAltResult>> {
         #[cfg(not(any(feature = "no_object", feature = "no_index")))]
         return Ok(TupleVariantSerializer {
-            variant,
-            array: Array::with_capacity(len),
+            variant: _variant,
+            array: Array::with_capacity(_len),
         });
         #[cfg(any(feature = "no_object", feature = "no_index"))]
         {
@@ -391,13 +394,13 @@ impl SerializeSeq for DynamicSerializer {
 
     fn serialize_element<T: ?Sized + Serialize>(
         &mut self,
-        value: &T,
+        _value: &T,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         {
-            let value = value.serialize(&mut *self)?;
+            let _value = _value.serialize(&mut *self)?;
             let arr = self.value.downcast_mut::<Array>().unwrap();
-            arr.push(value);
+            arr.push(_value);
             Ok(())
         }
         #[cfg(feature = "no_index")]
@@ -419,13 +422,13 @@ impl SerializeTuple for DynamicSerializer {
 
     fn serialize_element<T: ?Sized + Serialize>(
         &mut self,
-        value: &T,
+        _value: &T,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         {
-            let value = value.serialize(&mut *self)?;
+            let _value = _value.serialize(&mut *self)?;
             let arr = self.value.downcast_mut::<Array>().unwrap();
-            arr.push(value);
+            arr.push(_value);
             Ok(())
         }
         #[cfg(feature = "no_index")]
@@ -446,13 +449,13 @@ impl SerializeTupleStruct for DynamicSerializer {
 
     fn serialize_field<T: ?Sized + Serialize>(
         &mut self,
-        value: &T,
+        _value: &T,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         {
-            let value = value.serialize(&mut *self)?;
+            let _value = _value.serialize(&mut *self)?;
             let arr = self.value.downcast_mut::<Array>().unwrap();
-            arr.push(value);
+            arr.push(_value);
             Ok(())
         }
         #[cfg(feature = "no_index")]

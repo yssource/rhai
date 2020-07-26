@@ -46,8 +46,12 @@ impl<'de> DynamicDeserializer<'de> {
     }
     /// Shortcut for a type conversion error.
     fn type_error<T>(&self) -> Result<T, Box<EvalAltResult>> {
+        self.type_error_str(type_name::<T>())
+    }
+    /// Shortcut for a type conversion error.
+    fn type_error_str<T>(&self, error: &str) -> Result<T, Box<EvalAltResult>> {
         Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
-            type_name::<T>().into(),
+            error.into(),
             self.value.type_name().into(),
             Position::none(),
         )))
@@ -283,23 +287,23 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_f32<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
             .downcast_ref::<f32>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_f32(x));
+            .map_or_else(|| self.type_error(), |&x| _visitor.visit_f32(x));
 
         #[cfg(feature = "no_float")]
         return self.type_error_str("f32");
     }
 
-    fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_f64<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
             .downcast_ref::<f64>()
-            .map_or_else(|| self.type_error(), |&x| visitor.visit_f64(x));
+            .map_or_else(|| self.type_error(), |&x| _visitor.visit_f64(x));
 
         #[cfg(feature = "no_float")]
         return self.type_error_str("f64");
@@ -359,11 +363,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_seq<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         return self.value.downcast_ref::<Array>().map_or_else(
             || self.type_error(),
-            |arr| visitor.visit_seq(IterateArray::new(arr.iter())),
+            |arr| _visitor.visit_seq(IterateArray::new(arr.iter())),
         );
 
         #[cfg(feature = "no_index")]
@@ -461,6 +465,7 @@ where
     iter: ITER,
 }
 
+#[cfg(not(feature = "no_index"))]
 impl<'a, ITER> IterateArray<'a, ITER>
 where
     ITER: Iterator<Item = &'a Dynamic>,

@@ -1,9 +1,8 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{make_getter, make_setter, Engine, Imports, State, FN_IDX_GET, FN_IDX_SET};
+use crate::engine::{make_getter, make_setter, Engine, Imports, State};
 use crate::error::ParseError;
-use crate::fn_args::FuncArgs;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::fn_register::RegisterFn;
 use crate::module::{FuncReturn, Module};
@@ -12,13 +11,15 @@ use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{lex, Position};
-use crate::utils::StaticVec;
+
+#[cfg(not(feature = "no_index"))]
+use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
 
 #[cfg(not(feature = "no_function"))]
-use crate::engine::get_script_function_by_signature;
+use crate::{engine::get_script_function_by_signature, fn_args::FuncArgs, utils::StaticVec};
 
 use crate::stdlib::{
     any::{type_name, TypeId},

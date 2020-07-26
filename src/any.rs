@@ -19,8 +19,10 @@ use crate::stdlib::{
     collections::HashMap,
     fmt,
     string::String,
-    vec::Vec,
 };
+
+#[cfg(not(feature = "no_index"))]
+use crate::stdlib::vec::Vec;
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]

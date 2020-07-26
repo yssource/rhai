@@ -11,12 +11,17 @@ use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
-use crate::parser::{Expr, ImmutableString, ScriptFnDef, AST, INT};
-use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
+use crate::parser::{Expr, ImmutableString, AST, INT};
 use crate::result::EvalAltResult;
-use crate::scope::{EntryType as ScopeEntryType, Scope};
+use crate::scope::Scope;
 use crate::token::Position;
 use crate::utils::StaticVec;
+
+#[cfg(not(feature = "no_function"))]
+use crate::{
+    parser::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
+    scope::EntryType as ScopeEntryType,
+};
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -106,17 +111,17 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_fn_raw(
         &self,
-        scope: &mut Scope,
-        mods: &mut Imports,
+        _scope: &mut Scope,
+        _mods: &mut Imports,
         state: &mut State,
         lib: &Module,
         fn_name: &str,
         (hash_fn, hash_script): (u64, u64),
         args: &mut FnCallArgs,
         is_ref: bool,
-        is_method: bool,
+        _is_method: bool,
         def_val: Option<bool>,
-        level: usize,
+        _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
@@ -125,7 +130,7 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        if level > self.max_call_stack_depth {
+        if _level > self.limits.max_call_stack_depth {
             return Err(Box::new(
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
@@ -151,7 +156,7 @@ impl Engine {
 
         if let Some(func) = func {
             #[cfg(not(feature = "no_function"))]
-            let need_normalize = is_ref && (func.is_pure() || (func.is_script() && !is_method));
+            let need_normalize = is_ref && (func.is_pure() || (func.is_script() && !_is_method));
             #[cfg(feature = "no_function")]
             let need_normalize = is_ref && func.is_pure();
 
@@ -164,25 +169,25 @@ impl Engine {
                 let fn_def = func.get_fn_def();
 
                 // Method call of script function - map first argument to `this`
-                return if is_method {
+                return if _is_method {
                     let (first, rest) = args.split_at_mut(1);
                     Ok((
                         self.call_script_fn(
-                            scope,
-                            mods,
+                            _scope,
+                            _mods,
                             state,
                             lib,
                             &mut Some(first[0]),
                             fn_name,
                             fn_def,
                             rest,
-                            level,
+                            _level,
                         )?,
                         false,
                     ))
                 } else {
                     let result = self.call_script_fn(
-                        scope, mods, state, lib, &mut None, fn_name, fn_def, args, level,
+                        _scope, _mods, state, lib, &mut None, fn_name, fn_def, args, _level,
                     )?;
 
                     // Restore the original reference
@@ -305,6 +310,7 @@ impl Engine {
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn call_script_fn(
         &self,
         scope: &mut Scope,
