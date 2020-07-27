@@ -8,10 +8,10 @@ use crate::engine::{
     KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
-use crate::fn_native::{CallableFunction, FnCallArgs, FnPtr};
+use crate::fn_native::{FnCallArgs, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
-use crate::parser::{Expr, FnAccess, ImmutableString, AST, INT};
+use crate::parser::{Expr, ImmutableString, AST, INT};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::Position;
@@ -105,19 +105,6 @@ fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCal
     }
 }
 
-#[inline]
-fn check_public_access(func: &CallableFunction) -> Option<&CallableFunction> {
-    if func.access() == FnAccess::Private {
-        None
-    } else {
-        Some(func)
-    }
-}
-#[inline(always)]
-fn no_check_access(func: &CallableFunction) -> Option<&CallableFunction> {
-    Some(func)
-}
-
 impl Engine {
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
@@ -146,12 +133,6 @@ impl Engine {
 
         let native_only = hash_script == 0;
 
-        let check = if pub_only {
-            check_public_access
-        } else {
-            no_check_access
-        };
-
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
@@ -170,16 +151,14 @@ impl Engine {
         // Then search packages
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
         let func = if !native_only {
-            lib.get_fn(hash_script).and_then(check) //.or_else(|| lib.get_fn(hash_fn)).and_then(check)
+            lib.get_fn(hash_script, pub_only) //.or_else(|| lib.get_fn(hash_fn, pub_only))
         } else {
             None
         }
-        //.or_else(|| self.global_module.get_fn(hash_script)).and_then(check)
-        .or_else(|| self.global_module.get_fn(hash_fn))
-        .and_then(check)
-        //.or_else(|| self.packages.get_fn(hash_script)).and_then(check)
-        .or_else(|| self.packages.get_fn(hash_fn))
-        .and_then(check);
+        //.or_else(|| self.global_module.get_fn(hash_script, pub_only))
+        .or_else(|| self.global_module.get_fn(hash_fn, pub_only))
+        //.or_else(|| self.packages.get_fn(hash_script, pub_only))
+        .or_else(|| self.packages.get_fn(hash_fn, pub_only));
 
         if let Some(func) = func {
             #[cfg(not(feature = "no_function"))]
@@ -274,7 +253,11 @@ impl Engine {
         // Getter function not found?
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             return Err(Box::new(EvalAltResult::ErrorDotExpr(
-                format!("- property '{}' unknown or write-only", prop),
+                format!(
+                    "Unknown property '{}' for {}, or it is write-only",
+                    prop,
+                    self.map_type_name(args[0].type_name())
+                ),
                 Position::none(),
             )));
         }
@@ -282,7 +265,11 @@ impl Engine {
         // Setter function not found?
         if let Some(prop) = extract_prop_from_setter(fn_name) {
             return Err(Box::new(EvalAltResult::ErrorDotExpr(
-                format!("- property '{}' unknown or read-only", prop),
+                format!(
+                    "Unknown property '{}' for {}, or it is read-only",
+                    prop,
+                    self.map_type_name(args[0].type_name())
+                ),
                 Position::none(),
             )));
         }
@@ -401,27 +388,17 @@ impl Engine {
 
     // Has a system function an override?
     fn has_override(&self, lib: &Module, hash_fn: u64, hash_script: u64, pub_only: bool) -> bool {
-        let check = if pub_only {
-            check_public_access
-        } else {
-            no_check_access
-        };
-
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
 
         // First check script-defined functions
-        lib.get_fn(hash_script)
-            .and_then(check)
-            //.or_else(|| lib.get_fn(hash_fn)).and_then(check)
+        lib.contains_fn(hash_script, pub_only)
+            //|| lib.contains_fn(hash_fn, pub_only)
             // Then check registered functions
-            //.or_else(|| self.global_module.get_fn(hash_script)).and_then(check)
-            .or_else(|| self.global_module.get_fn(hash_fn))
-            .and_then(check)
+            //|| self.global_module.contains_fn(hash_script, pub_only)
+            || self.global_module.contains_fn(hash_fn, pub_only)
             // Then check packages
-            //.or_else(|| self.packages.get_fn(hash_script)).and_then(check)
-            .or_else(|| self.packages.get_fn(hash_fn))
-            .and_then(check)
-            .is_some()
+            //|| self.packages.contains_fn(hash_script, pub_only)
+            || self.packages.contains_fn(hash_fn, pub_only)
     }
 
     /// Perform an actual function call, taking care of special functions
@@ -840,7 +817,6 @@ impl Engine {
         args_expr: &[Expr],
         def_val: Option<bool>,
         hash_script: u64,
-        pub_only: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let modules = modules.as_ref().unwrap();
@@ -887,13 +863,7 @@ impl Engine {
         let module = search_imports(mods, state, modules)?;
 
         // First search in script-defined functions (can override built-in)
-        let check = if pub_only {
-            check_public_access
-        } else {
-            no_check_access
-        };
-
-        let func = match module.get_qualified_fn(hash_script).and_then(check) {
+        let func = match module.get_qualified_fn(hash_script) {
             // Then search in Rust functions
             None => {
                 self.inc_operations(state)?;
@@ -907,7 +877,7 @@ impl Engine {
                 // 3) The final hash is the XOR of the two hashes.
                 let hash_qualified_fn = hash_script ^ hash_fn_args;
 
-                module.get_qualified_fn(hash_qualified_fn).and_then(check)
+                module.get_qualified_fn(hash_qualified_fn)
             }
             r => r,
         };

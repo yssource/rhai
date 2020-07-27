@@ -19,7 +19,7 @@ use crate::utils::StaticVec;
 use crate::any::Variant;
 
 #[cfg(not(feature = "no_function"))]
-use crate::parser::{FnAccess, ScriptFnDef};
+use crate::parser::ScriptFnDef;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
@@ -264,19 +264,15 @@ pub fn get_script_function_by_signature<'a>(
     module: &'a Module,
     name: &str,
     params: usize,
-    public_only: bool,
+    pub_only: bool,
 ) -> Option<&'a ScriptFnDef> {
     // Qualifiers (none) + function name + number of arguments.
     let hash_script = calc_fn_hash(empty(), name, params, empty());
-    let func = module.get_fn(hash_script)?;
-    if !func.is_script() {
-        return None;
-    }
-    let fn_def = func.get_fn_def();
-
-    match fn_def.access {
-        FnAccess::Private if public_only => None,
-        FnAccess::Private | FnAccess::Public => Some(&fn_def),
+    let func = module.get_fn(hash_script, pub_only)?;
+    if func.is_script() {
+        Some(func.get_fn_def())
+    } else {
+        None
     }
 }
 
@@ -798,7 +794,7 @@ impl Engine {
 
                         let mut val = match sub_lhs {
                             Expr::Property(p) => {
-                                let ((prop, _, _), _) = p.as_ref();
+                                let ((prop, _, _), pos) = p.as_ref();
                                 let index = prop.clone().into();
                                 self.get_indexed_mut(state, lib, target, index, *pos, false, level)?
                             }
@@ -827,12 +823,12 @@ impl Engine {
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) => {
-                        let (sub_lhs, expr, pos) = x.as_ref();
+                        let (sub_lhs, expr, _) = x.as_ref();
 
                         match sub_lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let ((_, getter, setter), _) = p.as_ref();
+                                let ((_, getter, setter), pos) = p.as_ref();
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
@@ -1304,8 +1300,8 @@ impl Engine {
 
                         if let Some(CallableFunction::Method(func)) = self
                             .global_module
-                            .get_fn(hash_fn)
-                            .or_else(|| self.packages.get_fn(hash_fn))
+                            .get_fn(hash_fn, false)
+                            .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
                             // Overriding exact implementation
                             func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
@@ -1431,7 +1427,7 @@ impl Engine {
                 let ((name, _, pos), modules, hash, args_expr, def_val) = x.as_ref();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, modules, name, args_expr, *def_val, *hash,
-                    true, level,
+                    level,
                 )
                 .map_err(|err| err.new_position(*pos))
             }
