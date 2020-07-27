@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
     KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    KEYWORD_TYPE_OF, KEYWORD_SHARED
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -16,6 +16,7 @@ use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::Position;
 use crate::utils::StaticVec;
+use crate::stdlib::ops::Deref;
 
 #[cfg(not(feature = "no_function"))]
 use crate::{
@@ -540,7 +541,7 @@ impl Engine {
 
         let (result, updated) = if _fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
             // FnPtr call
-            let fn_ptr = obj.downcast_ref::<FnPtr>().unwrap();
+            let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             // Redirect function name
             let fn_name = fn_ptr.fn_name();
@@ -578,7 +579,7 @@ impl Engine {
             )
         } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
-            let fn_ptr = obj.downcast_ref::<FnPtr>().unwrap();
+            let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
             Ok((
                 FnPtr::new_unchecked(
                     fn_ptr.get_fn_name().clone(),
@@ -599,9 +600,9 @@ impl Engine {
 
             // Check if it is a map method call in OOP style
             #[cfg(not(feature = "no_object"))]
-            if let Some(map) = obj.downcast_ref::<Map>() {
+            if let Some(map) = obj.read_lock::<Map>() {
                 if let Some(val) = map.get(_fn_name) {
-                    if let Some(f) = val.downcast_ref::<FnPtr>() {
+                    if let Some(f) = val.read_lock::<FnPtr>() {
                         // Remap the function name
                         redirected = f.get_fn_name().clone();
                         _fn_name = &redirected;
@@ -695,6 +696,15 @@ impl Engine {
                 fn_curry.into_iter().chain(curry.into_iter()).collect(),
             )
             .into());
+        }
+
+        // Handle shared()
+        #[cfg(not(feature = "no_shared"))]
+        if name == KEYWORD_SHARED && args_expr.len() == 1 {
+            let expr = args_expr.get(0).unwrap();
+            let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+
+            return Ok(value.into_shared());
         }
 
         // Handle eval()
@@ -984,8 +994,8 @@ pub fn run_builtin_binary_op(
             _ => (),
         }
     } else if args_type == TypeId::of::<ImmutableString>() {
-        let x = x.downcast_ref::<ImmutableString>().unwrap();
-        let y = y.downcast_ref::<ImmutableString>().unwrap();
+        let x = &*x.read_lock::<ImmutableString>().unwrap();
+        let y = &*y.read_lock::<ImmutableString>().unwrap();
 
         match op {
             "+" => return Ok(Some((x + y).into())),
@@ -1058,7 +1068,7 @@ pub fn run_builtin_op_assignment(
     }
 
     if args_type == TypeId::of::<INT>() {
-        let x = x.downcast_mut::<INT>().unwrap();
+        let mut x = x.write_lock::<INT>().unwrap();
         let y = y.clone().cast::<INT>();
 
         #[cfg(not(feature = "unchecked"))]
@@ -1094,7 +1104,7 @@ pub fn run_builtin_op_assignment(
             _ => (),
         }
     } else if args_type == TypeId::of::<bool>() {
-        let x = x.downcast_mut::<bool>().unwrap();
+        let mut x = x.write_lock::<bool>().unwrap();
         let y = y.clone().cast::<bool>();
 
         match op {
@@ -1103,18 +1113,18 @@ pub fn run_builtin_op_assignment(
             _ => (),
         }
     } else if args_type == TypeId::of::<ImmutableString>() {
-        let x = x.downcast_mut::<ImmutableString>().unwrap();
-        let y = y.downcast_ref::<ImmutableString>().unwrap();
+        let mut x = x.write_lock::<ImmutableString>().unwrap();
+        let y = y.read_lock::<ImmutableString>().unwrap();
 
         match op {
-            "+=" => return Ok(Some(*x += y)),
+            "+=" => return Ok(Some(*x += y.deref())),
             _ => (),
         }
     }
 
     #[cfg(not(feature = "no_float"))]
     if args_type == TypeId::of::<FLOAT>() {
-        let x = x.downcast_mut::<FLOAT>().unwrap();
+        let mut x = x.write_lock::<FLOAT>().unwrap();
         let y = y.clone().cast::<FLOAT>();
 
         match op {

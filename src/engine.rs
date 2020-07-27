@@ -91,6 +91,7 @@ pub const KEYWORD_EVAL: &str = "eval";
 pub const KEYWORD_FN_PTR: &str = "Fn";
 pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
+pub const KEYWORD_SHARED: &str = "shared";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
 #[cfg(not(feature = "no_object"))]
@@ -1068,6 +1069,18 @@ impl Engine {
 
         let val = target.as_mut();
 
+        // if val.is_shared() {
+        //     return self.get_indexed_mut(
+        //         state,
+        //         lib,
+        //         &mut Target::Value(val.read::<Dynamic>().unwrap()),
+        //         idx,
+        //         idx_pos,
+        //         create,
+        //         level,
+        //     );
+        // }
+
         match val {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr)) => {
@@ -1102,7 +1115,7 @@ impl Engine {
                     map.entry(index).or_insert(Default::default()).into()
                 } else {
                     let index = _idx
-                        .downcast_ref::<ImmutableString>()
+                        .read_lock::<ImmutableString>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
                     map.get_mut(index.as_str())
@@ -1280,7 +1293,11 @@ impl Engine {
                     )),
                     // Normal assignment
                     ScopeEntryType::Normal if op.is_empty() => {
-                        *lhs_ptr = rhs_val;
+                        if lhs_ptr.is_shared() {
+                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = rhs_val;
+                        } else {
+                            *lhs_ptr = rhs_val;
+                        }
                         Ok(Default::default())
                     }
                     // Op-assignment - in order of precedence:
@@ -1298,8 +1315,13 @@ impl Engine {
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
-                            // Overriding exact implementation
-                            func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
+                            if lhs_ptr.is_shared() {
+                                // Overriding exact implementation
+                                func(self, lib, &mut [&mut lhs_ptr.write_lock::<Dynamic>().unwrap(), &mut rhs_val])?;
+                            } else {
+                                // Overriding exact implementation
+                                func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
+                            }
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
@@ -1313,8 +1335,13 @@ impl Engine {
                                     level,
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
-                            // Set value to LHS
-                            *lhs_ptr = value;
+                            if lhs_ptr.is_shared() {
+                                // Set value to LHS
+                                *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
+                            } else {
+                                // Set value to LHS
+                                *lhs_ptr = value;
+                            }
                         }
                         Ok(Default::default())
                     }
