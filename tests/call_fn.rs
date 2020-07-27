@@ -1,6 +1,7 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseError, ParseErrorType, Scope, INT,
+    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseError, ParseErrorType, RegisterFn,
+    Scope, INT,
 };
 use std::any::TypeId;
 
@@ -119,21 +120,23 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
 fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.register_raw_fn(
-        "bar",
-        &[
-            TypeId::of::<INT>(),
-            TypeId::of::<FnPtr>(),
-            TypeId::of::<INT>(),
-        ],
-        move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-            let fp = std::mem::take(args[1]).cast::<FnPtr>();
-            let value = args[2].clone();
-            let this_ptr = args.get_mut(0).unwrap();
+    engine
+        .register_fn("mul", |x: &mut INT, y: INT| *x *= y)
+        .register_raw_fn(
+            "bar",
+            &[
+                TypeId::of::<INT>(),
+                TypeId::of::<FnPtr>(),
+                TypeId::of::<INT>(),
+            ],
+            move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+                let fp = std::mem::take(args[1]).cast::<FnPtr>();
+                let value = args[2].clone();
+                let this_ptr = args.get_mut(0).unwrap();
 
-            fp.call_dynamic(engine, lib, Some(this_ptr), [value])
-        },
-    );
+                fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+            },
+        );
 
     assert_eq!(
         engine.eval::<INT>(
@@ -142,6 +145,30 @@ fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
 
                 let x = 41;
                 x.bar(Fn("foo"), 1);
+                x
+            "#
+        )?,
+        42
+    );
+
+    assert!(matches!(
+        *engine.eval::<INT>(
+            r#"
+                private fn foo(x) { this += x; }
+
+                let x = 41;
+                x.bar(Fn("foo"), 1);
+                x
+            "#
+        ).expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(x, _) if x.starts_with("foo (")
+    ));
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = 21;
+                x.bar(Fn("mul"), 2);
                 x
             "#
         )?,

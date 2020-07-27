@@ -912,16 +912,8 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
-    pub(crate) fn get_qualified_fn(
-        &self,
-        hash_qualified_fn: u64,
-    ) -> Result<&Func, Box<EvalAltResult>> {
-        self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {
-            Box::new(EvalAltResult::ErrorFunctionNotFound(
-                String::new(),
-                Position::none(),
-            ))
-        })
+    pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&Func> {
+        self.all_functions.get(&hash_qualified_fn)
     }
 
     /// Merge another module into this module.

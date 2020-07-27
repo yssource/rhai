@@ -695,8 +695,8 @@ impl Engine {
                                 let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                 self.exec_fn_call(
-                                    state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
-                                    level,
+                                    state, lib, FN_IDX_SET, true, 0, args, is_ref, true, false,
+                                    None, level,
                                 )
                                 .or_else(|err| match *err {
                                     // If there is no index setter, no need to set it back because the indexer is read-only
@@ -719,8 +719,8 @@ impl Engine {
                                     let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                     self.exec_fn_call(
-                                        state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
-                                        level,
+                                        state, lib, FN_IDX_SET, true, 0, args, is_ref, true, false,
+                                        None, level,
                                     )?;
                                 }
                                 // Error
@@ -741,7 +741,12 @@ impl Engine {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x) if x.1.is_none() => {
-                        self.make_method_call(state, lib, target, rhs, idx_val, level)
+                        let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
+                        self.make_method_call(
+                            state, lib, name, *hash, target, idx_val, *def_val, *native, false,
+                            level,
+                        )
+                        .map_err(|err| err.new_position(*pos))
                     }
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_) => unreachable!(),
@@ -770,7 +775,8 @@ impl Engine {
                         let ((_, _, setter), pos) = x.as_ref();
                         let mut args = [target.as_mut(), _new_val.as_mut().unwrap()];
                         self.exec_fn_call(
-                            state, lib, setter, true, 0, &mut args, is_ref, true, None, level,
+                            state, lib, setter, true, 0, &mut args, is_ref, true, false, None,
+                            level,
                         )
                         .map(|(v, _)| (v, true))
                         .map_err(|err| err.new_position(*pos))
@@ -780,7 +786,8 @@ impl Engine {
                         let ((_, getter, _), pos) = x.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
-                            state, lib, getter, true, 0, &mut args, is_ref, true, None, level,
+                            state, lib, getter, true, 0, &mut args, is_ref, true, false, None,
+                            level,
                         )
                         .map(|(v, _)| (v, false))
                         .map_err(|err| err.new_position(*pos))
@@ -797,9 +804,13 @@ impl Engine {
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x) if x.1.is_none() => {
-                                let (val, _) = self.make_method_call(
-                                    state, lib, target, sub_lhs, idx_val, level,
-                                )?;
+                                let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
+                                let (val, _) = self
+                                    .make_method_call(
+                                        state, lib, name, *hash, target, idx_val, *def_val,
+                                        *native, false, level,
+                                    )
+                                    .map_err(|err| err.new_position(*pos))?;
                                 val.into()
                             }
                             // {xxx:map}.module::fn_name(...) - syntax error
@@ -826,8 +837,8 @@ impl Engine {
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
-                                        state, lib, getter, true, 0, args, is_ref, true, None,
-                                        level,
+                                        state, lib, getter, true, 0, args, is_ref, true, false,
+                                        None, level,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -847,7 +858,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         state, lib, setter, true, 0, arg_values, is_ref, true,
-                                        None, level,
+                                        false, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -864,9 +875,13 @@ impl Engine {
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(x) if x.1.is_none() => {
-                                let (mut val, _) = self.make_method_call(
-                                    state, lib, target, sub_lhs, idx_val, level,
-                                )?;
+                                let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
+                                let (mut val, _) = self
+                                    .make_method_call(
+                                        state, lib, name, *hash, target, idx_val, *def_val,
+                                        *native, false, level,
+                                    )
+                                    .map_err(|err| err.new_position(*pos))?;
                                 let val = &mut val;
                                 let target = &mut val.into();
 
@@ -1132,7 +1147,7 @@ impl Engine {
                 let type_name = val.type_name();
                 let args = &mut [val, &mut _idx];
                 self.exec_fn_call(
-                    state, _lib, FN_IDX_GET, true, 0, args, is_ref, true, None, _level,
+                    state, _lib, FN_IDX_GET, true, 0, args, is_ref, true, false, None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1188,7 +1203,7 @@ impl Engine {
 
                     let (r, _) = self
                         .call_fn_raw(
-                            &mut scope, mods, state, lib, op, hashes, args, false, false,
+                            &mut scope, mods, state, lib, op, hashes, args, false, false, false,
                             def_value, level,
                         )
                         .map_err(|err| err.new_position(rhs.position()))?;
@@ -1303,7 +1318,8 @@ impl Engine {
                             // Run function
                             let (value, _) = self
                                 .exec_fn_call(
-                                    state, lib, op, true, hash, args, false, false, None, level,
+                                    state, lib, op, true, hash, args, false, false, false, None,
+                                    level,
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
                             // Set value to LHS
@@ -1331,9 +1347,11 @@ impl Engine {
                         &mut self.eval_expr(scope, mods, state, lib, this_ptr, lhs_expr, level)?,
                         &mut rhs_val,
                     ];
-                    self.exec_fn_call(state, lib, op, true, hash, args, false, false, None, level)
-                        .map(|(v, _)| v)
-                        .map_err(|err| err.new_position(*op_pos))?
+                    self.exec_fn_call(
+                        state, lib, op, true, hash, args, false, false, false, None, level,
+                    )
+                    .map(|(v, _)| v)
+                    .map_err(|err| err.new_position(*op_pos))?
                 });
 
                 match lhs_expr {
@@ -1403,7 +1421,7 @@ impl Engine {
                 let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
                 self.make_function_call(
                     scope, mods, state, lib, this_ptr, name, args_expr, *def_val, *hash, *native,
-                    level,
+                    false, level,
                 )
                 .map_err(|err| err.new_position(*pos))
             }
@@ -1413,7 +1431,7 @@ impl Engine {
                 let ((name, _, pos), modules, hash, args_expr, def_val) = x.as_ref();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, modules, name, args_expr, *def_val, *hash,
-                    level,
+                    true, level,
                 )
                 .map_err(|err| err.new_position(*pos))
             }

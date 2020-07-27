@@ -8,10 +8,10 @@ use crate::engine::{
     KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
-use crate::fn_native::{FnCallArgs, FnPtr};
+use crate::fn_native::{CallableFunction, FnCallArgs, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
-use crate::parser::{Expr, ImmutableString, AST, INT};
+use crate::parser::{Expr, FnAccess, ImmutableString, AST, INT};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::Position;
@@ -105,6 +105,19 @@ fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCal
     }
 }
 
+#[inline]
+fn check_public_access(func: &CallableFunction) -> Option<&CallableFunction> {
+    if func.access() == FnAccess::Private {
+        None
+    } else {
+        Some(func)
+    }
+}
+#[inline(always)]
+fn no_check_access(func: &CallableFunction) -> Option<&CallableFunction> {
+    Some(func)
+}
+
 impl Engine {
     /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
@@ -125,12 +138,19 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
+        pub_only: bool,
         def_val: Option<bool>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
         let native_only = hash_script == 0;
+
+        let check = if pub_only {
+            check_public_access
+        } else {
+            no_check_access
+        };
 
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
@@ -150,14 +170,16 @@ impl Engine {
         // Then search packages
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
         let func = if !native_only {
-            lib.get_fn(hash_script) //.or_else(|| lib.get_fn(hash_fn))
+            lib.get_fn(hash_script).and_then(check) //.or_else(|| lib.get_fn(hash_fn)).and_then(check)
         } else {
             None
         }
-        //.or_else(|| self.global_module.get_fn(hash_script))
+        //.or_else(|| self.global_module.get_fn(hash_script)).and_then(check)
         .or_else(|| self.global_module.get_fn(hash_fn))
-        //.or_else(|| self.packages.get_fn(hash_script))
-        .or_else(|| self.packages.get_fn(hash_fn));
+        .and_then(check)
+        //.or_else(|| self.packages.get_fn(hash_script)).and_then(check)
+        .or_else(|| self.packages.get_fn(hash_fn))
+        .and_then(check);
 
         if let Some(func) = func {
             #[cfg(not(feature = "no_function"))]
@@ -378,18 +400,28 @@ impl Engine {
     }
 
     // Has a system function an override?
-    fn has_override(&self, lib: &Module, hash_fn: u64, hash_script: u64) -> bool {
+    fn has_override(&self, lib: &Module, hash_fn: u64, hash_script: u64, pub_only: bool) -> bool {
+        let check = if pub_only {
+            check_public_access
+        } else {
+            no_check_access
+        };
+
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
 
         // First check script-defined functions
-        lib.contains_fn(hash_script)
-        //|| lib.contains_fn(hash_fn)
-        // Then check registered functions
-        //|| self.global_module.contains_fn(hash_script)
-        || self.global_module.contains_fn(hash_fn)
-        // Then check packages
-        //|| self.packages.contains_fn(hash_script)
-        || self.packages.contains_fn(hash_fn)
+        lib.get_fn(hash_script)
+            .and_then(check)
+            //.or_else(|| lib.get_fn(hash_fn)).and_then(check)
+            // Then check registered functions
+            //.or_else(|| self.global_module.get_fn(hash_script)).and_then(check)
+            .or_else(|| self.global_module.get_fn(hash_fn))
+            .and_then(check)
+            // Then check packages
+            //.or_else(|| self.packages.get_fn(hash_script)).and_then(check)
+            .or_else(|| self.packages.get_fn(hash_fn))
+            .and_then(check)
+            .is_some()
     }
 
     /// Perform an actual function call, taking care of special functions
@@ -410,6 +442,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         is_method: bool,
+        pub_only: bool,
         def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -420,7 +453,9 @@ impl Engine {
 
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1) => {
+            KEYWORD_TYPE_OF
+                if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1, pub_only) =>
+            {
                 Ok((
                     self.map_type_name(args[0].type_name()).to_string().into(),
                     false,
@@ -428,7 +463,9 @@ impl Engine {
             }
 
             // Fn
-            KEYWORD_FN_PTR if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1) => {
+            KEYWORD_FN_PTR
+                if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1, pub_only) =>
+            {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'Fn' should not be called in method style. Try Fn(...);".into(),
                     Position::none(),
@@ -436,7 +473,9 @@ impl Engine {
             }
 
             // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1) => {
+            KEYWORD_EVAL
+                if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1, pub_only) =>
+            {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     Position::none(),
@@ -449,7 +488,7 @@ impl Engine {
                 let mut mods = Imports::new();
                 self.call_fn_raw(
                     &mut scope, &mut mods, state, lib, fn_name, hashes, args, is_ref, is_method,
-                    def_val, level,
+                    pub_only, def_val, level,
                 )
             }
         }
@@ -499,28 +538,28 @@ impl Engine {
     }
 
     /// Call a dot method.
+    /// Position in `EvalAltResult` is `None` and must be set afterwards.
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
         &self,
         state: &mut State,
         lib: &Module,
+        name: &str,
+        hash: u64,
         target: &mut Target,
-        expr: &Expr,
         idx_val: Dynamic,
+        def_val: Option<bool>,
+        native: bool,
+        pub_only: bool,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        let ((name, native, pos), _, hash, _, def_val) = match expr {
-            Expr::FnCall(x) => x.as_ref(),
-            _ => unreachable!(),
-        };
-
         let is_ref = target.is_ref();
         let is_value = target.is_value();
 
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
         let mut idx = idx_val.cast::<StaticVec<Dynamic>>();
-        let mut _fn_name = name.as_ref();
+        let mut _fn_name = name;
 
         let (result, updated) = if _fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
             // FnPtr call
@@ -539,7 +578,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, fn_name, *native, hash, args, false, false, *def_val, level,
+                state, lib, fn_name, native, hash, args, false, false, pub_only, def_val, level,
             )
         } else if _fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
             // FnPtr call on object
@@ -558,7 +597,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, &fn_name, *native, hash, args, is_ref, true, *def_val, level,
+                state, lib, &fn_name, native, hash, args, is_ref, true, pub_only, def_val, level,
             )
         } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
@@ -579,7 +618,7 @@ impl Engine {
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;
-            let mut _hash = *hash;
+            let mut _hash = hash;
 
             // Check if it is a map method call in OOP style
             #[cfg(not(feature = "no_object"))]
@@ -600,10 +639,9 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, _fn_name, *native, _hash, args, is_ref, true, *def_val, level,
+                state, lib, _fn_name, native, _hash, args, is_ref, true, pub_only, def_val, level,
             )
-        }
-        .map_err(|err| err.new_position(*pos))?;
+        }?;
 
         // Feed the changed temp value back
         if updated && !is_ref && !is_value {
@@ -628,13 +666,14 @@ impl Engine {
         def_val: Option<bool>,
         mut hash: u64,
         native: bool,
+        pub_only: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         // Handle Fn()
         if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash) {
+            if !self.has_override(lib, hash_fn, hash, pub_only) {
                 // Fn - only in function call style
                 let expr = args_expr.get(0).unwrap();
                 let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -685,7 +724,7 @@ impl Engine {
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash) {
+            if !self.has_override(lib, hash_fn, hash, pub_only) {
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let expr = args_expr.get(0).unwrap();
@@ -710,7 +749,10 @@ impl Engine {
         let mut curry: StaticVec<_> = Default::default();
         let mut name = name;
 
-        if name == KEYWORD_FN_PTR_CALL && args_expr.len() >= 1 && !self.has_override(lib, 0, hash) {
+        if name == KEYWORD_FN_PTR_CALL
+            && args_expr.len() >= 1
+            && !self.has_override(lib, 0, hash, pub_only)
+        {
             let expr = args_expr.get(0).unwrap();
             let fn_name = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
@@ -779,7 +821,7 @@ impl Engine {
 
         let args = args.as_mut();
         self.exec_fn_call(
-            state, lib, name, native, hash, args, is_ref, false, def_val, level,
+            state, lib, name, native, hash, args, is_ref, false, pub_only, def_val, level,
         )
         .map(|(v, _)| v)
     }
@@ -798,6 +840,7 @@ impl Engine {
         args_expr: &[Expr],
         def_val: Option<bool>,
         hash_script: u64,
+        pub_only: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let modules = modules.as_ref().unwrap();
@@ -844,9 +887,15 @@ impl Engine {
         let module = search_imports(mods, state, modules)?;
 
         // First search in script-defined functions (can override built-in)
-        let func = match module.get_qualified_fn(hash_script) {
-            Err(err) if matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) => {
-                // Then search in Rust functions
+        let check = if pub_only {
+            check_public_access
+        } else {
+            no_check_access
+        };
+
+        let func = match module.get_qualified_fn(hash_script).and_then(check) {
+            // Then search in Rust functions
+            None => {
                 self.inc_operations(state)?;
 
                 // Qualified Rust functions are indexed in two steps:
@@ -858,14 +907,14 @@ impl Engine {
                 // 3) The final hash is the XOR of the two hashes.
                 let hash_qualified_fn = hash_script ^ hash_fn_args;
 
-                module.get_qualified_fn(hash_qualified_fn)
+                module.get_qualified_fn(hash_qualified_fn).and_then(check)
             }
             r => r,
         };
 
         match func {
             #[cfg(not(feature = "no_function"))]
-            Ok(f) if f.is_script() => {
+            Some(f) if f.is_script() => {
                 let args = args.as_mut();
                 let fn_def = f.get_fn_def();
                 let mut scope = Scope::new();
@@ -874,31 +923,24 @@ impl Engine {
                     &mut scope, &mut mods, state, lib, &mut None, name, fn_def, args, level,
                 )
             }
-            Ok(f) => f.get_native_fn()(self, lib, args.as_mut()),
-            Err(err) => match *err {
-                EvalAltResult::ErrorFunctionNotFound(_, _) if def_val.is_some() => {
-                    Ok(def_val.unwrap().into())
-                }
-                EvalAltResult::ErrorFunctionNotFound(_, pos) => {
-                    Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                        format!(
-                            "{}{} ({})",
-                            modules,
-                            name,
-                            args.iter()
-                                .map(|a| if a.is::<ImmutableString>() {
-                                    "&str | ImmutableString | String"
-                                } else {
-                                    self.map_type_name((*a).type_name())
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ),
-                        pos,
-                    )))
-                }
-                _ => Err(err),
-            },
+            Some(f) => f.get_native_fn()(self, lib, args.as_mut()),
+            None if def_val.is_some() => Ok(def_val.unwrap().into()),
+            None => Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+                format!(
+                    "{}{} ({})",
+                    modules,
+                    name,
+                    args.iter()
+                        .map(|a| if a.is::<ImmutableString>() {
+                            "&str | ImmutableString | String"
+                        } else {
+                            self.map_type_name((*a).type_name())
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                Position::none(),
+            ))),
         }
     }
 }

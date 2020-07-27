@@ -72,15 +72,17 @@ fn main() {
     println!("==============");
     print_help();
 
-    loop {
+    'main_loop: loop {
         print!("rhai> ");
         stdout().flush().expect("couldn't flush stdout");
 
         input.clear();
 
         loop {
-            if let Err(err) = stdin().read_line(&mut input) {
-                panic!("input error: {}", err);
+            match stdin().read_line(&mut input) {
+                Ok(0) => break 'main_loop,
+                Ok(_) => (),
+                Err(err) => panic!("input error: {}", err),
             }
 
             let line = input.as_str().trim_end();

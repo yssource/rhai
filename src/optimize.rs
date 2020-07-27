@@ -141,6 +141,7 @@ fn call_fn_with_constant_arguments(
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             false,
+            true,
             None,
             0,
         )

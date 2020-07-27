@@ -125,8 +125,7 @@ engine.register_raw_fn(
         let this_ptr = args.get_mut(0).unwrap();                // 1st argument - this pointer
 
         // Use 'FnPtr::call_dynamic' to call the function pointer.
-        // Beware, only script-defined functions are supported by 'FnPtr::call_dynamic'.
-        // If it is a native Rust function, directly call it here in Rust instead!
+        // Beware, private script-defined functions will not be found.
         fp.call_dynamic(engine, lib, Some(this_ptr), [value])
     },
 );

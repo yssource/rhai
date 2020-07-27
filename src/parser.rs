@@ -2674,10 +2674,9 @@ fn parse_block(
         // Parse statements inside the block
         settings.is_global = false;
 
-        let stmt = if let Some(s) = parse_stmt(input, state, lib, settings.level_up())? {
-            s
-        } else {
-            continue;
+        let stmt = match parse_stmt(input, state, lib, settings.level_up())? {
+            Some(s) => s,
+            None => continue,
         };
 
         // See if it needs a terminating semicolon
@@ -3137,10 +3136,9 @@ impl Engine {
                 pos: Position::none(),
             };
 
-            let stmt = if let Some(s) = parse_stmt(input, &mut state, &mut functions, settings)? {
-                s
-            } else {
-                continue;
+            let stmt = match parse_stmt(input, &mut state, &mut functions, settings)? {
+                Some(s) => s,
+                None => continue,
             };
 
             let need_semicolon = !stmt.is_self_terminated();
