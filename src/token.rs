@@ -1076,35 +1076,7 @@ fn get_next_token_inner(
 
             // letter or underscore ...
             ('A'..='Z', _) | ('a'..='z', _) | ('_', _) => {
-                let mut result = Vec::new();
-                result.push(c);
-
-                while let Some(next_char) = stream.peek_next() {
-                    match next_char {
-                        x if x.is_ascii_alphanumeric() || x == '_' => {
-                            result.push(x);
-                            eat_next(stream, pos);
-                        }
-                        _ => break,
-                    }
-                }
-
-                let is_valid_identifier = is_valid_identifier(result.iter().cloned());
-
-                let identifier: String = result.into_iter().collect();
-
-                if !is_valid_identifier {
-                    return Some((
-                        Token::LexError(Box::new(LERR::MalformedIdentifier(identifier))),
-                        start_pos,
-                    ));
-                }
-
-                return Some((
-                    Token::lookup_from_syntax(&identifier)
-                        .unwrap_or_else(|| Token::Identifier(identifier)),
-                    start_pos,
-                ));
+                return get_identifier(stream, pos, start_pos, c);
             }
 
             // " - string literal
@@ -1400,6 +1372,42 @@ fn get_next_token_inner(
     }
 }
 
+/// Get the next identifier.
+fn get_identifier(
+    stream: &mut impl InputStream,
+    pos: &mut Position,
+    start_pos: Position,
+    first_char: char,
+) -> Option<(Token, Position)> {
+    let mut result = Vec::new();
+    result.push(first_char);
+
+    while let Some(next_char) = stream.peek_next() {
+        match next_char {
+            x if x.is_ascii_alphanumeric() || x == '_' => {
+                result.push(x);
+                eat_next(stream, pos);
+            }
+            _ => break,
+        }
+    }
+
+    let is_valid_identifier = is_valid_identifier(result.iter().cloned());
+
+    let identifier: String = result.into_iter().collect();
+
+    if !is_valid_identifier {
+        return Some((
+            Token::LexError(Box::new(LERR::MalformedIdentifier(identifier))),
+            start_pos,
+        ));
+    }
+
+    return Some((
+        Token::lookup_from_syntax(&identifier).unwrap_or_else(|| Token::Identifier(identifier)),
+        start_pos,
+    ));
+}
 /// A type that implements the `InputStream` trait.
 /// Multiple character streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
