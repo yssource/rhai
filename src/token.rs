@@ -495,8 +495,8 @@ impl Token {
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
             | "new" | "use" | "module" | "package" | "var" | "static" | "with" | "do" | "each"
             | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try" | "catch"
-            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "async" | "await"
-            | "yield" => Reserved(syntax.into()),
+            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "shared" | "sync"
+            | "async" | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS => Reserved(syntax.into()),
