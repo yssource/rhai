@@ -30,8 +30,11 @@ pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
 
 /// A location (line number + character position) in the input script.
 ///
-/// In order to keep footprint small, both line number and character position have 16-bit unsigned resolution,
-/// meaning they go up to a maximum of 65,535 lines and characters per line.
+/// # Limitations
+///
+/// In order to keep footprint small, both line number and character position have 16-bit resolution,
+/// meaning they go up to a maximum of 65,535 lines and 65,535 characters per line.
+///
 /// Advancing beyond the maximum line length or maximum number of lines is not an error but has no effect.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
@@ -43,6 +46,13 @@ pub struct Position {
 
 impl Position {
     /// Create a new `Position`.
+    ///
+    /// `line` must not be zero.
+    /// If `position` is zero, then it is at the beginning of a line.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `line` is zero.
     pub fn new(line: u16, position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
 
@@ -52,7 +62,7 @@ impl Position {
         }
     }
 
-    /// Get the line number (1-based), or `None` if no position.
+    /// Get the line number (1-based), or `None` if there is no position.
     pub fn line(&self) -> Option<usize> {
         if self.is_none() {
             None
@@ -85,7 +95,6 @@ impl Position {
     /// # Panics
     ///
     /// Panics if already at beginning of a line - cannot rewind to a previous line.
-    ///
     pub(crate) fn rewind(&mut self) {
         assert!(!self.is_none(), "cannot rewind Position::none");
         assert!(self.pos > 0, "cannot rewind at position 0");
@@ -104,7 +113,7 @@ impl Position {
     }
 
     /// Create a `Position` representing no position.
-    pub(crate) fn none() -> Self {
+    pub fn none() -> Self {
         Self { line: 0, pos: 0 }
     }
 
@@ -146,9 +155,9 @@ impl fmt::Debug for Position {
 pub enum Token {
     /// An `INT` constant.
     IntegerConstant(INT),
-    /// A `FLOAT` constaint.
+    /// A `FLOAT` constant.
     ///
-    /// Never appears under the `no_float` feature.
+    /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT),
     /// An identifier.
@@ -249,7 +258,7 @@ pub enum Token {
     And,
     /// `fn`
     ///
-    /// Never appears under the `no_function` feature.
+    /// Reserved under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     Fn,
     /// `continue`
@@ -284,22 +293,22 @@ pub enum Token {
     PowerOfAssign,
     /// `private`
     ///
-    /// Never appears under the `no_function` feature.
+    /// Reserved under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     Private,
     /// `import`
     ///
-    /// Never appears under the `no_module` feature.
+    /// Reserved under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     Import,
     /// `export`
     ///
-    /// Never appears under the `no_module` feature.
+    /// Reserved under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     Export,
     /// `as`
     ///
-    /// Never appears under the `no_module` feature.
+    /// Reserved under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     As,
     /// A lexer error.
@@ -643,7 +652,7 @@ impl Token {
         }
     }
 
-    /// Is this token a standard keyword?
+    /// Is this token an active standard keyword?
     pub fn is_keyword(&self) -> bool {
         use Token::*;
 
@@ -670,7 +679,7 @@ impl Token {
     }
 
     /// Convert a token into a function name, if possible.
-    pub fn into_function_name(self) -> Result<String, Self> {
+    pub(crate) fn into_function_name(self) -> Result<String, Self> {
         match self {
             Self::Reserved(s) if is_keyword_function(&s) => Ok(s),
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
