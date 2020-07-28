@@ -1338,6 +1338,7 @@ fn get_next_token_inner(
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),
+            #[cfg(feature = "unicode-xid-ident")]
             (ch, _) if unicode_xid::UnicodeXID::is_xid_start(ch) => {
                 return get_identifier(stream, pos, start_pos, c);
             }
@@ -1412,23 +1413,26 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
+#[cfg(feature = "unicode-xid-ident")]
 fn is_id_first_alphabetic(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_start(x)
 }
 
+#[cfg(feature = "unicode-xid-ident")]
 fn is_id_continue(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(x)
 }
 
-/*
+#[cfg(not(feature = "unicode-xid-ident"))]
+
 fn is_id_first_alphabetic(x: char) -> bool {
     x.is_ascii_alphabetic()
 }
 
+#[cfg(not(feature = "unicode-xid-ident"))]
 fn is_id_continue(x: char) -> bool {
     x.is_ascii_alphanumeric() || x == '_'
 }
-*/
 
 /// A type that implements the `InputStream` trait.
 /// Multiple character streams are jointed together to form one single stream.
