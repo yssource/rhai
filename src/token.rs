@@ -1399,7 +1399,7 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     for ch in name {
         match ch {
             '_' => (),
-            _ if is_first_alphabetic(ch) => first_alphabetic = true,
+            _ if is_id_first_alphabetic(ch) => first_alphabetic = true,
             _ if !first_alphabetic => return false,
             _ if char::is_ascii_alphanumeric(&ch) => (),
             _ => return false,
@@ -1409,7 +1409,7 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
-fn is_first_alphabetic(x: char) -> bool {
+fn is_id_first_alphabetic(x: char) -> bool {
     x.is_ascii_alphabetic()
 }
 
