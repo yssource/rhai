@@ -185,6 +185,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 optimize_expr(expr, state),
                 optimize_stmt(x.1, state, true),
                 None,
+                x.3,
             ))),
         },
         // if expr { if_block } else { else_block }
@@ -201,6 +202,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     Stmt::Noop(_) => None, // Noop -> no else block
                     stmt => Some(stmt),
                 },
+                x.3,
             ))),
         },
         // while expr { block }
@@ -211,7 +213,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 Stmt::Noop(pos)
             }
             // while true { block } -> loop { block }
-            Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(x.1, state, false))),
+            Expr::True(_) => Stmt::Loop(Box::new((optimize_stmt(x.1, state, false), x.2))),
             // while expr { block }
             expr => match optimize_stmt(x.1, state, false) {
                 // while expr { break; } -> { expr; }
@@ -226,11 +228,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     Stmt::Block(Box::new((statements, pos)))
                 }
                 // while expr { block }
-                stmt => Stmt::While(Box::new((optimize_expr(expr, state), stmt))),
+                stmt => Stmt::While(Box::new((optimize_expr(expr, state), stmt, x.2))),
             },
         },
         // loop { block }
-        Stmt::Loop(block) => match optimize_stmt(*block, state, false) {
+        Stmt::Loop(x) => match optimize_stmt(x.0, state, false) {
             // loop { break; } -> Noop
             Stmt::Break(pos) => {
                 // Only a single break statement
@@ -238,23 +240,26 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 Stmt::Noop(pos)
             }
             // loop { block }
-            stmt => Stmt::Loop(Box::new(stmt)),
+            stmt => Stmt::Loop(Box::new((stmt, x.1))),
         },
         // for id in expr { block }
         Stmt::For(x) => Stmt::For(Box::new((
             x.0,
             optimize_expr(x.1, state),
             optimize_stmt(x.2, state, false),
+            x.3,
         ))),
         // let id = expr;
-        Stmt::Let(x) if x.1.is_some() => {
-            Stmt::Let(Box::new((x.0, Some(optimize_expr(x.1.unwrap(), state)))))
-        }
+        Stmt::Let(x) if x.1.is_some() => Stmt::Let(Box::new((
+            x.0,
+            Some(optimize_expr(x.1.unwrap(), state)),
+            x.2,
+        ))),
         // let id;
         stmt @ Stmt::Let(_) => stmt,
         // import expr as id;
         #[cfg(not(feature = "no_module"))]
-        Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1))),
+        Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1, x.2))),
         // { block }
         Stmt::Block(x) => {
             let orig_len = x.0.len(); // Original number of statements in the block, for change detection
@@ -267,7 +272,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     .map(|stmt| match stmt {
                         // Add constant into the state
                         Stmt::Const(v) => {
-                            let ((name, pos), expr) = *v;
+                            let ((name, pos), expr, _) = *v;
                             state.push_constant(&name, expr);
                             state.set_dirty();
                             Stmt::Noop(pos) // No need to keep constants
@@ -367,9 +372,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(Box::new(optimize_expr(*expr, state))),
         // return expr;
-        Stmt::ReturnWithVal(x) if x.1.is_some() => {
-            Stmt::ReturnWithVal(Box::new((x.0, Some(optimize_expr(x.1.unwrap(), state)))))
-        }
+        Stmt::ReturnWithVal(x) if x.1.is_some() => Stmt::ReturnWithVal(Box::new((
+            x.0,
+            Some(optimize_expr(x.1.unwrap(), state)),
+            x.2,
+        ))),
         // All other statements - skip
         stmt => stmt,
     }
@@ -412,7 +419,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 let pos = m.1;
                 m.0.into_iter().find(|((name, _), _)| name.as_str() == prop.as_str())
-                    .map(|(_, expr)| expr.set_position(pos))
+                    .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // lhs.rhs
@@ -429,7 +436,9 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                a.0.take(i.0 as usize).set_position(a.1)
+                let mut expr = a.0.take(i.0 as usize);
+                expr.set_position(a.1);
+                expr
             }
             // map[string]
             (Expr::Map(m), Expr::StringConstant(s)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
@@ -438,7 +447,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 let pos = m.1;
                 m.0.into_iter().find(|((name, _), _)| *name == s.0)
-                    .map(|(_, expr)| expr.set_position(pos))
+                    .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
@@ -625,7 +634,9 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(&name).unwrap().clone().set_position(pos)
+            let mut expr = state.find_constant(&name).unwrap().clone();
+            expr.set_position(pos);
+            expr
         }
 
         // Custom syntax
@@ -687,7 +698,7 @@ fn optimize(
                 match &stmt {
                     Stmt::Const(v) => {
                         // Load constants
-                        let ((name, _), expr) = v.as_ref();
+                        let ((name, _), expr, _) = v.as_ref();
                         state.push_constant(&name, expr.clone());
                         stmt // Keep it in the global scope
                     }

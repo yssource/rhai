@@ -26,7 +26,6 @@ use crate::stdlib::{
     fmt, format,
     hash::{Hash, Hasher},
     iter::empty,
-    mem,
     num::NonZeroUsize,
     ops::Add,
     string::{String, ToString},
@@ -511,33 +510,38 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Box<(Expr, Stmt, Option<Stmt>)>),
+    IfThenElse(Box<(Expr, Stmt, Option<Stmt>, Position)>),
     /// while expr { stmt }
-    While(Box<(Expr, Stmt)>),
+    While(Box<(Expr, Stmt, Position)>),
     /// loop { stmt }
-    Loop(Box<Stmt>),
+    Loop(Box<(Stmt, Position)>),
     /// for id in expr { stmt }
-    For(Box<(String, Expr, Stmt)>),
+    For(Box<(String, Expr, Stmt, Position)>),
     /// let id = expr
-    Let(Box<((String, Position), Option<Expr>)>),
+    Let(Box<((String, Position), Option<Expr>, Position)>),
     /// const id = expr
-    Const(Box<((String, Position), Expr)>),
+    Const(Box<((String, Position), Expr, Position)>),
     /// { stmt; ... }
     Block(Box<(StaticVec<Stmt>, Position)>),
-    /// { stmt }
+    /// expr
     Expr(Box<Expr>),
     /// continue
     Continue(Position),
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal(Box<((ReturnType, Position), Option<Expr>)>),
+    ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
     /// import expr as module
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, (String, Position))>),
+    Import(Box<(Expr, (String, Position), Position)>),
     /// expr id as name, ...
     #[cfg(not(feature = "no_module"))]
-    Export(Box<StaticVec<((String, Position), Option<(String, Position)>)>>),
+    Export(
+        Box<(
+            StaticVec<((String, Position), Option<(String, Position)>)>,
+            Position,
+        )>,
+    ),
 }
 
 impl Default for Stmt {
@@ -555,17 +559,42 @@ impl Stmt {
             Stmt::Const(x) => (x.0).1,
             Stmt::ReturnWithVal(x) => (x.0).1,
             Stmt::Block(x) => x.1,
-            Stmt::IfThenElse(x) => x.0.position(),
+            Stmt::IfThenElse(x) => x.3,
             Stmt::Expr(x) => x.position(),
-            Stmt::While(x) => x.1.position(),
-            Stmt::Loop(x) => x.position(),
-            Stmt::For(x) => x.2.position(),
+            Stmt::While(x) => x.2,
+            Stmt::Loop(x) => x.1,
+            Stmt::For(x) => x.3,
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => (x.1).1,
+            Stmt::Import(x) => x.2,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => (x.get(0).0).1,
+            Stmt::Export(x) => x.1,
         }
+    }
+
+    /// Override the `Position` of this statement.
+    pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
+        match self {
+            Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos = new_pos,
+            Stmt::Let(x) => (x.0).1 = new_pos,
+            Stmt::Const(x) => (x.0).1 = new_pos,
+            Stmt::ReturnWithVal(x) => (x.0).1 = new_pos,
+            Stmt::Block(x) => x.1 = new_pos,
+            Stmt::IfThenElse(x) => x.3 = new_pos,
+            Stmt::Expr(x) => {
+                x.set_position(new_pos);
+            }
+            Stmt::While(x) => x.2 = new_pos,
+            Stmt::Loop(x) => x.1 = new_pos,
+            Stmt::For(x) => x.3 = new_pos,
+
+            #[cfg(not(feature = "no_module"))]
+            Stmt::Import(x) => x.2 = new_pos,
+            #[cfg(not(feature = "no_module"))]
+            Stmt::Export(x) => x.1 = new_pos,
+        }
+
+        self
     }
 
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
@@ -602,7 +631,7 @@ impl Stmt {
             }
             Stmt::IfThenElse(x) => x.1.is_pure(),
             Stmt::While(x) => x.0.is_pure() && x.1.is_pure(),
-            Stmt::Loop(x) => x.is_pure(),
+            Stmt::Loop(x) => x.0.is_pure(),
             Stmt::For(x) => x.1.is_pure() && x.2.is_pure(),
             Stmt::Let(_) | Stmt::Const(_) => false,
             Stmt::Block(x) => x.0.iter().all(Stmt::is_pure),
@@ -832,11 +861,10 @@ impl Expr {
     }
 
     /// Override the `Position` of the expression.
-    pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
-        match &mut self {
-            Self::Expr(ref mut x) => {
-                let expr = mem::take(x);
-                *x = Box::new(expr.set_position(new_pos));
+    pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
+        match self {
+            Self::Expr(x) => {
+                x.set_position(new_pos);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -2314,7 +2342,7 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         (Token::Equals, pos) => {
-            return Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
+            Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
         }
         (Token::PlusAssign, pos)
         | (Token::MinusAssign, pos)
@@ -2326,12 +2354,10 @@ fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
         | (Token::PowerOfAssign, pos)
         | (Token::AndAssign, pos)
         | (Token::OrAssign, pos)
-        | (Token::XOrAssign, pos) => {
-            return Err(PERR::BadInput(
-                "Expecting a boolean expression, not an assignment".to_string(),
-            )
-            .into_err(*pos))
-        }
+        | (Token::XOrAssign, pos) => Err(PERR::BadInput(
+            "Expecting a boolean expression, not an assignment".to_string(),
+        )
+        .into_err(*pos)),
 
         _ => Ok(()),
     }
@@ -2345,7 +2371,8 @@ fn parse_if(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // if ...
-    settings.pos = eat_token(input, Token::If);
+    let token_pos = eat_token(input, Token::If);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2369,7 +2396,9 @@ fn parse_if(
         None
     };
 
-    Ok(Stmt::IfThenElse(Box::new((guard, if_body, else_body))))
+    Ok(Stmt::IfThenElse(Box::new((
+        guard, if_body, else_body, token_pos,
+    ))))
 }
 
 /// Parse a while loop.
@@ -2380,7 +2409,8 @@ fn parse_while(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // while ...
-    settings.pos = eat_token(input, Token::While);
+    let token_pos = eat_token(input, Token::While);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2393,7 +2423,7 @@ fn parse_while(
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::While(Box::new((guard, body))))
+    Ok(Stmt::While(Box::new((guard, body, token_pos))))
 }
 
 /// Parse a loop statement.
@@ -2404,7 +2434,8 @@ fn parse_loop(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // loop ...
-    settings.pos = eat_token(input, Token::Loop);
+    let token_pos = eat_token(input, Token::Loop);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2413,7 +2444,7 @@ fn parse_loop(
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::Loop(Box::new(body)))
+    Ok(Stmt::Loop(Box::new((body, token_pos))))
 }
 
 /// Parse a for loop.
@@ -2424,7 +2455,8 @@ fn parse_for(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // for ...
-    settings.pos = eat_token(input, Token::For);
+    let token_pos = eat_token(input, Token::For);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2467,7 +2499,7 @@ fn parse_for(
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(Box::new((name, expr, body))))
+    Ok(Stmt::For(Box::new((name, expr, body, token_pos))))
 }
 
 /// Parse a variable definition statement.
@@ -2479,7 +2511,8 @@ fn parse_let(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
-    settings.pos = input.next().unwrap().1;
+    let token_pos = input.next().unwrap().1;
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2503,12 +2536,16 @@ fn parse_let(
             // let name = expr
             ScopeEntryType::Normal => {
                 state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(((name, pos), Some(init_value)))))
+                Ok(Stmt::Let(Box::new((
+                    (name, pos),
+                    Some(init_value),
+                    token_pos,
+                ))))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
                 state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(((name, pos), init_value))))
+                Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
             }
             // const name = expr: error
             ScopeEntryType::Constant => {
@@ -2520,11 +2557,15 @@ fn parse_let(
         match var_type {
             ScopeEntryType::Normal => {
                 state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(((name, pos), None))))
+                Ok(Stmt::Let(Box::new(((name, pos), None, token_pos))))
             }
             ScopeEntryType::Constant => {
                 state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(((name, pos), Expr::Unit(pos)))))
+                Ok(Stmt::Const(Box::new((
+                    (name, pos),
+                    Expr::Unit(pos),
+                    token_pos,
+                ))))
             }
         }
     }
@@ -2539,7 +2580,8 @@ fn parse_import(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // import ...
-    settings.pos = eat_token(input, Token::Import);
+    let token_pos = eat_token(input, Token::Import);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2569,7 +2611,12 @@ fn parse_import(
     };
 
     state.modules.push(name.clone());
-    Ok(Stmt::Import(Box::new((expr, (name, settings.pos)))))
+
+    Ok(Stmt::Import(Box::new((
+        expr,
+        (name, settings.pos),
+        token_pos,
+    ))))
 }
 
 /// Parse an export statement.
@@ -2580,7 +2627,8 @@ fn parse_export(
     _lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    settings.pos = eat_token(input, Token::Export);
+    let token_pos = eat_token(input, Token::Export);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(_state.max_expr_depth)?;
@@ -2640,7 +2688,7 @@ fn parse_export(
         })
         .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
 
-    Ok(Stmt::Export(Box::new(exports)))
+    Ok(Stmt::Export(Box::new((exports, token_pos))))
 }
 
 /// Parse a statement block.
@@ -2827,22 +2875,32 @@ fn parse_stmt(
         Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
 
         Token::Return | Token::Throw => {
-            let return_type = match input.next().unwrap() {
-                (Token::Return, _) => ReturnType::Return,
-                (Token::Throw, _) => ReturnType::Exception,
-                _ => unreachable!(),
-            };
+            let (return_type, token_pos) = input
+                .next()
+                .map(|(token, pos)| {
+                    (
+                        match token {
+                            Token::Return => ReturnType::Return,
+                            Token::Throw => ReturnType::Exception,
+                            _ => unreachable!(),
+                        },
+                        pos,
+                    )
+                })
+                .unwrap();
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
                 (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(Box::new((
                     (return_type, *pos),
                     None,
+                    token_pos,
                 ))))),
                 // `return;` or `throw;`
                 (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(Box::new((
                     (return_type, settings.pos),
                     None,
+                    token_pos,
                 ))))),
                 // `return` or `throw` with expression
                 (_, _) => {
@@ -2852,6 +2910,7 @@ fn parse_stmt(
                     Ok(Some(Stmt::ReturnWithVal(Box::new((
                         (return_type, pos),
                         Some(expr),
+                        token_pos,
                     )))))
                 }
             }

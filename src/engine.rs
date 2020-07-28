@@ -228,11 +228,6 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 /// [INTERNALS] A type that holds all the current states of the Engine.
 /// Exported under the `internals` feature only.
 ///
-/// # Safety
-///
-/// This type uses some unsafe code, mainly for avoiding cloning of local variable names via
-/// direct lifetime casting.
-///
 /// ## WARNING
 ///
 /// This type is volatile and may change.
@@ -1495,6 +1490,12 @@ impl Engine {
     }
 
     /// Evaluate a statement
+    ///
+    ///
+    /// # Safety
+    ///
+    /// This method uses some unsafe code, mainly for avoiding cloning of local variable names via
+    /// direct lifetime casting.
     pub(crate) fn eval_stmt(
         &self,
         scope: &mut Scope,
@@ -1538,7 +1539,7 @@ impl Engine {
 
             // If-else statement
             Stmt::IfThenElse(x) => {
-                let (expr, if_block, else_block) = x.as_ref();
+                let (expr, if_block, else_block, _) = x.as_ref();
 
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
@@ -1556,7 +1557,7 @@ impl Engine {
 
             // While loop
             Stmt::While(x) => loop {
-                let (expr, body) = x.as_ref();
+                let (expr, body, _) = x.as_ref();
 
                 match self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
@@ -1582,8 +1583,8 @@ impl Engine {
             },
 
             // Loop statement
-            Stmt::Loop(body) => loop {
-                match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
+            Stmt::Loop(x) => loop {
+                match self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1595,7 +1596,7 @@ impl Engine {
 
             // For loop
             Stmt::For(x) => {
-                let (name, expr, stmt) = x.as_ref();
+                let (name, expr, stmt, _) = x.as_ref();
                 let iter_type = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let tid = iter_type.type_id();
 
@@ -1641,16 +1642,9 @@ impl Engine {
 
             // Return value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
+                let expr = x.1.as_ref().unwrap();
                 Err(Box::new(EvalAltResult::Return(
-                    self.eval_expr(
-                        scope,
-                        mods,
-                        state,
-                        lib,
-                        this_ptr,
-                        x.1.as_ref().unwrap(),
-                        level,
-                    )?,
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
                     (x.0).1,
                 )))
             }
@@ -1662,15 +1656,8 @@ impl Engine {
 
             // Throw value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
-                let val = self.eval_expr(
-                    scope,
-                    mods,
-                    state,
-                    lib,
-                    this_ptr,
-                    x.1.as_ref().unwrap(),
-                    level,
-                )?;
+                let expr = x.1.as_ref().unwrap();
+                let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     val.take_string().unwrap_or_else(|_| "".into()),
                     (x.0).1,
@@ -1686,23 +1673,16 @@ impl Engine {
 
             // Let statement
             Stmt::Let(x) if x.1.is_some() => {
-                let ((var_name, _), expr) = x.as_ref();
-                let val = self.eval_expr(
-                    scope,
-                    mods,
-                    state,
-                    lib,
-                    this_ptr,
-                    expr.as_ref().unwrap(),
-                    level,
-                )?;
+                let ((var_name, _), expr, _) = x.as_ref();
+                let expr = expr.as_ref().unwrap();
+                let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
                 Ok(Default::default())
             }
 
             Stmt::Let(x) => {
-                let ((var_name, _), _) = x.as_ref();
+                let ((var_name, _), _, _) = x.as_ref();
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push(var_name, ());
                 Ok(Default::default())
@@ -1710,7 +1690,7 @@ impl Engine {
 
             // Const statement
             Stmt::Const(x) if x.1.is_constant() => {
-                let ((var_name, _), expr) = x.as_ref();
+                let ((var_name, _), expr, _) = x.as_ref();
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
@@ -1723,7 +1703,7 @@ impl Engine {
             // Import statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(x) => {
-                let (expr, (name, _pos)) = x.as_ref();
+                let (expr, (name, _pos), _) = x.as_ref();
 
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
@@ -1756,8 +1736,8 @@ impl Engine {
 
             // Export statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(list) => {
-                for ((id, id_pos), rename) in list.iter() {
+            Stmt::Export(x) => {
+                for ((id, id_pos), rename) in x.0.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(id).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);
