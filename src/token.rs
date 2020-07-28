@@ -714,22 +714,6 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
-    let mut first_alphabetic = false;
-
-    for ch in name {
-        match ch {
-            '_' => (),
-            _ if char::is_ascii_alphabetic(&ch) => first_alphabetic = true,
-            _ if !first_alphabetic => return false,
-            _ if char::is_ascii_alphanumeric(&ch) => (),
-            _ => return false,
-        }
-    }
-
-    first_alphabetic
-}
-
 /// [INTERNALS] Parse a string literal wrapped by `enclosing_char`.
 /// Exported under the `internals` feature only.
 ///
@@ -1384,7 +1368,7 @@ fn get_identifier(
 
     while let Some(next_char) = stream.peek_next() {
         match next_char {
-            x if x.is_ascii_alphanumeric() || x == '_' => {
+            x if is_id_continue(x) => {
                 result.push(x);
                 eat_next(stream, pos);
             }
@@ -1408,6 +1392,31 @@ fn get_identifier(
         start_pos,
     ));
 }
+
+pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
+    let mut first_alphabetic = false;
+
+    for ch in name {
+        match ch {
+            '_' => (),
+            _ if is_first_alphabetic(ch) => first_alphabetic = true,
+            _ if !first_alphabetic => return false,
+            _ if char::is_ascii_alphanumeric(&ch) => (),
+            _ => return false,
+        }
+    }
+
+    first_alphabetic
+}
+
+fn is_first_alphabetic(x: char) -> bool {
+    x.is_ascii_alphabetic()
+}
+
+fn is_id_continue(x: char) -> bool {
+    x.is_ascii_alphanumeric() || x == '_'
+}
+
 /// A type that implements the `InputStream` trait.
 /// Multiple character streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
