@@ -930,8 +930,8 @@ pub fn run_builtin_binary_op(
     }
 
     if args_type == TypeId::of::<INT>() {
-        let x = *x.downcast_ref::<INT>().unwrap();
-        let y = *y.downcast_ref::<INT>().unwrap();
+        let x = x.clone().cast::<INT>();
+        let y = y.clone().cast::<INT>();
 
         #[cfg(not(feature = "unchecked"))]
         match op {
@@ -972,8 +972,8 @@ pub fn run_builtin_binary_op(
             _ => (),
         }
     } else if args_type == TypeId::of::<bool>() {
-        let x = *x.downcast_ref::<bool>().unwrap();
-        let y = *y.downcast_ref::<bool>().unwrap();
+        let x = x.clone().cast::<bool>();
+        let y = y.clone().cast::<bool>();
 
         match op {
             "&" => return Ok(Some((x && y).into())),
@@ -998,8 +998,8 @@ pub fn run_builtin_binary_op(
             _ => (),
         }
     } else if args_type == TypeId::of::<char>() {
-        let x = *x.downcast_ref::<char>().unwrap();
-        let y = *y.downcast_ref::<char>().unwrap();
+        let x = x.clone().cast::<char>();
+        let y = y.clone().cast::<char>();
 
         match op {
             "==" => return Ok(Some((x == y).into())),
@@ -1020,8 +1020,8 @@ pub fn run_builtin_binary_op(
 
     #[cfg(not(feature = "no_float"))]
     if args_type == TypeId::of::<FLOAT>() {
-        let x = *x.downcast_ref::<FLOAT>().unwrap();
-        let y = *y.downcast_ref::<FLOAT>().unwrap();
+        let x = x.clone().cast::<FLOAT>();
+        let y = y.clone().cast::<FLOAT>();
 
         match op {
             "+" => return Ok(Some((x + y).into())),
@@ -1059,7 +1059,7 @@ pub fn run_builtin_op_assignment(
 
     if args_type == TypeId::of::<INT>() {
         let x = x.downcast_mut::<INT>().unwrap();
-        let y = *y.downcast_ref::<INT>().unwrap();
+        let y = y.clone().cast::<INT>();
 
         #[cfg(not(feature = "unchecked"))]
         match op {
@@ -1095,7 +1095,7 @@ pub fn run_builtin_op_assignment(
         }
     } else if args_type == TypeId::of::<bool>() {
         let x = x.downcast_mut::<bool>().unwrap();
-        let y = *y.downcast_ref::<bool>().unwrap();
+        let y = y.clone().cast::<bool>();
 
         match op {
             "&=" => return Ok(Some(*x = *x && y)),
@@ -1115,7 +1115,7 @@ pub fn run_builtin_op_assignment(
     #[cfg(not(feature = "no_float"))]
     if args_type == TypeId::of::<FLOAT>() {
         let x = x.downcast_mut::<FLOAT>().unwrap();
-        let y = *y.downcast_ref::<FLOAT>().unwrap();
+        let y = y.clone().cast::<FLOAT>();
 
         match op {
             "+=" => return Ok(Some(*x += y)),
