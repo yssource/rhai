@@ -59,8 +59,10 @@ Reserved Keywords
 | `package` | Package               |
 | `spawn`   | Threading             |
 | `go`      | Threading             |
+| `shared`  | Threading             |
 | `await`   | Async                 |
 | `async`   | Async                 |
+| `sync`    | Async                 |
 | `yield`   | Async                 |
 | `default` | Special value         |
 | `void`    | Special value         |

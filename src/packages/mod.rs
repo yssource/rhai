@@ -61,14 +61,15 @@ impl PackagesCollection {
         self.0.insert(0, package);
     }
     /// Does the specified function hash key exist in the `PackagesCollection`?
-    pub fn contains_fn(&self, hash: u64) -> bool {
-        self.0.iter().any(|p| p.contains_fn(hash))
+    #[allow(dead_code)]
+    pub fn contains_fn(&self, hash: u64, public_only: bool) -> bool {
+        self.0.iter().any(|p| p.contains_fn(hash, public_only))
     }
     /// Get specified function via its hash key.
-    pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
+    pub fn get_fn(&self, hash: u64, public_only: bool) -> Option<&CallableFunction> {
         self.0
             .iter()
-            .map(|p| p.get_fn(hash))
+            .map(|p| p.get_fn(hash, public_only))
             .find(|f| f.is_some())
             .flatten()
     }

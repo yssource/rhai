@@ -182,7 +182,7 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorVariableNotFound(s, _)
             | Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
 
-            Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{} {}", desc, s)?,
+            Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{}", s)?,
 
             Self::ErrorIndexingType(_, _)
             | Self::ErrorNumericIndexExpr(_)

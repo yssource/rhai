@@ -27,6 +27,7 @@ Breaking changes
 * Language keywords are now _reserved_ (even when disabled) and they can no longer be used as variable names.
 * Function signature for defining custom syntax is simplified.
 * `Engine::register_raw_fn_XXX` API shortcuts are removed.
+* `PackagesCollection::get_fn`, `PackagesCollection::contains_fn`, `Module::get_fn` and `Module::contains_fn` now take an additional `public_only` parameter indicating whether only public functions are accepted.
 
 Housekeeping
 ------------

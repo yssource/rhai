@@ -19,7 +19,7 @@ use crate::utils::StaticVec;
 use crate::any::Variant;
 
 #[cfg(not(feature = "no_function"))]
-use crate::parser::{FnAccess, ScriptFnDef};
+use crate::parser::ScriptFnDef;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
@@ -228,11 +228,6 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 /// [INTERNALS] A type that holds all the current states of the Engine.
 /// Exported under the `internals` feature only.
 ///
-/// # Safety
-///
-/// This type uses some unsafe code, mainly for avoiding cloning of local variable names via
-/// direct lifetime casting.
-///
 /// ## WARNING
 ///
 /// This type is volatile and may change.
@@ -264,19 +259,15 @@ pub fn get_script_function_by_signature<'a>(
     module: &'a Module,
     name: &str,
     params: usize,
-    public_only: bool,
+    pub_only: bool,
 ) -> Option<&'a ScriptFnDef> {
     // Qualifiers (none) + function name + number of arguments.
     let hash_script = calc_fn_hash(empty(), name, params, empty());
-    let func = module.get_fn(hash_script)?;
-    if !func.is_script() {
-        return None;
-    }
-    let fn_def = func.get_fn_def();
-
-    match fn_def.access {
-        FnAccess::Private if public_only => None,
-        FnAccess::Private | FnAccess::Public => Some(&fn_def),
+    let func = module.get_fn(hash_script, pub_only)?;
+    if func.is_script() {
+        Some(func.get_fn_def())
+    } else {
+        None
     }
 }
 
@@ -695,8 +686,8 @@ impl Engine {
                                 let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                 self.exec_fn_call(
-                                    state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
-                                    level,
+                                    state, lib, FN_IDX_SET, true, 0, args, is_ref, true, false,
+                                    None, level,
                                 )
                                 .or_else(|err| match *err {
                                     // If there is no index setter, no need to set it back because the indexer is read-only
@@ -719,8 +710,8 @@ impl Engine {
                                     let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
 
                                     self.exec_fn_call(
-                                        state, lib, FN_IDX_SET, true, 0, args, is_ref, true, None,
-                                        level,
+                                        state, lib, FN_IDX_SET, true, 0, args, is_ref, true, false,
+                                        None, level,
                                     )?;
                                 }
                                 // Error
@@ -741,7 +732,12 @@ impl Engine {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x) if x.1.is_none() => {
-                        self.make_method_call(state, lib, target, rhs, idx_val, level)
+                        let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
+                        self.make_method_call(
+                            state, lib, name, *hash, target, idx_val, *def_val, *native, false,
+                            level,
+                        )
+                        .map_err(|err| err.new_position(*pos))
                     }
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_) => unreachable!(),
@@ -770,7 +766,8 @@ impl Engine {
                         let ((_, _, setter), pos) = x.as_ref();
                         let mut args = [target.as_mut(), _new_val.as_mut().unwrap()];
                         self.exec_fn_call(
-                            state, lib, setter, true, 0, &mut args, is_ref, true, None, level,
+                            state, lib, setter, true, 0, &mut args, is_ref, true, false, None,
+                            level,
                         )
                         .map(|(v, _)| (v, true))
                         .map_err(|err| err.new_position(*pos))
@@ -780,7 +777,8 @@ impl Engine {
                         let ((_, getter, _), pos) = x.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
-                            state, lib, getter, true, 0, &mut args, is_ref, true, None, level,
+                            state, lib, getter, true, 0, &mut args, is_ref, true, false, None,
+                            level,
                         )
                         .map(|(v, _)| (v, false))
                         .map_err(|err| err.new_position(*pos))
@@ -791,15 +789,19 @@ impl Engine {
 
                         let mut val = match sub_lhs {
                             Expr::Property(p) => {
-                                let ((prop, _, _), _) = p.as_ref();
+                                let ((prop, _, _), pos) = p.as_ref();
                                 let index = prop.clone().into();
                                 self.get_indexed_mut(state, lib, target, index, *pos, false, level)?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x) if x.1.is_none() => {
-                                let (val, _) = self.make_method_call(
-                                    state, lib, target, sub_lhs, idx_val, level,
-                                )?;
+                                let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
+                                let (val, _) = self
+                                    .make_method_call(
+                                        state, lib, name, *hash, target, idx_val, *def_val,
+                                        *native, false, level,
+                                    )
+                                    .map_err(|err| err.new_position(*pos))?;
                                 val.into()
                             }
                             // {xxx:map}.module::fn_name(...) - syntax error
@@ -816,18 +818,18 @@ impl Engine {
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) => {
-                        let (sub_lhs, expr, pos) = x.as_ref();
+                        let (sub_lhs, expr, _) = x.as_ref();
 
                         match sub_lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let ((_, getter, setter), _) = p.as_ref();
+                                let ((_, getter, setter), pos) = p.as_ref();
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
-                                        state, lib, getter, true, 0, args, is_ref, true, None,
-                                        level,
+                                        state, lib, getter, true, 0, args, is_ref, true, false,
+                                        None, level,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -847,7 +849,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         state, lib, setter, true, 0, arg_values, is_ref, true,
-                                        None, level,
+                                        false, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -864,9 +866,13 @@ impl Engine {
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(x) if x.1.is_none() => {
-                                let (mut val, _) = self.make_method_call(
-                                    state, lib, target, sub_lhs, idx_val, level,
-                                )?;
+                                let ((name, native, pos), _, hash, _, def_val) = x.as_ref();
+                                let (mut val, _) = self
+                                    .make_method_call(
+                                        state, lib, name, *hash, target, idx_val, *def_val,
+                                        *native, false, level,
+                                    )
+                                    .map_err(|err| err.new_position(*pos))?;
                                 let val = &mut val;
                                 let target = &mut val.into();
 
@@ -1132,7 +1138,7 @@ impl Engine {
                 let type_name = val.type_name();
                 let args = &mut [val, &mut _idx];
                 self.exec_fn_call(
-                    state, _lib, FN_IDX_GET, true, 0, args, is_ref, true, None, _level,
+                    state, _lib, FN_IDX_GET, true, 0, args, is_ref, true, false, None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1188,7 +1194,7 @@ impl Engine {
 
                     let (r, _) = self
                         .call_fn_raw(
-                            &mut scope, mods, state, lib, op, hashes, args, false, false,
+                            &mut scope, mods, state, lib, op, hashes, args, false, false, false,
                             def_value, level,
                         )
                         .map_err(|err| err.new_position(rhs.position()))?;
@@ -1289,8 +1295,8 @@ impl Engine {
 
                         if let Some(CallableFunction::Method(func)) = self
                             .global_module
-                            .get_fn(hash_fn)
-                            .or_else(|| self.packages.get_fn(hash_fn))
+                            .get_fn(hash_fn, false)
+                            .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
                             // Overriding exact implementation
                             func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
@@ -1303,7 +1309,8 @@ impl Engine {
                             // Run function
                             let (value, _) = self
                                 .exec_fn_call(
-                                    state, lib, op, true, hash, args, false, false, None, level,
+                                    state, lib, op, true, hash, args, false, false, false, None,
+                                    level,
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
                             // Set value to LHS
@@ -1331,9 +1338,11 @@ impl Engine {
                         &mut self.eval_expr(scope, mods, state, lib, this_ptr, lhs_expr, level)?,
                         &mut rhs_val,
                     ];
-                    self.exec_fn_call(state, lib, op, true, hash, args, false, false, None, level)
-                        .map(|(v, _)| v)
-                        .map_err(|err| err.new_position(*op_pos))?
+                    self.exec_fn_call(
+                        state, lib, op, true, hash, args, false, false, false, None, level,
+                    )
+                    .map(|(v, _)| v)
+                    .map_err(|err| err.new_position(*op_pos))?
                 });
 
                 match lhs_expr {
@@ -1403,7 +1412,7 @@ impl Engine {
                 let ((name, native, pos), _, hash, args_expr, def_val) = x.as_ref();
                 self.make_function_call(
                     scope, mods, state, lib, this_ptr, name, args_expr, *def_val, *hash, *native,
-                    level,
+                    false, level,
                 )
                 .map_err(|err| err.new_position(*pos))
             }
@@ -1481,6 +1490,12 @@ impl Engine {
     }
 
     /// Evaluate a statement
+    ///
+    ///
+    /// # Safety
+    ///
+    /// This method uses some unsafe code, mainly for avoiding cloning of local variable names via
+    /// direct lifetime casting.
     pub(crate) fn eval_stmt(
         &self,
         scope: &mut Scope,
@@ -1524,7 +1539,7 @@ impl Engine {
 
             // If-else statement
             Stmt::IfThenElse(x) => {
-                let (expr, if_block, else_block) = x.as_ref();
+                let (expr, if_block, else_block, _) = x.as_ref();
 
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
@@ -1542,7 +1557,7 @@ impl Engine {
 
             // While loop
             Stmt::While(x) => loop {
-                let (expr, body) = x.as_ref();
+                let (expr, body, _) = x.as_ref();
 
                 match self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
@@ -1568,8 +1583,8 @@ impl Engine {
             },
 
             // Loop statement
-            Stmt::Loop(body) => loop {
-                match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
+            Stmt::Loop(x) => loop {
+                match self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::ErrorLoopBreak(false, _) => (),
@@ -1581,7 +1596,7 @@ impl Engine {
 
             // For loop
             Stmt::For(x) => {
-                let (name, expr, stmt) = x.as_ref();
+                let (name, expr, stmt, _) = x.as_ref();
                 let iter_type = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let tid = iter_type.type_id();
 
@@ -1627,16 +1642,9 @@ impl Engine {
 
             // Return value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
+                let expr = x.1.as_ref().unwrap();
                 Err(Box::new(EvalAltResult::Return(
-                    self.eval_expr(
-                        scope,
-                        mods,
-                        state,
-                        lib,
-                        this_ptr,
-                        x.1.as_ref().unwrap(),
-                        level,
-                    )?,
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
                     (x.0).1,
                 )))
             }
@@ -1648,15 +1656,8 @@ impl Engine {
 
             // Throw value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
-                let val = self.eval_expr(
-                    scope,
-                    mods,
-                    state,
-                    lib,
-                    this_ptr,
-                    x.1.as_ref().unwrap(),
-                    level,
-                )?;
+                let expr = x.1.as_ref().unwrap();
+                let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     val.take_string().unwrap_or_else(|_| "".into()),
                     (x.0).1,
@@ -1672,23 +1673,16 @@ impl Engine {
 
             // Let statement
             Stmt::Let(x) if x.1.is_some() => {
-                let ((var_name, _), expr) = x.as_ref();
-                let val = self.eval_expr(
-                    scope,
-                    mods,
-                    state,
-                    lib,
-                    this_ptr,
-                    expr.as_ref().unwrap(),
-                    level,
-                )?;
+                let ((var_name, _), expr, _) = x.as_ref();
+                let expr = expr.as_ref().unwrap();
+                let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
                 Ok(Default::default())
             }
 
             Stmt::Let(x) => {
-                let ((var_name, _), _) = x.as_ref();
+                let ((var_name, _), _, _) = x.as_ref();
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push(var_name, ());
                 Ok(Default::default())
@@ -1696,7 +1690,7 @@ impl Engine {
 
             // Const statement
             Stmt::Const(x) if x.1.is_constant() => {
-                let ((var_name, _), expr) = x.as_ref();
+                let ((var_name, _), expr, _) = x.as_ref();
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?;
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
@@ -1709,7 +1703,7 @@ impl Engine {
             // Import statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(x) => {
-                let (expr, (name, _pos)) = x.as_ref();
+                let (expr, (name, _pos), _) = x.as_ref();
 
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
@@ -1742,8 +1736,8 @@ impl Engine {
 
             // Export statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(list) => {
-                for ((id, id_pos), rename) in list.iter() {
+            Stmt::Export(x) => {
+                for ((id, id_pos), rename) in x.0.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(id).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);

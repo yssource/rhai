@@ -1,17 +1,19 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::any::Dynamic;
+use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::module::Module;
+use crate::parser::FnAccess;
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_function"))]
-use crate::{module::FuncReturn, parser::ScriptFnDef, scope::Scope, utils::StaticVec};
+use crate::{module::FuncReturn, parser::ScriptFnDef, utils::StaticVec};
 
-use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, string::String, vec::Vec};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, string::String, vec::Vec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::mem;
@@ -90,9 +92,7 @@ impl FnPtr {
 
     /// Call the function pointer with curried arguments (if any).
     ///
-    /// The function must be a script-defined function.  It cannot be a Rust function.
-    ///
-    /// To call a Rust function, just call it directly in Rust!
+    /// If this function is a script-defined function, it must not be marked private.
     ///
     /// ## WARNING
     ///
@@ -108,14 +108,39 @@ impl FnPtr {
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> FuncReturn<Dynamic> {
-        let args = self
+        let mut args_data = self
             .1
             .iter()
             .cloned()
             .chain(arg_values.as_mut().iter_mut().map(|v| mem::take(v)))
             .collect::<StaticVec<_>>();
 
-        engine.call_fn_dynamic(&mut Scope::new(), lib, self.0.as_str(), this_ptr, args)
+        let has_this = this_ptr.is_some();
+        let args_len = args_data.len();
+        let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
+
+        if let Some(obj) = this_ptr {
+            args.insert(0, obj);
+        }
+
+        let fn_name = self.0.as_str();
+        let hash_script = calc_fn_hash(empty(), fn_name, args_len, empty());
+
+        engine
+            .exec_fn_call(
+                &mut Default::default(),
+                lib.as_ref(),
+                fn_name,
+                false,
+                hash_script,
+                args.as_mut(),
+                has_this,
+                has_this,
+                true,
+                None,
+                0,
+            )
+            .map(|(v, _)| v)
     }
 }
 
@@ -270,6 +295,16 @@ impl CallableFunction {
         match self {
             Self::Plugin(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Script(_) => false,
+        }
+    }
+    /// Get the access mode.
+    pub fn access(&self) -> FnAccess {
+        match self {
+            CallableFunction::Plugin(_) => FnAccess::Public,
+            CallableFunction::Pure(_)
+            | CallableFunction::Method(_)
+            | CallableFunction::Iterator(_) => FnAccess::Public,
+            CallableFunction::Script(f) => f.access,
         }
     }
     /// Get a reference to a native Rust function.

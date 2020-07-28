@@ -1,10 +1,13 @@
 #![cfg(not(feature = "no_std"))]
 #![cfg(not(target_arch = "wasm32"))]
 
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult};
 
 #[cfg(not(feature = "no_float"))]
 use rhai::FLOAT;
+
+#[cfg(feature = "no_float")]
+use rhai::INT;
 
 #[test]
 fn test_timestamp() -> Result<(), Box<EvalAltResult>> {
