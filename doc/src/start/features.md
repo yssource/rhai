@@ -24,7 +24,7 @@ more control over what a script can (or cannot) do.
 | `no_function` | Disable script-defined [functions].                                                                                                                                                                        |
 | `no_module`   | Disable loading external [modules].                                                                                                                                                                        |
 | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                                                                                                       |
-| `serde`       | Enable serialization/deserialization via [`serde`]. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies.                                      |
+| `serde`       | Enable serialization/deserialization via `serde`. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies.                                        |
 | `internals`   | Expose internal data structures (e.g. [`AST`] nodes). Beware that Rhai internals are volatile and may change from version to version.                                                                      |
 
 

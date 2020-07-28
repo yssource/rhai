@@ -432,7 +432,7 @@ impl Module {
     /// let mut module = Module::new();
     /// let hash = module.set_raw_fn("double_or_not",
     ///                 // Pass parameter types via a slice with TypeId's
-    ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>() ],
+    ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>()],
     ///                 // Fixed closure signature
     ///                 |engine, lib, args| {
     ///                     // 'args' is guaranteed to be the right length and of the correct types

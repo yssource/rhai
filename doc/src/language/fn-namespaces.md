@@ -69,17 +69,22 @@ The only practical way to ensure that a function is a correct one is to use [mod
 i.e. define the function in a separate module and then [`import`] it:
 
 ```rust
-message.rhai:
+----------------
+| message.rhai |
+----------------
 
-    fn message() { "Hello!" }
+fn message() { "Hello!" }
 
-script.rhai:
 
-    fn say_hello() {
-        import "message" as msg;
-        print(msg::message());
-    }
-    say_hello();
+---------------
+| script.rhai |
+---------------
+
+fn say_hello() {
+    import "message" as msg;
+    print(msg::message());
+}
+say_hello();
 ```
 
 
@@ -94,18 +99,23 @@ defined _within the script_.  When called later, those functions will be searche
 current global namespace and may not be found.
 
 ```rust
-greeting.rhai:
+-----------------
+| greeting.rhai |
+-----------------
 
-    fn message() { "Hello!" };
+fn message() { "Hello!" };
 
-    fn say_hello() { print(message()); }
+fn say_hello() { print(message()); }
 
-    say_hello();                    // 'message' is looked up in the global namespace
+say_hello();                        // 'message' is looked up in the global namespace
 
-script.rhai:
 
-    import "greeting" as g;
-    g::say_hello();                 // <- error: function not found - 'message'
+---------------
+| script.rhai |
+---------------
+
+import "greeting" as g;
+g::say_hello();                     // <- error: function not found - 'message'
 ```
 
 In the example above, although the module `greeting.rhai` loads fine (`"Hello!"` is printed),
@@ -118,24 +128,29 @@ as possible and avoid cross-calling them from each other.  A [function pointer] 
 to call another function within a module-defined function:
 
 ```rust
-greeting.rhai:
+-----------------
+| greeting.rhai |
+-----------------
 
-    fn message() { "Hello!" };
+fn message() { "Hello!" };
 
-    fn say_hello(msg_func) {        // 'msg_func' is a function pointer
-        print(msg_func.call());     // call via the function pointer
-    }
+fn say_hello(msg_func) {            // 'msg_func' is a function pointer
+    print(msg_func.call());         // call via the function pointer
+}
 
-    say_hello();                    // 'message' is looked up in the global namespace
+say_hello();                        // 'message' is looked up in the global namespace
 
-script.rhai:
 
-    import "greeting" as g;
+---------------
+| script.rhai |
+---------------
 
-    fn my_msg() {
-        import "greeting" as g;     // <- must import again here...
-        g::message()                // <- ... otherwise will not find module 'g'
-    }
+import "greeting" as g;
 
-    g::say_hello(Fn("my_msg"));     // prints 'Hello!'
+fn my_msg() {
+    import "greeting" as g;         // <- must import again here...
+    g::message()                    // <- ... otherwise will not find module 'g'
+}
+
+g::say_hello(Fn("my_msg"));         // prints 'Hello!'
 ```

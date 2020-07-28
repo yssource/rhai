@@ -35,22 +35,19 @@ Dynamic
 
 * Organize code base with dynamically-loadable [modules].
 
-* Dynamic dispatch via [function pointers].
+* Dynamic dispatch via [function pointers] with additional support for [currying].
 
 * Some support for [object-oriented programming (OOP)][OOP].
-
-* Serialization/deserialization support via [`serde`].
 
 Safe
 ----
 
-* Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
-  one single source file, all with names starting with `"unsafe_"`).
+* Relatively little `unsafe` code (yes there are some for performance reasons).
+
+* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 
 Rugged
 ------
-
-* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
 
 * Protected against malicious attacks (such as [stack-overflow][maximum call stack depth], [over-sized data][maximum length of strings], and [runaway scripts][maximum number of operations] etc.) that may come from untrusted third-party user-land scripts.
 
@@ -60,6 +57,8 @@ Flexible
 --------
 
 * Re-entrant scripting [`Engine`] can be made `Send + Sync` (via the [`sync`] feature).
+
+* Serialization/deserialization support via [`serde`](https://crates.io/crates/serde).
 
 * Support for [minimal builds] by excluding unneeded language [features].
 
