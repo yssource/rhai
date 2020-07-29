@@ -15,6 +15,9 @@ use crate::utils::{StaticVec, StraightHasherBuilder};
 #[cfg(not(feature = "no_function"))]
 use crate::engine::FN_ANONYMOUS;
 
+#[cfg(not(feature = "no_capture"))]
+use crate::engine::KEYWORD_FN_PTR_CURRY;
+
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter};
 
@@ -405,6 +408,10 @@ struct ParseState<'e> {
     engine: &'e Engine,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
+    /// Tracks a list of external variables(variables that are not explicitly
+    /// declared in the scope during AST evaluation).
+    #[cfg(not(feature = "no_capture"))]
+    externals: Vec<String>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -424,30 +431,78 @@ impl<'e> ParseState<'e> {
     ) -> Self {
         Self {
             engine,
+            #[cfg(not(feature = "unchecked"))] max_expr_depth,
+            #[cfg(not(feature = "unchecked"))] max_function_expr_depth,
+            #[cfg(not(feature = "no_capture"))] externals: Default::default(),
             stack: Default::default(),
             modules: Default::default(),
-            #[cfg(not(feature = "unchecked"))]
-            max_expr_depth,
-            #[cfg(not(feature = "unchecked"))]
-            max_function_expr_depth,
         }
     }
-    /// Find a variable by name in the `ParseState`, searching in reverse.
+
+    /// Find explicitly declared variable by name in the `ParseState`,
+    /// searching in reverse order.
+    ///
+    /// If the variable is not present in the scope adds it to the list of
+    /// external variables
+    ///
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return zero when the variable name is not found in the `ParseState`.
-    pub fn find_var(&self, name: &str) -> Option<NonZeroUsize> {
-        self.stack
+    /// Return `None` when the variable name is not found in the `stack`.
+    fn access_var(&mut self, name: &str) -> Option<NonZeroUsize> {
+        let index = self.stack
             .iter()
             .rev()
             .enumerate()
             .find(|(_, (n, _))| *n == name)
-            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1));
+
+        if index.is_some() {
+            return index
+        }
+
+        #[cfg(not(feature = "no_capture"))]
+        if self.externals.iter().find(|n| *n == name).is_none() {
+            self.externals.push(name.to_string());
+        }
+
+        None
     }
+
+    /// Creates a curry expression from a list of external variables
+    #[cfg(not(feature = "no_capture"))]
+    pub fn make_curry_from_externals(&self, fn_expr: Expr, settings: &ParseSettings) -> Expr {
+        if self.externals.is_empty() {
+            return fn_expr
+        }
+
+        let mut args = StaticVec::new();
+
+        for var in self.externals.iter() {
+            args.push(Expr::Variable(Box::new((
+                (var.clone(), settings.pos),
+                None,
+                0,
+                None,
+            ))));
+        }
+
+        Expr::Dot(Box::new((
+            fn_expr,
+            Expr::FnCall(Box::new((
+                (KEYWORD_FN_PTR_CURRY.into(), false, settings.pos),
+                None,
+                calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, self.externals.len(), empty()),
+                args,
+                None,
+            ))),
+            settings.pos,
+        )))
+    }
+
     /// Find a module by name in the `ParseState`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return zero when the variable name is not found in the `ParseState`.
+    /// Return `None` when the variable name is not found in the `ParseState`.
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
@@ -1577,7 +1632,7 @@ fn parse_primary(
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
-            let index = state.find_var(&s);
+            let index = state.access_var(&s);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         // Function call is allowed to have reserved keyword
@@ -1778,7 +1833,7 @@ fn parse_unary(
         // | ...
         #[cfg(not(feature = "no_function"))]
         Token::Pipe | Token::Or => {
-            let mut state = ParseState::new(
+            let mut new_state = ParseState::new(
                 state.engine,
                 #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
@@ -1797,7 +1852,12 @@ fn parse_unary(
                 pos: *token_pos,
             };
 
-            let (expr, func) = parse_anon_fn(input, &mut state, lib, settings)?;
+            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
+
+            #[cfg(not(feature = "no_capture"))]
+            for closure in new_state.externals {
+                state.access_var(&closure);
+            }
 
             // Qualifiers (none) + function name + number of arguments.
             let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -3091,7 +3151,16 @@ fn parse_anon_fn(
     let body = parse_stmt(input, state, lib, settings.level_up())
         .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
 
-    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+    let mut static_params = StaticVec::<String>::new();
+
+    #[cfg(not(feature = "no_capture"))]
+    for closure in state.externals.iter() {
+        static_params.push(closure.clone());
+    }
+
+    for param in params.into_iter() {
+        static_params.push(param.0);
+    }
 
     // Calculate hash
     #[cfg(feature = "no_std")]
@@ -3099,8 +3168,8 @@ fn parse_anon_fn(
     #[cfg(not(feature = "no_std"))]
     let mut s = DefaultHasher::new();
 
-    s.write_usize(params.len());
-    params.iter().for_each(|a| a.hash(&mut s));
+    s.write_usize(static_params.len());
+    static_params.iter().for_each(|a| a.hash(&mut s));
     body.hash(&mut s);
     let hash = s.finish();
 
@@ -3110,11 +3179,18 @@ fn parse_anon_fn(
     let script = ScriptFnDef {
         name: fn_name.clone(),
         access: FnAccess::Public,
-        params,
+        params: static_params,
         body,
         pos: settings.pos,
     };
 
+    #[cfg(not(feature = "no_capture"))]
+    let expr = state.make_curry_from_externals(
+        Expr::FnPointer(Box::new((fn_name, settings.pos))),
+        &settings,
+    );
+
+    #[cfg(feature = "no_capture")]
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
     Ok((expr, script))
@@ -3128,7 +3204,6 @@ impl Engine {
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let mut functions = Default::default();
-
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
@@ -3174,7 +3249,6 @@ impl Engine {
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
         let mut statements: Vec<Stmt> = Default::default();
         let mut functions = Default::default();
-
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]

@@ -209,3 +209,28 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(not(feature = "no_capture"))]
+fn test_fn_closures() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = 8;
+
+                let res = |y, z| {
+                    let w = 12;
+
+                    return (|| x + y + z + w).call();
+                }.curry(15).call(2);
+
+                res + (|| x - 3).call()
+            "#
+        )?,
+        42
+    );
+
+    Ok(())
+}
