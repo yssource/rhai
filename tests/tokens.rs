@@ -51,3 +51,29 @@ fn test_tokens_custom_operator() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_tokens_unicode_xid_ident() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+    let result = engine.eval::<INT>(
+        r"
+            fn すべての答え() { 42 }
+            すべての答え()
+        ",
+    );
+    #[cfg(feature = "unicode-xid-ident")]
+    assert_eq!(result?, 42);
+
+    #[cfg(not(feature = "unicode-xid-ident"))]
+    assert!(result.is_err());
+
+    let result = engine.eval::<INT>(
+        r"
+            fn _1() { 1 }
+            _1()
+        ",
+    );
+    assert!(result.is_err());
+
+    Ok(())
+}

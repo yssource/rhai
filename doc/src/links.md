@@ -12,6 +12,7 @@
 [`no_std`]: {{rootUrl}}/start/features.md
 [`no-std`]: {{rootUrl}}/start/features.md
 [`internals`]: {{rootUrl}}/start/features.md
+[`unicode-xid-ident`]: {{rootUrl}}/start/features.md
 
 [minimal builds]: {{rootUrl}}/start/builds/minimal.md
 [WASM]: {{rootUrl}}/start/builds/wasm.md

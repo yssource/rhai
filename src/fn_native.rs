@@ -300,11 +300,9 @@ impl CallableFunction {
     /// Get the access mode.
     pub fn access(&self) -> FnAccess {
         match self {
-            CallableFunction::Plugin(_) => FnAccess::Public,
-            CallableFunction::Pure(_)
-            | CallableFunction::Method(_)
-            | CallableFunction::Iterator(_) => FnAccess::Public,
-            CallableFunction::Script(f) => f.access,
+            Self::Plugin(_) => FnAccess::Public,
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => FnAccess::Public,
+            Self::Script(f) => f.access,
         }
     }
     /// Get a reference to a native Rust function.

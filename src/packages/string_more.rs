@@ -15,7 +15,7 @@ use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     fmt::Display,
-    format,
+    format, mem,
     string::{String, ToString},
     vec::Vec,
 };
@@ -242,7 +242,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             }
 
             if len > 0 {
-                let ch = *args[2].downcast_ref::< char>().unwrap();
+                let ch = mem::take(args[2]).cast::<char>();
                 let s = args[0].downcast_mut::<ImmutableString>().unwrap();
 
                 let orig_len = s.chars().count();
