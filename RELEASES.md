@@ -19,6 +19,7 @@ New features
 * Custom syntax now works even without the `internals` feature.
 * Currying of function pointers is supported via the `curry` keyword.
 * `Module::set_indexer_get_set_fn` is added as a shorthand of both `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn`.
+* New `unicode-xid-ident` feature to allow unicode-xid for identifiers.
 
 Breaking changes
 ----------------
