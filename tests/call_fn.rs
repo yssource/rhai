@@ -211,22 +211,26 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_closures"))]
 fn test_fn_closures() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
-    let res = engine.eval::<INT>(
-        r#"
-            let x = 100;
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = 8;
 
-            let f = || x;
+                let res = |y, z| {
+                    let w = 12;
 
-            let x = 200;
+                    return (|| x + y + z + w).call();
+                }.curry(15).call(2);
 
-            f.call()
-        "#
-    ).unwrap();
-
-    panic!("{:#?}", res);
+                res + (|| x - 3).call()
+            "#
+        )?,
+        42
+    );
 
     Ok(())
 }
