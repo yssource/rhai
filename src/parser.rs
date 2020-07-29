@@ -15,7 +15,7 @@ use crate::utils::{StaticVec, StraightHasherBuilder};
 #[cfg(not(feature = "no_function"))]
 use crate::engine::FN_ANONYMOUS;
 
-#[cfg(not(feature = "no_closures"))]
+#[cfg(not(feature = "no_capture"))]
 use crate::engine::KEYWORD_FN_PTR_CURRY;
 
 #[cfg(not(feature = "no_object"))]
@@ -402,28 +402,29 @@ pub enum ReturnType {
     Exception,
 }
 
+#[derive(Clone)]
 struct ParseState<'e> {
-    // Reference to the scripting `Engine`.
+    /// Reference to the scripting `Engine`.
     engine: &'e Engine,
-    // Encapsulates a local stack with variable names to simulate an actual runtime scope.
+    /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
-    // Tracks a list of external variables(variables that are not explicitly
-    // declared in the scope during AST evaluation).
-    #[cfg(not(feature = "no_closures"))]
+    /// Tracks a list of external variables(variables that are not explicitly
+    /// declared in the scope during AST evaluation).
+    #[cfg(not(feature = "no_capture"))]
     externals: Vec<String>,
-    // Encapsulates a local stack with variable names to simulate an actual runtime scope.
+    /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
-    // Maximum levels of expression nesting.
+    /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     max_expr_depth: usize,
-    // Maximum levels of expression nesting in functions.
+    /// Maximum levels of expression nesting in functions.
     #[cfg(not(feature = "unchecked"))]
     max_function_expr_depth: usize,
 }
 
 impl<'e> ParseState<'e> {
     /// Create a new `ParseState`.
-    fn new(
+    pub fn new(
         engine: &'e Engine,
         #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
         #[cfg(not(feature = "unchecked"))] max_function_expr_depth: usize,
@@ -432,7 +433,7 @@ impl<'e> ParseState<'e> {
             engine,
             #[cfg(not(feature = "unchecked"))] max_expr_depth,
             #[cfg(not(feature = "unchecked"))] max_function_expr_depth,
-            #[cfg(not(feature = "no_closures"))] externals: Default::default(),
+            #[cfg(not(feature = "no_capture"))] externals: Default::default(),
             stack: Default::default(),
             modules: Default::default(),
         }
@@ -459,7 +460,7 @@ impl<'e> ParseState<'e> {
             return index
         }
 
-        #[cfg(not(feature = "no_closures"))]
+        #[cfg(not(feature = "no_capture"))]
         if self.externals.iter().find(|n| *n == name).is_none() {
             self.externals.push(name.to_string());
         }
@@ -468,8 +469,8 @@ impl<'e> ParseState<'e> {
     }
 
     /// Creates a curry expression from a list of external variables
-    #[cfg(not(feature = "no_closures"))]
-    fn make_curry_from_externals(&self, fn_expr: Expr, settings: &ParseSettings) -> Expr {
+    #[cfg(not(feature = "no_capture"))]
+    pub fn make_curry_from_externals(&self, fn_expr: Expr, settings: &ParseSettings) -> Expr {
         if self.externals.is_empty() {
             return fn_expr
         }
@@ -502,7 +503,7 @@ impl<'e> ParseState<'e> {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `ParseState`.
-    fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
+    pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
             .rev()
@@ -1853,7 +1854,7 @@ fn parse_unary(
 
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
 
-            #[cfg(not(feature = "no_closures"))]
+            #[cfg(not(feature = "no_capture"))]
             for closure in new_state.externals {
                 state.access_var(&closure);
             }
@@ -3152,7 +3153,7 @@ fn parse_anon_fn(
 
     let mut static_params = StaticVec::<String>::new();
 
-    #[cfg(not(feature = "no_closures"))]
+    #[cfg(not(feature = "no_capture"))]
     for closure in state.externals.iter() {
         static_params.push(closure.clone());
     }
@@ -3183,13 +3184,13 @@ fn parse_anon_fn(
         pos: settings.pos,
     };
 
-    #[cfg(not(feature = "no_closures"))]
+    #[cfg(not(feature = "no_capture"))]
     let expr = state.make_curry_from_externals(
         Expr::FnPointer(Box::new((fn_name, settings.pos))),
         &settings,
     );
 
-    #[cfg(feature = "no_closures")]
+    #[cfg(feature = "no_capture")]
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
     Ok((expr, script))
