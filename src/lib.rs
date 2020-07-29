@@ -48,23 +48,7 @@
 //! }
 //! ```
 //!
-//! ## Optional features
-//!
-//! | Feature       | Description                                                                                                                       |
-//! | ------------- | ----------------------------------------------------------------------------------------------------------------------------------|
-//! | `unchecked`   | Exclude arithmetic checking (such as overflows and division by zero). Beware that a bad script may panic the entire system!       |
-//! | `no_function` | Disable script-defined functions if not needed.                                                                                   |
-//! | `no_module`   | Disable loading external modules if not needed.                                                                                   |
-//! | `no_index`    | Disable arrays and indexing features if not needed.                                                                               |
-//! | `no_object`   | Disable support for custom types and objects.                                                                                     |
-//! | `no_float`    | Disable floating-point numbers and math if not needed.                                                                            |
-//! | `no_optimize` | Disable the script optimizer.                                                                                                     |
-//! | `only_i32`    | Set the system integer type to `i32` and disable all other integer types. `INT` is set to `i32`.                                  |
-//! | `only_i64`    | Set the system integer type to `i64` and disable all other integer types. `INT` is set to `i64`.                                  |
-//! | `no_std`      | Build for `no-std`. Notice that additional dependencies will be pulled in to replace `std` features.                              |
-//! | `sync`        | Restrict all values types to those that are `Send + Sync`. Under this feature, `Engine`, `Scope` and `AST` are all `Send + Sync`. |
-//! | `serde`       | Enable serialization/deserialization via `serde`. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies. |
-//! | `internals`   | Expose internal data structures (beware they may be volatile from version to version).                                            |
+//! # Documentation
 //!
 //! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai script engine and language.
 

@@ -15,6 +15,17 @@ The [`Engine::eval_expression_XXX`][`eval_expression`] API can be used to restri
 a script to expressions only.
 
 
+Unicode Standard Annex #31 Identifiers
+-------------------------------------
+
+Variable names and other identifiers do not necessarily need to be ASCII-only.
+
+The [`unicode-xid-ident`] feature, when turned on, causes Rhai to allow variable names and identifiers
+that follow [Unicode Standard Annex #31](http://www.unicode.org/reports/tr31/).
+
+This is sometimes useful in a non-English DSL.
+
+
 Disable Keywords and/or Operators
 --------------------------------
 

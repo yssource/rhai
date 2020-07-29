@@ -445,7 +445,7 @@ pub fn search_imports<'s>(
     state: &mut State,
     modules: &Box<ModuleRef>,
 ) -> Result<&'s Module, Box<EvalAltResult>> {
-    let (root, root_pos) = modules.get(0);
+    let (root, root_pos) = &modules[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
@@ -478,7 +478,7 @@ pub fn search_imports_mut<'s>(
     state: &mut State,
     modules: &Box<ModuleRef>,
 ) -> Result<&'s mut Module, Box<EvalAltResult>> {
-    let (root, root_pos) = modules.get(0);
+    let (root, root_pos) = &modules[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
@@ -652,7 +652,7 @@ impl Engine {
         };
 
         // Pop the last index value
-        let idx_val = idx_values.pop();
+        let idx_val = idx_values.pop().unwrap();
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
@@ -1007,7 +1007,7 @@ impl Engine {
                 idx_values.push(Dynamic::from(arg_values));
             }
             Expr::FnCall(_) => unreachable!(),
-            Expr::Property(_) => idx_values.push(()), // Store a placeholder - no need to copy the property name
+            Expr::Property(_) => idx_values.push(().into()), // Store a placeholder - no need to copy the property name
             Expr::Index(x) | Expr::Dot(x) => {
                 let (lhs, rhs, _) = x.as_ref();
 

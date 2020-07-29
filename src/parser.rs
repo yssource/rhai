@@ -15,6 +15,9 @@ use crate::utils::{StaticVec, StraightHasherBuilder};
 #[cfg(not(feature = "no_function"))]
 use crate::engine::FN_ANONYMOUS;
 
+#[cfg(not(feature = "no_capture"))]
+use crate::engine::KEYWORD_FN_PTR_CURRY;
+
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter};
 
@@ -405,6 +408,9 @@ struct ParseState<'e> {
     engine: &'e Engine,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
+    /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
+    #[cfg(not(feature = "no_capture"))]
+    externals: HashMap<String, Position>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -424,30 +430,45 @@ impl<'e> ParseState<'e> {
     ) -> Self {
         Self {
             engine,
-            stack: Default::default(),
-            modules: Default::default(),
             #[cfg(not(feature = "unchecked"))]
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
             max_function_expr_depth,
+            #[cfg(not(feature = "no_capture"))]
+            externals: Default::default(),
+            stack: Default::default(),
+            modules: Default::default(),
         }
     }
-    /// Find a variable by name in the `ParseState`, searching in reverse.
+
+    /// Find explicitly declared variable by name in the `ParseState`, searching in reverse order.
+    ///
+    /// If the variable is not present in the scope adds it to the list of external variables
+    ///
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return zero when the variable name is not found in the `ParseState`.
-    pub fn find_var(&self, name: &str) -> Option<NonZeroUsize> {
-        self.stack
+    /// Return `None` when the variable name is not found in the `stack`.
+    fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
+        let index = self
+            .stack
             .iter()
             .rev()
             .enumerate()
             .find(|(_, (n, _))| *n == name)
-            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1));
+
+        #[cfg(not(feature = "no_capture"))]
+        if index.is_none() && !self.externals.contains_key(name) {
+            self.externals.insert(name.to_string(), pos);
+        }
+
+        index
     }
+
     /// Find a module by name in the `ParseState`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return zero when the variable name is not found in the `ParseState`.
+    /// Return `None` when the variable name is not found in the `ParseState`.
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
@@ -1103,7 +1124,7 @@ fn parse_fn_call(
             eat_token(input, Token::RightParen);
 
             let hash_script = if let Some(modules) = modules.as_mut() {
-                modules.set_index(state.find_module(&modules.get(0).0));
+                modules.set_index(state.find_module(&modules[0].0));
 
                 // Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1145,7 +1166,7 @@ fn parse_fn_call(
                 eat_token(input, Token::RightParen);
 
                 let hash_script = if let Some(modules) = modules.as_mut() {
-                    modules.set_index(state.find_module(&modules.get(0).0));
+                    modules.set_index(state.find_module(&modules[0].0));
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1577,7 +1598,7 @@ fn parse_primary(
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
-            let index = state.find_var(&s);
+            let index = state.access_var(&s, settings.pos);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         // Function call is allowed to have reserved keyword
@@ -1678,7 +1699,7 @@ fn parse_primary(
 
             // Qualifiers + variable name
             *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
-            modules.set_index(state.find_module(&modules.get(0).0));
+            modules.set_index(state.find_module(&modules[0].0));
         }
         _ => (),
     }
@@ -1778,7 +1799,7 @@ fn parse_unary(
         // | ...
         #[cfg(not(feature = "no_function"))]
         Token::Pipe | Token::Or => {
-            let mut state = ParseState::new(
+            let mut new_state = ParseState::new(
                 state.engine,
                 #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
@@ -1797,7 +1818,12 @@ fn parse_unary(
                 pos: *token_pos,
             };
 
-            let (expr, func) = parse_anon_fn(input, &mut state, lib, settings)?;
+            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
+
+            #[cfg(not(feature = "no_capture"))]
+            new_state.externals.iter().for_each(|(closure, pos)| {
+                state.access_var(closure, *pos);
+            });
 
             // Qualifiers (none) + function name + number of arguments.
             let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -1936,7 +1962,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].1));
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
@@ -2197,25 +2223,25 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_def))),
 
             Token::Or => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::Or(Box::new((current_lhs, rhs, pos)))
             }
             Token::And => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::And(Box::new((current_lhs, rhs, pos)))
             }
             Token::In => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 
@@ -3024,6 +3050,46 @@ fn parse_fn(
     })
 }
 
+/// Creates a curried expression from a list of external variables
+#[cfg(not(feature = "no_capture"))]
+fn make_curry_from_externals(
+    fn_expr: Expr,
+    state: &mut ParseState,
+    settings: &ParseSettings,
+) -> Expr {
+    if state.externals.is_empty() {
+        return fn_expr;
+    }
+
+    let mut args: StaticVec<_> = Default::default();
+
+    state.externals.iter().for_each(|(var_name, pos)| {
+        args.push(Expr::Variable(Box::new((
+            (var_name.clone(), *pos),
+            None,
+            0,
+            None,
+        ))));
+    });
+
+    let hash = calc_fn_hash(
+        empty(),
+        KEYWORD_FN_PTR_CURRY,
+        state.externals.len(),
+        empty(),
+    );
+
+    let fn_call = Expr::FnCall(Box::new((
+        (KEYWORD_FN_PTR_CURRY.into(), false, settings.pos),
+        None,
+        hash,
+        args,
+        None,
+    )));
+
+    Expr::Dot(Box::new((fn_expr, fn_call, settings.pos)))
+}
+
 /// Parse an anonymous function definition.
 #[cfg(not(feature = "no_function"))]
 fn parse_anon_fn(
@@ -3091,7 +3157,17 @@ fn parse_anon_fn(
     let body = parse_stmt(input, state, lib, settings.level_up())
         .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
 
-    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+    #[cfg(feature = "no_capture")]
+    let params: StaticVec<_> = params.into_iter().map(|(v, _)| v).collect();
+
+    // Add parameters that are auto-curried
+    #[cfg(not(feature = "no_capture"))]
+    let params: StaticVec<_> = state
+        .externals
+        .keys()
+        .cloned()
+        .chain(params.into_iter().map(|(v, _)| v))
+        .collect();
 
     // Calculate hash
     #[cfg(feature = "no_std")]
@@ -3117,6 +3193,9 @@ fn parse_anon_fn(
 
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
+    #[cfg(not(feature = "no_capture"))]
+    let expr = make_curry_from_externals(expr, state, &settings);
+
     Ok((expr, script))
 }
 
@@ -3128,7 +3207,6 @@ impl Engine {
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let mut functions = Default::default();
-
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
@@ -3174,7 +3252,6 @@ impl Engine {
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
         let mut statements: Vec<Stmt> = Default::default();
         let mut functions = Default::default();
-
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]

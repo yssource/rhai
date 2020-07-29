@@ -32,7 +32,7 @@ fn bench_parse_full(bench: &mut Bencher) {
             2 > 1 &&
             "something" != "nothing" ||
             "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
-            [array, with, spaces].len <= #{prop:name}.len &&
+            [array, has, spaces].len <= #{prop:name}.len &&
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
@@ -109,7 +109,7 @@ fn bench_parse_optimize_simple(bench: &mut Bencher) {
             2 > 1 &&
             "something" != "nothing" ||
             "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
-            [array, with, spaces].len <= #{prop:name}.len &&
+            [array, has, spaces].len <= #{prop:name}.len &&
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 
@@ -125,7 +125,7 @@ fn bench_parse_optimize_full(bench: &mut Bencher) {
             2 > 1 &&
             "something" != "nothing" ||
             "2014-01-20" < "Wed Jul  8 23:07:35 MDT 2015" &&
-            [array, with, spaces].len <= #{prop:name}.len &&
+            [array, has, spaces].len <= #{prop:name}.len &&
             modifierTest + 1000 / 2 > (80 * 100 % 2)
         "#;
 

@@ -21,7 +21,6 @@ use crate::stdlib::{
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
-    vec::Vec,
 };
 
 type LERR = LexError;
@@ -747,8 +746,8 @@ pub fn parse_string_literal(
     pos: &mut Position,
     enclosing_char: char,
 ) -> Result<String, (LexError, Position)> {
-    let mut result = Vec::new();
-    let mut escape = String::with_capacity(12);
+    let mut result: StaticVec<char> = Default::default();
+    let mut escape: StaticVec<char> = Default::default();
 
     loop {
         let next_char = stream.get_next().ok_or((LERR::UnterminatedString, *pos))?;
@@ -787,8 +786,8 @@ pub fn parse_string_literal(
             // \x??, \u????, \U????????
             ch @ 'x' | ch @ 'u' | ch @ 'U' if !escape.is_empty() => {
                 let mut seq = escape.clone();
-                seq.push(ch);
                 escape.clear();
+                seq.push(ch);
 
                 let mut out_val: u32 = 0;
                 let len = match ch {
@@ -799,23 +798,31 @@ pub fn parse_string_literal(
                 };
 
                 for _ in 0..len {
-                    let c = stream
-                        .get_next()
-                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq.to_string()), *pos))?;
+                    let c = stream.get_next().ok_or_else(|| {
+                        (
+                            LERR::MalformedEscapeSequence(seq.iter().cloned().collect()),
+                            *pos,
+                        )
+                    })?;
 
                     seq.push(c);
                     pos.advance();
 
                     out_val *= 16;
-                    out_val += c
-                        .to_digit(16)
-                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq.to_string()), *pos))?;
+                    out_val += c.to_digit(16).ok_or_else(|| {
+                        (
+                            LERR::MalformedEscapeSequence(seq.iter().cloned().collect()),
+                            *pos,
+                        )
+                    })?;
                 }
 
-                result.push(
-                    char::from_u32(out_val)
-                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq), *pos))?,
-                );
+                result.push(char::from_u32(out_val).ok_or_else(|| {
+                    (
+                        LERR::MalformedEscapeSequence(seq.into_iter().collect()),
+                        *pos,
+                    )
+                })?);
             }
 
             // \{enclosing_char} - escaped
@@ -828,7 +835,12 @@ pub fn parse_string_literal(
             ch if enclosing_char == ch && escape.is_empty() => break,
 
             // Unknown escape sequence
-            _ if !escape.is_empty() => return Err((LERR::MalformedEscapeSequence(escape), *pos)),
+            _ if !escape.is_empty() => {
+                return Err((
+                    LERR::MalformedEscapeSequence(escape.into_iter().collect()),
+                    *pos,
+                ))
+            }
 
             // Cannot have new-lines inside string literals
             '\n' => {
@@ -983,7 +995,7 @@ fn get_next_token_inner(
 
             // digit ...
             ('0'..='9', _) => {
-                let mut result = Vec::new();
+                let mut result: StaticVec<char> = Default::default();
                 let mut radix_base: Option<u32> = None;
                 result.push(c);
 
@@ -1385,7 +1397,7 @@ fn get_identifier(
     start_pos: Position,
     first_char: char,
 ) -> Option<(Token, Position)> {
-    let mut result = Vec::new();
+    let mut result: StaticVec<_> = Default::default();
     result.push(first_char);
 
     while let Some(next_char) = stream.peek_next() {
@@ -1400,7 +1412,7 @@ fn get_identifier(
 
     let is_valid_identifier = is_valid_identifier(result.iter().cloned());
 
-    let identifier: String = result.into_iter().collect();
+    let identifier = result.into_iter().collect();
 
     if !is_valid_identifier {
         return Some((

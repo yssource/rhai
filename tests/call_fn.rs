@@ -84,38 +84,6 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
-    let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
-        Engine::new(),
-        "fn calc(x, y, z,) { (x + y) * z }",
-        "calc",
-    )?;
-
-    assert_eq!(calc_func(42, 123, 9)?, 1485);
-
-    let calc_func = Func::<(INT, String, INT), INT>::create_from_script(
-        Engine::new(),
-        "fn calc(x, y, z) { (x + len(y)) * z }",
-        "calc",
-    )?;
-
-    assert_eq!(calc_func(42, "hello".to_string(), 9)?, 423);
-
-    let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
-        Engine::new(),
-        "private fn calc(x, y, z) { (x + y) * z }",
-        "calc",
-    )?;
-
-    assert!(matches!(
-        *calc_func(42, 123, 9).expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "calc"
-    ));
-
-    Ok(())
-}
-
-#[test]
 #[cfg(not(feature = "no_object"))]
 fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
@@ -179,33 +147,33 @@ fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
-    let mut module = Module::new();
+fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
+    let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
+        Engine::new(),
+        "fn calc(x, y, z,) { (x + y) * z }",
+        "calc",
+    )?;
 
-    module.set_raw_fn(
-        "call_with_arg",
-        &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
-        |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-            let fn_ptr = std::mem::take(args[0]).cast::<FnPtr>();
-            fn_ptr.call_dynamic(engine, lib, None, [std::mem::take(args[1])])
-        },
-    );
+    assert_eq!(calc_func(42, 123, 9)?, 1485);
 
-    let mut engine = Engine::new();
-    engine.load_package(module.into());
+    let calc_func = Func::<(INT, String, INT), INT>::create_from_script(
+        Engine::new(),
+        "fn calc(x, y, z) { (x + len(y)) * z }",
+        "calc",
+    )?;
 
-    #[cfg(not(feature = "no_object"))]
-    assert_eq!(
-        engine.eval::<INT>(
-            r#"
-                let addition = |x, y| { x + y };
-                let curried = addition.curry(2);
+    assert_eq!(calc_func(42, "hello".to_string(), 9)?, 423);
 
-                call_with_arg(curried, 40)
-            "#
-        )?,
-        42
-    );
+    let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
+        Engine::new(),
+        "private fn calc(x, y, z) { (x + y) * z }",
+        "calc",
+    )?;
+
+    assert!(matches!(
+        *calc_func(42, 123, 9).expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "calc"
+    ));
 
     Ok(())
 }
