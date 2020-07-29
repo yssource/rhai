@@ -34,6 +34,7 @@ no_object = []      # no custom objects
 no_function = []    # no script-defined functions
 no_module = []      # no modules
 internals = []      # expose internal data structures
+unicode-xid-ident = ["unicode-xid"]  # allow unicode-xid for identifiers.
 
 # compiling for no-std
 no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]
@@ -71,6 +72,11 @@ optional = true
 version = "1.0.111"
 default_features = false
 features = ["derive", "alloc"]
+optional = true
+
+[dependencies.unicode-xid]
+version = "0.2.1"
+default_features = false
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

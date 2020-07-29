@@ -735,32 +735,6 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-pub fn is_keyword_function(name: &str) -> bool {
-    name == KEYWORD_PRINT
-        || name == KEYWORD_DEBUG
-        || name == KEYWORD_TYPE_OF
-        || name == KEYWORD_EVAL
-        || name == KEYWORD_FN_PTR
-        || name == KEYWORD_FN_PTR_CALL
-        || name == KEYWORD_FN_PTR_CURRY
-}
-
-pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
-    let mut first_alphabetic = false;
-
-    for ch in name {
-        match ch {
-            '_' => (),
-            _ if char::is_ascii_alphabetic(&ch) => first_alphabetic = true,
-            _ if !first_alphabetic => return false,
-            _ if char::is_ascii_alphanumeric(&ch) => (),
-            _ => return false,
-        }
-    }
-
-    first_alphabetic
-}
-
 /// [INTERNALS] Parse a string literal wrapped by `enclosing_char`.
 /// Exported under the `internals` feature only.
 ///
@@ -1107,35 +1081,7 @@ fn get_next_token_inner(
 
             // letter or underscore ...
             ('A'..='Z', _) | ('a'..='z', _) | ('_', _) => {
-                let mut result = Vec::new();
-                result.push(c);
-
-                while let Some(next_char) = stream.peek_next() {
-                    match next_char {
-                        x if x.is_ascii_alphanumeric() || x == '_' => {
-                            result.push(x);
-                            eat_next(stream, pos);
-                        }
-                        _ => break,
-                    }
-                }
-
-                let is_valid_identifier = is_valid_identifier(result.iter().cloned());
-
-                let identifier: String = result.into_iter().collect();
-
-                if !is_valid_identifier {
-                    return Some((
-                        Token::LexError(Box::new(LERR::MalformedIdentifier(identifier))),
-                        start_pos,
-                    ));
-                }
-
-                return Some((
-                    Token::lookup_from_syntax(&identifier)
-                        .unwrap_or_else(|| Token::Identifier(identifier)),
-                    start_pos,
-                ));
+                return get_identifier(stream, pos, start_pos, c);
             }
 
             // " - string literal
@@ -1413,6 +1359,10 @@ fn get_next_token_inner(
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),
+            #[cfg(feature = "unicode-xid-ident")]
+            (ch, _) if unicode_xid::UnicodeXID::is_xid_start(ch) => {
+                return get_identifier(stream, pos, start_pos, c);
+            }
             (ch, _) => {
                 return Some((
                     Token::LexError(Box::new(LERR::UnexpectedInput(ch.to_string()))),
@@ -1429,6 +1379,91 @@ fn get_next_token_inner(
     } else {
         Some((Token::EOF, *pos))
     }
+}
+
+/// Get the next identifier.
+fn get_identifier(
+    stream: &mut impl InputStream,
+    pos: &mut Position,
+    start_pos: Position,
+    first_char: char,
+) -> Option<(Token, Position)> {
+    let mut result = Vec::new();
+    result.push(first_char);
+
+    while let Some(next_char) = stream.peek_next() {
+        match next_char {
+            x if is_id_continue(x) => {
+                result.push(x);
+                eat_next(stream, pos);
+            }
+            _ => break,
+        }
+    }
+
+    let is_valid_identifier = is_valid_identifier(result.iter().cloned());
+
+    let identifier: String = result.into_iter().collect();
+
+    if !is_valid_identifier {
+        return Some((
+            Token::LexError(Box::new(LERR::MalformedIdentifier(identifier))),
+            start_pos,
+        ));
+    }
+
+    return Some((
+        Token::lookup_from_syntax(&identifier).unwrap_or_else(|| Token::Identifier(identifier)),
+        start_pos,
+    ));
+}
+
+/// Is this keyword allowed as a function?
+pub fn is_keyword_function(name: &str) -> bool {
+    name == KEYWORD_PRINT
+        || name == KEYWORD_DEBUG
+        || name == KEYWORD_TYPE_OF
+        || name == KEYWORD_EVAL
+        || name == KEYWORD_FN_PTR
+        || name == KEYWORD_FN_PTR_CALL
+        || name == KEYWORD_FN_PTR_CURRY
+}
+
+pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
+    let mut first_alphabetic = false;
+
+    for ch in name {
+        match ch {
+            '_' => (),
+            _ if is_id_first_alphabetic(ch) => first_alphabetic = true,
+            _ if !first_alphabetic => return false,
+            _ if char::is_ascii_alphanumeric(&ch) => (),
+            _ => return false,
+        }
+    }
+
+    first_alphabetic
+}
+
+#[cfg(feature = "unicode-xid-ident")]
+fn is_id_first_alphabetic(x: char) -> bool {
+    unicode_xid::UnicodeXID::is_xid_start(x)
+}
+
+#[cfg(feature = "unicode-xid-ident")]
+fn is_id_continue(x: char) -> bool {
+    unicode_xid::UnicodeXID::is_xid_continue(x)
+}
+
+#[cfg(not(feature = "unicode-xid-ident"))]
+
+fn is_id_first_alphabetic(x: char) -> bool {
+    x.is_ascii_alphabetic()
+}
+
+#[cfg(not(feature = "unicode-xid-ident"))]
+fn is_id_continue(x: char) -> bool {
+    x.is_ascii_alphanumeric() || x == '_'
 }
 
 /// A type that implements the `InputStream` trait.
