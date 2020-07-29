@@ -1835,7 +1835,7 @@ fn parse_unary(
             let mut new_state = ParseState::new(
                 state.engine,
                 #[cfg(not(feature = "unchecked"))]
-                state.max_expr_depth,
+                state.max_function_expr_depth,
                 #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
             );
@@ -2884,7 +2884,7 @@ fn parse_stmt(
                     let mut state = ParseState::new(
                         state.engine,
                         #[cfg(not(feature = "unchecked"))]
-                        state.max_expr_depth,
+                        state.max_function_expr_depth,
                         #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
                     );
