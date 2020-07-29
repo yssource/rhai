@@ -21,6 +21,18 @@ When a property of an [object map] is called like a method function, and if it h
 a valid [function pointer] (perhaps defined via an [anonymous function]), then the call will be
 dispatched to the actual function with `this` binding to the [object map] itself.
 
+
+Use Anonymous Functions to Define Methods
+----------------------------------------
+
+[Anonymous functions] defined as values for [object map] properties take on a syntactic shape
+that resembles very closely that of class methods in an OOP language.
+
+Anonymous functions can also _capture_ variables from the defining environment, which is a very
+common OOP pattern.  Capturing is accomplished via a feature called _[automatic currying]_ and
+can be turned off via the [`no_capture`] feature.
+
+
 Examples
 --------
 
