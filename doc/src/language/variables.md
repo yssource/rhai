@@ -21,6 +21,11 @@ Variable names are case _sensitive_.
 
 Variable names also cannot be the same as a [keyword].
 
+### Unicode Standard Annex #31 Identifiers
+
+The [`unicode-xid-ident`] feature expands the allowed characters for variable names to the set defined by
+[Unicode Standard Annex #31](http://www.unicode.org/reports/tr31/).
+
 
 Declare a Variable
 ------------------

@@ -1104,7 +1104,7 @@ fn get_next_token_inner(
                     |err| (Token::LexError(Box::new(err.0)), err.1),
                     |result| {
                         let mut chars = result.chars();
-                        let first = chars.next();
+                        let first = chars.next().unwrap();
 
                         if chars.next().is_some() {
                             (
@@ -1112,10 +1112,7 @@ fn get_next_token_inner(
                                 start_pos,
                             )
                         } else {
-                            (
-                                Token::CharConstant(first.expect("should be Some")),
-                                start_pos,
-                            )
+                            (Token::CharConstant(first), start_pos)
                         }
                     },
                 ))
@@ -1419,6 +1416,7 @@ fn get_identifier(
 }
 
 /// Is this keyword allowed as a function?
+#[inline(always)]
 pub fn is_keyword_function(name: &str) -> bool {
     name == KEYWORD_PRINT
         || name == KEYWORD_DEBUG
@@ -1446,22 +1444,25 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
 }
 
 #[cfg(feature = "unicode-xid-ident")]
+#[inline(always)]
 fn is_id_first_alphabetic(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_start(x)
 }
 
 #[cfg(feature = "unicode-xid-ident")]
+#[inline(always)]
 fn is_id_continue(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(x)
 }
 
 #[cfg(not(feature = "unicode-xid-ident"))]
-
+#[inline(always)]
 fn is_id_first_alphabetic(x: char) -> bool {
     x.is_ascii_alphabetic()
 }
 
 #[cfg(not(feature = "unicode-xid-ident"))]
+#[inline(always)]
 fn is_id_continue(x: char) -> bool {
     x.is_ascii_alphanumeric() || x == '_'
 }
