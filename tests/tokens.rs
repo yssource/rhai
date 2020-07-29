@@ -67,5 +67,13 @@ fn test_tokens_unicode_xid_ident() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "unicode-xid-ident"))]
     assert!(result.is_err());
 
+    let result = engine.eval::<INT>(
+        r"
+                fn _1() { 1 }
+                _1()
+            ",
+    );
+    assert!(result.is_err());
+
     Ok(())
 }
