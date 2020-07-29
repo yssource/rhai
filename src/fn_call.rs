@@ -893,8 +893,8 @@ impl Engine {
                     &mut scope, &mut mods, state, lib, &mut None, name, fn_def, args, level,
                 )
             }
-            Some(f) => f.get_native_fn()(self, lib, args.as_mut()),
             Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut(), Position::none()),
+            Some(f) => f.get_native_fn()(self, lib, args.as_mut()),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),
             None => Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
                 format!(
