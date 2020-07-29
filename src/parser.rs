@@ -1103,7 +1103,7 @@ fn parse_fn_call(
             eat_token(input, Token::RightParen);
 
             let hash_script = if let Some(modules) = modules.as_mut() {
-                modules.set_index(state.find_module(&modules.get(0).0));
+                modules.set_index(state.find_module(&modules[0].0));
 
                 // Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1145,7 +1145,7 @@ fn parse_fn_call(
                 eat_token(input, Token::RightParen);
 
                 let hash_script = if let Some(modules) = modules.as_mut() {
-                    modules.set_index(state.find_module(&modules.get(0).0));
+                    modules.set_index(state.find_module(&modules[0].0));
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1678,7 +1678,7 @@ fn parse_primary(
 
             // Qualifiers + variable name
             *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
-            modules.set_index(state.find_module(&modules.get(0).0));
+            modules.set_index(state.find_module(&modules[0].0));
         }
         _ => (),
     }
@@ -1936,7 +1936,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].1));
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
@@ -2197,25 +2197,25 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_def))),
 
             Token::Or => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::Or(Box::new((current_lhs, rhs, pos)))
             }
             Token::And => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::And(Box::new((current_lhs, rhs, pos)))
             }
             Token::In => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 

@@ -20,6 +20,7 @@ use crate::parser::CustomExpr;
 use crate::stdlib::{
     boxed::Box,
     iter::empty,
+    mem,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -436,7 +437,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let mut expr = a.0.take(i.0 as usize);
+                let mut expr = a.0.remove(i.0 as usize);
                 expr.set_position(a.1);
                 expr
             }
