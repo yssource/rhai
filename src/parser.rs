@@ -25,7 +25,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     char,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt, format,
     hash::{Hash, Hasher},
     iter::empty,
@@ -410,7 +410,7 @@ struct ParseState<'e> {
     stack: Vec<(String, ScopeEntryType)>,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_capture"))]
-    externals: HashSet<(String, Position)>,
+    externals: HashMap<String, Position>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -458,8 +458,8 @@ impl<'e> ParseState<'e> {
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
 
         #[cfg(not(feature = "no_capture"))]
-        if index.is_none() {
-            self.externals.insert((name.to_string(), pos));
+        if index.is_none() && !self.externals.contains_key(name) {
+            self.externals.insert(name.to_string(), pos);
         }
 
         index
@@ -3157,16 +3157,17 @@ fn parse_anon_fn(
     let body = parse_stmt(input, state, lib, settings.level_up())
         .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
 
-    let mut static_params: StaticVec<_> = Default::default();
+    #[cfg(feature = "no_capture")]
+    let params: StaticVec<_> = params.into_iter().map(|(v, _)| v).collect();
 
+    // Add parameters that are auto-curried
     #[cfg(not(feature = "no_capture"))]
-    state.externals.iter().for_each(|(closure, _)| {
-        static_params.push(closure.clone());
-    });
-
-    for param in params.into_iter() {
-        static_params.push(param.0);
-    }
+    let params: StaticVec<_> = state
+        .externals
+        .keys()
+        .cloned()
+        .chain(params.into_iter().map(|(v, _)| v))
+        .collect();
 
     // Calculate hash
     #[cfg(feature = "no_std")]
@@ -3174,8 +3175,8 @@ fn parse_anon_fn(
     #[cfg(not(feature = "no_std"))]
     let mut s = DefaultHasher::new();
 
-    s.write_usize(static_params.len());
-    static_params.iter().for_each(|a| a.hash(&mut s));
+    s.write_usize(params.len());
+    params.iter().for_each(|a| a.hash(&mut s));
     body.hash(&mut s);
     let hash = s.finish();
 
@@ -3185,7 +3186,7 @@ fn parse_anon_fn(
     let script = ScriptFnDef {
         name: fn_name.clone(),
         access: FnAccess::Public,
-        params: static_params,
+        params,
         body,
         pos: settings.pos,
     };
