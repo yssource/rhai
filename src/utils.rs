@@ -87,6 +87,9 @@ pub fn calc_fn_spec<'a>(
     s.finish()
 }
 
+/// [INTERNALS] Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
+/// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
+/// Exported under the `internals` feature only.
 pub type StaticVec<T> = SmallVec<[T; 4]>;
 
 /// The system immutable string type.

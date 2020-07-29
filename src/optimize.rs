@@ -20,7 +20,6 @@ use crate::parser::CustomExpr;
 use crate::stdlib::{
     boxed::Box,
     iter::empty,
-    mem,
     string::{String, ToString},
     vec,
     vec::Vec,

@@ -25,7 +25,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     char,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
     iter::empty,
@@ -408,10 +408,9 @@ struct ParseState<'e> {
     engine: &'e Engine,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
-    /// Tracks a list of external variables(variables that are not explicitly
-    /// declared in the scope during AST evaluation).
+    /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_capture"))]
-    externals: Vec<String>,
+    externals: HashSet<(String, Position)>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -431,72 +430,39 @@ impl<'e> ParseState<'e> {
     ) -> Self {
         Self {
             engine,
-            #[cfg(not(feature = "unchecked"))] max_expr_depth,
-            #[cfg(not(feature = "unchecked"))] max_function_expr_depth,
-            #[cfg(not(feature = "no_capture"))] externals: Default::default(),
+            #[cfg(not(feature = "unchecked"))]
+            max_expr_depth,
+            #[cfg(not(feature = "unchecked"))]
+            max_function_expr_depth,
+            #[cfg(not(feature = "no_capture"))]
+            externals: Default::default(),
             stack: Default::default(),
             modules: Default::default(),
         }
     }
 
-    /// Find explicitly declared variable by name in the `ParseState`,
-    /// searching in reverse order.
+    /// Find explicitly declared variable by name in the `ParseState`, searching in reverse order.
     ///
-    /// If the variable is not present in the scope adds it to the list of
-    /// external variables
+    /// If the variable is not present in the scope adds it to the list of external variables
     ///
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `stack`.
-    fn access_var(&mut self, name: &str) -> Option<NonZeroUsize> {
-        let index = self.stack
+    fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
+        let index = self
+            .stack
             .iter()
             .rev()
             .enumerate()
             .find(|(_, (n, _))| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
 
-        if index.is_some() {
-            return index
-        }
-
         #[cfg(not(feature = "no_capture"))]
-        if self.externals.iter().find(|n| *n == name).is_none() {
-            self.externals.push(name.to_string());
+        if index.is_none() {
+            self.externals.insert((name.to_string(), pos));
         }
 
-        None
-    }
-
-    /// Creates a curry expression from a list of external variables
-    #[cfg(not(feature = "no_capture"))]
-    pub fn make_curry_from_externals(&self, fn_expr: Expr, settings: &ParseSettings) -> Expr {
-        if self.externals.is_empty() {
-            return fn_expr
-        }
-
-        let mut args = StaticVec::new();
-
-        for var in self.externals.iter() {
-            args.push(Expr::Variable(Box::new((
-                (var.clone(), settings.pos),
-                None,
-                0,
-                None,
-            ))));
-        }
-
-        Expr::Dot(Box::new((
-            fn_expr,
-            Expr::FnCall(Box::new((
-                (KEYWORD_FN_PTR_CURRY.into(), false, settings.pos),
-                None,
-                calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, self.externals.len(), empty()),
-                args,
-                None,
-            ))),
-            settings.pos,
-        )))
+        index
     }
 
     /// Find a module by name in the `ParseState`, searching in reverse.
@@ -1632,7 +1598,7 @@ fn parse_primary(
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
-            let index = state.access_var(&s);
+            let index = state.access_var(&s, settings.pos);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         // Function call is allowed to have reserved keyword
@@ -1855,9 +1821,9 @@ fn parse_unary(
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
 
             #[cfg(not(feature = "no_capture"))]
-            for closure in new_state.externals {
-                state.access_var(&closure);
-            }
+            new_state.externals.iter().for_each(|(closure, pos)| {
+                state.access_var(closure, *pos);
+            });
 
             // Qualifiers (none) + function name + number of arguments.
             let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -3084,6 +3050,46 @@ fn parse_fn(
     })
 }
 
+/// Creates a curried expression from a list of external variables
+#[cfg(not(feature = "no_capture"))]
+fn make_curry_from_externals(
+    fn_expr: Expr,
+    state: &mut ParseState,
+    settings: &ParseSettings,
+) -> Expr {
+    if state.externals.is_empty() {
+        return fn_expr;
+    }
+
+    let mut args: StaticVec<_> = Default::default();
+
+    state.externals.iter().for_each(|(var_name, pos)| {
+        args.push(Expr::Variable(Box::new((
+            (var_name.clone(), *pos),
+            None,
+            0,
+            None,
+        ))));
+    });
+
+    let hash = calc_fn_hash(
+        empty(),
+        KEYWORD_FN_PTR_CURRY,
+        state.externals.len(),
+        empty(),
+    );
+
+    let fn_call = Expr::FnCall(Box::new((
+        (KEYWORD_FN_PTR_CURRY.into(), false, settings.pos),
+        None,
+        hash,
+        args,
+        None,
+    )));
+
+    Expr::Dot(Box::new((fn_expr, fn_call, settings.pos)))
+}
+
 /// Parse an anonymous function definition.
 #[cfg(not(feature = "no_function"))]
 fn parse_anon_fn(
@@ -3151,12 +3157,12 @@ fn parse_anon_fn(
     let body = parse_stmt(input, state, lib, settings.level_up())
         .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
 
-    let mut static_params = StaticVec::<String>::new();
+    let mut static_params: StaticVec<_> = Default::default();
 
     #[cfg(not(feature = "no_capture"))]
-    for closure in state.externals.iter() {
+    state.externals.iter().for_each(|(closure, _)| {
         static_params.push(closure.clone());
-    }
+    });
 
     for param in params.into_iter() {
         static_params.push(param.0);
@@ -3184,14 +3190,10 @@ fn parse_anon_fn(
         pos: settings.pos,
     };
 
-    #[cfg(not(feature = "no_capture"))]
-    let expr = state.make_curry_from_externals(
-        Expr::FnPointer(Box::new((fn_name, settings.pos))),
-        &settings,
-    );
-
-    #[cfg(feature = "no_capture")]
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
+
+    #[cfg(not(feature = "no_capture"))]
+    let expr = make_curry_from_externals(expr, state, &settings);
 
     Ok((expr, script))
 }
