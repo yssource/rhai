@@ -363,6 +363,9 @@ pub struct ScriptFnDef {
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<String>,
+    /// Access to external variables.
+    #[cfg(not(feature = "no_capture"))]
+    pub externals: StaticVec<String>,
     /// Function body.
     pub body: Stmt,
     /// Position of the function definition.
@@ -448,7 +451,7 @@ impl<'e> ParseState<'e> {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `stack`.
-    fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
+    fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let index = self
             .stack
             .iter()
@@ -459,7 +462,7 @@ impl<'e> ParseState<'e> {
 
         #[cfg(not(feature = "no_capture"))]
         if index.is_none() && !self.externals.contains_key(name) {
-            self.externals.insert(name.to_string(), pos);
+            self.externals.insert(name.to_string(), _pos);
         }
 
         index
@@ -2848,7 +2851,7 @@ fn parse_stmt(
 
             match input.next().unwrap() {
                 (Token::Fn, pos) => {
-                    let mut state = ParseState::new(
+                    let mut new_state = ParseState::new(
                         state.engine,
                         #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
@@ -2867,7 +2870,7 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut state, lib, access, settings)?;
+                    let func = parse_fn(input, &mut new_state, lib, access, settings)?;
 
                     // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -3039,12 +3042,23 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
     };
 
-    let params = params.into_iter().map(|(p, _)| p).collect();
+    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+
+    #[cfg(not(feature = "no_capture"))]
+    let externals = state
+        .externals
+        .iter()
+        .map(|(name, _)| name)
+        .filter(|name| !params.contains(name))
+        .cloned()
+        .collect();
 
     Ok(ScriptFnDef {
         name: name.into(),
         access,
         params,
+        #[cfg(not(feature = "no_capture"))]
+        externals,
         body,
         pos: settings.pos,
     })
@@ -3054,40 +3068,31 @@ fn parse_fn(
 #[cfg(not(feature = "no_capture"))]
 fn make_curry_from_externals(
     fn_expr: Expr,
-    state: &mut ParseState,
-    settings: &ParseSettings,
+    externals: StaticVec<(String, Position)>,
+    pos: Position,
 ) -> Expr {
-    if state.externals.is_empty() {
+    if externals.is_empty() {
         return fn_expr;
     }
 
+    let num_externals = externals.len();
     let mut args: StaticVec<_> = Default::default();
 
-    state.externals.iter().for_each(|(var_name, pos)| {
-        args.push(Expr::Variable(Box::new((
-            (var_name.clone(), *pos),
-            None,
-            0,
-            None,
-        ))));
+    externals.into_iter().for_each(|(var_name, pos)| {
+        args.push(Expr::Variable(Box::new(((var_name, pos), None, 0, None))));
     });
 
-    let hash = calc_fn_hash(
-        empty(),
-        KEYWORD_FN_PTR_CURRY,
-        state.externals.len(),
-        empty(),
-    );
+    let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals, empty());
 
     let fn_call = Expr::FnCall(Box::new((
-        (KEYWORD_FN_PTR_CURRY.into(), false, settings.pos),
+        (KEYWORD_FN_PTR_CURRY.into(), false, pos),
         None,
         hash,
         args,
         None,
     )));
 
-    Expr::Dot(Box::new((fn_expr, fn_call, settings.pos)))
+    Expr::Dot(Box::new((fn_expr, fn_call, pos)))
 }
 
 /// Parse an anonymous function definition.
@@ -3160,11 +3165,20 @@ fn parse_anon_fn(
     #[cfg(feature = "no_capture")]
     let params: StaticVec<_> = params.into_iter().map(|(v, _)| v).collect();
 
+    // External variables may need to be processed in a consistent order,
+    // so extract them into a list.
+    #[cfg(not(feature = "no_capture"))]
+    let externals: StaticVec<_> = state
+        .externals
+        .iter()
+        .map(|(k, &v)| (k.clone(), v))
+        .collect();
+
     // Add parameters that are auto-curried
     #[cfg(not(feature = "no_capture"))]
-    let params: StaticVec<_> = state
-        .externals
-        .keys()
+    let params: StaticVec<_> = externals
+        .iter()
+        .map(|(k, _)| k)
         .cloned()
         .chain(params.into_iter().map(|(v, _)| v))
         .collect();
@@ -3183,10 +3197,13 @@ fn parse_anon_fn(
     // Create unique function name
     let fn_name: ImmutableString = format!("{}{:16x}", FN_ANONYMOUS, hash).into();
 
+    // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
         access: FnAccess::Public,
         params,
+        #[cfg(not(feature = "no_capture"))]
+        externals: Default::default(),
         body,
         pos: settings.pos,
     };
@@ -3194,7 +3211,7 @@ fn parse_anon_fn(
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
     #[cfg(not(feature = "no_capture"))]
-    let expr = make_curry_from_externals(expr, state, &settings);
+    let expr = make_curry_from_externals(expr, externals, settings.pos);
 
     Ok((expr, script))
 }
