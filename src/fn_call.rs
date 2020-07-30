@@ -36,6 +36,7 @@ use crate::engine::{Map, Target, FN_GET, FN_SET};
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    collections::HashSet,
     convert::TryFrom,
     format,
     iter::{empty, once},
@@ -109,22 +110,20 @@ fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCal
 // Add captured variables into scope
 #[cfg(not(feature = "no_capture"))]
 fn add_captured_variables_into_scope<'s>(
-    externals: &[String],
-    captured: &'s Scope<'s>,
+    externals: &HashSet<String>,
+    captured: Scope<'s>,
     scope: &mut Scope<'s>,
 ) {
-    externals
-        .iter()
-        .map(|var_name| captured.get_entry(var_name))
-        .filter(Option::is_some)
-        .map(Option::unwrap)
+    captured
+        .into_iter()
+        .filter(|ScopeEntry { name, .. }| externals.contains(name.as_ref()))
         .for_each(
             |ScopeEntry {
                  name, typ, value, ..
              }| {
                 match typ {
-                    ScopeEntryType::Normal => scope.push(name.clone(), value.clone()),
-                    ScopeEntryType::Constant => scope.push_constant(name.clone(), value.clone()),
+                    ScopeEntryType::Normal => scope.push(name, value),
+                    ScopeEntryType::Constant => scope.push_constant(name, value),
                 };
             },
         );
@@ -451,7 +450,7 @@ impl Engine {
 
                 // Add captured variables into scope
                 #[cfg(not(feature = "no_capture"))]
-                if let Some(captured) = &capture {
+                if let Some(captured) = capture {
                     add_captured_variables_into_scope(&func.externals, captured, scope);
                 }
 
@@ -801,7 +800,7 @@ impl Engine {
         let mut args: StaticVec<_>;
         let mut is_ref = false;
         let capture = if capture && !scope.is_empty() {
-            Some(scope.clone())
+            Some(scope.flatten_clone())
         } else {
             None
         };
@@ -875,7 +874,7 @@ impl Engine {
 
         #[cfg(not(feature = "no_capture"))]
         let capture = if capture && !scope.is_empty() {
-            Some(scope.clone())
+            Some(scope.flatten_clone())
         } else {
             None
         };
@@ -952,7 +951,7 @@ impl Engine {
 
                 // Add captured variables into scope
                 #[cfg(not(feature = "no_capture"))]
-                if let Some(captured) = &capture {
+                if let Some(captured) = capture {
                     add_captured_variables_into_scope(&func.externals, captured, scope);
                 }
 

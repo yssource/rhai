@@ -25,7 +25,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     char,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
     iter::empty,
@@ -355,7 +355,7 @@ impl fmt::Display for FnAccess {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct ScriptFnDef {
     /// Function name.
     pub name: ImmutableString,
@@ -365,7 +365,7 @@ pub struct ScriptFnDef {
     pub params: StaticVec<String>,
     /// Access to external variables.
     #[cfg(not(feature = "no_capture"))]
-    pub externals: StaticVec<String>,
+    pub externals: HashSet<String>,
     /// Function body.
     pub body: Stmt,
     /// Position of the function definition.
