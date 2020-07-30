@@ -1105,7 +1105,7 @@ impl Engine {
                         .downcast_ref::<ImmutableString>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
-                    map.get_mut(index.as_str())
+                    map.get_mut(index)
                         .map(Target::from)
                         .unwrap_or_else(|| Target::from(()))
                 })
@@ -1208,10 +1208,8 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
                 // Only allows String or char
-                Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(s.as_str()).into()),
-                Dynamic(Union::Char(c)) => {
-                    Ok(rhs_value.contains_key(c.to_string().as_str()).into())
-                }
+                Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(&s).into()),
+                Dynamic(Union::Char(c)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
                 _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
             },
             Dynamic(Union::Str(rhs_value)) => match lhs_value {

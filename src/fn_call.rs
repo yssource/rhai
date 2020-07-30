@@ -665,7 +665,8 @@ impl Engine {
                         ))
                     })
                     .and_then(|s| FnPtr::try_from(s))
-                    .map(Into::<Dynamic>::into);
+                    .map(Into::<Dynamic>::into)
+                    .map_err(|err| err.new_position(expr.position()));
             }
         }
 

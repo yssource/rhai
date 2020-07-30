@@ -23,7 +23,7 @@ fn map_get_values(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     lib.set_fn_2_mut(
         "has",
-        |map: &mut Map, prop: ImmutableString| Ok(map.contains_key(prop.as_str())),
+        |map: &mut Map, prop: ImmutableString| Ok(map.contains_key(&prop)),
     );
     lib.set_fn_1_mut("len", |map: &mut Map| Ok(map.len() as INT));
     lib.set_fn_1_mut("clear", |map: &mut Map| {
@@ -32,7 +32,7 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     });
     lib.set_fn_2_mut(
         "remove",
-        |x: &mut Map, name: ImmutableString| Ok(x.remove(name.as_str()).unwrap_or_else(|| ().into())),
+        |x: &mut Map, name: ImmutableString| Ok(x.remove(&name).unwrap_or_else(|| ().into())),
     );
     lib.set_fn_2_mut(
         "mixin",
@@ -47,7 +47,7 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
         "fill_with",
         |map1: &mut Map, map2: Map| {
             map2.into_iter().for_each(|(key, value)| {
-                if !map1.contains_key(key.as_str()) {
+                if !map1.contains_key(&key) {
                     map1.insert(key, value);
                 }
             });
