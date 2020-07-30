@@ -19,8 +19,9 @@ use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_function"))]
 use crate::{
-    parser::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
-    scope::EntryType as ScopeEntryType,
+    parser::ScriptFnDef,
+    r#unsafe::unsafe_cast_var_name_to_lifetime,
+    scope::{Entry as ScopeEntry, EntryType as ScopeEntryType},
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -105,8 +106,32 @@ fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCal
     }
 }
 
+// Add captured variables into scope
+#[cfg(not(feature = "no_capture"))]
+fn add_captured_variables_into_scope<'s>(
+    externals: &[String],
+    captured: &'s Scope<'s>,
+    scope: &mut Scope<'s>,
+) {
+    externals
+        .iter()
+        .map(|var_name| captured.get_entry(var_name))
+        .filter(Option::is_some)
+        .map(Option::unwrap)
+        .for_each(
+            |ScopeEntry {
+                 name, typ, value, ..
+             }| {
+                match typ {
+                    ScopeEntryType::Normal => scope.push(name.clone(), value.clone()),
+                    ScopeEntryType::Constant => scope.push_constant(name.clone(), value.clone()),
+                };
+            },
+        );
+}
+
 impl Engine {
-    /// Universal method for calling functions either registered with the `Engine` or written in Rhai.
+    /// Call a native Rust function registered with the `Engine`.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
@@ -121,7 +146,7 @@ impl Engine {
         state: &mut State,
         lib: &Module,
         fn_name: &str,
-        (hash_fn, hash_script): (u64, u64),
+        hash_fn: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -130,8 +155,6 @@ impl Engine {
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
-
-        let native_only = hash_script == 0;
 
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
@@ -142,23 +165,13 @@ impl Engine {
             ));
         }
 
-        let mut this_copy: Dynamic = Default::default();
-        let mut old_this_ptr: Option<&mut Dynamic> = None;
-
         // Search for the function
-        // First search in script-defined functions (can override built-in)
-        // Then search registered native functions (can override packages)
+        // First search registered native functions (can override packages)
         // Then search packages
-        // NOTE: We skip script functions for global_module and packages, and native functions for lib
-        let func = if !native_only {
-            lib.get_fn(hash_script, pub_only) //.or_else(|| lib.get_fn(hash_fn, pub_only))
-        } else {
-            None
-        }
-        //.or_else(|| self.global_module.get_fn(hash_script, pub_only))
-        .or_else(|| self.global_module.get_fn(hash_fn, pub_only))
-        //.or_else(|| self.packages.get_fn(hash_script, pub_only))
-        .or_else(|| self.packages.get_fn(hash_fn, pub_only));
+        let func = self
+            .global_module
+            .get_fn(hash_fn, pub_only)
+            .or_else(|| self.packages.get_fn(hash_fn, pub_only));
 
         if let Some(func) = func {
             #[cfg(not(feature = "no_function"))]
@@ -166,42 +179,11 @@ impl Engine {
             #[cfg(feature = "no_function")]
             let need_normalize = is_ref && func.is_pure();
 
+            let mut this_copy: Dynamic = Default::default();
+            let mut old_this_ptr: Option<&mut Dynamic> = None;
+
             // Calling pure function but the first argument is a reference?
             normalize_first_arg(need_normalize, &mut this_copy, &mut old_this_ptr, args);
-
-            #[cfg(not(feature = "no_function"))]
-            if func.is_script() {
-                // Run scripted function
-                let fn_def = func.get_fn_def();
-
-                // Method call of script function - map first argument to `this`
-                return if _is_method {
-                    let (first, rest) = args.split_at_mut(1);
-                    Ok((
-                        self.call_script_fn(
-                            _scope,
-                            _mods,
-                            state,
-                            lib,
-                            &mut Some(first[0]),
-                            fn_name,
-                            fn_def,
-                            rest,
-                            _level,
-                        )?,
-                        false,
-                    ))
-                } else {
-                    let result = self.call_script_fn(
-                        _scope, _mods, state, lib, &mut None, fn_name, fn_def, args, _level,
-                    )?;
-
-                    // Restore the original reference
-                    restore_first_arg(old_this_ptr, args);
-
-                    Ok((result, false))
-                };
-            }
 
             // Run external function
             let result = func.get_native_fn()(self, lib, args)?;
@@ -414,24 +396,23 @@ impl Engine {
         state: &mut State,
         lib: &Module,
         fn_name: &str,
-        native_only: bool,
         hash_script: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
         is_method: bool,
         pub_only: bool,
+        capture: Option<Scope>,
         def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
         let arg_types = args.iter().map(|a| a.type_id());
         let hash_fn = calc_fn_hash(empty(), fn_name, args.len(), arg_types);
-        let hashes = (hash_fn, if native_only { 0 } else { hash_script });
 
         match fn_name {
             // type_of
             KEYWORD_TYPE_OF
-                if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1, pub_only) =>
+                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
             {
                 Ok((
                     self.map_type_name(args[0].type_name()).to_string().into(),
@@ -441,7 +422,7 @@ impl Engine {
 
             // Fn
             KEYWORD_FN_PTR
-                if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1, pub_only) =>
+                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
             {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'Fn' should not be called in method style. Try Fn(...);".into(),
@@ -451,7 +432,7 @@ impl Engine {
 
             // eval - reaching this point it must be a method-style call
             KEYWORD_EVAL
-                if args.len() == 1 && !self.has_override(lib, hashes.0, hashes.1, pub_only) =>
+                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
             {
                 Err(Box::new(EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
@@ -459,12 +440,61 @@ impl Engine {
                 )))
             }
 
-            // Normal function call
+            // Normal script function call
+            #[cfg(not(feature = "no_function"))]
+            _ if hash_script > 0 && lib.contains_fn(hash_script, pub_only) => {
+                // Get scripted function
+                let func = lib.get_fn(hash_script, pub_only).unwrap().get_fn_def();
+
+                let scope = &mut Scope::new();
+                let mods = &mut Imports::new();
+
+                // Add captured variables into scope
+                #[cfg(not(feature = "no_capture"))]
+                if let Some(captured) = &capture {
+                    add_captured_variables_into_scope(&func.externals, captured, scope);
+                }
+
+                let result = if is_method {
+                    // Method call of script function - map first argument to `this`
+                    let (first, rest) = args.split_at_mut(1);
+                    self.call_script_fn(
+                        scope,
+                        mods,
+                        state,
+                        lib,
+                        &mut Some(first[0]),
+                        fn_name,
+                        func,
+                        rest,
+                        level,
+                    )?
+                } else {
+                    // Normal call of script function - map first argument to `this`
+                    let mut first_copy: Dynamic = Default::default();
+                    let mut old_first: Option<&mut Dynamic> = None;
+
+                    // The first argument is a reference?
+                    normalize_first_arg(is_ref, &mut first_copy, &mut old_first, args);
+
+                    let result = self.call_script_fn(
+                        scope, mods, state, lib, &mut None, fn_name, func, args, level,
+                    )?;
+
+                    // Restore the original reference
+                    restore_first_arg(old_first, args);
+
+                    result
+                };
+
+                Ok((result, false))
+            }
+            // Normal native function call
             _ => {
                 let mut scope = Scope::new();
                 let mut mods = Imports::new();
                 self.call_fn_raw(
-                    &mut scope, &mut mods, state, lib, fn_name, hashes, args, is_ref, is_method,
+                    &mut scope, &mut mods, state, lib, fn_name, hash_fn, args, is_ref, is_method,
                     pub_only, def_val, level,
                 )
             }
@@ -522,7 +552,7 @@ impl Engine {
         state: &mut State,
         lib: &Module,
         name: &str,
-        hash: u64,
+        hash_script: u64,
         target: &mut Target,
         idx_val: Dynamic,
         def_val: Option<bool>,
@@ -545,7 +575,11 @@ impl Engine {
             // Redirect function name
             let fn_name = fn_ptr.fn_name();
             // Recalculate hash
-            let hash = calc_fn_hash(empty(), fn_name, curry.len() + idx.len(), empty());
+            let hash = if native {
+                0
+            } else {
+                calc_fn_hash(empty(), fn_name, curry.len() + idx.len(), empty())
+            };
             // Arguments are passed as-is, adding the curried arguments
             let mut arg_values = curry
                 .iter_mut()
@@ -555,7 +589,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, fn_name, native, hash, args, false, false, pub_only, def_val, level,
+                state, lib, fn_name, hash, args, false, false, pub_only, None, def_val, level,
             )
         } else if _fn_name == KEYWORD_FN_PTR_CALL && idx.len() > 0 && idx[0].is::<FnPtr>() {
             // FnPtr call on object
@@ -564,7 +598,11 @@ impl Engine {
             // Redirect function name
             let fn_name = fn_ptr.get_fn_name().clone();
             // Recalculate hash
-            let hash = calc_fn_hash(empty(), &fn_name, curry.len() + idx.len(), empty());
+            let hash = if native {
+                0
+            } else {
+                calc_fn_hash(empty(), &fn_name, curry.len() + idx.len(), empty())
+            };
             // Replace the first argument with the object pointer, adding the curried arguments
             let mut arg_values = once(obj)
                 .chain(curry.iter_mut())
@@ -574,7 +612,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, &fn_name, native, hash, args, is_ref, true, pub_only, def_val, level,
+                state, lib, &fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
             )
         } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
@@ -595,7 +633,7 @@ impl Engine {
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;
-            let mut _hash = hash;
+            let mut _hash = hash_script;
 
             // Check if it is a map method call in OOP style
             #[cfg(not(feature = "no_object"))]
@@ -611,12 +649,16 @@ impl Engine {
                 }
             };
 
+            if native {
+                _hash = 0;
+            }
+
             // Attached object pointer in front of the arguments
             let mut arg_values = once(obj).chain(idx.iter_mut()).collect::<StaticVec<_>>();
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, _fn_name, native, _hash, args, is_ref, true, pub_only, def_val, level,
+                state, lib, _fn_name, _hash, args, is_ref, true, pub_only, None, def_val, level,
             )
         }?;
 
@@ -641,16 +683,17 @@ impl Engine {
         name: &str,
         args_expr: &[Expr],
         def_val: Option<bool>,
-        mut hash: u64,
+        mut hash_script: u64,
         native: bool,
         pub_only: bool,
+        capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         // Handle Fn()
         if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash, pub_only) {
+            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 // Fn - only in function call style
                 let expr = args_expr.get(0).unwrap();
                 let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -698,11 +741,43 @@ impl Engine {
             .into());
         }
 
+        // Handle call() - Redirect function call
+        let redirected;
+        let mut args_expr = args_expr.as_ref();
+        let mut curry: StaticVec<_> = Default::default();
+        let mut name = name;
+
+        if name == KEYWORD_FN_PTR_CALL
+            && args_expr.len() >= 1
+            && !self.has_override(lib, 0, hash_script, pub_only)
+        {
+            let expr = args_expr.get(0).unwrap();
+            let fn_name = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+
+            if fn_name.is::<FnPtr>() {
+                let fn_ptr = fn_name.cast::<FnPtr>();
+                curry = fn_ptr.curry().iter().cloned().collect();
+                // Redirect function name
+                redirected = fn_ptr.take_data().0;
+                name = &redirected;
+                // Skip the first argument
+                args_expr = &args_expr.as_ref()[1..];
+                // Recalculate hash
+                hash_script = calc_fn_hash(empty(), name, curry.len() + args_expr.len(), empty());
+            } else {
+                return Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
+                    self.map_type_name(type_name::<FnPtr>()).into(),
+                    fn_name.type_name().into(),
+                    expr.position(),
+                )));
+            }
+        }
+
         // Handle eval()
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash, pub_only) {
+            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let expr = args_expr.get(0).unwrap();
@@ -721,42 +796,15 @@ impl Engine {
             }
         }
 
-        // Handle call() - Redirect function call
-        let redirected;
-        let mut args_expr = args_expr.as_ref();
-        let mut curry: StaticVec<_> = Default::default();
-        let mut name = name;
-
-        if name == KEYWORD_FN_PTR_CALL
-            && args_expr.len() >= 1
-            && !self.has_override(lib, 0, hash, pub_only)
-        {
-            let expr = args_expr.get(0).unwrap();
-            let fn_name = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-
-            if fn_name.is::<FnPtr>() {
-                let fn_ptr = fn_name.cast::<FnPtr>();
-                curry = fn_ptr.curry().iter().cloned().collect();
-                // Redirect function name
-                redirected = fn_ptr.take_data().0;
-                name = &redirected;
-                // Skip the first argument
-                args_expr = &args_expr.as_ref()[1..];
-                // Recalculate hash
-                hash = calc_fn_hash(empty(), name, curry.len() + args_expr.len(), empty());
-            } else {
-                return Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name(type_name::<FnPtr>()).into(),
-                    fn_name.type_name().into(),
-                    expr.position(),
-                )));
-            }
-        }
-
-        // Normal function call - except for Fn and eval (handled above)
+        // Normal function call - except for Fn, curry, call and eval (handled above)
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
         let mut is_ref = false;
+        let capture = if capture && !scope.is_empty() {
+            Some(scope.clone())
+        } else {
+            None
+        };
 
         if args_expr.is_empty() && curry.is_empty() {
             // No arguments
@@ -797,9 +845,11 @@ impl Engine {
             }
         }
 
+        let hash = if native { 0 } else { hash_script };
         let args = args.as_mut();
+
         self.exec_fn_call(
-            state, lib, name, native, hash, args, is_ref, false, pub_only, def_val, level,
+            state, lib, name, hash, args, is_ref, false, pub_only, capture, def_val, level,
         )
         .map(|(v, _)| v)
     }
@@ -818,9 +868,17 @@ impl Engine {
         args_expr: &[Expr],
         def_val: Option<bool>,
         hash_script: u64,
+        capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let modules = modules.as_ref().unwrap();
+
+        #[cfg(not(feature = "no_capture"))]
+        let capture = if capture && !scope.is_empty() {
+            Some(scope.clone())
+        } else {
+            None
+        };
 
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
@@ -887,12 +945,18 @@ impl Engine {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
                 let args = args.as_mut();
-                let fn_def = f.get_fn_def();
-                let mut scope = Scope::new();
-                let mut mods = Imports::new();
-                self.call_script_fn(
-                    &mut scope, &mut mods, state, lib, &mut None, name, fn_def, args, level,
-                )
+                let func = f.get_fn_def();
+
+                let scope = &mut Scope::new();
+                let mods = &mut Imports::new();
+
+                // Add captured variables into scope
+                #[cfg(not(feature = "no_capture"))]
+                if let Some(captured) = &capture {
+                    add_captured_variables_into_scope(&func.externals, captured, scope);
+                }
+
+                self.call_script_fn(scope, mods, state, lib, &mut None, name, func, args, level)
             }
             Some(f) => f.get_native_fn()(self, lib, args.as_mut()),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),

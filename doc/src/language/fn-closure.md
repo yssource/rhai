@@ -1,6 +1,8 @@
 Capture External Variables via Automatic Currying
 ================================================
 
+{{#include ../links.md}}
+
 Poor Man's Closures
 -------------------
 

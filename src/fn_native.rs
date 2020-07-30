@@ -130,12 +130,12 @@ impl FnPtr {
                 &mut Default::default(),
                 lib.as_ref(),
                 fn_name,
-                false,
                 hash_script,
                 args.as_mut(),
                 has_this,
                 has_this,
                 true,
+                None,
                 None,
                 0,
             )

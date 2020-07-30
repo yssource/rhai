@@ -138,7 +138,7 @@ fn call_fn_with_constant_arguments(
             &mut Default::default(),
             state.lib,
             fn_name,
-            (hash_fn, 0),
+            hash_fn,
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             false,
@@ -576,7 +576,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.3.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
-            let ((name, _, pos), _, _, args, def_value) = x.as_mut();
+            let ((name, _, _, pos), _, _, args, def_value) = x.as_mut();
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)

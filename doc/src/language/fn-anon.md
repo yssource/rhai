@@ -54,7 +54,7 @@ WARNING - NOT Closures
 ----------------------
 
 Remember: anonymous functions, though having the same syntax as Rust _closures_, are themselves
-**not** closures.  In particular, they do not capture their running environment.  They are more like
+**not** closures.  In particular, they do not capture their execution environment.  They are more like
 Rust's function pointers.
 
 They do, however, _capture_ variable _values_ from their execution environment, unless the [`no_capture`]

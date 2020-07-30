@@ -316,6 +316,14 @@ impl<'a> Scope<'a> {
             })
     }
 
+    /// Get an entry in the Scope, starting from the last.
+    pub(crate) fn get_entry(&self, name: &str) -> Option<&Entry> {
+        self.0
+            .iter()
+            .rev()
+            .find(|Entry { name: key, .. }| name == key)
+    }
+
     /// Get the value of an entry in the Scope, starting from the last.
     ///
     /// # Examples
@@ -329,10 +337,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
-        self.0
-            .iter()
-            .rev()
-            .find(|Entry { name: key, .. }| name == key)
+        self.get_entry(name)
             .and_then(|Entry { value, .. }| value.downcast_ref::<T>().cloned())
     }
 

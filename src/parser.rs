@@ -748,12 +748,12 @@ pub enum Expr {
     Stmt(Box<(Stmt, Position)>),
     /// Wrapped expression - should not be optimized away.
     Expr(Box<Expr>),
-    /// func(expr, ... ) - ((function name, native_only, position), optional modules, hash, arguments, optional default value)
+    /// func(expr, ... ) - ((function name, native_only, capture, position), optional modules, hash, arguments, optional default value)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<(
-            (Cow<'static, str>, bool, Position),
+            (Cow<'static, str>, bool, bool, Position),
             Option<Box<ModuleRef>>,
             u64,
             StaticVec<Expr>,
@@ -871,7 +871,7 @@ impl Expr {
             Self::Property(x) => x.1,
             Self::Stmt(x) => x.1,
             Self::Variable(x) => (x.0).1,
-            Self::FnCall(x) => (x.0).2,
+            Self::FnCall(x) => (x.0).3,
             Self::Assignment(x) => x.0.position(),
 
             Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
@@ -903,7 +903,7 @@ impl Expr {
             Self::Variable(x) => (x.0).1 = new_pos,
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(x) => (x.0).2 = new_pos,
+            Self::FnCall(x) => (x.0).3 = new_pos,
             Self::And(x) => x.2 = new_pos,
             Self::Or(x) => x.2 = new_pos,
             Self::In(x) => x.2 = new_pos,
@@ -1009,6 +1009,7 @@ impl Expr {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
+                Token::Bang => true,
                 Token::DoubleColon => true,
                 _ => false,
             },
@@ -1101,6 +1102,7 @@ fn parse_fn_call(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     id: String,
+    capture: bool,
     mut modules: Option<Box<ModuleRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
@@ -1143,7 +1145,7 @@ fn parse_fn_call(
             };
 
             return Ok(Expr::FnCall(Box::new((
-                (id.into(), false, settings.pos),
+                (id.into(), false, capture, settings.pos),
                 modules,
                 hash_script,
                 args,
@@ -1185,7 +1187,7 @@ fn parse_fn_call(
                 };
 
                 return Ok(Expr::FnCall(Box::new((
-                    (id.into(), false, settings.pos),
+                    (id.into(), false, capture, settings.pos),
                     modules,
                     hash_script,
                     args,
@@ -1594,6 +1596,8 @@ fn parse_primary(
         _ => input.next().unwrap(),
     };
 
+    let (next_token, _) = input.peek().unwrap();
+
     let mut root_expr = match token {
         Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, settings.pos))),
         #[cfg(not(feature = "no_float"))]
@@ -1605,7 +1609,7 @@ fn parse_primary(
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         // Function call is allowed to have reserved keyword
-        Token::Reserved(s) if input.peek().unwrap().0 == Token::LeftParen => {
+        Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
                 Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
             } else {
@@ -1613,7 +1617,7 @@ fn parse_primary(
             }
         }
         // Access to `this` as a variable is OK
-        Token::Reserved(s) if s == KEYWORD_THIS && input.peek().unwrap().0 != Token::LeftParen => {
+        Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
                 return Err(
                     PERR::BadInput(format!("'{}' can only be used in functions", s))
@@ -1654,10 +1658,25 @@ fn parse_primary(
 
         root_expr = match (root_expr, token) {
             // Function call
+            #[cfg(not(feature = "no_capture"))]
+            (Expr::Variable(x), Token::Bang) => {
+                if !match_token(input, Token::LeftParen)? {
+                    return Err(PERR::MissingToken(
+                        Token::LeftParen.syntax().into(),
+                        "to start arguments list of function call".into(),
+                    )
+                    .into_err(input.peek().unwrap().1));
+                }
+
+                let ((name, pos), modules, _, _) = *x;
+                settings.pos = pos;
+                parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
+            }
+            // Function call
             (Expr::Variable(x), Token::LeftParen) => {
                 let ((name, pos), modules, _, _) = *x;
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, modules, settings.level_up())?
+                parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
@@ -1767,7 +1786,7 @@ fn parse_unary(
                     args.push(expr);
 
                     Ok(Expr::FnCall(Box::new((
-                        (op.into(), true, pos),
+                        (op.into(), true, false, pos),
                         None,
                         hash,
                         args,
@@ -1792,7 +1811,7 @@ fn parse_unary(
             let hash = calc_fn_hash(empty(), op, 2, empty());
 
             Ok(Expr::FnCall(Box::new((
-                (op.into(), true, pos),
+                (op.into(), true, false, pos),
                 None,
                 hash,
                 args,
@@ -1987,7 +2006,14 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
                 op_pos,
             )))
         }
-        // lhs.func()
+        // lhs.func!(...)
+        (_, Expr::FnCall(x)) if (x.0).2 => {
+            return Err(PERR::MalformedCapture(
+                "method-call style does not support capturing".into(),
+            )
+            .into_err((x.0).3))
+        }
+        // lhs.func(...)
         (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
@@ -2196,7 +2222,7 @@ fn parse_binary_op(
         let cmp_def = Some(false);
         let op = op_token.syntax();
         let hash = calc_fn_hash(empty(), &op, 2, empty());
-        let op = (op, true, pos);
+        let op = (op, true, false, pos);
 
         let mut args = StaticVec::new();
         args.push(root);
@@ -2257,7 +2283,7 @@ fn parse_binary_op(
                     .unwrap_or(false) =>
             {
                 // Accept non-native functions for custom operators
-                let op = (op.0, false, op.2);
+                let op = (op.0, false, op.2, op.3);
                 Expr::FnCall(Box::new((op, None, hash, args, None)))
             }
 
@@ -2975,10 +3001,12 @@ fn parse_fn(
 
     let (token, pos) = input.next().unwrap();
 
-    let name = token.into_function_name().map_err(|t| match t {
-        Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
-        _ => PERR::FnMissingName.into_err(pos),
-    })?;
+    let name = token
+        .into_function_name_for_override()
+        .map_err(|t| match t {
+            Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
+            _ => PERR::FnMissingName.into_err(pos),
+        })?;
 
     match input.peek().unwrap() {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
@@ -3085,7 +3113,7 @@ fn make_curry_from_externals(
     let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals, empty());
 
     let fn_call = Expr::FnCall(Box::new((
-        (KEYWORD_FN_PTR_CURRY.into(), false, pos),
+        (KEYWORD_FN_PTR_CURRY.into(), false, false, pos),
         None,
         hash,
         args,
