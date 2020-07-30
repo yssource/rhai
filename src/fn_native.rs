@@ -18,7 +18,7 @@ use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, string::Stri
 use crate::stdlib::mem;
 
 #[cfg(not(feature = "sync"))]
-use crate::stdlib::{rc::Rc, cell::{RefCell, Ref, RefMut}};
+use crate::stdlib::{rc::Rc, cell::RefCell};
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::{Arc, RwLock};
 

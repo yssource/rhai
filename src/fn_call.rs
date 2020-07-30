@@ -699,7 +699,6 @@ impl Engine {
         }
 
         // Handle shared()
-        #[cfg(not(feature = "no_shared"))]
         if name == KEYWORD_SHARED && args_expr.len() == 1 {
             let expr = args_expr.get(0).unwrap();
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;

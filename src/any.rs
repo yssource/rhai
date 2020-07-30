@@ -18,7 +18,7 @@ use crate::stdlib::{
     boxed::Box,
     fmt,
     string::String,
-    ops::{Deref, DerefMut}
+    ops::{DerefMut, Deref}
 };
 
 #[cfg(not(feature = "sync"))]
@@ -259,11 +259,13 @@ impl Dynamic {
     /// If the `Dynamic` is a Shared variant checking is performed on
     /// top of it's internal value.
     pub fn is<T: Variant + Clone>(&self) -> bool {
-        self.type_id() == TypeId::of::<T>()
-            || match self.0 {
-                Union::Str(_) => TypeId::of::<String>() == TypeId::of::<T>(),
-                _ => false,
-            }
+        let mut target_type_id = TypeId::of::<T>();
+
+        if target_type_id == TypeId::of::<String>() {
+            target_type_id = TypeId::of::<ImmutableString>();
+        }
+
+        self.type_id() == target_type_id
     }
 
     /// Get the TypeId of the value held by this `Dynamic`.
@@ -606,6 +608,7 @@ impl Dynamic {
                 _ => None,
             };
         }
+
         #[cfg(not(feature = "no_float"))]
         if type_id == TypeId::of::<FLOAT>() {
             return match self.0 {
@@ -613,30 +616,35 @@ impl Dynamic {
                 _ => None,
             };
         }
+
         if type_id == TypeId::of::<bool>() {
             return match self.0 {
                 Union::Bool(value) => unsafe_try_cast(value),
                 _ => None,
             };
         }
+
         if type_id == TypeId::of::<ImmutableString>() {
             return match self.0 {
                 Union::Str(value) => unsafe_try_cast(value),
                 _ => None,
             };
         }
+
         if type_id == TypeId::of::<String>() {
             return match self.0 {
                 Union::Str(value) => unsafe_try_cast(value.into_owned()),
                 _ => None,
             };
         }
+
         if type_id == TypeId::of::<char>() {
             return match self.0 {
                 Union::Char(value) => unsafe_try_cast(value),
                 _ => None,
             };
         }
+
         #[cfg(not(feature = "no_index"))]
         if type_id == TypeId::of::<Array>() {
             return match self.0 {
@@ -644,6 +652,7 @@ impl Dynamic {
                 _ => None,
             };
         }
+
         #[cfg(not(feature = "no_object"))]
         if type_id == TypeId::of::<Map>() {
             return match self.0 {
@@ -651,12 +660,14 @@ impl Dynamic {
                 _ => None,
             };
         }
+
         if type_id == TypeId::of::<FnPtr>() {
             return match self.0 {
                 Union::FnPtr(value) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
                 _ => None,
             };
         }
+
         if type_id == TypeId::of::<()>() {
             return match self.0 {
                 Union::Unit(value) => unsafe_try_cast(value),
@@ -951,6 +962,7 @@ impl Dynamic {
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
+            Union::Shared(_) => self.read::<INT>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -961,6 +973,7 @@ impl Dynamic {
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n) => Ok(n),
+            Union::Shared(_) => self.read::<FLOAT>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -970,6 +983,7 @@ impl Dynamic {
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b) => Ok(b),
+            Union::Shared(_) => self.read::<bool>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -979,12 +993,15 @@ impl Dynamic {
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n) => Ok(n),
+            Union::Shared(_) => self.read::<char>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
 
     /// Cast the `Dynamic` as a string and return the string slice.
     /// Returns the name of the actual type if the cast fails.
+    ///
+    /// Cast is failing if `self` is Shared Dynamic
     pub fn as_str(&self) -> Result<&str, &'static str> {
         match &self.0 {
             Union::Str(s) => Ok(s),
@@ -1006,6 +1023,20 @@ impl Dynamic {
         match self.0 {
             Union::Str(s) => Ok(s),
             Union::FnPtr(f) => Ok(f.take_data().0),
+            Union::Shared(cell) => {
+                #[cfg(not(feature = "sync"))]
+                match &cell.container.borrow().deref().0 {
+                    Union::Str(s) => Ok(s.clone()),
+                    Union::FnPtr(f) => Ok(f.clone().take_data().0),
+                    _ => Err(cell.value_type_name),
+                }
+                #[cfg(feature = "sync")]
+                match &cell.container.read().deref().0 {
+                    Union::Str(s) => Ok(s.clone()),
+                    Union::FnPtr(f) => Ok(f.clone().take_data().0),
+                    _ => Err(cell.value_type_name),
+                }
+            }
             _ => Err(self.type_name()),
         }
     }

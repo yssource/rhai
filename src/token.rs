@@ -1430,13 +1430,20 @@ fn get_identifier(
 /// Is this keyword allowed as a function?
 #[inline(always)]
 pub fn is_keyword_function(name: &str) -> bool {
-    name == KEYWORD_PRINT
+    let mut result = name == KEYWORD_PRINT
         || name == KEYWORD_DEBUG
         || name == KEYWORD_TYPE_OF
         || name == KEYWORD_EVAL
         || name == KEYWORD_FN_PTR
         || name == KEYWORD_FN_PTR_CALL
-        || name == KEYWORD_FN_PTR_CURRY
+        || name == KEYWORD_FN_PTR_CURRY;
+
+    #[cfg(not(feature = "no-shared"))]
+    {
+        result = result || name == KEYWORD_SHARED;
+    }
+
+    result
 }
 
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {

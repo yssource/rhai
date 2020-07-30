@@ -411,6 +411,11 @@ struct ParseState<'e> {
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_capture"))]
     externals: HashMap<String, Position>,
+    /// An indicator that prevents variables capturing into externals one time.
+    /// If set to true the next call of `access_var` will not capture the variable.
+    /// All consequent calls to `access_var` will not be affected
+    #[cfg(not(feature = "no_capture"))]
+    capture: bool,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -436,6 +441,8 @@ impl<'e> ParseState<'e> {
             max_function_expr_depth,
             #[cfg(not(feature = "no_capture"))]
             externals: Default::default(),
+            #[cfg(not(feature = "no_capture"))]
+            capture: true,
             stack: Default::default(),
             modules: Default::default(),
         }
@@ -458,8 +465,12 @@ impl<'e> ParseState<'e> {
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
 
         #[cfg(not(feature = "no_capture"))]
-        if index.is_none() && !self.externals.contains_key(name) {
-            self.externals.insert(name.to_string(), pos);
+        if self.capture {
+            if index.is_none() && !self.externals.contains_key(name) {
+                self.externals.insert(name.to_string(), pos);
+            }
+        } else {
+            self.capture = true
         }
 
         index
@@ -2171,9 +2182,18 @@ fn parse_binary_op(
 
         let (op_token, pos) = input.next().unwrap();
 
-        let rhs = parse_unary(input, state, lib, settings)?;
+        let next = input.peek().unwrap();
+        let next_precedence = next.0.precedence(custom);
 
-        let next_precedence = input.peek().unwrap().0.precedence(custom);
+        #[cfg(any(not(feature = "no_object"), not(feature = "no_capture")))]
+        if op_token == Token::Period {
+            if let (Token::Identifier(_), _) = next {
+                // prevents capturing of the object properties as vars: xxx.<var>
+                state.capture = false;
+            }
+        }
+
+        let rhs = parse_unary(input, state, lib, settings)?;
 
         // Bind to right if the next operator has higher precedence
         // If same precedence, then check if the operator binds right

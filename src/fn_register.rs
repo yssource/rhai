@@ -114,7 +114,7 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
         ref_T.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
         // If T is String, data must be ImmutableString, so map directly to it
-        *unsafe_cast_box(Box::new(data.as_str().unwrap().to_string())).unwrap()
+        *unsafe_cast_box(Box::new(data.clone().take_string().unwrap())).unwrap()
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
