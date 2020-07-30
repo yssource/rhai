@@ -127,5 +127,5 @@ x.change();         // call 'change' in method-call style, 'this' binds to 'x'
 
 x == 42;            // 'x' is changed!
 
-change();           // <- error: `this` is unbounded
+change();           // <- error: `this` is unbound
 ```

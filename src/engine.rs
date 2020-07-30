@@ -556,7 +556,7 @@ pub fn search_scope_only<'s, 'a>(
         if let Some(val) = this_ptr {
             return Ok(((*val).into(), KEYWORD_THIS, ScopeEntryType::Normal, *pos));
         } else {
-            return Err(Box::new(EvalAltResult::ErrorUnboundedThis(*pos)));
+            return Err(Box::new(EvalAltResult::ErrorUnboundThis(*pos)));
         }
     }
 
@@ -1247,7 +1247,7 @@ impl Engine {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
                 } else {
-                    Err(Box::new(EvalAltResult::ErrorUnboundedThis((x.0).1)))
+                    Err(Box::new(EvalAltResult::ErrorUnboundThis((x.0).1)))
                 }
             }
             Expr::Variable(_) => {
