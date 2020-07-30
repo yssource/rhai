@@ -1,5 +1,7 @@
 //! Module defining plugins in Rhai. Is exported for use by plugin authors.
 
+use crate::stdlib::boxed::Box;
+
 pub use crate::any::{Dynamic, Variant};
 pub use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn};
 pub use crate::parser::{
