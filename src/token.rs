@@ -1431,20 +1431,18 @@ fn get_identifier(
 /// Is this keyword allowed as a function?
 #[inline(always)]
 pub fn is_keyword_function(name: &str) -> bool {
-    let mut result = name == KEYWORD_PRINT
+    #[cfg(not(feature = "no_shared"))]
+    if name == KEYWORD_SHARED || name == KEYWORD_TAKE {
+        return true;
+    }
+
+    name == KEYWORD_PRINT
         || name == KEYWORD_DEBUG
         || name == KEYWORD_TYPE_OF
         || name == KEYWORD_EVAL
         || name == KEYWORD_FN_PTR
         || name == KEYWORD_FN_PTR_CALL
-        || name == KEYWORD_FN_PTR_CURRY;
-
-    #[cfg(not(feature = "no_shared"))]
-    {
-        result = result || name == KEYWORD_SHARED || name == KEYWORD_TAKE;
-    }
-
-    result
+        || name == KEYWORD_FN_PTR_CURRY
 }
 
 /// Can this keyword be overridden as a function?

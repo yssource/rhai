@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, DynamicWriteLock, Union};
+use crate::any::{map_std_type_name, Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, FnPtr};
@@ -31,19 +31,24 @@ use crate::module::resolvers;
 #[cfg(any(not(feature = "no_object"), not(feature = "no_module")))]
 use crate::utils::ImmutableString;
 
+#[cfg(not(feature = "no_shared"))]
+use crate::any::DynamicWriteLock;
+
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     collections::{HashMap, HashSet},
     fmt, format,
     iter::{empty, once},
-    ops::DerefMut,
     string::{String, ToString},
     vec::Vec,
 };
 
 #[cfg(not(feature = "no_index"))]
 use crate::stdlib::any::TypeId;
+
+#[cfg(not(feature = "no_shared"))]
+use crate::stdlib::ops::DerefMut;
 
 /// Variable-sized array of `Dynamic` values.
 ///
@@ -126,7 +131,8 @@ pub enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
     Ref(&'a mut Dynamic),
     /// The target is a mutable reference to a Shared `Dynamic` value.
-    /// It holds the access guard and the original container both for cloning purposes
+    /// It holds both the access guard and the original shared value.
+    #[cfg(not(feature = "no_shared"))]
     LockGuard((DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Dynamic),
@@ -142,6 +148,7 @@ impl Target<'_> {
     pub fn is_ref(&self) -> bool {
         match self {
             Self::Ref(_) => true,
+            #[cfg(not(feature = "no_shared"))]
             Self::LockGuard(_) => true,
             Self::Value(_) => false,
             #[cfg(not(feature = "no_index"))]
@@ -152,6 +159,7 @@ impl Target<'_> {
     pub fn is_value(&self) -> bool {
         match self {
             Self::Ref(_) => false,
+            #[cfg(not(feature = "no_shared"))]
             Self::LockGuard(_) => false,
             Self::Value(_) => true,
             #[cfg(not(feature = "no_index"))]
@@ -163,6 +171,7 @@ impl Target<'_> {
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
             Target::Ref(r) => r.is::<T>(),
+            #[cfg(not(feature = "no_shared"))]
             Target::LockGuard((r, _)) => r.is::<T>(),
             Target::Value(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
@@ -173,7 +182,8 @@ impl Target<'_> {
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
             Self::Ref(r) => r.clone(),          // Referenced value is cloned
-            Self::LockGuard((_, orig)) => orig, // Return original container of the Shared Dynamic
+            #[cfg(not(feature = "no_shared"))]
+            Self::LockGuard((_, orig)) => orig, // Original value is simply taken
             Self::Value(v) => v,                // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
@@ -183,6 +193,7 @@ impl Target<'_> {
     pub fn as_mut(&mut self) -> &mut Dynamic {
         match self {
             Self::Ref(r) => *r,
+            #[cfg(not(feature = "no_shared"))]
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::Value(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
@@ -194,6 +205,7 @@ impl Target<'_> {
     pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val,
+            #[cfg(not(feature = "no_shared"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => {
                 return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
@@ -231,7 +243,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
         #[cfg(not(feature = "no_shared"))]
         if value.is_shared() {
-            // cloning is cheap since it holds Arc/Rw under the hood
+            // Cloning is cheap for a shared value
             let container = value.clone();
             return Self::LockGuard((value.write_lock::<Dynamic>().unwrap(), container));
         }
