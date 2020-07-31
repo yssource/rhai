@@ -32,10 +32,10 @@ use crate::parser::FLOAT;
 use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{Map, Target, FN_GET, FN_SET, KEYWORD_TAKE};
+use crate::engine::{Map, Target, FN_GET, FN_SET};
 
 #[cfg(not(feature = "no_shared"))]
-use crate::engine::KEYWORD_SHARED;
+use crate::engine::{KEYWORD_SHARED, KEYWORD_TAKE};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -659,9 +659,12 @@ impl Engine {
                 .into(),
                 false,
             ))
-        } else if _fn_name == KEYWORD_TAKE {
+        } else if _fn_name == KEYWORD_SHARED && idx.is_empty() {
             // take call
-            return Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false));
+            Ok((obj.clone().into_shared(), false))
+        } else if _fn_name == KEYWORD_TAKE && idx.is_empty() {
+            // take call
+            Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false))
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;
@@ -780,6 +783,15 @@ impl Engine {
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
             return Ok(value.into_shared());
+        }
+
+        // Handle take()
+        #[cfg(not(feature = "no_shared"))]
+        if name == KEYWORD_TAKE && args_expr.len() == 1 {
+            let expr = args_expr.get(0).unwrap();
+            let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+
+            return Ok(value.clone_inner_data::<Dynamic>().unwrap());
         }
 
         // Handle call() - Redirect function call
