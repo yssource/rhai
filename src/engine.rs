@@ -1328,12 +1328,15 @@ impl Engine {
                     // Normal assignment
                     ScopeEntryType::Normal if op.is_empty() => {
                         #[cfg(not(feature = "no_shared"))]
-                        let lhs_ptr = if lhs_ptr.is_shared() {
-                            lhs_ptr.write_lock::<Dynamic>().unwrap();
+                        if lhs_ptr.is_shared() {
+                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = rhs_val;
                         } else {
-                            lhs_ptr
-                        };
-                        *lhs_ptr = rhs_val;
+                            *lhs_ptr = rhs_val;
+                        }
+                        #[cfg(feature = "no_shared")]
+                        {
+                            *lhs_ptr = rhs_val;
+                        }
                         Ok(Default::default())
                     }
                     // Op-assignment - in order of precedence:
@@ -1351,14 +1354,17 @@ impl Engine {
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
-                            // Overriding exact implementation
+                            let mut lock_guard;
+
                             #[cfg(not(feature = "no_shared"))]
                             let lhs_ptr = if lhs_ptr.is_shared() {
-                                &mut lhs_ptr.write_lock::<Dynamic>().unwrap()
+                                lock_guard = Some(lhs_ptr.write_lock::<Dynamic>().unwrap());
+                                lock_guard.as_deref_mut().unwrap()
                             } else {
                                 lhs_ptr
                             };
 
+                            // Overriding exact implementation
                             func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
@@ -1375,13 +1381,15 @@ impl Engine {
                                 .map_err(|err| err.new_position(*op_pos))?;
 
                             #[cfg(not(feature = "no_shared"))]
-                            let lhs_ptr = if lhs_ptr.is_shared() {
-                                lhs_ptr.write_lock::<Dynamic>().unwrap()
+                            if lhs_ptr.is_shared() {
+                                *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
                             } else {
-                                lhs_ptr
-                            };
-
-                            *lhs_ptr = value;
+                                *lhs_ptr = value;
+                            }
+                            #[cfg(feature = "no_shared")]
+                            {
+                                *lhs_ptr = value;
+                            }
                         }
                         Ok(Default::default())
                     }

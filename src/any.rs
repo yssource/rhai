@@ -578,7 +578,9 @@ impl Dynamic {
     }
 
     /// Convert the `Dynamic` value into specific type.
-    /// Casting to a `Dynamic` just returns as is.
+    ///
+    /// Casting to a `Dynamic` just returns as is, but if it contains a shared value,
+    /// it is cloned into a `Dynamic` with a normal value.
     ///
     /// Returns `None` if types mismatched.
     ///
@@ -601,6 +603,19 @@ impl Dynamic {
     #[inline(always)]
     pub fn try_cast<T: Variant>(self) -> Option<T> {
         let type_id = TypeId::of::<T>();
+
+        match self.0 {
+            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(cell) => return cell.container.borrow().deref().clone().try_cast(),
+
+            #[cfg(not(feature = "no_shared"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(cell) => {
+                return cell.container.read().unwrap().deref().clone().try_cast()
+            }
+            _ => (),
+        }
 
         if type_id == TypeId::of::<Dynamic>() {
             return unsafe_cast_box::<_, T>(Box::new(self)).ok().map(|v| *v);
@@ -681,23 +696,15 @@ impl Dynamic {
 
         match self.0 {
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).ok(),
-
-            #[cfg(not(feature = "no_shared"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(cell) => return cell.container.borrow().deref().clone().try_cast(),
-
-            #[cfg(not(feature = "no_shared"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(cell) => {
-                return cell.container.read().unwrap().deref().clone().try_cast()
-            }
-
+            Union::Shared(_) => unreachable!(),
             _ => None,
         }
     }
 
     /// Convert the `Dynamic` value into a specific type.
-    /// Casting to a `Dynamic` just returns as is.
+    ///
+    /// Casting to a `Dynamic` just returns as is, but if it contains a shared value,
+    /// it is cloned into a `Dynamic` with a normal value.
     ///
     /// Returns `None` if types mismatched.
     ///
