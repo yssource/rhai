@@ -4,8 +4,8 @@ use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
-    KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
-    KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_TYPE_OF,
+    KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_SHARED,
+    KEYWORD_PRINT, KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -451,6 +451,12 @@ impl Engine {
                 )))
             }
 
+            // Fn
+            KEYWORD_IS_SHARED if args.len() == 1 => Err(Box::new(EvalAltResult::ErrorRuntime(
+                "'is_shared' should not be called in method style. Try is_shared(...);".into(),
+                Position::none(),
+            ))),
+
             // eval - reaching this point it must be a method-style call
             KEYWORD_EVAL
                 if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
@@ -781,6 +787,15 @@ impl Engine {
                 fn_curry.into_iter().chain(curry.into_iter()).collect(),
             )
             .into());
+        }
+
+        // Handle is_shared()
+        #[cfg(not(feature = "no_shared"))]
+        if name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
+            let expr = args_expr.get(0).unwrap();
+            let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+
+            return Ok(value.is_shared().into());
         }
 
         // Handle shared()

@@ -9,6 +9,7 @@ Keywords List
 |        `false`        | Boolean false literal                    |                 |      No      |
 |         `let`         | Variable declaration                     |                 |      No      |
 |        `const`        | Constant declaration                     |                 |      No      |
+|      `is_shared`      | Is a value shared?                       |                 |      No      |
 |       `shared`        | Share value                              |  [`no_shared`]  |      No      |
 |        `take`         | Un-share value                           |  [`no_shared`]  |      No      |
 |         `if`          | If statement                             |                 |      No      |

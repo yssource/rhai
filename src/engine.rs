@@ -99,6 +99,7 @@ pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
 pub const KEYWORD_SHARED: &str = "shared";
 pub const KEYWORD_TAKE: &str = "take";
+pub const KEYWORD_IS_SHARED: &str = "is_shared";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
 #[cfg(not(feature = "no_object"))]
@@ -181,10 +182,10 @@ impl Target<'_> {
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
-            Self::Ref(r) => r.clone(),          // Referenced value is cloned
+            Self::Ref(r) => r.clone(), // Referenced value is cloned
             #[cfg(not(feature = "no_shared"))]
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
-            Self::Value(v) => v,                // Owned value is simply taken
+            Self::Value(v) => v,       // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }

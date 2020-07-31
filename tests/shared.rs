@@ -18,6 +18,11 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<char>("shared('x')")?, 'x');
 
+    assert!(engine.eval::<bool>("is_shared(shared(42))")?);
+
+    #[cfg(not(feature = "no_object"))]
+    assert!(engine.eval::<bool>("shared(42).is_shared()")?);
+
     #[cfg(not(feature = "no_index"))]
     {
         assert_eq!(

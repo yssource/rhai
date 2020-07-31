@@ -2,7 +2,7 @@
 
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_PRINT, KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 
 use crate::error::LexError;
@@ -1431,28 +1431,22 @@ fn get_identifier(
 /// Is this keyword allowed as a function?
 #[inline(always)]
 pub fn is_keyword_function(name: &str) -> bool {
-    #[cfg(not(feature = "no_shared"))]
-    if name == KEYWORD_SHARED || name == KEYWORD_TAKE {
-        return true;
+    match name {
+        #[cfg(not(feature = "no_shared"))]
+        KEYWORD_SHARED | KEYWORD_TAKE | KEYWORD_IS_SHARED => true,
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
+        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
+        _ => false,
     }
-
-    name == KEYWORD_PRINT
-        || name == KEYWORD_DEBUG
-        || name == KEYWORD_TYPE_OF
-        || name == KEYWORD_EVAL
-        || name == KEYWORD_FN_PTR
-        || name == KEYWORD_FN_PTR_CALL
-        || name == KEYWORD_FN_PTR_CURRY
 }
 
 /// Can this keyword be overridden as a function?
 #[inline(always)]
 pub fn can_override_keyword(name: &str) -> bool {
-    name == KEYWORD_PRINT
-        || name == KEYWORD_DEBUG
-        || name == KEYWORD_TYPE_OF
-        || name == KEYWORD_EVAL
-        || name == KEYWORD_FN_PTR
+    match name {
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR => true,
+        _ => false,
+    }
 }
 
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {

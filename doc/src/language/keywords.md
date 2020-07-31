@@ -9,7 +9,7 @@ The following are reserved keywords in Rhai:
 | ------------------------------------------------- | ------------------------------------------------ | --------------------- | :--------------------: |
 | `true`, `false`                                   |                                                  | Boolean constants     |                        |
 | `let`, `const`                                    | `var`, `static`                                  | Variable declarations |                        |
-| `shared`, `take`                                  |                                                  | Shared values         |     [`no_shared`]      |
+| `shared`, `take`, `is_shared`                     |                                                  | Shared values         |     [`no_shared`]      |
 | `if`, `else`                                      | `then`, `goto`, `exit`                           | Control flow          |                        |
 |                                                   | `switch`, `match`, `case`                        | Matching              |                        |
 | `while`, `loop`, `for`, `in`, `continue`, `break` | `do`, `each`                                     | Looping               |                        |
@@ -23,4 +23,3 @@ The following are reserved keywords in Rhai:
 |                                                   | `default`, `void`, `null`, `nil`                 | Special values        |                        |
 
 Keywords cannot become the name of a [function] or [variable], even when they are disabled.
-
