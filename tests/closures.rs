@@ -116,8 +116,8 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
                 let s = shared("test");
                 let i = shared(0);
                 i = 2;
-
                 s[i] = 'S';
+
                 s
             "#
         )?,
@@ -283,6 +283,26 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("update", TestStruct::update);
     engine.register_fn("merge", TestStruct::merge);
     engine.register_fn("new_ts", TestStruct::new);
+    engine.
+        register_raw_fn(
+            "mutate_with_cb",
+            &[
+                TypeId::of::<TestStruct>(),
+                TypeId::of::<INT>(),
+                TypeId::of::<FnPtr>(),
+            ],
+            move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+                let fp = std::mem::take(args[2]).cast::<FnPtr>();
+                let mut value = args[1].clone();
+                {
+                    let mut lock = value.write_lock::<INT>().unwrap();
+                    *lock = *lock + 1;
+                }
+                let this_ptr = args.get_mut(0).unwrap();
+
+                fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+            },
+        );
 
     assert_eq!(
         engine.eval::<INT>(
@@ -291,11 +311,33 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
 
                 a.x = 100;
                 a.update();
-                // a.merge(a);
+                a.merge(a.take()); // take is important to prevent a deadlock
+
                 a.x
             "
         )?,
-        1100
+        2200
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let a = shared(new_ts());
+                let b = shared(100);
+
+                a.mutate_with_cb(b, |param| {
+                    this.x = param;
+                    param = 50;
+                    this.update();
+                });
+
+                a.update();
+                a.x += b;
+
+                a.x
+            "
+        )?,
+        2151
     );
 
     Ok(())

@@ -568,7 +568,7 @@ impl Dynamic {
     ///
     /// ## Safety
     ///
-    /// Both situations normally shouldn't happen since all operations in Rhai
+    /// Both situations normally shouldn't happen since most operations in Rhai
     /// use pass-by-value data and the script executed in a single thread.
     ///
     /// # Example
@@ -741,7 +741,9 @@ impl Dynamic {
     }
 
     /// Get a copy of a specific type to the `Dynamic`.
-    /// Casting to `Dynamic` just returns a reference to it.
+    /// Casting to `Dynamic` returns a clone of the value in case of NON-shared
+    /// Dynamic. In case of Shared Dynamic returns a clone of the inner data of
+    /// Shared Dynamic.
     /// Returns `None` if the cast fails.
     #[inline(always)]
     pub fn read<T: Variant + Clone>(&self) -> Option<T> {

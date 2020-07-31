@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
     KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF, KEYWORD_SHARED
+    KEYWORD_TYPE_OF, KEYWORD_SHARED, KEYWORD_TAKE
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -593,6 +593,9 @@ impl Engine {
                 .into(),
                 false,
             ))
+        } else if _fn_name == KEYWORD_TAKE {
+            // take call
+            return Ok((obj.read::<Dynamic>().unwrap(), false));
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;
