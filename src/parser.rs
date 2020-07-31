@@ -2182,18 +2182,17 @@ fn parse_binary_op(
 
         let (op_token, pos) = input.next().unwrap();
 
-        let next = input.peek().unwrap();
-        let next_precedence = next.0.precedence(custom);
-
         #[cfg(any(not(feature = "no_object"), not(feature = "no_capture")))]
         if op_token == Token::Period {
-            if let (Token::Identifier(_), _) = next {
+            if let (Token::Identifier(_), _) = input.peek().unwrap() {
                 // prevents capturing of the object properties as vars: xxx.<var>
                 state.capture = false;
             }
         }
 
         let rhs = parse_unary(input, state, lib, settings)?;
+
+        let next_precedence = input.peek().unwrap().0.precedence(custom);
 
         // Bind to right if the next operator has higher precedence
         // If same precedence, then check if the operator binds right

@@ -1031,7 +1031,7 @@ impl Dynamic {
                     _ => Err(cell.value_type_name),
                 }
                 #[cfg(feature = "sync")]
-                match &cell.container.read().deref().0 {
+                match &cell.container.read().unwrap().deref().0 {
                     Union::Str(s) => Ok(s.clone()),
                     Union::FnPtr(f) => Ok(f.clone().take_data().0),
                     _ => Err(cell.value_type_name),
