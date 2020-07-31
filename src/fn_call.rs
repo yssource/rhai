@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
     KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -33,9 +33,6 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{Map, Target, FN_GET, FN_SET};
-
-#[cfg(not(feature = "no_shared"))]
-use crate::engine::{KEYWORD_SHARED, KEYWORD_TAKE};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -661,10 +658,20 @@ impl Engine {
             ))
         } else if _fn_name == KEYWORD_SHARED && idx.is_empty() {
             // take call
-            Ok((obj.clone().into_shared(), false))
+            #[cfg(not(feature = "no_shared"))]
+            {
+                Ok((obj.clone().into_shared(), false))
+            }
+            #[cfg(feature = "no_shared")]
+            unreachable!()
         } else if _fn_name == KEYWORD_TAKE && idx.is_empty() {
             // take call
-            Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false))
+            #[cfg(not(feature = "no_shared"))]
+            {
+                Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false))
+            }
+            #[cfg(feature = "no_shared")]
+            unreachable!()
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;

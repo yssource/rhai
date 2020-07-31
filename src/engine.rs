@@ -1354,6 +1354,7 @@ impl Engine {
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
+                            #[cfg(not(feature = "no_shared"))]
                             let mut lock_guard;
 
                             #[cfg(not(feature = "no_shared"))]

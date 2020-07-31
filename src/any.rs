@@ -696,6 +696,7 @@ impl Dynamic {
 
         match self.0 {
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).ok(),
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(_) => unreachable!(),
             _ => None,
         }
