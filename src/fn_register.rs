@@ -15,7 +15,7 @@ use crate::stdlib::{
     any::TypeId,
     boxed::Box,
     mem,
-    string::{String, ToString},
+    string::String,
 };
 
 /// Trait to register custom functions with the `Engine`.

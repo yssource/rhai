@@ -1,6 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::any::{Dynamic, Variant};
+use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::module::Module;

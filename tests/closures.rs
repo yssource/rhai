@@ -1,6 +1,12 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, RegisterFn, FnPtr, Module, INT, Array};
-use std::any::{TypeId, Any};
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, INT};
+use std::any::TypeId;
+
+#[cfg(not(feature = "no_shared"))]
+use rhai::RegisterFn;
+
+#[cfg(not(feature = "no_index"))]
+use rhai::Array;
 
 #[test]
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
@@ -35,7 +41,7 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-#[cfg(not(feature = "no_capture"))]
+#[cfg(all(not(feature = "no_capture"), not(feature = "no_object")))]
 fn test_closures() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
@@ -110,9 +116,11 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
         'x'
     );
 
-    assert_eq!(
-        engine.eval::<String>(
-            r#"
+    #[cfg(not(feature = "no_index"))]
+    {
+        assert_eq!(
+            engine.eval::<String>(
+                r#"
                 let s = shared("test");
                 let i = shared(0);
                 i = 2;
@@ -120,12 +128,10 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
 
                 s
             "#
-        )?,
-        "teSt"
-    );
+            )?,
+            "teSt"
+        );
 
-    #[cfg(not(feature = "no_index"))]
-    {
         assert_eq!(
             engine.eval::<Array>(
                 r#"
@@ -137,6 +143,7 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
             5
         );
 
+        #[cfg(not(feature = "no_object"))]
         assert_eq!(
             engine.eval::<INT>(
                 r"
@@ -170,6 +177,7 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
             true
         );
 
+        #[cfg(not(feature = "no_object"))]
         assert_eq!(
             engine.eval::<INT>(
                 r#"
@@ -250,95 +258,97 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
         42
     );
 
-    #[derive(Clone)]
-    struct TestStruct {
-        x: INT,
-    }
-
-    impl TestStruct {
-        fn update(&mut self) {
-            self.x += 1000;
+    #[cfg(not(feature = "no_object"))]
+    {
+        #[derive(Clone)]
+        struct TestStruct {
+            x: INT,
         }
 
-        fn merge(&mut self, other: Self) {
-            self.x += other.x;
+        impl TestStruct {
+            fn update(&mut self) {
+                self.x += 1000;
+            }
+
+            fn merge(&mut self, other: Self) {
+                self.x += other.x;
+            }
+
+            fn get_x(&mut self) -> INT {
+                self.x
+            }
+
+            fn set_x(&mut self, new_x: INT) {
+                self.x = new_x;
+            }
+
+            fn new() -> Self {
+                TestStruct { x: 1 }
+            }
         }
 
-        fn get_x(&mut self) -> INT {
-            self.x
-        }
+        engine
+            .register_type::<TestStruct>()
+            .register_get_set("x", TestStruct::get_x, TestStruct::set_x)
+            .register_fn("update", TestStruct::update)
+            .register_fn("merge", TestStruct::merge)
+            .register_fn("new_ts", TestStruct::new)
+            .register_raw_fn(
+                "mutate_with_cb",
+                &[
+                    TypeId::of::<TestStruct>(),
+                    TypeId::of::<INT>(),
+                    TypeId::of::<FnPtr>(),
+                ],
+                move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+                    let fp = std::mem::take(args[2]).cast::<FnPtr>();
+                    let mut value = args[1].clone();
+                    {
+                        let mut lock = value.write_lock::<INT>().unwrap();
+                        *lock = *lock + 1;
+                    }
+                    let this_ptr = args.get_mut(0).unwrap();
 
-        fn set_x(&mut self, new_x: INT) {
-            self.x = new_x;
-        }
+                    fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+                },
+            );
 
-        fn new() -> Self {
-            TestStruct { x: 1 }
-        }
-    }
+        assert_eq!(
+            engine.eval::<INT>(
+                r"
+                    let a = shared(new_ts());
 
-    engine.register_type::<TestStruct>();
+                    a.x = 100;
+                    a.update();
+                    a.merge(a.take()); // take is important to prevent a deadlock
 
-    engine.register_get_set("x", TestStruct::get_x, TestStruct::set_x);
-    engine.register_fn("update", TestStruct::update);
-    engine.register_fn("merge", TestStruct::merge);
-    engine.register_fn("new_ts", TestStruct::new);
-    engine.
-        register_raw_fn(
-            "mutate_with_cb",
-            &[
-                TypeId::of::<TestStruct>(),
-                TypeId::of::<INT>(),
-                TypeId::of::<FnPtr>(),
-            ],
-            move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-                let fp = std::mem::take(args[2]).cast::<FnPtr>();
-                let mut value = args[1].clone();
-                {
-                    let mut lock = value.write_lock::<INT>().unwrap();
-                    *lock = *lock + 1;
-                }
-                let this_ptr = args.get_mut(0).unwrap();
-
-                fp.call_dynamic(engine, lib, Some(this_ptr), [value])
-            },
+                    a.x
+                "
+            )?,
+            2200
         );
 
-    assert_eq!(
-        engine.eval::<INT>(
-            r"
-                let a = shared(new_ts());
+        assert_eq!(
+            engine.eval::<INT>(
+                r"
+                    let a = shared(new_ts());
+                    let b = shared(100);
 
-                a.x = 100;
-                a.update();
-                a.merge(a.take()); // take is important to prevent a deadlock
+                    a.mutate_with_cb(b, |param| {
+                        this.x = param;
+                        param = 50;
+                        this.update();
+                    });
 
-                a.x
-            "
-        )?,
-        2200
-    );
+                    a.update();
+                    a.x += b;
 
-    assert_eq!(
-        engine.eval::<INT>(
-            r"
-                let a = shared(new_ts());
-                let b = shared(100);
-
-                a.mutate_with_cb(b, |param| {
-                    this.x = param;
-                    param = 50;
-                    this.update();
-                });
-
-                a.update();
-                a.x += b;
-
-                a.x
-            "
-        )?,
-        2151
-    );
+                    a.x
+                "
+            )?,
+            2151
+        );
+    }
 
     Ok(())
 }

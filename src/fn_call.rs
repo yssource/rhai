@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
     KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF, KEYWORD_SHARED, KEYWORD_TAKE
+    KEYWORD_TYPE_OF, KEYWORD_SHARED,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -31,7 +31,7 @@ use crate::parser::FLOAT;
 use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{Map, Target, FN_GET, FN_SET};
+use crate::engine::{Map, Target, FN_GET, FN_SET, KEYWORD_TAKE};
 
 use crate::stdlib::{
     any::{type_name, TypeId},
