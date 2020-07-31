@@ -2,7 +2,7 @@
 
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_PRINT, KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 
 use crate::error::LexError;
@@ -503,12 +503,12 @@ impl Token {
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
             | "new" | "use" | "module" | "package" | "var" | "static" | "with" | "do" | "each"
             | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try" | "catch"
-            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync"
-            | "async" | "await" | "yield" => Reserved(syntax.into()),
+            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync" | "async" | "await"
+            | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_SHARED
-            | KEYWORD_TAKE |KEYWORD_THIS => Reserved(syntax.into()),
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_SHARED | KEYWORD_TAKE
+            | KEYWORD_THIS => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -1439,7 +1439,7 @@ pub fn is_keyword_function(name: &str) -> bool {
         || name == KEYWORD_FN_PTR_CALL
         || name == KEYWORD_FN_PTR_CURRY;
 
-    #[cfg(not(feature = "no-shared"))]
+    #[cfg(not(feature = "no_shared"))]
     {
         result = result || name == KEYWORD_SHARED || name == KEYWORD_TAKE;
     }

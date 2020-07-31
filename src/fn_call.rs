@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
     KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF, KEYWORD_SHARED,
+    KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -14,9 +14,9 @@ use crate::optimize::OptimizationLevel;
 use crate::parser::{Expr, ImmutableString, AST, INT};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
+use crate::stdlib::ops::Deref;
 use crate::token::Position;
 use crate::utils::StaticVec;
-use crate::stdlib::ops::Deref;
 
 #[cfg(not(feature = "no_function"))]
 use crate::{
@@ -33,6 +33,9 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{Map, Target, FN_GET, FN_SET, KEYWORD_TAKE};
+
+#[cfg(not(feature = "no_shared"))]
+use crate::engine::KEYWORD_SHARED;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -771,6 +774,7 @@ impl Engine {
         }
 
         // Handle shared()
+        #[cfg(not(feature = "no_shared"))]
         if name == KEYWORD_SHARED && args_expr.len() == 1 {
             let expr = args_expr.get(0).unwrap();
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;

@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, Union, DynamicWriteLock};
+use crate::any::{map_std_type_name, Dynamic, DynamicWriteLock, Union};
 use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, FnPtr};
@@ -37,9 +37,9 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     iter::{empty, once},
+    ops::DerefMut,
     string::{String, ToString},
     vec::Vec,
-    ops::DerefMut,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -172,9 +172,9 @@ impl Target<'_> {
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
-            Self::Ref(r) => r.clone(), // Referenced value is cloned
+            Self::Ref(r) => r.clone(),          // Referenced value is cloned
             Self::LockGuard((_, orig)) => orig, // Return original container of the Shared Dynamic
-            Self::Value(v) => v,       // Owned value is simply taken
+            Self::Value(v) => v,                // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }
@@ -229,15 +229,17 @@ impl Target<'_> {
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
+        #[cfg(not(feature = "no_shared"))]
         if value.is_shared() {
-            // clone is cheap since it holds Arc/Rw under the hood
+            // cloning is cheap since it holds Arc/Rw under the hood
             let container = value.clone();
-            Self::LockGuard((value.write_lock::<Dynamic>().unwrap(), container))
-        } else {
-            Self::Ref(value)
+            return Self::LockGuard((value.write_lock::<Dynamic>().unwrap(), container));
         }
+
+        Self::Ref(value)
     }
 }
+
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     fn from(value: T) -> Self {
@@ -706,7 +708,7 @@ impl Engine {
                             // Try to call an index setter
                             #[cfg(not(feature = "no_index"))]
                             Ok(obj_ptr) if obj_ptr.is_value() => {
-                               next = Some((1, _new_val.unwrap()));
+                                next = Some((1, _new_val.unwrap()));
                             }
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
@@ -740,13 +742,13 @@ impl Engine {
                                     state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
                                     None, level,
                                 )
-                                    .or_else(|err| match *err {
-                                        // If there is no index setter, no need to set it back because the indexer is read-only
-                                        EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                                            Ok(Default::default())
-                                        }
-                                        _ => Err(err),
-                                    })?;
+                                .or_else(|err| match *err {
+                                    // If there is no index setter, no need to set it back because the indexer is read-only
+                                    EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                                        Ok(Default::default())
+                                    }
+                                    _ => Err(err),
+                                })?;
                             }
 
                             // next step is custom index setter call in case of error
@@ -759,7 +761,7 @@ impl Engine {
                                 )?;
                             }
                             None => (),
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
 
                         Ok(Default::default())
@@ -881,8 +883,15 @@ impl Engine {
 
                                 let (result, may_be_changed) = self
                                     .eval_dot_index_chain_helper(
-                                        state, lib, this_ptr, &mut val.into(), expr, idx_values, next_chain,
-                                        level, _new_val,
+                                        state,
+                                        lib,
+                                        this_ptr,
+                                        &mut val.into(),
+                                        expr,
+                                        idx_values,
+                                        next_chain,
+                                        level,
+                                        _new_val,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -1318,11 +1327,13 @@ impl Engine {
                     )),
                     // Normal assignment
                     ScopeEntryType::Normal if op.is_empty() => {
-                        if lhs_ptr.is_shared() {
-                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = rhs_val;
+                        #[cfg(not(feature = "no_shared"))]
+                        let lhs_ptr = if lhs_ptr.is_shared() {
+                            lhs_ptr.write_lock::<Dynamic>().unwrap();
                         } else {
-                            *lhs_ptr = rhs_val;
-                        }
+                            lhs_ptr
+                        };
+                        *lhs_ptr = rhs_val;
                         Ok(Default::default())
                     }
                     // Op-assignment - in order of precedence:
@@ -1340,13 +1351,15 @@ impl Engine {
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
-                            if lhs_ptr.is_shared() {
-                                // Overriding exact implementation
-                                func(self, lib, &mut [&mut lhs_ptr.write_lock::<Dynamic>().unwrap(), &mut rhs_val])?;
+                            // Overriding exact implementation
+                            #[cfg(not(feature = "no_shared"))]
+                            let lhs_ptr = if lhs_ptr.is_shared() {
+                                &mut lhs_ptr.write_lock::<Dynamic>().unwrap()
                             } else {
-                                // Overriding exact implementation
-                                func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
-                            }
+                                lhs_ptr
+                            };
+
+                            func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
@@ -1360,13 +1373,15 @@ impl Engine {
                                     state, lib, op, 0, args, false, false, false, None, None, level,
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
-                            if lhs_ptr.is_shared() {
-                                // Set value to LHS
-                                *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
+
+                            #[cfg(not(feature = "no_shared"))]
+                            let lhs_ptr = if lhs_ptr.is_shared() {
+                                lhs_ptr.write_lock::<Dynamic>().unwrap()
                             } else {
-                                // Set value to LHS
-                                *lhs_ptr = value;
-                            }
+                                lhs_ptr
+                            };
+
+                            *lhs_ptr = value;
                         }
                         Ok(Default::default())
                     }

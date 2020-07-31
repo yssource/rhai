@@ -29,6 +29,8 @@ jobs:
           - "--features no_object"
           - "--features no_function"
           - "--features no_module"
+          - "--features no_capture"
+          - "--features no_shared"
           - "--features unicode-xid-ident"
         toolchain: [stable]
         experimental: [false]

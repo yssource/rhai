@@ -1,8 +1,11 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::fn_native::{FnPtr, SendSync, SharedMut};
+use crate::fn_native::{FnPtr, SendSync};
 use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
+
+#[cfg(not(feature = "no_shared"))]
+use crate::fn_native::SharedMut;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -17,13 +20,18 @@ use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
     fmt,
+    ops::{Deref, DerefMut},
     string::String,
-    ops::{DerefMut, Deref}
 };
 
+#[cfg(not(feature = "no_shared"))]
 #[cfg(not(feature = "sync"))]
-use crate::stdlib::{rc::Rc, cell::{RefCell, Ref, RefMut}};
+use crate::stdlib::{
+    cell::{Ref, RefCell, RefMut},
+    rc::Rc,
+};
 
+#[cfg(not(feature = "no_shared"))]
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -151,32 +159,39 @@ pub enum Union {
     Map(Box<Map>),
     FnPtr(Box<FnPtr>),
     Variant(Box<Box<dyn Variant>>),
+    #[cfg(not(feature = "no_shared"))]
     Shared(Box<SharedCell>),
 }
 
 /// Internal Shared Dynamic representation.
 ///
 /// Created with `Dynamic::into_shared()`.
+#[cfg(not(feature = "no_shared"))]
 #[derive(Clone)]
 pub struct SharedCell {
     value_type_id: TypeId,
     value_type_name: &'static str,
-    container: SharedMut<Dynamic>
+    container: SharedMut<Dynamic>,
 }
 
-/// Dynamic's underlying `Variant` read guard that supports `Deref` for Variant's
-/// reference reading.
+/// Underlying `Variant` read guard for `Dynamic`.
 ///
-/// This data structure provides transparent interoperability between normal
-/// `Dynamic` types and Shared Dynamic references.
+/// This data structure provides transparent interoperability between
+/// normal `Dynamic` and shared Dynamic values.
 #[derive(Debug)]
 pub struct DynamicReadLock<'d, T: Variant + Clone>(DynamicReadLockInner<'d, T>);
 
+/// Different types of read guards for `DynamicReadLock`.
 #[derive(Debug)]
 enum DynamicReadLockInner<'d, T: Variant + Clone> {
+    /// A simple reference to a non-shared value.
     Reference(&'d T),
+    /// A read guard to a shared `RefCell`.
+    #[cfg(not(feature = "no_shared"))]
     #[cfg(not(feature = "sync"))]
     Guard(Ref<'d, Dynamic>),
+    /// A read guard to a shared `RwLock`.
+    #[cfg(not(feature = "no_shared"))]
     #[cfg(feature = "sync")]
     Guard(RwLockReadGuard<'d, Dynamic>),
 }
@@ -188,25 +203,31 @@ impl<'d, T: Variant + Clone> Deref for DynamicReadLock<'d, T> {
     fn deref(&self) -> &Self::Target {
         match &self.0 {
             DynamicReadLockInner::Reference(reference) => reference.deref(),
-            // unwrapping is safe because all checks already done in it's constructor
+            // Unwrapping is safe because all checking is already done in its constructor
+            #[cfg(not(feature = "no_shared"))]
             DynamicReadLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
         }
     }
 }
 
-/// Dynamic's underlying `Variant` write guard that supports `Deref` and `DerefMut`
-/// for Variant's reference reading/writing.
+/// Underlying `Variant` write guard for `Dynamic`.
 ///
-/// This data structure provides transparent interoperability between normal
-/// `Dynamic` types and Shared Dynamic references.
+/// This data structure provides transparent interoperability between
+/// normal `Dynamic` and shared Dynamic values.
 #[derive(Debug)]
 pub struct DynamicWriteLock<'d, T: Variant + Clone>(DynamicWriteLockInner<'d, T>);
 
+/// Different types of write guards for `DynamicReadLock`.
 #[derive(Debug)]
 enum DynamicWriteLockInner<'d, T: Variant + Clone> {
+    /// A simple mutable reference to a non-shared value.
     Reference(&'d mut T),
+    /// A write guard to a shared `RefCell`.
+    #[cfg(not(feature = "no_shared"))]
     #[cfg(not(feature = "sync"))]
     Guard(RefMut<'d, Dynamic>),
+    /// A write guard to a shared `RwLock`.
+    #[cfg(not(feature = "no_shared"))]
     #[cfg(feature = "sync")]
     Guard(RwLockWriteGuard<'d, Dynamic>),
 }
@@ -218,7 +239,8 @@ impl<'d, T: Variant + Clone> Deref for DynamicWriteLock<'d, T> {
     fn deref(&self) -> &Self::Target {
         match &self.0 {
             DynamicWriteLockInner::Reference(reference) => reference.deref(),
-            // unwrapping is safe because all checks already done in it's constructor
+            // Unwrapping is safe because all checking is already done in its constructor
+            #[cfg(not(feature = "no_shared"))]
             DynamicWriteLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
         }
     }
@@ -229,7 +251,8 @@ impl<'d, T: Variant + Clone> DerefMut for DynamicWriteLock<'d, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match &mut self.0 {
             DynamicWriteLockInner::Reference(reference) => reference.deref_mut(),
-            // unwrapping is safe because all checks already done in it's constructor
+            // Unwrapping is safe because all checking is already done in its constructor
+            #[cfg(not(feature = "no_shared"))]
             DynamicWriteLockInner::Guard(guard) => guard.downcast_mut().unwrap(),
         }
     }
@@ -247,6 +270,7 @@ impl Dynamic {
 
     /// Does this `Dynamic` hold a shared data type
     /// instead of one of the support system primitive types?
+    #[cfg(not(feature = "no_shared"))]
     pub fn is_shared(&self) -> bool {
         match self.0 {
             Union::Shared(_) => true,
@@ -284,6 +308,7 @@ impl Dynamic {
             Union::Map(_) => TypeId::of::<Map>(),
             Union::FnPtr(_) => TypeId::of::<FnPtr>(),
             Union::Variant(value) => (***value).type_id(),
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(cell) => (**cell).value_type_id,
         }
     }
@@ -307,6 +332,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
             Union::Variant(value) => (***value).type_name(),
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(cell) => (**cell).value_type_name,
         }
     }
@@ -363,7 +389,8 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(value) => write!(f, "{}", (*value).type_name()),
-            Union::Shared(cell) => write!(f, "{}", (**cell).value_type_name),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(cell) => write!(f, "<shared {}>", (**cell).value_type_name),
         }
     }
 }
@@ -390,7 +417,8 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(value) => write!(f, "{}", (*value).type_name()),
-            Union::Shared(cell) => write!(f, "{}", (**cell).value_type_name),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(cell) => write!(f, "<shared {}>", (**cell).value_type_name),
         }
     }
 }
@@ -411,7 +439,8 @@ impl Clone for Dynamic {
             Union::Map(ref value) => Self(Union::Map(value.clone())),
             Union::FnPtr(ref value) => Self(Union::FnPtr(value.clone())),
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
-            Union::Shared(ref cell) => Self(Union::Shared(Box::new((**cell).clone())))
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(ref cell) => Self(Union::Shared(Box::new((**cell).clone()))),
         }
     }
 }
@@ -523,53 +552,42 @@ impl Dynamic {
         Self(Union::Variant(Box::new(boxed)))
     }
 
-    /// Turns Dynamic into Shared Dynamic variant backed by runtime
-    /// mutable reference-counter container(`Arc<RwLock<Dynamic>>` or
-    /// `Rc<RefCell<Dynamic>` depending on `sync` feature).
+    /// Turn the `Dynamic` value into a shared `Dynamic` value backed by an `Rc<RefCell<Dynamic>>`
+    /// or `Arc<RwLock<Dynamic>>` depending on the `sync` feature.
     ///
-    /// Instances of Shared Dynamic are relatively cheap to clone. All clones of
-    /// Shared Dynamic references the same chunk of memory.
+    /// Shared `Dynamic` values are relatively cheap to clone as they simply increment the
+    /// reference counts.
     ///
-    /// The Dynamic is capable to work transparently with the it's inner
-    /// data, seamlessly casting between ordinary instances of Dynamic and
-    /// Shared Dynamic instances.
+    /// Shared `Dynamic` values can be converted seamlessly to and from ordinary `Dynamic` values.
     ///
-    /// If original value already a Shared variant returns identity.
+    /// If the `Dynamic` value is already shared, this method returns itself.
+    #[cfg(not(feature = "no_shared"))]
     pub fn into_shared(self) -> Self {
         match self.0 {
             Union::Shared(..) => self,
-            _ => {
-                let cell = SharedCell {
-                    value_type_id: self.type_id(),
-                    value_type_name: self.type_name(),
-                    #[cfg(not(feature = "sync"))]
-                    container: Rc::new(RefCell::new(self)),
-                    #[cfg(feature = "sync")]
-                    container: Arc::new(RwLock::new(self)),
-                };
+            _ => Self(Union::Shared(Box::new(SharedCell {
+                value_type_id: self.type_id(),
+                value_type_name: self.type_name(),
 
-                Self(Union::Shared(Box::new(cell)))
-            },
+                #[cfg(not(feature = "sync"))]
+                container: Rc::new(RefCell::new(self)),
+                #[cfg(feature = "sync")]
+                container: Arc::new(RwLock::new(self)),
+            }))),
         }
     }
 
-    /// Get a copy of the `Dynamic` value as a specific type.
+    /// Convert the `Dynamic` value into specific type.
     /// Casting to a `Dynamic` just returns as is.
     ///
-    /// Returns None if types mismatched.
+    /// Returns `None` if types mismatched.
     ///
-    /// # Shared Dynamic
+    /// # Panics and Deadlocks
     ///
-    /// When accessing Shared Dynamic in sync mode(`sync` feature enabled)
-    /// can block current thread while the underlined data is being written.
+    /// Under the `sync` feature, this call may deadlock.
+    /// Otherwise, this call panics if the data is currently borrowed for write.
     ///
-    /// When accessing Shared Dynamic in NON-sync mode can **panic** if the data
-    /// is currently borrowed for write.
-    ///
-    /// ## Safety
-    ///
-    /// Both situations normally shouldn't happen since most operations in Rhai
-    /// use pass-by-value data and the script executed in a single thread.
+    /// These normally shouldn't occur since most operations in Rhai is single-threaded.
     ///
     /// # Example
     ///
@@ -586,20 +604,6 @@ impl Dynamic {
 
         if type_id == TypeId::of::<Dynamic>() {
             return unsafe_cast_box::<_, T>(Box::new(self)).ok().map(|v| *v);
-        }
-
-        #[cfg(not(feature = "sync"))]
-        if let Union::Shared(cell) = self.0 {
-            let reference = cell.container.borrow();
-
-            return (*reference).clone().try_cast()
-        }
-
-        #[cfg(feature = "sync")]
-        if let Union::Shared(cell) = self.0 {
-            let read_lock = cell.container.read().unwrap();
-
-            return (*read_lock).clone().try_cast()
         }
 
         if type_id == TypeId::of::<INT>() {
@@ -677,23 +681,35 @@ impl Dynamic {
 
         match self.0 {
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).ok(),
+
+            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(cell) => return cell.container.borrow().deref().clone().try_cast(),
+
+            #[cfg(not(feature = "no_shared"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(cell) => {
+                return cell.container.read().unwrap().deref().clone().try_cast()
+            }
+
             _ => None,
         }
     }
 
-    /// Get a copy of the `Dynamic` value as a specific type.
+    /// Convert the `Dynamic` value into a specific type.
     /// Casting to a `Dynamic` just returns as is.
     ///
-    /// # Panics
+    /// Returns `None` if types mismatched.
+    ///
+    /// # Panics and Deadlocks
     ///
     /// Panics if the cast fails (e.g. the type of the actual value is not the
-    /// same as the specified type), or if the data held by Shared Dynamic is
-    /// currently borrowed(when the `sync` feature disabled).
+    /// same as the specified type).
     ///
-    /// # Notes
+    /// Under the `sync` feature, this call may deadlock.
+    /// Otherwise, this call panics if the data is currently borrowed for write.
     ///
-    /// If the `sync` feature enabled Shared Dynamic can block current thread
-    /// while the data being written.
+    /// These normally shouldn't occur since most operations in Rhai is single-threaded.
     ///
     /// # Example
     ///
@@ -709,108 +725,115 @@ impl Dynamic {
         self.try_cast::<T>().unwrap()
     }
 
-    /// Get a copy of a specific type to the `Dynamic`.
-    /// Casting to `Dynamic` returns a clone of the value in case of NON-shared
-    /// Dynamic. In case of Shared Dynamic returns a clone of the inner data of
-    /// Shared Dynamic.
+    /// Get a copy of the `Dynamic` as a specific type.
+    ///
+    /// If the `Dynamic` is not a shared value, it returns a cloned copy of the value.
+    ///
+    /// If the `Dynamic` is a shared value, it returns a cloned copy of the shared value.
+    ///
     /// Returns `None` if the cast fails.
     #[inline(always)]
     pub fn clone_inner_data<T: Variant + Clone>(&self) -> Option<T> {
         match self.0 {
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(ref cell) => {
                 let type_id = TypeId::of::<T>();
 
-                if type_id != TypeId::of::<Dynamic>() && cell.value_type_id != type_id {
-                    return None
+                if type_id != TypeId::of::<Dynamic>() && type_id != cell.value_type_id {
+                    return None;
                 }
 
                 #[cfg(not(feature = "sync"))]
-                    return Some(cell
-                    .container
-                    .borrow()
-                    .deref()
-                    .downcast_ref::<T>()
-                    .unwrap()
-                    .clone());
+                return Some(
+                    cell.container
+                        .borrow()
+                        .deref()
+                        .downcast_ref::<T>()
+                        .unwrap()
+                        .clone(),
+                );
 
                 #[cfg(feature = "sync")]
-                    return Some(cell
-                    .container
-                    .read()
-                    .unwrap()
-                    .deref()
-                    .downcast_ref::<T>()
-                    .unwrap()
-                    .clone());
-            },
-            _ => {
-                self.downcast_ref().cloned()
+                return Some(
+                    cell.container
+                        .read()
+                        .unwrap()
+                        .deref()
+                        .downcast_ref::<T>()
+                        .unwrap()
+                        .clone(),
+                );
             }
+            _ => self.downcast_ref().cloned(),
         }
     }
 
     /// Get a reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a reference to it.
+    ///
     /// Returns `None` if the cast fails.
     #[inline(always)]
     pub fn read_lock<T: Variant + Clone>(&self) -> Option<DynamicReadLock<T>> {
         match self.0 {
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(ref cell) => {
                 let type_id = TypeId::of::<T>();
 
-                if type_id != TypeId::of::<Dynamic>() && cell.value_type_id != type_id {
-                    return None
+                if type_id != TypeId::of::<Dynamic>() && type_id != cell.value_type_id {
+                    return None;
                 }
 
                 #[cfg(not(feature = "sync"))]
                 return Some(DynamicReadLock(DynamicReadLockInner::Guard(
-                    cell.container.borrow()
+                    cell.container.borrow(),
                 )));
 
                 #[cfg(feature = "sync")]
                 return Some(DynamicReadLock(DynamicReadLockInner::Guard(
-                    cell.container.read().unwrap()
+                    cell.container.read().unwrap(),
                 )));
-            },
-            _ => {
-                self.downcast_ref().map(|reference| {
-                    DynamicReadLock(DynamicReadLockInner::Reference(reference))
-                })
             }
+            _ => self
+                .downcast_ref()
+                .map(|reference| DynamicReadLock(DynamicReadLockInner::Reference(reference))),
         }
     }
 
     /// Get a mutable reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a mutable reference to it.
+    ///
     /// Returns `None` if the cast fails.
     #[inline(always)]
     pub fn write_lock<T: Variant + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
         match self.0 {
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(ref cell) => {
                 let type_id = TypeId::of::<T>();
 
                 if type_id != TypeId::of::<Dynamic>() && cell.value_type_id != type_id {
-                    return None
+                    return None;
                 }
 
                 #[cfg(not(feature = "sync"))]
                 return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(
-                    cell.container.borrow_mut()
+                    cell.container.borrow_mut(),
                 )));
 
                 #[cfg(feature = "sync")]
                 return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(
-                    cell.container.write().unwrap()
+                    cell.container.write().unwrap(),
                 )));
-            },
-            _ => {
-                self.downcast_mut().map(|reference| {
-                    DynamicWriteLock(DynamicWriteLockInner::Reference(reference))
-                })
             }
+            _ => self
+                .downcast_mut()
+                .map(|reference| DynamicWriteLock(DynamicWriteLockInner::Reference(reference))),
         }
     }
 
+    /// Get a reference of a specific type to the `Dynamic`.
+    /// Casting to `Dynamic` just returns a reference to it.
+    ///
+    /// Returns `None` if the cast fails.
     #[inline(always)]
     fn downcast_ref<T: Variant + Clone>(&self) -> Option<&T> {
         let type_id = TypeId::of::<T>();
@@ -884,10 +907,16 @@ impl Dynamic {
 
         match &self.0 {
             Union::Variant(value) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(_) => unreachable!(),
             _ => None,
         }
     }
 
+    /// Get a mutable reference of a specific type to the `Dynamic`.
+    /// Casting to `Dynamic` just returns a mutable reference to it.
+    ///
+    /// Returns `None` if the cast fails.
     #[inline(always)]
     fn downcast_mut<T: Variant + Clone>(&mut self) -> Option<&mut T> {
         let type_id = TypeId::of::<T>();
@@ -955,6 +984,8 @@ impl Dynamic {
 
         match &mut self.0 {
             Union::Variant(value) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(_) => unreachable!(),
             _ => None,
         }
     }
@@ -964,7 +995,10 @@ impl Dynamic {
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
-            Union::Shared(_) => self.clone_inner_data::<INT>().ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(_) => self
+                .clone_inner_data::<INT>()
+                .ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -975,7 +1009,10 @@ impl Dynamic {
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n) => Ok(n),
-            Union::Shared(_) => self.clone_inner_data::<FLOAT>().ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(_) => self
+                .clone_inner_data::<FLOAT>()
+                .ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -985,7 +1022,10 @@ impl Dynamic {
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b) => Ok(b),
-            Union::Shared(_) => self.clone_inner_data::<bool>().ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(_) => self
+                .clone_inner_data::<bool>()
+                .ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -995,7 +1035,10 @@ impl Dynamic {
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n) => Ok(n),
-            Union::Shared(_) => self.clone_inner_data::<char>().ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(_) => self
+                .clone_inner_data::<char>()
+                .ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -1025,6 +1068,7 @@ impl Dynamic {
         match self.0 {
             Union::Str(s) => Ok(s),
             Union::FnPtr(f) => Ok(f.take_data().0),
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(cell) => {
                 #[cfg(not(feature = "sync"))]
                 match &cell.container.borrow().deref().0 {

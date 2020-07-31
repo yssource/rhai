@@ -18,33 +18,46 @@ use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, string::Stri
 use crate::stdlib::mem;
 
 #[cfg(not(feature = "sync"))]
-use crate::stdlib::{rc::Rc, cell::RefCell};
+use crate::stdlib::rc::Rc;
 #[cfg(feature = "sync")]
-use crate::stdlib::sync::{Arc, RwLock};
+use crate::stdlib::sync::Arc;
+
+#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::cell::RefCell;
+#[cfg(not(feature = "no_shared"))]
+#[cfg(feature = "sync")]
+use crate::stdlib::sync::RwLock;
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
+/// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 impl<T: Send + Sync> SendSync for T {}
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(not(feature = "sync"))]
 pub trait SendSync {}
+/// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(not(feature = "sync"))]
 impl<T> SendSync for T {}
 
-/// Immutable reference counting container
+/// Immutable reference-counted container
 #[cfg(not(feature = "sync"))]
 pub type Shared<T> = Rc<T>;
+/// Immutable reference-counted container
 #[cfg(feature = "sync")]
 pub type Shared<T> = Arc<T>;
 
-/// Mutable reference counting container(read-write lock)
+/// Mutable reference-counted container (read-write lock)
+#[cfg(not(feature = "no_shared"))]
 #[cfg(not(feature = "sync"))]
-pub type SharedMut<T> = Rc<RefCell<T>>;
+pub type SharedMut<T> = Shared<RefCell<T>>;
+/// Mutable reference-counted container (read-write lock)
+#[cfg(not(feature = "no_shared"))]
 #[cfg(feature = "sync")]
-pub type SharedMut<T> = Arc<RwLock<T>>;
+pub type SharedMut<T> = Shared<RwLock<T>>;
 
 /// Consume a `Shared` resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
