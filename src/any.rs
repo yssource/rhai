@@ -270,9 +270,9 @@ impl Dynamic {
 
     /// Does this `Dynamic` hold a shared data type
     /// instead of one of the support system primitive types?
-    #[cfg(not(feature = "no_shared"))]
     pub fn is_shared(&self) -> bool {
         match self.0 {
+            #[cfg(not(feature = "no_shared"))]
             Union::Shared(_) => true,
             _ => false,
         }
@@ -440,7 +440,7 @@ impl Clone for Dynamic {
             Union::FnPtr(ref value) => Self(Union::FnPtr(value.clone())),
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
             #[cfg(not(feature = "no_shared"))]
-            Union::Shared(ref cell) => Self(Union::Shared(Box::new((**cell).clone()))),
+            Union::Shared(ref cell) => Self(Union::Shared(cell.clone())),
         }
     }
 }
@@ -561,9 +561,13 @@ impl Dynamic {
     /// Shared `Dynamic` values can be converted seamlessly to and from ordinary `Dynamic` values.
     ///
     /// If the `Dynamic` value is already shared, this method returns itself.
-    #[cfg(not(feature = "no_shared"))]
+    ///
+    /// # Panics
+    ///
+    /// Panics under the `no_shared` feature.
     pub fn into_shared(self) -> Self {
-        match self.0 {
+        #[cfg(not(feature = "no_shared"))]
+        return match self.0 {
             Union::Shared(..) => self,
             _ => Self(Union::Shared(Box::new(SharedCell {
                 value_type_id: self.type_id(),
@@ -574,7 +578,10 @@ impl Dynamic {
                 #[cfg(feature = "sync")]
                 container: Arc::new(RwLock::new(self)),
             }))),
-        }
+        };
+
+        #[cfg(feature = "no_shared")]
+        unimplemented!()
     }
 
     /// Convert the `Dynamic` value into specific type.

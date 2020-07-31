@@ -2,7 +2,9 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::{
+    Engine, KEYWORD_FN_PTR_CURRY, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
+};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::Shared;
 use crate::module::{Module, ModuleRef};
@@ -15,9 +17,6 @@ use crate::utils::{StaticVec, StraightHasherBuilder};
 #[cfg(not(feature = "no_function"))]
 use crate::engine::FN_ANONYMOUS;
 
-#[cfg(not(feature = "no_capture"))]
-use crate::engine::KEYWORD_FN_PTR_CURRY;
-
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter};
 
@@ -25,7 +24,7 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     char,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt, format,
     hash::{Hash, Hasher},
     iter::empty,
@@ -39,6 +38,9 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::collections::hash_map::DefaultHasher;
+
+#[cfg(not(feature = "no_capture"))]
+use crate::stdlib::collections::HashSet;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_function"))]
@@ -2211,11 +2213,13 @@ fn parse_binary_op(
 
         let (op_token, pos) = input.next().unwrap();
 
-        #[cfg(any(not(feature = "no_object"), not(feature = "no_capture")))]
-        if op_token == Token::Period {
+        if cfg!(not(feature = "no_object")) && op_token == Token::Period {
             if let (Token::Identifier(_), _) = input.peek().unwrap() {
                 // prevents capturing of the object properties as vars: xxx.<var>
-                state.capture = false;
+                #[cfg(not(feature = "no_capture"))]
+                {
+                    state.capture = false;
+                }
             }
         }
 
@@ -3112,7 +3116,6 @@ fn parse_fn(
 }
 
 /// Creates a curried expression from a list of external variables
-#[cfg(not(feature = "no_capture"))]
 fn make_curry_from_externals(
     fn_expr: Expr,
     externals: StaticVec<(String, Position)>,
@@ -3209,26 +3212,31 @@ fn parse_anon_fn(
     let body = parse_stmt(input, state, lib, settings.level_up())
         .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
 
-    #[cfg(feature = "no_capture")]
-    let params: StaticVec<_> = params.into_iter().map(|(v, _)| v).collect();
-
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    #[cfg(not(feature = "no_capture"))]
-    let externals: StaticVec<_> = state
-        .externals
-        .iter()
-        .map(|(k, &v)| (k.clone(), v))
-        .collect();
+    let externals: StaticVec<_> = {
+        #[cfg(not(feature = "no_capture"))]
+        {
+            state
+                .externals
+                .iter()
+                .map(|(k, &v)| (k.clone(), v))
+                .collect()
+        }
+        #[cfg(feature = "no_capture")]
+        Default::default()
+    };
 
-    // Add parameters that are auto-curried
-    #[cfg(not(feature = "no_capture"))]
-    let params: StaticVec<_> = externals
-        .iter()
-        .map(|(k, _)| k)
-        .cloned()
-        .chain(params.into_iter().map(|(v, _)| v))
-        .collect();
+    let params: StaticVec<_> = if cfg!(not(feature = "no_capture")) {
+        externals
+            .iter()
+            .map(|(k, _)| k)
+            .cloned()
+            .chain(params.into_iter().map(|(v, _)| v))
+            .collect()
+    } else {
+        params.into_iter().map(|(v, _)| v).collect()
+    };
 
     // Calculate hash
     #[cfg(feature = "no_std")]
@@ -3257,8 +3265,11 @@ fn parse_anon_fn(
 
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
-    #[cfg(not(feature = "no_capture"))]
-    let expr = make_curry_from_externals(expr, externals, settings.pos);
+    let expr = if cfg!(not(feature = "no_capture")) {
+        make_curry_from_externals(expr, externals, settings.pos)
+    } else {
+        expr
+    };
 
     Ok((expr, script))
 }

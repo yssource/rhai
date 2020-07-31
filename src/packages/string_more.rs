@@ -94,14 +94,11 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     reg_op!(lib, "+", prepend, INT, bool, char);
     lib.set_fn_2("+", |_: (), y: ImmutableString| Ok(y));
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
+    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         reg_op!(lib, "+", append, i8, u8, i16, u16, i32, i64, u32, u64);
         reg_op!(lib, "+", prepend, i8, u8, i16, u16, i32, i64, u32, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
+        if cfg!(not(target_arch = "wasm32")) {
             reg_op!(lib, "+", append, i128, u128);
             reg_op!(lib, "+", prepend, i128, u128);
         }

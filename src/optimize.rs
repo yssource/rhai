@@ -576,17 +576,13 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
-            #[cfg(not(feature = "no_function"))]
-            let _has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
+            let has_script_fn = cfg!(not(feature = "no_function")) && state.lib.iter_fn().find(|(_, _, _, f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
                 fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
             }).is_some();
 
-            #[cfg(feature = "no_function")]
-            let _has_script_fn: bool = false;
-
-            if _has_script_fn {
+            if has_script_fn {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);
@@ -748,11 +744,13 @@ pub fn optimize_into_ast(
     _functions: Vec<ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
-    #[cfg(feature = "no_optimize")]
-    const level: OptimizationLevel = OptimizationLevel::None;
+    let level = if cfg!(feature = "no_optimize") {
+        OptimizationLevel::None
+    } else {
+        level
+    };
 
-    #[cfg(not(feature = "no_function"))]
-    let lib = {
+    let lib = if cfg!(not(feature = "no_function")) {
         let mut module = Module::new();
 
         if !level.is_none() {
@@ -814,10 +812,9 @@ pub fn optimize_into_ast(
         }
 
         module
+    } else {
+        Default::default()
     };
-
-    #[cfg(feature = "no_function")]
-    let lib = Default::default();
 
     AST::new(
         match level {

@@ -507,8 +507,8 @@ impl Token {
             | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_SHARED | KEYWORD_TAKE
-            | KEYWORD_THIS => Reserved(syntax.into()),
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_SHARED | KEYWORD_SHARED
+            | KEYWORD_TAKE | KEYWORD_THIS => Reserved(syntax.into()),
 
             _ => return None,
         })

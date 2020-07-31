@@ -20,9 +20,8 @@ use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_function"))]
 use crate::{
-    parser::ScriptFnDef,
-    r#unsafe::unsafe_cast_var_name_to_lifetime,
-    scope::{Entry as ScopeEntry, EntryType as ScopeEntryType},
+    parser::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
+    scope::EntryType as ScopeEntryType,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -34,17 +33,22 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{Map, Target, FN_GET, FN_SET};
 
+#[cfg(not(feature = "no_capture"))]
+use crate::scope::Entry as ScopeEntry;
+
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    collections::HashSet,
     convert::TryFrom,
     format,
     iter::{empty, once},
     mem,
-    string::{String, ToString},
+    string::ToString,
     vec::Vec,
 };
+
+#[cfg(not(feature = "no_capture"))]
+use crate::stdlib::{collections::HashSet, string::String};
 
 /// Extract the property name from a getter function name.
 #[inline(always)]
@@ -422,7 +426,7 @@ impl Engine {
         is_ref: bool,
         is_method: bool,
         pub_only: bool,
-        capture: Option<Scope>,
+        _capture: Option<Scope>,
         def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -451,12 +455,6 @@ impl Engine {
                 )))
             }
 
-            // Fn
-            KEYWORD_IS_SHARED if args.len() == 1 => Err(Box::new(EvalAltResult::ErrorRuntime(
-                "'is_shared' should not be called in method style. Try is_shared(...);".into(),
-                Position::none(),
-            ))),
-
             // eval - reaching this point it must be a method-style call
             KEYWORD_EVAL
                 if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
@@ -478,7 +476,7 @@ impl Engine {
 
                 // Add captured variables into scope
                 #[cfg(not(feature = "no_capture"))]
-                if let Some(captured) = capture {
+                if let Some(captured) = _capture {
                     add_captured_variables_into_scope(&func.externals, captured, scope);
                 }
 
@@ -662,22 +660,18 @@ impl Engine {
                 .into(),
                 false,
             ))
-        } else if _fn_name == KEYWORD_SHARED && idx.is_empty() {
+        } else if cfg!(not(feature = "no_shared"))
+            && _fn_name == KEYWORD_IS_SHARED
+            && idx.is_empty()
+        {
             // take call
-            #[cfg(not(feature = "no_shared"))]
-            {
-                Ok((obj.clone().into_shared(), false))
-            }
-            #[cfg(feature = "no_shared")]
-            unreachable!()
-        } else if _fn_name == KEYWORD_TAKE && idx.is_empty() {
+            Ok((target.is_shared().into(), false))
+        } else if cfg!(not(feature = "no_shared")) && _fn_name == KEYWORD_SHARED && idx.is_empty() {
             // take call
-            #[cfg(not(feature = "no_shared"))]
-            {
-                Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false))
-            }
-            #[cfg(feature = "no_shared")]
-            unreachable!()
+            Ok((obj.clone().into_shared(), false))
+        } else if cfg!(not(feature = "no_shared")) && _fn_name == KEYWORD_TAKE && idx.is_empty() {
+            // take call
+            Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false))
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;
@@ -790,8 +784,7 @@ impl Engine {
         }
 
         // Handle is_shared()
-        #[cfg(not(feature = "no_shared"))]
-        if name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
+        if cfg!(not(feature = "no_shared")) && name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
             let expr = args_expr.get(0).unwrap();
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
@@ -799,8 +792,7 @@ impl Engine {
         }
 
         // Handle shared()
-        #[cfg(not(feature = "no_shared"))]
-        if name == KEYWORD_SHARED && args_expr.len() == 1 {
+        if cfg!(not(feature = "no_shared")) && name == KEYWORD_SHARED && args_expr.len() == 1 {
             let expr = args_expr.get(0).unwrap();
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
@@ -808,8 +800,7 @@ impl Engine {
         }
 
         // Handle take()
-        #[cfg(not(feature = "no_shared"))]
-        if name == KEYWORD_TAKE && args_expr.len() == 1 {
+        if cfg!(not(feature = "no_shared")) && name == KEYWORD_TAKE && args_expr.len() == 1 {
             let expr = args_expr.get(0).unwrap();
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
@@ -875,7 +866,7 @@ impl Engine {
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
         let mut is_ref = false;
-        let capture = if capture && !scope.is_empty() {
+        let capture = if cfg!(not(feature = "no_capture")) && capture && !scope.is_empty() {
             Some(scope.flatten_clone())
         } else {
             None
@@ -943,18 +934,10 @@ impl Engine {
         args_expr: &[Expr],
         def_val: Option<bool>,
         hash_script: u64,
-        capture: bool,
+        _capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let modules = modules.as_ref().unwrap();
-
-        #[cfg(not(feature = "no_capture"))]
-        let capture = if capture && !scope.is_empty() {
-            Some(scope.flatten_clone())
-        } else {
-            None
-        };
-
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
 
@@ -1027,8 +1010,12 @@ impl Engine {
 
                 // Add captured variables into scope
                 #[cfg(not(feature = "no_capture"))]
-                if let Some(captured) = capture {
-                    add_captured_variables_into_scope(&func.externals, captured, scope);
+                if _capture && !scope.is_empty() {
+                    add_captured_variables_into_scope(
+                        &func.externals,
+                        scope.flatten_clone(),
+                        scope,
+                    );
                 }
 
                 self.call_script_fn(scope, mods, state, lib, &mut None, name, func, args, level)
@@ -1073,30 +1060,30 @@ pub fn run_builtin_binary_op(
         let x = x.clone().cast::<INT>();
         let y = y.clone().cast::<INT>();
 
-        #[cfg(not(feature = "unchecked"))]
-        match op {
-            "+" => return add(x, y).map(Into::into).map(Some),
-            "-" => return sub(x, y).map(Into::into).map(Some),
-            "*" => return mul(x, y).map(Into::into).map(Some),
-            "/" => return div(x, y).map(Into::into).map(Some),
-            "%" => return modulo(x, y).map(Into::into).map(Some),
-            "~" => return pow_i_i(x, y).map(Into::into).map(Some),
-            ">>" => return shr(x, y).map(Into::into).map(Some),
-            "<<" => return shl(x, y).map(Into::into).map(Some),
-            _ => (),
-        }
-
-        #[cfg(feature = "unchecked")]
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "*" => return Ok(Some((x * y).into())),
-            "/" => return Ok(Some((x / y).into())),
-            "%" => return Ok(Some((x % y).into())),
-            "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
-            ">>" => return shr_u(x, y).map(Into::into).map(Some),
-            "<<" => return shl_u(x, y).map(Into::into).map(Some),
-            _ => (),
+        if cfg!(not(feature = "unchecked")) {
+            match op {
+                "+" => return add(x, y).map(Into::into).map(Some),
+                "-" => return sub(x, y).map(Into::into).map(Some),
+                "*" => return mul(x, y).map(Into::into).map(Some),
+                "/" => return div(x, y).map(Into::into).map(Some),
+                "%" => return modulo(x, y).map(Into::into).map(Some),
+                "~" => return pow_i_i(x, y).map(Into::into).map(Some),
+                ">>" => return shr(x, y).map(Into::into).map(Some),
+                "<<" => return shl(x, y).map(Into::into).map(Some),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+" => return Ok(Some((x + y).into())),
+                "-" => return Ok(Some((x - y).into())),
+                "*" => return Ok(Some((x * y).into())),
+                "/" => return Ok(Some((x / y).into())),
+                "%" => return Ok(Some((x % y).into())),
+                "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
+                ">>" => return shr_u(x, y).map(Into::into).map(Some),
+                "<<" => return shl_u(x, y).map(Into::into).map(Some),
+                _ => (),
+            }
         }
 
         match op {

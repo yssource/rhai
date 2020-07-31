@@ -158,6 +158,32 @@ impl<'a> Scope<'a> {
         self.push_dynamic_value(name, EntryType::Normal, Dynamic::from(value), false)
     }
 
+    /// Add (push) a new shared entry to the Scope.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push_shared("x", 42_i64);
+    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// ```
+    #[cfg(not(feature = "no_shared"))]
+    pub fn push_shared<K: Into<Cow<'a, str>>, T: Variant + Clone>(
+        &mut self,
+        name: K,
+        value: T,
+    ) -> &mut Self {
+        self.push_dynamic_value(
+            name,
+            EntryType::Normal,
+            Dynamic::from(value).into_shared(),
+            false,
+        )
+    }
+
     /// Add (push) a new `Dynamic` entry to the Scope.
     ///
     /// # Examples
@@ -198,6 +224,34 @@ impl<'a> Scope<'a> {
         value: T,
     ) -> &mut Self {
         self.push_dynamic_value(name, EntryType::Constant, Dynamic::from(value), true)
+    }
+
+    /// Add (push) a new shared constant to the Scope.
+    ///
+    /// Shared constants are immutable and cannot be assigned to, but their shared values can change.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push_constant_shared("x", 42_i64);
+    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// ```
+    #[cfg(not(feature = "no_shared"))]
+    pub fn push_constant_shared<K: Into<Cow<'a, str>>, T: Variant + Clone>(
+        &mut self,
+        name: K,
+        value: T,
+    ) -> &mut Self {
+        self.push_dynamic_value(
+            name,
+            EntryType::Constant,
+            Dynamic::from(value).into_shared(),
+            true,
+        )
     }
 
     /// Add (push) a new constant with a `Dynamic` value to the Scope.
@@ -393,7 +447,6 @@ impl<'a> Scope<'a> {
 
     /// Clone the Scope, keeping only the last instances of each variable name.
     /// Shadowed variables are omitted in the copy.
-    #[cfg(not(feature = "no_capture"))]
     pub(crate) fn flatten_clone(&self) -> Self {
         let mut entries: HashMap<&str, Entry> = Default::default();
 

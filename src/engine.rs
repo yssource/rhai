@@ -32,6 +32,7 @@ use crate::module::resolvers;
 use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_object"))]
 use crate::any::DynamicWriteLock;
 
 use crate::stdlib::{
@@ -44,11 +45,12 @@ use crate::stdlib::{
     vec::Vec,
 };
 
+#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_object"))]
+use crate::stdlib::ops::DerefMut;
+
 #[cfg(not(feature = "no_index"))]
 use crate::stdlib::any::TypeId;
-
-#[cfg(not(feature = "no_shared"))]
-use crate::stdlib::ops::DerefMut;
 
 /// Variable-sized array of `Dynamic` values.
 ///
@@ -134,6 +136,7 @@ pub enum Target<'a> {
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_shared"))]
+    #[cfg(not(feature = "no_object"))]
     LockGuard((DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Dynamic),
@@ -150,6 +153,7 @@ impl Target<'_> {
         match self {
             Self::Ref(_) => true,
             #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => true,
             Self::Value(_) => false,
             #[cfg(not(feature = "no_index"))]
@@ -161,8 +165,21 @@ impl Target<'_> {
         match self {
             Self::Ref(_) => false,
             #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => false,
             Self::Value(_) => true,
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar(_, _, _) => false,
+        }
+    }
+    /// Is the `Target` a shared value?
+    pub fn is_shared(&self) -> bool {
+        match self {
+            Self::Ref(r) => r.is_shared(),
+            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_object"))]
+            Self::LockGuard(_) => true,
+            Self::Value(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
@@ -173,6 +190,7 @@ impl Target<'_> {
         match self {
             Target::Ref(r) => r.is::<T>(),
             #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_object"))]
             Target::LockGuard((r, _)) => r.is::<T>(),
             Target::Value(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
@@ -184,6 +202,7 @@ impl Target<'_> {
         match self {
             Self::Ref(r) => r.clone(), // Referenced value is cloned
             #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
             Self::Value(v) => v,       // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
@@ -195,6 +214,7 @@ impl Target<'_> {
         match self {
             Self::Ref(r) => *r,
             #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::Value(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
@@ -207,6 +227,7 @@ impl Target<'_> {
         match self {
             Self::Ref(r) => **r = new_val,
             #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => {
                 return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
@@ -243,6 +264,7 @@ impl Target<'_> {
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
         #[cfg(not(feature = "no_shared"))]
+        #[cfg(not(feature = "no_object"))]
         if value.is_shared() {
             // Cloning is cheap for a shared value
             let container = value.clone();
@@ -427,11 +449,11 @@ impl Default for Engine {
             progress: None,
 
             // optimization level
-            #[cfg(feature = "no_optimize")]
-            optimization_level: OptimizationLevel::None,
-
-            #[cfg(not(feature = "no_optimize"))]
-            optimization_level: OptimizationLevel::Simple,
+            optimization_level: if cfg!(feature = "no_optimize") {
+                OptimizationLevel::None
+            } else {
+                OptimizationLevel::Simple
+            },
 
             #[cfg(not(feature = "unchecked"))]
             limits: Limits {
@@ -639,11 +661,11 @@ impl Engine {
             debug: Box::new(|_| {}),
             progress: None,
 
-            #[cfg(feature = "no_optimize")]
-            optimization_level: OptimizationLevel::None,
-
-            #[cfg(not(feature = "no_optimize"))]
-            optimization_level: OptimizationLevel::Simple,
+            optimization_level: if cfg!(feature = "no_optimize") {
+                OptimizationLevel::None
+            } else {
+                OptimizationLevel::Simple
+            },
 
             #[cfg(not(feature = "unchecked"))]
             limits: Limits {
@@ -1340,14 +1362,9 @@ impl Engine {
                     )),
                     // Normal assignment
                     ScopeEntryType::Normal if op.is_empty() => {
-                        #[cfg(not(feature = "no_shared"))]
-                        if lhs_ptr.is_shared() {
+                        if cfg!(not(feature = "no_shared")) && lhs_ptr.is_shared() {
                             *lhs_ptr.write_lock::<Dynamic>().unwrap() = rhs_val;
                         } else {
-                            *lhs_ptr = rhs_val;
-                        }
-                        #[cfg(feature = "no_shared")]
-                        {
                             *lhs_ptr = rhs_val;
                         }
                         Ok(Default::default())
@@ -1394,14 +1411,9 @@ impl Engine {
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
 
-                            #[cfg(not(feature = "no_shared"))]
-                            if lhs_ptr.is_shared() {
+                            if cfg!(not(feature = "no_shared")) && lhs_ptr.is_shared() {
                                 *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
                             } else {
-                                *lhs_ptr = value;
-                            }
-                            #[cfg(feature = "no_shared")]
-                            {
                                 *lhs_ptr = value;
                             }
                         }
@@ -1845,13 +1857,15 @@ impl Engine {
             .map_err(|err| err.new_position(stmt.position()))
     }
 
+    /// Check a result to ensure that the data size is within allowable limit.
+    /// Position in `EvalAltResult` may be None and should be set afterwards.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
     fn check_data_size(
         &self,
         result: Result<Dynamic, Box<EvalAltResult>>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        return result;
+        result
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
@@ -1861,9 +1875,6 @@ impl Engine {
         &self,
         result: Result<Dynamic, Box<EvalAltResult>>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        #[cfg(feature = "unchecked")]
-        return result;
-
         // If no data size limits, just return
         if self.limits.max_string_size + self.limits.max_array_size + self.limits.max_map_size == 0
         {
