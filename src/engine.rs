@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, Union};
+use crate::any::{map_std_type_name, Dynamic, Union, DynamicWriteLock};
 use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, FnPtr};
@@ -39,6 +39,7 @@ use crate::stdlib::{
     iter::{empty, once},
     string::{String, ToString},
     vec::Vec,
+    ops::DerefMut,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -91,6 +92,8 @@ pub const KEYWORD_EVAL: &str = "eval";
 pub const KEYWORD_FN_PTR: &str = "Fn";
 pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
+pub const KEYWORD_SHARED: &str = "shared";
+pub const KEYWORD_TAKE: &str = "take";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
 #[cfg(not(feature = "no_object"))]
@@ -122,6 +125,9 @@ pub enum ChainType {
 pub enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
     Ref(&'a mut Dynamic),
+    /// The target is a mutable reference to a Shared `Dynamic` value.
+    /// It holds the access guard and the original container both for cloning purposes
+    LockGuard((DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Dynamic),
     /// The target is a character inside a String.
@@ -136,6 +142,7 @@ impl Target<'_> {
     pub fn is_ref(&self) -> bool {
         match self {
             Self::Ref(_) => true,
+            Self::LockGuard(_) => true,
             Self::Value(_) => false,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
@@ -145,6 +152,7 @@ impl Target<'_> {
     pub fn is_value(&self) -> bool {
         match self {
             Self::Ref(_) => false,
+            Self::LockGuard(_) => false,
             Self::Value(_) => true,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
@@ -155,6 +163,7 @@ impl Target<'_> {
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
             Target::Ref(r) => r.is::<T>(),
+            Target::LockGuard((r, _)) => r.is::<T>(),
             Target::Value(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
             Target::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
@@ -164,6 +173,7 @@ impl Target<'_> {
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
             Self::Ref(r) => r.clone(), // Referenced value is cloned
+            Self::LockGuard((_, orig)) => orig, // Return original container of the Shared Dynamic
             Self::Value(v) => v,       // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
@@ -173,6 +183,7 @@ impl Target<'_> {
     pub fn as_mut(&mut self) -> &mut Dynamic {
         match self {
             Self::Ref(r) => *r,
+            Self::LockGuard((r, _)) => r.deref_mut(),
             Self::Value(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref mut r) => r,
@@ -183,13 +194,16 @@ impl Target<'_> {
     pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val,
+            Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => {
                 return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
                     Position::none(),
                 )))
             }
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(Dynamic(Union::Str(ref mut s)), index, _) => {
+            Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
+                let mut s = string.write_lock::<ImmutableString>().unwrap();
+
                 // Replace the character at the specified index position
                 let new_ch = new_val
                     .as_char()
@@ -215,7 +229,13 @@ impl Target<'_> {
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
-        Self::Ref(value)
+        if value.is_shared() {
+            // clone is cheap since it holds Arc/Rw under the hood
+            let container = value.clone();
+            Self::LockGuard((value.write_lock::<Dynamic>().unwrap(), container))
+        } else {
+            Self::Ref(value)
+        }
     }
 }
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -675,49 +695,73 @@ impl Engine {
                     }
                     // xxx[rhs] = new_val
                     _ if _new_val.is_some() => {
-                        let mut new_val = _new_val.unwrap();
                         let mut idx_val2 = idx_val.clone();
+
+                        // `next` is introduced to bypass double mutable borrowing of target
+                        #[cfg(not(feature = "no_index"))]
+                        let mut next: Option<(u8, Dynamic)>;
 
                         match self.get_indexed_mut(state, lib, target, idx_val, pos, true, level) {
                             // Indexed value is an owned value - the only possibility is an indexer
                             // Try to call an index setter
                             #[cfg(not(feature = "no_index"))]
                             Ok(obj_ptr) if obj_ptr.is_value() => {
-                                let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
-
-                                self.exec_fn_call(
-                                    state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
-                                    None, level,
-                                )
-                                .or_else(|err| match *err {
-                                    // If there is no index setter, no need to set it back because the indexer is read-only
-                                    EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                                        Ok(Default::default())
-                                    }
-                                    _ => Err(err),
-                                })?;
+                               next = Some((1, _new_val.unwrap()));
                             }
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
                                 obj_ptr
-                                    .set_value(new_val)
+                                    .set_value(_new_val.unwrap())
                                     .map_err(|err| err.new_position(rhs.position()))?;
+
+                                #[cfg(not(feature = "no_index"))]
+                                {
+                                    next = None;
+                                }
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
                                 #[cfg(not(feature = "no_index"))]
                                 EvalAltResult::ErrorIndexingType(_, _) => {
-                                    let args = &mut [target.as_mut(), &mut idx_val2, &mut new_val];
-
-                                    self.exec_fn_call(
-                                        state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
-                                        None, level,
-                                    )?;
+                                    next = Some((2, _new_val.unwrap()));
                                 }
                                 // Error
                                 err => return Err(Box::new(err)),
                             },
+                        };
+
+                        #[cfg(not(feature = "no_index"))]
+                        match &mut next {
+                            // next step is custom index setter call
+                            Some((1, _new_val)) => {
+                                let args = &mut [target.as_mut(), &mut idx_val2, _new_val];
+
+                                self.exec_fn_call(
+                                    state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
+                                    None, level,
+                                )
+                                    .or_else(|err| match *err {
+                                        // If there is no index setter, no need to set it back because the indexer is read-only
+                                        EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                                            Ok(Default::default())
+                                        }
+                                        _ => Err(err),
+                                    })?;
+                            }
+
+                            // next step is custom index setter call in case of error
+                            Some((2, _new_val)) => {
+                                let args = &mut [target.as_mut(), &mut idx_val2, _new_val];
+
+                                self.exec_fn_call(
+                                    state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
+                                    None, level,
+                                )?;
+                            }
+                            None => (),
+                            _ => unreachable!()
                         }
+
                         Ok(Default::default())
                     }
                     // xxx[rhs]
@@ -834,11 +878,10 @@ impl Engine {
                                     .map_err(|err| err.new_position(*pos))?;
 
                                 let val = &mut val;
-                                let target = &mut val.into();
 
                                 let (result, may_be_changed) = self
                                     .eval_dot_index_chain_helper(
-                                        state, lib, this_ptr, target, expr, idx_values, next_chain,
+                                        state, lib, this_ptr, &mut val.into(), expr, idx_values, next_chain,
                                         level, _new_val,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
@@ -1102,10 +1145,10 @@ impl Engine {
                     map.entry(index).or_insert(Default::default()).into()
                 } else {
                     let index = _idx
-                        .downcast_ref::<ImmutableString>()
+                        .read_lock::<ImmutableString>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
-                    map.get_mut(index)
+                    map.get_mut(&*index)
                         .map(Target::from)
                         .unwrap_or_else(|| Target::from(()))
                 })
@@ -1275,7 +1318,11 @@ impl Engine {
                     )),
                     // Normal assignment
                     ScopeEntryType::Normal if op.is_empty() => {
-                        *lhs_ptr = rhs_val;
+                        if lhs_ptr.is_shared() {
+                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = rhs_val;
+                        } else {
+                            *lhs_ptr = rhs_val;
+                        }
                         Ok(Default::default())
                     }
                     // Op-assignment - in order of precedence:
@@ -1293,8 +1340,13 @@ impl Engine {
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
-                            // Overriding exact implementation
-                            func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
+                            if lhs_ptr.is_shared() {
+                                // Overriding exact implementation
+                                func(self, lib, &mut [&mut lhs_ptr.write_lock::<Dynamic>().unwrap(), &mut rhs_val])?;
+                            } else {
+                                // Overriding exact implementation
+                                func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
+                            }
                         } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
                             // Not built in, map to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
@@ -1308,8 +1360,13 @@ impl Engine {
                                     state, lib, op, 0, args, false, false, false, None, None, level,
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
-                            // Set value to LHS
-                            *lhs_ptr = value;
+                            if lhs_ptr.is_shared() {
+                                // Set value to LHS
+                                *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
+                            } else {
+                                // Set value to LHS
+                                *lhs_ptr = value;
+                            }
                         }
                         Ok(Default::default())
                     }

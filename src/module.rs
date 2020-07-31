@@ -442,7 +442,7 @@ impl Module {
     ///                     // Since it is a primary type, it can also be cheaply copied
     ///                     let double = args[1].clone().cast::<bool>();
     ///                     // Get a mutable reference to the first argument.
-    ///                     let x = args[0].downcast_mut::<i64>().unwrap();
+    ///                     let mut x = args[0].write_lock::<i64>().unwrap();
     ///
     ///                     let orig = *x;
     ///
@@ -534,7 +534,7 @@ impl Module {
         func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
+            func(&mut args[0].write_lock::<A>().unwrap()).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -615,9 +615,9 @@ impl Module {
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b).map(Dynamic::from)
+            func(&mut a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -739,9 +739,9 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b, c).map(Dynamic::from)
+            func(&mut a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -773,9 +773,9 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b, c).map(Dynamic::from)
+            func(&mut a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
@@ -896,9 +896,9 @@ impl Module {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let d = mem::take(args[3]).cast::<D>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b, c, d).map(Dynamic::from)
+            func(&mut a, b, c, d).map(Dynamic::from)
         };
         let arg_types = [
             TypeId::of::<A>(),
