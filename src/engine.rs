@@ -1179,7 +1179,6 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value)) => {
                 let op = "==";
-                let mut scope = Scope::new();
 
                 // Call the `==` operator to compare each value
                 for value in rhs_value.iter_mut() {
@@ -1190,13 +1189,13 @@ impl Engine {
                     let hash =
                         calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
 
-                    let (r, _) = self
-                        .call_fn_raw(
-                            &mut scope, mods, state, lib, op, hash, args, false, false, false,
-                            def_value, level,
-                        )
-                        .map_err(|err| err.new_position(rhs.position()))?;
-                    if r.as_bool().unwrap_or(false) {
+                    if self
+                        .call_native_fn(state, lib, op, hash, args, false, false, def_value)
+                        .map_err(|err| err.new_position(rhs.position()))?
+                        .0
+                        .as_bool()
+                        .unwrap_or(false)
+                    {
                         return Ok(true.into());
                     }
                 }

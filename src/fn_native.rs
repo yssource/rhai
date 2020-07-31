@@ -280,6 +280,16 @@ impl CallableFunction {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
         }
     }
+    /// Is this a native Rust function?
+    pub fn is_native(&self) -> bool {
+        match self {
+            Self::Pure(_) | Self::Method(_) => true,
+            Self::Iterator(_) => true,
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => false,
+        }
+    }
     /// Get the access mode.
     pub fn access(&self) -> FnAccess {
         match self {

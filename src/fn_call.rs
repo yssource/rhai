@@ -41,7 +41,7 @@ use crate::stdlib::{
     format,
     iter::{empty, once},
     mem,
-    string::ToString,
+    string::{String, ToString},
     vec::Vec,
 };
 
@@ -67,43 +67,69 @@ fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
     None
 }
 
-/// This function replaces the first argument of a method call with a clone copy.
-/// This is to prevent a pure function unintentionally consuming the first argument.
-fn normalize_first_arg<'a>(
-    normalize: bool,
-    this_copy: &mut Dynamic,
-    old_this_ptr: &mut Option<&'a mut Dynamic>,
-    args: &mut FnCallArgs<'a>,
-) {
-    // Only do it for method calls with arguments.
-    if !normalize || args.is_empty() {
-        return;
-    }
-
-    // Clone the original value.
-    *this_copy = args[0].clone();
-
-    // Replace the first reference with a reference to the clone, force-casting the lifetime.
-    // Keep the original reference.  Must remember to restore it later with `restore_first_arg_of_method_call`.
-    //
-    // # Safety
-    //
-    // Blindly casting a a reference to another lifetime saves on allocations and string cloning,
-    // but must be used with the utmost care.
-    //
-    // We can do this here because, at the end of this scope, we'd restore the original reference
-    // with `restore_first_arg_of_method_call`. Therefore this shorter lifetime does not get "out".
-    let this_pointer = mem::replace(args.get_mut(0).unwrap(), unsafe {
-        mem::transmute(this_copy)
-    });
-
-    *old_this_ptr = Some(this_pointer);
+/// A type that temporarily stores a mutable reference to a `Dynamic`,
+/// replacing it with a cloned copy.
+#[derive(Debug, Default)]
+struct ArgBackup<'a> {
+    orig_mut: Option<&'a mut Dynamic>,
+    value_copy: Dynamic,
 }
 
-/// This function restores the first argument that was replaced by `normalize_first_arg_of_method_call`.
-fn restore_first_arg<'a>(old_this_ptr: Option<&'a mut Dynamic>, args: &mut FnCallArgs<'a>) {
-    if let Some(this_pointer) = old_this_ptr {
-        args[0] = this_pointer;
+impl<'a> ArgBackup<'a> {
+    /// This function replaces the first argument of a method call with a clone copy.
+    /// This is to prevent a pure function unintentionally consuming the first argument.
+    ///
+    /// `restore_first_arg` must be called before the end of the scope to prevent the shorter lifetime from leaking.
+    ///
+    /// # Safety
+    ///
+    /// This method blindly casts a reference to another lifetime, which saves allocation and string cloning.
+    ///
+    /// If `restore_first_arg` is called before the end of the scope, the shorter lifetime will not leak.
+    fn change_first_arg_to_copy(&mut self, normalize: bool, args: &mut FnCallArgs<'a>) {
+        // Only do it for method calls with arguments.
+        if !normalize || args.is_empty() {
+            return;
+        }
+
+        // Clone the original value.
+        self.value_copy = args[0].clone();
+
+        // Replace the first reference with a reference to the clone, force-casting the lifetime.
+        // Must remember to restore it later with `restore_first_arg`.
+        //
+        // # Safety
+        //
+        // Blindly casting a reference to another lifetime saves allocation and string cloning,
+        // but must be used with the utmost care.
+        //
+        // We can do this here because, before the end of this scope, we'd restore the original reference
+        // via `restore_first_arg`. Therefore this shorter lifetime does not leak.
+        self.orig_mut = Some(mem::replace(args.get_mut(0).unwrap(), unsafe {
+            mem::transmute(&mut self.value_copy)
+        }));
+    }
+
+    /// This function restores the first argument that was replaced by `change_first_arg_to_copy`.
+    ///
+    /// # Safety
+    ///
+    /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_ exiting
+    /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
+    fn restore_first_arg(&mut self, args: &mut FnCallArgs<'a>) {
+        if let Some(this_pointer) = self.orig_mut.take() {
+            args[0] = this_pointer;
+        }
+    }
+}
+
+impl Drop for ArgBackup<'_> {
+    fn drop(&mut self) {
+        // Panic if the shorter lifetime leaks.
+        assert!(
+            self.orig_mut.is_none(),
+            "MutBackup::restore has not been called prior to existing this scope"
+        );
     }
 }
 
@@ -138,34 +164,21 @@ impl Engine {
     /// Function call arguments be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
-    pub(crate) fn call_fn_raw(
+    pub(crate) fn call_native_fn(
         &self,
-        _scope: &mut Scope,
-        _mods: &mut Imports,
         state: &mut State,
         lib: &Module,
         fn_name: &str,
         hash_fn: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
-        _is_method: bool,
         pub_only: bool,
         def_val: Option<bool>,
-        _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
-        // Check for stack overflow
-        #[cfg(not(feature = "no_function"))]
-        #[cfg(not(feature = "unchecked"))]
-        if _level > self.limits.max_call_stack_depth {
-            return Err(Box::new(
-                EvalAltResult::ErrorStackOverflow(Position::none()),
-            ));
-        }
-
-        // Search for the function
-        // First search registered native functions (can override packages)
+        // Search for the native function
+        // First search registered functions (can override packages)
         // Then search packages
         let func = self
             .global_module
@@ -173,22 +186,19 @@ impl Engine {
             .or_else(|| self.packages.get_fn(hash_fn, pub_only));
 
         if let Some(func) = func {
-            #[cfg(not(feature = "no_function"))]
-            let need_normalize = is_ref && (func.is_pure() || (func.is_script() && !_is_method));
-            #[cfg(feature = "no_function")]
-            let need_normalize = is_ref && func.is_pure();
-
-            let mut this_copy: Dynamic = Default::default();
-            let mut old_this_ptr: Option<&mut Dynamic> = None;
+            assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
-            normalize_first_arg(need_normalize, &mut this_copy, &mut old_this_ptr, args);
+            let mut backup: ArgBackup = Default::default();
+            backup.change_first_arg_to_copy(is_ref && func.is_pure(), args);
 
             // Run external function
-            let result = func.get_native_fn()(self, lib, args)?;
+            let result = func.get_native_fn()(self, lib, args);
 
             // Restore the original reference
-            restore_first_arg(old_this_ptr, args);
+            backup.restore_first_arg(args);
+
+            let result = result?;
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
@@ -320,6 +330,17 @@ impl Engine {
         args: &mut FnCallArgs,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.inc_operations(state)?;
+
+        // Check for stack overflow
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(not(feature = "unchecked"))]
+        if level > self.limits.max_call_stack_depth {
+            return Err(Box::new(
+                EvalAltResult::ErrorStackOverflow(Position::none()),
+            ));
+        }
+
         let orig_scope_level = state.scope_level;
         state.scope_level += 1;
 
@@ -382,7 +403,7 @@ impl Engine {
             || self.packages.contains_fn(hash_fn, pub_only)
     }
 
-    /// Perform an actual function call, taking care of special functions
+    /// Perform an actual function call, native Rust or scripted, taking care of special functions.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
     /// ## WARNING
@@ -470,33 +491,26 @@ impl Engine {
                     )?
                 } else {
                     // Normal call of script function - map first argument to `this`
-                    let mut first_copy: Dynamic = Default::default();
-                    let mut old_first: Option<&mut Dynamic> = None;
-
                     // The first argument is a reference?
-                    normalize_first_arg(is_ref, &mut first_copy, &mut old_first, args);
+                    let mut backup: ArgBackup = Default::default();
+                    backup.change_first_arg_to_copy(is_ref, args);
 
                     let result = self.call_script_fn(
                         scope, mods, state, lib, &mut None, fn_name, func, args, level,
-                    )?;
+                    );
 
                     // Restore the original reference
-                    restore_first_arg(old_first, args);
+                    backup.restore_first_arg(args);
 
-                    result
+                    result?
                 };
 
                 Ok((result, false))
             }
             // Normal native function call
-            _ => {
-                let mut scope = Scope::new();
-                let mut mods = Imports::new();
-                self.call_fn_raw(
-                    &mut scope, &mut mods, state, lib, fn_name, hash_fn, args, is_ref, is_method,
-                    pub_only, def_val, level,
-                )
-            }
+            _ => self.call_native_fn(
+                state, lib, fn_name, hash_fn, args, is_ref, pub_only, def_val,
+            ),
         }
     }
 
@@ -508,9 +522,21 @@ impl Engine {
         mods: &mut Imports,
         state: &mut State,
         lib: &Module,
-        script: &Dynamic,
+        script_expr: &Dynamic,
+        level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let script = script.as_str().map_err(|typ| {
+        self.inc_operations(state)?;
+
+        // Check for stack overflow
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(not(feature = "unchecked"))]
+        if level > self.limits.max_call_stack_depth {
+            return Err(Box::new(
+                EvalAltResult::ErrorStackOverflow(Position::none()),
+            ));
+        }
+
+        let script = script_expr.as_str().map_err(|typ| {
             EvalAltResult::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<ImmutableString>()).into(),
                 typ.into(),
@@ -782,12 +808,12 @@ impl Engine {
                 let expr = args_expr.get(0).unwrap();
                 let script = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let result = self
-                    .eval_script_expr(scope, mods, state, lib, &script)
+                    .eval_script_expr(scope, mods, state, lib, &script, level + 1)
                     .map_err(|err| err.new_position(expr.position()));
 
+                // IMPORTANT! If the eval defines new variables in the current scope,
+                //            all variable offsets from this point on will be mis-aligned.
                 if scope.len() != prev_len {
-                    // IMPORTANT! If the eval defines new variables in the current scope,
-                    //            all variable offsets from this point on will be mis-aligned.
                     state.always_search = true;
                 }
 

@@ -3,7 +3,7 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::fn_native::FnPtr;
 use crate::module::Module;
@@ -132,22 +132,18 @@ fn call_fn_with_constant_arguments(
 
     state
         .engine
-        .call_fn_raw(
-            &mut Scope::new(),
-            &mut Imports::new(),
+        .call_native_fn(
             &mut Default::default(),
             state.lib,
             fn_name,
             hash_fn,
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
-            false,
             true,
             None,
-            0,
         )
-        .map(|(v, _)| Some(v))
-        .unwrap_or_else(|_| None)
+        .ok()
+        .map(|(v, _)| v)
 }
 
 /// Optimize a statement.
