@@ -407,7 +407,6 @@ impl<'a> Scope<'a> {
     }
 
     /// Get an iterator to entries in the Scope.
-    #[cfg(not(feature = "no_module"))]
     pub(crate) fn into_iter(self) -> impl Iterator<Item = Entry<'a>> {
         self.0.into_iter()
     }

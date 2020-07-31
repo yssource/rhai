@@ -523,14 +523,14 @@ impl Engine {
         state: &mut State,
         lib: &Module,
         script_expr: &Dynamic,
-        level: usize,
+        _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        if level > self.limits.max_call_stack_depth {
+        if _level > self.limits.max_call_stack_depth {
             return Err(Box::new(
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
