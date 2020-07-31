@@ -137,12 +137,12 @@ impl FnPtr {
                 &mut Default::default(),
                 lib.as_ref(),
                 fn_name,
-                false,
                 hash_script,
                 args.as_mut(),
                 has_this,
                 has_this,
                 true,
+                None,
                 None,
                 0,
             )
@@ -285,6 +285,16 @@ impl CallableFunction {
         match self {
             Self::Script(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
+        }
+    }
+    /// Is this a native Rust function?
+    pub fn is_native(&self) -> bool {
+        match self {
+            Self::Pure(_) | Self::Method(_) => true,
+            Self::Iterator(_) => true,
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => false,
         }
     }
     /// Get the access mode.

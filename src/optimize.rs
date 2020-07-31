@@ -3,12 +3,12 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
+use crate::fn_native::FnPtr;
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
-use crate::token::is_valid_identifier;
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_function"))]
@@ -19,6 +19,7 @@ use crate::parser::CustomExpr;
 
 use crate::stdlib::{
     boxed::Box,
+    convert::TryFrom,
     iter::empty,
     string::{String, ToString},
     vec,
@@ -131,22 +132,18 @@ fn call_fn_with_constant_arguments(
 
     state
         .engine
-        .call_fn_raw(
-            &mut Scope::new(),
-            &mut Imports::new(),
+        .call_native_fn(
             &mut Default::default(),
             state.lib,
             fn_name,
-            (hash_fn, 0),
+            hash_fn,
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
-            false,
             false,
             true,
             None,
-            0,
         )
-        .map(|(v, _)| Some(v))
-        .unwrap_or_else(|_| None)
+        .ok()
+        .map(|(v, _)| v)
 }
 
 /// Optimize a statement.
@@ -418,7 +415,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop.as_str())
+                m.0.into_iter().find(|((name, _), _)| name == prop)
                     .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -495,7 +492,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 let ch = a.0.to_string();
 
-                if b.0.iter().find(|((name, _), _)| name.as_str() == ch.as_str()).is_some() {
+                if b.0.iter().find(|((name, _), _)| name == &ch).is_some() {
                     Expr::True(a.1)
                 } else {
                     Expr::False(a.1)
@@ -553,14 +550,19 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
         // Fn("...")
         Expr::FnCall(x)
-            if x.1.is_none()
-            && (x.0).0 == KEYWORD_FN_PTR
-            && x.3.len() == 1
-            && matches!(x.3[0], Expr::StringConstant(_))
+                if x.1.is_none()
+                && (x.0).0 == KEYWORD_FN_PTR
+                && x.3.len() == 1
+                && matches!(x.3[0], Expr::StringConstant(_))
         => {
-            match &x.3[0] {
-                Expr::StringConstant(s) if is_valid_identifier(s.0.chars()) => Expr::FnPointer(s.clone()),
-                _ => Expr::FnCall(x)
+            if let Expr::StringConstant(s) = &x.3[0] {
+                if let Ok(fn_ptr) = FnPtr::try_from(s.0.as_str()) {
+                    Expr::FnPointer(Box::new((fn_ptr.take_data().0, s.1)))
+                } else {
+                    Expr::FnCall(x)
+                }
+            } else {
+                unreachable!()
             }
         }
 
@@ -570,7 +572,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.3.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
-            let ((name, _, pos), _, _, args, def_value) = x.as_mut();
+            let ((name, _, _, pos), _, _, args, def_value) = x.as_mut();
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
@@ -578,7 +580,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             let _has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
-                fn_def.name.as_str() == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
+                fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
             }).is_some();
 
             #[cfg(feature = "no_function")]
@@ -765,6 +767,8 @@ pub fn optimize_into_ast(
                         access: fn_def.access,
                         body: Default::default(),
                         params: fn_def.params.clone(),
+                        #[cfg(not(feature = "no_capture"))]
+                        externals: fn_def.externals.clone(),
                         pos: fn_def.pos,
                     }
                     .into()

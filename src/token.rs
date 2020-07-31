@@ -679,9 +679,9 @@ impl Token {
     }
 
     /// Convert a token into a function name, if possible.
-    pub(crate) fn into_function_name(self) -> Result<String, Self> {
+    pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
-            Self::Reserved(s) if is_keyword_function(&s) => Ok(s),
+            Self::Reserved(s) if can_override_keyword(&s) => Ok(s),
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
             _ => Err(self),
         }
@@ -1445,6 +1445,16 @@ pub fn is_keyword_function(name: &str) -> bool {
     }
 
     result
+}
+
+/// Can this keyword be overridden as a function?
+#[inline(always)]
+pub fn can_override_keyword(name: &str) -> bool {
+    name == KEYWORD_PRINT
+        || name == KEYWORD_DEBUG
+        || name == KEYWORD_TYPE_OF
+        || name == KEYWORD_EVAL
+        || name == KEYWORD_FN_PTR
 }
 
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {

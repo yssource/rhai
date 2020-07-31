@@ -4,7 +4,9 @@ use crate::any::{Dynamic, Variant};
 use crate::parser::{map_dynamic_to_expr, Expr};
 use crate::token::Position;
 
-use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
+use crate::stdlib::{
+    borrow::Cow, boxed::Box, collections::HashMap, iter, string::String, vec::Vec,
+};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -316,6 +318,14 @@ impl<'a> Scope<'a> {
             })
     }
 
+    /// Get an entry in the Scope, starting from the last.
+    pub(crate) fn get_entry(&self, name: &str) -> Option<&Entry> {
+        self.0
+            .iter()
+            .rev()
+            .find(|Entry { name: key, .. }| name == key)
+    }
+
     /// Get the value of an entry in the Scope, starting from the last.
     ///
     /// # Examples
@@ -329,10 +339,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
-        self.0
-            .iter()
-            .rev()
-            .find(|Entry { name: key, .. }| name == key)
+        self.get_entry(name)
             .and_then(|Entry { value, .. }| value.read::<T>())
     }
 
@@ -384,13 +391,27 @@ impl<'a> Scope<'a> {
         self
     }
 
+    /// Clone the Scope, keeping only the last instances of each variable name.
+    /// Shadowed variables are omitted in the copy.
+    #[cfg(not(feature = "no_capture"))]
+    pub(crate) fn flatten_clone(&self) -> Self {
+        let mut entries: HashMap<&str, Entry> = Default::default();
+
+        self.0.iter().rev().for_each(|entry| {
+            entries
+                .entry(entry.name.as_ref())
+                .or_insert_with(|| entry.clone());
+        });
+
+        Self(entries.into_iter().map(|(_, v)| v).collect())
+    }
+
     /// Get an iterator to entries in the Scope.
-    #[cfg(not(feature = "no_module"))]
     pub(crate) fn into_iter(self) -> impl Iterator<Item = Entry<'a>> {
         self.0.into_iter()
     }
 
-    /// Get an iterator to entries in the Scope.
+    /// Get an iterator to entries in the Scope in reverse order.
     pub(crate) fn to_iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev() // Always search a Scope in reverse order
     }

@@ -91,6 +91,10 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_object` and `no_index` features combination.
     MalformedInExpr(String),
+    /// A capturing  has syntax error. Wrapped value is the error description (if any).
+    ///
+    /// Never appears under the `no_capture` feature.
+    MalformedCapture(String),
     /// A map definition has duplicated property names. Wrapped value is the property name.
     ///
     /// Never appears under the `no_object` feature.
@@ -166,6 +170,7 @@ impl ParseErrorType {
             Self::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             Self::MalformedIndexExpr(_) => "Invalid index in indexing expression",
             Self::MalformedInExpr(_) => "Invalid 'in' expression",
+            Self::MalformedCapture(_) => "Invalid capturing",
             Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
             Self::ForbiddenConstantExpr(_) => "Expecting a constant",
             Self::PropertyExpected => "Expecting name of a property",
@@ -199,9 +204,9 @@ impl fmt::Display for ParseErrorType {
             }
             Self::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s),
 
-            Self::MalformedIndexExpr(s) => f.write_str(if s.is_empty() { self.desc() } else { s }),
-
-            Self::MalformedInExpr(s) => f.write_str(if s.is_empty() { self.desc() } else { s }),
+            Self::MalformedIndexExpr(s) | Self::MalformedInExpr(s) | Self::MalformedCapture(s) => {
+                f.write_str(if s.is_empty() { self.desc() } else { s })
+            }
 
             Self::DuplicatedProperty(s) => {
                 write!(f, "Duplicated property '{}' for object map literal", s)
