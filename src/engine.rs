@@ -734,69 +734,49 @@ impl Engine {
                     _ if _new_val.is_some() => {
                         let mut idx_val2 = idx_val.clone();
 
-                        // `next` is introduced to bypass double mutable borrowing of target
-                        #[cfg(not(feature = "no_index"))]
-                        let mut next: Option<(u8, Dynamic)>;
-
-                        match self.get_indexed_mut(state, lib, target, idx_val, pos, true, level) {
-                            // Indexed value is an owned value - the only possibility is an indexer
-                            // Try to call an index setter
+                        // `call_setter` is introduced to bypass double mutable borrowing of target
+                        let mut call_setter = match self
+                            .get_indexed_mut(state, lib, target, idx_val, pos, true, level)
+                        {
+                            // Indexed value is an owned value - the only possibility is a value from an indexer.
+                            // Try to call an index setter to update it back, but no need to raise an error
+                            // if the indexer is read-only.
                             #[cfg(not(feature = "no_index"))]
-                            Ok(obj_ptr) if obj_ptr.is_value() => {
-                                next = Some((1, _new_val.unwrap()));
-                            }
+                            Ok(obj_ptr) if obj_ptr.is_value() => Some((false, _new_val.unwrap())),
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
                                 obj_ptr
                                     .set_value(_new_val.unwrap())
                                     .map_err(|err| err.new_position(rhs.position()))?;
 
-                                #[cfg(not(feature = "no_index"))]
-                                {
-                                    next = None;
-                                }
+                                None
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
-                                #[cfg(not(feature = "no_index"))]
                                 EvalAltResult::ErrorIndexingType(_, _) => {
-                                    next = Some((2, _new_val.unwrap()));
+                                    // Raise error if there is no index getter nor setter
+                                    Some((true, _new_val.unwrap()))
                                 }
-                                // Error
+                                // Any other error - return
                                 err => return Err(Box::new(err)),
                             },
                         };
 
-                        #[cfg(not(feature = "no_index"))]
-                        match &mut next {
-                            // next step is custom index setter call
-                            Some((1, _new_val)) => {
-                                let args = &mut [target.as_mut(), &mut idx_val2, _new_val];
+                        if let Some((must_have_setter, ref mut new_val)) = call_setter {
+                            let args = &mut [target.as_mut(), &mut idx_val2, new_val];
 
-                                self.exec_fn_call(
-                                    state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
-                                    None, level,
-                                )
-                                .or_else(|err| match *err {
+                            match self.exec_fn_call(
+                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, None,
+                                level,
+                            ) {
+                                Ok(_) => (),
+                                Err(err) if !must_have_setter => match *err {
                                     // If there is no index setter, no need to set it back because the indexer is read-only
-                                    EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                                        Ok(Default::default())
-                                    }
-                                    _ => Err(err),
-                                })?;
+                                    EvalAltResult::ErrorFunctionNotFound(_, _) => (),
+                                    _ => return Err(err),
+                                },
+                                err => return err,
                             }
-
-                            // next step is custom index setter call in case of error
-                            Some((2, _new_val)) => {
-                                let args = &mut [target.as_mut(), &mut idx_val2, _new_val];
-
-                                self.exec_fn_call(
-                                    state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
-                                    None, level,
-                                )?;
-                            }
-                            None => (),
-                            _ => unreachable!(),
                         }
 
                         Ok(Default::default())
