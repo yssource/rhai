@@ -709,6 +709,46 @@ impl Dynamic {
         self.try_cast::<T>().unwrap()
     }
 
+    /// Get a copy of a specific type to the `Dynamic`.
+    /// Casting to `Dynamic` returns a clone of the value in case of NON-shared
+    /// Dynamic. In case of Shared Dynamic returns a clone of the inner data of
+    /// Shared Dynamic.
+    /// Returns `None` if the cast fails.
+    #[inline(always)]
+    pub fn clone_inner_data<T: Variant + Clone>(&self) -> Option<T> {
+        match self.0 {
+            Union::Shared(ref cell) => {
+                let type_id = TypeId::of::<T>();
+
+                if type_id != TypeId::of::<Dynamic>() && cell.value_type_id != type_id {
+                    return None
+                }
+
+                #[cfg(not(feature = "sync"))]
+                    return Some(cell
+                    .container
+                    .borrow()
+                    .deref()
+                    .downcast_ref::<T>()
+                    .unwrap()
+                    .clone());
+
+                #[cfg(feature = "sync")]
+                    return Some(cell
+                    .container
+                    .read()
+                    .unwrap()
+                    .deref()
+                    .downcast_ref::<T>()
+                    .unwrap()
+                    .clone());
+            },
+            _ => {
+                self.downcast_ref().cloned()
+            }
+        }
+    }
+
     /// Get a reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a reference to it.
     /// Returns `None` if the cast fails.
@@ -736,46 +776,6 @@ impl Dynamic {
                 self.downcast_ref().map(|reference| {
                     DynamicReadLock(DynamicReadLockInner::Reference(reference))
                 })
-            }
-        }
-    }
-
-    /// Get a copy of a specific type to the `Dynamic`.
-    /// Casting to `Dynamic` returns a clone of the value in case of NON-shared
-    /// Dynamic. In case of Shared Dynamic returns a clone of the inner data of
-    /// Shared Dynamic.
-    /// Returns `None` if the cast fails.
-    #[inline(always)]
-    pub fn read<T: Variant + Clone>(&self) -> Option<T> {
-        match self.0 {
-            Union::Shared(ref cell) => {
-                let type_id = TypeId::of::<T>();
-
-                if type_id != TypeId::of::<Dynamic>() && cell.value_type_id != type_id {
-                    return None
-                }
-
-                #[cfg(not(feature = "sync"))]
-                return Some(cell
-                    .container
-                    .borrow()
-                    .deref()
-                    .downcast_ref::<T>()
-                    .unwrap()
-                    .clone());
-
-                #[cfg(feature = "sync")]
-                return Some(cell
-                    .container
-                    .read()
-                    .unwrap()
-                    .deref()
-                    .downcast_ref::<T>()
-                    .unwrap()
-                    .clone());
-            },
-            _ => {
-                self.downcast_ref().cloned()
             }
         }
     }
@@ -964,7 +964,7 @@ impl Dynamic {
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
-            Union::Shared(_) => self.read::<INT>().ok_or_else(|| self.type_name()),
+            Union::Shared(_) => self.clone_inner_data::<INT>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -975,7 +975,7 @@ impl Dynamic {
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n) => Ok(n),
-            Union::Shared(_) => self.read::<FLOAT>().ok_or_else(|| self.type_name()),
+            Union::Shared(_) => self.clone_inner_data::<FLOAT>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -985,7 +985,7 @@ impl Dynamic {
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b) => Ok(b),
-            Union::Shared(_) => self.read::<bool>().ok_or_else(|| self.type_name()),
+            Union::Shared(_) => self.clone_inner_data::<bool>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -995,7 +995,7 @@ impl Dynamic {
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n) => Ok(n),
-            Union::Shared(_) => self.read::<char>().ok_or_else(|| self.type_name()),
+            Union::Shared(_) => self.clone_inner_data::<char>().ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }

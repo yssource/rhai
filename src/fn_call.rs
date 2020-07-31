@@ -658,7 +658,7 @@ impl Engine {
             ))
         } else if _fn_name == KEYWORD_TAKE {
             // take call
-            return Ok((obj.read::<Dynamic>().unwrap(), false));
+            return Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false));
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;

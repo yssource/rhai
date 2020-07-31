@@ -340,7 +340,7 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.get_entry(name)
-            .and_then(|Entry { value, .. }| value.read::<T>())
+            .and_then(|Entry { value, .. }| value.clone_inner_data::<T>())
     }
 
     /// Update the value of the named entry.
