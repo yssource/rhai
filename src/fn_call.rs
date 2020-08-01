@@ -1188,30 +1188,30 @@ pub fn run_builtin_op_assignment(
         let mut x = x.write_lock::<INT>().unwrap();
         let y = y.clone().cast::<INT>();
 
-        #[cfg(not(feature = "unchecked"))]
-        match op {
-            "+=" => return Ok(Some(*x = add(*x, y)?)),
-            "-=" => return Ok(Some(*x = sub(*x, y)?)),
-            "*=" => return Ok(Some(*x = mul(*x, y)?)),
-            "/=" => return Ok(Some(*x = div(*x, y)?)),
-            "%=" => return Ok(Some(*x = modulo(*x, y)?)),
-            "~=" => return Ok(Some(*x = pow_i_i(*x, y)?)),
-            ">>=" => return Ok(Some(*x = shr(*x, y)?)),
-            "<<=" => return Ok(Some(*x = shl(*x, y)?)),
-            _ => (),
-        }
-
-        #[cfg(feature = "unchecked")]
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            "*=" => return Ok(Some(*x *= y)),
-            "/=" => return Ok(Some(*x /= y)),
-            "%=" => return Ok(Some(*x %= y)),
-            "~=" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
-            ">>=" => return Ok(Some(*x = shr_u(*x, y)?)),
-            "<<=" => return Ok(Some(*x = shl_u(*x, y)?)),
-            _ => (),
+        if cfg!(not(feature = "unchecked")) {
+            match op {
+                "+=" => return Ok(Some(*x = add(*x, y)?)),
+                "-=" => return Ok(Some(*x = sub(*x, y)?)),
+                "*=" => return Ok(Some(*x = mul(*x, y)?)),
+                "/=" => return Ok(Some(*x = div(*x, y)?)),
+                "%=" => return Ok(Some(*x = modulo(*x, y)?)),
+                "~=" => return Ok(Some(*x = pow_i_i(*x, y)?)),
+                ">>=" => return Ok(Some(*x = shr(*x, y)?)),
+                "<<=" => return Ok(Some(*x = shl(*x, y)?)),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+=" => return Ok(Some(*x += y)),
+                "-=" => return Ok(Some(*x -= y)),
+                "*=" => return Ok(Some(*x *= y)),
+                "/=" => return Ok(Some(*x /= y)),
+                "%=" => return Ok(Some(*x %= y)),
+                "~=" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
+                ">>=" => return Ok(Some(*x = shr_u(*x, y)?)),
+                "<<=" => return Ok(Some(*x = shl_u(*x, y)?)),
+                _ => (),
+            }
         }
 
         match op {

@@ -721,8 +721,9 @@ impl Engine {
                     Expr::Dot(x) | Expr::Index(x) => {
                         let (idx, expr, pos) = x.as_ref();
                         let idx_pos = idx.position();
-                        let obj_ptr = &mut self
-                            .get_indexed_mut(state, lib, target, idx_val, idx_pos, false, level)?;
+                        let obj_ptr = &mut self.get_indexed_mut(
+                            state, lib, target, idx_val, idx_pos, false, true, level,
+                        )?;
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
@@ -735,14 +736,9 @@ impl Engine {
                         let mut idx_val2 = idx_val.clone();
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
-                        let mut call_setter = match self
-                            .get_indexed_mut(state, lib, target, idx_val, pos, true, level)
+                        let _call_setter = match self
+                            .get_indexed_mut(state, lib, target, idx_val, pos, true, false, level)
                         {
-                            // Indexed value is an owned value - the only possibility is a value from an indexer.
-                            // Try to call an index setter to update it back, but no need to raise an error
-                            // if the indexer is read-only.
-                            #[cfg(not(feature = "no_index"))]
-                            Ok(obj_ptr) if obj_ptr.is_value() => Some((false, _new_val.unwrap())),
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
                                 obj_ptr
@@ -753,37 +749,42 @@ impl Engine {
                             }
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
+                                #[cfg(not(feature = "no_index"))]
                                 EvalAltResult::ErrorIndexingType(_, _) => {
                                     // Raise error if there is no index getter nor setter
-                                    Some((true, _new_val.unwrap()))
+                                    Some(_new_val.unwrap())
                                 }
                                 // Any other error - return
                                 err => return Err(Box::new(err)),
                             },
                         };
 
-                        if let Some((must_have_setter, ref mut new_val)) = call_setter {
-                            let args = &mut [target.as_mut(), &mut idx_val2, new_val];
+                        #[cfg(not(feature = "no_index"))]
+                        if let Some(mut new_val) = _call_setter {
+                            let val = target.as_mut();
+                            let val_type_name = val.type_name();
+                            let args = &mut [val, &mut idx_val2, &mut new_val];
 
-                            match self.exec_fn_call(
+                            self.exec_fn_call(
                                 state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, None,
                                 level,
-                            ) {
-                                Ok(_) => (),
-                                Err(err) if !must_have_setter => match *err {
-                                    // If there is no index setter, no need to set it back because the indexer is read-only
-                                    EvalAltResult::ErrorFunctionNotFound(_, _) => (),
-                                    _ => return Err(err),
-                                },
-                                err => return err,
-                            }
+                            )
+                            .map_err(|err| match *err {
+                                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                                    EvalAltResult::ErrorIndexingType(
+                                        self.map_type_name(val_type_name).into(),
+                                        Position::none(),
+                                    )
+                                }
+                                err => err,
+                            })?;
                         }
 
                         Ok(Default::default())
                     }
                     // xxx[rhs]
                     _ => self
-                        .get_indexed_mut(state, lib, target, idx_val, pos, false, level)
+                        .get_indexed_mut(state, lib, target, idx_val, pos, false, true, level)
                         .map(|v| (v.clone_into_dynamic(), false)),
                 }
             }
@@ -806,8 +807,8 @@ impl Engine {
                     Expr::Property(x) if target.is::<Map>() && _new_val.is_some() => {
                         let ((prop, _, _), pos) = x.as_ref();
                         let index = prop.clone().into();
-                        let mut val =
-                            self.get_indexed_mut(state, lib, target, index, *pos, true, level)?;
+                        let mut val = self
+                            .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
                         val.set_value(_new_val.unwrap())
                             .map_err(|err| err.new_position(rhs.position()))?;
@@ -817,8 +818,9 @@ impl Engine {
                     Expr::Property(x) if target.is::<Map>() => {
                         let ((prop, _, _), pos) = x.as_ref();
                         let index = prop.clone().into();
-                        let val =
-                            self.get_indexed_mut(state, lib, target, index, *pos, false, level)?;
+                        let val = self.get_indexed_mut(
+                            state, lib, target, index, *pos, false, false, level,
+                        )?;
 
                         Ok((val.clone_into_dynamic(), false))
                     }
@@ -852,7 +854,9 @@ impl Engine {
                             Expr::Property(p) => {
                                 let ((prop, _, _), pos) = p.as_ref();
                                 let index = prop.clone().into();
-                                self.get_indexed_mut(state, lib, target, index, *pos, false, level)?
+                                self.get_indexed_mut(
+                                    state, lib, target, index, *pos, false, true, level,
+                                )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x) if x.1.is_none() => {
@@ -1125,6 +1129,7 @@ impl Engine {
         mut _idx: Dynamic,
         idx_pos: Position,
         _create: bool,
+        _indexers: bool,
         _level: usize,
     ) -> Result<Target<'a>, Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -1201,7 +1206,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             #[cfg(not(feature = "no_index"))]
-            _ => {
+            _ if _indexers => {
                 let type_name = val.type_name();
                 let args = &mut [val, &mut _idx];
                 self.exec_fn_call(
@@ -1216,7 +1221,6 @@ impl Engine {
                 })
             }
 
-            #[cfg(any(feature = "no_index", feature = "no_object"))]
             _ => Err(Box::new(EvalAltResult::ErrorIndexingType(
                 self.map_type_name(val.type_name()).into(),
                 Position::none(),
