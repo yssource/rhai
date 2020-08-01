@@ -1023,30 +1023,30 @@ pub fn run_builtin_binary_op(
         let x = x.clone().cast::<INT>();
         let y = y.clone().cast::<INT>();
 
-        #[cfg(not(feature = "unchecked"))]
-        match op {
-            "+" => return add(x, y).map(Into::into).map(Some),
-            "-" => return sub(x, y).map(Into::into).map(Some),
-            "*" => return mul(x, y).map(Into::into).map(Some),
-            "/" => return div(x, y).map(Into::into).map(Some),
-            "%" => return modulo(x, y).map(Into::into).map(Some),
-            "~" => return pow_i_i(x, y).map(Into::into).map(Some),
-            ">>" => return shr(x, y).map(Into::into).map(Some),
-            "<<" => return shl(x, y).map(Into::into).map(Some),
-            _ => (),
-        }
-
-        #[cfg(feature = "unchecked")]
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "*" => return Ok(Some((x * y).into())),
-            "/" => return Ok(Some((x / y).into())),
-            "%" => return Ok(Some((x % y).into())),
-            "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
-            ">>" => return shr_u(x, y).map(Into::into).map(Some),
-            "<<" => return shl_u(x, y).map(Into::into).map(Some),
-            _ => (),
+        if cfg!(not(feature = "unchecked")) {
+            match op {
+                "+" => return add(x, y).map(Into::into).map(Some),
+                "-" => return sub(x, y).map(Into::into).map(Some),
+                "*" => return mul(x, y).map(Into::into).map(Some),
+                "/" => return div(x, y).map(Into::into).map(Some),
+                "%" => return modulo(x, y).map(Into::into).map(Some),
+                "~" => return pow_i_i(x, y).map(Into::into).map(Some),
+                ">>" => return shr(x, y).map(Into::into).map(Some),
+                "<<" => return shl(x, y).map(Into::into).map(Some),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+" => return Ok(Some((x + y).into())),
+                "-" => return Ok(Some((x - y).into())),
+                "*" => return Ok(Some((x * y).into())),
+                "/" => return Ok(Some((x / y).into())),
+                "%" => return Ok(Some((x % y).into())),
+                "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
+                ">>" => return shr_u(x, y).map(Into::into).map(Some),
+                "<<" => return shl_u(x, y).map(Into::into).map(Some),
+                _ => (),
+            }
         }
 
         match op {
@@ -1151,30 +1151,30 @@ pub fn run_builtin_op_assignment(
         let x = x.downcast_mut::<INT>().unwrap();
         let y = y.clone().cast::<INT>();
 
-        #[cfg(not(feature = "unchecked"))]
-        match op {
-            "+=" => return Ok(Some(*x = add(*x, y)?)),
-            "-=" => return Ok(Some(*x = sub(*x, y)?)),
-            "*=" => return Ok(Some(*x = mul(*x, y)?)),
-            "/=" => return Ok(Some(*x = div(*x, y)?)),
-            "%=" => return Ok(Some(*x = modulo(*x, y)?)),
-            "~=" => return Ok(Some(*x = pow_i_i(*x, y)?)),
-            ">>=" => return Ok(Some(*x = shr(*x, y)?)),
-            "<<=" => return Ok(Some(*x = shl(*x, y)?)),
-            _ => (),
-        }
-
-        #[cfg(feature = "unchecked")]
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            "*=" => return Ok(Some(*x *= y)),
-            "/=" => return Ok(Some(*x /= y)),
-            "%=" => return Ok(Some(*x %= y)),
-            "~=" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
-            ">>=" => return Ok(Some(*x = shr_u(*x, y)?)),
-            "<<=" => return Ok(Some(*x = shl_u(*x, y)?)),
-            _ => (),
+        if cfg!(not(feature = "unchecked")) {
+            match op {
+                "+=" => return Ok(Some(*x = add(*x, y)?)),
+                "-=" => return Ok(Some(*x = sub(*x, y)?)),
+                "*=" => return Ok(Some(*x = mul(*x, y)?)),
+                "/=" => return Ok(Some(*x = div(*x, y)?)),
+                "%=" => return Ok(Some(*x = modulo(*x, y)?)),
+                "~=" => return Ok(Some(*x = pow_i_i(*x, y)?)),
+                ">>=" => return Ok(Some(*x = shr(*x, y)?)),
+                "<<=" => return Ok(Some(*x = shl(*x, y)?)),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+=" => return Ok(Some(*x += y)),
+                "-=" => return Ok(Some(*x -= y)),
+                "*=" => return Ok(Some(*x *= y)),
+                "/=" => return Ok(Some(*x /= y)),
+                "%=" => return Ok(Some(*x %= y)),
+                "~=" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
+                ">>=" => return Ok(Some(*x = shr_u(*x, y)?)),
+                "<<=" => return Ok(Some(*x = shl_u(*x, y)?)),
+                _ => (),
+            }
         }
 
         match op {

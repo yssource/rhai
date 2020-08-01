@@ -1,25 +1,20 @@
 #![cfg(not(feature = "no_object"))]
 
+use crate::any::Dynamic;
 use crate::def_package;
 use crate::engine::Map;
+use crate::module::FuncReturn;
 use crate::parser::{ImmutableString, INT};
 
-#[cfg(not(feature = "no_index"))]
-use crate::{any::Dynamic, module::FuncReturn};
-
-#[cfg(not(feature = "no_index"))]
 use crate::stdlib::vec::Vec;
 
-#[cfg(not(feature = "no_index"))]
 fn map_get_keys(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
     Ok(map.iter().map(|(k, _)| k.clone().into()).collect())
 }
-#[cfg(not(feature = "no_index"))]
 fn map_get_values(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
     Ok(map.iter().map(|(_, v)| v.clone()).collect())
 }
 
-#[cfg(not(feature = "no_object"))]
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     lib.set_fn_2_mut(
         "has",
@@ -74,9 +69,11 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     );
 
     // Register map access functions
-    #[cfg(not(feature = "no_index"))]
-    lib.set_fn_1_mut("keys", map_get_keys);
+    if cfg!(not(feature = "no_index")) {
+        lib.set_fn_1_mut("keys", map_get_keys);
+    }
 
-    #[cfg(not(feature = "no_index"))]
-    lib.set_fn_1_mut("values", map_get_values);
+    if cfg!(not(feature = "no_index")) {
+        lib.set_fn_1_mut("values", map_get_values);
+    }
 });
