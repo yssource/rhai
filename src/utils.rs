@@ -264,6 +264,18 @@ impl AddAssign<&ImmutableString> for ImmutableString {
     }
 }
 
+impl AddAssign<ImmutableString> for ImmutableString {
+    fn add_assign(&mut self, rhs: ImmutableString) {
+        if !rhs.is_empty() {
+            if self.is_empty() {
+                self.0 = rhs.0;
+            } else {
+                self.make_mut().push_str(rhs.0.as_str());
+            }
+        }
+    }
+}
+
 impl Add<&str> for ImmutableString {
     type Output = Self;
 

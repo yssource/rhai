@@ -1185,8 +1185,8 @@ pub fn run_builtin_op_assignment(
     }
 
     if args_type == TypeId::of::<INT>() {
-        let mut x = x.write_lock::<INT>().unwrap();
         let y = y.clone().cast::<INT>();
+        let mut x = x.write_lock::<INT>().unwrap();
 
         if cfg!(not(feature = "unchecked")) {
             match op {
@@ -1221,8 +1221,8 @@ pub fn run_builtin_op_assignment(
             _ => (),
         }
     } else if args_type == TypeId::of::<bool>() {
-        let mut x = x.write_lock::<bool>().unwrap();
         let y = y.clone().cast::<bool>();
+        let mut x = x.write_lock::<bool>().unwrap();
 
         match op {
             "&=" => return Ok(Some(*x = *x && y)),
@@ -1230,19 +1230,19 @@ pub fn run_builtin_op_assignment(
             _ => (),
         }
     } else if args_type == TypeId::of::<ImmutableString>() {
+        let y = y.read_lock::<ImmutableString>().unwrap().deref().clone();
         let mut x = x.write_lock::<ImmutableString>().unwrap();
-        let y = y.read_lock::<ImmutableString>().unwrap();
 
         match op {
-            "+=" => return Ok(Some(*x += y.deref())),
+            "+=" => return Ok(Some(*x += y)),
             _ => (),
         }
     }
 
     #[cfg(not(feature = "no_float"))]
     if args_type == TypeId::of::<FLOAT>() {
-        let mut x = x.write_lock::<FLOAT>().unwrap();
         let y = y.clone().cast::<FLOAT>();
+        let mut x = x.write_lock::<FLOAT>().unwrap();
 
         match op {
             "+=" => return Ok(Some(*x += y)),

@@ -11,8 +11,20 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<bool>("shared(true)")?, true);
 
+    assert_eq!(
+        engine.eval::<String>("let x = shared(true); type_of(x)")?,
+        "bool"
+    );
+
+    assert_eq!(
+        engine.eval::<String>("let x = shared(true); x = (); type_of(x)")?,
+        "()"
+    );
+
     #[cfg(not(feature = "no_float"))]
     assert_eq!(engine.eval::<f64>("shared(4.2)")?, 4.2);
+
+    assert_eq!(engine.eval::<String>(r#"shared("test")"#)?, "test");
 
     assert_eq!(engine.eval::<String>(r#"shared("test")"#)?, "test");
 
