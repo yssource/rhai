@@ -258,7 +258,7 @@ impl Dynamic {
     }
 
     /// Does this `Dynamic` hold a shared data type
-    /// instead of one of the support system primitive types?
+    /// instead of one of the supported system primitive types?
     pub fn is_shared(&self) -> bool {
         match self.0 {
             #[cfg(not(feature = "no_shared"))]

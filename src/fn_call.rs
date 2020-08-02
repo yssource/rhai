@@ -906,11 +906,11 @@ impl Engine {
             // No arguments
             args = Default::default();
         } else {
-            // See if the first argument is a variable, if so, convert to method-call style
+            // If the first argument is a variable, and there is no curried arguments, convert to method-call style
             // in order to leverage potential &mut first argument and avoid cloning the value
             match args_expr.get(0).unwrap() {
                 // func(x, ...) -> x.func(...)
-                lhs @ Expr::Variable(_) => {
+                lhs @ Expr::Variable(_) if curry.is_empty() => {
                     arg_values = args_expr
                         .iter()
                         .skip(1)
@@ -922,12 +922,14 @@ impl Engine {
                     self.inc_operations(state)
                         .map_err(|err| err.new_position(pos))?;
 
-                    args = once(target)
-                        .chain(curry.iter_mut())
-                        .chain(arg_values.iter_mut())
-                        .collect();
-
-                    is_ref = true;
+                    // Turn it into a method call only if the object is not shared
+                    args = if target.is_shared() {
+                        arg_values.insert(0, target.clone_inner_data().unwrap());
+                        arg_values.iter_mut().collect()
+                    } else {
+                        is_ref = true;
+                        once(target).chain(arg_values.iter_mut()).collect()
+                    };
                 }
                 // func(..., ...)
                 _ => {
