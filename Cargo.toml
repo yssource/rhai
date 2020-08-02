@@ -23,7 +23,6 @@ smallvec = { version = "1.4.1", default-features = false }
 [features]
 #default = ["unchecked", "sync", "no_optimize", "no_float", "only_i32", "no_index", "no_object", "no_function", "no_module"]
 default = []
-plugins = []
 unchecked = []      # unchecked arithmetic
 sync = []           # restrict to only types that implement Send + Sync
 no_optimize = []    # no script optimizer
@@ -80,6 +79,10 @@ optional = true
 version = "0.2.1"
 default_features = false
 optional = true
+
+[dependencies.rhai_codegen]
+version = "0.1"
+path = "codegen"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 instant= { version = "0.1.4", features = ["wasm-bindgen"] } # WASM implementation of std::time::Instant

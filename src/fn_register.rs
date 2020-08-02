@@ -43,7 +43,7 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///     fn is_method_call(&self) -> bool { false }
     ///     fn is_varadic(&self) -> bool { false }
     ///
-    ///     fn call(&self, args: &[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn call(&self, args: &mut[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         let x1: &FLOAT = args[0].downcast_ref::<FLOAT>().unwrap();
     ///         let y1: &FLOAT = args[1].downcast_ref::<FLOAT>().unwrap();
     ///         let x2: &FLOAT = args[2].downcast_ref::<FLOAT>().unwrap();
@@ -54,6 +54,13 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///
     ///     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
     ///         Box::new(DistanceFunction())
+    ///     }
+    ///
+    ///     fn input_types(&self) -> Box<[std::any::TypeId]> {
+    ///         vec![std::any::TypeId::of::<FLOAT>(),
+    ///              std::any::TypeId::of::<FLOAT>(),
+    ///              std::any::TypeId::of::<FLOAT>(),
+    ///              std::any::TypeId::of::<FLOAT>()].into_boxed_slice()
     ///     }
     /// }
     ///

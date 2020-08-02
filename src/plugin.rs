@@ -1,6 +1,6 @@
 //! Module defining plugins in Rhai. Is exported for use by plugin authors.
 
-use crate::stdlib::boxed::Box;
+use crate::stdlib::{any::TypeId, boxed::Box};
 
 pub use crate::any::{Dynamic, Variant};
 pub use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn};
@@ -38,7 +38,9 @@ pub trait PluginFunction {
     fn is_method_call(&self) -> bool;
     fn is_varadic(&self) -> bool;
 
-    fn call(&self, args: &[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>>;
+    fn call(&self, args: &mut[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>>;
 
     fn clone_boxed(&self) -> Box<dyn PluginFunction>;
+
+    fn input_types(&self) -> Box<[TypeId]>;
 }

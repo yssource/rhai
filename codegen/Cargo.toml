@@ -1,0 +1,21 @@
+[package]
+name = "rhai_codegen"
+version = "0.1.0"
+edition = "2018"
+authors = ["Stephen Chung", "jhwgh1968"]
+description = "Proceducral macro support package for Rhai, a scripting language for Rust"
+homepage = "https://github.com/jonathandturner/rhai"
+repository = "https://github.com/jonathandturner/rhai"
+license = "MIT OR Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[dev-dependencies]
+rhai = { version = "*", path = ".." }
+trybuild = "1"
+
+[dependencies]
+proc-macro2 = "1"
+syn = { version = "1", features = ["full", "parsing", "printing", "proc-macro", "extra-traits"] }
+quote = "1"

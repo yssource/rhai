@@ -98,6 +98,8 @@ pub use syntax::{EvalContext, Expression};
 pub use token::Position;
 pub use utils::calc_fn_spec as calc_fn_hash;
 
+pub use rhai_codegen::*;
+
 #[cfg(not(feature = "no_function"))]
 pub use parser::FnAccess;
 
