@@ -16,7 +16,7 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
     );
 
     let mut engine = Engine::new();
-    engine.load_package(module.into());
+    engine.load_package(module);
 
     #[cfg(not(feature = "no_object"))]
     assert_eq!(

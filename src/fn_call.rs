@@ -204,7 +204,11 @@ impl Engine {
             }
 
             // Run external function
-            let result = func.get_native_fn()(self, lib, args)?;
+            let result = if func.is_plugin_fn() {
+                func.get_plugin_fn().call(args, Position::none())?
+            } else {
+                func.get_native_fn()(self, lib, args)?
+            };
 
             // Restore the original reference
             restore_first_arg(old_this_ptr, args);

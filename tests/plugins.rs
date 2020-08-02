@@ -1,8 +1,12 @@
-use rhai::{export_module, exported_module};
+use rhai::{
+    export_fn, export_module, exported_module,
+    plugin::{CallableFunction, PluginFunction},
+    register_exported_fn,
+};
 use rhai::{Engine, EvalAltResult, INT};
 
 #[export_module]
-pub mod array_package {
+mod special_array_package {
     use rhai::{Array, INT};
 
     pub fn len(array: &mut Array, mul: INT) -> INT {
@@ -10,15 +14,25 @@ pub mod array_package {
     }
 }
 
+#[export_fn]
+fn make_greeting(n: INT) -> String {
+    format!("{} {}", n, if n > 1 { "kitties" } else { "kitty" }).into()
+}
+
 #[test]
-fn test_plugins() -> Result<(), Box<EvalAltResult>> {
+fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    let m = exported_module!(array_package);
+    let mut m = exported_module!(special_array_package);
+    register_exported_fn!(m, "greet", make_greeting);
 
-    engine.load_package(m.into());
+    engine.load_package(m);
 
-    assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.len(2)")?, 6);
+    assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; len(a, 2)")?, 6);
+    assert_eq!(
+        engine.eval::<String>("let a = [1, 2, 3]; greet(len(a, 2))")?,
+        "6 kitties"
+    );
 
     Ok(())
 }

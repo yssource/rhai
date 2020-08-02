@@ -2,18 +2,11 @@
 
 use crate::stdlib::{any::TypeId, boxed::Box};
 
-pub use crate::any::{Dynamic, Variant};
-pub use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn};
-pub use crate::parser::{
-    FnAccess,
-    FnAccess::{Private, Public},
-    AST,
-};
-pub use crate::result::EvalAltResult;
-pub use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
-pub use crate::token::{Position, Token};
-pub use crate::utils::StaticVec;
-pub use crate::Engine;
+use crate::any::Dynamic;
+use crate::engine::Engine;
+pub use crate::fn_native::CallableFunction;
+use crate::result::EvalAltResult;
+use crate::token::Position;
 
 #[cfg(features = "sync")]
 /// Represents an externally-written plugin for the Rhai interpreter.
@@ -38,7 +31,8 @@ pub trait PluginFunction {
     fn is_method_call(&self) -> bool;
     fn is_varadic(&self) -> bool;
 
-    fn call(&self, args: &mut[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>>;
+    fn call(&self, args: &mut [&mut Dynamic], pos: Position)
+        -> Result<Dynamic, Box<EvalAltResult>>;
 
     fn clone_boxed(&self) -> Box<dyn PluginFunction>;
 
