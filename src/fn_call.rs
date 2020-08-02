@@ -160,6 +160,31 @@ fn add_captured_variables_into_scope<'s>(
         );
 }
 
+#[inline(always)]
+pub fn ensure_no_data_race(
+    fn_name: &str,
+    args: &FnCallArgs,
+    is_ref: bool,
+) -> Result<(), Box<EvalAltResult>> {
+    if cfg!(not(feature = "no_shared")) {
+        let skip = if is_ref { 1 } else { 0 };
+
+        if let Some((n, _)) = args
+            .iter()
+            .skip(skip)
+            .enumerate()
+            .find(|(_, a)| a.is_locked())
+        {
+            return Err(Box::new(EvalAltResult::ErrorDataRace(
+                format!("argument #{} of function '{}'", n + 1 + skip, fn_name),
+                Position::none(),
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 impl Engine {
     /// Call a native Rust function registered with the `Engine`.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
@@ -430,6 +455,11 @@ impl Engine {
         def_val: Option<bool>,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        // Check for data race.
+        if cfg!(not(feature = "no_shared")) {
+            ensure_no_data_race(fn_name, args, is_ref)?;
+        }
+
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
         let arg_types = args.iter().map(|a| a.type_id());
         let hash_fn = calc_fn_hash(empty(), fn_name, args.len(), arg_types);

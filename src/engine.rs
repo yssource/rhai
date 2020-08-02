@@ -41,13 +41,10 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     iter::{empty, once},
+    ops::DerefMut,
     string::{String, ToString},
     vec::Vec,
 };
-
-#[cfg(not(feature = "no_shared"))]
-#[cfg(not(feature = "no_object"))]
-use crate::stdlib::ops::DerefMut;
 
 #[cfg(not(feature = "no_index"))]
 use crate::stdlib::any::TypeId;
@@ -561,7 +558,8 @@ pub fn search_imports_mut<'s>(
     })
 }
 
-/// Search for a variable within the scope and imports
+/// Search for a variable within the scope or within imports,
+/// depending on whether the variable name is qualified.
 pub fn search_namespace<'s, 'a>(
     scope: &'s mut Scope,
     mods: &'s mut Imports,
@@ -631,6 +629,13 @@ pub fn search_scope_only<'s, 'a>(
     };
 
     let (val, typ) = scope.get_mut(index);
+
+    // Check for data race - probably not necessary because the only place it should conflict is in a method call
+    //                       when the object variable is also used as a parameter.
+    // if cfg!(not(feature = "no_shared")) && val.is_locked() {
+    //     return Err(Box::new(EvalAltResult::ErrorDataRace(name.into(), *pos)));
+    // }
+
     Ok((val, name, typ, *pos))
 }
 

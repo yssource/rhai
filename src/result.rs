@@ -69,6 +69,8 @@ pub enum EvalAltResult {
     ErrorVariableNotFound(String, Position),
     /// Usage of an unknown module. Wrapped value is the name of the module.
     ErrorModuleNotFound(String, Position),
+    /// Data race detected when accessing a variable. Wrapped value is the name of the variable.
+    ErrorDataRace(String, Position),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     ErrorAssignmentToUnknownLHS(Position),
     /// Assignment to a constant variable.
@@ -136,7 +138,8 @@ impl EvalAltResult {
             Self::ErrorLogicGuard(_) => "Boolean value expected",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
-            Self::ErrorModuleNotFound(_, _) => "module not found",
+            Self::ErrorModuleNotFound(_, _) => "Module not found",
+            Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"
             }
@@ -180,6 +183,7 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorFunctionNotFound(s, _)
             | Self::ErrorVariableNotFound(s, _)
+            | Self::ErrorDataRace(s, _)
             | Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
 
             Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{}", s)?,
@@ -289,6 +293,7 @@ impl EvalAltResult {
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
+            | Self::ErrorDataRace(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
@@ -329,6 +334,7 @@ impl EvalAltResult {
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
+            | Self::ErrorDataRace(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)

@@ -282,6 +282,11 @@ impl Dynamic {
     }
 
     /// Get the TypeId of the value held by this `Dynamic`.
+    ///
+    /// # Panics and Deadlocks When Value is Shared
+    ///
+    /// Under the `sync` feature, this call may deadlock.
+    /// Otherwise, this call panics if the data is currently borrowed for write.
     pub fn type_id(&self) -> TypeId {
         match &self.0 {
             Union::Unit(_) => TypeId::of::<()>(),
@@ -307,6 +312,11 @@ impl Dynamic {
     }
 
     /// Get the name of the type of the value held by this `Dynamic`.
+    ///
+    /// # Panics and Deadlocks When Value is Shared
+    ///
+    /// Under the `sync` feature, this call may deadlock.
+    /// Otherwise, this call panics if the data is currently borrowed for write.
     pub fn type_name(&self) -> &'static str {
         match &self.0 {
             Union::Unit(_) => "()",
@@ -749,6 +759,28 @@ impl Dynamic {
                 return Some(cell.read().unwrap().downcast_ref::<T>().unwrap().clone());
             }
             _ => self.downcast_ref().cloned(),
+        }
+    }
+
+    /// Is the `Dynamic` a shared value that is locked?
+    ///
+    /// ## Note
+    ///
+    /// Under the `sync` feature, shared values use `RwLock` and they are never locked.
+    /// Access just waits until the `RwLock` is released.
+    /// So this method always returns `false` under `sync`.
+    #[inline(always)]
+    pub fn is_locked(&self) -> bool {
+        match self.0 {
+            #[cfg(not(feature = "no_shared"))]
+            Union::Shared(ref _cell) => {
+                #[cfg(not(feature = "sync"))]
+                return _cell.try_borrow().is_err();
+
+                #[cfg(feature = "sync")]
+                return false;
+            }
+            _ => false,
         }
     }
 

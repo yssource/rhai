@@ -283,3 +283,42 @@ fn test_shared() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_shared_data_race() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(not(feature = "no_object"))]
+    {
+        assert_eq!(
+            engine.eval::<INT>(
+                r#"
+                    fn foo(x) { this += x };
+
+                    let a = shared(41);
+                    a.foo(1);
+                    a
+                "#
+            )?,
+            42
+        );
+
+        assert!(matches!(
+            *engine
+                .eval::<INT>(
+                    r#"
+                        fn foo(x) { this += x };
+
+                        let a = shared(42);
+                        a.foo(a);
+                        a
+                    "#
+                )
+                .expect_err("should error"),
+            EvalAltResult::ErrorDataRace(_, _)
+        ));
+    }
+
+    Ok(())
+}

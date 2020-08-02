@@ -3,6 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, Imports, State};
 use crate::error::ParseError;
+use crate::fn_call::ensure_no_data_race;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::module::{FuncReturn, Module};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
@@ -1281,6 +1282,11 @@ impl Engine {
         let mut state = State::new();
         let mut mods = Imports::new();
         let args = args.as_mut();
+
+        // Check for data race.
+        if cfg!(not(feature = "no_shared")) {
+            ensure_no_data_race(name, args, false)?;
+        }
 
         self.call_script_fn(
             scope, &mut mods, &mut state, lib, this_ptr, name, fn_def, args, 0,
