@@ -75,8 +75,10 @@ mod module;
 mod rhai_module;
 
 #[proc_macro_attribute]
-pub fn export_fn(_args: proc_macro::TokenStream,
-                input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn export_fn(
+    _args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let mut output = proc_macro2::TokenStream::from(input.clone());
     let function_def = parse_macro_input!(input as function::ExportedFn);
     output.extend(function_def.generate());
@@ -84,8 +86,10 @@ pub fn export_fn(_args: proc_macro::TokenStream,
 }
 
 #[proc_macro_attribute]
-pub fn export_module(_args: proc_macro::TokenStream,
-              input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn export_module(
+    _args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let module_def = parse_macro_input!(input as module::Module);
     let tokens = module_def.generate();
     proc_macro::TokenStream::from(tokens)
@@ -108,8 +112,8 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
     let items: Vec<syn::Expr> = args.into_iter().collect();
     if items.len() != 3 {
         return proc_macro::TokenStream::from(
-            syn::Error::new(arg_span, "this macro requires three arguments")
-                .to_compile_error());
+            syn::Error::new(arg_span, "this macro requires three arguments").to_compile_error(),
+        );
     }
     let rhai_module = &items[0];
     let export_name = match &items[1] {
@@ -122,15 +126,20 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
     } else {
         return proc_macro::TokenStream::from(
             syn::Error::new(items[2].span(), "third argument must be a function name")
-                .to_compile_error());
+                .to_compile_error(),
+        );
     };
     let gen_mod_path: syn::punctuated::Punctuated<syn::PathSegment, _> = {
         let mut g = rust_modpath.clone().segments;
         g.pop();
-        let ident = syn::Ident::new(&format!("rhai_fn__{}",
-                                            rust_modpath.segments.last().unwrap().ident),
-                                   items[2].span());
-        g.push_value(syn::PathSegment { ident, arguments: syn::PathArguments::None });
+        let ident = syn::Ident::new(
+            &format!("rhai_fn__{}", rust_modpath.segments.last().unwrap().ident),
+            items[2].span(),
+        );
+        g.push_value(syn::PathSegment {
+            ident,
+            arguments: syn::PathArguments::None,
+        });
         g
     };
     let tokens = quote! {

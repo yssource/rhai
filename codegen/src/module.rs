@@ -17,36 +17,39 @@ impl Parse for Module {
         let fns: Vec<_>;
         let consts: Vec<_>;
         if let Some((_, ref content)) = mod_all.content {
-            fns = content.iter()
-                .filter_map(|item| {
-                    match item {
-                        syn::Item::Fn(f) => {
-                            if let syn::Visibility::Public(_) = f.vis {
-                                Some(f)
-                            } else {
-                                None
-                            }
-                        },
-                        _ => None,
+            fns = content
+                .iter()
+                .filter_map(|item| match item {
+                    syn::Item::Fn(f) => {
+                        if let syn::Visibility::Public(_) = f.vis {
+                            Some(f)
+                        } else {
+                            None
+                        }
                     }
+                    _ => None,
                 })
                 .try_fold(Vec::new(), |mut vec, itemfn| {
                     syn::parse2::<ExportedFn>(itemfn.to_token_stream())
                         .map(|f| vec.push(f))
                         .map(|_| vec)
                 })?;
-            consts = content.iter()
-                .filter_map(|item| {
-                    match item {
-                        syn::Item::Const(syn::ItemConst {vis, ref expr, ident, ..}) => {
-                            if let syn::Visibility::Public(_) = vis {
-                                Some((ident.to_string(), expr.as_ref().clone()))
-                            } else {
-                                None
-                            }
-                        },
-                        _ => None,
+            consts = content
+                .iter()
+                .filter_map(|item| match item {
+                    syn::Item::Const(syn::ItemConst {
+                        vis,
+                        ref expr,
+                        ident,
+                        ..
+                    }) => {
+                        if let syn::Visibility::Public(_) = vis {
+                            Some((ident.to_string(), expr.as_ref().clone()))
+                        } else {
+                            None
+                        }
                     }
+                    _ => None,
                 })
                 .collect();
         } else {
@@ -87,7 +90,6 @@ mod module_tests {
 
     #[test]
     fn empty_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod empty { }
         };
@@ -99,7 +101,6 @@ mod module_tests {
 
     #[test]
     fn one_factory_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
@@ -113,13 +114,14 @@ mod module_tests {
         assert_eq!(item_mod.fns.len(), 1);
         assert_eq!(item_mod.fns[0].name().to_string(), "get_mystic_number");
         assert_eq!(item_mod.fns[0].arg_count(), 0);
-        assert_eq!(item_mod.fns[0].return_type().unwrap(),
-                   &syn::parse2::<syn::Type>(quote! { INT }).unwrap());
+        assert_eq!(
+            item_mod.fns[0].return_type().unwrap(),
+            &syn::parse2::<syn::Type>(quote! { INT }).unwrap()
+        );
     }
 
     #[test]
     fn one_single_arg_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 pub fn add_one_to(x: INT) -> INT {
@@ -133,15 +135,18 @@ mod module_tests {
         assert_eq!(item_mod.fns.len(), 1);
         assert_eq!(item_mod.fns[0].name().to_string(), "add_one_to");
         assert_eq!(item_mod.fns[0].arg_count(), 1);
-        assert_eq!(item_mod.fns[0].arg_list().next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { x: INT }).unwrap());
-        assert_eq!(item_mod.fns[0].return_type().unwrap(),
-                   &syn::parse2::<syn::Type>(quote! { INT }).unwrap());
+        assert_eq!(
+            item_mod.fns[0].arg_list().next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { x: INT }).unwrap()
+        );
+        assert_eq!(
+            item_mod.fns[0].return_type().unwrap(),
+            &syn::parse2::<syn::Type>(quote! { INT }).unwrap()
+        );
     }
 
     #[test]
     fn one_double_arg_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 pub fn add_together(x: INT, y: INT) -> INT {
@@ -156,18 +161,23 @@ mod module_tests {
         assert_eq!(item_mod.fns.len(), 1);
         assert_eq!(item_mod.fns[0].name().to_string(), "add_together");
         assert_eq!(item_mod.fns[0].arg_count(), 2);
-        assert_eq!(args.next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { x: INT }).unwrap());
-        assert_eq!(args.next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { y: INT }).unwrap());
+        assert_eq!(
+            args.next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { x: INT }).unwrap()
+        );
+        assert_eq!(
+            args.next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { y: INT }).unwrap()
+        );
         assert!(args.next().is_none());
-        assert_eq!(item_mod.fns[0].return_type().unwrap(),
-                   &syn::parse2::<syn::Type>(quote! { INT }).unwrap());
+        assert_eq!(
+            item_mod.fns[0].return_type().unwrap(),
+            &syn::parse2::<syn::Type>(quote! { INT }).unwrap()
+        );
     }
 
     #[test]
     fn one_constant_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
                 pub const MYSTIC_NUMBER: INT = 42;
@@ -178,12 +188,14 @@ mod module_tests {
         assert!(item_mod.fns.is_empty());
         assert_eq!(item_mod.consts.len(), 1);
         assert_eq!(&item_mod.consts[0].0, "MYSTIC_NUMBER");
-        assert_eq!(item_mod.consts[0].1, syn::parse2::<syn::Expr>(quote! { 42 }).unwrap());
+        assert_eq!(
+            item_mod.consts[0].1,
+            syn::parse2::<syn::Expr>(quote! { 42 }).unwrap()
+        );
     }
 
     #[test]
     fn one_private_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 fn get_mystic_number() -> INT {
@@ -199,7 +211,6 @@ mod module_tests {
 
     #[test]
     fn one_private_constant_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
                 const MYSTIC_NUMBER: INT = 42;
@@ -224,7 +235,9 @@ mod generate_tests {
         let expected = expected.to_string();
         if &actual != &expected {
             let mut counter = 0;
-            let iter = actual.chars().zip(expected.chars())
+            let iter = actual
+                .chars()
+                .zip(expected.chars())
                 .inspect(|_| counter += 1)
                 .skip_while(|(a, e)| *a == *e);
             let (actual_diff, expected_diff) = {
@@ -265,7 +278,6 @@ mod generate_tests {
 
     #[test]
     fn one_factory_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
@@ -320,7 +332,6 @@ mod generate_tests {
 
     #[test]
     fn one_single_arg_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 pub fn add_one_to(x: INT) -> INT {
@@ -376,7 +387,6 @@ mod generate_tests {
 
     #[test]
     fn one_double_arg_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 pub fn add_together(x: INT, y: INT) -> INT {
@@ -435,7 +445,6 @@ mod generate_tests {
 
     #[test]
     fn one_constant_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
                 pub const MYSTIC_NUMBER: INT = 42;
@@ -462,7 +471,6 @@ mod generate_tests {
 
     #[test]
     fn one_constant_module_imports_preserved() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
                 pub use rhai::INT;
@@ -491,7 +499,6 @@ mod generate_tests {
 
     #[test]
     fn one_private_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 fn get_mystic_number() -> INT {
@@ -521,7 +528,6 @@ mod generate_tests {
 
     #[test]
     fn one_private_constant_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
                 const MYSTIC_NUMBER: INT = 42;
@@ -547,7 +553,6 @@ mod generate_tests {
 
     #[test]
     fn one_str_arg_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod str_fn {
                 pub fn print_out_to(x: &str) {
@@ -604,7 +609,6 @@ mod generate_tests {
 
     #[test]
     fn one_mut_ref_fn_module() {
-
         let input_tokens: TokenStream = quote! {
             pub mod ref_fn {
                 pub fn increment(x: &mut FLOAT) {

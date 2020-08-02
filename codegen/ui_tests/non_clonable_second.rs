@@ -13,7 +13,12 @@ pub fn test_fn(a: u32, b: NonClonable) -> bool {
 }
 
 fn main() {
-    let n = NonClonable { a: 0.0, b: 10, c: 'a', d: true };
+    let n = NonClonable {
+        a: 0.0,
+        b: 10,
+        c: 'a',
+        d: true,
+    };
     if test_fn(10, n) {
         println!("yes");
     } else {

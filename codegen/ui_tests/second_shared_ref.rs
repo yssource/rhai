@@ -14,7 +14,12 @@ pub fn test_fn(input: Clonable, factor: &bool) -> bool {
 }
 
 fn main() {
-    let n = Clonable { a: 0.0, b: 10, c: 'a', d: true };
+    let n = Clonable {
+        a: 0.0,
+        b: 10,
+        c: 'a',
+        d: true,
+    };
     if test_fn(n, &true) {
         println!("yes");
     } else {

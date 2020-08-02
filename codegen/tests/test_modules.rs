@@ -1,12 +1,12 @@
-use rhai::{EvalAltResult, FLOAT, INT, RegisterFn};
-use rhai::plugin::*;
 use rhai::module_resolvers::*;
+use rhai::plugin::*;
+use rhai::{EvalAltResult, RegisterFn, FLOAT, INT};
 
 pub mod empty_module {
     use rhai::export_module;
 
     #[export_module]
-    pub mod EmptyModule { }
+    pub mod EmptyModule {}
 }
 
 #[test]
@@ -17,8 +17,10 @@ fn empty_module_test() -> Result<(), Box<EvalAltResult>> {
     r.insert("Module::Empty".to_string(), m);
     engine.set_module_resolver(Some(r));
 
-    assert_eq!(engine.eval::<INT>(
-        r#"import "Module::Empty" as m; 42"#)?, 42);
+    assert_eq!(
+        engine.eval::<INT>(r#"import "Module::Empty" as m; 42"#)?,
+        42
+    );
     Ok(())
 }
 
@@ -42,10 +44,14 @@ fn one_fn_module_test() -> Result<(), Box<EvalAltResult>> {
     r.insert("Math::Advanced".to_string(), m);
     engine.set_module_resolver(Some(r));
 
-    assert_eq!(engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
+    assert_eq!(
+        engine.eval::<FLOAT>(
+            r#"import "Math::Advanced" as math;
            let m = math::get_mystic_number();
-           m"#)?, 42.0);
+           m"#
+        )?,
+        42.0
+    );
     Ok(())
 }
 
@@ -59,7 +65,7 @@ pub mod one_fn_and_const_module {
         pub const MYSTIC_NUMBER: FLOAT = 42.0 as FLOAT;
 
         pub fn euclidean_distance(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
-            ((y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0)).sqrt()
+            ((y2 - y1).abs().powf(2.0) + (x2 - x1).abs().powf(2.0)).sqrt()
         }
     }
 }
@@ -72,11 +78,15 @@ fn one_fn_and_const_module_test() -> Result<(), Box<EvalAltResult>> {
     r.insert("Math::Advanced".to_string(), m);
     engine.set_module_resolver(Some(r));
 
-    assert_eq!(engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
+    assert_eq!(
+        engine.eval::<FLOAT>(
+            r#"import "Math::Advanced" as math;
            let m = math::MYSTIC_NUMBER;
            let x = math::euclidean_distance(0.0, 1.0, 0.0, m);
-           x"#)?, 41.0);
+           x"#
+        )?,
+        41.0
+    );
     Ok(())
 }
 
@@ -100,27 +110,31 @@ fn raw_fn_str_module_test() -> Result<(), Box<EvalAltResult>> {
     r.insert("Host::IO".to_string(), m);
     engine.set_module_resolver(Some(r));
 
-    assert_eq!(engine.eval::<bool>(
-        r#"import "Host::IO" as io;
+    assert_eq!(
+        engine.eval::<bool>(
+            r#"import "Host::IO" as io;
            let x = io::write_out_str("hello world!");
-           x"#)?, true);
+           x"#
+        )?,
+        true
+    );
     Ok(())
 }
 
 pub mod mut_opaque_ref_module {
-    use rhai::INT;
     use rhai::export_module;
+    use rhai::INT;
 
     #[derive(Clone)]
     pub struct StatusMessage {
         os_code: Option<INT>,
         message: String,
-        is_ok: bool
+        is_ok: bool,
     }
 
     #[export_module]
     pub mod host_msg {
-        use super::{INT, StatusMessage};
+        use super::{StatusMessage, INT};
 
         pub fn new_message(is_ok: bool, message: &str) -> StatusMessage {
             StatusMessage {
@@ -153,13 +167,17 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
     r.insert("Host::Msg".to_string(), m);
     engine.set_module_resolver(Some(r));
 
-    assert_eq!(engine.eval::<bool>(
-        r#"import "Host::Msg" as msg;
+    assert_eq!(
+        engine.eval::<bool>(
+            r#"import "Host::Msg" as msg;
            let success = "it worked";
            let message1 = msg::new_message(true, success);
            let ok1 = msg::write_out_message(message1);
            let message2 = msg::new_os_message(true, 0);
            let ok2 = msg::write_out_message(message2);
-           ok1 && ok2"#)?, true);
+           ok1 && ok2"#
+        )?,
+        true
+    );
     Ok(())
 }

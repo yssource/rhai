@@ -14,6 +14,14 @@ pub fn test_fn(input: Clonable) -> *const str {
 }
 
 fn main() {
-    let n = Clonable { a: 0.0, b: 10, c: 'a', d: true };
-    println!("{}", unsafe { let ptr = test_fn(n); *ptr });
+    let n = Clonable {
+        a: 0.0,
+        b: 10,
+        c: 'a',
+        d: true,
+    };
+    println!("{}", unsafe {
+        let ptr = test_fn(n);
+        *ptr
+    });
 }

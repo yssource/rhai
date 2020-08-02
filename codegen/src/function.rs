@@ -19,29 +19,36 @@ impl Parse for ExportedFn {
         // Determine if the function is public.
         let is_public = match fn_all.vis {
             syn::Visibility::Public(_) => true,
-            _ => false
+            _ => false,
         };
         // Determine whether function generates a special calling convention for a mutable
         // reciever.
         let mut_receiver = {
             if let Some(first_arg) = fn_all.sig.inputs.first() {
                 match first_arg {
-                    syn::FnArg::Receiver(syn::Receiver { reference: Some(_), ..}) => true,
-                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
-                        match ty.as_ref() {
-                            &syn::Type::Reference(syn::TypeReference {
-                                mutability: Some(_), ..  }) => true,
-                            &syn::Type::Reference(syn::TypeReference { mutability: None,
-                                                                       ref elem, .. }) => {
-                                match elem.as_ref() {
-                                    &syn::Type::Path(ref p) if p.path == str_type_path => false,
-                                    _ => return Err(syn::Error::new(ty.span(),
-                                           "references from Rhai in this position \
-                                            must be mutable")),
-                                }
-                            },
-                            _ => false,
-                        }
+                    syn::FnArg::Receiver(syn::Receiver {
+                        reference: Some(_), ..
+                    }) => true,
+                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => match ty.as_ref() {
+                        &syn::Type::Reference(syn::TypeReference {
+                            mutability: Some(_),
+                            ..
+                        }) => true,
+                        &syn::Type::Reference(syn::TypeReference {
+                            mutability: None,
+                            ref elem,
+                            ..
+                        }) => match elem.as_ref() {
+                            &syn::Type::Path(ref p) if p.path == str_type_path => false,
+                            _ => {
+                                return Err(syn::Error::new(
+                                    ty.span(),
+                                    "references from Rhai in this position \
+                                            must be mutable",
+                                ))
+                            }
+                        },
+                        _ => false,
                     },
                     _ => false,
                 }
@@ -57,31 +64,46 @@ impl Parse for ExportedFn {
                 _ => panic!("internal error: receiver argument outside of first position!?"),
             };
             let is_ok = match ty.as_ref() {
-                &syn::Type::Reference(syn::TypeReference { mutability: Some(_), .. }) => false,
-                &syn::Type::Reference(syn::TypeReference { mutability: None,
-                                                           ref elem, .. }) => {
-                    match elem.as_ref() {
-                        &syn::Type::Path(ref p) if p.path == str_type_path => true,
-                        _ => false,
-                    }
+                &syn::Type::Reference(syn::TypeReference {
+                    mutability: Some(_),
+                    ..
+                }) => false,
+                &syn::Type::Reference(syn::TypeReference {
+                    mutability: None,
+                    ref elem,
+                    ..
+                }) => match elem.as_ref() {
+                    &syn::Type::Path(ref p) if p.path == str_type_path => true,
+                    _ => false,
                 },
                 &syn::Type::Verbatim(_) => false,
                 _ => true,
             };
             if !is_ok {
-                return Err(syn::Error::new(ty.span(), "this type in this position passes from \
-                                                        Rhai by value"));
+                return Err(syn::Error::new(
+                    ty.span(),
+                    "this type in this position passes from \
+                                                        Rhai by value",
+                ));
             }
         }
 
         // No returning references or pointers.
         if let syn::ReturnType::Type(_, ref rtype) = fn_all.sig.output {
             match rtype.as_ref() {
-                &syn::Type::Ptr(_) => return Err(syn::Error::new(fn_all.sig.output.span(),
-                                                 "cannot return a pointer to Rhai")),
-                &syn::Type::Reference(_) => return Err(syn::Error::new(fn_all.sig.output.span(),
-                                                       "cannot return a reference to Rhai")),
-                _ => {},
+                &syn::Type::Ptr(_) => {
+                    return Err(syn::Error::new(
+                        fn_all.sig.output.span(),
+                        "cannot return a pointer to Rhai",
+                    ))
+                }
+                &syn::Type::Reference(_) => {
+                    return Err(syn::Error::new(
+                        fn_all.sig.output.span(),
+                        "cannot return a reference to Rhai",
+                    ))
+                }
+                _ => {}
             }
         }
         Ok(ExportedFn {
@@ -110,7 +132,7 @@ impl ExportedFn {
         &self.signature.ident
     }
 
-    pub(crate) fn arg_list(&self) -> impl Iterator<Item=&syn::FnArg> {
+    pub(crate) fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
         self.signature.inputs.iter()
     }
 
@@ -127,8 +149,10 @@ impl ExportedFn {
     }
 
     pub fn generate(self) -> proc_macro2::TokenStream {
-        let name: syn::Ident = syn::Ident::new(&format!("rhai_fn__{}", self.name().to_string()),
-                                               self.name().span());
+        let name: syn::Ident = syn::Ident::new(
+            &format!("rhai_fn__{}", self.name().to_string()),
+            self.name().span(),
+        );
         let impl_block = self.generate_impl("Token");
         quote! {
             #[allow(unused)]
@@ -156,23 +180,30 @@ impl ExportedFn {
             let first_arg = self.arg_list().next().unwrap();
             let var = syn::Ident::new("arg0", proc_macro2::Span::call_site());
             match first_arg {
-                syn::FnArg::Typed(pattern) =>  {
+                syn::FnArg::Typed(pattern) => {
                     let arg_type: &syn::Type = {
                         match pattern.ty.as_ref() {
-                            &syn::Type::Reference(
-                                syn::TypeReference { ref elem, .. }) => elem.as_ref(),
+                            &syn::Type::Reference(syn::TypeReference { ref elem, .. }) => {
+                                elem.as_ref()
+                            }
                             ref p => p,
                         }
                     };
                     let downcast_span = quote_spanned!(
                         arg_type.span()=> args[0usize].downcast_mut::<#arg_type>().unwrap());
-                    unpack_stmts.push(syn::parse2::<syn::Stmt>(quote! {
-                        let #var: &mut _ = #downcast_span;
-                    }).unwrap());
-                    input_type_exprs.push(syn::parse2::<syn::Expr>(quote_spanned!(
-                        arg_type.span()=> std::any::TypeId::of::<#arg_type>()
-                    )).unwrap());
-                },
+                    unpack_stmts.push(
+                        syn::parse2::<syn::Stmt>(quote! {
+                            let #var: &mut _ = #downcast_span;
+                        })
+                        .unwrap(),
+                    );
+                    input_type_exprs.push(
+                        syn::parse2::<syn::Expr>(quote_spanned!(
+                            arg_type.span()=> std::any::TypeId::of::<#arg_type>()
+                        ))
+                        .unwrap(),
+                    );
+                }
                 syn::FnArg::Receiver(_) => todo!("true self parameters not implemented yet"),
             }
             unpack_exprs.push(syn::parse2::<syn::Expr>(quote! { #var }).unwrap());
@@ -189,42 +220,52 @@ impl ExportedFn {
             let var = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
             let is_str_ref;
             match arg {
-                syn::FnArg::Typed(pattern) =>  {
+                syn::FnArg::Typed(pattern) => {
                     let arg_type: &syn::Type = pattern.ty.as_ref();
                     let downcast_span = match pattern.ty.as_ref() {
-                        &syn::Type::Reference(syn::TypeReference { mutability: None,
-                                                                   ref elem, .. }) => {
-                            match elem.as_ref() {
-                                &syn::Type::Path(ref p) if p.path == str_type_path => {
-                                    is_str_ref = true;
-                                    quote_spanned!(arg_type.span()=>
+                        &syn::Type::Reference(syn::TypeReference {
+                            mutability: None,
+                            ref elem,
+                            ..
+                        }) => match elem.as_ref() {
+                            &syn::Type::Path(ref p) if p.path == str_type_path => {
+                                is_str_ref = true;
+                                quote_spanned!(arg_type.span()=>
                                                    args[#i]
                                                    .downcast_clone::<rhai::ImmutableString>()
                                                    .unwrap())
-                                },
-                                _ => panic!("internal error: why wasn't this found earlier!?"),
                             }
+                            _ => panic!("internal error: why wasn't this found earlier!?"),
                         },
                         _ => {
                             is_str_ref = false;
                             quote_spanned!(arg_type.span()=>
                                             args[#i].downcast_clone::<#arg_type>().unwrap())
-                        },
+                        }
                     };
 
-                    unpack_stmts.push(syn::parse2::<syn::Stmt>(quote! {
-                        let #var = #downcast_span;
-                    }).unwrap());
+                    unpack_stmts.push(
+                        syn::parse2::<syn::Stmt>(quote! {
+                            let #var = #downcast_span;
+                        })
+                        .unwrap(),
+                    );
                     if !is_str_ref {
-                        input_type_exprs.push(syn::parse2::<syn::Expr>(quote_spanned!(
-                            arg_type.span()=> std::any::TypeId::of::<#arg_type>()
-                        )).unwrap());
+                        input_type_exprs.push(
+                            syn::parse2::<syn::Expr>(quote_spanned!(
+                                arg_type.span()=> std::any::TypeId::of::<#arg_type>()
+                            ))
+                            .unwrap(),
+                        );
                     } else {
-                        input_type_exprs.push(syn::parse2::<syn::Expr>(quote_spanned!(
-                            arg_type.span()=> std::any::TypeId::of::<rhai::ImmutableString>()
-                        )).unwrap());
+                        input_type_exprs.push(
+                            syn::parse2::<syn::Expr>(quote_spanned!(
+                                arg_type.span()=> std::any::TypeId::of::<rhai::ImmutableString>()
+                            ))
+                            .unwrap(),
+                        );
                     }
-                },
+                }
                 syn::FnArg::Receiver(_) => panic!("internal error: how did this happen!?"),
             }
             if !is_str_ref {
@@ -302,8 +343,10 @@ mod function_tests {
         assert!(item_fn.is_public());
         assert!(item_fn.return_type().is_none());
 
-        assert_eq!(item_fn.arg_list().next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { x: usize }).unwrap());
+        assert_eq!(
+            item_fn.arg_list().next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { x: usize }).unwrap()
+        );
     }
 
     #[test]
@@ -319,10 +362,14 @@ mod function_tests {
         assert!(item_fn.is_public());
         assert!(item_fn.return_type().is_none());
 
-        assert_eq!(item_fn.arg_list().next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { x: usize }).unwrap());
-        assert_eq!(item_fn.arg_list().skip(1).next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { y: f32 }).unwrap());
+        assert_eq!(
+            item_fn.arg_list().next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { x: usize }).unwrap()
+        );
+        assert_eq!(
+            item_fn.arg_list().skip(1).next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { y: f32 }).unwrap()
+        );
     }
 
     #[test]
@@ -336,11 +383,12 @@ mod function_tests {
         assert!(!item_fn.mutable_receiver());
         assert!(item_fn.is_public());
         assert_eq!(item_fn.arg_list().count(), 0);
-        assert_eq!(item_fn.return_type().unwrap(),
-                &syn::Type::Path(syn::TypePath {
-                    qself: None,
-                    path: syn::parse2::<syn::Path>(quote! { usize }).unwrap()
-                })
+        assert_eq!(
+            item_fn.return_type().unwrap(),
+            &syn::Type::Path(syn::TypePath {
+                qself: None,
+                path: syn::parse2::<syn::Path>(quote! { usize }).unwrap()
+            })
         );
     }
 
@@ -351,8 +399,7 @@ mod function_tests {
         };
 
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err),
-                   "cannot return a reference to Rhai");
+        assert_eq!(format!("{}", err), "cannot return a reference to Rhai");
     }
 
     #[test]
@@ -362,8 +409,7 @@ mod function_tests {
         };
 
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err),
-                   "cannot return a pointer to Rhai");
+        assert_eq!(format!("{}", err), "cannot return a pointer to Rhai");
     }
 
     #[test]
@@ -373,8 +419,10 @@ mod function_tests {
         };
 
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err),
-                   "references from Rhai in this position must be mutable");
+        assert_eq!(
+            format!("{}", err),
+            "references from Rhai in this position must be mutable"
+        );
     }
 
     #[test]
@@ -384,8 +432,10 @@ mod function_tests {
         };
 
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err),
-                   "this type in this position passes from Rhai by value");
+        assert_eq!(
+            format!("{}", err),
+            "this type in this position passes from Rhai by value"
+        );
     }
 
     #[test]
@@ -395,8 +445,10 @@ mod function_tests {
         };
 
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err),
-                   "this type in this position passes from Rhai by value");
+        assert_eq!(
+            format!("{}", err),
+            "this type in this position passes from Rhai by value"
+        );
     }
 
     #[test]
@@ -412,8 +464,10 @@ mod function_tests {
         assert!(item_fn.is_public());
         assert!(item_fn.return_type().is_none());
 
-        assert_eq!(item_fn.arg_list().next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { message: &str }).unwrap());
+        assert_eq!(
+            item_fn.arg_list().next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { message: &str }).unwrap()
+        );
     }
 
     #[test]
@@ -429,10 +483,14 @@ mod function_tests {
         assert!(item_fn.is_public());
         assert!(item_fn.return_type().is_none());
 
-        assert_eq!(item_fn.arg_list().next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { level: usize }).unwrap());
-        assert_eq!(item_fn.arg_list().skip(1).next().unwrap(),
-                   &syn::parse2::<syn::FnArg>(quote! { message: &str }).unwrap());
+        assert_eq!(
+            item_fn.arg_list().next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { level: usize }).unwrap()
+        );
+        assert_eq!(
+            item_fn.arg_list().skip(1).next().unwrap(),
+            &syn::parse2::<syn::FnArg>(quote! { message: &str }).unwrap()
+        );
     }
 
     #[test]
@@ -490,7 +548,9 @@ mod generate_tests {
         let expected = expected.to_string();
         if &actual != &expected {
             let mut counter = 0;
-            let iter = actual.chars().zip(expected.chars())
+            let iter = actual
+                .chars()
+                .zip(expected.chars())
                 .inspect(|_| counter += 1)
                 .skip_while(|(a, e)| *a == *e);
             let (actual_diff, expected_diff) = {
@@ -508,7 +568,7 @@ mod generate_tests {
     }
 
     #[test]
-    fn minimal_fn () {
+    fn minimal_fn() {
         let input_tokens: TokenStream = quote! {
             pub fn do_nothing() { }
         };
