@@ -18,9 +18,9 @@ impl Engine {
     ///
     /// When searching for functions, packages loaded later are preferred.
     /// In other words, loaded packages are searched in reverse order.
-    pub fn load_package(&mut self, package: PackageLibrary) -> &mut Self {
+    pub fn load_package(&mut self, package: impl Into<PackageLibrary>) -> &mut Self {
         // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package);
+        self.packages.push(package.into());
         self
     }
 
