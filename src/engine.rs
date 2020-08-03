@@ -1701,7 +1701,15 @@ impl Engine {
                     state.scope_level += 1;
 
                     for loop_var in func(iter_type) {
-                        *scope.get_mut(index).0 = loop_var;
+                        let for_var = scope.get_mut(index).0;
+                        let value = loop_var.clone_inner_data().unwrap();
+
+                        if cfg!(not(feature = "no_closure")) && for_var.is_shared() {
+                            *for_var.write_lock().unwrap() = value;
+                        } else {
+                            *for_var = value;
+                        }
+
                         self.inc_operations(state)
                             .map_err(|err| err.new_position(stmt.position()))?;
 
