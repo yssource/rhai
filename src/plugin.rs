@@ -2,11 +2,18 @@
 
 use crate::stdlib::{any::TypeId, boxed::Box};
 
-use crate::any::Dynamic;
-use crate::engine::Engine;
-pub use crate::fn_native::CallableFunction;
-use crate::result::EvalAltResult;
-use crate::token::Position;
+pub use crate::{
+    fn_native::CallableFunction,
+    Dynamic,
+    Engine,
+    EvalAltResult,
+    FnAccess,
+    ImmutableString,
+    Module,
+    Position,
+};
+
+pub use rhai_codegen::*;
 
 #[cfg(features = "sync")]
 /// Represents an externally-written plugin for the Rhai interpreter.

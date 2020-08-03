@@ -263,7 +263,7 @@ mod generate_tests {
         let expected_tokens = quote! {
             pub mod empty {
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
@@ -292,36 +292,42 @@ mod generate_tests {
                     42
                 }
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("get_mystic_number", FnAccess::Public, &[],
-                             rhai::plugin::CallableFunction::from_plugin(get_mystic_number__Token()));
+                             CallableFunction::from_plugin(get_mystic_number__Token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                pub struct get_mystic_number__Token();
-                impl rhai::plugin::PluginFunction for get_mystic_number__Token {
+                struct get_mystic_number__Token();
+                impl PluginFunction for get_mystic_number__Token {
                     fn call(&self,
-                            args: &mut [&mut rhai::Dynamic], pos: rhai::Position
-                    ) -> Result<rhai::Dynamic, Box<rhai::EvalAltResult>> {
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
                         if args.len() != 0usize {
-                            return Err(Box::new(rhai::EvalAltResult::ErrorRuntime(
+                            return Err(Box::new(EvalAltResult::ErrorRuntime(
                                     format!("wrong arg count: {} != {}",
-                                            args.len(), 0usize), rhai::Position::none())));
+                                            args.len(), 0usize), Position::none())));
                         }
-                        Ok(rhai::Dynamic::from(get_mystic_number()))
+                        Ok(Dynamic::from(get_mystic_number()))
                     }
 
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn rhai::plugin::PluginFunction> {
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(get_mystic_number__Token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![].into_boxed_slice()
                     }
+                }
+                pub fn get_mystic_number__Token__callable() -> CallableFunction {
+                    CallableFunction::from_plugin(get_mystic_number__Token())
+                }
+                pub fn get_mystic_number__Token__input_types() -> Box<[std::any::TypeId]> {
+                    get_mystic_number__Token().input_types()
                 }
             }
         };
@@ -346,37 +352,43 @@ mod generate_tests {
                     x + 1
                 }
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("add_one_to", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
-                             rhai::plugin::CallableFunction::from_plugin(add_one_to__Token()));
+                             CallableFunction::from_plugin(add_one_to__Token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                pub struct add_one_to__Token();
-                impl rhai::plugin::PluginFunction for add_one_to__Token {
+                struct add_one_to__Token();
+                impl PluginFunction for add_one_to__Token {
                     fn call(&self,
-                            args: &mut [&mut rhai::Dynamic], pos: rhai::Position
-                    ) -> Result<rhai::Dynamic, Box<rhai::EvalAltResult>> {
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
                         if args.len() != 1usize {
-                            return Err(Box::new(rhai::EvalAltResult::ErrorRuntime(
+                            return Err(Box::new(EvalAltResult::ErrorRuntime(
                                     format!("wrong arg count: {} != {}",
-                                            args.len(), 1usize), rhai::Position::none())));
+                                            args.len(), 1usize), Position::none())));
                         }
                         let arg0 = args[0usize].downcast_clone::<INT>().unwrap();
-                        Ok(rhai::Dynamic::from(add_one_to(arg0)))
+                        Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn rhai::plugin::PluginFunction> {
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_one_to__Token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![std::any::TypeId::of::<INT>()].into_boxed_slice()
                     }
+                }
+                pub fn add_one_to__Token__callable() -> CallableFunction {
+                    CallableFunction::from_plugin(add_one_to__Token())
+                }
+                pub fn add_one_to__Token__input_types() -> Box<[std::any::TypeId]> {
+                    add_one_to__Token().input_types()
                 }
             }
         };
@@ -401,40 +413,46 @@ mod generate_tests {
                     x + y
                 }
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
-                             rhai::plugin::CallableFunction::from_plugin(add_together__Token()));
+                             CallableFunction::from_plugin(add_together__Token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                pub struct add_together__Token();
-                impl rhai::plugin::PluginFunction for add_together__Token {
+                struct add_together__Token();
+                impl PluginFunction for add_together__Token {
                     fn call(&self,
-                            args: &mut [&mut rhai::Dynamic], pos: rhai::Position
-                    ) -> Result<rhai::Dynamic, Box<rhai::EvalAltResult>> {
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
                         if args.len() != 2usize {
-                            return Err(Box::new(rhai::EvalAltResult::ErrorRuntime(
+                            return Err(Box::new(EvalAltResult::ErrorRuntime(
                                     format!("wrong arg count: {} != {}",
-                                            args.len(), 2usize), rhai::Position::none())));
+                                            args.len(), 2usize), Position::none())));
                         }
                         let arg0 = args[0usize].downcast_clone::<INT>().unwrap();
                         let arg1 = args[1usize].downcast_clone::<INT>().unwrap();
-                        Ok(rhai::Dynamic::from(add_together(arg0, arg1)))
+                        Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn rhai::plugin::PluginFunction> {
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_together__Token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![std::any::TypeId::of::<INT>(),
                              std::any::TypeId::of::<INT>()].into_boxed_slice()
                     }
+                }
+                pub fn add_together__Token__callable() -> CallableFunction {
+                    CallableFunction::from_plugin(add_together__Token())
+                }
+                pub fn add_together__Token__input_types() -> Box<[std::any::TypeId]> {
+                    add_together__Token().input_types()
                 }
             }
         };
@@ -455,7 +473,7 @@ mod generate_tests {
             pub mod one_constant {
                 pub const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
@@ -483,7 +501,7 @@ mod generate_tests {
                 pub use rhai::INT;
                 pub const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
@@ -513,7 +531,7 @@ mod generate_tests {
                     42
                 }
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
@@ -538,7 +556,7 @@ mod generate_tests {
             pub mod one_constant {
                 const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
@@ -567,38 +585,44 @@ mod generate_tests {
                     x + 1
                 }
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("print_out_to", FnAccess::Public,
-                             &[core::any::TypeId::of::<rhai::ImmutableString>()],
-                             rhai::plugin::CallableFunction::from_plugin(print_out_to__Token()));
+                             &[core::any::TypeId::of::<ImmutableString>()],
+                             CallableFunction::from_plugin(print_out_to__Token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                pub struct print_out_to__Token();
-                impl rhai::plugin::PluginFunction for print_out_to__Token {
+                struct print_out_to__Token();
+                impl PluginFunction for print_out_to__Token {
                     fn call(&self,
-                            args: &mut [&mut rhai::Dynamic], pos: rhai::Position
-                    ) -> Result<rhai::Dynamic, Box<rhai::EvalAltResult>> {
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
                         if args.len() != 1usize {
-                            return Err(Box::new(rhai::EvalAltResult::ErrorRuntime(
+                            return Err(Box::new(EvalAltResult::ErrorRuntime(
                                     format!("wrong arg count: {} != {}",
-                                            args.len(), 1usize), rhai::Position::none())));
+                                            args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = args[0usize].downcast_clone::<rhai::ImmutableString>().unwrap();
-                        Ok(rhai::Dynamic::from(print_out_to(&arg0)))
+                        let arg0 = args[0usize].downcast_clone::<ImmutableString>().unwrap();
+                        Ok(Dynamic::from(print_out_to(&arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn rhai::plugin::PluginFunction> {
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(print_out_to__Token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<rhai::ImmutableString>()].into_boxed_slice()
+                        vec![std::any::TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
+                }
+                pub fn print_out_to__Token__callable() -> CallableFunction {
+                    CallableFunction::from_plugin(print_out_to__Token())
+                }
+                pub fn print_out_to__Token__input_types() -> Box<[std::any::TypeId]> {
+                    print_out_to__Token().input_types()
                 }
             }
         };
@@ -623,40 +647,46 @@ mod generate_tests {
                     *x += 1.0 as FLOAT;
                 }
                 #[allow(unused_imports)]
-                use rhai::{Module, FnAccess};
+                use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module__generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("increment", FnAccess::Public,
                              &[core::any::TypeId::of::<FLOAT>()],
-                             rhai::plugin::CallableFunction::from_plugin(increment__Token()));
+                             CallableFunction::from_plugin(increment__Token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                pub struct increment__Token();
-                impl rhai::plugin::PluginFunction for increment__Token {
+                struct increment__Token();
+                impl PluginFunction for increment__Token {
                     fn call(&self,
-                            args: &mut [&mut rhai::Dynamic], pos: rhai::Position
-                    ) -> Result<rhai::Dynamic, Box<rhai::EvalAltResult>> {
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
                         if args.len() != 1usize {
-                            return Err(Box::new(rhai::EvalAltResult::ErrorRuntime(
+                            return Err(Box::new(EvalAltResult::ErrorRuntime(
                                     format!("wrong arg count: {} != {}",
-                                            args.len(), 1usize), rhai::Position::none())));
+                                            args.len(), 1usize), Position::none())));
                         }
                         let arg0: &mut _ = args[0usize].downcast_mut::<FLOAT>().unwrap();
-                        Ok(rhai::Dynamic::from(increment(arg0)))
+                        Ok(Dynamic::from(increment(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
                     fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn rhai::plugin::PluginFunction> {
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(increment__Token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![std::any::TypeId::of::<FLOAT>()].into_boxed_slice()
                     }
                 }
-            }
+                pub fn increment__Token__callable() -> CallableFunction {
+                    CallableFunction::from_plugin(increment__Token())
+                }
+                pub fn increment__Token__input_types() -> Box<[std::any::TypeId]> {
+                    increment__Token().input_types()
+                }
+        }
         };
 
         let item_mod = syn::parse2::<Module>(input_tokens).unwrap();

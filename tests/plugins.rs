@@ -1,8 +1,4 @@
-use rhai::{
-    export_fn, export_module, exported_module,
-    plugin::{CallableFunction, PluginFunction},
-    register_exported_fn,
-};
+use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, INT};
 
 #[export_module]

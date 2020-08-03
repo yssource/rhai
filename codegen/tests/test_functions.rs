@@ -1,9 +1,8 @@
 use rhai::module_resolvers::*;
-use rhai::plugin::*;
-use rhai::{EvalAltResult, Module, RegisterFn, FLOAT, INT};
+use rhai::{Engine, EvalAltResult, Module, RegisterFn, FLOAT, INT};
 
 pub mod raw_fn {
-    use rhai::export_fn;
+    use rhai::plugin::*;
     use rhai::FLOAT;
 
     #[export_fn]
@@ -37,7 +36,7 @@ fn raw_fn_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod raw_fn_mut {
-    use rhai::export_fn;
+    use rhai::plugin::*;
     use rhai::FLOAT;
 
     #[export_fn]
@@ -69,7 +68,7 @@ fn raw_fn_mut_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod raw_fn_str {
-    use rhai::export_fn;
+    use rhai::plugin::*;
 
     #[export_fn]
     pub fn write_out_str(message: &str) -> bool {
@@ -100,7 +99,7 @@ fn raw_fn_str_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod mut_opaque_ref {
-    use rhai::export_fn;
+    use rhai::plugin::*;
     use rhai::INT;
 
     #[derive(Clone)]

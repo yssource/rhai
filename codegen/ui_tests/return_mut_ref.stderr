@@ -5,7 +5,7 @@ error: cannot return a reference to Rhai
    |                                      ^^^^^^^^^^^^
 
 error[E0425]: cannot find function `test_fn` in this scope
-  --> $DIR/return_mut_ref.rs:18:8
+  --> $DIR/return_mut_ref.rs:23:8
    |
-18 |     if test_fn(n) {
+23 |     if test_fn(n) {
    |        ^^^^^^^ not found in this scope

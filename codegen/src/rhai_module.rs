@@ -44,7 +44,7 @@ pub(crate) fn generate_body(
                         }) => match elem.as_ref() {
                             &syn::Type::Path(ref p) if p.path == str_type_path => {
                                 syn::parse2::<syn::Type>(quote! {
-                                rhai::ImmutableString })
+                                ImmutableString })
                                 .unwrap()
                             }
                             _ => panic!("internal error: non-string shared reference!?"),
@@ -71,22 +71,24 @@ pub(crate) fn generate_body(
         set_fn_stmts.push(
             syn::parse2::<syn::Stmt>(quote! {
                 m.set_fn(#fn_literal, FnAccess::Public, &[#(#fn_input_types),*],
-                         rhai::plugin::CallableFunction::from_plugin(#fn_token_name()));
+                         CallableFunction::from_plugin(#fn_token_name()));
             })
             .unwrap(),
         );
 
         gen_fn_tokens.push(quote! {
             #[allow(non_camel_case_types)]
-            pub struct #fn_token_name();
+            struct #fn_token_name();
         });
         gen_fn_tokens.push(function.generate_impl(&fn_token_name.to_string()));
+        gen_fn_tokens.push(function.generate_callable(&fn_token_name.to_string()));
+        gen_fn_tokens.push(function.generate_input_types(&fn_token_name.to_string()));
     }
 
     let mut generate_fncall = syn::parse2::<syn::ItemMod>(quote! {
         pub mod generate_info {
             #[allow(unused_imports)]
-            use rhai::{Module, FnAccess};
+            use super::*;
             #[allow(unused_mut)]
             pub fn rhai_module__generate() -> Module {
                 let mut m = Module::new();

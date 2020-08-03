@@ -1,4 +1,4 @@
-use rhai::export_fn;
+use rhai::plugin::*;
 
 struct NonClonable {
     a: f32,

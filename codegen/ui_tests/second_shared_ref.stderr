@@ -5,7 +5,7 @@ error: this type in this position passes from Rhai by value
    |                                         ^^^^^
 
 error[E0425]: cannot find function `test_fn` in this scope
-  --> $DIR/second_shared_ref.rs:18:8
+  --> $DIR/second_shared_ref.rs:23:8
    |
-18 |     if test_fn(n, &true) {
+23 |     if test_fn(n, &true) {
    |        ^^^^^^^ not found in this scope

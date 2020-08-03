@@ -1,4 +1,4 @@
-use rhai::export_fn;
+use rhai::plugin::*;
 
 #[derive(Clone)]
 struct Clonable {
