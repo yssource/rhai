@@ -122,7 +122,7 @@ fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-#[cfg(not(feature = "no_capture"))]
+#[cfg(not(feature = "no_closure"))]
 fn test_function_captures() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 

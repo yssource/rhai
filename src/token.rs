@@ -2,7 +2,7 @@
 
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 
 use crate::error::LexError;
@@ -501,14 +501,15 @@ impl Token {
             "import" | "export" | "as" => Reserved(syntax.into()),
 
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
-            | "new" | "use" | "module" | "package" | "var" | "static" | "with" | "do" | "each"
-            | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try" | "catch"
-            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync" | "async" | "await"
-            | "yield" => Reserved(syntax.into()),
+            | "new" | "use" | "module" | "package" | "var" | "static" | "shared" | "with"
+            | "do" | "each" | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try"
+            | "catch" | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync" | "async"
+            | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_SHARED | KEYWORD_SHARED
-            | KEYWORD_TAKE | KEYWORD_THIS => Reserved(syntax.into()),
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_SHARED | KEYWORD_THIS => {
+                Reserved(syntax.into())
+            }
 
             _ => return None,
         })
@@ -1432,8 +1433,8 @@ fn get_identifier(
 #[inline(always)]
 pub fn is_keyword_function(name: &str) -> bool {
     match name {
-        #[cfg(not(feature = "no_shared"))]
-        KEYWORD_SHARED | KEYWORD_TAKE | KEYWORD_IS_SHARED => true,
+        #[cfg(not(feature = "no_closure"))]
+        KEYWORD_IS_SHARED => true,
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
         | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
         _ => false,

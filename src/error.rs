@@ -93,7 +93,7 @@ pub enum ParseErrorType {
     MalformedInExpr(String),
     /// A capturing  has syntax error. Wrapped value is the error description (if any).
     ///
-    /// Never appears under the `no_capture` feature.
+    /// Never appears under the `no_closure` feature.
     MalformedCapture(String),
     /// A map definition has duplicated property names. Wrapped value is the property name.
     ///

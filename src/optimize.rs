@@ -765,7 +765,7 @@ pub fn optimize_into_ast(
                         access: fn_def.access,
                         body: Default::default(),
                         params: fn_def.params.clone(),
-                        #[cfg(not(feature = "no_capture"))]
+                        #[cfg(not(feature = "no_closure"))]
                         externals: fn_def.externals.clone(),
                         pos: fn_def.pos,
                     }

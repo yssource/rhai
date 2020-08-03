@@ -1284,7 +1284,7 @@ impl Engine {
         let args = args.as_mut();
 
         // Check for data race.
-        if cfg!(not(feature = "no_shared")) {
+        if cfg!(not(feature = "no_closure")) {
             ensure_no_data_race(name, args, false)?;
         }
 

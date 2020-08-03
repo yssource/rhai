@@ -15,7 +15,7 @@ is created.
 
 Variables that are accessible during the time the [anonymous function] is created can be captured,
 as long as they are not shadowed by local variables defined within the function's scope.
-The values captured are the values of those variables at the time of the [anonymous function]'s creation.
+The captured variables are automatically converted into reference-counted shared values.
 
 
 New Parameters For Captured Variables
@@ -29,28 +29,32 @@ In actual implementation, this de-sugars to:
 
 3. The variable is added to the parameters list of the anonymous function, at the front.
 
-4. The current value of the variable is then [curried][currying] into the [function pointer] itself, essentially carrying that value and inserting it into future calls of the function.
+4. The variable is then turned into a reference-counted shared value.
 
-Automatic currying can be turned off via the [`no_capture`] feature.
+5. The shared value is then [curried][currying] into the [function pointer] itself, essentially carrying a reference to that shared value and inserting it into future calls of the function.
+
+Automatic currying can be turned off via the [`no_closure`] feature.
 
 
 Examples
 --------
 
 ```rust
-let x = 40;
+let x = 1;
 
-let f = |y| x + y;                  // current value of variable 'x' is auto-curried
-                                    // the value 40 is curried into 'f'
+let f = |y| x + y;                  // variable 'x' is auto-curried (captured) into 'f'
+                                    // 'x' is converted into a shared value
 
-x = 1;                              // 'x' can be changed but the curried value is not
+x = 40;                             // 'x' can be changed
 
-f.call(2) == 42;                    // the value of 'x' is still 40
+f.call(2) == 42;                    // the value of 'x' is 40 because 'x' is shared
 
 // The above de-sugars into this:
 fn anon$1001(x, y) { x + y }        // parameter 'x' is inserted
 
-let f = Fn("anon$1001").curry(x);   // current value of 'x' is curried
+make_shared(x);                     // convert 'x' into a shared value
+
+let f = Fn("anon$1001").curry(x);   // shared 'x' is curried
 
 f.call(2) == 42;
 ```

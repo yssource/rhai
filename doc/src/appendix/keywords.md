@@ -10,8 +10,6 @@ Keywords List
 |         `let`         | Variable declaration                     |                 |      No      |
 |        `const`        | Constant declaration                     |                 |      No      |
 |      `is_shared`      | Is a value shared?                       |                 |      No      |
-|       `shared`        | Share value                              |  [`no_shared`]  |      No      |
-|        `take`         | Un-share value                           |  [`no_shared`]  |      No      |
 |         `if`          | If statement                             |                 |      No      |
 |        `else`         | else block of if statement               |                 |      No      |
 |        `while`        | While loop                               |                 |      No      |
@@ -44,6 +42,7 @@ Reserved Keywords
 | --------- | --------------------- |
 | `var`     | Variable declaration  |
 | `static`  | Variable declaration  |
+| `shared`  | Share value           |
 | `do`      | Looping               |
 | `each`    | Looping               |
 | `then`    | Control flow          |

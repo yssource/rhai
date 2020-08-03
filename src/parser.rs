@@ -39,7 +39,7 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::collections::hash_map::DefaultHasher;
 
-#[cfg(not(feature = "no_capture"))]
+#[cfg(not(feature = "no_closure"))]
 use crate::stdlib::collections::HashSet;
 
 #[cfg(feature = "no_std")]
@@ -366,7 +366,7 @@ pub struct ScriptFnDef {
     /// Names of function parameters.
     pub params: StaticVec<String>,
     /// Access to external variables.
-    #[cfg(not(feature = "no_capture"))]
+    #[cfg(not(feature = "no_closure"))]
     pub externals: HashSet<String>,
     /// Function body.
     pub body: Stmt,
@@ -414,13 +414,13 @@ struct ParseState<'e> {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
-    #[cfg(not(feature = "no_capture"))]
+    #[cfg(not(feature = "no_closure"))]
     externals: HashMap<String, Position>,
-    /// An indicator that prevents variables capturing into externals one time.
-    /// If set to true the next call of `access_var` will not capture the variable.
+    /// An indicator that disables variable capturing into externals one single time.
+    /// If set to false the next call to `access_var` will not capture the variable.
     /// All consequent calls to `access_var` will not be affected
-    #[cfg(not(feature = "no_capture"))]
-    capture: bool,
+    #[cfg(not(feature = "no_closure"))]
+    allow_capture: bool,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -444,10 +444,10 @@ impl<'e> ParseState<'e> {
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
             max_function_expr_depth,
-            #[cfg(not(feature = "no_capture"))]
+            #[cfg(not(feature = "no_closure"))]
             externals: Default::default(),
-            #[cfg(not(feature = "no_capture"))]
-            capture: true,
+            #[cfg(not(feature = "no_closure"))]
+            allow_capture: true,
             stack: Default::default(),
             modules: Default::default(),
         }
@@ -469,13 +469,13 @@ impl<'e> ParseState<'e> {
             .find(|(_, (n, _))| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
 
-        #[cfg(not(feature = "no_capture"))]
-        if self.capture {
+        #[cfg(not(feature = "no_closure"))]
+        if self.allow_capture {
             if index.is_none() && !self.externals.contains_key(name) {
                 self.externals.insert(name.to_string(), _pos);
             }
         } else {
-            self.capture = true
+            self.allow_capture = true
         }
 
         index
@@ -579,6 +579,9 @@ pub enum Stmt {
             Position,
         )>,
     ),
+    /// Convert a variable to shared.
+    #[cfg(not(feature = "no_closure"))]
+    Share(Box<(String, Position)>),
 }
 
 impl Default for Stmt {
@@ -606,6 +609,9 @@ impl Stmt {
             Stmt::Import(x) => x.2,
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(x) => x.1,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(x) => x.1,
         }
     }
 
@@ -629,6 +635,9 @@ impl Stmt {
             Stmt::Import(x) => x.2 = new_pos,
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(x) => x.1 = new_pos,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(x) => x.1 = new_pos,
         }
 
         self
@@ -655,6 +664,9 @@ impl Stmt {
 
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(_) | Stmt::Export(_) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(_) => false,
         }
     }
 
@@ -678,6 +690,9 @@ impl Stmt {
             Stmt::Import(_) => false,
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(_) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(_) => false,
         }
     }
 }
@@ -1671,7 +1686,7 @@ fn parse_primary(
 
         root_expr = match (root_expr, token) {
             // Function call
-            #[cfg(not(feature = "no_capture"))]
+            #[cfg(not(feature = "no_closure"))]
             (Expr::Variable(x), Token::Bang) => {
                 if !match_token(input, Token::LeftParen)? {
                     return Err(PERR::MissingToken(
@@ -1855,7 +1870,7 @@ fn parse_unary(
 
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
 
-            #[cfg(not(feature = "no_capture"))]
+            #[cfg(not(feature = "no_closure"))]
             new_state.externals.iter().for_each(|(closure, pos)| {
                 state.access_var(closure, *pos);
             });
@@ -2216,9 +2231,9 @@ fn parse_binary_op(
         if cfg!(not(feature = "no_object")) && op_token == Token::Period {
             if let (Token::Identifier(_), _) = input.peek().unwrap() {
                 // prevents capturing of the object properties as vars: xxx.<var>
-                #[cfg(not(feature = "no_capture"))]
+                #[cfg(not(feature = "no_closure"))]
                 {
-                    state.capture = false;
+                    state.allow_capture = false;
                 }
             }
         }
@@ -3095,7 +3110,7 @@ fn parse_fn(
 
     let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
 
-    #[cfg(not(feature = "no_capture"))]
+    #[cfg(not(feature = "no_closure"))]
     let externals = state
         .externals
         .iter()
@@ -3108,7 +3123,7 @@ fn parse_fn(
         name: name.into(),
         access,
         params,
-        #[cfg(not(feature = "no_capture"))]
+        #[cfg(not(feature = "no_closure"))]
         externals,
         body,
         pos: settings.pos,
@@ -3128,6 +3143,17 @@ fn make_curry_from_externals(
     let num_externals = externals.len();
     let mut args: StaticVec<_> = Default::default();
 
+    #[cfg(not(feature = "no_closure"))]
+    externals.iter().for_each(|(var_name, pos)| {
+        args.push(Expr::Variable(Box::new((
+            (var_name.into(), *pos),
+            None,
+            0,
+            None,
+        ))));
+    });
+
+    #[cfg(feature = "no_closure")]
     externals.into_iter().for_each(|(var_name, pos)| {
         args.push(Expr::Variable(Box::new(((var_name, pos), None, 0, None))));
     });
@@ -3142,7 +3168,23 @@ fn make_curry_from_externals(
         None,
     )));
 
-    Expr::Dot(Box::new((fn_expr, fn_call, pos)))
+    let expr = Expr::Dot(Box::new((fn_expr, fn_call, pos)));
+
+    // If there are captured variables, convert the entire expression into a statement block,
+    // then insert the relevant `Share` statements.
+    #[cfg(not(feature = "no_closure"))]
+    {
+        // Statement block
+        let mut statements: StaticVec<_> = Default::default();
+        // Insert `Share` statements
+        statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
+        // Final expression
+        statements.push(Stmt::Expr(Box::new(expr)));
+        Expr::Stmt(Box::new((Stmt::Block(Box::new((statements, pos))), pos)))
+    }
+
+    #[cfg(feature = "no_closure")]
+    return expr;
 }
 
 /// Parse an anonymous function definition.
@@ -3215,7 +3257,7 @@ fn parse_anon_fn(
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
     let externals: StaticVec<_> = {
-        #[cfg(not(feature = "no_capture"))]
+        #[cfg(not(feature = "no_closure"))]
         {
             state
                 .externals
@@ -3223,11 +3265,11 @@ fn parse_anon_fn(
                 .map(|(k, &v)| (k.clone(), v))
                 .collect()
         }
-        #[cfg(feature = "no_capture")]
+        #[cfg(feature = "no_closure")]
         Default::default()
     };
 
-    let params: StaticVec<_> = if cfg!(not(feature = "no_capture")) {
+    let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
         externals
             .iter()
             .map(|(k, _)| k)
@@ -3257,7 +3299,7 @@ fn parse_anon_fn(
         name: fn_name.clone(),
         access: FnAccess::Public,
         params,
-        #[cfg(not(feature = "no_capture"))]
+        #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),
         body,
         pos: settings.pos,
@@ -3265,7 +3307,7 @@ fn parse_anon_fn(
 
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
-    let expr = if cfg!(not(feature = "no_capture")) {
+    let expr = if cfg!(not(feature = "no_closure")) {
         make_curry_from_externals(expr, externals, settings.pos)
     } else {
         expr

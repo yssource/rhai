@@ -22,7 +22,7 @@ fn print_obj() { print(this.data); }
 ```
 
 The above can be replaced by using _anonymous functions_ which have the same syntax as Rust's closures
-(but they are **NOT** closures, merely syntactic sugar):
+(but they are **NOT** real closures, merely syntactic sugar):
 
 ```rust
 let obj = #{
@@ -50,12 +50,10 @@ fn anon_fn_1002() { print this.data; }
 ```
 
 
-WARNING - NOT Closures
-----------------------
+WARNING - NOT Real Closures
+--------------------------
 
 Remember: anonymous functions, though having the same syntax as Rust _closures_, are themselves
-**not** closures.  In particular, they do not capture their execution environment.  They are more like
-Rust's function pointers.
-
-They do, however, _capture_ variable _values_ from their execution environment, unless the [`no_capture`]
-feature is turned on.  This is accomplished via [automatic currying][capture].
+**not** real closures.
+In particular, they capture their execution environment via [automatic currying][capture],
+unless the [`no_closure`] feature is turned on.

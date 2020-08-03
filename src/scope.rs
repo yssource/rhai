@@ -158,32 +158,6 @@ impl<'a> Scope<'a> {
         self.push_dynamic_value(name, EntryType::Normal, Dynamic::from(value), false)
     }
 
-    /// Add (push) a new shared entry to the Scope.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Scope;
-    ///
-    /// let mut my_scope = Scope::new();
-    ///
-    /// my_scope.push_shared("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
-    /// ```
-    #[cfg(not(feature = "no_shared"))]
-    pub fn push_shared<K: Into<Cow<'a, str>>, T: Variant + Clone>(
-        &mut self,
-        name: K,
-        value: T,
-    ) -> &mut Self {
-        self.push_dynamic_value(
-            name,
-            EntryType::Normal,
-            Dynamic::from(value).into_shared(),
-            false,
-        )
-    }
-
     /// Add (push) a new `Dynamic` entry to the Scope.
     ///
     /// # Examples
@@ -224,34 +198,6 @@ impl<'a> Scope<'a> {
         value: T,
     ) -> &mut Self {
         self.push_dynamic_value(name, EntryType::Constant, Dynamic::from(value), true)
-    }
-
-    /// Add (push) a new shared constant to the Scope.
-    ///
-    /// Shared constants are immutable and cannot be assigned to, but their shared values can change.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Scope;
-    ///
-    /// let mut my_scope = Scope::new();
-    ///
-    /// my_scope.push_constant_shared("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
-    /// ```
-    #[cfg(not(feature = "no_shared"))]
-    pub fn push_constant_shared<K: Into<Cow<'a, str>>, T: Variant + Clone>(
-        &mut self,
-        name: K,
-        value: T,
-    ) -> &mut Self {
-        self.push_dynamic_value(
-            name,
-            EntryType::Constant,
-            Dynamic::from(value).into_shared(),
-            true,
-        )
     }
 
     /// Add (push) a new constant with a `Dynamic` value to the Scope.
@@ -394,7 +340,7 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.get_entry(name)
-            .and_then(|Entry { value, .. }| value.clone_inner_data::<T>())
+            .and_then(|Entry { value, .. }| value.clone().clone_inner_data::<T>())
     }
 
     /// Update the value of the named entry.
@@ -485,13 +431,20 @@ impl<'a> Scope<'a> {
     ///
     /// let (name, value) = iter.next().unwrap();
     /// assert_eq!(name, "x");
-    /// assert_eq!(value.clone().cast::<i64>(), 42);
+    /// assert_eq!(value.cast::<i64>(), 42);
     ///
     /// let (name, value) = iter.next().unwrap();
     /// assert_eq!(name, "foo");
-    /// assert_eq!(value.clone().cast::<String>(), "hello");
+    /// assert_eq!(value.cast::<String>(), "hello");
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, Dynamic)> {
+        self.iter_raw()
+            .map(|(name, value)| (name, value.clone().clone_inner_data().unwrap()))
+    }
+
+    /// Get an iterator to entries in the Scope.
+    /// Shared values are not expanded.
+    pub fn iter_raw(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
         self.0
             .iter()
             .map(|Entry { name, value, .. }| (name.as_ref(), value))

@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
     KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_SHARED,
-    KEYWORD_PRINT, KEYWORD_SHARED, KEYWORD_TAKE, KEYWORD_TYPE_OF,
+    KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -33,7 +33,7 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{Map, Target, FN_GET, FN_SET};
 
-#[cfg(not(feature = "no_capture"))]
+#[cfg(not(feature = "no_closure"))]
 use crate::scope::Entry as ScopeEntry;
 
 use crate::stdlib::{
@@ -47,7 +47,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_capture"))]
+#[cfg(not(feature = "no_closure"))]
 use crate::stdlib::{collections::HashSet, string::String};
 
 /// Extract the property name from a getter function name.
@@ -139,7 +139,7 @@ impl Drop for ArgBackup<'_> {
 }
 
 // Add captured variables into scope
-#[cfg(not(feature = "no_capture"))]
+#[cfg(not(feature = "no_closure"))]
 fn add_captured_variables_into_scope<'s>(
     externals: &HashSet<String>,
     captured: Scope<'s>,
@@ -166,7 +166,7 @@ pub fn ensure_no_data_race(
     args: &FnCallArgs,
     is_ref: bool,
 ) -> Result<(), Box<EvalAltResult>> {
-    if cfg!(not(feature = "no_shared")) {
+    if cfg!(not(feature = "no_closure")) {
         let skip = if is_ref { 1 } else { 0 };
 
         if let Some((n, _)) = args
@@ -456,7 +456,7 @@ impl Engine {
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Check for data race.
-        if cfg!(not(feature = "no_shared")) {
+        if cfg!(not(feature = "no_closure")) {
             ensure_no_data_race(fn_name, args, is_ref)?;
         }
 
@@ -505,7 +505,7 @@ impl Engine {
                 let mods = &mut Imports::new();
 
                 // Add captured variables into scope
-                #[cfg(not(feature = "no_capture"))]
+                #[cfg(not(feature = "no_closure"))]
                 if let Some(captured) = _capture {
                     add_captured_variables_into_scope(&func.externals, captured, scope);
                 }
@@ -690,18 +690,12 @@ impl Engine {
                 .into(),
                 false,
             ))
-        } else if cfg!(not(feature = "no_shared"))
+        } else if cfg!(not(feature = "no_closure"))
             && _fn_name == KEYWORD_IS_SHARED
             && idx.is_empty()
         {
             // take call
             Ok((target.is_shared().into(), false))
-        } else if cfg!(not(feature = "no_shared")) && _fn_name == KEYWORD_SHARED && idx.is_empty() {
-            // take call
-            Ok((obj.clone().into_shared(), false))
-        } else if cfg!(not(feature = "no_shared")) && _fn_name == KEYWORD_TAKE && idx.is_empty() {
-            // take call
-            Ok((obj.clone_inner_data::<Dynamic>().unwrap(), false))
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;
@@ -814,27 +808,11 @@ impl Engine {
         }
 
         // Handle is_shared()
-        if cfg!(not(feature = "no_shared")) && name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
+        if cfg!(not(feature = "no_closure")) && name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
             let expr = args_expr.get(0).unwrap();
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
             return Ok(value.is_shared().into());
-        }
-
-        // Handle shared()
-        if cfg!(not(feature = "no_shared")) && name == KEYWORD_SHARED && args_expr.len() == 1 {
-            let expr = args_expr.get(0).unwrap();
-            let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-
-            return Ok(value.into_shared());
-        }
-
-        // Handle take()
-        if cfg!(not(feature = "no_shared")) && name == KEYWORD_TAKE && args_expr.len() == 1 {
-            let expr = args_expr.get(0).unwrap();
-            let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-
-            return Ok(value.clone_inner_data::<Dynamic>().unwrap());
         }
 
         // Handle call() - Redirect function call
@@ -896,7 +874,7 @@ impl Engine {
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
         let mut is_ref = false;
-        let capture = if cfg!(not(feature = "no_capture")) && capture && !scope.is_empty() {
+        let capture = if cfg!(not(feature = "no_closure")) && capture && !scope.is_empty() {
             Some(scope.flatten_clone())
         } else {
             None
@@ -924,7 +902,7 @@ impl Engine {
 
                     // Turn it into a method call only if the object is not shared
                     args = if target.is_shared() {
-                        arg_values.insert(0, target.clone_inner_data().unwrap());
+                        arg_values.insert(0, target.clone().clone_inner_data().unwrap());
                         arg_values.iter_mut().collect()
                     } else {
                         is_ref = true;
@@ -1041,7 +1019,7 @@ impl Engine {
                 let mods = &mut Imports::new();
 
                 // Add captured variables into scope
-                #[cfg(not(feature = "no_capture"))]
+                #[cfg(not(feature = "no_closure"))]
                 if _capture && !scope.is_empty() {
                     add_captured_variables_into_scope(
                         &func.externals,

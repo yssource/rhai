@@ -9,7 +9,7 @@ The following are reserved keywords in Rhai:
 | ------------------------------------------------- | ------------------------------------------------ | --------------------- | :--------------------: |
 | `true`, `false`                                   |                                                  | Boolean constants     |                        |
 | `let`, `const`                                    | `var`, `static`                                  | Variable declarations |                        |
-| `shared`, `take`, `is_shared`                     |                                                  | Shared values         |     [`no_shared`]      |
+| `is_shared`                                       |                                                  | Shared values         |     [`no_closure`]     |
 | `if`, `else`                                      | `then`, `goto`, `exit`                           | Control flow          |                        |
 |                                                   | `switch`, `match`, `case`                        | Matching              |                        |
 | `while`, `loop`, `for`, `in`, `continue`, `break` | `do`, `each`                                     | Looping               |                        |

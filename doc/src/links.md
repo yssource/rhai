@@ -9,8 +9,7 @@
 [`no_object`]: {{rootUrl}}/start/features.md
 [`no_function`]: {{rootUrl}}/start/features.md
 [`no_module`]: {{rootUrl}}/start/features.md
-[`no_capture`]: {{rootUrl}}/start/features.md
-[`no_shared`]: {{rootUrl}}/start/features.md
+[`no_closure`]: {{rootUrl}}/start/features.md
 [`no_std`]: {{rootUrl}}/start/features.md
 [`no-std`]: {{rootUrl}}/start/features.md
 [`internals`]: {{rootUrl}}/start/features.md

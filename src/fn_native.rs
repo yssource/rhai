@@ -22,10 +22,10 @@ use crate::stdlib::rc::Rc;
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::Arc;
 
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::cell::RefCell;
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::RwLock;
 
@@ -51,11 +51,11 @@ pub type Shared<T> = Rc<T>;
 pub type Shared<T> = Arc<T>;
 
 /// Mutable reference-counted container (read-write lock)
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
 pub type SharedMut<T> = Shared<RefCell<T>>;
 /// Mutable reference-counted container (read-write lock)
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
 pub type SharedMut<T> = Shared<RwLock<T>>;
 

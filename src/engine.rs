@@ -31,7 +31,7 @@ use crate::module::resolvers;
 #[cfg(any(not(feature = "no_object"), not(feature = "no_module")))]
 use crate::utils::ImmutableString;
 
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "no_object"))]
 use crate::any::DynamicWriteLock;
 
@@ -48,6 +48,9 @@ use crate::stdlib::{
 
 #[cfg(not(feature = "no_index"))]
 use crate::stdlib::any::TypeId;
+
+#[cfg(not(feature = "no_closure"))]
+use crate::stdlib::mem;
 
 /// Variable-sized array of `Dynamic` values.
 ///
@@ -96,8 +99,6 @@ pub const KEYWORD_EVAL: &str = "eval";
 pub const KEYWORD_FN_PTR: &str = "Fn";
 pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
-pub const KEYWORD_SHARED: &str = "shared";
-pub const KEYWORD_TAKE: &str = "take";
 pub const KEYWORD_IS_SHARED: &str = "is_shared";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
@@ -132,7 +133,7 @@ pub enum Target<'a> {
     Ref(&'a mut Dynamic),
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
-    #[cfg(not(feature = "no_shared"))]
+    #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "no_object"))]
     LockGuard((DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
@@ -149,7 +150,7 @@ impl Target<'_> {
     pub fn is_ref(&self) -> bool {
         match self {
             Self::Ref(_) => true,
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => true,
             Self::Value(_) => false,
@@ -161,7 +162,7 @@ impl Target<'_> {
     pub fn is_value(&self) -> bool {
         match self {
             Self::Ref(_) => false,
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => false,
             Self::Value(_) => true,
@@ -173,7 +174,7 @@ impl Target<'_> {
     pub fn is_shared(&self) -> bool {
         match self {
             Self::Ref(r) => r.is_shared(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => true,
             Self::Value(r) => r.is_shared(),
@@ -186,7 +187,7 @@ impl Target<'_> {
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
             Target::Ref(r) => r.is::<T>(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Target::LockGuard((r, _)) => r.is::<T>(),
             Target::Value(r) => r.is::<T>(),
@@ -198,7 +199,7 @@ impl Target<'_> {
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
             Self::Ref(r) => r.clone(), // Referenced value is cloned
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
             Self::Value(v) => v,       // Owned value is simply taken
@@ -210,7 +211,7 @@ impl Target<'_> {
     pub fn as_mut(&mut self) -> &mut Dynamic {
         match self {
             Self::Ref(r) => *r,
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::Value(ref mut r) => r,
@@ -223,7 +224,7 @@ impl Target<'_> {
     pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val,
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => {
@@ -260,7 +261,7 @@ impl Target<'_> {
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     fn from(value: &'a mut Dynamic) -> Self {
-        #[cfg(not(feature = "no_shared"))]
+        #[cfg(not(feature = "no_closure"))]
         #[cfg(not(feature = "no_object"))]
         if value.is_shared() {
             // Cloning is cheap for a shared value
@@ -632,7 +633,7 @@ pub fn search_scope_only<'s, 'a>(
 
     // Check for data race - probably not necessary because the only place it should conflict is in a method call
     //                       when the object variable is also used as a parameter.
-    // if cfg!(not(feature = "no_shared")) && val.is_locked() {
+    // if cfg!(not(feature = "no_closure")) && val.is_locked() {
     //     return Err(Box::new(EvalAltResult::ErrorDataRace(name.into(), *pos)));
     // }
 
@@ -1351,12 +1352,9 @@ impl Engine {
                     )),
                     // Normal assignment
                     ScopeEntryType::Normal if op.is_empty() => {
-                        if cfg!(not(feature = "no_shared")) && lhs_ptr.is_shared() {
-                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = if rhs_val.is_shared() {
-                                rhs_val.clone_inner_data().unwrap()
-                            } else {
-                                rhs_val
-                            };
+                        let rhs_val = rhs_val.clone_inner_data().unwrap();
+                        if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = rhs_val;
                         } else {
                             *lhs_ptr = rhs_val;
                         }
@@ -1377,7 +1375,7 @@ impl Engine {
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
-                            if cfg!(not(feature = "no_shared")) && lhs_ptr.is_shared() {
+                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
                                 let mut lock_guard = lhs_ptr.write_lock::<Dynamic>().unwrap();
                                 let lhs_ptr_inner = lock_guard.deref_mut();
 
@@ -1401,12 +1399,9 @@ impl Engine {
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
 
-                            if cfg!(not(feature = "no_shared")) && lhs_ptr.is_shared() {
-                                *lhs_ptr.write_lock::<Dynamic>().unwrap() = if value.is_shared() {
-                                    value.clone_inner_data().unwrap()
-                                } else {
-                                    value
-                                };
+                            let value = value.clone_inner_data().unwrap();
+                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                                *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
                             } else {
                                 *lhs_ptr = value;
                             }
@@ -1842,6 +1837,25 @@ impl Engine {
                             *id_pos,
                         )));
                     }
+                }
+                Ok(Default::default())
+            }
+
+            // Share statement
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(x) => {
+                let (var_name, _) = x.as_ref();
+
+                match scope.get_index(var_name) {
+                    Some((index, ScopeEntryType::Normal)) => {
+                        let (val, _) = scope.get_mut(index);
+
+                        if !val.is_shared() {
+                            // Replace the variable with a shared value.
+                            *val = mem::take(val).into_shared();
+                        }
+                    }
+                    _ => (),
                 }
                 Ok(Default::default())
             }

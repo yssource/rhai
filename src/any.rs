@@ -4,7 +4,7 @@ use crate::fn_native::{FnPtr, SendSync};
 use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 use crate::fn_native::SharedMut;
 
 #[cfg(not(feature = "no_float"))]
@@ -24,14 +24,14 @@ use crate::stdlib::{
     string::String,
 };
 
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::{
     cell::{Ref, RefCell, RefMut},
     rc::Rc,
 };
 
-#[cfg(not(feature = "no_shared"))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -159,7 +159,7 @@ pub enum Union {
     Map(Box<Map>),
     FnPtr(Box<FnPtr>),
     Variant(Box<Box<dyn Variant>>),
-    #[cfg(not(feature = "no_shared"))]
+    #[cfg(not(feature = "no_closure"))]
     Shared(SharedMut<Dynamic>),
 }
 
@@ -176,11 +176,11 @@ enum DynamicReadLockInner<'d, T: Variant + Clone> {
     /// A simple reference to a non-shared value.
     Reference(&'d T),
     /// A read guard to a shared `RefCell`.
-    #[cfg(not(feature = "no_shared"))]
+    #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
     Guard(Ref<'d, Dynamic>),
     /// A read guard to a shared `RwLock`.
-    #[cfg(not(feature = "no_shared"))]
+    #[cfg(not(feature = "no_closure"))]
     #[cfg(feature = "sync")]
     Guard(RwLockReadGuard<'d, Dynamic>),
 }
@@ -193,7 +193,7 @@ impl<'d, T: Variant + Clone> Deref for DynamicReadLock<'d, T> {
         match &self.0 {
             DynamicReadLockInner::Reference(reference) => *reference,
             // Unwrapping is safe because all checking is already done in its constructor
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             DynamicReadLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
         }
     }
@@ -212,11 +212,11 @@ enum DynamicWriteLockInner<'d, T: Variant + Clone> {
     /// A simple mutable reference to a non-shared value.
     Reference(&'d mut T),
     /// A write guard to a shared `RefCell`.
-    #[cfg(not(feature = "no_shared"))]
+    #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
     Guard(RefMut<'d, Dynamic>),
     /// A write guard to a shared `RwLock`.
-    #[cfg(not(feature = "no_shared"))]
+    #[cfg(not(feature = "no_closure"))]
     #[cfg(feature = "sync")]
     Guard(RwLockWriteGuard<'d, Dynamic>),
 }
@@ -229,7 +229,7 @@ impl<'d, T: Variant + Clone> Deref for DynamicWriteLock<'d, T> {
         match &self.0 {
             DynamicWriteLockInner::Reference(reference) => *reference,
             // Unwrapping is safe because all checking is already done in its constructor
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             DynamicWriteLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
         }
     }
@@ -241,7 +241,7 @@ impl<'d, T: Variant + Clone> DerefMut for DynamicWriteLock<'d, T> {
         match &mut self.0 {
             DynamicWriteLockInner::Reference(reference) => *reference,
             // Unwrapping is safe because all checking is already done in its constructor
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             DynamicWriteLockInner::Guard(guard) => guard.downcast_mut().unwrap(),
         }
     }
@@ -261,7 +261,7 @@ impl Dynamic {
     /// instead of one of the supported system primitive types?
     pub fn is_shared(&self) -> bool {
         match self.0 {
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_) => true,
             _ => false,
         }
@@ -302,10 +302,10 @@ impl Dynamic {
             Union::Map(_) => TypeId::of::<Map>(),
             Union::FnPtr(_) => TypeId::of::<FnPtr>(),
             Union::Variant(value) => (***value).type_id(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
             Union::Shared(cell) => (*cell.borrow()).type_id(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
             Union::Shared(cell) => (*cell.read().unwrap()).type_id(),
         }
@@ -335,10 +335,10 @@ impl Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
             Union::Variant(value) => (***value).type_name(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
             Union::Shared(cell) => (*cell.borrow()).type_name(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
             Union::Shared(cell) => (*cell.read().unwrap()).type_name(),
         }
@@ -396,7 +396,7 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(value) => write!(f, "{}", (*value).type_name()),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_) => f.write_str("<shared>"),
         }
     }
@@ -424,7 +424,7 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(value) => write!(f, "{}", (*value).type_name()),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_) => f.write_str("<shared>"),
         }
     }
@@ -446,7 +446,7 @@ impl Clone for Dynamic {
             Union::Map(ref value) => Self(Union::Map(value.clone())),
             Union::FnPtr(ref value) => Self(Union::FnPtr(value.clone())),
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell) => Self(Union::Shared(cell.clone())),
         }
     }
@@ -571,9 +571,9 @@ impl Dynamic {
     ///
     /// # Panics
     ///
-    /// Panics under the `no_shared` feature.
+    /// Panics under the `no_closure` feature.
     pub fn into_shared(self) -> Self {
-        #[cfg(not(feature = "no_shared"))]
+        #[cfg(not(feature = "no_closure"))]
         return match self.0 {
             Union::Shared(..) => self,
             #[cfg(not(feature = "sync"))]
@@ -582,7 +582,7 @@ impl Dynamic {
             _ => Self(Union::Shared(Arc::new(RwLock::new(self)))),
         };
 
-        #[cfg(feature = "no_shared")]
+        #[cfg(feature = "no_closure")]
         unimplemented!()
     }
 
@@ -614,11 +614,11 @@ impl Dynamic {
         let type_id = TypeId::of::<T>();
 
         match self.0 {
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
             Union::Shared(cell) => return cell.borrow().clone().try_cast(),
 
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
             Union::Shared(cell) => return cell.read().unwrap().clone().try_cast(),
             _ => (),
@@ -703,7 +703,7 @@ impl Dynamic {
 
         match self.0 {
             Union::Variant(value) => (*value).as_box_any().downcast().map(|x| *x).ok(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_) => unreachable!(),
             _ => None,
         }
@@ -748,17 +748,17 @@ impl Dynamic {
     ///
     /// Returns `None` if the cast fails.
     #[inline(always)]
-    pub fn clone_inner_data<T: Variant + Clone>(&self) -> Option<T> {
+    pub fn clone_inner_data<T: Variant + Clone>(self) -> Option<T> {
         match self.0 {
-            #[cfg(not(feature = "no_shared"))]
-            Union::Shared(ref cell) => {
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell) => {
                 #[cfg(not(feature = "sync"))]
                 return Some(cell.borrow().downcast_ref::<T>().unwrap().clone());
 
                 #[cfg(feature = "sync")]
                 return Some(cell.read().unwrap().downcast_ref::<T>().unwrap().clone());
             }
-            _ => self.downcast_ref().cloned(),
+            _ => self.try_cast(),
         }
     }
 
@@ -772,7 +772,7 @@ impl Dynamic {
     #[inline(always)]
     pub fn is_locked(&self) -> bool {
         match self.0 {
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref _cell) => {
                 #[cfg(not(feature = "sync"))]
                 return _cell.try_borrow().is_err();
@@ -788,22 +788,33 @@ impl Dynamic {
     /// Casting to `Dynamic` just returns a reference to it.
     ///
     /// Returns `None` if the cast fails.
+    ///
+    /// # Panics and Deadlocks When Value is Shared
+    ///
+    /// Under the `sync` feature, this call may deadlock.
+    /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
     pub fn read_lock<T: Variant + Clone>(&self) -> Option<DynamicReadLock<T>> {
         match self.0 {
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell) => {
                 #[cfg(not(feature = "sync"))]
-                return Some(DynamicReadLock(DynamicReadLockInner::Guard(cell.borrow())));
+                let data = cell.borrow();
 
                 #[cfg(feature = "sync")]
-                return Some(DynamicReadLock(DynamicReadLockInner::Guard(
-                    cell.read().unwrap(),
-                )));
+                let data = cell.read().unwrap();
+
+                let type_id = (*data).type_id();
+
+                if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
+                    None
+                } else {
+                    Some(DynamicReadLock(DynamicReadLockInner::Guard(data)))
+                }
             }
             _ => self
                 .downcast_ref()
-                .map(|reference| DynamicReadLock(DynamicReadLockInner::Reference(reference))),
+                .map(|r| DynamicReadLock(DynamicReadLockInner::Reference(r))),
         }
     }
 
@@ -811,24 +822,33 @@ impl Dynamic {
     /// Casting to `Dynamic` just returns a mutable reference to it.
     ///
     /// Returns `None` if the cast fails.
+    ///
+    /// # Panics and Deadlocks When Value is Shared
+    ///
+    /// Under the `sync` feature, this call may deadlock.
+    /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
     pub fn write_lock<T: Variant + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
         match self.0 {
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell) => {
                 #[cfg(not(feature = "sync"))]
-                return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(
-                    cell.borrow_mut(),
-                )));
+                let data = cell.borrow_mut();
 
                 #[cfg(feature = "sync")]
-                return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(
-                    cell.write().unwrap(),
-                )));
+                let data = cell.write().unwrap();
+
+                let type_id = (*data).type_id();
+
+                if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
+                    None
+                } else {
+                    Some(DynamicWriteLock(DynamicWriteLockInner::Guard(data)))
+                }
             }
             _ => self
                 .downcast_mut()
-                .map(|reference| DynamicWriteLock(DynamicWriteLockInner::Reference(reference))),
+                .map(|r| DynamicWriteLock(DynamicWriteLockInner::Reference(r))),
         }
     }
 
@@ -836,6 +856,10 @@ impl Dynamic {
     /// Casting to `Dynamic` just returns a reference to it.
     ///
     /// Returns `None` if the cast fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is shared.
     #[inline(always)]
     fn downcast_ref<T: Variant + Clone>(&self) -> Option<&T> {
         let type_id = TypeId::of::<T>();
@@ -909,7 +933,7 @@ impl Dynamic {
 
         match &self.0 {
             Union::Variant(value) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_) => unreachable!(),
             _ => None,
         }
@@ -919,6 +943,10 @@ impl Dynamic {
     /// Casting to `Dynamic` just returns a mutable reference to it.
     ///
     /// Returns `None` if the cast fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is shared.
     #[inline(always)]
     fn downcast_mut<T: Variant + Clone>(&mut self) -> Option<&mut T> {
         let type_id = TypeId::of::<T>();
@@ -986,7 +1014,7 @@ impl Dynamic {
 
         match &mut self.0 {
             Union::Variant(value) => value.as_mut().as_mut_any().downcast_mut::<T>(),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_) => unreachable!(),
             _ => None,
         }
@@ -997,10 +1025,8 @@ impl Dynamic {
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
-            #[cfg(not(feature = "no_shared"))]
-            Union::Shared(_) => self
-                .clone_inner_data::<INT>()
-                .ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -1011,10 +1037,8 @@ impl Dynamic {
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n) => Ok(n),
-            #[cfg(not(feature = "no_shared"))]
-            Union::Shared(_) => self
-                .clone_inner_data::<FLOAT>()
-                .ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -1024,10 +1048,8 @@ impl Dynamic {
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b) => Ok(b),
-            #[cfg(not(feature = "no_shared"))]
-            Union::Shared(_) => self
-                .clone_inner_data::<bool>()
-                .ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -1037,10 +1059,8 @@ impl Dynamic {
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n) => Ok(n),
-            #[cfg(not(feature = "no_shared"))]
-            Union::Shared(_) => self
-                .clone_inner_data::<char>()
-                .ok_or_else(|| self.type_name()),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
         }
     }
@@ -1070,7 +1090,7 @@ impl Dynamic {
         match self.0 {
             Union::Str(s) => Ok(s),
             Union::FnPtr(f) => Ok(f.take_data().0),
-            #[cfg(not(feature = "no_shared"))]
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell) => {
                 #[cfg(not(feature = "sync"))]
                 {
