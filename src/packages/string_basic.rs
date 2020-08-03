@@ -21,7 +21,7 @@ fn to_debug<T: Debug>(x: &mut T) -> FuncReturn<ImmutableString> {
     Ok(format!("{:?}", x).into())
 }
 fn to_string<T: Display>(x: &mut T) -> FuncReturn<ImmutableString> {
-    Ok(format!("{}", x).into())
+    Ok(x.to_string().into())
 }
 #[cfg(not(feature = "no_object"))]
 fn format_map(x: &mut Map) -> FuncReturn<ImmutableString> {

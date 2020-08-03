@@ -3,6 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
 use crate::engine::{Array, Engine};
+use crate::fn_native::FnPtr;
 use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
 
@@ -83,9 +84,9 @@ macro_rules! reg_pad {
 }
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    reg_op!(lib, "push", push, INT, bool, char, ImmutableString, Array, ());
-    reg_pad!(lib, "pad", pad, INT, bool, char, ImmutableString, Array, ());
-    reg_tri!(lib, "insert", ins, INT, bool, char, ImmutableString, Array, ());
+    reg_op!(lib, "push", push, INT, bool, char, ImmutableString, FnPtr, Array, ());
+    reg_pad!(lib, "pad", pad, INT, bool, char, ImmutableString, FnPtr, Array, ());
+    reg_tri!(lib, "insert", ins, INT, bool, char, ImmutableString, FnPtr, Array, ());
 
     lib.set_fn_2_mut("append", |x: &mut Array, y: Array| {
         x.extend(y);

@@ -1,6 +1,7 @@
 use crate::any::Dynamic;
 use crate::def_package;
 use crate::engine::Engine;
+use crate::fn_native::FnPtr;
 use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
 use crate::utils::StaticVec;
@@ -88,10 +89,10 @@ macro_rules! reg_op {
 }
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
-    reg_op!(lib, "+", append, INT, bool, char);
+    reg_op!(lib, "+", append, INT, bool, char, FnPtr);
     lib.set_fn_2( "+", |x: ImmutableString, _: ()| Ok(x));
 
-    reg_op!(lib, "+", prepend, INT, bool, char);
+    reg_op!(lib, "+", prepend, INT, bool, char, FnPtr);
     lib.set_fn_2("+", |_: (), y: ImmutableString| Ok(y));
 
     if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
