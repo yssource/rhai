@@ -551,6 +551,11 @@ impl Dynamic {
             }
         }
 
+        boxed = match unsafe_cast_box::<_, FnPtr>(boxed) {
+            Ok(fn_ptr) => return (*fn_ptr).into(),
+            Err(val) => val,
+        };
+
         boxed = match unsafe_cast_box::<_, Dynamic>(boxed) {
             Ok(d) => return *d,
             Err(val) => val,
@@ -805,6 +810,7 @@ impl Dynamic {
                 let data = cell.read().unwrap();
 
                 let type_id = (*data).type_id();
+                println!("Type = {}", (*data).type_name());
 
                 if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
                     None
@@ -1176,7 +1182,7 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<HashMap<K, T>> for Dynam
 }
 impl From<FnPtr> for Dynamic {
     fn from(value: FnPtr) -> Self {
-        Box::new(value).into()
+        Self(Union::FnPtr(Box::new(value)))
     }
 }
 impl From<Box<FnPtr>> for Dynamic {
