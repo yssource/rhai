@@ -88,6 +88,7 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
 fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
+    #[allow(deprecated)]
     engine
         .register_fn("mul", |x: &mut INT, y: INT| *x *= y)
         .register_raw_fn(

@@ -35,6 +35,7 @@ Breaking changes
 * `Engine::register_raw_fn_XXX` API shortcuts are removed.
 * `PackagesCollection::get_fn`, `PackagesCollection::contains_fn`, `Module::get_fn` and `Module::contains_fn` now take an additional `public_only` parameter indicating whether only public functions are accepted.
 * The iterator returned by `Scope::iter` now contains a clone of the `Dynamic` value (unshared).
+* `Engine::load_package` takes any type that is `Into<PackageLibrary>`.
 
 Housekeeping
 ------------
