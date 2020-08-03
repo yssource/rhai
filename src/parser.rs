@@ -6,7 +6,7 @@ use crate::engine::{
     Engine, KEYWORD_FN_PTR_CURRY, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
 };
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::fn_native::Shared;
+use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -835,6 +835,10 @@ impl Expr {
             Self::FloatConstant(x) => x.0.into(),
             Self::CharConstant(x) => x.0.into(),
             Self::StringConstant(x) => x.0.clone().into(),
+            Self::FnPointer(x) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
+                x.0.clone(),
+                Default::default(),
+            )))),
             Self::True(_) => true.into(),
             Self::False(_) => false.into(),
             Self::Unit(_) => ().into(),
@@ -3292,7 +3296,7 @@ fn parse_anon_fn(
     let hash = s.finish();
 
     // Create unique function name
-    let fn_name: ImmutableString = format!("{}{:16x}", FN_ANONYMOUS, hash).into();
+    let fn_name: ImmutableString = format!("{}{:016x}", FN_ANONYMOUS, hash).into();
 
     // Define the function
     let script = ScriptFnDef {
