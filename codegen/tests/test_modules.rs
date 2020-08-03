@@ -1,9 +1,8 @@
 use rhai::module_resolvers::*;
-use rhai::plugin::*;
-use rhai::{EvalAltResult, RegisterFn, FLOAT, INT};
+use rhai::{Engine, EvalAltResult, RegisterFn, FLOAT, INT};
 
 pub mod empty_module {
-    use rhai::export_module;
+    use rhai::plugin::*;
 
     #[export_module]
     pub mod EmptyModule {}
@@ -25,7 +24,7 @@ fn empty_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod one_fn_module {
-    use rhai::export_module;
+    use rhai::plugin::*;
 
     #[export_module]
     pub mod advanced_math {
@@ -56,7 +55,7 @@ fn one_fn_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod one_fn_and_const_module {
-    use rhai::export_module;
+    use rhai::plugin::*;
 
     #[export_module]
     pub mod advanced_math {
@@ -91,7 +90,7 @@ fn one_fn_and_const_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod raw_fn_str_module {
-    use rhai::export_module;
+    use rhai::plugin::*;
 
     #[export_module]
     pub mod host_io {
@@ -122,7 +121,7 @@ fn raw_fn_str_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod mut_opaque_ref_module {
-    use rhai::export_module;
+    use rhai::plugin::*;
     use rhai::INT;
 
     #[derive(Clone)]

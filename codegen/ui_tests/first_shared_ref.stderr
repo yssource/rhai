@@ -5,7 +5,7 @@ error: references from Rhai in this position must be mutable
    |                       ^^^^^^^^^^^^
 
 error[E0425]: cannot find function `test_fn` in this scope
-  --> $DIR/first_shared_ref.rs:17:8
+  --> $DIR/first_shared_ref.rs:22:8
    |
-17 |     if test_fn(n) {
+22 |     if test_fn(n) {
    |        ^^^^^^^ not found in this scope

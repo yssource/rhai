@@ -4,7 +4,7 @@
 //! # Exporting a Macro to Rhai
 //!
 //! ```
-//! use rhai::{EvalAltResult, FLOAT, RegisterFn};
+//! use rhai::{EvalAltResult, FLOAT};
 //! use rhai::plugin::*;
 //! use rhai::module_resolvers::*;
 //!
@@ -144,8 +144,8 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
     };
     let tokens = quote! {
         #rhai_module.set_fn(#export_name, rhai::FnAccess::Public,
-                            #gen_mod_path::Token().input_types().as_ref(),
-                            CallableFunction::from_plugin(#gen_mod_path::Token()));
+                            #gen_mod_path::Token__input_types().as_ref(),
+                            #gen_mod_path::Token__callable());
 
     };
     proc_macro::TokenStream::from(tokens)
