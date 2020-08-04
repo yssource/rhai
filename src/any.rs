@@ -600,6 +600,7 @@ impl Dynamic {
     /// # Panics
     ///
     /// Panics under the `no_closure` feature.
+    #[inline(always)]
     pub fn into_shared(self) -> Self {
         #[cfg(not(feature = "no_closure"))]
         return match self.0 {
@@ -833,7 +834,6 @@ impl Dynamic {
                 let data = cell.read().unwrap();
 
                 let type_id = (*data).type_id();
-                println!("Type = {}", (*data).type_name());
 
                 if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
                     None

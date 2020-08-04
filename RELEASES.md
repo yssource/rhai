@@ -6,10 +6,10 @@ Version 0.18.0
 
 This version adds:
 
-* Binding the `this` pointer in a function pointer `call`.
 * Anonymous functions (in Rust closure syntax).  Simplifies creation of single-use ad-hoc functions.
 * Currying of function pointers.
 * Closures - auto-currying of anonymous functions to capture shared variables from the external scope.
+* Binding the `this` pointer in a function pointer `call`.
 * Capturing call scope via `func!(...)` syntax.
 
 New features
