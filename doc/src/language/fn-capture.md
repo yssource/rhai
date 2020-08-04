@@ -16,6 +16,8 @@ it raises an evaluation error.
 It is possible, through a special syntax, to capture the calling scope - i.e. the scope
 that makes the function call - and access variables defined there.
 
+Capturing can be disabled via the [`no_closure`] feature.
+
 ```rust
 fn foo(y) {             // function accesses 'x' and 'y', but 'x' is not defined
     x += y;             // 'x' is modified in this function
@@ -47,7 +49,7 @@ f.call!(41);            // <- syntax error: capturing is not allowed in method-c
 No Mutations
 ------------
 
-Variables in the calling scope are accessed as copies.
+Variables in the calling scope are captured as copies.
 Changes to them do not reflect back to the calling scope.
 
 Rhai functions remain _pure_ in the sense that they can never mutate their environment.
@@ -56,7 +58,10 @@ Rhai functions remain _pure_ in the sense that they can never mutate their envir
 Caveat Emptor
 -------------
 
-Functions relying on the calling scope is a _Very Bad Idea™_ because it makes code almost impossible
-to reason and maintain, as their behaviors are volatile and unpredictable.
+Functions relying on the calling scope is often a _Very Bad Idea™_ because it makes code
+almost impossible to reason and maintain, as their behaviors are volatile and unpredictable.
 
-This usage should be at the last resort.
+They behave more like macros that are expanded inline than actual function calls, thus the
+syntax is also similar to Rust's macro invocations.
+
+This usage should be at the last resort. YOU HAVE BEEN WARNED.

@@ -55,5 +55,6 @@ WARNING - NOT Real Closures
 
 Remember: anonymous functions, though having the same syntax as Rust _closures_, are themselves
 **not** real closures.
-In particular, they capture their execution environment via [automatic currying][capture],
-unless the [`no_closure`] feature is turned on.
+
+In particular, they capture their execution environment via [automatic currying]
+(disabled via [`no_closure`]).

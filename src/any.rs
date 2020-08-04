@@ -283,9 +283,9 @@ impl Dynamic {
 
     /// Get the TypeId of the value held by this `Dynamic`.
     ///
-    /// # Panics and Deadlocks When Value is Shared
+    /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the `sync` feature, this call may deadlock.
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     pub fn type_id(&self) -> TypeId {
         match &self.0 {
@@ -313,9 +313,9 @@ impl Dynamic {
 
     /// Get the name of the type of the value held by this `Dynamic`.
     ///
-    /// # Panics and Deadlocks When Value is Shared
+    /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the `sync` feature, this call may deadlock.
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     pub fn type_name(&self) -> &'static str {
         match &self.0 {
@@ -621,9 +621,9 @@ impl Dynamic {
     ///
     /// Returns `None` if types mismatched.
     ///
-    /// # Panics and Deadlocks
+    /// # Panics or Deadlocks
     ///
-    /// Under the `sync` feature, this call may deadlock.
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     ///
     /// These normally shouldn't occur since most operations in Rhai is single-threaded.
@@ -744,12 +744,12 @@ impl Dynamic {
     ///
     /// Returns `None` if types mismatched.
     ///
-    /// # Panics and Deadlocks
+    /// # Panics or Deadlocks
     ///
     /// Panics if the cast fails (e.g. the type of the actual value is not the
     /// same as the specified type).
     ///
-    /// Under the `sync` feature, this call may deadlock.
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     ///
     /// These normally shouldn't occur since most operations in Rhai is single-threaded.
@@ -817,9 +817,9 @@ impl Dynamic {
     ///
     /// Returns `None` if the cast fails.
     ///
-    /// # Panics and Deadlocks When Value is Shared
+    /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the `sync` feature, this call may deadlock.
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
     pub fn read_lock<T: Variant + Clone>(&self) -> Option<DynamicReadLock<T>> {
@@ -852,9 +852,9 @@ impl Dynamic {
     ///
     /// Returns `None` if the cast fails.
     ///
-    /// # Panics and Deadlocks When Value is Shared
+    /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the `sync` feature, this call may deadlock.
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
     pub fn write_lock<T: Variant + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
