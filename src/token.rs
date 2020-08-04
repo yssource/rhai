@@ -2,7 +2,7 @@
 
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 
 use crate::error::LexError;
@@ -501,13 +501,15 @@ impl Token {
             "import" | "export" | "as" => Reserved(syntax.into()),
 
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
-            | "new" | "use" | "module" | "package" | "var" | "static" | "with" | "do" | "each"
-            | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try" | "catch"
-            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "shared" | "sync"
-            | "async" | "await" | "yield" => Reserved(syntax.into()),
+            | "new" | "use" | "module" | "package" | "var" | "static" | "shared" | "with"
+            | "do" | "each" | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try"
+            | "catch" | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync" | "async"
+            | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS => Reserved(syntax.into()),
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_SHARED | KEYWORD_THIS => {
+                Reserved(syntax.into())
+            }
 
             _ => return None,
         })
@@ -678,9 +680,9 @@ impl Token {
     }
 
     /// Convert a token into a function name, if possible.
-    pub(crate) fn into_function_name(self) -> Result<String, Self> {
+    pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
-            Self::Reserved(s) if is_keyword_function(&s) => Ok(s),
+            Self::Reserved(s) if can_override_keyword(&s) => Ok(s),
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
             _ => Err(self),
         }
@@ -1430,13 +1432,22 @@ fn get_identifier(
 /// Is this keyword allowed as a function?
 #[inline(always)]
 pub fn is_keyword_function(name: &str) -> bool {
-    name == KEYWORD_PRINT
-        || name == KEYWORD_DEBUG
-        || name == KEYWORD_TYPE_OF
-        || name == KEYWORD_EVAL
-        || name == KEYWORD_FN_PTR
-        || name == KEYWORD_FN_PTR_CALL
-        || name == KEYWORD_FN_PTR_CURRY
+    match name {
+        #[cfg(not(feature = "no_closure"))]
+        KEYWORD_IS_SHARED => true,
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
+        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
+        _ => false,
+    }
+}
+
+/// Can this keyword be overridden as a function?
+#[inline(always)]
+pub fn can_override_keyword(name: &str) -> bool {
+    match name {
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR => true,
+        _ => false,
+    }
 }
 
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {

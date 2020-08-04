@@ -39,8 +39,8 @@ pub enum EvalAltResult {
     /// An error has occurred inside a called function.
     /// Wrapped values are the name of the function and the interior error.
     ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
-    /// Access to `this` that is not bounded.
-    ErrorUnboundedThis(Position),
+    /// Access to `this` that is not bound.
+    ErrorUnboundThis(Position),
     /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
     ErrorBooleanArgMismatch(String, Position),
     /// Non-character value encountered where a character is required.
@@ -69,6 +69,8 @@ pub enum EvalAltResult {
     ErrorVariableNotFound(String, Position),
     /// Usage of an unknown module. Wrapped value is the name of the module.
     ErrorModuleNotFound(String, Position),
+    /// Data race detected when accessing a variable. Wrapped value is the name of the variable.
+    ErrorDataRace(String, Position),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     ErrorAssignmentToUnknownLHS(Position),
     /// Assignment to a constant variable.
@@ -112,7 +114,7 @@ impl EvalAltResult {
             Self::ErrorParsing(p, _) => p.desc(),
             Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
-            Self::ErrorUnboundedThis(_) => "'this' is not bounded",
+            Self::ErrorUnboundThis(_) => "'this' is not bound",
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorCharMismatch(_) => "Character expected",
             Self::ErrorNumericIndexExpr(_) => {
@@ -136,7 +138,8 @@ impl EvalAltResult {
             Self::ErrorLogicGuard(_) => "Boolean value expected",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
-            Self::ErrorModuleNotFound(_, _) => "module not found",
+            Self::ErrorModuleNotFound(_, _) => "Module not found",
+            Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
             Self::ErrorAssignmentToUnknownLHS(_) => {
                 "Assignment to an unsupported left-hand side expression"
             }
@@ -180,6 +183,7 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorFunctionNotFound(s, _)
             | Self::ErrorVariableNotFound(s, _)
+            | Self::ErrorDataRace(s, _)
             | Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
 
             Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{}", s)?,
@@ -187,7 +191,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorIndexingType(_, _)
             | Self::ErrorNumericIndexExpr(_)
             | Self::ErrorStringIndexExpr(_)
-            | Self::ErrorUnboundedThis(_)
+            | Self::ErrorUnboundThis(_)
             | Self::ErrorImportExpr(_)
             | Self::ErrorLogicGuard(_)
             | Self::ErrorFor(_)
@@ -276,7 +280,7 @@ impl EvalAltResult {
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
-            | Self::ErrorUnboundedThis(pos)
+            | Self::ErrorUnboundThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)
@@ -289,6 +293,7 @@ impl EvalAltResult {
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
+            | Self::ErrorDataRace(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
@@ -316,7 +321,7 @@ impl EvalAltResult {
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
-            | Self::ErrorUnboundedThis(pos)
+            | Self::ErrorUnboundThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
             | Self::ErrorArrayBounds(_, _, pos)
@@ -329,6 +334,7 @@ impl EvalAltResult {
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
+            | Self::ErrorDataRace(_, pos)
             | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)

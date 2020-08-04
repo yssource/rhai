@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - closures
   pull_request: {}
 
 jobs:
@@ -28,6 +29,7 @@ jobs:
           - "--features no_object"
           - "--features no_function"
           - "--features no_module"
+          - "--features no_closure"
           - "--features unicode-xid-ident"
         toolchain: [stable]
         experimental: [false]

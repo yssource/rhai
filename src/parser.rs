@@ -2,9 +2,11 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::{
+    Engine, KEYWORD_FN_PTR_CURRY, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
+};
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::fn_native::Shared;
+use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -14,9 +16,6 @@ use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::FN_ANONYMOUS;
-
-#[cfg(not(feature = "no_capture"))]
-use crate::engine::KEYWORD_FN_PTR_CURRY;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter};
@@ -39,6 +38,9 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::collections::hash_map::DefaultHasher;
+
+#[cfg(not(feature = "no_closure"))]
+use crate::stdlib::collections::HashSet;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_function"))]
@@ -355,7 +357,7 @@ impl fmt::Display for FnAccess {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct ScriptFnDef {
     /// Function name.
     pub name: ImmutableString,
@@ -363,6 +365,9 @@ pub struct ScriptFnDef {
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<String>,
+    /// Access to external variables.
+    #[cfg(not(feature = "no_closure"))]
+    pub externals: HashSet<String>,
     /// Function body.
     pub body: Stmt,
     /// Position of the function definition.
@@ -409,8 +414,13 @@ struct ParseState<'e> {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
-    #[cfg(not(feature = "no_capture"))]
+    #[cfg(not(feature = "no_closure"))]
     externals: HashMap<String, Position>,
+    /// An indicator that disables variable capturing into externals one single time.
+    /// If set to false the next call to `access_var` will not capture the variable.
+    /// All consequent calls to `access_var` will not be affected
+    #[cfg(not(feature = "no_closure"))]
+    allow_capture: bool,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -434,8 +444,10 @@ impl<'e> ParseState<'e> {
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
             max_function_expr_depth,
-            #[cfg(not(feature = "no_capture"))]
+            #[cfg(not(feature = "no_closure"))]
             externals: Default::default(),
+            #[cfg(not(feature = "no_closure"))]
+            allow_capture: true,
             stack: Default::default(),
             modules: Default::default(),
         }
@@ -448,7 +460,7 @@ impl<'e> ParseState<'e> {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `stack`.
-    fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
+    fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let index = self
             .stack
             .iter()
@@ -457,9 +469,13 @@ impl<'e> ParseState<'e> {
             .find(|(_, (n, _))| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
 
-        #[cfg(not(feature = "no_capture"))]
-        if index.is_none() && !self.externals.contains_key(name) {
-            self.externals.insert(name.to_string(), pos);
+        #[cfg(not(feature = "no_closure"))]
+        if self.allow_capture {
+            if index.is_none() && !self.externals.contains_key(name) {
+                self.externals.insert(name.to_string(), _pos);
+            }
+        } else {
+            self.allow_capture = true
         }
 
         index
@@ -563,6 +579,9 @@ pub enum Stmt {
             Position,
         )>,
     ),
+    /// Convert a variable to shared.
+    #[cfg(not(feature = "no_closure"))]
+    Share(Box<(String, Position)>),
 }
 
 impl Default for Stmt {
@@ -590,6 +609,9 @@ impl Stmt {
             Stmt::Import(x) => x.2,
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(x) => x.1,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(x) => x.1,
         }
     }
 
@@ -613,6 +635,9 @@ impl Stmt {
             Stmt::Import(x) => x.2 = new_pos,
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(x) => x.1 = new_pos,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(x) => x.1 = new_pos,
         }
 
         self
@@ -639,6 +664,9 @@ impl Stmt {
 
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(_) | Stmt::Export(_) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(_) => false,
         }
     }
 
@@ -662,6 +690,9 @@ impl Stmt {
             Stmt::Import(_) => false,
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(_) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(_) => false,
         }
     }
 }
@@ -745,12 +776,12 @@ pub enum Expr {
     Stmt(Box<(Stmt, Position)>),
     /// Wrapped expression - should not be optimized away.
     Expr(Box<Expr>),
-    /// func(expr, ... ) - ((function name, native_only, position), optional modules, hash, arguments, optional default value)
+    /// func(expr, ... ) - ((function name, native_only, capture, position), optional modules, hash, arguments, optional default value)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<(
-            (Cow<'static, str>, bool, Position),
+            (Cow<'static, str>, bool, bool, Position),
             Option<Box<ModuleRef>>,
             u64,
             StaticVec<Expr>,
@@ -804,6 +835,10 @@ impl Expr {
             Self::FloatConstant(x) => x.0.into(),
             Self::CharConstant(x) => x.0.into(),
             Self::StringConstant(x) => x.0.clone().into(),
+            Self::FnPointer(x) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
+                x.0.clone(),
+                Default::default(),
+            )))),
             Self::True(_) => true.into(),
             Self::False(_) => false.into(),
             Self::Unit(_) => ().into(),
@@ -868,7 +903,7 @@ impl Expr {
             Self::Property(x) => x.1,
             Self::Stmt(x) => x.1,
             Self::Variable(x) => (x.0).1,
-            Self::FnCall(x) => (x.0).2,
+            Self::FnCall(x) => (x.0).3,
             Self::Assignment(x) => x.0.position(),
 
             Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
@@ -900,7 +935,7 @@ impl Expr {
             Self::Variable(x) => (x.0).1 = new_pos,
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(x) => (x.0).2 = new_pos,
+            Self::FnCall(x) => (x.0).3 = new_pos,
             Self::And(x) => x.2 = new_pos,
             Self::Or(x) => x.2 = new_pos,
             Self::In(x) => x.2 = new_pos,
@@ -1006,6 +1041,7 @@ impl Expr {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
+                Token::Bang => true,
                 Token::DoubleColon => true,
                 _ => false,
             },
@@ -1098,6 +1134,7 @@ fn parse_fn_call(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     id: String,
+    capture: bool,
     mut modules: Option<Box<ModuleRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
@@ -1140,7 +1177,7 @@ fn parse_fn_call(
             };
 
             return Ok(Expr::FnCall(Box::new((
-                (id.into(), false, settings.pos),
+                (id.into(), false, capture, settings.pos),
                 modules,
                 hash_script,
                 args,
@@ -1182,7 +1219,7 @@ fn parse_fn_call(
                 };
 
                 return Ok(Expr::FnCall(Box::new((
-                    (id.into(), false, settings.pos),
+                    (id.into(), false, capture, settings.pos),
                     modules,
                     hash_script,
                     args,
@@ -1591,6 +1628,8 @@ fn parse_primary(
         _ => input.next().unwrap(),
     };
 
+    let (next_token, _) = input.peek().unwrap();
+
     let mut root_expr = match token {
         Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, settings.pos))),
         #[cfg(not(feature = "no_float"))]
@@ -1602,7 +1641,7 @@ fn parse_primary(
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         // Function call is allowed to have reserved keyword
-        Token::Reserved(s) if input.peek().unwrap().0 == Token::LeftParen => {
+        Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
                 Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
             } else {
@@ -1610,7 +1649,7 @@ fn parse_primary(
             }
         }
         // Access to `this` as a variable is OK
-        Token::Reserved(s) if s == KEYWORD_THIS && input.peek().unwrap().0 != Token::LeftParen => {
+        Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
                 return Err(
                     PERR::BadInput(format!("'{}' can only be used in functions", s))
@@ -1651,10 +1690,25 @@ fn parse_primary(
 
         root_expr = match (root_expr, token) {
             // Function call
+            #[cfg(not(feature = "no_closure"))]
+            (Expr::Variable(x), Token::Bang) => {
+                if !match_token(input, Token::LeftParen)? {
+                    return Err(PERR::MissingToken(
+                        Token::LeftParen.syntax().into(),
+                        "to start arguments list of function call".into(),
+                    )
+                    .into_err(input.peek().unwrap().1));
+                }
+
+                let ((name, pos), modules, _, _) = *x;
+                settings.pos = pos;
+                parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
+            }
+            // Function call
             (Expr::Variable(x), Token::LeftParen) => {
                 let ((name, pos), modules, _, _) = *x;
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, modules, settings.level_up())?
+                parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
@@ -1764,7 +1818,7 @@ fn parse_unary(
                     args.push(expr);
 
                     Ok(Expr::FnCall(Box::new((
-                        (op.into(), true, pos),
+                        (op.into(), true, false, pos),
                         None,
                         hash,
                         args,
@@ -1789,7 +1843,7 @@ fn parse_unary(
             let hash = calc_fn_hash(empty(), op, 2, empty());
 
             Ok(Expr::FnCall(Box::new((
-                (op.into(), true, pos),
+                (op.into(), true, false, pos),
                 None,
                 hash,
                 args,
@@ -1820,7 +1874,7 @@ fn parse_unary(
 
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
 
-            #[cfg(not(feature = "no_capture"))]
+            #[cfg(not(feature = "no_closure"))]
             new_state.externals.iter().for_each(|(closure, pos)| {
                 state.access_var(closure, *pos);
             });
@@ -1984,7 +2038,14 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
                 op_pos,
             )))
         }
-        // lhs.func()
+        // lhs.func!(...)
+        (_, Expr::FnCall(x)) if (x.0).2 => {
+            return Err(PERR::MalformedCapture(
+                "method-call style does not support capturing".into(),
+            )
+            .into_err((x.0).3))
+        }
+        // lhs.func(...)
         (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
@@ -2171,6 +2232,16 @@ fn parse_binary_op(
 
         let (op_token, pos) = input.next().unwrap();
 
+        if cfg!(not(feature = "no_object")) && op_token == Token::Period {
+            if let (Token::Identifier(_), _) = input.peek().unwrap() {
+                // prevents capturing of the object properties as vars: xxx.<var>
+                #[cfg(not(feature = "no_closure"))]
+                {
+                    state.allow_capture = false;
+                }
+            }
+        }
+
         let rhs = parse_unary(input, state, lib, settings)?;
 
         let next_precedence = input.peek().unwrap().0.precedence(custom);
@@ -2193,7 +2264,7 @@ fn parse_binary_op(
         let cmp_def = Some(false);
         let op = op_token.syntax();
         let hash = calc_fn_hash(empty(), &op, 2, empty());
-        let op = (op, true, pos);
+        let op = (op, true, false, pos);
 
         let mut args = StaticVec::new();
         args.push(root);
@@ -2254,7 +2325,7 @@ fn parse_binary_op(
                     .unwrap_or(false) =>
             {
                 // Accept non-native functions for custom operators
-                let op = (op.0, false, op.2);
+                let op = (op.0, false, op.2, op.3);
                 Expr::FnCall(Box::new((op, None, hash, args, None)))
             }
 
@@ -2848,7 +2919,7 @@ fn parse_stmt(
 
             match input.next().unwrap() {
                 (Token::Fn, pos) => {
-                    let mut state = ParseState::new(
+                    let mut new_state = ParseState::new(
                         state.engine,
                         #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
@@ -2867,7 +2938,7 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut state, lib, access, settings)?;
+                    let func = parse_fn(input, &mut new_state, lib, access, settings)?;
 
                     // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -2972,10 +3043,12 @@ fn parse_fn(
 
     let (token, pos) = input.next().unwrap();
 
-    let name = token.into_function_name().map_err(|t| match t {
-        Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
-        _ => PERR::FnMissingName.into_err(pos),
-    })?;
+    let name = token
+        .into_function_name_for_override()
+        .map_err(|t| match t {
+            Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
+            _ => PERR::FnMissingName.into_err(pos),
+        })?;
 
     match input.peek().unwrap() {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
@@ -3039,55 +3112,83 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
     };
 
-    let params = params.into_iter().map(|(p, _)| p).collect();
+    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+
+    #[cfg(not(feature = "no_closure"))]
+    let externals = state
+        .externals
+        .iter()
+        .map(|(name, _)| name)
+        .filter(|name| !params.contains(name))
+        .cloned()
+        .collect();
 
     Ok(ScriptFnDef {
         name: name.into(),
         access,
         params,
+        #[cfg(not(feature = "no_closure"))]
+        externals,
         body,
         pos: settings.pos,
     })
 }
 
 /// Creates a curried expression from a list of external variables
-#[cfg(not(feature = "no_capture"))]
 fn make_curry_from_externals(
     fn_expr: Expr,
-    state: &mut ParseState,
-    settings: &ParseSettings,
+    externals: StaticVec<(String, Position)>,
+    pos: Position,
 ) -> Expr {
-    if state.externals.is_empty() {
+    if externals.is_empty() {
         return fn_expr;
     }
 
+    let num_externals = externals.len();
     let mut args: StaticVec<_> = Default::default();
 
-    state.externals.iter().for_each(|(var_name, pos)| {
+    #[cfg(not(feature = "no_closure"))]
+    externals.iter().for_each(|(var_name, pos)| {
         args.push(Expr::Variable(Box::new((
-            (var_name.clone(), *pos),
+            (var_name.into(), *pos),
             None,
             0,
             None,
         ))));
     });
 
-    let hash = calc_fn_hash(
-        empty(),
-        KEYWORD_FN_PTR_CURRY,
-        state.externals.len(),
-        empty(),
-    );
+    #[cfg(feature = "no_closure")]
+    externals.into_iter().for_each(|(var_name, pos)| {
+        args.push(Expr::Variable(Box::new(((var_name, pos), None, 0, None))));
+    });
+
+    let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals, empty());
 
     let fn_call = Expr::FnCall(Box::new((
-        (KEYWORD_FN_PTR_CURRY.into(), false, settings.pos),
+        (KEYWORD_FN_PTR_CURRY.into(), false, false, pos),
         None,
         hash,
         args,
         None,
     )));
 
-    Expr::Dot(Box::new((fn_expr, fn_call, settings.pos)))
+    let expr = Expr::Dot(Box::new((fn_expr, fn_call, pos)));
+
+    // If there are captured variables, convert the entire expression into a statement block,
+    // then insert the relevant `Share` statements.
+    #[cfg(not(feature = "no_closure"))]
+    {
+        // Statement block
+        let mut statements: StaticVec<_> = Default::default();
+        // Insert `Share` statements
+        statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
+        // Final expression
+        statements.push(Stmt::Expr(Box::new(expr)));
+        Expr::Stmt(Box::new((Stmt::Block(Box::new((statements, pos))), pos)))
+    }
+
+    #[cfg(feature = "no_closure")]
+    return expr;
 }
 
 /// Parse an anonymous function definition.
@@ -3157,17 +3258,31 @@ fn parse_anon_fn(
     let body = parse_stmt(input, state, lib, settings.level_up())
         .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
 
-    #[cfg(feature = "no_capture")]
-    let params: StaticVec<_> = params.into_iter().map(|(v, _)| v).collect();
+    // External variables may need to be processed in a consistent order,
+    // so extract them into a list.
+    let externals: StaticVec<_> = {
+        #[cfg(not(feature = "no_closure"))]
+        {
+            state
+                .externals
+                .iter()
+                .map(|(k, &v)| (k.clone(), v))
+                .collect()
+        }
+        #[cfg(feature = "no_closure")]
+        Default::default()
+    };
 
-    // Add parameters that are auto-curried
-    #[cfg(not(feature = "no_capture"))]
-    let params: StaticVec<_> = state
-        .externals
-        .keys()
-        .cloned()
-        .chain(params.into_iter().map(|(v, _)| v))
-        .collect();
+    let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
+        externals
+            .iter()
+            .map(|(k, _)| k)
+            .cloned()
+            .chain(params.into_iter().map(|(v, _)| v))
+            .collect()
+    } else {
+        params.into_iter().map(|(v, _)| v).collect()
+    };
 
     // Calculate hash
     #[cfg(feature = "no_std")]
@@ -3181,20 +3296,26 @@ fn parse_anon_fn(
     let hash = s.finish();
 
     // Create unique function name
-    let fn_name: ImmutableString = format!("{}{:16x}", FN_ANONYMOUS, hash).into();
+    let fn_name: ImmutableString = format!("{}{:016x}", FN_ANONYMOUS, hash).into();
 
+    // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
         access: FnAccess::Public,
         params,
+        #[cfg(not(feature = "no_closure"))]
+        externals: Default::default(),
         body,
         pos: settings.pos,
     };
 
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
 
-    #[cfg(not(feature = "no_capture"))]
-    let expr = make_curry_from_externals(expr, state, &settings);
+    let expr = if cfg!(not(feature = "no_closure")) {
+        make_curry_from_externals(expr, externals, settings.pos)
+    } else {
+        expr
+    };
 
     Ok((expr, script))
 }

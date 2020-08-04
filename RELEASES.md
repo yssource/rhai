@@ -9,6 +9,8 @@ This version adds:
 * Binding the `this` pointer in a function pointer `call`.
 * Anonymous functions (in Rust closure syntax).  Simplifies creation of single-use ad-hoc functions.
 * Currying of function pointers.
+* Closures - auto-currying of anonymous functions to capture shared variables from the external scope.
+* Capturing call scope via `func!(...)` syntax.
 
 New features
 ------------
@@ -19,8 +21,11 @@ New features
 * Anonymous functions are supported in the syntax of a Rust closure, e.g. `|x, y, z| x + y - z`.
 * Custom syntax now works even without the `internals` feature.
 * Currying of function pointers is supported via the new `curry` keyword.
+* Automatic currying of anonymous functions to capture shared variables from the external scope.
+* Capturing of the calling scope for function call via the `func!(...)` syntax.
 * `Module::set_indexer_get_set_fn` is added as a shorthand of both `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn`.
 * New `unicode-xid-ident` feature to allow [Unicode Standard Annex #31](http://www.unicode.org/reports/tr31/) for identifiers.
+* `Scope::iter_raw` returns an iterator with a reference to the underlying `Dynamic` value (which may be shared).
 
 Breaking changes
 ----------------
@@ -29,6 +34,8 @@ Breaking changes
 * Function signature for defining custom syntax is simplified.
 * `Engine::register_raw_fn_XXX` API shortcuts are removed.
 * `PackagesCollection::get_fn`, `PackagesCollection::contains_fn`, `Module::get_fn` and `Module::contains_fn` now take an additional `public_only` parameter indicating whether only public functions are accepted.
+* The iterator returned by `Scope::iter` now contains a clone of the `Dynamic` value (unshared).
+* `Engine::load_package` takes any type that is `Into<PackageLibrary>`.
 
 Housekeeping
 ------------

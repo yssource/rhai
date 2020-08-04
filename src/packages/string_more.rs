@@ -1,6 +1,7 @@
 use crate::any::Dynamic;
 use crate::def_package;
 use crate::engine::Engine;
+use crate::fn_native::FnPtr;
 use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
 use crate::utils::StaticVec;
@@ -88,20 +89,17 @@ macro_rules! reg_op {
 }
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
-    reg_op!(lib, "+", append, INT, bool, char);
+    reg_op!(lib, "+", append, INT, bool, char, FnPtr);
     lib.set_fn_2( "+", |x: ImmutableString, _: ()| Ok(x));
 
-    reg_op!(lib, "+", prepend, INT, bool, char);
+    reg_op!(lib, "+", prepend, INT, bool, char, FnPtr);
     lib.set_fn_2("+", |_: (), y: ImmutableString| Ok(y));
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
+    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         reg_op!(lib, "+", append, i8, u8, i16, u16, i32, i64, u32, u64);
         reg_op!(lib, "+", prepend, i8, u8, i16, u16, i32, i64, u32, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
+        if cfg!(not(target_arch = "wasm32")) {
             reg_op!(lib, "+", append, i128, u128);
             reg_op!(lib, "+", prepend, i128, u128);
         }
@@ -228,7 +226,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
         "pad",
         &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
         |_engine: &Engine, _: &Module, args: &mut [&mut Dynamic]| {
-            let len = *args[1].downcast_ref::< INT>().unwrap();
+            let len = *args[1].read_lock::< INT>().unwrap();
 
             // Check if string will be over max size limit
             #[cfg(not(feature = "unchecked"))]
@@ -243,7 +241,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
             if len > 0 {
                 let ch = mem::take(args[2]).cast::<char>();
-                let s = args[0].downcast_mut::<ImmutableString>().unwrap();
+                let mut s = args[0].write_lock::<ImmutableString>().unwrap();
 
                 let orig_len = s.chars().count();
 

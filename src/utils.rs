@@ -6,6 +6,7 @@ use crate::stdlib::{
     any::TypeId,
     borrow::Borrow,
     boxed::Box,
+    cmp::Ordering,
     fmt,
     hash::{BuildHasher, Hash, Hasher},
     iter::FromIterator,
@@ -141,6 +142,12 @@ impl AsRef<String> for ImmutableString {
     }
 }
 
+impl Borrow<String> for ImmutableString {
+    fn borrow(&self) -> &String {
+        &self.0
+    }
+}
+
 impl Borrow<str> for ImmutableString {
     fn borrow(&self) -> &str {
         self.0.as_str()
@@ -257,6 +264,18 @@ impl AddAssign<&ImmutableString> for ImmutableString {
     }
 }
 
+impl AddAssign<ImmutableString> for ImmutableString {
+    fn add_assign(&mut self, rhs: ImmutableString) {
+        if !rhs.is_empty() {
+            if self.is_empty() {
+                self.0 = rhs.0;
+            } else {
+                self.make_mut().push_str(rhs.0.as_str());
+            }
+        }
+    }
+}
+
 impl Add<&str> for ImmutableString {
     type Output = Self;
 
@@ -345,6 +364,42 @@ impl Add<char> for &ImmutableString {
 impl AddAssign<char> for ImmutableString {
     fn add_assign(&mut self, rhs: char) {
         self.make_mut().push(rhs);
+    }
+}
+
+impl<S: AsRef<str>> PartialEq<S> for ImmutableString {
+    fn eq(&self, other: &S) -> bool {
+        self.as_str().eq(other.as_ref())
+    }
+}
+
+impl PartialEq<ImmutableString> for str {
+    fn eq(&self, other: &ImmutableString) -> bool {
+        self.eq(other.as_str())
+    }
+}
+
+impl PartialEq<ImmutableString> for String {
+    fn eq(&self, other: &ImmutableString) -> bool {
+        self.eq(other.as_str())
+    }
+}
+
+impl<S: AsRef<str>> PartialOrd<S> for ImmutableString {
+    fn partial_cmp(&self, other: &S) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_ref())
+    }
+}
+
+impl PartialOrd<ImmutableString> for str {
+    fn partial_cmp(&self, other: &ImmutableString) -> Option<Ordering> {
+        self.partial_cmp(other.as_str())
+    }
+}
+
+impl PartialOrd<ImmutableString> for String {
+    fn partial_cmp(&self, other: &ImmutableString) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_str())
     }
 }
 

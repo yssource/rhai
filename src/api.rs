@@ -3,6 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, Imports, State};
 use crate::error::ParseError;
+use crate::fn_call::ensure_no_data_race;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::module::{FuncReturn, Module};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
@@ -1282,6 +1283,11 @@ impl Engine {
         let mut mods = Imports::new();
         let args = args.as_mut();
 
+        // Check for data race.
+        if cfg!(not(feature = "no_closure")) {
+            ensure_no_data_race(name, args, false)?;
+        }
+
         self.call_script_fn(
             scope, &mut mods, &mut state, lib, this_ptr, name, fn_def, args, 0,
         )
@@ -1305,16 +1311,15 @@ impl Engine {
         mut ast: AST,
         optimization_level: OptimizationLevel,
     ) -> AST {
-        #[cfg(not(feature = "no_function"))]
-        let lib = ast
-            .lib()
-            .iter_fn()
-            .filter(|(_, _, _, f)| f.is_script())
-            .map(|(_, _, _, f)| f.get_fn_def().clone())
-            .collect();
-
-        #[cfg(feature = "no_function")]
-        let lib = Default::default();
+        let lib = if cfg!(not(feature = "no_function")) {
+            ast.lib()
+                .iter_fn()
+                .filter(|(_, _, _, f)| f.is_script())
+                .map(|(_, _, _, f)| f.get_fn_def().clone())
+                .collect()
+        } else {
+            Default::default()
+        };
 
         let stmt = mem::take(ast.statements_mut());
         optimize_into_ast(self, scope, stmt, lib, optimization_level)

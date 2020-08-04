@@ -9,7 +9,7 @@
 [`no_object`]: {{rootUrl}}/start/features.md
 [`no_function`]: {{rootUrl}}/start/features.md
 [`no_module`]: {{rootUrl}}/start/features.md
-[`no_capture`]: {{rootUrl}}/start/features.md
+[`no_closure`]: {{rootUrl}}/start/features.md
 [`no_std`]: {{rootUrl}}/start/features.md
 [`no-std`]: {{rootUrl}}/start/features.md
 [`internals`]: {{rootUrl}}/start/features.md
@@ -79,8 +79,10 @@
 [function pointer]: {{rootUrl}}/language/fn-ptr.md
 [function pointers]: {{rootUrl}}/language/fn-ptr.md
 [currying]: {{rootUrl}}/language/fn-curry.md
-[capture]: {{rootUrl}}/language/fn-closure.md
+[capture]: {{rootUrl}}/language/fn-capture.md
 [automatic currying]: {{rootUrl}}/language/fn-closure.md
+[closure]: {{rootUrl}}/language/fn-closure.md
+[closures]: {{rootUrl}}/language/fn-closure.md
 [function namespace]: {{rootUrl}}/language/fn-namespaces.md
 [function namespaces]: {{rootUrl}}/language/fn-namespaces.md
 [anonymous function]: {{rootUrl}}/language/fn-anon.md
