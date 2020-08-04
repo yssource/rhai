@@ -20,7 +20,7 @@ There are also a number of examples scripts that showcase Rhai's features, all i
 | [`function_decl3.rhai`]({{repoTree}}/scripts/function_decl3.rhai) | A [function] with many parameters                                                           |
 | [`if1.rhai`]({{repoTree}}/scripts/if1.rhai)                       | [`if`]({{rootUrl}}/language/if.md) example                                                  |
 | [`loop.rhai`]({{repoTree}}/scripts/loop.rhai)                     | Count-down [`loop`]({{rootUrl}}/language/loop.md) in Rhai, emulating a `do` .. `while` loop |
-| [`oop.rhai`]({{repoTree}}/scripts/oop.rhai)                       | Simulate [object-oriented programming (OOP)][OOP]                                           |
+| [`oop.rhai`]({{repoTree}}/scripts/oop.rhai)                       | Simulate [object-oriented programming (OOP)][OOP] with [closures]                           |
 | [`op1.rhai`]({{repoTree}}/scripts/op1.rhai)                       | Just simple addition                                                                        |
 | [`op2.rhai`]({{repoTree}}/scripts/op2.rhai)                       | Simple addition and multiplication                                                          |
 | [`op3.rhai`]({{repoTree}}/scripts/op3.rhai)                       | Change evaluation order with parenthesis                                                    |

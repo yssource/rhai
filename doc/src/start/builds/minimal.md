@@ -38,8 +38,8 @@ Omitting arrays ([`no_index`]) yields the most code-size savings, followed by fl
 ([`no_float`]), checked arithmetic/script resource limits ([`unchecked`]) and finally object maps and custom types ([`no_object`]).
 
 Where the usage scenario does not call for loading externally-defined modules, use [`no_module`] to save some bytes.
-Disable script-defined functions ([`no_function`]) when the feature is not needed.
-Both of these have little code size savings.
+Disable script-defined functions ([`no_function`]) and possibly closures ([`no_closure`]) when the features are not needed.
+Both of these have some code size savings but not much.
 
 
 Use a Raw [`Engine`]
