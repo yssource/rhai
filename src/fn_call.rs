@@ -705,12 +705,25 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             if let Some(map) = obj.read_lock::<Map>() {
                 if let Some(val) = map.get(_fn_name) {
-                    if let Some(f) = val.read_lock::<FnPtr>() {
+                    if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                         // Remap the function name
-                        redirected = f.get_fn_name().clone();
+                        redirected = fn_ptr.get_fn_name().clone();
                         _fn_name = &redirected;
-                        // Recalculate the hash based on the new function name
-                        _hash = calc_fn_hash(empty(), _fn_name, idx.len(), empty());
+                        // Add curried arguments
+                        if !fn_ptr.curry().is_empty() {
+                            fn_ptr
+                                .curry()
+                                .iter()
+                                .cloned()
+                                .enumerate()
+                                .for_each(|(i, v)| idx.insert(i, v));
+                        }
+                        // Recalculate the hash based on the new function name and new arguments
+                        _hash = if native {
+                            0
+                        } else {
+                            calc_fn_hash(empty(), _fn_name, idx.len(), empty())
+                        };
                     }
                 }
             };
