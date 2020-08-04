@@ -337,7 +337,10 @@ impl Dynamic {
             Union::Variant(value) => (***value).type_name(),
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
-            Union::Shared(cell) => (*cell.borrow()).type_name(),
+            Union::Shared(cell) => cell
+                .try_borrow()
+                .map(|v| (*v).type_name())
+                .unwrap_or("<shared>"),
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
             Union::Shared(cell) => (*cell.read().unwrap()).type_name(),
@@ -394,10 +397,20 @@ impl fmt::Display for Dynamic {
             Union::FnPtr(value) => fmt::Display::fmt(value, f),
 
             #[cfg(not(feature = "no_std"))]
-            Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
-            Union::Variant(value) => write!(f, "{}", (*value).type_name()),
+            Union::Variant(value) if value.is::<Instant>() => f.write_str("<timestamp>"),
+            Union::Variant(value) => f.write_str((*value).type_name()),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_) => f.write_str("<shared>"),
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(cell) => {
+                if let Ok(v) = cell.try_borrow() {
+                    fmt::Display::fmt(&*v, f)
+                } else {
+                    f.write_str("<shared>")
+                }
+            }
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(cell) => fmt::Display::fmt(*cell.read_lock().unwrap(), f),
         }
     }
 }
@@ -425,7 +438,17 @@ impl fmt::Debug for Dynamic {
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(value) => write!(f, "{}", (*value).type_name()),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_) => f.write_str("<shared>"),
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(cell) => {
+                if let Ok(v) = cell.try_borrow() {
+                    write!(f, "{:?} (shared)", *v)
+                } else {
+                    f.write_str("<shared>")
+                }
+            }
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(cell) => fmt::Display::fmt(*cell.read_lock().unwrap(), f),
         }
     }
 }
@@ -861,13 +884,9 @@ impl Dynamic {
     /// Get a reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a reference to it.
     ///
-    /// Returns `None` if the cast fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the value is shared.
+    /// Returns `None` if the cast fails, or if the value is shared.
     #[inline(always)]
-    fn downcast_ref<T: Variant + Clone>(&self) -> Option<&T> {
+    pub(crate) fn downcast_ref<T: Variant + Clone>(&self) -> Option<&T> {
         let type_id = TypeId::of::<T>();
 
         if type_id == TypeId::of::<INT>() {
@@ -940,7 +959,7 @@ impl Dynamic {
         match &self.0 {
             Union::Variant(value) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_) => unreachable!(),
+            Union::Shared(_) => None,
             _ => None,
         }
     }
@@ -948,13 +967,9 @@ impl Dynamic {
     /// Get a mutable reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a mutable reference to it.
     ///
-    /// Returns `None` if the cast fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the value is shared.
+    /// Returns `None` if the cast fails, or if the value is shared.
     #[inline(always)]
-    fn downcast_mut<T: Variant + Clone>(&mut self) -> Option<&mut T> {
+    pub(crate) fn downcast_mut<T: Variant + Clone>(&mut self) -> Option<&mut T> {
         let type_id = TypeId::of::<T>();
 
         if type_id == TypeId::of::<INT>() {
@@ -1021,7 +1036,7 @@ impl Dynamic {
         match &mut self.0 {
             Union::Variant(value) => value.as_mut().as_mut_any().downcast_mut::<T>(),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_) => unreachable!(),
+            Union::Shared(_) => None,
             _ => None,
         }
     }

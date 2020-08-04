@@ -177,6 +177,9 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             Union::Variant(value) if value.is::<u128>() => self.deserialize_u128(visitor),
 
             Union::Variant(_) => self.type_error(),
+
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_) => self.type_error(),
         }
     }
 
