@@ -2,7 +2,7 @@
 
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 
 use crate::error::LexError;
@@ -21,7 +21,6 @@ use crate::stdlib::{
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
-    vec::Vec,
 };
 
 type LERR = LexError;
@@ -30,8 +29,11 @@ pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
 
 /// A location (line number + character position) in the input script.
 ///
-/// In order to keep footprint small, both line number and character position have 16-bit unsigned resolution,
-/// meaning they go up to a maximum of 65,535 lines and characters per line.
+/// # Limitations
+///
+/// In order to keep footprint small, both line number and character position have 16-bit resolution,
+/// meaning they go up to a maximum of 65,535 lines and 65,535 characters per line.
+///
 /// Advancing beyond the maximum line length or maximum number of lines is not an error but has no effect.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
@@ -43,6 +45,13 @@ pub struct Position {
 
 impl Position {
     /// Create a new `Position`.
+    ///
+    /// `line` must not be zero.
+    /// If `position` is zero, then it is at the beginning of a line.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `line` is zero.
     pub fn new(line: u16, position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
 
@@ -52,7 +61,7 @@ impl Position {
         }
     }
 
-    /// Get the line number (1-based), or `None` if no position.
+    /// Get the line number (1-based), or `None` if there is no position.
     pub fn line(&self) -> Option<usize> {
         if self.is_none() {
             None
@@ -85,7 +94,6 @@ impl Position {
     /// # Panics
     ///
     /// Panics if already at beginning of a line - cannot rewind to a previous line.
-    ///
     pub(crate) fn rewind(&mut self) {
         assert!(!self.is_none(), "cannot rewind Position::none");
         assert!(self.pos > 0, "cannot rewind at position 0");
@@ -104,7 +112,7 @@ impl Position {
     }
 
     /// Create a `Position` representing no position.
-    pub(crate) fn none() -> Self {
+    pub fn none() -> Self {
         Self { line: 0, pos: 0 }
     }
 
@@ -146,9 +154,9 @@ impl fmt::Debug for Position {
 pub enum Token {
     /// An `INT` constant.
     IntegerConstant(INT),
-    /// A `FLOAT` constaint.
+    /// A `FLOAT` constant.
     ///
-    /// Never appears under the `no_float` feature.
+    /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FLOAT),
     /// An identifier.
@@ -249,7 +257,7 @@ pub enum Token {
     And,
     /// `fn`
     ///
-    /// Never appears under the `no_function` feature.
+    /// Reserved under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     Fn,
     /// `continue`
@@ -284,22 +292,22 @@ pub enum Token {
     PowerOfAssign,
     /// `private`
     ///
-    /// Never appears under the `no_function` feature.
+    /// Reserved under the `no_function` feature.
     #[cfg(not(feature = "no_function"))]
     Private,
     /// `import`
     ///
-    /// Never appears under the `no_module` feature.
+    /// Reserved under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     Import,
     /// `export`
     ///
-    /// Never appears under the `no_module` feature.
+    /// Reserved under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     Export,
     /// `as`
     ///
-    /// Never appears under the `no_module` feature.
+    /// Reserved under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
     As,
     /// A lexer error.
@@ -492,11 +500,16 @@ impl Token {
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
 
-            "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" => {
+            "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
+            | "new" | "use" | "module" | "package" | "var" | "static" | "shared" | "with"
+            | "do" | "each" | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try"
+            | "catch" | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync" | "async"
+            | "await" | "yield" => Reserved(syntax.into()),
+
+            KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_SHARED | KEYWORD_THIS => {
                 Reserved(syntax.into())
             }
-            KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -640,7 +653,7 @@ impl Token {
         }
     }
 
-    /// Is this token a standard keyword?
+    /// Is this token an active standard keyword?
     pub fn is_keyword(&self) -> bool {
         use Token::*;
 
@@ -663,6 +676,15 @@ impl Token {
         match self {
             Self::Reserved(_) => true,
             _ => false,
+        }
+    }
+
+    /// Convert a token into a function name, if possible.
+    pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
+        match self {
+            Self::Reserved(s) if can_override_keyword(&s) => Ok(s),
+            Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
+            _ => Err(self),
         }
     }
 
@@ -726,8 +748,8 @@ pub fn parse_string_literal(
     pos: &mut Position,
     enclosing_char: char,
 ) -> Result<String, (LexError, Position)> {
-    let mut result = Vec::new();
-    let mut escape = String::with_capacity(12);
+    let mut result: StaticVec<char> = Default::default();
+    let mut escape: StaticVec<char> = Default::default();
 
     loop {
         let next_char = stream.get_next().ok_or((LERR::UnterminatedString, *pos))?;
@@ -766,8 +788,8 @@ pub fn parse_string_literal(
             // \x??, \u????, \U????????
             ch @ 'x' | ch @ 'u' | ch @ 'U' if !escape.is_empty() => {
                 let mut seq = escape.clone();
-                seq.push(ch);
                 escape.clear();
+                seq.push(ch);
 
                 let mut out_val: u32 = 0;
                 let len = match ch {
@@ -778,23 +800,31 @@ pub fn parse_string_literal(
                 };
 
                 for _ in 0..len {
-                    let c = stream
-                        .get_next()
-                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq.to_string()), *pos))?;
+                    let c = stream.get_next().ok_or_else(|| {
+                        (
+                            LERR::MalformedEscapeSequence(seq.iter().cloned().collect()),
+                            *pos,
+                        )
+                    })?;
 
                     seq.push(c);
                     pos.advance();
 
                     out_val *= 16;
-                    out_val += c
-                        .to_digit(16)
-                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq.to_string()), *pos))?;
+                    out_val += c.to_digit(16).ok_or_else(|| {
+                        (
+                            LERR::MalformedEscapeSequence(seq.iter().cloned().collect()),
+                            *pos,
+                        )
+                    })?;
                 }
 
-                result.push(
-                    char::from_u32(out_val)
-                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq), *pos))?,
-                );
+                result.push(char::from_u32(out_val).ok_or_else(|| {
+                    (
+                        LERR::MalformedEscapeSequence(seq.into_iter().collect()),
+                        *pos,
+                    )
+                })?);
             }
 
             // \{enclosing_char} - escaped
@@ -807,7 +837,12 @@ pub fn parse_string_literal(
             ch if enclosing_char == ch && escape.is_empty() => break,
 
             // Unknown escape sequence
-            _ if !escape.is_empty() => return Err((LERR::MalformedEscapeSequence(escape), *pos)),
+            _ if !escape.is_empty() => {
+                return Err((
+                    LERR::MalformedEscapeSequence(escape.into_iter().collect()),
+                    *pos,
+                ))
+            }
 
             // Cannot have new-lines inside string literals
             '\n' => {
@@ -962,7 +997,7 @@ fn get_next_token_inner(
 
             // digit ...
             ('0'..='9', _) => {
-                let mut result = Vec::new();
+                let mut result: StaticVec<char> = Default::default();
                 let mut radix_base: Option<u32> = None;
                 result.push(c);
 
@@ -1083,7 +1118,7 @@ fn get_next_token_inner(
                     |err| (Token::LexError(Box::new(err.0)), err.1),
                     |result| {
                         let mut chars = result.chars();
-                        let first = chars.next();
+                        let first = chars.next().unwrap();
 
                         if chars.next().is_some() {
                             (
@@ -1091,10 +1126,7 @@ fn get_next_token_inner(
                                 start_pos,
                             )
                         } else {
-                            (
-                                Token::CharConstant(first.expect("should be Some")),
-                                start_pos,
-                            )
+                            (Token::CharConstant(first), start_pos)
                         }
                     },
                 ))
@@ -1367,7 +1399,7 @@ fn get_identifier(
     start_pos: Position,
     first_char: char,
 ) -> Option<(Token, Position)> {
-    let mut result = Vec::new();
+    let mut result: StaticVec<_> = Default::default();
     result.push(first_char);
 
     while let Some(next_char) = stream.peek_next() {
@@ -1382,7 +1414,7 @@ fn get_identifier(
 
     let is_valid_identifier = is_valid_identifier(result.iter().cloned());
 
-    let identifier: String = result.into_iter().collect();
+    let identifier = result.into_iter().collect();
 
     if !is_valid_identifier {
         return Some((
@@ -1395,6 +1427,27 @@ fn get_identifier(
         Token::lookup_from_syntax(&identifier).unwrap_or_else(|| Token::Identifier(identifier)),
         start_pos,
     ));
+}
+
+/// Is this keyword allowed as a function?
+#[inline(always)]
+pub fn is_keyword_function(name: &str) -> bool {
+    match name {
+        #[cfg(not(feature = "no_closure"))]
+        KEYWORD_IS_SHARED => true,
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
+        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
+        _ => false,
+    }
+}
+
+/// Can this keyword be overridden as a function?
+#[inline(always)]
+pub fn can_override_keyword(name: &str) -> bool {
+    match name {
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR => true,
+        _ => false,
+    }
 }
 
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
@@ -1414,22 +1467,25 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
 }
 
 #[cfg(feature = "unicode-xid-ident")]
+#[inline(always)]
 fn is_id_first_alphabetic(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_start(x)
 }
 
 #[cfg(feature = "unicode-xid-ident")]
+#[inline(always)]
 fn is_id_continue(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(x)
 }
 
 #[cfg(not(feature = "unicode-xid-ident"))]
-
+#[inline(always)]
 fn is_id_first_alphabetic(x: char) -> bool {
     x.is_ascii_alphabetic()
 }
 
 #[cfg(not(feature = "unicode-xid-ident"))]
+#[inline(always)]
 fn is_id_continue(x: char) -> bool {
     x.is_ascii_alphanumeric() || x == '_'
 }
@@ -1486,13 +1542,15 @@ pub struct TokenIterator<'a, 'e> {
     pos: Position,
     /// Input character stream.
     stream: MultiInputsStream<'a>,
+    /// A processor function (if any) that maps a token to another.
+    map: Option<Box<dyn Fn(Token) -> Token>>,
 }
 
 impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match (
+        let token = match (
             get_next_token(&mut self.stream, &mut self.state, &mut self.pos),
             self.engine.disabled_symbols.as_ref(),
             self.engine.custom_keywords.as_ref(),
@@ -1574,12 +1632,27 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                 Some((Token::Reserved(token.syntax().into()), pos))
             }
             (r, _, _) => r,
+        };
+
+        match token {
+            None => None,
+            Some((token, pos)) => {
+                if let Some(ref map) = self.map {
+                    Some((map(token), pos))
+                } else {
+                    Some((token, pos))
+                }
+            }
         }
     }
 }
 
 /// Tokenize an input text stream.
-pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a, 'e> {
+pub fn lex<'a, 'e>(
+    input: &'a [&'a str],
+    map: Option<Box<dyn Fn(Token) -> Token>>,
+    engine: &'e Engine,
+) -> TokenIterator<'a, 'e> {
     TokenIterator {
         engine,
         state: TokenizeState {
@@ -1597,5 +1670,6 @@ pub fn lex<'a, 'e>(input: &'a [&'a str], engine: &'e Engine) -> TokenIterator<'a
             streams: input.iter().map(|s| s.chars().peekable()).collect(),
             index: 0,
         },
+        map,
     }
 }

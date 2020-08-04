@@ -1,8 +1,4 @@
 //! Module containing various utility types and functions.
-//!
-//! # Safety
-//!
-//! The `StaticVec` type has some `unsafe` blocks to handle conversions between `MaybeUninit` and regular types.
 
 use crate::fn_native::{shared_make_mut, shared_take, Shared};
 
@@ -10,15 +6,13 @@ use crate::stdlib::{
     any::TypeId,
     borrow::Borrow,
     boxed::Box,
+    cmp::Ordering,
     fmt,
     hash::{BuildHasher, Hash, Hasher},
     iter::FromIterator,
-    mem,
-    mem::MaybeUninit,
-    ops::{Add, AddAssign, Deref, DerefMut, Drop, Index, IndexMut},
+    ops::{Add, AddAssign, Deref},
     str::FromStr,
     string::{String, ToString},
-    vec::Vec,
 };
 
 #[cfg(not(feature = "no_std"))]
@@ -26,6 +20,8 @@ use crate::stdlib::collections::hash_map::DefaultHasher;
 
 #[cfg(feature = "no_std")]
 use ahash::AHasher;
+
+use smallvec::SmallVec;
 
 /// A hasher that only takes one single `u64` and returns it as a hash key.
 ///
@@ -92,549 +88,10 @@ pub fn calc_fn_spec<'a>(
     s.finish()
 }
 
-/// [INTERNALS] An array-like type that holds a number of values in static storage for no-allocation, quick access.
+/// [INTERNALS] Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
+/// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
 /// Exported under the `internals` feature only.
-///
-/// If too many items are stored, it converts into using a `Vec`.
-///
-///
-/// This is essentially a knock-off of the [`staticvec`](https://crates.io/crates/staticvec) crate.
-/// This simplified implementation here is to avoid pulling in another crate.
-///
-/// # Implementation
-///
-/// A `StaticVec` holds data in _either one_ of two storages: 1) a fixed-size array of `MAX_STATIC_VEC`
-/// items, and 2) a dynamic `Vec`.  At any time, either one of them (or both) must be empty, depending on the
-/// total number of items.
-///
-/// There is a `len` field containing the total number of items held by the `StaticVec`.
-///
-/// The fixed-size array (`list`) is not initialized (i.e. initialized with `MaybeUninit::uninit()`).
-///
-/// When `len <= MAX_STATIC_VEC`, all elements are stored in the fixed-size array.
-/// Array slots `>= len` are `MaybeUninit::uninit()` while slots `< len` are considered actual data.
-/// In this scenario, the `Vec` (`more`) is empty.
-///
-/// As soon as we try to push a new item into the `StaticVec` that makes the total number exceed
-/// `MAX_STATIC_VEC`, all the items in the fixed-sized array are taken out, replaced with
-/// `MaybeUninit::uninit()` (via `mem::replace`) and pushed into the `Vec`.
-/// Then the new item is added to the `Vec`.
-///
-/// Therefore, if `len > MAX_STATIC_VEC`, then the fixed-size array (`list`) is considered
-/// empty and uninitialized while all data resides in the `Vec` (`more`).
-///
-/// When popping an item off of the `StaticVec`, the reverse is true.  When `len = MAX_STATIC_VEC + 1`,
-/// after popping the item, all the items residing in the `Vec` are moved back to the fixed-size array (`list`).
-/// The `Vec` will then be empty.
-///
-/// Therefore, if `len <= MAX_STATIC_VEC`, data is in the fixed-size array (`list`).
-/// Otherwise, data is in the `Vec` (`more`).
-///
-/// # Safety
-///
-/// This type uses some unsafe code (mainly for uninitialized/unused array slots) for efficiency.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-//
-// TODO - remove unsafe code
-pub struct StaticVec<T> {
-    /// Total number of values held.
-    len: usize,
-    /// Fixed-size storage for fast, no-allocation access.
-    list: [MaybeUninit<T>; MAX_STATIC_VEC],
-    /// Dynamic storage. For spill-overs.
-    more: Vec<T>,
-}
-
-/// Maximum slots of fixed-size storage for a `StaticVec`.
-/// 4 slots should be enough for most cases.
-const MAX_STATIC_VEC: usize = 4;
-
-impl<T> Drop for StaticVec<T> {
-    fn drop(&mut self) {
-        self.clear();
-    }
-}
-
-impl<T: Hash> Hash for StaticVec<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.iter().for_each(|x| x.hash(state));
-    }
-}
-
-impl<T> Default for StaticVec<T> {
-    fn default() -> Self {
-        Self {
-            len: 0,
-            list: unsafe { mem::MaybeUninit::uninit().assume_init() },
-            more: Vec::new(),
-        }
-    }
-}
-
-impl<T: PartialEq> PartialEq for StaticVec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        if self.len != other.len || self.more != other.more {
-            return false;
-        }
-
-        if self.len > MAX_STATIC_VEC {
-            return true;
-        }
-
-        unsafe {
-            mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&self.list)
-                == mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&other.list)
-        }
-    }
-}
-
-impl<T: Clone> Clone for StaticVec<T> {
-    fn clone(&self) -> Self {
-        let mut value: Self = Default::default();
-        value.len = self.len;
-
-        if self.is_fixed_storage() {
-            for x in 0..self.len {
-                let item = self.list.get(x).unwrap();
-                let item_value = unsafe { mem::transmute::<_, &T>(item) };
-                value.list[x] = MaybeUninit::new(item_value.clone());
-            }
-        } else {
-            value.more = self.more.clone();
-        }
-
-        value
-    }
-}
-
-impl<T: Eq> Eq for StaticVec<T> {}
-
-impl<T> FromIterator<T> for StaticVec<T> {
-    fn from_iter<X: IntoIterator<Item = T>>(iter: X) -> Self {
-        let mut vec = StaticVec::new();
-
-        for x in iter {
-            vec.push(x);
-        }
-
-        vec
-    }
-}
-
-impl<T: 'static> IntoIterator for StaticVec<T> {
-    type Item = T;
-    type IntoIter = Box<dyn Iterator<Item = T>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
-impl<T> StaticVec<T> {
-    /// Create a new `StaticVec`.
-    pub fn new() -> Self {
-        Default::default()
-    }
-    /// Empty the `StaticVec`.
-    pub fn clear(&mut self) {
-        if self.is_fixed_storage() {
-            for x in 0..self.len {
-                self.extract_from_list(x);
-            }
-        } else {
-            self.more.clear();
-        }
-        self.len = 0;
-    }
-    /// Extract a `MaybeUninit` into a concrete initialized type.
-    fn extract(value: MaybeUninit<T>) -> T {
-        unsafe { value.assume_init() }
-    }
-    /// Extract an item from the fixed-size array, replacing it with `MaybeUninit::uninit()`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if fixed-size storage is not used, or if the `index` is out of bounds.
-    fn extract_from_list(&mut self, index: usize) -> T {
-        if !self.is_fixed_storage() {
-            panic!("not fixed storage in StaticVec");
-        }
-        if index >= self.len {
-            panic!("index OOB in StaticVec");
-        }
-        Self::extract(mem::replace(
-            self.list.get_mut(index).unwrap(),
-            MaybeUninit::uninit(),
-        ))
-    }
-    /// Set an item into the fixed-size array.
-    /// If `drop` is `true`, the original value is extracted then automatically dropped.
-    ///
-    /// # Panics
-    ///
-    /// Panics if fixed-size storage is not used, or if the `index` is out of bounds.
-    fn set_into_list(&mut self, index: usize, value: T, drop: bool) {
-        if !self.is_fixed_storage() {
-            panic!("not fixed storage in StaticVec");
-        }
-        // Allow setting at most one slot to the right
-        if index > self.len {
-            panic!("index OOB in StaticVec");
-        }
-        let temp = mem::replace(self.list.get_mut(index).unwrap(), MaybeUninit::new(value));
-        if drop {
-            // Extract the original value - which will drop it automatically
-            Self::extract(temp);
-        }
-    }
-    /// Move item in the fixed-size array into the `Vec`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if fixed-size storage is not used, or if the fixed-size storage is not full.
-    fn move_fixed_into_vec(&mut self, num: usize) {
-        if !self.is_fixed_storage() {
-            panic!("not fixed storage in StaticVec");
-        }
-        if self.len != num {
-            panic!("fixed storage is not full in StaticVec");
-        }
-        self.more.extend(
-            self.list
-                .iter_mut()
-                .take(num)
-                .map(|v| mem::replace(v, MaybeUninit::uninit()))
-                .map(Self::extract),
-        );
-    }
-    /// Is data stored in fixed-size storage?
-    fn is_fixed_storage(&self) -> bool {
-        self.len <= MAX_STATIC_VEC
-    }
-    /// Push a new value to the end of this `StaticVec`.
-    pub fn push<X: Into<T>>(&mut self, value: X) {
-        if self.len == MAX_STATIC_VEC {
-            self.move_fixed_into_vec(MAX_STATIC_VEC);
-            self.more.push(value.into());
-        } else if self.is_fixed_storage() {
-            self.set_into_list(self.len, value.into(), false);
-        } else {
-            self.more.push(value.into());
-        }
-        self.len += 1;
-    }
-    /// Insert a new value to this `StaticVec` at a particular position.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `index` is out of bounds.
-    pub fn insert<X: Into<T>>(&mut self, index: usize, value: X) {
-        if index > self.len {
-            panic!("index OOB in StaticVec");
-        }
-
-        if self.len == MAX_STATIC_VEC {
-            self.move_fixed_into_vec(MAX_STATIC_VEC);
-            self.more.insert(index, value.into());
-        } else if self.is_fixed_storage() {
-            // Move all items one slot to the right
-            for x in (index..self.len).rev() {
-                let orig_value = self.extract_from_list(x);
-                self.set_into_list(x + 1, orig_value, false);
-            }
-            self.set_into_list(index, value.into(), false);
-        } else {
-            self.more.insert(index, value.into());
-        }
-        self.len += 1;
-    }
-    /// Pop a value from the end of this `StaticVec`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `StaticVec` is empty.
-    pub fn pop(&mut self) -> T {
-        if self.is_empty() {
-            panic!("nothing to pop!");
-        }
-
-        if self.is_fixed_storage() {
-            let value = self.extract_from_list(self.len - 1);
-            self.len -= 1;
-            value
-        } else {
-            let value = self.more.pop().unwrap();
-            self.len -= 1;
-
-            // Move back to the fixed list
-            if self.more.len() == MAX_STATIC_VEC {
-                for index in (0..MAX_STATIC_VEC).rev() {
-                    let item = self.more.pop().unwrap();
-                    self.set_into_list(index, item, false);
-                }
-            }
-
-            value
-        }
-    }
-    /// Remove a value from this `StaticVec` at a particular position.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `index` is out of bounds.
-    pub fn remove(&mut self, index: usize) -> T {
-        if index >= self.len {
-            panic!("index OOB in StaticVec");
-        }
-
-        if self.is_fixed_storage() {
-            let value = self.extract_from_list(index);
-
-            // Move all items one slot to the left
-            for x in index + 1..self.len {
-                let orig_value = self.extract_from_list(x);
-                self.set_into_list(x - 1, orig_value, false);
-            }
-            self.len -= 1;
-
-            value
-        } else {
-            let value = self.more.remove(index);
-            self.len -= 1;
-
-            // Move back to the fixed list
-            if self.more.len() == MAX_STATIC_VEC {
-                for index in (0..MAX_STATIC_VEC).rev() {
-                    let item = self.more.pop().unwrap();
-                    self.set_into_list(index, item, false);
-                }
-            }
-
-            value
-        }
-    }
-    /// Get the number of items in this `StaticVec`.
-    pub fn len(&self) -> usize {
-        self.len
-    }
-    /// Is this `StaticVec` empty?
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-    /// Get a reference to the item at a particular index.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `index` is out of bounds.
-    pub fn get(&self, index: usize) -> &T {
-        if index >= self.len {
-            panic!("index OOB in StaticVec");
-        }
-
-        let list = unsafe { mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&self.list) };
-
-        if self.is_fixed_storage() {
-            list.get(index).unwrap()
-        } else {
-            self.more.get(index).unwrap()
-        }
-    }
-    /// Get a mutable reference to the item at a particular index.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `index` is out of bounds.
-    pub fn get_mut(&mut self, index: usize) -> &mut T {
-        if index >= self.len {
-            panic!("index OOB in StaticVec");
-        }
-
-        let list = unsafe { mem::transmute::<_, &mut [T; MAX_STATIC_VEC]>(&mut self.list) };
-
-        if self.is_fixed_storage() {
-            list.get_mut(index).unwrap()
-        } else {
-            self.more.get_mut(index).unwrap()
-        }
-    }
-    /// Get an iterator to entries in the `StaticVec`.
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        let list = unsafe { mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&self.list) };
-
-        if self.is_fixed_storage() {
-            list[..self.len].iter()
-        } else {
-            self.more.iter()
-        }
-    }
-    /// Get a mutable iterator to entries in the `StaticVec`.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        let list = unsafe { mem::transmute::<_, &mut [T; MAX_STATIC_VEC]>(&mut self.list) };
-
-        if self.is_fixed_storage() {
-            list[..self.len].iter_mut()
-        } else {
-            self.more.iter_mut()
-        }
-    }
-}
-
-impl<T: 'static> StaticVec<T> {
-    /// Get a mutable iterator to entries in the `StaticVec`.
-    pub fn into_iter(mut self) -> Box<dyn Iterator<Item = T>> {
-        if self.is_fixed_storage() {
-            let mut it = FixedStorageIterator {
-                data: unsafe { mem::MaybeUninit::uninit().assume_init() },
-                index: 0,
-                limit: self.len,
-            };
-
-            for x in 0..self.len {
-                it.data[x] = mem::replace(self.list.get_mut(x).unwrap(), MaybeUninit::uninit());
-            }
-            self.len = 0;
-
-            Box::new(it)
-        } else {
-            Box::new(Vec::from(self).into_iter())
-        }
-    }
-}
-
-/// An iterator that takes control of the fixed-size storage of a `StaticVec` and returns its values.
-struct FixedStorageIterator<T> {
-    data: [MaybeUninit<T>; MAX_STATIC_VEC],
-    index: usize,
-    limit: usize,
-}
-
-impl<T> Iterator for FixedStorageIterator<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.limit {
-            None
-        } else {
-            self.index += 1;
-
-            let value = mem::replace(
-                self.data.get_mut(self.index - 1).unwrap(),
-                MaybeUninit::uninit(),
-            );
-
-            unsafe { Some(value.assume_init()) }
-        }
-    }
-}
-
-impl<T: Default> StaticVec<T> {
-    /// Get the item at a particular index, replacing it with the default.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `index` is out of bounds.
-    pub fn take(&mut self, index: usize) -> T {
-        if index >= self.len {
-            panic!("index OOB in StaticVec");
-        }
-
-        mem::take(if self.is_fixed_storage() {
-            unsafe { mem::transmute(self.list.get_mut(index).unwrap()) }
-        } else {
-            self.more.get_mut(index).unwrap()
-        })
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for StaticVec<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.iter().collect::<Vec<_>>(), f)
-    }
-}
-
-impl<T> AsRef<[T]> for StaticVec<T> {
-    fn as_ref(&self) -> &[T] {
-        let list = unsafe { mem::transmute::<_, &[T; MAX_STATIC_VEC]>(&self.list) };
-
-        if self.is_fixed_storage() {
-            &list[..self.len]
-        } else {
-            &self.more[..]
-        }
-    }
-}
-
-impl<T> AsMut<[T]> for StaticVec<T> {
-    fn as_mut(&mut self) -> &mut [T] {
-        let list = unsafe { mem::transmute::<_, &mut [T; MAX_STATIC_VEC]>(&mut self.list) };
-
-        if self.is_fixed_storage() {
-            &mut list[..self.len]
-        } else {
-            &mut self.more[..]
-        }
-    }
-}
-
-impl<T> Deref for StaticVec<T> {
-    type Target = [T];
-    fn deref(&self) -> &Self::Target {
-        self.as_ref()
-    }
-}
-
-impl<T> DerefMut for StaticVec<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.as_mut()
-    }
-}
-
-impl<T> Index<usize> for StaticVec<T> {
-    type Output = T;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        self.get(index)
-    }
-}
-
-impl<T> IndexMut<usize> for StaticVec<T> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        self.get_mut(index)
-    }
-}
-
-impl<T> From<StaticVec<T>> for Vec<T> {
-    fn from(mut value: StaticVec<T>) -> Self {
-        if value.len <= MAX_STATIC_VEC {
-            value.move_fixed_into_vec(value.len);
-        }
-        value.len = 0;
-
-        let mut arr = Self::new();
-        arr.append(&mut value.more);
-        arr
-    }
-}
-
-impl<T> From<Vec<T>> for StaticVec<T> {
-    fn from(mut value: Vec<T>) -> Self {
-        let mut arr: Self = Default::default();
-        arr.len = value.len();
-
-        if arr.len <= MAX_STATIC_VEC {
-            for x in (0..arr.len).rev() {
-                arr.set_into_list(x, value.pop().unwrap(), false);
-            }
-        } else {
-            arr.more = value;
-        }
-
-        arr
-    }
-}
+pub type StaticVec<T> = SmallVec<[T; 4]>;
 
 /// The system immutable string type.
 ///
@@ -681,6 +138,12 @@ impl Deref for ImmutableString {
 
 impl AsRef<String> for ImmutableString {
     fn as_ref(&self) -> &String {
+        &self.0
+    }
+}
+
+impl Borrow<String> for ImmutableString {
+    fn borrow(&self) -> &String {
         &self.0
     }
 }
@@ -801,6 +264,18 @@ impl AddAssign<&ImmutableString> for ImmutableString {
     }
 }
 
+impl AddAssign<ImmutableString> for ImmutableString {
+    fn add_assign(&mut self, rhs: ImmutableString) {
+        if !rhs.is_empty() {
+            if self.is_empty() {
+                self.0 = rhs.0;
+            } else {
+                self.make_mut().push_str(rhs.0.as_str());
+            }
+        }
+    }
+}
+
 impl Add<&str> for ImmutableString {
     type Output = Self;
 
@@ -889,6 +364,42 @@ impl Add<char> for &ImmutableString {
 impl AddAssign<char> for ImmutableString {
     fn add_assign(&mut self, rhs: char) {
         self.make_mut().push(rhs);
+    }
+}
+
+impl<S: AsRef<str>> PartialEq<S> for ImmutableString {
+    fn eq(&self, other: &S) -> bool {
+        self.as_str().eq(other.as_ref())
+    }
+}
+
+impl PartialEq<ImmutableString> for str {
+    fn eq(&self, other: &ImmutableString) -> bool {
+        self.eq(other.as_str())
+    }
+}
+
+impl PartialEq<ImmutableString> for String {
+    fn eq(&self, other: &ImmutableString) -> bool {
+        self.eq(other.as_str())
+    }
+}
+
+impl<S: AsRef<str>> PartialOrd<S> for ImmutableString {
+    fn partial_cmp(&self, other: &S) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_ref())
+    }
+}
+
+impl PartialOrd<ImmutableString> for str {
+    fn partial_cmp(&self, other: &ImmutableString) -> Option<Ordering> {
+        self.partial_cmp(other.as_str())
+    }
+}
+
+impl PartialOrd<ImmutableString> for String {
+    fn partial_cmp(&self, other: &ImmutableString) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_str())
     }
 }
 

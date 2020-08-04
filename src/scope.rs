@@ -316,6 +316,14 @@ impl<'a> Scope<'a> {
             })
     }
 
+    /// Get an entry in the Scope, starting from the last.
+    pub(crate) fn get_entry(&self, name: &str) -> Option<&Entry> {
+        self.0
+            .iter()
+            .rev()
+            .find(|Entry { name: key, .. }| name == key)
+    }
+
     /// Get the value of an entry in the Scope, starting from the last.
     ///
     /// # Examples
@@ -329,11 +337,8 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
-        self.0
-            .iter()
-            .rev()
-            .find(|Entry { name: key, .. }| name == key)
-            .and_then(|Entry { value, .. }| value.downcast_ref::<T>().cloned())
+        self.get_entry(name)
+            .and_then(|Entry { value, .. }| value.clone().clone_inner_data::<T>())
     }
 
     /// Update the value of the named entry.
@@ -384,13 +389,30 @@ impl<'a> Scope<'a> {
         self
     }
 
+    /// Clone the Scope, keeping only the last instances of each variable name.
+    /// Shadowed variables are omitted in the copy.
+    pub(crate) fn flatten_clone(&self) -> Self {
+        let mut entries: Vec<Entry> = Default::default();
+
+        self.0.iter().rev().for_each(|entry| {
+            if entries
+                .iter()
+                .find(|Entry { name, .. }| &entry.name == name)
+                .is_none()
+            {
+                entries.push(entry.clone());
+            }
+        });
+
+        Self(entries)
+    }
+
     /// Get an iterator to entries in the Scope.
-    #[cfg(not(feature = "no_module"))]
     pub(crate) fn into_iter(self) -> impl Iterator<Item = Entry<'a>> {
         self.0.into_iter()
     }
 
-    /// Get an iterator to entries in the Scope.
+    /// Get an iterator to entries in the Scope in reverse order.
     pub(crate) fn to_iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev() // Always search a Scope in reverse order
     }
@@ -411,13 +433,20 @@ impl<'a> Scope<'a> {
     ///
     /// let (name, value) = iter.next().unwrap();
     /// assert_eq!(name, "x");
-    /// assert_eq!(value.clone().cast::<i64>(), 42);
+    /// assert_eq!(value.cast::<i64>(), 42);
     ///
     /// let (name, value) = iter.next().unwrap();
     /// assert_eq!(name, "foo");
-    /// assert_eq!(value.clone().cast::<String>(), "hello");
+    /// assert_eq!(value.cast::<String>(), "hello");
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, Dynamic)> {
+        self.iter_raw()
+            .map(|(name, value)| (name, value.clone().clone_inner_data().unwrap()))
+    }
+
+    /// Get an iterator to entries in the Scope.
+    /// Shared values are not expanded.
+    pub fn iter_raw(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
         self.0
             .iter()
             .map(|Entry { name, value, .. }| (name.as_ref(), value))

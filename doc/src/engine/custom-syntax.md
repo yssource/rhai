@@ -114,10 +114,7 @@ Any custom syntax must include an _implementation_ of it.
 
 The function signature of an implementation is:
 
-```rust
-Fn(engine: &Engine, context: &mut EvalContext, scope: &mut Scope, inputs: &[Expression])
-    -> Result<Dynamic, Box<EvalAltResult>>
-```
+> `Fn(engine: &Engine, context: &mut EvalContext, scope: &mut Scope, inputs: &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>`
 
 where:
 

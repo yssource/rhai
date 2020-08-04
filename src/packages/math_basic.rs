@@ -5,22 +5,20 @@ use crate::parser::INT;
 use crate::parser::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
-#[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};
 
-#[cfg(not(feature = "no_float"))]
 #[cfg(feature = "no_std")]
-use num_traits::*;
+#[cfg(not(feature = "no_float"))]
+use num_traits::float::Float;
 
 #[cfg(not(feature = "no_float"))]
-#[cfg(not(feature = "unchecked"))]
 use crate::stdlib::{boxed::Box, format};
 
+#[allow(dead_code)]
 #[cfg(feature = "only_i32")]
-#[cfg(not(feature = "unchecked"))]
 pub const MAX_INT: INT = i32::MAX;
+#[allow(dead_code)]
 #[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "unchecked"))]
 pub const MAX_INT: INT = i64::MAX;
 
 def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
@@ -69,9 +67,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
         lib.set_fn_1("to_float", |x: INT| Ok(x as FLOAT));
         lib.set_fn_1("to_float", |x: f32| Ok(x as FLOAT));
 
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
-        {
+        if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
             lib.set_fn_1("to_float", |x: i8| Ok(x as FLOAT));
             lib.set_fn_1("to_float", |x: u8| Ok(x as FLOAT));
             lib.set_fn_1("to_float", |x: i16| Ok(x as FLOAT));
@@ -81,8 +77,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
             lib.set_fn_1("to_float", |x: i64| Ok(x as FLOAT));
             lib.set_fn_1("to_float", |x: u64| Ok(x as FLOAT));
 
-            #[cfg(not(target_arch = "wasm32"))]
-            {
+            if cfg!(not(target_arch = "wasm32")) {
                 lib.set_fn_1("to_float", |x: i128| Ok(x as FLOAT));
                 lib.set_fn_1("to_float", |x: u128| Ok(x as FLOAT));
             }
@@ -91,28 +86,25 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 
     lib.set_fn_1("to_int", |ch: char| Ok(ch as INT));
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
+    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         lib.set_fn_1("to_int", |x: i8| Ok(x as INT));
         lib.set_fn_1("to_int", |x: u8| Ok(x as INT));
         lib.set_fn_1("to_int", |x: i16| Ok(x as INT));
         lib.set_fn_1("to_int", |x: u16| Ok(x as INT));
     }
 
-    #[cfg(not(feature = "only_i32"))]
-    {
+    if cfg!(not(feature = "only_i32")) {
         lib.set_fn_1("to_int", |x: i32| Ok(x as INT));
         lib.set_fn_1("to_int", |x: u64| Ok(x as INT));
 
-        #[cfg(feature = "only_i64")]
-        lib.set_fn_1("to_int", |x: u32| Ok(x as INT));
+        if cfg!(feature = "only_i64") {
+            lib.set_fn_1("to_int", |x: u32| Ok(x as INT));
+        }
     }
 
     #[cfg(not(feature = "no_float"))]
     {
-        #[cfg(not(feature = "unchecked"))]
-        {
+        if cfg!(not(feature = "unchecked")) {
             lib.set_fn_1(
                 "to_int",
                 |x: f32| {
@@ -141,8 +133,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
             );
         }
 
-        #[cfg(feature = "unchecked")]
-        {
+        if cfg!(feature = "unchecked") {
             lib.set_fn_1("to_int", |x: f32| Ok(x as INT));
             lib.set_fn_1("to_int", |x: f64| Ok(x as INT));
         }

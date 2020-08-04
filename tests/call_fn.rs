@@ -1,6 +1,7 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseError, ParseErrorType, Scope, INT,
+    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseError, ParseErrorType, RegisterFn,
+    Scope, INT,
 };
 use std::any::TypeId;
 
@@ -83,6 +84,70 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_object"))]
+fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    #[allow(deprecated)]
+    engine
+        .register_fn("mul", |x: &mut INT, y: INT| *x *= y)
+        .register_raw_fn(
+            "bar",
+            &[
+                TypeId::of::<INT>(),
+                TypeId::of::<FnPtr>(),
+                TypeId::of::<INT>(),
+            ],
+            move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+                let fp = std::mem::take(args[1]).cast::<FnPtr>();
+                let value = args[2].clone();
+                let this_ptr = args.get_mut(0).unwrap();
+
+                fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+            },
+        );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(x) { this += x; }
+
+                let x = 41;
+                x.bar(Fn("foo"), 1);
+                x
+            "#
+        )?,
+        42
+    );
+
+    assert!(matches!(
+        *engine.eval::<INT>(
+            r#"
+                private fn foo(x) { this += x; }
+
+                let x = 41;
+                x.bar(Fn("foo"), 1);
+                x
+            "#
+        ).expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(x, _) if x.starts_with("foo (")
+    ));
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = 21;
+                x.bar(Fn("mul"), 2);
+                x
+            "#
+        )?,
+        42
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
     let calc_func = Func::<(INT, INT, INT), INT>::create_from_script(
         Engine::new(),
@@ -110,83 +175,6 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
         *calc_func(42, 123, 9).expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "calc"
     ));
-
-    Ok(())
-}
-
-#[test]
-#[cfg(not(feature = "no_object"))]
-fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new();
-
-    engine.register_raw_fn(
-        "bar",
-        &[
-            TypeId::of::<INT>(),
-            TypeId::of::<FnPtr>(),
-            TypeId::of::<INT>(),
-        ],
-        move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-            let fp = std::mem::take(args[1]).cast::<FnPtr>();
-            let value = args[2].clone();
-            let this_ptr = args.get_mut(0).unwrap();
-
-            engine.call_fn_dynamic(
-                &mut Scope::new(),
-                lib,
-                fp.fn_name(),
-                Some(this_ptr),
-                [value],
-            )?;
-
-            Ok(())
-        },
-    );
-
-    assert_eq!(
-        engine.eval::<INT>(
-            r#"
-                fn foo(x) { this += x; }
-
-                let x = 41;
-                x.bar(Fn("foo"), 1);
-                x
-            "#
-        )?,
-        42
-    );
-
-    Ok(())
-}
-
-#[test]
-fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
-    let mut module = Module::new();
-
-    module.set_raw_fn(
-        "call_with_arg",
-        &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
-        |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-            let fn_ptr = std::mem::take(args[0]).cast::<FnPtr>();
-            fn_ptr.call_dynamic(engine, lib, None, [std::mem::take(args[1])])
-        },
-    );
-
-    let mut engine = Engine::new();
-    engine.load_package(module.into());
-
-    #[cfg(not(feature = "no_object"))]
-    assert_eq!(
-        engine.eval::<INT>(
-            r#"
-                let addition = |x, y| { x + y };
-                let curried = addition.curry(2);
-
-                call_with_arg(curried, 40)
-            "#
-        )?,
-        42
-    );
 
     Ok(())
 }

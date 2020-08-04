@@ -5,6 +5,8 @@ Advanced Topics
 
 This section covers advanced features such as:
 
+* [Capture the calling scope]({{rootUrl}}/language/fn-capture.md) in a function call.
+
 * Simulated [Object Oriented Programming (OOP)][OOP].
 
 * [`serde`] integration.

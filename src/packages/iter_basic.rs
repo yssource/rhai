@@ -73,9 +73,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     reg_range::<INT>(lib);
     lib.set_fn_2("range", get_range::<INT>);
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
+    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         macro_rules! reg_range {
             ($lib:expr, $x:expr, $( $y:ty ),*) => (
                 $(
@@ -87,16 +85,15 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
 
         reg_range!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        reg_range!(lib, "range", i128, u128);
+        if cfg!(not(target_arch = "wasm32")) {
+            reg_range!(lib, "range", i128, u128);
+        }
     }
 
     reg_step::<INT>(lib);
     lib.set_fn_3("range", get_step_range::<INT>);
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
+    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         macro_rules! reg_step {
             ($lib:expr, $x:expr, $( $y:ty ),*) => (
                 $(
@@ -108,7 +105,8 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
 
         reg_step!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        reg_step!(lib, "range", i128, u128);
+        if cfg!(not(target_arch = "wasm32")) {
+            reg_step!(lib, "range", i128, u128);
+        }
     }
 });

@@ -57,9 +57,9 @@ fn test_tokens_unicode_xid_ident() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let result = engine.eval::<INT>(
         r"
-                fn すべての答え() { 42 }
-                すべての答え()
-            ",
+            fn すべての答え() { 42 }
+            すべての答え()
+        ",
     );
     #[cfg(feature = "unicode-xid-ident")]
     assert_eq!(result?, 42);
@@ -69,9 +69,9 @@ fn test_tokens_unicode_xid_ident() -> Result<(), Box<EvalAltResult>> {
 
     let result = engine.eval::<INT>(
         r"
-                fn _1() { 1 }
-                _1()
-            ",
+            fn _1() { 1 }
+            _1()
+        ",
     );
     assert!(result.is_err());
 

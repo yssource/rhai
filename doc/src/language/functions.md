@@ -16,7 +16,7 @@ fn sub(x, y,) {     // trailing comma in parameters list is OK
 
 add(2, 3) == 5;
 
-sub(2, 3,) == -1;  // trailing comma in arguments list is OK
+sub(2, 3,) == -1;   // trailing comma in arguments list is OK
 ```
 
 
@@ -127,5 +127,5 @@ x.change();         // call 'change' in method-call style, 'this' binds to 'x'
 
 x == 42;            // 'x' is changed!
 
-change();           // <- error: `this` is unbounded
+change();           // <- error: `this` is unbound
 ```

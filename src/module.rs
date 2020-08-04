@@ -355,10 +355,20 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
-    pub fn contains_fn(&self, hash_fn: u64) -> bool {
-        self.functions.contains_key(&hash_fn)
+    pub fn contains_fn(&self, hash_fn: u64, public_only: bool) -> bool {
+        if public_only {
+            self.functions
+                .get(&hash_fn)
+                .map(|(_, access, _, _)| match access {
+                    FnAccess::Public => true,
+                    FnAccess::Private => false,
+                })
+                .unwrap_or(false)
+        } else {
+            self.functions.contains_key(&hash_fn)
+        }
     }
 
     /// Set a Rust function into the module, returning a hash key.
@@ -422,7 +432,7 @@ impl Module {
     /// let mut module = Module::new();
     /// let hash = module.set_raw_fn("double_or_not",
     ///                 // Pass parameter types via a slice with TypeId's
-    ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>() ],
+    ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>()],
     ///                 // Fixed closure signature
     ///                 |engine, lib, args| {
     ///                     // 'args' is guaranteed to be the right length and of the correct types
@@ -432,7 +442,7 @@ impl Module {
     ///                     // Since it is a primary type, it can also be cheaply copied
     ///                     let double = args[1].clone().cast::<bool>();
     ///                     // Get a mutable reference to the first argument.
-    ///                     let x = args[0].downcast_mut::<i64>().unwrap();
+    ///                     let mut x = args[0].write_lock::<i64>().unwrap();
     ///
     ///                     let orig = *x;
     ///
@@ -443,7 +453,7 @@ impl Module {
     ///                     Ok(orig)                // return Result<T, Box<EvalAltResult>>
     ///                 });
     ///
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_raw_fn<T: Variant + Clone>(
         &mut self,
@@ -468,7 +478,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
@@ -491,7 +501,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -516,7 +526,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -524,7 +534,7 @@ impl Module {
         func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            func(args[0].downcast_mut::<A>().unwrap()).map(Dynamic::from)
+            func(&mut args[0].write_lock::<A>().unwrap()).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -541,7 +551,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
@@ -565,7 +575,7 @@ impl Module {
     /// let hash = module.set_fn_2("calc", |x: i64, y: ImmutableString| {
     ///     Ok(x + y.len() as i64)
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -596,7 +606,7 @@ impl Module {
     /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: ImmutableString| {
     ///     *x += y.len() as i64; Ok(*x)
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
@@ -605,9 +615,9 @@ impl Module {
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b).map(Dynamic::from)
+            func(&mut a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -628,7 +638,7 @@ impl Module {
     ///     *x = y.len() as i64;
     ///     Ok(())
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
@@ -653,7 +663,7 @@ impl Module {
     /// let hash = module.set_indexer_get_fn(|x: &mut i64, y: ImmutableString| {
     ///     Ok(*x + y.len() as i64)
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
@@ -677,7 +687,7 @@ impl Module {
     /// let hash = module.set_fn_3("calc", |x: i64, y: ImmutableString, z: i64| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_3<
         A: Variant + Clone,
@@ -714,7 +724,7 @@ impl Module {
     /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: ImmutableString, z: i64| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_3_mut<
         A: Variant + Clone,
@@ -729,9 +739,9 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b, c).map(Dynamic::from)
+            func(&mut a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -752,7 +762,7 @@ impl Module {
     ///     *x = y.len() as i64 + value;
     ///     Ok(())
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
@@ -763,9 +773,9 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b, c).map(Dynamic::from)
+            func(&mut a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
@@ -796,8 +806,8 @@ impl Module {
     ///         Ok(())
     ///     }
     /// );
-    /// assert!(module.contains_fn(hash_get));
-    /// assert!(module.contains_fn(hash_set));
+    /// assert!(module.contains_fn(hash_get, true));
+    /// assert!(module.contains_fn(hash_set, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
@@ -825,7 +835,7 @@ impl Module {
     /// let hash = module.set_fn_4("calc", |x: i64, y: ImmutableString, z: i64, _w: ()| {
     ///     Ok(x + y.len() as i64 + z)
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_4<
         A: Variant + Clone,
@@ -869,7 +879,7 @@ impl Module {
     /// let hash = module.set_fn_4_mut("calc", |x: &mut i64, y: ImmutableString, z: i64, _w: ()| {
     ///     *x += y.len() as i64 + z; Ok(*x)
     /// });
-    /// assert!(module.contains_fn(hash));
+    /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn set_fn_4_mut<
         A: Variant + Clone,
@@ -886,9 +896,9 @@ impl Module {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let d = mem::take(args[3]).cast::<D>();
-            let a = args[0].downcast_mut::<A>().unwrap();
+            let mut a = args[0].write_lock::<A>().unwrap();
 
-            func(a, b, c, d).map(Dynamic::from)
+            func(&mut a, b, c, d).map(Dynamic::from)
         };
         let arg_types = [
             TypeId::of::<A>(),
@@ -903,8 +913,14 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
-    pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&Func> {
-        self.functions.get(&hash_fn).map(|(_, _, _, v)| v)
+    pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&Func> {
+        self.functions
+            .get(&hash_fn)
+            .and_then(|(_, access, _, f)| match access {
+                _ if !public_only => Some(f),
+                FnAccess::Public => Some(f),
+                FnAccess::Private => None,
+            })
     }
 
     /// Get a modules-qualified function.
@@ -912,16 +928,8 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
-    pub(crate) fn get_qualified_fn(
-        &self,
-        hash_qualified_fn: u64,
-    ) -> Result<&Func, Box<EvalAltResult>> {
-        self.all_functions.get(&hash_qualified_fn).ok_or_else(|| {
-            Box::new(EvalAltResult::ErrorFunctionNotFound(
-                String::new(),
-                Position::none(),
-            ))
-        })
+    pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&Func> {
+        self.all_functions.get(&hash_qualified_fn)
     }
 
     /// Merge another module into this module.

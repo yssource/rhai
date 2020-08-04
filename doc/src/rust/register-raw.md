@@ -35,12 +35,12 @@ engine.register_raw_fn(
         // Therefore, get a '&mut' reference to the first argument _last_.
         // Alternatively, use `args.split_at_mut(1)` etc. to split the slice first.
 
-        let y: i64 = *args[1].downcast_ref::<i64>()         // get a reference to the second argument
+        let y: i64 = *args[1].read_lock::<i64>()            // get a reference to the second argument
                              .unwrap();                     // then copying it because it is a primary type
 
         let y: i64 = std::mem::take(args[1]).cast::<i64>(); // alternatively, directly 'consume' it
 
-        let x: &mut i64 = args[0].downcast_mut::<i64>()     // get a '&mut' reference to the
+        let x: &mut i64 = args[0].write_lock::<i64>()       // get a '&mut' reference to the
                                  .unwrap();                 // first argument
 
         *x += y;                                            // perform the action
@@ -55,27 +55,12 @@ engine.register_fn("increment_by", |x: &mut i64, y: i64| x += y);
 ```
 
 
-Shortcuts
----------
+Function Signature
+------------------
 
-As usual with Rhai, there are shortcuts.  For functions of zero to four parameters, which should be
-the majority, use one of the `Engine::register_raw_fn_n` (where `n = 0..4`) methods:
+The function signature passed to `Engine::register_raw_fn` takes the following form:
 
-```rust
-// Specify parameter types as generics
-engine.register_raw_fn_2::<i64, i64>(
-    "increment_by",
-    |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| { ... }
-);
-```
-
-
-Closure Signature
------------------
-
-The closure passed to `Engine::register_raw_fn` takes the following form:
-
-`Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>> + 'static`
+> `Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>> + 'static`
 
 where:
 
@@ -99,12 +84,12 @@ Extract Arguments
 
 To extract an argument from the `args` parameter (`&mut [&mut Dynamic]`), use the following:
 
-| Argument type                  | Access (`n` = argument position)       | Result                                                     |
-| ------------------------------ | -------------------------------------- | ---------------------------------------------------------- |
-| [Primary type][standard types] | `args[n].clone().cast::<T>()`          | Copy of value.                                             |
-| Custom type                    | `args[n].downcast_ref::<T>().unwrap()` | Immutable reference to value.                              |
-| Custom type (consumed)         | `std::mem::take(args[n]).cast::<T>()`  | The _consumed_ value.<br/>The original value becomes `()`. |
-| `this` object                  | `args[0].downcast_mut::<T>().unwrap()` | Mutable reference to value.                                |
+| Argument type                  | Access (`n` = argument position)      | Result                                                     |
+| ------------------------------ | ------------------------------------- | ---------------------------------------------------------- |
+| [Primary type][standard types] | `args[n].clone().cast::<T>()`         | Copy of value.                                             |
+| Custom type                    | `args[n].read_lock::<T>().unwrap()`   | Immutable reference to value.                              |
+| Custom type (consumed)         | `std::mem::take(args[n]).cast::<T>()` | The _consumed_ value.<br/>The original value becomes `()`. |
+| `this` object                  | `args[0].write_lock::<T>().unwrap()`  | Mutable reference to value.                                |
 
 When there is a mutable reference to the `this` object (i.e. the first argument),
 there can be no other immutable references to `args`, otherwise the Rust borrow checker will complain.
@@ -112,6 +97,12 @@ there can be no other immutable references to `args`, otherwise the Rust borrow 
 
 Example - Passing a Function Pointer to a Rust Function
 ------------------------------------------------------
+
+The low-level API is useful when there is a need to interact with the scripting [`Engine`] within a function.
+
+The following example registers a function that takes a [function pointer] as an argument,
+then calls it within the same [`Engine`].  This way, a _callback_ function can be provided
+to a native Rust function.
 
 ```rust
 use rhai::{Engine, Module, Dynamic, FnPtr};
@@ -133,11 +124,9 @@ engine.register_raw_fn(
         let value = args[2].clone();                            // 3rd argument - function argument
         let this_ptr = args.get_mut(0).unwrap();                // 1st argument - this pointer
 
-        // Use 'call_fn_dynamic' to call the function name.
-        // Pass 'lib' as the current global library of functions.
-        engine.call_fn_dynamic(&mut Scope::new(), lib, fp.fn_name(), Some(this_ptr), [value])?;
-
-        Ok(())
+        // Use 'FnPtr::call_dynamic' to call the function pointer.
+        // Beware, private script-defined functions will not be found.
+        fp.call_dynamic(engine, lib, Some(this_ptr), [value])
     },
 );
 
@@ -167,5 +156,5 @@ let this_ptr = first[0].downcast_mut::<A>().unwrap();
 
 // Immutable reference to the second value parameter
 // This can be mutable but there is no point because the parameter is passed by value
-let value = rest[0].downcast_ref::<B>().unwrap();
+let value_ref = rest[0].read_lock::<B>().unwrap();
 ```

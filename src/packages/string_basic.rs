@@ -21,7 +21,7 @@ fn to_debug<T: Debug>(x: &mut T) -> FuncReturn<ImmutableString> {
     Ok(format!("{:?}", x).into())
 }
 fn to_string<T: Display>(x: &mut T) -> FuncReturn<ImmutableString> {
-    Ok(format!("{}", x).into())
+    Ok(x.to_string().into())
 }
 #[cfg(not(feature = "no_object"))]
 fn format_map(x: &mut Map) -> FuncReturn<ImmutableString> {
@@ -48,9 +48,7 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
     reg_op!(lib, KEYWORD_DEBUG, to_debug, INT, bool, (), char, ImmutableString);
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
+    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         reg_op!(lib, KEYWORD_PRINT, to_string, i8, u8, i16, u16, i32, u32);
         reg_op!(lib, FN_TO_STRING, to_string, i8, u8, i16, u16, i32, u32);
         reg_op!(lib, KEYWORD_DEBUG, to_debug, i8, u8, i16, u16, i32, u32);
@@ -58,8 +56,7 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
         reg_op!(lib, FN_TO_STRING, to_string, i64, u64);
         reg_op!(lib, KEYWORD_DEBUG, to_debug, i64, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
+        if cfg!(not(target_arch = "wasm32")) {
             reg_op!(lib, KEYWORD_PRINT, to_string, i128, u128);
             reg_op!(lib, FN_TO_STRING, to_string, i128, u128);
             reg_op!(lib, KEYWORD_DEBUG, to_debug, i128, u128);

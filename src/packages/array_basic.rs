@@ -3,6 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
 use crate::engine::{Array, Engine};
+use crate::fn_native::FnPtr;
 use crate::module::{FuncReturn, Module};
 use crate::parser::{ImmutableString, INT};
 
@@ -34,7 +35,7 @@ fn pad<T: Variant + Clone>(
     _: &Module,
     args: &mut [&mut Dynamic],
 ) -> FuncReturn<()> {
-    let len = *args[1].downcast_ref::<INT>().unwrap();
+    let len = *args[1].read_lock::<INT>().unwrap();
 
     // Check if array will be over max size limit
     #[cfg(not(feature = "unchecked"))]
@@ -52,7 +53,7 @@ fn pad<T: Variant + Clone>(
 
     if len > 0 {
         let item = args[2].clone();
-        let list = args[0].downcast_mut::<Array>().unwrap();
+        let mut list = args[0].write_lock::<Array>().unwrap();
 
         if len as usize > list.len() {
             list.resize(len as usize, item);
@@ -82,11 +83,10 @@ macro_rules! reg_pad {
     };
 }
 
-#[cfg(not(feature = "no_index"))]
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    reg_op!(lib, "push", push, INT, bool, char, ImmutableString, Array, ());
-    reg_pad!(lib, "pad", pad, INT, bool, char, ImmutableString, Array, ());
-    reg_tri!(lib, "insert", ins, INT, bool, char, ImmutableString, Array, ());
+    reg_op!(lib, "push", push, INT, bool, char, ImmutableString, FnPtr, Array, ());
+    reg_pad!(lib, "pad", pad, INT, bool, char, ImmutableString, FnPtr, Array, ());
+    reg_tri!(lib, "insert", ins, INT, bool, char, ImmutableString, FnPtr, Array, ());
 
     lib.set_fn_2_mut("append", |x: &mut Array, y: Array| {
         x.extend(y);
@@ -104,15 +104,12 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
         },
     );
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
+    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         reg_op!(lib, "push", push, i8, u8, i16, u16, i32, i64, u32, u64);
         reg_pad!(lib, "pad", pad, i8, u8, i16, u16, i32, u32, i64, u64);
         reg_tri!(lib, "insert", ins, i8, u8, i16, u16, i32, i64, u32, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
+        if cfg!(not(target_arch = "wasm32")) {
             reg_op!(lib, "push", push, i128, u128);
             reg_pad!(lib, "pad", pad, i128, u128);
             reg_tri!(lib, "insert", ins, i128, u128);

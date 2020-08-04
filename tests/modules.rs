@@ -35,7 +35,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     let m2 = m.get_sub_module("universe").unwrap();
 
     assert!(m2.contains_var("answer"));
-    assert!(m2.contains_fn(hash_inc));
+    assert!(m2.contains_fn(hash_inc, false));
 
     assert_eq!(m2.get_var_value::<INT>("answer").unwrap(), 41);
 

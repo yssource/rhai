@@ -14,15 +14,16 @@ include = [
     "Cargo.toml"
 ]
 keywords = [ "scripting" ]
-categories = [ "no-std", "embedded", "parser-implementations" ]
+categories = [ "no-std", "embedded", "wasm", "parser-implementations" ]
 
 [dependencies]
 num-traits = { version = "0.2.11", default-features = false }
+smallvec = { version = "1.4.1", default-features = false }
 
 [features]
 #default = ["unchecked", "sync", "no_optimize", "no_float", "only_i32", "no_index", "no_object", "no_function", "no_module"]
 default = []
-plugins = []
+plugins = []        # custom plugins support
 unchecked = []      # unchecked arithmetic
 sync = []           # restrict to only types that implement Send + Sync
 no_optimize = []    # no script optimizer
@@ -32,12 +33,13 @@ only_i64 = []       # set INT=i64 (default) and disable support for all other in
 no_index = []       # no arrays and indexing
 no_object = []      # no custom objects
 no_function = []    # no script-defined functions
+no_closure = []     # no automatic sharing and capture of anonymous functions to external variables
 no_module = []      # no modules
 internals = []      # expose internal data structures
-unicode-xid-ident = ["unicode-xid"]  # allow unicode-xid for identifiers.
+unicode-xid-ident = ["unicode-xid"]  # allow Unicode Standard Annex #31 for identifiers.
 
 # compiling for no-std
-no_std = [ "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]
+no_std = [ "no_closure", "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]
 
 [profile.release]
 lto = "fat"

@@ -6,25 +6,41 @@ Version 0.18.0
 
 This version adds:
 
-* Anonymous functions (in closure syntax).  Simplifies creation of ad hoc functions.
+* Binding the `this` pointer in a function pointer `call`.
+* Anonymous functions (in Rust closure syntax).  Simplifies creation of single-use ad-hoc functions.
 * Currying of function pointers.
+* Closures - auto-currying of anonymous functions to capture shared variables from the external scope.
+* Capturing call scope via `func!(...)` syntax.
 
 New features
 ------------
 
 * `call` can now be called function-call style for function pointers - this is to handle builds with `no_object`.
-* Disallow many keywords as variables, such as `print`, `eval`, `call`, `this` etc.
+* Reserve language keywords, such as `print`, `eval`, `call`, `this` etc.
 * `x.call(f, ...)` allows binding `x` to `this` for the function referenced by the function pointer `f`.
-* Anonymous functions in the syntax of a closure, e.g. `|x, y, z| x + y - z`.
+* Anonymous functions are supported in the syntax of a Rust closure, e.g. `|x, y, z| x + y - z`.
 * Custom syntax now works even without the `internals` feature.
-* Currying of function pointers is supported via the `curry` keyword.
+* Currying of function pointers is supported via the new `curry` keyword.
+* Automatic currying of anonymous functions to capture shared variables from the external scope.
+* Capturing of the calling scope for function call via the `func!(...)` syntax.
 * `Module::set_indexer_get_set_fn` is added as a shorthand of both `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn`.
-* New `unicode-xid-ident` feature to allow unicode-xid for identifiers.
+* New `unicode-xid-ident` feature to allow [Unicode Standard Annex #31](http://www.unicode.org/reports/tr31/) for identifiers.
+* `Scope::iter_raw` returns an iterator with a reference to the underlying `Dynamic` value (which may be shared).
 
 Breaking changes
 ----------------
 
+* Language keywords are now _reserved_ (even when disabled) and they can no longer be used as variable names.
 * Function signature for defining custom syntax is simplified.
+* `Engine::register_raw_fn_XXX` API shortcuts are removed.
+* `PackagesCollection::get_fn`, `PackagesCollection::contains_fn`, `Module::get_fn` and `Module::contains_fn` now take an additional `public_only` parameter indicating whether only public functions are accepted.
+* The iterator returned by `Scope::iter` now contains a clone of the `Dynamic` value (unshared).
+* `Engine::load_package` takes any type that is `Into<PackageLibrary>`.
+
+Housekeeping
+------------
+
+* Most compilation warnings are eliminated via feature gates.
 
 
 Version 0.17.0
@@ -58,7 +74,7 @@ New features
 * `Engine::disable_symbol` to surgically disable keywords and/or operators.
 * `Engine::register_custom_operator` to define a custom operator.
 * `Engine::register_custom_syntax` to define a custom syntax.
-* New low-level API `Engine::register_raw_fn` and `Engine::register_raw_fn_XXX`.
+* New low-level API `Engine::register_raw_fn`.
 * New low-level API `Module::set_raw_fn` mirroring `Engine::register_raw_fn`.
 * `AST::clone_functions_only`, `AST::clone_functions_only_filtered` and `AST::clone_statements_only` to clone only part of an `AST`.
 * The boolean `^` (XOR) operator is added.

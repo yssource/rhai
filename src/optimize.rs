@@ -3,12 +3,12 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
+use crate::fn_native::FnPtr;
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
-use crate::token::is_valid_identifier;
 use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_function"))]
@@ -19,6 +19,7 @@ use crate::parser::CustomExpr;
 
 use crate::stdlib::{
     boxed::Box,
+    convert::TryFrom,
     iter::empty,
     string::{String, ToString},
     vec,
@@ -131,21 +132,18 @@ fn call_fn_with_constant_arguments(
 
     state
         .engine
-        .call_fn_raw(
-            &mut Scope::new(),
-            &mut Imports::new(),
+        .call_native_fn(
             &mut Default::default(),
             state.lib,
             fn_name,
-            (hash_fn, 0),
+            hash_fn,
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
-            false,
+            true,
             None,
-            0,
         )
-        .map(|(v, _)| Some(v))
-        .unwrap_or_else(|_| None)
+        .ok()
+        .map(|(v, _)| v)
 }
 
 /// Optimize a statement.
@@ -184,6 +182,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 optimize_expr(expr, state),
                 optimize_stmt(x.1, state, true),
                 None,
+                x.3,
             ))),
         },
         // if expr { if_block } else { else_block }
@@ -200,6 +199,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     Stmt::Noop(_) => None, // Noop -> no else block
                     stmt => Some(stmt),
                 },
+                x.3,
             ))),
         },
         // while expr { block }
@@ -210,7 +210,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 Stmt::Noop(pos)
             }
             // while true { block } -> loop { block }
-            Expr::True(_) => Stmt::Loop(Box::new(optimize_stmt(x.1, state, false))),
+            Expr::True(_) => Stmt::Loop(Box::new((optimize_stmt(x.1, state, false), x.2))),
             // while expr { block }
             expr => match optimize_stmt(x.1, state, false) {
                 // while expr { break; } -> { expr; }
@@ -225,11 +225,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     Stmt::Block(Box::new((statements, pos)))
                 }
                 // while expr { block }
-                stmt => Stmt::While(Box::new((optimize_expr(expr, state), stmt))),
+                stmt => Stmt::While(Box::new((optimize_expr(expr, state), stmt, x.2))),
             },
         },
         // loop { block }
-        Stmt::Loop(block) => match optimize_stmt(*block, state, false) {
+        Stmt::Loop(x) => match optimize_stmt(x.0, state, false) {
             // loop { break; } -> Noop
             Stmt::Break(pos) => {
                 // Only a single break statement
@@ -237,23 +237,26 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 Stmt::Noop(pos)
             }
             // loop { block }
-            stmt => Stmt::Loop(Box::new(stmt)),
+            stmt => Stmt::Loop(Box::new((stmt, x.1))),
         },
         // for id in expr { block }
         Stmt::For(x) => Stmt::For(Box::new((
             x.0,
             optimize_expr(x.1, state),
             optimize_stmt(x.2, state, false),
+            x.3,
         ))),
         // let id = expr;
-        Stmt::Let(x) if x.1.is_some() => {
-            Stmt::Let(Box::new((x.0, Some(optimize_expr(x.1.unwrap(), state)))))
-        }
+        Stmt::Let(x) if x.1.is_some() => Stmt::Let(Box::new((
+            x.0,
+            Some(optimize_expr(x.1.unwrap(), state)),
+            x.2,
+        ))),
         // let id;
         stmt @ Stmt::Let(_) => stmt,
         // import expr as id;
         #[cfg(not(feature = "no_module"))]
-        Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1))),
+        Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1, x.2))),
         // { block }
         Stmt::Block(x) => {
             let orig_len = x.0.len(); // Original number of statements in the block, for change detection
@@ -266,7 +269,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     .map(|stmt| match stmt {
                         // Add constant into the state
                         Stmt::Const(v) => {
-                            let ((name, pos), expr) = *v;
+                            let ((name, pos), expr, _) = *v;
                             state.push_constant(&name, expr);
                             state.set_dirty();
                             Stmt::Noop(pos) // No need to keep constants
@@ -366,9 +369,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(Box::new(optimize_expr(*expr, state))),
         // return expr;
-        Stmt::ReturnWithVal(x) if x.1.is_some() => {
-            Stmt::ReturnWithVal(Box::new((x.0, Some(optimize_expr(x.1.unwrap(), state)))))
-        }
+        Stmt::ReturnWithVal(x) if x.1.is_some() => Stmt::ReturnWithVal(Box::new((
+            x.0,
+            Some(optimize_expr(x.1.unwrap(), state)),
+            x.2,
+        ))),
         // All other statements - skip
         stmt => stmt,
     }
@@ -410,8 +415,8 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name.as_str() == prop.as_str())
-                    .map(|(_, expr)| expr.set_position(pos))
+                m.0.into_iter().find(|((name, _), _)| name == prop)
+                    .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // lhs.rhs
@@ -428,7 +433,9 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                a.0.take(i.0 as usize).set_position(a.1)
+                let mut expr = a.0.remove(i.0 as usize);
+                expr.set_position(a.1);
+                expr
             }
             // map[string]
             (Expr::Map(m), Expr::StringConstant(s)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
@@ -437,7 +444,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 let pos = m.1;
                 m.0.into_iter().find(|((name, _), _)| *name == s.0)
-                    .map(|(_, expr)| expr.set_position(pos))
+                    .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
@@ -485,7 +492,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 let ch = a.0.to_string();
 
-                if b.0.iter().find(|((name, _), _)| name.as_str() == ch.as_str()).is_some() {
+                if b.0.iter().find(|((name, _), _)| name == &ch).is_some() {
                     Expr::True(a.1)
                 } else {
                     Expr::False(a.1)
@@ -543,14 +550,19 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
         // Fn("...")
         Expr::FnCall(x)
-            if x.1.is_none()
-            && (x.0).0 == KEYWORD_FN_PTR
-            && x.3.len() == 1
-            && matches!(x.3[0], Expr::StringConstant(_))
+                if x.1.is_none()
+                && (x.0).0 == KEYWORD_FN_PTR
+                && x.3.len() == 1
+                && matches!(x.3[0], Expr::StringConstant(_))
         => {
-            match &x.3[0] {
-                Expr::StringConstant(s) if is_valid_identifier(s.0.chars()) => Expr::FnPointer(s.clone()),
-                _ => Expr::FnCall(x)
+            if let Expr::StringConstant(s) = &x.3[0] {
+                if let Ok(fn_ptr) = FnPtr::try_from(s.0.as_str()) {
+                    Expr::FnPointer(Box::new((fn_ptr.take_data().0, s.1)))
+                } else {
+                    Expr::FnCall(x)
+                }
+            } else {
+                unreachable!()
             }
         }
 
@@ -560,21 +572,17 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.3.iter().all(|expr| expr.is_constant()) // all arguments are constants
         => {
-            let ((name, _, pos), _, _, args, def_value) = x.as_mut();
+            let ((name, _, _, pos), _, _, args, def_value) = x.as_mut();
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
-            #[cfg(not(feature = "no_function"))]
-            let _has_script_fn = state.lib.iter_fn().find(|(_, _, _, f)| {
+            let has_script_fn = cfg!(not(feature = "no_function")) && state.lib.iter_fn().find(|(_, _, _, f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
-                fn_def.name.as_str() == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
+                fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
             }).is_some();
 
-            #[cfg(feature = "no_function")]
-            let _has_script_fn: bool = false;
-
-            if _has_script_fn {
+            if has_script_fn {
                 // A script-defined function overrides the built-in function - do not make the call
                 x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
                 return Expr::FnCall(x);
@@ -624,7 +632,9 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             state.set_dirty();
 
             // Replace constant with value
-            state.find_constant(&name).unwrap().clone().set_position(pos)
+            let mut expr = state.find_constant(&name).unwrap().clone();
+            expr.set_position(pos);
+            expr
         }
 
         // Custom syntax
@@ -686,7 +696,7 @@ fn optimize(
                 match &stmt {
                     Stmt::Const(v) => {
                         // Load constants
-                        let ((name, _), expr) = v.as_ref();
+                        let ((name, _), expr, _) = v.as_ref();
                         state.push_constant(&name, expr.clone());
                         stmt // Keep it in the global scope
                     }
@@ -734,11 +744,13 @@ pub fn optimize_into_ast(
     _functions: Vec<ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
-    #[cfg(feature = "no_optimize")]
-    const level: OptimizationLevel = OptimizationLevel::None;
+    let level = if cfg!(feature = "no_optimize") {
+        OptimizationLevel::None
+    } else {
+        level
+    };
 
-    #[cfg(not(feature = "no_function"))]
-    let lib = {
+    let lib = if cfg!(not(feature = "no_function")) {
         let mut module = Module::new();
 
         if !level.is_none() {
@@ -753,6 +765,8 @@ pub fn optimize_into_ast(
                         access: fn_def.access,
                         body: Default::default(),
                         params: fn_def.params.clone(),
+                        #[cfg(not(feature = "no_closure"))]
+                        externals: fn_def.externals.clone(),
                         pos: fn_def.pos,
                     }
                     .into()
@@ -798,10 +812,9 @@ pub fn optimize_into_ast(
         }
 
         module
+    } else {
+        Default::default()
     };
-
-    #[cfg(feature = "no_function")]
-    let lib = Default::default();
 
     AST::new(
         match level {

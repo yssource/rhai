@@ -1,16 +1,18 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::any::Dynamic;
+use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::module::Module;
+use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_function"))]
-use crate::{module::FuncReturn, parser::ScriptFnDef, scope::Scope, utils::StaticVec};
+use crate::{module::FuncReturn, parser::ScriptFnDef, utils::StaticVec};
 
-use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, string::String, vec::Vec};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, string::String, vec::Vec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::mem;
@@ -20,22 +22,42 @@ use crate::stdlib::rc::Rc;
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::Arc;
 
+#[cfg(not(feature = "no_closure"))]
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::cell::RefCell;
+#[cfg(not(feature = "no_closure"))]
+#[cfg(feature = "sync")]
+use crate::stdlib::sync::RwLock;
+
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
+/// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 impl<T: Send + Sync> SendSync for T {}
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(not(feature = "sync"))]
 pub trait SendSync {}
+/// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(not(feature = "sync"))]
 impl<T> SendSync for T {}
 
+/// Immutable reference-counted container
 #[cfg(not(feature = "sync"))]
 pub type Shared<T> = Rc<T>;
+/// Immutable reference-counted container
 #[cfg(feature = "sync")]
 pub type Shared<T> = Arc<T>;
+
+/// Mutable reference-counted container (read-write lock)
+#[cfg(not(feature = "no_closure"))]
+#[cfg(not(feature = "sync"))]
+pub type SharedMut<T> = Shared<RefCell<T>>;
+/// Mutable reference-counted container (read-write lock)
+#[cfg(not(feature = "no_closure"))]
+#[cfg(feature = "sync")]
+pub type SharedMut<T> = Shared<RwLock<T>>;
 
 /// Consume a `Shared` resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
@@ -89,9 +111,7 @@ impl FnPtr {
 
     /// Call the function pointer with curried arguments (if any).
     ///
-    /// The function must be a script-defined function.  It cannot be a Rust function.
-    ///
-    /// To call a Rust function, just call it directly in Rust!
+    /// If this function is a script-defined function, it must not be marked private.
     ///
     /// ## WARNING
     ///
@@ -107,14 +127,39 @@ impl FnPtr {
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> FuncReturn<Dynamic> {
-        let args = self
+        let mut args_data = self
             .1
             .iter()
             .cloned()
             .chain(arg_values.as_mut().iter_mut().map(|v| mem::take(v)))
             .collect::<StaticVec<_>>();
 
-        engine.call_fn_dynamic(&mut Scope::new(), lib, self.0.as_str(), this_ptr, args)
+        let has_this = this_ptr.is_some();
+        let args_len = args_data.len();
+        let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
+
+        if let Some(obj) = this_ptr {
+            args.insert(0, obj);
+        }
+
+        let fn_name = self.0.as_str();
+        let hash_script = calc_fn_hash(empty(), fn_name, args_len, empty());
+
+        engine
+            .exec_fn_call(
+                &mut Default::default(),
+                lib.as_ref(),
+                fn_name,
+                hash_script,
+                args.as_mut(),
+                has_this,
+                has_this,
+                true,
+                None,
+                None,
+                0,
+            )
+            .map(|(v, _)| v)
     }
 }
 
@@ -253,6 +298,23 @@ impl CallableFunction {
         match self {
             Self::Script(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
+        }
+    }
+    /// Is this a native Rust function?
+    pub fn is_native(&self) -> bool {
+        match self {
+            Self::Pure(_) | Self::Method(_) => true,
+            Self::Iterator(_) => true,
+
+            #[cfg(not(feature = "no_function"))]
+            Self::Script(_) => false,
+        }
+    }
+    /// Get the access mode.
+    pub fn access(&self) -> FnAccess {
+        match self {
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => FnAccess::Public,
+            Self::Script(f) => f.access,
         }
     }
     /// Get a reference to a native Rust function.

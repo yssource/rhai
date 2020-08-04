@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType, INT};
 
 #[test]
 fn test_functions() -> Result<(), Box<EvalAltResult>> {
@@ -117,6 +117,56 @@ fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
         )?,
         42
     );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_closure"))]
+fn test_function_captures() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                fn foo(y) { x += y; x }
+
+                let x = 41;
+                let y = 999;
+
+                foo!(1) + x
+            "#
+        )?,
+        83
+    );
+
+    assert!(engine
+        .eval::<INT>(
+            r#"
+                fn foo(y) { x += y; x }
+
+                let x = 41;
+                let y = 999;
+
+                foo(1) + x
+            "#
+        )
+        .is_err());
+
+    #[cfg(not(feature = "no_object"))]
+    assert!(matches!(
+        engine.compile(
+            r#"
+                fn foo() { this += x; }
+
+                let x = 41;
+                let y = 999;
+
+                y.foo!();
+            "#
+        ).expect_err("should error"),
+        ParseError(err, _) if matches!(*err, ParseErrorType::MalformedCapture(_))
+    ));
 
     Ok(())
 }

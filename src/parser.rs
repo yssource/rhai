@@ -2,14 +2,16 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::{
+    Engine, KEYWORD_FN_PTR_CURRY, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
+};
 use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::fn_native::Shared;
+use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::FnCustomSyntaxEval;
-use crate::token::{is_valid_identifier, Position, Token, TokenStream};
+use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
@@ -26,7 +28,6 @@ use crate::stdlib::{
     fmt, format,
     hash::{Hash, Hasher},
     iter::empty,
-    mem,
     num::NonZeroUsize,
     ops::Add,
     string::{String, ToString},
@@ -37,6 +38,9 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::collections::hash_map::DefaultHasher;
+
+#[cfg(not(feature = "no_closure"))]
+use crate::stdlib::collections::HashSet;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_function"))]
@@ -353,7 +357,7 @@ impl fmt::Display for FnAccess {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct ScriptFnDef {
     /// Function name.
     pub name: ImmutableString,
@@ -361,6 +365,9 @@ pub struct ScriptFnDef {
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<String>,
+    /// Access to external variables.
+    #[cfg(not(feature = "no_closure"))]
+    pub externals: HashSet<String>,
     /// Function body.
     pub body: Stmt,
     /// Position of the function definition.
@@ -406,6 +413,14 @@ struct ParseState<'e> {
     engine: &'e Engine,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
+    /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
+    #[cfg(not(feature = "no_closure"))]
+    externals: HashMap<String, Position>,
+    /// An indicator that disables variable capturing into externals one single time.
+    /// If set to false the next call to `access_var` will not capture the variable.
+    /// All consequent calls to `access_var` will not be affected
+    #[cfg(not(feature = "no_closure"))]
+    allow_capture: bool,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
@@ -425,30 +440,51 @@ impl<'e> ParseState<'e> {
     ) -> Self {
         Self {
             engine,
-            stack: Default::default(),
-            modules: Default::default(),
             #[cfg(not(feature = "unchecked"))]
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
             max_function_expr_depth,
+            #[cfg(not(feature = "no_closure"))]
+            externals: Default::default(),
+            #[cfg(not(feature = "no_closure"))]
+            allow_capture: true,
+            stack: Default::default(),
+            modules: Default::default(),
         }
     }
-    /// Find a variable by name in the `ParseState`, searching in reverse.
+
+    /// Find explicitly declared variable by name in the `ParseState`, searching in reverse order.
+    ///
+    /// If the variable is not present in the scope adds it to the list of external variables
+    ///
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return zero when the variable name is not found in the `ParseState`.
-    pub fn find_var(&self, name: &str) -> Option<NonZeroUsize> {
-        self.stack
+    /// Return `None` when the variable name is not found in the `stack`.
+    fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
+        let index = self
+            .stack
             .iter()
             .rev()
             .enumerate()
             .find(|(_, (n, _))| *n == name)
-            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1));
+
+        #[cfg(not(feature = "no_closure"))]
+        if self.allow_capture {
+            if index.is_none() && !self.externals.contains_key(name) {
+                self.externals.insert(name.to_string(), _pos);
+            }
+        } else {
+            self.allow_capture = true
+        }
+
+        index
     }
+
     /// Find a module by name in the `ParseState`, searching in reverse.
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return zero when the variable name is not found in the `ParseState`.
+    /// Return `None` when the variable name is not found in the `ParseState`.
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
@@ -511,33 +547,41 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Box<(Expr, Stmt, Option<Stmt>)>),
+    IfThenElse(Box<(Expr, Stmt, Option<Stmt>, Position)>),
     /// while expr { stmt }
-    While(Box<(Expr, Stmt)>),
+    While(Box<(Expr, Stmt, Position)>),
     /// loop { stmt }
-    Loop(Box<Stmt>),
+    Loop(Box<(Stmt, Position)>),
     /// for id in expr { stmt }
-    For(Box<(String, Expr, Stmt)>),
+    For(Box<(String, Expr, Stmt, Position)>),
     /// let id = expr
-    Let(Box<((String, Position), Option<Expr>)>),
+    Let(Box<((String, Position), Option<Expr>, Position)>),
     /// const id = expr
-    Const(Box<((String, Position), Expr)>),
+    Const(Box<((String, Position), Expr, Position)>),
     /// { stmt; ... }
     Block(Box<(StaticVec<Stmt>, Position)>),
-    /// { stmt }
+    /// expr
     Expr(Box<Expr>),
     /// continue
     Continue(Position),
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal(Box<((ReturnType, Position), Option<Expr>)>),
+    ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
     /// import expr as module
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, (String, Position))>),
+    Import(Box<(Expr, (String, Position), Position)>),
     /// expr id as name, ...
     #[cfg(not(feature = "no_module"))]
-    Export(Box<StaticVec<((String, Position), Option<(String, Position)>)>>),
+    Export(
+        Box<(
+            StaticVec<((String, Position), Option<(String, Position)>)>,
+            Position,
+        )>,
+    ),
+    /// Convert a variable to shared.
+    #[cfg(not(feature = "no_closure"))]
+    Share(Box<(String, Position)>),
 }
 
 impl Default for Stmt {
@@ -555,17 +599,48 @@ impl Stmt {
             Stmt::Const(x) => (x.0).1,
             Stmt::ReturnWithVal(x) => (x.0).1,
             Stmt::Block(x) => x.1,
-            Stmt::IfThenElse(x) => x.0.position(),
+            Stmt::IfThenElse(x) => x.3,
             Stmt::Expr(x) => x.position(),
-            Stmt::While(x) => x.1.position(),
-            Stmt::Loop(x) => x.position(),
-            Stmt::For(x) => x.2.position(),
+            Stmt::While(x) => x.2,
+            Stmt::Loop(x) => x.1,
+            Stmt::For(x) => x.3,
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => (x.1).1,
+            Stmt::Import(x) => x.2,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => (x.get(0).0).1,
+            Stmt::Export(x) => x.1,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(x) => x.1,
         }
+    }
+
+    /// Override the `Position` of this statement.
+    pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
+        match self {
+            Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos = new_pos,
+            Stmt::Let(x) => (x.0).1 = new_pos,
+            Stmt::Const(x) => (x.0).1 = new_pos,
+            Stmt::ReturnWithVal(x) => (x.0).1 = new_pos,
+            Stmt::Block(x) => x.1 = new_pos,
+            Stmt::IfThenElse(x) => x.3 = new_pos,
+            Stmt::Expr(x) => {
+                x.set_position(new_pos);
+            }
+            Stmt::While(x) => x.2 = new_pos,
+            Stmt::Loop(x) => x.1 = new_pos,
+            Stmt::For(x) => x.3 = new_pos,
+
+            #[cfg(not(feature = "no_module"))]
+            Stmt::Import(x) => x.2 = new_pos,
+            #[cfg(not(feature = "no_module"))]
+            Stmt::Export(x) => x.1 = new_pos,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(x) => x.1 = new_pos,
+        }
+
+        self
     }
 
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
@@ -589,6 +664,9 @@ impl Stmt {
 
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(_) | Stmt::Export(_) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(_) => false,
         }
     }
 
@@ -602,7 +680,7 @@ impl Stmt {
             }
             Stmt::IfThenElse(x) => x.1.is_pure(),
             Stmt::While(x) => x.0.is_pure() && x.1.is_pure(),
-            Stmt::Loop(x) => x.is_pure(),
+            Stmt::Loop(x) => x.0.is_pure(),
             Stmt::For(x) => x.1.is_pure() && x.2.is_pure(),
             Stmt::Let(_) | Stmt::Const(_) => false,
             Stmt::Block(x) => x.0.iter().all(Stmt::is_pure),
@@ -612,6 +690,9 @@ impl Stmt {
             Stmt::Import(_) => false,
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(_) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Stmt::Share(_) => false,
         }
     }
 }
@@ -695,12 +776,12 @@ pub enum Expr {
     Stmt(Box<(Stmt, Position)>),
     /// Wrapped expression - should not be optimized away.
     Expr(Box<Expr>),
-    /// func(expr, ... ) - ((function name, native_only, position), optional modules, hash, arguments, optional default value)
+    /// func(expr, ... ) - ((function name, native_only, capture, position), optional modules, hash, arguments, optional default value)
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
     FnCall(
         Box<(
-            (Cow<'static, str>, bool, Position),
+            (Cow<'static, str>, bool, bool, Position),
             Option<Box<ModuleRef>>,
             u64,
             StaticVec<Expr>,
@@ -754,6 +835,10 @@ impl Expr {
             Self::FloatConstant(x) => x.0.into(),
             Self::CharConstant(x) => x.0.into(),
             Self::StringConstant(x) => x.0.clone().into(),
+            Self::FnPointer(x) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
+                x.0.clone(),
+                Default::default(),
+            )))),
             Self::True(_) => true.into(),
             Self::False(_) => false.into(),
             Self::Unit(_) => ().into(),
@@ -818,7 +903,7 @@ impl Expr {
             Self::Property(x) => x.1,
             Self::Stmt(x) => x.1,
             Self::Variable(x) => (x.0).1,
-            Self::FnCall(x) => (x.0).2,
+            Self::FnCall(x) => (x.0).3,
             Self::Assignment(x) => x.0.position(),
 
             Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
@@ -832,11 +917,10 @@ impl Expr {
     }
 
     /// Override the `Position` of the expression.
-    pub(crate) fn set_position(mut self, new_pos: Position) -> Self {
-        match &mut self {
-            Self::Expr(ref mut x) => {
-                let expr = mem::take(x);
-                *x = Box::new(expr.set_position(new_pos));
+    pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
+        match self {
+            Self::Expr(x) => {
+                x.set_position(new_pos);
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -851,7 +935,7 @@ impl Expr {
             Self::Variable(x) => (x.0).1 = new_pos,
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(x) => (x.0).2 = new_pos,
+            Self::FnCall(x) => (x.0).3 = new_pos,
             Self::And(x) => x.2 = new_pos,
             Self::Or(x) => x.2 = new_pos,
             Self::In(x) => x.2 = new_pos,
@@ -957,6 +1041,7 @@ impl Expr {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
+                Token::Bang => true,
                 Token::DoubleColon => true,
                 _ => false,
             },
@@ -1044,11 +1129,12 @@ fn parse_paren_expr(
 }
 
 /// Parse a function call.
-fn parse_call_expr(
+fn parse_fn_call(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     id: String,
+    capture: bool,
     mut modules: Option<Box<ModuleRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
@@ -1075,7 +1161,7 @@ fn parse_call_expr(
             eat_token(input, Token::RightParen);
 
             let hash_script = if let Some(modules) = modules.as_mut() {
-                modules.set_index(state.find_module(&modules.get(0).0));
+                modules.set_index(state.find_module(&modules[0].0));
 
                 // Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1091,7 +1177,7 @@ fn parse_call_expr(
             };
 
             return Ok(Expr::FnCall(Box::new((
-                (id.into(), false, settings.pos),
+                (id.into(), false, capture, settings.pos),
                 modules,
                 hash_script,
                 args,
@@ -1117,7 +1203,7 @@ fn parse_call_expr(
                 eat_token(input, Token::RightParen);
 
                 let hash_script = if let Some(modules) = modules.as_mut() {
-                    modules.set_index(state.find_module(&modules.get(0).0));
+                    modules.set_index(state.find_module(&modules[0].0));
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1133,7 +1219,7 @@ fn parse_call_expr(
                 };
 
                 return Ok(Expr::FnCall(Box::new((
-                    (id.into(), false, settings.pos),
+                    (id.into(), false, capture, settings.pos),
                     modules,
                     hash_script,
                     args,
@@ -1542,6 +1628,8 @@ fn parse_primary(
         _ => input.next().unwrap(),
     };
 
+    let (next_token, _) = input.peek().unwrap();
+
     let mut root_expr = match token {
         Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, settings.pos))),
         #[cfg(not(feature = "no_float"))]
@@ -1549,15 +1637,19 @@ fn parse_primary(
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
         Token::Identifier(s) => {
-            let index = state.find_var(&s);
+            let index = state.access_var(&s, settings.pos);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
         // Function call is allowed to have reserved keyword
-        Token::Reserved(s) if s != KEYWORD_THIS && input.peek().unwrap().0 == Token::LeftParen => {
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+        Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
+            if is_keyword_function(&s) {
+                Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+            } else {
+                return Err(PERR::Reserved(s).into_err(settings.pos));
+            }
         }
         // Access to `this` as a variable is OK
-        Token::Reserved(s) if s == KEYWORD_THIS && input.peek().unwrap().0 != Token::LeftParen => {
+        Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
                 return Err(
                     PERR::BadInput(format!("'{}' can only be used in functions", s))
@@ -1598,10 +1690,25 @@ fn parse_primary(
 
         root_expr = match (root_expr, token) {
             // Function call
+            #[cfg(not(feature = "no_closure"))]
+            (Expr::Variable(x), Token::Bang) => {
+                if !match_token(input, Token::LeftParen)? {
+                    return Err(PERR::MissingToken(
+                        Token::LeftParen.syntax().into(),
+                        "to start arguments list of function call".into(),
+                    )
+                    .into_err(input.peek().unwrap().1));
+                }
+
+                let ((name, pos), modules, _, _) = *x;
+                settings.pos = pos;
+                parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
+            }
+            // Function call
             (Expr::Variable(x), Token::LeftParen) => {
                 let ((name, pos), modules, _, _) = *x;
                 settings.pos = pos;
-                parse_call_expr(input, state, lib, name, modules, settings.level_up())?
+                parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
@@ -1646,7 +1753,7 @@ fn parse_primary(
 
             // Qualifiers + variable name
             *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
-            modules.set_index(state.find_module(&modules.get(0).0));
+            modules.set_index(state.find_module(&modules[0].0));
         }
         _ => (),
     }
@@ -1711,7 +1818,7 @@ fn parse_unary(
                     args.push(expr);
 
                     Ok(Expr::FnCall(Box::new((
-                        (op.into(), true, pos),
+                        (op.into(), true, false, pos),
                         None,
                         hash,
                         args,
@@ -1736,7 +1843,7 @@ fn parse_unary(
             let hash = calc_fn_hash(empty(), op, 2, empty());
 
             Ok(Expr::FnCall(Box::new((
-                (op.into(), true, pos),
+                (op.into(), true, false, pos),
                 None,
                 hash,
                 args,
@@ -1746,7 +1853,7 @@ fn parse_unary(
         // | ...
         #[cfg(not(feature = "no_function"))]
         Token::Pipe | Token::Or => {
-            let mut state = ParseState::new(
+            let mut new_state = ParseState::new(
                 state.engine,
                 #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
@@ -1765,7 +1872,12 @@ fn parse_unary(
                 pos: *token_pos,
             };
 
-            let (expr, func) = parse_anon_fn(input, &mut state, lib, settings)?;
+            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
+
+            #[cfg(not(feature = "no_closure"))]
+            new_state.externals.iter().for_each(|(closure, pos)| {
+                state.access_var(closure, *pos);
+            });
 
             // Qualifiers (none) + function name + number of arguments.
             let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -1904,7 +2016,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().get(0).1));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].1));
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
@@ -1926,7 +2038,14 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
                 op_pos,
             )))
         }
-        // lhs.func()
+        // lhs.func!(...)
+        (_, Expr::FnCall(x)) if (x.0).2 => {
+            return Err(PERR::MalformedCapture(
+                "method-call style does not support capturing".into(),
+            )
+            .into_err((x.0).3))
+        }
+        // lhs.func(...)
         (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
@@ -2113,6 +2232,16 @@ fn parse_binary_op(
 
         let (op_token, pos) = input.next().unwrap();
 
+        if cfg!(not(feature = "no_object")) && op_token == Token::Period {
+            if let (Token::Identifier(_), _) = input.peek().unwrap() {
+                // prevents capturing of the object properties as vars: xxx.<var>
+                #[cfg(not(feature = "no_closure"))]
+                {
+                    state.allow_capture = false;
+                }
+            }
+        }
+
         let rhs = parse_unary(input, state, lib, settings)?;
 
         let next_precedence = input.peek().unwrap().0.precedence(custom);
@@ -2135,7 +2264,7 @@ fn parse_binary_op(
         let cmp_def = Some(false);
         let op = op_token.syntax();
         let hash = calc_fn_hash(empty(), &op, 2, empty());
-        let op = (op, true, pos);
+        let op = (op, true, false, pos);
 
         let mut args = StaticVec::new();
         args.push(root);
@@ -2165,25 +2294,25 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_def))),
 
             Token::Or => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::Or(Box::new((current_lhs, rhs, pos)))
             }
             Token::And => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::And(Box::new((current_lhs, rhs, pos)))
             }
             Token::In => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
-                let rhs = args.pop();
-                let current_lhs = args.pop();
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 
@@ -2196,7 +2325,7 @@ fn parse_binary_op(
                     .unwrap_or(false) =>
             {
                 // Accept non-native functions for custom operators
-                let op = (op.0, false, op.2);
+                let op = (op.0, false, op.2, op.3);
                 Expr::FnCall(Box::new((op, None, hash, args, None)))
             }
 
@@ -2310,7 +2439,7 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         (Token::Equals, pos) => {
-            return Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
+            Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
         }
         (Token::PlusAssign, pos)
         | (Token::MinusAssign, pos)
@@ -2322,12 +2451,10 @@ fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
         | (Token::PowerOfAssign, pos)
         | (Token::AndAssign, pos)
         | (Token::OrAssign, pos)
-        | (Token::XOrAssign, pos) => {
-            return Err(PERR::BadInput(
-                "Expecting a boolean expression, not an assignment".to_string(),
-            )
-            .into_err(*pos))
-        }
+        | (Token::XOrAssign, pos) => Err(PERR::BadInput(
+            "Expecting a boolean expression, not an assignment".to_string(),
+        )
+        .into_err(*pos)),
 
         _ => Ok(()),
     }
@@ -2341,7 +2468,8 @@ fn parse_if(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // if ...
-    settings.pos = eat_token(input, Token::If);
+    let token_pos = eat_token(input, Token::If);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2365,7 +2493,9 @@ fn parse_if(
         None
     };
 
-    Ok(Stmt::IfThenElse(Box::new((guard, if_body, else_body))))
+    Ok(Stmt::IfThenElse(Box::new((
+        guard, if_body, else_body, token_pos,
+    ))))
 }
 
 /// Parse a while loop.
@@ -2376,7 +2506,8 @@ fn parse_while(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // while ...
-    settings.pos = eat_token(input, Token::While);
+    let token_pos = eat_token(input, Token::While);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2389,7 +2520,7 @@ fn parse_while(
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::While(Box::new((guard, body))))
+    Ok(Stmt::While(Box::new((guard, body, token_pos))))
 }
 
 /// Parse a loop statement.
@@ -2400,7 +2531,8 @@ fn parse_loop(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // loop ...
-    settings.pos = eat_token(input, Token::Loop);
+    let token_pos = eat_token(input, Token::Loop);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2409,7 +2541,7 @@ fn parse_loop(
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::Loop(Box::new(body)))
+    Ok(Stmt::Loop(Box::new((body, token_pos))))
 }
 
 /// Parse a for loop.
@@ -2420,7 +2552,8 @@ fn parse_for(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // for ...
-    settings.pos = eat_token(input, Token::For);
+    let token_pos = eat_token(input, Token::For);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2463,7 +2596,7 @@ fn parse_for(
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(Box::new((name, expr, body))))
+    Ok(Stmt::For(Box::new((name, expr, body, token_pos))))
 }
 
 /// Parse a variable definition statement.
@@ -2475,7 +2608,8 @@ fn parse_let(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
-    settings.pos = input.next().unwrap().1;
+    let token_pos = input.next().unwrap().1;
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2499,12 +2633,16 @@ fn parse_let(
             // let name = expr
             ScopeEntryType::Normal => {
                 state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(((name, pos), Some(init_value)))))
+                Ok(Stmt::Let(Box::new((
+                    (name, pos),
+                    Some(init_value),
+                    token_pos,
+                ))))
             }
             // const name = { expr:constant }
             ScopeEntryType::Constant if init_value.is_constant() => {
                 state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(((name, pos), init_value))))
+                Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
             }
             // const name = expr: error
             ScopeEntryType::Constant => {
@@ -2516,11 +2654,15 @@ fn parse_let(
         match var_type {
             ScopeEntryType::Normal => {
                 state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(((name, pos), None))))
+                Ok(Stmt::Let(Box::new(((name, pos), None, token_pos))))
             }
             ScopeEntryType::Constant => {
                 state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(((name, pos), Expr::Unit(pos)))))
+                Ok(Stmt::Const(Box::new((
+                    (name, pos),
+                    Expr::Unit(pos),
+                    token_pos,
+                ))))
             }
         }
     }
@@ -2535,7 +2677,8 @@ fn parse_import(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // import ...
-    settings.pos = eat_token(input, Token::Import);
+    let token_pos = eat_token(input, Token::Import);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2565,7 +2708,12 @@ fn parse_import(
     };
 
     state.modules.push(name.clone());
-    Ok(Stmt::Import(Box::new((expr, (name, settings.pos)))))
+
+    Ok(Stmt::Import(Box::new((
+        expr,
+        (name, settings.pos),
+        token_pos,
+    ))))
 }
 
 /// Parse an export statement.
@@ -2576,7 +2724,8 @@ fn parse_export(
     _lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    settings.pos = eat_token(input, Token::Export);
+    let token_pos = eat_token(input, Token::Export);
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(_state.max_expr_depth)?;
@@ -2636,7 +2785,7 @@ fn parse_export(
         })
         .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
 
-    Ok(Stmt::Export(Box::new(exports)))
+    Ok(Stmt::Export(Box::new((exports, token_pos))))
 }
 
 /// Parse a statement block.
@@ -2670,10 +2819,9 @@ fn parse_block(
         // Parse statements inside the block
         settings.is_global = false;
 
-        let stmt = if let Some(s) = parse_stmt(input, state, lib, settings.level_up())? {
-            s
-        } else {
-            continue;
+        let stmt = match parse_stmt(input, state, lib, settings.level_up())? {
+            Some(s) => s,
+            None => continue,
         };
 
         // See if it needs a terminating semicolon
@@ -2771,7 +2919,7 @@ fn parse_stmt(
 
             match input.next().unwrap() {
                 (Token::Fn, pos) => {
-                    let mut state = ParseState::new(
+                    let mut new_state = ParseState::new(
                         state.engine,
                         #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
@@ -2790,7 +2938,7 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut state, lib, access, settings)?;
+                    let func = parse_fn(input, &mut new_state, lib, access, settings)?;
 
                     // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
@@ -2824,22 +2972,32 @@ fn parse_stmt(
         Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
 
         Token::Return | Token::Throw => {
-            let return_type = match input.next().unwrap() {
-                (Token::Return, _) => ReturnType::Return,
-                (Token::Throw, _) => ReturnType::Exception,
-                _ => unreachable!(),
-            };
+            let (return_type, token_pos) = input
+                .next()
+                .map(|(token, pos)| {
+                    (
+                        match token {
+                            Token::Return => ReturnType::Return,
+                            Token::Throw => ReturnType::Exception,
+                            _ => unreachable!(),
+                        },
+                        pos,
+                    )
+                })
+                .unwrap();
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
                 (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(Box::new((
                     (return_type, *pos),
                     None,
+                    token_pos,
                 ))))),
                 // `return;` or `throw;`
                 (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(Box::new((
                     (return_type, settings.pos),
                     None,
+                    token_pos,
                 ))))),
                 // `return` or `throw` with expression
                 (_, _) => {
@@ -2849,6 +3007,7 @@ fn parse_stmt(
                     Ok(Some(Stmt::ReturnWithVal(Box::new((
                         (return_type, pos),
                         Some(expr),
+                        token_pos,
                     )))))
                 }
             }
@@ -2882,14 +3041,14 @@ fn parse_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let name = match input.next().unwrap() {
-        (Token::Identifier(s), _) | (Token::Custom(s), _) | (Token::Reserved(s), _)
-            if s != KEYWORD_THIS && is_valid_identifier(s.chars()) =>
-        {
-            s
-        }
-        (_, pos) => return Err(PERR::FnMissingName.into_err(pos)),
-    };
+    let (token, pos) = input.next().unwrap();
+
+    let name = token
+        .into_function_name_for_override()
+        .map_err(|t| match t {
+            Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
+            _ => PERR::FnMissingName.into_err(pos),
+        })?;
 
     match input.peek().unwrap() {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
@@ -2953,15 +3112,83 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
     };
 
-    let params = params.into_iter().map(|(p, _)| p).collect();
+    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+
+    #[cfg(not(feature = "no_closure"))]
+    let externals = state
+        .externals
+        .iter()
+        .map(|(name, _)| name)
+        .filter(|name| !params.contains(name))
+        .cloned()
+        .collect();
 
     Ok(ScriptFnDef {
         name: name.into(),
         access,
         params,
+        #[cfg(not(feature = "no_closure"))]
+        externals,
         body,
         pos: settings.pos,
     })
+}
+
+/// Creates a curried expression from a list of external variables
+fn make_curry_from_externals(
+    fn_expr: Expr,
+    externals: StaticVec<(String, Position)>,
+    pos: Position,
+) -> Expr {
+    if externals.is_empty() {
+        return fn_expr;
+    }
+
+    let num_externals = externals.len();
+    let mut args: StaticVec<_> = Default::default();
+
+    #[cfg(not(feature = "no_closure"))]
+    externals.iter().for_each(|(var_name, pos)| {
+        args.push(Expr::Variable(Box::new((
+            (var_name.into(), *pos),
+            None,
+            0,
+            None,
+        ))));
+    });
+
+    #[cfg(feature = "no_closure")]
+    externals.into_iter().for_each(|(var_name, pos)| {
+        args.push(Expr::Variable(Box::new(((var_name, pos), None, 0, None))));
+    });
+
+    let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals, empty());
+
+    let fn_call = Expr::FnCall(Box::new((
+        (KEYWORD_FN_PTR_CURRY.into(), false, false, pos),
+        None,
+        hash,
+        args,
+        None,
+    )));
+
+    let expr = Expr::Dot(Box::new((fn_expr, fn_call, pos)));
+
+    // If there are captured variables, convert the entire expression into a statement block,
+    // then insert the relevant `Share` statements.
+    #[cfg(not(feature = "no_closure"))]
+    {
+        // Statement block
+        let mut statements: StaticVec<_> = Default::default();
+        // Insert `Share` statements
+        statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
+        // Final expression
+        statements.push(Stmt::Expr(Box::new(expr)));
+        Expr::Stmt(Box::new((Stmt::Block(Box::new((statements, pos))), pos)))
+    }
+
+    #[cfg(feature = "no_closure")]
+    return expr;
 }
 
 /// Parse an anonymous function definition.
@@ -3031,7 +3258,31 @@ fn parse_anon_fn(
     let body = parse_stmt(input, state, lib, settings.level_up())
         .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
 
-    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+    // External variables may need to be processed in a consistent order,
+    // so extract them into a list.
+    let externals: StaticVec<_> = {
+        #[cfg(not(feature = "no_closure"))]
+        {
+            state
+                .externals
+                .iter()
+                .map(|(k, &v)| (k.clone(), v))
+                .collect()
+        }
+        #[cfg(feature = "no_closure")]
+        Default::default()
+    };
+
+    let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
+        externals
+            .iter()
+            .map(|(k, _)| k)
+            .cloned()
+            .chain(params.into_iter().map(|(v, _)| v))
+            .collect()
+    } else {
+        params.into_iter().map(|(v, _)| v).collect()
+    };
 
     // Calculate hash
     #[cfg(feature = "no_std")]
@@ -3045,17 +3296,26 @@ fn parse_anon_fn(
     let hash = s.finish();
 
     // Create unique function name
-    let fn_name: ImmutableString = format!("{}{:16x}", FN_ANONYMOUS, hash).into();
+    let fn_name: ImmutableString = format!("{}{:016x}", FN_ANONYMOUS, hash).into();
 
+    // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
         access: FnAccess::Public,
         params,
+        #[cfg(not(feature = "no_closure"))]
+        externals: Default::default(),
         body,
         pos: settings.pos,
     };
 
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
+
+    let expr = if cfg!(not(feature = "no_closure")) {
+        make_curry_from_externals(expr, externals, settings.pos)
+    } else {
+        expr
+    };
 
     Ok((expr, script))
 }
@@ -3068,7 +3328,6 @@ impl Engine {
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let mut functions = Default::default();
-
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
@@ -3114,7 +3373,6 @@ impl Engine {
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
         let mut statements: Vec<Stmt> = Default::default();
         let mut functions = Default::default();
-
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
@@ -3135,10 +3393,9 @@ impl Engine {
                 pos: Position::none(),
             };
 
-            let stmt = if let Some(s) = parse_stmt(input, &mut state, &mut functions, settings)? {
-                s
-            } else {
-                continue;
+            let stmt = match parse_stmt(input, &mut state, &mut functions, settings)? {
+                Some(s) => s,
+                None => continue,
             };
 
             let need_semicolon = !stmt.is_self_terminated();

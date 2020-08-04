@@ -27,12 +27,11 @@ Standard features
 * Easily [call a script-defined function](https://schungx.github.io/rhai/engine/call-fn.html) from Rust.
 * Fairly low compile-time overhead.
 * Fairly efficient evaluation (1 million iterations in 0.3 sec on a single core, 2.3 GHz Linux VM).
-* Relatively little `unsafe` code (yes there are some for performance reasons, and most `unsafe` code is limited to
-  one single source file, all with names starting with `"unsafe_"`).
+* Relatively little `unsafe` code (yes there are some for performance reasons).
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
 * [Function overloading](https://schungx.github.io/rhai/language/overload.html).
 * [Operator overloading](https://schungx.github.io/rhai/rust/operators.html).
-* Dynamic dispatch via [function pointers](https://schungx.github.io/rhai/language/fn-ptr.html).
+* Dynamic dispatch via [function pointers](https://schungx.github.io/rhai/language/fn-ptr.html) with additional support for [currying](https://schungx.github.io/rhai/language/fn-curry.html).
 * Some support for [object-oriented programming (OOP)](https://schungx.github.io/rhai/language/oop.html).
 * Organize code base with dynamically-loadable [modules](https://schungx.github.io/rhai/language/modules.html).
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).

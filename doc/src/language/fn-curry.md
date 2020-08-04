@@ -28,3 +28,12 @@ let curried = curry(func, 21);  // function-call style also works
 curried.call(2) == 42;          // <- de-sugars to 'func.call(21, 2)'
                                 //    only one argument is now required
 ```
+
+
+Automatic Currying
+------------------
+
+[Anonymous functions] defined via a closure syntax _capture_ external variables
+that are not shadowed inside the function's scope.
+
+This is accomplished via [automatic currying].
