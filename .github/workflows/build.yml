@@ -19,7 +19,6 @@ jobs:
         flags:
           - ""
           - "--features serde"
-          - "--features plugins"
           - "--features unchecked"
           - "--features sync"
           - "--features no_optimize"
