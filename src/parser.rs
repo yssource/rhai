@@ -568,7 +568,7 @@ pub enum Stmt {
     ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
     /// import expr as module
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, (String, Position), Position)>),
+    Import(Box<(Expr, Option<(String, Position)>, Position)>),
     /// expr id as name, ...
     #[cfg(not(feature = "no_module"))]
     Export(
@@ -2685,14 +2685,8 @@ fn parse_import(
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
     // import expr as ...
-    match input.next().unwrap() {
-        (Token::As, _) => (),
-        (_, pos) => {
-            return Err(
-                PERR::MissingToken(Token::As.into(), "in this import statement".into())
-                    .into_err(pos),
-            )
-        }
+    if !match_token(input, Token::As)? {
+        return Ok(Stmt::Import(Box::new((expr, None, token_pos))));
     }
 
     // import expr as name ...
@@ -2709,7 +2703,7 @@ fn parse_import(
 
     Ok(Stmt::Import(Box::new((
         expr,
-        (name, settings.pos),
+        Some((name, settings.pos)),
         token_pos,
     ))))
 }

@@ -1806,7 +1806,7 @@ impl Engine {
             // Import statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(x) => {
-                let (expr, (name, _pos), _) = x.as_ref();
+                let (expr, alias, _pos) = x.as_ref();
 
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
@@ -1820,8 +1820,11 @@ impl Engine {
                 {
                     if let Some(resolver) = &self.module_resolver {
                         let mut module = resolver.resolve(self, &path, expr.position())?;
-                        module.index_all_sub_modules();
-                        mods.push((name.clone().into(), module));
+
+                        if let Some((name, _)) = alias {
+                            module.index_all_sub_modules();
+                            mods.push((name.clone().into(), module));
+                        }
 
                         state.modules += 1;
 
