@@ -100,7 +100,7 @@ impl Engine {
             ) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> Result<&mut Self, Box<ParseError>> {
+    ) -> Result<&mut Self, ParseError> {
         let mut segments: StaticVec<_> = Default::default();
 
         for s in keywords {
