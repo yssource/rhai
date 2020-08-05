@@ -2,9 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{
-    Engine, KEYWORD_FN_PTR_CURRY, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
-};
+use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
@@ -15,7 +13,7 @@ use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, To
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
-use crate::engine::FN_ANONYMOUS;
+use crate::engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY};
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter};
@@ -3135,6 +3133,7 @@ fn parse_fn(
 }
 
 /// Creates a curried expression from a list of external variables
+#[cfg(not(feature = "no_function"))]
 fn make_curry_from_externals(
     fn_expr: Expr,
     externals: StaticVec<(String, Position)>,

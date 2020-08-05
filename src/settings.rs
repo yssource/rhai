@@ -1,12 +1,14 @@
 //! Configuration settings for `Engine`.
 
 use crate::engine::Engine;
-use crate::optimize::OptimizationLevel;
 use crate::packages::PackageLibrary;
 use crate::token::{is_valid_identifier, Token};
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
+
+#[cfg(not(feature = "no_optimize"))]
+use crate::optimize::OptimizationLevel;
 
 use crate::stdlib::{format, string::String};
 

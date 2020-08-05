@@ -3,10 +3,9 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, Imports, State};
 use crate::error::ParseError;
-use crate::fn_call::ensure_no_data_race;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::module::{FuncReturn, Module};
-use crate::optimize::{optimize_into_ast, OptimizationLevel};
+use crate::optimize::OptimizationLevel;
 use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
@@ -24,13 +23,21 @@ use crate::{
 };
 
 #[cfg(not(feature = "no_function"))]
-use crate::{engine::get_script_function_by_signature, fn_args::FuncArgs, utils::StaticVec};
+use crate::{
+    engine::get_script_function_by_signature, fn_args::FuncArgs, fn_call::ensure_no_data_race,
+    utils::StaticVec,
+};
+
+#[cfg(not(feature = "no_optimize"))]
+use crate::optimize::optimize_into_ast;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    mem,
 };
+
+#[cfg(not(feature = "no_optimize"))]
+use crate::stdlib::mem;
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]

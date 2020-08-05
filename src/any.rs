@@ -410,7 +410,7 @@ impl fmt::Display for Dynamic {
             }
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell) => fmt::Display::fmt(*cell.read_lock().unwrap(), f),
+            Union::Shared(cell) => fmt::Display::fmt(&*cell.read().unwrap(), f),
         }
     }
 }
@@ -448,7 +448,7 @@ impl fmt::Debug for Dynamic {
             }
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell) => fmt::Display::fmt(*cell.read_lock().unwrap(), f),
+            Union::Shared(cell) => fmt::Debug::fmt(&*cell.read().unwrap(), f),
         }
     }
 }

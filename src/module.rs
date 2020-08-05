@@ -4,13 +4,13 @@ use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync};
-use crate::parser::{FnAccess, FnAccess::Public};
+use crate::parser::{FnAccess, FnAccess::Public, ScriptFnDef};
 use crate::result::EvalAltResult;
 use crate::token::{Position, Token};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_native::Shared, parser::ScriptFnDef};
+use crate::fn_native::Shared;
 
 #[cfg(not(feature = "no_module"))]
 use crate::{
@@ -258,7 +258,6 @@ impl Module {
     /// Set a script-defined function into the module.
     ///
     /// If there is an existing function of the same name and number of arguments, it is replaced.
-    #[cfg(not(feature = "no_function"))]
     pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) -> &mut Self {
         // None + function name + number of arguments.
         let hash_script = calc_fn_hash(empty(), &fn_def.name, fn_def.params.len(), empty());
@@ -1003,7 +1002,6 @@ impl Module {
     }
 
     /// Get an iterator to the functions in the module.
-    #[cfg(not(feature = "no_function"))]
     pub(crate) fn iter_fn(
         &self,
     ) -> impl Iterator<Item = &(String, FnAccess, StaticVec<TypeId>, Func)> {

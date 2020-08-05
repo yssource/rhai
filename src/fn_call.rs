@@ -34,6 +34,7 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 use crate::engine::{Map, Target, FN_GET, FN_SET};
 
 #[cfg(not(feature = "no_closure"))]
+#[cfg(not(feature = "no_function"))]
 use crate::scope::Entry as ScopeEntry;
 
 use crate::stdlib::{
@@ -48,6 +49,7 @@ use crate::stdlib::{
 };
 
 #[cfg(not(feature = "no_closure"))]
+#[cfg(not(feature = "no_function"))]
 use crate::stdlib::{collections::HashSet, string::String};
 
 /// Extract the property name from a getter function name.
@@ -140,6 +142,7 @@ impl Drop for ArgBackup<'_> {
 
 // Add captured variables into scope
 #[cfg(not(feature = "no_closure"))]
+#[cfg(not(feature = "no_function"))]
 fn add_captured_variables_into_scope<'s>(
     externals: &HashSet<String>,
     captured: Scope<'s>,
@@ -449,11 +452,11 @@ impl Engine {
         hash_script: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
-        is_method: bool,
+        _is_method: bool,
         pub_only: bool,
         _capture: Option<Scope>,
         def_val: Option<bool>,
-        level: usize,
+        _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {
@@ -510,7 +513,7 @@ impl Engine {
                     add_captured_variables_into_scope(&func.externals, captured, scope);
                 }
 
-                let result = if is_method {
+                let result = if _is_method {
                     // Method call of script function - map first argument to `this`
                     let (first, rest) = args.split_at_mut(1);
                     self.call_script_fn(
@@ -522,7 +525,7 @@ impl Engine {
                         fn_name,
                         func,
                         rest,
-                        level,
+                        _level,
                     )?
                 } else {
                     // Normal call of script function - map first argument to `this`
@@ -531,7 +534,7 @@ impl Engine {
                     backup.change_first_arg_to_copy(is_ref, args);
 
                     let result = self.call_script_fn(
-                        scope, mods, state, lib, &mut None, fn_name, func, args, level,
+                        scope, mods, state, lib, &mut None, fn_name, func, args, _level,
                     );
 
                     // Restore the original reference
