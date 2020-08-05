@@ -36,6 +36,7 @@ Breaking changes
 * `PackagesCollection::get_fn`, `PackagesCollection::contains_fn`, `Module::get_fn` and `Module::contains_fn` now take an additional `public_only` parameter indicating whether only public functions are accepted.
 * The iterator returned by `Scope::iter` now contains a clone of the `Dynamic` value (unshared).
 * `Engine::load_package` takes any type that is `Into<PackageLibrary>`.
+* Error in `Engine::register_custom_syntax` is no longer `Box`-ed.
 
 Housekeeping
 ------------
