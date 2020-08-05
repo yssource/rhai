@@ -1,6 +1,4 @@
-use rhai::{
-    Engine, EvalAltResult, EvalContext, Expression, ParseError, ParseErrorType, Scope, INT,
-};
+use rhai::{Engine, EvalAltResult, EvalContext, Expression, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -19,43 +17,35 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         ParseErrorType::Reserved(err) if err == "while"
     ));
 
-    engine
-        .register_custom_syntax(
-            &[
-                "do", "|", "$ident$", "|", "->", "$block$", "while", "$expr$",
-            ],
-            1,
-            |engine: &Engine,
-             context: &mut EvalContext,
-             scope: &mut Scope,
-             inputs: &[Expression]| {
-                let var_name = inputs[0].get_variable_name().unwrap().to_string();
-                let stmt = inputs.get(1).unwrap();
-                let expr = inputs.get(2).unwrap();
+    engine.register_custom_syntax(
+        &[
+            "do", "|", "$ident$", "|", "->", "$block$", "while", "$expr$",
+        ],
+        1,
+        |engine: &Engine, context: &mut EvalContext, scope: &mut Scope, inputs: &[Expression]| {
+            let var_name = inputs[0].get_variable_name().unwrap().to_string();
+            let stmt = inputs.get(1).unwrap();
+            let expr = inputs.get(2).unwrap();
 
-                scope.push(var_name, 0 as INT);
+            scope.push(var_name, 0 as INT);
 
-                loop {
-                    engine.eval_expression_tree(context, scope, stmt)?;
+            loop {
+                engine.eval_expression_tree(context, scope, stmt)?;
 
-                    if !engine
-                        .eval_expression_tree(context, scope, expr)?
-                        .as_bool()
-                        .map_err(|_| {
-                            EvalAltResult::ErrorBooleanArgMismatch(
-                                "do-while".into(),
-                                expr.position(),
-                            )
-                        })?
-                    {
-                        break;
-                    }
+                if !engine
+                    .eval_expression_tree(context, scope, expr)?
+                    .as_bool()
+                    .map_err(|_| {
+                        EvalAltResult::ErrorBooleanArgMismatch("do-while".into(), expr.position())
+                    })?
+                {
+                    break;
                 }
+            }
 
-                Ok(().into())
-            },
-        )
-        .unwrap();
+            Ok(().into())
+        },
+    )?;
 
     // 'while' is now a custom keyword so this it can no longer be a variable
     engine.consume("let while = 0").expect_err("should error");
@@ -71,10 +61,13 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     );
 
     // The first symbol must be an identifier
-    assert!(matches!(
-        *engine.register_custom_syntax(&["!"], 0, |_, _, _, _| Ok(().into())).expect_err("should error"),
-        ParseError(err, _) if *err == ParseErrorType::BadInput("Improper symbol for custom syntax: '!'".to_string())
-    ));
+    assert_eq!(
+        *engine
+            .register_custom_syntax(&["!"], 0, |_, _, _, _| Ok(().into()))
+            .expect_err("should error")
+            .0,
+        ParseErrorType::BadInput("Improper symbol for custom syntax: '!'".to_string())
+    );
 
     Ok(())
 }
