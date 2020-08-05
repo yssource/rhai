@@ -694,12 +694,12 @@ impl Engine {
             && _fn_name == KEYWORD_IS_SHARED
             && idx.is_empty()
         {
-            // take call
+            // is_shared call
             Ok((target.is_shared().into(), false))
         } else {
             #[cfg(not(feature = "no_object"))]
             let redirected;
-            let mut _hash = hash_script;
+            let mut hash = hash_script;
 
             // Check if it is a map method call in OOP style
             #[cfg(not(feature = "no_object"))]
@@ -719,7 +719,7 @@ impl Engine {
                                 .for_each(|(i, v)| idx.insert(i, v));
                         }
                         // Recalculate the hash based on the new function name and new arguments
-                        _hash = if native {
+                        hash = if native {
                             0
                         } else {
                             calc_fn_hash(empty(), _fn_name, idx.len(), empty())
@@ -729,7 +729,7 @@ impl Engine {
             };
 
             if native {
-                _hash = 0;
+                hash = 0;
             }
 
             // Attached object pointer in front of the arguments
@@ -737,7 +737,7 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, _fn_name, _hash, args, is_ref, true, pub_only, None, def_val, level,
+                state, lib, _fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
             )
         }?;
 
