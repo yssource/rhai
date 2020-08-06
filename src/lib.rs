@@ -102,6 +102,8 @@ pub use rhai_codegen::*;
 
 #[cfg(not(feature = "no_function"))]
 pub use parser::FnAccess;
+#[cfg(feature = "no_function")]
+pub use parser::FnAccess;
 
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;

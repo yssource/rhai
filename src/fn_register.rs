@@ -39,10 +39,10 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///     fn is_varadic(&self) -> bool { false }
     ///
     ///     fn call(&self, args: &mut[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
-    ///         let x1: &FLOAT = args[0].downcast_ref::<FLOAT>().unwrap();
-    ///         let y1: &FLOAT = args[1].downcast_ref::<FLOAT>().unwrap();
-    ///         let x2: &FLOAT = args[2].downcast_ref::<FLOAT>().unwrap();
-    ///         let y2: &FLOAT = args[3].downcast_ref::<FLOAT>().unwrap();
+    ///         let x1: FLOAT = args[0].downcast_clone::<FLOAT>().unwrap();
+    ///         let y1: FLOAT = args[1].downcast_clone::<FLOAT>().unwrap();
+    ///         let x2: FLOAT = args[2].downcast_clone::<FLOAT>().unwrap();
+    ///         let y2: FLOAT = args[3].downcast_clone::<FLOAT>().unwrap();
     ///         let square_sum = (y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0);
     ///         Ok(Dynamic::from(square_sum.sqrt()))
     ///     }
