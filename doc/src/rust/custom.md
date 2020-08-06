@@ -83,6 +83,8 @@ engine
 ***Note**: Rhai follows the convention that methods of custom types take a `&mut` first parameter
 so that invoking methods can update the types. All other parameters in Rhai are passed by value (i.e. clones).*
 
+**IMPORTANT: Rhai does NOT support normal references (i.e. `&T`) as parameters.**
+
 Use the Custom Type in Scripts
 -----------------------------
 
@@ -125,8 +127,8 @@ Under [`no_object`], however, the _method_ style of function calls
 let result = engine.eval::<()>("let x = [1, 2, 3]; x.clear()")?;
 ```
 
-[`type_of()`]
--------------
+`type_of()` a Custom Type
+-------------------------
 
 [`type_of()`] works fine with custom types and returns the name of the type.
 
