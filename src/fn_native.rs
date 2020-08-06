@@ -1,21 +1,20 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::any::Dynamic;
-use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::module::Module;
-use crate::parser::FnAccess;
+use crate::parser::{FnAccess, ScriptFnDef};
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_function"))]
-use crate::{module::FuncReturn, parser::ScriptFnDef, utils::StaticVec};
+use crate::{calc_fn_hash, module::FuncReturn, utils::StaticVec};
 
-use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, string::String, vec::Vec};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, string::String, vec::Vec};
 
 #[cfg(not(feature = "no_function"))]
-use crate::stdlib::mem;
+use crate::stdlib::{iter::empty, mem};
 
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::rc::Rc;
@@ -176,10 +175,7 @@ impl TryFrom<ImmutableString> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                value.into(),
-                Position::none(),
-            )))
+            EvalAltResult::ErrorFunctionNotFound(value.into(), Position::none()).into()
         }
     }
 }
@@ -293,10 +289,11 @@ impl CallableFunction {
         }
     }
     /// Is this a Rhai-scripted function?
-    #[cfg(not(feature = "no_function"))]
     pub fn is_script(&self) -> bool {
         match self {
+            #[cfg(not(feature = "no_function"))]
             Self::Script(_) => true,
+
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
         }
     }
@@ -314,6 +311,8 @@ impl CallableFunction {
     pub fn access(&self) -> FnAccess {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => FnAccess::Public,
+
+            #[cfg(not(feature = "no_function"))]
             Self::Script(f) => f.access,
         }
     }
@@ -348,10 +347,11 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Script`.
-    #[cfg(not(feature = "no_function"))]
     pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
+
+            #[cfg(not(feature = "no_function"))]
             Self::Script(f) => f,
         }
     }
@@ -385,16 +385,22 @@ impl From<IteratorFn> for CallableFunction {
     }
 }
 
-#[cfg(not(feature = "no_function"))]
 impl From<ScriptFnDef> for CallableFunction {
-    fn from(func: ScriptFnDef) -> Self {
-        Self::Script(func.into())
+    fn from(_func: ScriptFnDef) -> Self {
+        #[cfg(feature = "no_function")]
+        unreachable!();
+
+        #[cfg(not(feature = "no_function"))]
+        Self::Script(_func.into())
     }
 }
 
-#[cfg(not(feature = "no_function"))]
 impl From<Shared<ScriptFnDef>> for CallableFunction {
-    fn from(func: Shared<ScriptFnDef>) -> Self {
-        Self::Script(func)
+    fn from(_func: Shared<ScriptFnDef>) -> Self {
+        #[cfg(feature = "no_function")]
+        unreachable!();
+
+        #[cfg(not(feature = "no_function"))]
+        Self::Script(_func)
     }
 }

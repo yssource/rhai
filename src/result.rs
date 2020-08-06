@@ -361,3 +361,9 @@ impl EvalAltResult {
         self
     }
 }
+
+impl<T> From<EvalAltResult> for Result<T, Box<EvalAltResult>> {
+    fn from(err: EvalAltResult) -> Self {
+        Err(err.into())
+    }
+}

@@ -95,10 +95,11 @@ When there is a mutable reference to the `this` object (i.e. the first argument)
 there can be no other immutable references to `args`, otherwise the Rust borrow checker will complain.
 
 
-Example - Passing a Function Pointer to a Rust Function
-------------------------------------------------------
+Example - Passing a Callback to a Rust Function
+----------------------------------------------
 
-The low-level API is useful when there is a need to interact with the scripting [`Engine`] within a function.
+The low-level API is useful when there is a need to interact with the scripting [`Engine`]
+within a function.
 
 The following example registers a function that takes a [function pointer] as an argument,
 then calls it within the same [`Engine`].  This way, a _callback_ function can be provided
@@ -140,6 +141,24 @@ let result = engine.eval::<i64>(r#"
 ```
 
 
+TL;DR - Why `read_lock` and `write_lock`
+---------------------------------------
+
+The `Dynamic` API that casts it to a reference to a particular data type  is `read_lock`
+(for an immutable reference) and `write_lock` (for a mutable reference).
+
+As the naming shows, something is _locked_ in order to allow this access, and that something
+is a _shared value_ created by [capturing][automatic currying] variables from [closures].
+
+Shared values are implemented as `Rc<RefCell<Dynamic>>` (`Arc<RwLock<Dynamic>>` under [`sync`]).
+
+If the value is _not_ a shared value, or if running under [`no_closure`] where there is
+no [capturing][automatic currying], this API de-sugars to a simple `downcast_ref` and `downcast_mut`.
+
+If the value is a shared value, then it is first locked and the returned lock guard
+then allows access to the underlying value in the specified type.
+
+
 Hold Multiple References
 ------------------------
 
@@ -152,9 +171,9 @@ to partition the slice:
 let (first, rest) = args.split_at_mut(1);
 
 // Mutable reference to the first parameter
-let this_ptr = first[0].downcast_mut::<A>().unwrap();
+let this_ptr: &mut Dynamic = &mut *first[0].write_lock::<A>().unwrap();
 
 // Immutable reference to the second value parameter
 // This can be mutable but there is no point because the parameter is passed by value
-let value_ref = rest[0].read_lock::<B>().unwrap();
+let value_ref: &Dynamic = &*rest[0].read_lock::<B>().unwrap();
 ```

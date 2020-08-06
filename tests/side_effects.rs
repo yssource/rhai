@@ -5,16 +5,16 @@ use std::sync::{Arc, Mutex, RwLock};
 /// Simulate a command object.
 struct Command {
     /// Simulate an external state.
-    state: i64,
+    state: INT,
 }
 
 impl Command {
     /// Do some action.
-    pub fn action(&mut self, val: i64) {
+    pub fn action(&mut self, val: INT) {
         self.state = val;
     }
     /// Get current value.
-    pub fn get(&self) -> i64 {
+    pub fn get(&self) -> INT {
         self.state
     }
 }
@@ -39,7 +39,7 @@ fn test_side_effects_command() -> Result<(), Box<EvalAltResult>> {
 
     // Register type.
     engine.register_type_with_name::<API>("CommandType");
-    engine.register_fn("action", |api: &mut API, x: i64| {
+    engine.register_fn("action", |api: &mut API, x: INT| {
         let mut command = api.lock().unwrap();
         let val = command.get();
         command.action(val + x);

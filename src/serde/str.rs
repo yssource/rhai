@@ -20,11 +20,12 @@ impl<'a> ImmutableStringDeserializer<'a> {
     }
     /// Shortcut for a type conversion error.
     fn type_error<T>(&self) -> Result<T, Box<EvalAltResult>> {
-        Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
+        EvalAltResult::ErrorMismatchOutputType(
             type_name::<T>().into(),
             "string".into(),
             Position::none(),
-        )))
+        )
+        .into()
     }
 }
 

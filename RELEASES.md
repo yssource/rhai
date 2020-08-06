@@ -1,14 +1,18 @@
 Rhai Release Notes
 ==================
 
-Version 0.18.0
+Version 0.19.0
+==============
+
+
+Version 0.18.1
 ==============
 
 This version adds:
 
 * Anonymous functions (in Rust closure syntax).  Simplifies creation of single-use ad-hoc functions.
 * Currying of function pointers.
-* Closures - auto-currying of anonymous functions to capture shared variables from the external scope.
+* Closures - auto-currying of anonymous functions to capture shared variables from the external scope. Use the `no_closure` feature to disable sharing values and capturing.
 * Binding the `this` pointer in a function pointer `call`.
 * Capturing call scope via `func!(...)` syntax.
 

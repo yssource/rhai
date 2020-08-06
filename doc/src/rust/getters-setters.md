@@ -42,3 +42,5 @@ let result = engine.eval::<String>(r#"let a = new_ts(); a.xyz = "42"; a.xyz"#)?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
+
+**IMPORTANT: Rhai does NOT support normal references (i.e. `&T`) as parameters.**

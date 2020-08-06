@@ -36,6 +36,8 @@ update(array[0]);   // <- 'array[0]' is an expression returning a calculated val
 array[0].update();  // <- call in method-call style will update 'a'
 ```
 
+**IMPORTANT: Rhai does NOT support normal references (i.e. `&T`) as parameters.**
+
 
 Number of Parameters
 --------------------
@@ -51,8 +53,8 @@ The following table illustrates the differences:
 |  Rhai script  |    _n_     |         `this`         |                  `fn method(x, y) {}`                   |
 
 
-`&mut` is Efficient (Except for `ImmutableString`)
-------------------------------------------------
+`&mut` is Efficient, Except for `ImmutableString`
+-----------------------------------------------
 
 Using a `&mut` first parameter is highly encouraged when using types that are expensive to clone,
 even when the intention is not to mutate that argument, because it avoids cloning that argument value.

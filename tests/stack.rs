@@ -1,5 +1,5 @@
 #![cfg(not(feature = "unchecked"))]
-use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType};
+use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType, INT};
 
 #[test]
 #[cfg(not(feature = "no_function"))]
@@ -7,7 +7,7 @@ fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
-        engine.eval::<i64>(
+        engine.eval::<INT>(
             r"
                 fn foo(n) { if n <= 1 { 0 } else { n + foo(n-1) } }
                 foo(8)

@@ -680,6 +680,7 @@ impl Token {
     }
 
     /// Convert a token into a function name, if possible.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
             Self::Reserved(s) if can_override_keyword(&s) => Ok(s),
@@ -1442,6 +1443,7 @@ pub fn is_keyword_function(name: &str) -> bool {
 }
 
 /// Can this keyword be overridden as a function?
+#[cfg(not(feature = "no_function"))]
 #[inline(always)]
 pub fn can_override_keyword(name: &str) -> bool {
     match name {
