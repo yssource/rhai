@@ -265,7 +265,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m
                 }
@@ -294,15 +294,15 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("get_mystic_number", FnAccess::Public, &[],
-                             CallableFunction::from_plugin(get_mystic_number__Token()));
+                             CallableFunction::from_plugin(get_mystic_number_token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                struct get_mystic_number__Token();
-                impl PluginFunction for get_mystic_number__Token {
+                struct get_mystic_number_token();
+                impl PluginFunction for get_mystic_number_token {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -317,17 +317,17 @@ mod generate_tests {
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(get_mystic_number__Token())
+                        Box::new(get_mystic_number_token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![].into_boxed_slice()
                     }
                 }
-                pub fn get_mystic_number__Token__callable() -> CallableFunction {
-                    CallableFunction::from_plugin(get_mystic_number__Token())
+                pub fn get_mystic_number_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(get_mystic_number_token())
                 }
-                pub fn get_mystic_number__Token__input_types() -> Box<[std::any::TypeId]> {
-                    get_mystic_number__Token().input_types()
+                pub fn get_mystic_number_token_input_types() -> Box<[std::any::TypeId]> {
+                    get_mystic_number_token().input_types()
                 }
             }
         };
@@ -354,15 +354,15 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("add_one_to", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_one_to__Token()));
+                             CallableFunction::from_plugin(add_one_to_token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                struct add_one_to__Token();
-                impl PluginFunction for add_one_to__Token {
+                struct add_one_to_token();
+                impl PluginFunction for add_one_to_token {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -378,17 +378,17 @@ mod generate_tests {
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_one_to__Token())
+                        Box::new(add_one_to_token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![std::any::TypeId::of::<INT>()].into_boxed_slice()
                     }
                 }
-                pub fn add_one_to__Token__callable() -> CallableFunction {
-                    CallableFunction::from_plugin(add_one_to__Token())
+                pub fn add_one_to_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(add_one_to_token())
                 }
-                pub fn add_one_to__Token__input_types() -> Box<[std::any::TypeId]> {
-                    add_one_to__Token().input_types()
+                pub fn add_one_to_token_input_types() -> Box<[std::any::TypeId]> {
+                    add_one_to_token().input_types()
                 }
             }
         };
@@ -415,16 +415,16 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_together__Token()));
+                             CallableFunction::from_plugin(add_together_token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                struct add_together__Token();
-                impl PluginFunction for add_together__Token {
+                struct add_together_token();
+                impl PluginFunction for add_together_token {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -441,18 +441,18 @@ mod generate_tests {
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_together__Token())
+                        Box::new(add_together_token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![std::any::TypeId::of::<INT>(),
                              std::any::TypeId::of::<INT>()].into_boxed_slice()
                     }
                 }
-                pub fn add_together__Token__callable() -> CallableFunction {
-                    CallableFunction::from_plugin(add_together__Token())
+                pub fn add_together_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(add_together_token())
                 }
-                pub fn add_together__Token__input_types() -> Box<[std::any::TypeId]> {
-                    add_together__Token().input_types()
+                pub fn add_together_token_input_types() -> Box<[std::any::TypeId]> {
+                    add_together_token().input_types()
                 }
             }
         };
@@ -475,7 +475,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_var("MYSTIC_NUMBER", 42);
                     m
@@ -503,7 +503,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_var("MYSTIC_NUMBER", 42);
                     m
@@ -533,7 +533,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m
                 }
@@ -558,7 +558,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m
                 }
@@ -587,16 +587,16 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("print_out_to", FnAccess::Public,
                              &[core::any::TypeId::of::<ImmutableString>()],
-                             CallableFunction::from_plugin(print_out_to__Token()));
+                             CallableFunction::from_plugin(print_out_to_token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                struct print_out_to__Token();
-                impl PluginFunction for print_out_to__Token {
+                struct print_out_to_token();
+                impl PluginFunction for print_out_to_token {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -612,17 +612,17 @@ mod generate_tests {
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(print_out_to__Token())
+                        Box::new(print_out_to_token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![std::any::TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
                 }
-                pub fn print_out_to__Token__callable() -> CallableFunction {
-                    CallableFunction::from_plugin(print_out_to__Token())
+                pub fn print_out_to_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(print_out_to_token())
                 }
-                pub fn print_out_to__Token__input_types() -> Box<[std::any::TypeId]> {
-                    print_out_to__Token().input_types()
+                pub fn print_out_to_token_input_types() -> Box<[std::any::TypeId]> {
+                    print_out_to_token().input_types()
                 }
             }
         };
@@ -649,16 +649,16 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
-                pub fn rhai_module__generate() -> Module {
+                pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_fn("increment", FnAccess::Public,
                              &[core::any::TypeId::of::<FLOAT>()],
-                             CallableFunction::from_plugin(increment__Token()));
+                             CallableFunction::from_plugin(increment_token()));
                     m
                 }
                 #[allow(non_camel_case_types)]
-                struct increment__Token();
-                impl PluginFunction for increment__Token {
+                struct increment_token();
+                impl PluginFunction for increment_token {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -667,24 +667,24 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0: &mut _ = args[0usize].downcast_mut::<FLOAT>().unwrap();
+                        let arg0: &mut _ = args[0usize].write_lock::<FLOAT>().unwrap();
                         Ok(Dynamic::from(increment(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(increment__Token())
+                        Box::new(increment_token())
                     }
                     fn input_types(&self) -> Box<[std::any::TypeId]> {
                         vec![std::any::TypeId::of::<FLOAT>()].into_boxed_slice()
                     }
                 }
-                pub fn increment__Token__callable() -> CallableFunction {
-                    CallableFunction::from_plugin(increment__Token())
+                pub fn increment_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(increment_token())
                 }
-                pub fn increment__Token__input_types() -> Box<[std::any::TypeId]> {
-                    increment__Token().input_types()
+                pub fn increment_token_input_types() -> Box<[std::any::TypeId]> {
+                    increment_token().input_types()
                 }
         }
         };

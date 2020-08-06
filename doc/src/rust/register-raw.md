@@ -152,7 +152,7 @@ to partition the slice:
 let (first, rest) = args.split_at_mut(1);
 
 // Mutable reference to the first parameter
-let this_ptr = first[0].downcast_mut::<A>().unwrap();
+let this_ptr = first[0].write_lock::<A>().unwrap();
 
 // Immutable reference to the second value parameter
 // This can be mutable but there is no point because the parameter is passed by value

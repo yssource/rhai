@@ -99,7 +99,7 @@ pub fn export_module(
 pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let module_path = parse_macro_input!(module_path as syn::Path);
     let tokens = quote::quote! {
-        #module_path::rhai_module__generate()
+        #module_path::rhai_module_generate()
     };
     proc_macro::TokenStream::from(tokens)
 }
@@ -133,7 +133,7 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
         let mut g = rust_modpath.clone().segments;
         g.pop();
         let ident = syn::Ident::new(
-            &format!("rhai_fn__{}", rust_modpath.segments.last().unwrap().ident),
+            &format!("rhai_fn_{}", rust_modpath.segments.last().unwrap().ident),
             items[2].span(),
         );
         g.push_value(syn::PathSegment {
@@ -144,8 +144,8 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
     };
     let tokens = quote! {
         #rhai_module.set_fn(#export_name, rhai::FnAccess::Public,
-                            #gen_mod_path::Token__input_types().as_ref(),
-                            #gen_mod_path::Token__callable());
+                            #gen_mod_path::token_input_types().as_ref(),
+                            #gen_mod_path::token_callable());
 
     };
     proc_macro::TokenStream::from(tokens)

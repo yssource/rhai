@@ -26,7 +26,7 @@ pub(crate) fn generate_body(
     let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
     for function in fns {
         let fn_token_name = syn::Ident::new(
-            &format!("{}__Token", function.name().to_string()),
+            &format!("{}_Token", function.name().to_string()),
             function.name().span(),
         );
         let fn_literal =
@@ -90,7 +90,7 @@ pub(crate) fn generate_body(
             #[allow(unused_imports)]
             use super::*;
             #[allow(unused_mut)]
-            pub fn rhai_module__generate() -> Module {
+            pub fn rhai_module_generate() -> Module {
                 let mut m = Module::new();
                 #(#set_fn_stmts)*
                 #(#set_const_stmts)*

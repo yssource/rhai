@@ -150,7 +150,7 @@ impl ExportedFn {
 
     pub fn generate(self) -> proc_macro2::TokenStream {
         let name: syn::Ident = syn::Ident::new(
-            &format!("rhai_fn__{}", self.name().to_string()),
+            &format!("rhai_fn_{}", self.name().to_string()),
             self.name().span(),
         );
         let impl_block = self.generate_impl("Token");
@@ -171,8 +171,9 @@ impl ExportedFn {
     pub fn generate_callable(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let callable_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}__callable", on_type_name).as_str(),
-            self.name().span());
+            format!("{}_callable", on_type_name.to_lowercase()).as_str(),
+            self.name().span(),
+        );
         quote! {
             pub fn #callable_fn_name() -> CallableFunction {
                 CallableFunction::from_plugin(#token_name())
@@ -183,8 +184,9 @@ impl ExportedFn {
     pub fn generate_input_types(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let input_types_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}__input_types", on_type_name).as_str(),
-            self.name().span());
+            format!("{}_input_types", on_type_name.to_lowercase()).as_str(),
+            self.name().span(),
+        );
         quote! {
             pub fn #input_types_fn_name() -> Box<[std::any::TypeId]> {
                 #token_name().input_types()
@@ -218,7 +220,7 @@ impl ExportedFn {
                         }
                     };
                     let downcast_span = quote_spanned!(
-                        arg_type.span()=> args[0usize].downcast_mut::<#arg_type>().unwrap());
+                        arg_type.span()=> &mut *args[0usize].write_lock::<#arg_type>().unwrap());
                     unpack_stmts.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             let #var: &mut _ = #downcast_span;
@@ -603,7 +605,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             #[allow(unused)]
-            pub mod rhai_fn__do_nothing {
+            pub mod rhai_fn_do_nothing {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
@@ -625,10 +627,10 @@ mod generate_tests {
                         vec![].into_boxed_slice()
                     }
                 }
-                pub fn Token__callable() -> CallableFunction {
+                pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn Token__input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
             }
@@ -646,7 +648,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             #[allow(unused)]
-            pub mod rhai_fn__do_something {
+            pub mod rhai_fn_do_something {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
@@ -669,10 +671,10 @@ mod generate_tests {
                         vec![std::any::TypeId::of::<usize>()].into_boxed_slice()
                     }
                 }
-                pub fn Token__callable() -> CallableFunction {
+                pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn Token__input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
             }
@@ -723,7 +725,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             #[allow(unused)]
-            pub mod rhai_fn__add_together {
+            pub mod rhai_fn_add_together {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
@@ -748,10 +750,10 @@ mod generate_tests {
                              std::any::TypeId::of::<usize>()].into_boxed_slice()
                     }
                 }
-                pub fn Token__callable() -> CallableFunction {
+                pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn Token__input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
             }
@@ -769,7 +771,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             #[allow(unused)]
-            pub mod rhai_fn__increment {
+            pub mod rhai_fn_increment {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
@@ -782,7 +784,7 @@ mod generate_tests {
                                             args.len(), 2usize), Position::none())));
                         }
                         let arg1 = args[1usize].downcast_clone::<usize>().unwrap();
-                        let arg0: &mut _ = args[0usize].downcast_mut::<usize>().unwrap();
+                        let arg0: &mut _ = args[0usize].write_lock::<usize>().unwrap();
                         Ok(Dynamic::from(increment(arg0, arg1)))
                     }
 
@@ -794,10 +796,10 @@ mod generate_tests {
                              std::any::TypeId::of::<usize>()].into_boxed_slice()
                     }
                 }
-                pub fn Token__callable() -> CallableFunction {
+                pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn Token__input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
             }
@@ -816,7 +818,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             #[allow(unused)]
-            pub mod rhai_fn__special_print {
+            pub mod rhai_fn_special_print {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
@@ -839,10 +841,10 @@ mod generate_tests {
                         vec![std::any::TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
                 }
-                pub fn Token__callable() -> CallableFunction {
+                pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn Token__input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
             }
