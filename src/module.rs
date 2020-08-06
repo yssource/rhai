@@ -248,10 +248,7 @@ impl Module {
         hash_var: u64,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
         self.all_variables.get_mut(&hash_var).ok_or_else(|| {
-            Box::new(EvalAltResult::ErrorVariableNotFound(
-                String::new(),
-                Position::none(),
-            ))
+            EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into()
         })
     }
 
@@ -1517,7 +1514,7 @@ mod stat {
             self.0
                 .get(path)
                 .cloned()
-                .ok_or_else(|| Box::new(EvalAltResult::ErrorModuleNotFound(path.into(), pos)))
+                .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
         }
     }
 }
@@ -1597,10 +1594,7 @@ mod collection {
                 }
             }
 
-            Err(Box::new(EvalAltResult::ErrorModuleNotFound(
-                path.into(),
-                pos,
-            )))
+            EvalAltResult::ErrorModuleNotFound(path.into(), pos).into()
         }
     }
 }

@@ -608,21 +608,13 @@ impl Engine {
     #[cfg(not(target_arch = "wasm32"))]
     fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
         let mut f = File::open(path.clone()).map_err(|err| {
-            Box::new(EvalAltResult::ErrorReadingScriptFile(
-                path.clone(),
-                Position::none(),
-                err,
-            ))
+            EvalAltResult::ErrorReadingScriptFile(path.clone(), Position::none(), err)
         })?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents).map_err(|err| {
-            Box::new(EvalAltResult::ErrorReadingScriptFile(
-                path.clone(),
-                Position::none(),
-                err,
-            ))
+            EvalAltResult::ErrorReadingScriptFile(path.clone(), Position::none(), err)
         })?;
 
         Ok(contents)
@@ -1042,11 +1034,12 @@ impl Engine {
         let typ = self.map_type_name(result.type_name());
 
         return result.try_cast::<T>().ok_or_else(|| {
-            Box::new(EvalAltResult::ErrorMismatchOutputType(
+            EvalAltResult::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::none(),
-            ))
+            )
+            .into()
         });
     }
 
@@ -1190,11 +1183,12 @@ impl Engine {
         let typ = self.map_type_name(result.type_name());
 
         return result.try_cast().ok_or_else(|| {
-            Box::new(EvalAltResult::ErrorMismatchOutputType(
+            EvalAltResult::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::none(),
-            ))
+            )
+            .into()
         });
     }
 
@@ -1278,13 +1272,8 @@ impl Engine {
     ) -> FuncReturn<Dynamic> {
         let lib = lib.as_ref();
         let mut args: StaticVec<_> = arg_values.iter_mut().collect();
-        let fn_def =
-            get_script_function_by_signature(lib, name, args.len(), true).ok_or_else(|| {
-                Box::new(EvalAltResult::ErrorFunctionNotFound(
-                    name.into(),
-                    Position::none(),
-                ))
-            })?;
+        let fn_def = get_script_function_by_signature(lib, name, args.len(), true)
+            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 
         let mut state = State::new();
         let mut mods = Imports::new();

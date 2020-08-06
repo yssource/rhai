@@ -228,9 +228,7 @@ impl Target<'_> {
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => {
-                return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
-                    Position::none(),
-                )))
+                return EvalAltResult::ErrorAssignmentToUnknownLHS(Position::none()).into();
             }
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
@@ -517,12 +515,7 @@ pub fn search_imports<'s>(
             .rev()
             .find(|(n, _)| n == root)
             .map(|(_, m)| m)
-            .ok_or_else(|| {
-                Box::new(EvalAltResult::ErrorModuleNotFound(
-                    root.to_string(),
-                    *root_pos,
-                ))
-            })?
+            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *root_pos))?
     })
 }
 
@@ -550,12 +543,7 @@ pub fn search_imports_mut<'s>(
             .rev()
             .find(|(n, _)| n == root)
             .map(|(_, m)| m)
-            .ok_or_else(|| {
-                Box::new(EvalAltResult::ErrorModuleNotFound(
-                    root.to_string(),
-                    *root_pos,
-                ))
-            })?
+            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *root_pos))?
     })
 }
 
@@ -577,10 +565,11 @@ pub fn search_namespace<'s, 'a>(
                     .get_qualified_var_mut(*hash_var)
                     .map_err(|err| match *err {
                         EvalAltResult::ErrorVariableNotFound(_, _) => {
-                            Box::new(EvalAltResult::ErrorVariableNotFound(
+                            EvalAltResult::ErrorVariableNotFound(
                                 format!("{}{}", modules, name),
                                 *pos,
-                            ))
+                            )
+                            .into()
                         }
                         _ => err.new_position(*pos),
                     })?;
@@ -612,7 +601,7 @@ pub fn search_scope_only<'s, 'a>(
         if let Some(val) = this_ptr {
             return Ok(((*val).into(), KEYWORD_THIS, ScopeEntryType::Normal, *pos));
         } else {
-            return Err(Box::new(EvalAltResult::ErrorUnboundThis(*pos)));
+            return EvalAltResult::ErrorUnboundThis(*pos).into();
         }
     }
 
@@ -625,7 +614,7 @@ pub fn search_scope_only<'s, 'a>(
         // Find the variable in the scope
         scope
             .get_index(name)
-            .ok_or_else(|| Box::new(EvalAltResult::ErrorVariableNotFound(name.into(), *pos)))?
+            .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.into(), *pos))?
             .0
     };
 
@@ -634,7 +623,7 @@ pub fn search_scope_only<'s, 'a>(
     // Check for data race - probably not necessary because the only place it should conflict is in a method call
     //                       when the object variable is also used as a parameter.
     // if cfg!(not(feature = "no_closure")) && val.is_locked() {
-    //     return Err(Box::new(EvalAltResult::ErrorDataRace(name.into(), *pos)));
+    //     return EvalAltResult::ErrorDataRace(name.into(), *pos).into();
     // }
 
     Ok((val, name, typ, *pos))
@@ -966,10 +955,7 @@ impl Engine {
                         }
                     }
                     // Syntax error
-                    _ => Err(Box::new(EvalAltResult::ErrorDotExpr(
-                        "".into(),
-                        rhs.position(),
-                    ))),
+                    _ => EvalAltResult::ErrorDotExpr("".into(), rhs.position()).into(),
                 }
             }
 
@@ -1016,10 +1002,8 @@ impl Engine {
                 // Constants cannot be modified
                 match typ {
                     ScopeEntryType::Constant if new_val.is_some() => {
-                        return Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                            var_name.to_string(),
-                            pos,
-                        )));
+                        return EvalAltResult::ErrorAssignmentToConstant(var_name.to_string(), pos)
+                            .into();
                     }
                     ScopeEntryType::Constant | ScopeEntryType::Normal => (),
                 }
@@ -1033,9 +1017,7 @@ impl Engine {
             }
             // {expr}.??? = ??? or {expr}[???] = ???
             expr if new_val.is_some() => {
-                return Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
-                    expr.position(),
-                )));
+                return EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into();
             }
             // {expr}.??? or {expr}[???]
             expr => {
@@ -1160,12 +1142,10 @@ impl Engine {
                     arr.get_mut(index as usize)
                         .map(Target::from)
                         .ok_or_else(|| {
-                            Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                            EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
                         })
                 } else {
-                    Err(Box::new(EvalAltResult::ErrorArrayBounds(
-                        arr_len, index, idx_pos,
-                    )))
+                    EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
                 }
             }
 
@@ -1200,13 +1180,11 @@ impl Engine {
                 if index >= 0 {
                     let offset = index as usize;
                     let ch = s.chars().nth(offset).ok_or_else(|| {
-                        Box::new(EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos))
+                        EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
                     })?;
                     Ok(Target::StringChar(val, offset, ch.into()))
                 } else {
-                    Err(Box::new(EvalAltResult::ErrorStringBounds(
-                        chars_len, index, idx_pos,
-                    )))
+                    EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into()
                 }
             }
 
@@ -1227,10 +1205,11 @@ impl Engine {
                 })
             }
 
-            _ => Err(Box::new(EvalAltResult::ErrorIndexingType(
+            _ => EvalAltResult::ErrorIndexingType(
                 self.map_type_name(val.type_name()).into(),
                 Position::none(),
-            ))),
+            )
+            .into(),
         }
     }
 
@@ -1284,15 +1263,15 @@ impl Engine {
                 // Only allows String or char
                 Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(&s).into()),
                 Dynamic(Union::Char(c)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
-                _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
+                _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
             },
             Dynamic(Union::Str(rhs_value)) => match lhs_value {
                 // Only allows String or char
                 Dynamic(Union::Str(s)) => Ok(rhs_value.contains(s.as_str()).into()),
                 Dynamic(Union::Char(c)) => Ok(rhs_value.contains(c).into()),
-                _ => Err(Box::new(EvalAltResult::ErrorInExpr(lhs.position()))),
+                _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
             },
-            _ => Err(Box::new(EvalAltResult::ErrorInExpr(rhs.position()))),
+            _ => EvalAltResult::ErrorInExpr(rhs.position()).into(),
         }
     }
 
@@ -1323,7 +1302,7 @@ impl Engine {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
                 } else {
-                    Err(Box::new(EvalAltResult::ErrorUnboundThis((x.0).1)))
+                    EvalAltResult::ErrorUnboundThis((x.0).1).into()
                 }
             }
             Expr::Variable(_) => {
@@ -1454,16 +1433,13 @@ impl Engine {
                         Ok(Default::default())
                     }
                     // Error assignment to constant
-                    expr if expr.is_constant() => {
-                        Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                            expr.get_constant_str(),
-                            expr.position(),
-                        )))
-                    }
-                    // Syntax error
-                    expr => Err(Box::new(EvalAltResult::ErrorAssignmentToUnknownLHS(
+                    expr if expr.is_constant() => EvalAltResult::ErrorAssignmentToConstant(
+                        expr.get_constant_str(),
                         expr.position(),
-                    ))),
+                    )
+                    .into(),
+                    // Syntax error
+                    expr => EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into(),
                 }
             }
 
@@ -1632,7 +1608,7 @@ impl Engine {
 
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
-                    .map_err(|_| Box::new(EvalAltResult::ErrorLogicGuard(expr.position())))
+                    .map_err(|_| EvalAltResult::ErrorLogicGuard(expr.position()).into())
                     .and_then(|guard_val| {
                         if guard_val {
                             self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
@@ -1665,9 +1641,7 @@ impl Engine {
                         }
                     }
                     Ok(false) => return Ok(Default::default()),
-                    Err(_) => {
-                        return Err(Box::new(EvalAltResult::ErrorLogicGuard(expr.position())))
-                    }
+                    Err(_) => return EvalAltResult::ErrorLogicGuard(expr.position()).into(),
                 }
             },
 
@@ -1727,43 +1701,45 @@ impl Engine {
                     state.scope_level -= 1;
                     Ok(Default::default())
                 } else {
-                    Err(Box::new(EvalAltResult::ErrorFor(x.1.position())))
+                    EvalAltResult::ErrorFor(x.1.position()).into()
                 }
             }
 
             // Continue statement
-            Stmt::Continue(pos) => Err(Box::new(EvalAltResult::ErrorLoopBreak(false, *pos))),
+            Stmt::Continue(pos) => EvalAltResult::ErrorLoopBreak(false, *pos).into(),
 
             // Break statement
-            Stmt::Break(pos) => Err(Box::new(EvalAltResult::ErrorLoopBreak(true, *pos))),
+            Stmt::Break(pos) => EvalAltResult::ErrorLoopBreak(true, *pos).into(),
 
             // Return value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
                 let expr = x.1.as_ref().unwrap();
-                Err(Box::new(EvalAltResult::Return(
+                EvalAltResult::Return(
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
                     (x.0).1,
-                )))
+                )
+                .into()
             }
 
             // Empty return
             Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Return => {
-                Err(Box::new(EvalAltResult::Return(Default::default(), (x.0).1)))
+                EvalAltResult::Return(Default::default(), (x.0).1).into()
             }
 
             // Throw value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
                 let expr = x.1.as_ref().unwrap();
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                Err(Box::new(EvalAltResult::ErrorRuntime(
+                EvalAltResult::ErrorRuntime(
                     val.take_string().unwrap_or_else(|_| "".into()),
                     (x.0).1,
-                )))
+                )
+                .into()
             }
 
             // Empty throw
             Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Exception => {
-                Err(Box::new(EvalAltResult::ErrorRuntime("".into(), (x.0).1)))
+                EvalAltResult::ErrorRuntime("".into(), (x.0).1).into()
             }
 
             Stmt::ReturnWithVal(_) => unreachable!(),
@@ -1811,7 +1787,7 @@ impl Engine {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if state.modules >= self.limits.max_modules {
-                    return Err(Box::new(EvalAltResult::ErrorTooManyModules(*_pos)));
+                    return EvalAltResult::ErrorTooManyModules(*_pos).into();
                 }
 
                 if let Some(path) = self
@@ -1830,13 +1806,13 @@ impl Engine {
 
                         Ok(Default::default())
                     } else {
-                        Err(Box::new(EvalAltResult::ErrorModuleNotFound(
-                            path.to_string(),
-                            expr.position(),
-                        )))
+                        Err(
+                            EvalAltResult::ErrorModuleNotFound(path.to_string(), expr.position())
+                                .into(),
+                        )
                     }
                 } else {
-                    Err(Box::new(EvalAltResult::ErrorImportExpr(expr.position())))
+                    EvalAltResult::ErrorImportExpr(expr.position()).into()
                 }
             }
 
@@ -1849,10 +1825,7 @@ impl Engine {
                         let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);
                         scope.set_entry_alias(index, alias.clone());
                     } else {
-                        return Err(Box::new(EvalAltResult::ErrorVariableNotFound(
-                            id.into(),
-                            *id_pos,
-                        )));
+                        return EvalAltResult::ErrorVariableNotFound(id.into(), *id_pos).into();
                     }
                 }
                 Ok(Default::default())
@@ -1976,26 +1949,29 @@ impl Engine {
         let (arr, map, s) = calc_size(result.as_ref().unwrap());
 
         if s > self.limits.max_string_size {
-            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+            EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 self.limits.max_string_size,
                 s,
                 Position::none(),
-            )))
+            )
+            .into()
         } else if arr > self.limits.max_array_size {
-            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+            EvalAltResult::ErrorDataTooLarge(
                 "Size of array".to_string(),
                 self.limits.max_array_size,
                 arr,
                 Position::none(),
-            )))
+            )
+            .into()
         } else if map > self.limits.max_map_size {
-            Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+            EvalAltResult::ErrorDataTooLarge(
                 "Number of properties in object map".to_string(),
                 self.limits.max_map_size,
                 map,
                 Position::none(),
-            )))
+            )
+            .into()
         } else {
             result
         }
@@ -2009,16 +1985,14 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
         if self.limits.max_operations > 0 && state.operations > self.limits.max_operations {
-            return Err(Box::new(EvalAltResult::ErrorTooManyOperations(
-                Position::none(),
-            )));
+            return EvalAltResult::ErrorTooManyOperations(Position::none()).into();
         }
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
             if !progress(&state.operations) {
                 // Terminate script if progress returns false
-                return Err(Box::new(EvalAltResult::ErrorTerminated(Position::none())));
+                return EvalAltResult::ErrorTerminated(Position::none()).into();
             }
         }
 

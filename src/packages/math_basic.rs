@@ -12,7 +12,7 @@ use crate::{result::EvalAltResult, token::Position};
 use num_traits::float::Float;
 
 #[cfg(not(feature = "no_float"))]
-use crate::stdlib::{boxed::Box, format};
+use crate::stdlib::format;
 
 #[allow(dead_code)]
 #[cfg(feature = "only_i32")]
@@ -109,10 +109,10 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
                 "to_int",
                 |x: f32| {
                     if x > (MAX_INT as f32) {
-                        return Err(Box::new(EvalAltResult::ErrorArithmetic(
+                        return EvalAltResult::ErrorArithmetic(
                             format!("Integer overflow: to_int({})", x),
                             Position::none(),
-                        )));
+                        ).into();
                     }
 
                     Ok(x.trunc() as INT)
@@ -122,10 +122,10 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
                 "to_int",
                 |x: FLOAT| {
                     if x > (MAX_INT as FLOAT) {
-                        return Err(Box::new(EvalAltResult::ErrorArithmetic(
+                        return EvalAltResult::ErrorArithmetic(
                             format!("Integer overflow: to_int({})", x),
                             Position::none(),
-                        )));
+                        ).into();
                     }
 
                     Ok(x.trunc() as INT)

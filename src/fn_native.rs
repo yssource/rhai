@@ -175,10 +175,7 @@ impl TryFrom<ImmutableString> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-                value.into(),
-                Position::none(),
-            )))
+            EvalAltResult::ErrorFunctionNotFound(value.into(), Position::none()).into()
         }
     }
 }

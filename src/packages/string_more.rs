@@ -231,12 +231,12 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
             // Check if string will be over max size limit
             #[cfg(not(feature = "unchecked"))]
             if _engine.limits.max_string_size > 0 && len > 0 && (len as usize) > _engine.limits.max_string_size {
-                return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                return EvalAltResult::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     _engine.limits.max_string_size,
                     len as usize,
                     Position::none(),
-                )));
+                ).into();
             }
 
             if len > 0 {
@@ -254,12 +254,12 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
                     #[cfg(not(feature = "unchecked"))]
                     if _engine.limits.max_string_size > 0 && s.len() > _engine.limits.max_string_size {
-                        return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+                        return EvalAltResult::ErrorDataTooLarge(
                             "Length of string".to_string(),
                             _engine.limits.max_string_size,
                             s.len(),
                             Position::none(),
-                        )));
+                        ).into();
                     }
                 }
             }

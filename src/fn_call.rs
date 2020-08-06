@@ -178,10 +178,11 @@ pub fn ensure_no_data_race(
             .enumerate()
             .find(|(_, a)| a.is_locked())
         {
-            return Err(Box::new(EvalAltResult::ErrorDataRace(
+            return EvalAltResult::ErrorDataRace(
                 format!("argument #{} of function '{}'", n + 1 + skip, fn_name),
                 Position::none(),
-            )));
+            )
+            .into();
         }
     }
 
@@ -237,22 +238,22 @@ impl Engine {
             return Ok(match fn_name {
                 KEYWORD_PRINT => (
                     (self.print)(result.as_str().map_err(|typ| {
-                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                        EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
                             Position::none(),
-                        ))
+                        )
                     })?)
                     .into(),
                     false,
                 ),
                 KEYWORD_DEBUG => (
                     (self.debug)(result.as_str().map_err(|typ| {
-                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                        EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
                             Position::none(),
-                        ))
+                        )
                     })?)
                     .into(),
                     false,
@@ -276,56 +277,60 @@ impl Engine {
 
         // Getter function not found?
         if let Some(prop) = extract_prop_from_getter(fn_name) {
-            return Err(Box::new(EvalAltResult::ErrorDotExpr(
+            return EvalAltResult::ErrorDotExpr(
                 format!(
                     "Unknown property '{}' for {}, or it is write-only",
                     prop,
                     self.map_type_name(args[0].type_name())
                 ),
                 Position::none(),
-            )));
+            )
+            .into();
         }
 
         // Setter function not found?
         if let Some(prop) = extract_prop_from_setter(fn_name) {
-            return Err(Box::new(EvalAltResult::ErrorDotExpr(
+            return EvalAltResult::ErrorDotExpr(
                 format!(
                     "Unknown property '{}' for {}, or it is read-only",
                     prop,
                     self.map_type_name(args[0].type_name())
                 ),
                 Position::none(),
-            )));
+            )
+            .into();
         }
 
         // index getter function not found?
         #[cfg(not(feature = "no_index"))]
         if fn_name == FN_IDX_GET && args.len() == 2 {
-            return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+            return EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]",
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
                 Position::none(),
-            )));
+            )
+            .into();
         }
 
         // index setter function not found?
         #[cfg(not(feature = "no_index"))]
         if fn_name == FN_IDX_SET {
-            return Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+            return EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]=",
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
                 Position::none(),
-            )));
+            )
+            .into();
         }
 
         // Raise error
-        Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+        EvalAltResult::ErrorFunctionNotFound(
             format!(
                 "{} ({})",
                 fn_name,
@@ -339,7 +344,8 @@ impl Engine {
                     .join(", ")
             ),
             Position::none(),
-        )))
+        )
+        .into()
     }
 
     /// Call a script-defined function.
@@ -400,17 +406,15 @@ impl Engine {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
                 EvalAltResult::ErrorInFunctionCall(name, err, _) => {
-                    Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                    EvalAltResult::ErrorInFunctionCall(
                         format!("{} > {}", fn_name, name),
                         err,
                         Position::none(),
-                    )))
+                    )
+                    .into()
                 }
-                _ => Err(Box::new(EvalAltResult::ErrorInFunctionCall(
-                    fn_name.to_string(),
-                    err,
-                    Position::none(),
-                ))),
+                _ => EvalAltResult::ErrorInFunctionCall(fn_name.to_string(), err, Position::none())
+                    .into(),
             });
 
         // Remove all local variables
@@ -482,20 +486,22 @@ impl Engine {
             KEYWORD_FN_PTR
                 if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
             {
-                Err(Box::new(EvalAltResult::ErrorRuntime(
+                EvalAltResult::ErrorRuntime(
                     "'Fn' should not be called in method style. Try Fn(...);".into(),
                     Position::none(),
-                )))
+                )
+                .into()
             }
 
             // eval - reaching this point it must be a method-style call
             KEYWORD_EVAL
                 if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
             {
-                Err(Box::new(EvalAltResult::ErrorRuntime(
+                EvalAltResult::ErrorRuntime(
                     "'eval' should not be called in method style. Try eval(...);".into(),
                     Position::none(),
-                )))
+                )
+                .into()
             }
 
             // Normal script function call
@@ -783,11 +789,12 @@ impl Engine {
                 return arg_value
                     .take_immutable_string()
                     .map_err(|typ| {
-                        Box::new(EvalAltResult::ErrorMismatchOutputType(
+                        EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
                             expr.position(),
-                        ))
+                        )
+                        .into()
                     })
                     .and_then(|s| FnPtr::try_from(s))
                     .map(Into::<Dynamic>::into)
@@ -801,11 +808,12 @@ impl Engine {
             let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
             if !fn_ptr.is::<FnPtr>() {
-                return Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
+                return EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name(type_name::<FnPtr>()).into(),
                     self.map_type_name(fn_ptr.type_name()).into(),
                     expr.position(),
-                )));
+                )
+                .into();
             }
 
             let (fn_name, fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
@@ -855,11 +863,12 @@ impl Engine {
                 // Recalculate hash
                 hash_script = calc_fn_hash(empty(), name, curry.len() + args_expr.len(), empty());
             } else {
-                return Err(Box::new(EvalAltResult::ErrorMismatchOutputType(
+                return EvalAltResult::ErrorMismatchOutputType(
                     self.map_type_name(type_name::<FnPtr>()).into(),
                     fn_name.type_name().into(),
                     expr.position(),
-                )));
+                )
+                .into();
             }
         }
 
@@ -1048,7 +1057,7 @@ impl Engine {
             }
             Some(f) => f.get_native_fn()(self, lib, args.as_mut()),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),
-            None => Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+            None => EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{}{} ({})",
                     modules,
@@ -1063,7 +1072,8 @@ impl Engine {
                         .join(", ")
                 ),
                 Position::none(),
-            ))),
+            )
+            .into(),
         }
     }
 }
