@@ -43,12 +43,13 @@ fn pad<T: Variant + Clone>(
         && len > 0
         && (len as usize) > _engine.limits.max_array_size
     {
-        return Err(Box::new(EvalAltResult::ErrorDataTooLarge(
+        return EvalAltResult::ErrorDataTooLarge(
             "Size of array".to_string(),
             _engine.limits.max_array_size,
             len as usize,
             Position::none(),
-        )));
+        )
+        .into();
     }
 
     if len > 0 {

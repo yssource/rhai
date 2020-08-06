@@ -2,9 +2,7 @@
 
 use crate::any::{Dynamic, Union};
 use crate::calc_fn_hash;
-use crate::engine::{
-    Engine, KEYWORD_FN_PTR_CURRY, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
-};
+use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
@@ -15,7 +13,7 @@ use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, To
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
-use crate::engine::FN_ANONYMOUS;
+use crate::engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY};
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter};
@@ -570,7 +568,7 @@ pub enum Stmt {
     ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
     /// import expr as module
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, (String, Position), Position)>),
+    Import(Box<(Expr, Option<(String, Position)>, Position)>),
     /// expr id as name, ...
     #[cfg(not(feature = "no_module"))]
     Export(
@@ -2687,14 +2685,8 @@ fn parse_import(
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
     // import expr as ...
-    match input.next().unwrap() {
-        (Token::As, _) => (),
-        (_, pos) => {
-            return Err(
-                PERR::MissingToken(Token::As.into(), "in this import statement".into())
-                    .into_err(pos),
-            )
-        }
+    if !match_token(input, Token::As)? {
+        return Ok(Stmt::Import(Box::new((expr, None, token_pos))));
     }
 
     // import expr as name ...
@@ -2711,7 +2703,7 @@ fn parse_import(
 
     Ok(Stmt::Import(Box::new((
         expr,
-        (name, settings.pos),
+        Some((name, settings.pos)),
         token_pos,
     ))))
 }
@@ -3135,6 +3127,7 @@ fn parse_fn(
 }
 
 /// Creates a curried expression from a list of external variables
+#[cfg(not(feature = "no_function"))]
 fn make_curry_from_externals(
     fn_expr: Expr,
     externals: StaticVec<(String, Position)>,

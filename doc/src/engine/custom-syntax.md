@@ -200,8 +200,10 @@ fn implementation_func(
 
         // Evaluate the condition expression
         let stop = !engine.eval_expression_tree(context, scope, condition)?
-                          .as_bool().map_err(|_| EvalAltResult::ErrorBooleanArgMismatch(
-                                                    "do-while".into(), expr.position()))?;
+                          .as_bool()
+                          .map_err(|_| EvalAltResult::ErrorBooleanArgMismatch(
+                              "do-while".into(), expr.position()
+                           ))?;
 
         if stop {
             break;

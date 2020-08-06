@@ -83,6 +83,7 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
 #[test]
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "sync"))]
 fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 

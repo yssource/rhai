@@ -32,7 +32,7 @@ Standard features
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
 * [Function overloading](https://schungx.github.io/rhai/language/overload.html).
 * [Operator overloading](https://schungx.github.io/rhai/rust/operators.html).
-* Dynamic dispatch via [function pointers](https://schungx.github.io/rhai/language/fn-ptr.html) with additional support for [currying](https://schungx.github.io/rhai/language/fn-curry.html).
+* Dynamic dispatch via [function pointers](https://schungx.github.io/rhai/language/fn-ptr.html) with additional support for [currying](https://schungx.github.io/rhai/language/fn-curry.html) and [closures](https://schungx.github.io/rhai/language/fn-closure.html).
 * Some support for [object-oriented programming (OOP)](https://schungx.github.io/rhai/language/oop.html).
 * Organize code base with dynamically-loadable [modules](https://schungx.github.io/rhai/language/modules.html).
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).

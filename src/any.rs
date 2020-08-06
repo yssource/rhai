@@ -410,7 +410,7 @@ impl fmt::Display for Dynamic {
             }
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell) => fmt::Display::fmt(*cell.read_lock().unwrap(), f),
+            Union::Shared(cell) => fmt::Display::fmt(&*cell.read().unwrap(), f),
         }
     }
 }
@@ -448,7 +448,7 @@ impl fmt::Debug for Dynamic {
             }
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell) => fmt::Display::fmt(*cell.read_lock().unwrap(), f),
+            Union::Shared(cell) => fmt::Debug::fmt(&*cell.read().unwrap(), f),
         }
     }
 }
@@ -600,6 +600,7 @@ impl Dynamic {
     /// # Panics
     ///
     /// Panics under the `no_closure` feature.
+    #[inline(always)]
     pub fn into_shared(self) -> Self {
         #[cfg(not(feature = "no_closure"))]
         return match self.0 {
@@ -833,7 +834,6 @@ impl Dynamic {
                 let data = cell.read().unwrap();
 
                 let type_id = (*data).type_id();
-                println!("Type = {}", (*data).type_name());
 
                 if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
                     None

@@ -38,7 +38,7 @@ impl ModuleResolver for MyModuleResolver {
             let module: Module = load_secret_module(path);
             Ok(module)
         } else {
-            Err(Box::new(EvalAltResult::ErrorModuleNotFound(path.into(), pos)))
+            Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
         }
     }
 }

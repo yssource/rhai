@@ -7,10 +7,17 @@ Import a Module
 `import` Statement
 -----------------
 
-A module can be _imported_ via the `import` statement, and its members are accessed via '`::`' similar to C++.
+A module can be _imported_ via the `import` statement, and be given a name.
+Its members can be accessed via '`::`' similar to C++.
+
+A module that is only `import`-ed but not under any module name is commonly used for initialization purposes,
+where the module script contains initialization statements that puts the functions registered with the
+[`Engine`] into a particular state.
 
 ```rust
-import "crypto" as lock;        // import the script file 'crypto.rhai' as a module named 'lock'
+import "crypto_init";           // run the script file 'crypto_init.rhai' without creating an imported module
+
+import "crypto" as lock;        // run the script file 'crypto.rhai' and import it as a module named 'lock'
 
 lock::encrypt(secret);          // use functions defined under the module via '::'
 

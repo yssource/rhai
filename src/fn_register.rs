@@ -2,7 +2,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::any::{Dynamic, Variant, DynamicWriteLock};
+use crate::any::{Dynamic, DynamicWriteLock, Variant};
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::module::Module;
@@ -12,12 +12,7 @@ use crate::r#unsafe::unsafe_cast_box;
 use crate::result::EvalAltResult;
 use crate::utils::ImmutableString;
 
-use crate::stdlib::{
-    any::TypeId,
-    boxed::Box,
-    mem,
-    string::String,
-};
+use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String};
 
 /// A trait to register custom plugins with the `Engine`.
 ///

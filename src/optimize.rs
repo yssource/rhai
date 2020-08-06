@@ -7,12 +7,9 @@ use crate::engine::{
 };
 use crate::fn_native::FnPtr;
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::utils::StaticVec;
-
-#[cfg(not(feature = "no_function"))]
-use crate::parser::ReturnType;
 
 #[cfg(feature = "internals")]
 use crate::parser::CustomExpr;
@@ -46,10 +43,12 @@ impl OptimizationLevel {
         self == Self::None
     }
     /// Is the `OptimizationLevel` Simple.
+    #[cfg(not(feature = "no_optimize"))]
     pub fn is_simple(self) -> bool {
         self == Self::Simple
     }
     /// Is the `OptimizationLevel` Full.
+    #[cfg(not(feature = "no_optimize"))]
     pub fn is_full(self) -> bool {
         self == Self::Full
     }
