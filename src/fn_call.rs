@@ -228,9 +228,9 @@ impl Engine {
 
             // Run external function
             let result = if func.is_plugin_fn() {
-                func.get_plugin_fn().call(args, Position::none())?
+                func.get_plugin_fn().call(args, Position::none())
             } else {
-                func.get_native_fn()(self, lib, args)?
+                func.get_native_fn()(self, lib, args)
             };
 
             // Restore the original reference
