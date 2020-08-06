@@ -85,9 +85,9 @@ impl DynamicSerializer {
 /// assert!(value.is::<Map>());
 ///
 /// let map = value.cast::<Map>();
-/// let point = map.get("d").unwrap().downcast_ref::<Map>().unwrap();
-/// assert_eq!(*point.get("x").unwrap().downcast_ref::<f64>().unwrap(), 123.456);
-/// assert_eq!(*point.get("y").unwrap().downcast_ref::<f64>().unwrap(), 999.0);
+/// let point = map["d"].read_lock::<Map>().unwrap();
+/// assert_eq!(*point["x"].read_lock::<f64>().unwrap(), 123.456);
+/// assert_eq!(*point["y"].read_lock::<f64>().unwrap(), 999.0);
 /// # }
 /// # Ok(())
 /// # }
