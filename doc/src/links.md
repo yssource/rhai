@@ -97,7 +97,7 @@
 
 [`eval`]: {{rootUrl}}/language/eval.md
 
-[OOP]: {{rootUrl}}/language/oop.md
+[OOP]: {{rootUrl}}/patterns/oop.md
 [DSL]: {{rootUrl}}/engine/dsl.md
 
 [maximum statement depth]: {{rootUrl}}/safety/max-stmt-depth.md
