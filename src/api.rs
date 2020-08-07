@@ -18,7 +18,7 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 #[cfg(not(feature = "no_object"))]
 use crate::{
     engine::{make_getter, make_setter, Map},
-    fn_register::RegisterFn,
+    fn_register::{RegisterFn, RegisterResultFn},
     token::Token,
 };
 
@@ -224,6 +224,54 @@ impl Engine {
         self.register_fn(&make_getter(name), callback)
     }
 
+    /// Register a getter function for a member of a registered type with the `Engine`.
+    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    ///
+    /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    ///
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     field: i64
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                { TestStruct { field: 1 } }
+    ///
+    ///     // Even a getter must start with `&mut self` and not `&self`.
+    ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///         Ok(self.field.into())
+    ///     }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register a getter on a property (notice it doesn't have to be the same name).
+    /// engine.register_get_result("xyz", TestStruct::get_field);
+    ///
+    /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a.xyz")?, 1);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    pub fn register_get_result<T: Variant + Clone>(
+        &mut self,
+        name: &str,
+        callback: impl Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+    ) -> &mut Self {
+        self.register_result_fn(&make_getter(name), callback)
+    }
+
     /// Register a setter function for a member of a registered type with the `Engine`.
     ///
     /// # Example
@@ -271,6 +319,59 @@ impl Engine {
         U: Variant + Clone,
     {
         self.register_fn(&make_setter(name), callback)
+    }
+
+    /// Register a setter function for a member of a registered type with the `Engine`.
+    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    ///
+    /// #[derive(Debug, Clone, Eq, PartialEq)]
+    /// struct TestStruct {
+    ///     field: i64
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                        { TestStruct { field: 1 } }
+    ///     fn set_field(&mut self, new_val: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///         self.field = new_val;
+    ///         Ok(().into())
+    ///     }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register a setter on a property (notice it doesn't have to be the same name)
+    /// engine.register_set_result("xyz", TestStruct::set_field);
+    ///
+    /// // Notice that, with a getter, there is no way to get the property value
+    /// assert_eq!(
+    ///     engine.eval::<TestStruct>("let a = new_ts(); a.xyz = 42; a")?,
+    ///     TestStruct { field: 42 }
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    pub fn register_set_result<T, U>(
+        &mut self,
+        name: &str,
+        callback: impl Fn(&mut T, U) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+    ) -> &mut Self
+    where
+        T: Variant + Clone,
+        U: Variant + Clone,
+    {
+        self.register_result_fn(&make_setter(name), callback)
     }
 
     /// Shorthand for registering both getter and setter functions
@@ -375,6 +476,58 @@ impl Engine {
         self.register_fn(FN_IDX_GET, callback)
     }
 
+    /// Register an index getter for a registered type with the `Engine`.
+    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    ///
+    /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    ///
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     fields: Vec<i64>
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///
+    ///     // Even a getter must start with `&mut self` and not `&self`.
+    ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///         Ok(self.fields[index as usize].into())
+    ///     }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register an indexer.
+    /// engine.register_indexer_get_result(TestStruct::get_field);
+    ///
+    /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn register_indexer_get_result<T, X>(
+        &mut self,
+        callback: impl Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+    ) -> &mut Self
+    where
+        T: Variant + Clone,
+        X: Variant + Clone,
+    {
+        self.register_result_fn(FN_IDX_GET, callback)
+    }
+
     /// Register an index setter for a registered type with the `Engine`.
     ///
     /// # Example
@@ -422,6 +575,59 @@ impl Engine {
         X: Variant + Clone,
     {
         self.register_fn(FN_IDX_SET, callback)
+    }
+
+    /// Register an index setter for a registered type with the `Engine`.
+    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    ///
+    /// #[derive(Clone)]
+    /// struct TestStruct {
+    ///     fields: Vec<i64>
+    /// }
+    ///
+    /// impl TestStruct {
+    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///         self.fields[index as usize] = value;
+    ///         Ok(().into())
+    ///     }
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register the custom type.
+    /// engine.register_type::<TestStruct>();
+    ///
+    /// engine.register_fn("new_ts", TestStruct::new);
+    ///
+    /// // Register an indexer.
+    /// engine.register_indexer_set_result(TestStruct::set_field);
+    ///
+    /// assert_eq!(
+    ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
+    ///     42
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
+    pub fn register_indexer_set_result<T, X, U>(
+        &mut self,
+        callback: impl Fn(&mut T, X, U) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+    ) -> &mut Self
+    where
+        T: Variant + Clone,
+        U: Variant + Clone,
+        X: Variant + Clone,
+    {
+        self.register_result_fn(FN_IDX_SET, callback)
     }
 
     /// Shorthand for register both index getter and setter functions for a registered type with the `Engine`.
