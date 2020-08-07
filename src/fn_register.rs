@@ -26,25 +26,36 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     /// # Example
     ///
     /// ```
-    /// use rhai::{FLOAT, INT, Module, ModuleResolver, RegisterFn, RegisterPlugin};
+    /// # #[cfg(not(feature = "no_float"))]
+    /// use rhai::FLOAT as NUMBER;
+    /// # #[cfg(feature = "no_float")]
+    /// use rhai::INT as NUMBER;
+    /// # #[cfg(not(feature = "no_module"))]
+    /// use rhai::{Module, ModuleResolver, RegisterFn, RegisterPlugin};
+    /// # #[cfg(not(feature = "no_module"))]
     /// use rhai::plugin::*;
+    /// # #[cfg(not(feature = "no_module"))]
     /// use rhai::module_resolvers::*;
     ///
     /// // A function we want to expose to Rhai.
     /// #[derive(Copy, Clone)]
     /// struct DistanceFunction();
     ///
+    /// # #[cfg(not(feature = "no_module"))]
     /// impl PluginFunction for DistanceFunction {
     ///     fn is_method_call(&self) -> bool { false }
     ///     fn is_varadic(&self) -> bool { false }
     ///
     ///     fn call(&self, args: &mut[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
-    ///         let x1: &FLOAT = args[0].downcast_ref::<FLOAT>().unwrap();
-    ///         let y1: &FLOAT = args[1].downcast_ref::<FLOAT>().unwrap();
-    ///         let x2: &FLOAT = args[2].downcast_ref::<FLOAT>().unwrap();
-    ///         let y2: &FLOAT = args[3].downcast_ref::<FLOAT>().unwrap();
+    ///         let x1: NUMBER = args[0].downcast_clone::<NUMBER>().unwrap();
+    ///         let y1: NUMBER = args[1].downcast_clone::<NUMBER>().unwrap();
+    ///         let x2: NUMBER = args[2].downcast_clone::<NUMBER>().unwrap();
+    ///         let y2: NUMBER = args[3].downcast_clone::<NUMBER>().unwrap();
+    /// #       #[cfg(not(feature = "no_float"))]
     ///         let square_sum = (y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0);
-    ///         Ok(Dynamic::from(square_sum.sqrt()))
+    /// #       #[cfg(feature = "no_float")]
+    ///         let square_sum = (y2 - y1).abs().pow(2) + (x2 -x1).abs().pow(2);
+    ///         Ok(Dynamic::from(square_sum))
     ///     }
     ///
     ///     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
@@ -52,10 +63,10 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///     }
     ///
     ///     fn input_types(&self) -> Box<[std::any::TypeId]> {
-    ///         vec![std::any::TypeId::of::<FLOAT>(),
-    ///              std::any::TypeId::of::<FLOAT>(),
-    ///              std::any::TypeId::of::<FLOAT>(),
-    ///              std::any::TypeId::of::<FLOAT>()].into_boxed_slice()
+    ///         vec![std::any::TypeId::of::<NUMBER>(),
+    ///              std::any::TypeId::of::<NUMBER>(),
+    ///              std::any::TypeId::of::<NUMBER>(),
+    ///              std::any::TypeId::of::<NUMBER>()].into_boxed_slice()
     ///     }
     /// }
     ///
@@ -63,10 +74,11 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     /// #[derive(Copy, Clone)]
     /// pub struct AdvancedMathPlugin();
     ///
+    /// # #[cfg(not(feature = "no_module"))]
     /// impl Plugin for AdvancedMathPlugin {
     ///     fn register_contents(self, engine: &mut Engine) {
     ///         // Plugins are allowed to have side-effects on the engine.
-    ///         engine.register_fn("get_mystic_number", || { 42 as FLOAT });
+    ///         engine.register_fn("get_mystic_number", || { 42 as NUMBER });
     ///
     ///         // Main purpose: create a module to expose the functions to Rhai.
     ///         //
@@ -74,10 +86,10 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///         // modules.
     ///         let mut m = Module::new();
     ///         m.set_fn("euclidean_distance".to_string(), FnAccess::Public,
-    ///                  &[std::any::TypeId::of::<FLOAT>(),
-    ///                    std::any::TypeId::of::<FLOAT>(),
-    ///                    std::any::TypeId::of::<FLOAT>(),
-    ///                    std::any::TypeId::of::<FLOAT>()],
+    ///                  &[std::any::TypeId::of::<NUMBER>(),
+    ///                    std::any::TypeId::of::<NUMBER>(),
+    ///                    std::any::TypeId::of::<NUMBER>(),
+    ///                    std::any::TypeId::of::<NUMBER>()],
     ///                  CallableFunction::from_plugin(DistanceFunction()));
     ///         let mut r = StaticModuleResolver::new();
     ///         r.insert("Math::Advanced".to_string(), m);
@@ -88,12 +100,19 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     ///
+    /// # #[cfg(not(feature = "no_module"))] {
     /// let mut engine = Engine::new();
     /// engine.register_plugin(AdvancedMathPlugin());
     ///
-    /// assert_eq!(engine.eval::<FLOAT>(
+    /// # #[cfg(feature = "no_float")]
+    /// assert_eq!(engine.eval::<NUMBER>(
     ///     r#"import "Math::Advanced" as math;
-    ///        let x = math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#)?, 41.0);
+    ///        let x = math::euclidean_distance(0, 1, 0, get_mystic_number()); x"#)?, 1681);
+    /// # #[cfg(not(feature = "no_float"))]
+    /// assert_eq!(engine.eval::<NUMBER>(
+    ///     r#"import "Math::Advanced" as math;
+    ///        let x = math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#)?, 1681.0);
+    /// # } // end cfg
     /// # Ok(())
     /// # }
     /// ```

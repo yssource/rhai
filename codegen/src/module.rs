@@ -667,7 +667,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0: &mut _ = args[0usize].write_lock::<FLOAT>().unwrap();
+                        let arg0: &mut _ = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                         Ok(Dynamic::from(increment(arg0)))
                     }
 

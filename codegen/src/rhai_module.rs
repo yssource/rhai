@@ -26,7 +26,7 @@ pub(crate) fn generate_body(
     let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
     for function in fns {
         let fn_token_name = syn::Ident::new(
-            &format!("{}_Token", function.name().to_string()),
+            &format!("{}_token", function.name().to_string()),
             function.name().span(),
         );
         let fn_literal =

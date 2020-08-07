@@ -220,7 +220,7 @@ impl ExportedFn {
                         }
                     };
                     let downcast_span = quote_spanned!(
-                        arg_type.span()=> &mut *args[0usize].write_lock::<#arg_type>().unwrap());
+                        arg_type.span()=> &mut args[0usize].write_lock::<#arg_type>().unwrap());
                     unpack_stmts.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             let #var: &mut _ = #downcast_span;
@@ -784,7 +784,7 @@ mod generate_tests {
                                             args.len(), 2usize), Position::none())));
                         }
                         let arg1 = args[1usize].downcast_clone::<usize>().unwrap();
-                        let arg0: &mut _ = args[0usize].write_lock::<usize>().unwrap();
+                        let arg0: &mut _ = &mut args[0usize].write_lock::<usize>().unwrap();
                         Ok(Dynamic::from(increment(arg0, arg1)))
                     }
 

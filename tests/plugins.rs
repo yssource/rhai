@@ -1,3 +1,5 @@
+#![cfg(not(any(feature = "no_index", feature = "no_module")))]
+
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, INT};
 
