@@ -9,11 +9,11 @@ Usage Scenario
 
 * A system where settings and configurations are complex and logic-driven.
 
-* Where it is not possible to configure said system via standard configuration file formats such as `TOML` or `YAML`.
+* Where said system is too complex to configure via standard configuration file formats such as `JSON`, `TOML` or `YAML`.
 
-* The system configuration is complex enough that it requires a full programming language. Essentially _configuration by code_.
+* The system is complex enough to require a full programming language to configure. Essentially _configuration by code_.
 
-* Yet the configurations must be flexible, late-bound and dynamically loadable, just like a configuration file.
+* Yet the configuration must be flexible, late-bound and dynamically loadable, just like a configuration file.
 
 
 Key Concepts
@@ -22,6 +22,8 @@ Key Concepts
 * Leverage the loadable [modules] of Rhai.  The [`no_module`] feature must not be on.
 
 * Expose the configuration API.  Use separate scripts to configure that API.  Dynamically load scripts via the `import` statement.
+
+* Leverage [function overloading] to simplify the API design.
 
 * Since Rhai is _sand-boxed_, it cannot mutate the environment.  To modify the external configuration object via an API, it must be wrapped in a `RefCell` (or `RwLock`/`Mutex` for [`sync`]) and shared to the [`Engine`].
 

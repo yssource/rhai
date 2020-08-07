@@ -19,11 +19,25 @@ Key Concepts
 
 * Expose a Control API.
 
-* Since Rhai is _sand-boxed_, it cannot mutate the environment.  To perform external actions via an API, the actual system must be wrapped in a `RefCell` (or `RwLock`/`Mutex` for [`sync`]) and shared to the [`Engine`].
+* Leverage [function overloading] to simplify the API design.
+
+* Since Rhai is _[sand-boxed]_, it cannot mutate the environment.  To perform external actions via an API, the actual system must be wrapped in a `RefCell` (or `RwLock`/`Mutex` for [`sync`]) and shared to the [`Engine`].
 
 
 Implementation
 --------------
+
+There are two broad ways for Rhai to control an external system, both of which involve
+wrapping the system in a shared, interior-mutated object.
+
+This is one way which does not involve exposing the data structures of the external system,
+but only through exposing an abstract API primarily made up of functions.
+
+Use this when the API is relatively simple and clean, and the number of functions is small enough.
+
+For a complex API involving lots of functions, or an API that is object-based,
+use the [Singleton Command Object]({{rootUrl}}/patterns/singleton.md) pattern instead.
+
 
 ### Functional API
 

@@ -3,9 +3,15 @@ Arrays
 
 {{#include ../links.md}}
 
-Arrays are first-class citizens in Rhai. Like C, arrays are accessed with zero-based, non-negative integer indices.
+Arrays are first-class citizens in Rhai. Like C, arrays are accessed with zero-based, non-negative integer indices:
 
-Array literals are built within square brackets '`[`' ... '`]`' and separated by commas '`,`'.
+> _array_ `[` _index_ `]`
+
+Array literals are built within square brackets '`[`' ... '`]`' and separated by commas '`,`':
+
+> `[` _value_ `,` _value_ `,` `...` `,` _value_ `]`
+>
+> `[` _value_ `,` _value_ `,` `...` `,` _value_ `,` `]`     `// trailing comma is OK`
 
 All elements stored in an array are [`Dynamic`], and the array can freely grow or shrink with elements added or removed.
 

@@ -46,7 +46,7 @@ Safe
 
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 
-* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
+* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless [explicitly permitted]({{rootUrl}}/patterns/control.md).
 
 Rugged
 ------
