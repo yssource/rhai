@@ -38,7 +38,7 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "no_object"))]
 fn test_closures() -> Result<(), Box<EvalAltResult>> {
-    let engine = Engine::new();
+    let mut engine = Engine::new();
 
     assert_eq!(
         engine.eval::<INT>(
@@ -76,6 +76,23 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
             a.is_shared()
         "#
     )?);
+
+    let mut module = Module::new();
+
+    module.set_fn_1("plus_one", |x: INT| Ok(x + 1));
+
+    engine.load_package(module);
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let a = 41;
+                let f = || plus_one(a);
+                f.call()
+            "#
+        )?,
+        42
+    );
 
     Ok(())
 }
