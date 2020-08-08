@@ -4,7 +4,7 @@ use syn::{parse::Parse, parse::ParseStream, spanned::Spanned};
 
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
-    name: Option<String>,
+    pub name: Option<String>,
 }
 
 impl Parse for ExportedFnParams {
@@ -238,7 +238,12 @@ impl ExportedFn {
     }
 
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let name: syn::Ident = self.name().clone();
+        let name: syn::Ident = if let Some(ref name) = self.params.name {
+            syn::Ident::new(name, self.name().span())
+        } else {
+            self.name().clone()
+        };
+
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();
 

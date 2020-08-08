@@ -1,5 +1,5 @@
 use rhai::module_resolvers::*;
-use rhai::{Engine, EvalAltResult, Module, RegisterFn, FLOAT, INT};
+use rhai::{Array, Engine, EvalAltResult, Module, RegisterFn, FLOAT};
 
 pub mod raw_fn {
     use rhai::plugin::*;
@@ -188,5 +188,45 @@ fn rename_fn_test() -> Result<(), Box<EvalAltResult>> {
         )?,
         43.0
     );
+    Ok(())
+}
+
+mod duplicate_fn_rename {
+    use rhai::plugin::*;
+    use rhai::{FLOAT, INT};
+
+    #[export_fn(name = "add_float")]
+    pub fn add(f1: FLOAT, f2: FLOAT) -> FLOAT {
+        f1 + f2
+    }
+
+    #[export_fn(name = "add_int")]
+    pub fn add(i1: INT, i2: INT) -> INT {
+        i1 + i2
+    }
+}
+
+#[test]
+fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    engine.register_fn("get_mystic_number", || 42 as FLOAT);
+    let mut m = Module::new();
+    rhai::register_exported_fn!(m, "add_two_floats", duplicate_fn_rename::add_float);
+    rhai::register_exported_fn!(m, "add_two_ints", duplicate_fn_rename::add_int);
+    let mut r = StaticModuleResolver::new();
+    r.insert("Math::Advanced".to_string(), m);
+    engine.set_module_resolver(Some(r));
+
+    let output_array = engine.eval::<Array>(
+        r#"import "Math::Advanced" as math;
+       let fx = get_mystic_number();
+       let fy = math::add_two_floats(fx, 1.0);
+       let ix = 42;
+       let iy = math::add_two_ints(ix, 1);
+       [fy, iy]
+       "#
+    )?;
+    assert_eq!(&output_array[0].as_float().unwrap(), &43.0);
+    assert_eq!(&output_array[1].as_int().unwrap(), &43);
     Ok(())
 }
