@@ -1634,12 +1634,13 @@ fn parse_primary(
         Token::FloatConstant(x) => Expr::FloatConstant(Box::new(FloatWrapper(x, settings.pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
         Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
+
+        // Function call
+        Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
+            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+        }
+        // Normal variable access
         Token::Identifier(s) => {
-            // prevents capturing of the function call
-            #[cfg(not(feature = "no_closure"))]
-            if *next_token == Token::LeftParen || *next_token == Token::Bang {
-                state.allow_capture = false;
-            }
             let index = state.access_var(&s, settings.pos);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }

@@ -1,12 +1,13 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, RegisterFn, INT};
 use std::any::TypeId;
 
 #[test]
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
-    let mut module = Module::new();
+    let mut engine = Engine::new();
 
-    module.set_raw_fn(
+    #[allow(deprecated)]
+    engine.register_raw_fn(
         "call_with_arg",
         &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
         |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
@@ -14,9 +15,6 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
             fn_ptr.call_dynamic(engine, lib, None, [std::mem::take(args[1])])
         },
     );
-
-    let mut engine = Engine::new();
-    engine.load_package(module);
 
     #[cfg(not(feature = "no_object"))]
     assert_eq!(
@@ -77,11 +75,7 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
         "#
     )?);
 
-    let mut module = Module::new();
-
-    module.set_fn_1("plus_one", |x: INT| Ok(x + 1));
-
-    engine.load_package(module);
+    engine.register_fn("plus_one", |x: INT| x + 1);
 
     assert_eq!(
         engine.eval::<INT>(
