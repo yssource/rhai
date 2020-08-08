@@ -147,6 +147,7 @@ pub enum Target<'a> {
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl Target<'_> {
     /// Is the `Target` a reference pointing to other data?
+    #[inline(always)]
     pub fn is_ref(&self) -> bool {
         match self {
             Self::Ref(_) => true,
@@ -159,6 +160,7 @@ impl Target<'_> {
         }
     }
     /// Is the `Target` an owned value?
+    #[inline(always)]
     pub fn is_value(&self) -> bool {
         match self {
             Self::Ref(_) => false,
@@ -171,6 +173,7 @@ impl Target<'_> {
         }
     }
     /// Is the `Target` a shared value?
+    #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self {
             Self::Ref(r) => r.is_shared(),
@@ -184,6 +187,7 @@ impl Target<'_> {
     }
     /// Is the `Target` a specific type?
     #[allow(dead_code)]
+    #[inline(always)]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
             Target::Ref(r) => r.is::<T>(),
@@ -196,6 +200,7 @@ impl Target<'_> {
         }
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
+    #[inline(always)]
     pub fn clone_into_dynamic(self) -> Dynamic {
         match self {
             Self::Ref(r) => r.clone(), // Referenced value is cloned
@@ -208,6 +213,7 @@ impl Target<'_> {
         }
     }
     /// Get a mutable reference from the `Target`.
+    #[inline(always)]
     pub fn as_mut(&mut self) -> &mut Dynamic {
         match self {
             Self::Ref(r) => *r,
@@ -258,6 +264,7 @@ impl Target<'_> {
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
+    #[inline(always)]
     fn from(value: &'a mut Dynamic) -> Self {
         #[cfg(not(feature = "no_closure"))]
         #[cfg(not(feature = "no_object"))]
@@ -273,6 +280,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
+    #[inline(always)]
     fn from(value: T) -> Self {
         Self::Value(value.into())
     }
@@ -301,6 +309,7 @@ pub struct State {
 
 impl State {
     /// Create a new `State`.
+    #[inline(always)]
     pub fn new() -> Self {
         Default::default()
     }
@@ -407,6 +416,7 @@ pub struct Engine {
 }
 
 impl fmt::Debug for Engine {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.id.as_ref() {
             Some(id) => write!(f, "Engine({})", id),
@@ -689,7 +699,7 @@ impl Engine {
         idx_values: &mut StaticVec<Dynamic>,
         chain_type: ChainType,
         level: usize,
-        mut _new_val: Option<Dynamic>,
+        new_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
             panic!();
@@ -722,12 +732,12 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
-                            _new_val,
+                            new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
                     // xxx[rhs] = new_val
-                    _ if _new_val.is_some() => {
+                    _ if new_val.is_some() => {
                         let mut idx_val2 = idx_val.clone();
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
@@ -737,7 +747,7 @@ impl Engine {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
                                 obj_ptr
-                                    .set_value(_new_val.unwrap())
+                                    .set_value(new_val.unwrap())
                                     .map_err(|err| err.new_position(rhs.position()))?;
 
                                 None
@@ -747,7 +757,7 @@ impl Engine {
                                 #[cfg(not(feature = "no_index"))]
                                 EvalAltResult::ErrorIndexingType(_, _) => {
                                     // Raise error if there is no index getter nor setter
-                                    Some(_new_val.unwrap())
+                                    Some(new_val.unwrap())
                                 }
                                 // Any other error - return
                                 err => return Err(Box::new(err)),
@@ -799,13 +809,13 @@ impl Engine {
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_) => unreachable!(),
                     // {xxx:map}.id = ???
-                    Expr::Property(x) if target.is::<Map>() && _new_val.is_some() => {
+                    Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let ((prop, _, _), pos) = x.as_ref();
                         let index = prop.clone().into();
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
-                        val.set_value(_new_val.unwrap())
+                        val.set_value(new_val.unwrap())
                             .map_err(|err| err.new_position(rhs.position()))?;
                         Ok((Default::default(), true))
                     }
@@ -820,9 +830,10 @@ impl Engine {
                         Ok((val.clone_into_dynamic(), false))
                     }
                     // xxx.id = ???
-                    Expr::Property(x) if _new_val.is_some() => {
+                    Expr::Property(x) if new_val.is_some() => {
                         let ((_, _, setter), pos) = x.as_ref();
-                        let mut args = [target.as_mut(), _new_val.as_mut().unwrap()];
+                        let mut new_val = new_val;
+                        let mut args = [target.as_mut(), new_val.as_mut().unwrap()];
                         self.exec_fn_call(
                             state, lib, setter, 0, &mut args, is_ref, true, false, None, None,
                             level,
@@ -872,7 +883,7 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
-                            _new_val,
+                            new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
@@ -905,7 +916,7 @@ impl Engine {
                                         idx_values,
                                         next_chain,
                                         level,
-                                        _new_val,
+                                        new_val,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -944,7 +955,7 @@ impl Engine {
 
                                 self.eval_dot_index_chain_helper(
                                     state, lib, this_ptr, target, expr, idx_values, next_chain,
-                                    level, _new_val,
+                                    level, new_val,
                                 )
                                 .map_err(|err| err.new_position(*pos))
                             }
@@ -1114,7 +1125,7 @@ impl Engine {
         state: &mut State,
         _lib: &Module,
         target: &'a mut Target,
-        mut _idx: Dynamic,
+        idx: Dynamic,
         idx_pos: Position,
         _create: bool,
         _indexers: bool,
@@ -1132,7 +1143,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr)) => {
                 // val_array[idx]
-                let index = _idx
+                let index = idx
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
 
@@ -1153,13 +1164,13 @@ impl Engine {
             Dynamic(Union::Map(map)) => {
                 // val_map[idx]
                 Ok(if _create {
-                    let index = _idx
+                    let index = idx
                         .take_immutable_string()
                         .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
                     map.entry(index).or_insert(Default::default()).into()
                 } else {
-                    let index = _idx
+                    let index = idx
                         .read_lock::<ImmutableString>()
                         .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
@@ -1173,7 +1184,7 @@ impl Engine {
             Dynamic(Union::Str(s)) => {
                 // val_string[idx]
                 let chars_len = s.chars().count();
-                let index = _idx
+                let index = idx
                     .as_int()
                     .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
 
@@ -1192,7 +1203,8 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             _ if _indexers => {
                 let type_name = val.type_name();
-                let args = &mut [val, &mut _idx];
+                let mut idx = idx;
+                let args = &mut [val, &mut idx];
                 self.exec_fn_call(
                     state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, None, _level,
                 )
@@ -1331,11 +1343,11 @@ impl Engine {
                     )),
                     // Normal assignment
                     ScopeEntryType::Normal if op.is_empty() => {
-                        let rhs_val = rhs_val.clone_inner_data().unwrap();
+                        let value = rhs_val.flatten();
                         if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = rhs_val;
+                            *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
                         } else {
-                            *lhs_ptr = rhs_val;
+                            *lhs_ptr = value;
                         }
                         Ok(Default::default())
                     }
@@ -1378,7 +1390,7 @@ impl Engine {
                                 )
                                 .map_err(|err| err.new_position(*op_pos))?;
 
-                            let value = value.clone_inner_data().unwrap();
+                            let value = value.flatten();
                             if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
                                 *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
                             } else {
@@ -1674,14 +1686,14 @@ impl Engine {
                     let index = scope.len() - 1;
                     state.scope_level += 1;
 
-                    for loop_var in func(iter_type) {
-                        let for_var = scope.get_mut(index).0;
-                        let value = loop_var.clone_inner_data().unwrap();
+                    for iter_value in func(iter_type) {
+                        let (loop_var, _) = scope.get_mut(index);
 
-                        if cfg!(not(feature = "no_closure")) && for_var.is_shared() {
-                            *for_var.write_lock().unwrap() = value;
+                        let value = iter_value.flatten();
+                        if cfg!(not(feature = "no_closure")) && loop_var.is_shared() {
+                            *loop_var.write_lock().unwrap() = value;
                         } else {
-                            *for_var = value;
+                            *loop_var = value;
                         }
 
                         self.inc_operations(state)
@@ -1750,8 +1762,7 @@ impl Engine {
                 let expr = expr.as_ref().unwrap();
                 let val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .clone_inner_data()
-                    .unwrap();
+                    .flatten();
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
                 Ok(Default::default())
@@ -1769,8 +1780,7 @@ impl Engine {
                 let ((var_name, _), expr, _) = x.as_ref();
                 let val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
-                    .clone_inner_data()
-                    .unwrap();
+                    .flatten();
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
                 Ok(Default::default())
@@ -2000,6 +2010,7 @@ impl Engine {
     }
 
     /// Map a type_name into a pretty-print name
+    #[inline(always)]
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
             .as_ref()

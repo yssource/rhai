@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.19.0
 ==============
 
+New features
+------------
+
+* Adds `Engine::register_get_result`, `Engine::register_set_result`, `Engine::register_indexer_get_result`, `Engine::register_indexer_set_result` API.
+
 
 Version 0.18.1
 ==============

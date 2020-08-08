@@ -41,7 +41,7 @@ Standard features
 Protection against attacks
 --------------------------
 
-* Sand-boxed - the scripting engine, if declared immutable, cannot mutate the containing environment unless explicitly permitted (e.g. via a `RefCell`).
+* Sand-boxed - the scripting engine, if declared immutable, cannot mutate the containing environment unless [explicitly permitted](https://schungx.github.io/rhai/patterns/control.html).
 * Rugged - protected against malicious attacks (such as [stack-overflow](https://schungx.github.io/rhai/safety/max-call-stack.html), [over-sized data](https://schungx.github.io/rhai/safety/max-string-size.html), and [runaway scripts](https://schungx.github.io/rhai/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://schungx.github.io/rhai/safety/progress.html) and manually terminate a script run.
 

@@ -1,7 +1,6 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{
-    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseError, ParseErrorType, RegisterFn,
-    Scope, INT,
+    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseErrorType, RegisterFn, Scope, INT,
 };
 use std::any::TypeId;
 
@@ -10,12 +9,13 @@ fn test_fn() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     // Expect duplicated parameters error
-    assert!(matches!(
-        engine
+    assert_eq!(
+        *engine
             .compile("fn hello(x, x) { x }")
-            .expect_err("should be error"),
-        ParseError(x, _) if *x == ParseErrorType::FnDuplicatedParam("hello".to_string(), "x".to_string())
-    ));
+            .expect_err("should be error")
+            .0,
+        ParseErrorType::FnDuplicatedParam("hello".to_string(), "x".to_string())
+    );
 
     Ok(())
 }

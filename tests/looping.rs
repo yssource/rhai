@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_loop() -> Result<(), Box<EvalAltResult>> {
@@ -26,15 +26,21 @@ fn test_loop() -> Result<(), Box<EvalAltResult>> {
         21
     );
 
-    assert!(matches!(
-        engine.compile("let x = 0; break;").expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::LoopBreak
-    ));
+    assert_eq!(
+        *engine
+            .compile("let x = 0; break;")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::LoopBreak
+    );
 
-    assert!(matches!(
-        engine.compile("let x = 0; if x > 0 { continue; }").expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::LoopBreak
-    ));
+    assert_eq!(
+        *engine
+            .compile("let x = 0; if x > 0 { continue; }")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::LoopBreak
+    );
 
     Ok(())
 }

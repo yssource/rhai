@@ -338,7 +338,7 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.get_entry(name)
-            .and_then(|Entry { value, .. }| value.clone().clone_inner_data::<T>())
+            .and_then(|Entry { value, .. }| value.flatten_clone().try_cast())
     }
 
     /// Update the value of the named entry.
@@ -441,7 +441,7 @@ impl<'a> Scope<'a> {
     /// ```
     pub fn iter(&self) -> impl Iterator<Item = (&str, Dynamic)> {
         self.iter_raw()
-            .map(|(name, value)| (name, value.clone().clone_inner_data().unwrap()))
+            .map(|(name, value)| (name, value.flatten_clone()))
     }
 
     /// Get an iterator to entries in the Scope.

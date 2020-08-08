@@ -1,5 +1,5 @@
 #![cfg(not(feature = "unchecked"))]
-use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType};
+use rhai::{Engine, EvalAltResult, ParseErrorType};
 
 #[cfg(not(feature = "no_index"))]
 use rhai::Array;
@@ -12,15 +12,21 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_max_string_size(10);
 
-    assert!(matches!(
-        engine.compile(r#"let x = "hello, world!";"#).expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::LiteralTooLarge("Length of string literal".to_string(), 10)
-    ));
+    assert_eq!(
+        *engine
+            .compile(r#"let x = "hello, world!";"#)
+            .expect_err("should error")
+            .0,
+        ParseErrorType::LiteralTooLarge("Length of string literal".to_string(), 10)
+    );
 
-    assert!(matches!(
-        engine.compile(r#"let x = "朝に紅顔、暮に白骨";"#).expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::LiteralTooLarge("Length of string literal".to_string(), 10)
-    ));
+    assert_eq!(
+        *engine
+            .compile(r#"let x = "朝に紅顔、暮に白骨";"#)
+            .expect_err("should error")
+            .0,
+        ParseErrorType::LiteralTooLarge("Length of string literal".to_string(), 10)
+    );
 
     assert!(matches!(
         *engine
@@ -74,12 +80,13 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_object"))]
     engine.set_max_map_size(10);
 
-    assert!(matches!(
-        engine
+    assert_eq!(
+        *engine
             .compile("let x = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];")
-            .expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::LiteralTooLarge("Size of array literal".to_string(), 10)
-    ));
+            .expect_err("should error")
+            .0,
+        ParseErrorType::LiteralTooLarge("Size of array literal".to_string(), 10)
+    );
 
     assert!(matches!(
         *engine
@@ -186,12 +193,18 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_index"))]
     engine.set_max_array_size(10);
 
-    assert!(matches!(
-        engine
-            .compile("let x = #{a:1,b:2,c:3,d:4,e:5,f:6,g:7,h:8,i:9,j:10,k:11,l:12,m:13,n:14,o:15};")
-            .expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::LiteralTooLarge("Number of properties in object map literal".to_string(), 10)
-    ));
+    assert_eq!(
+        *engine
+            .compile(
+                "let x = #{a:1,b:2,c:3,d:4,e:5,f:6,g:7,h:8,i:9,j:10,k:11,l:12,m:13,n:14,o:15};"
+            )
+            .expect_err("should error")
+            .0,
+        ParseErrorType::LiteralTooLarge(
+            "Number of properties in object map literal".to_string(),
+            10
+        )
+    );
 
     assert!(matches!(
         *engine

@@ -76,6 +76,8 @@
 
 [function]: {{rootUrl}}/language/functions.md
 [functions]: {{rootUrl}}/language/functions.md
+[function overloading]: {{rootUrl}}/rust/functions.md#function-overloading
+[fallible functions]: {{rootUrl}}/rust/fallible.md
 [function pointer]: {{rootUrl}}/language/fn-ptr.md
 [function pointers]: {{rootUrl}}/language/fn-ptr.md
 [currying]: {{rootUrl}}/language/fn-curry.md
@@ -97,9 +99,10 @@
 
 [`eval`]: {{rootUrl}}/language/eval.md
 
-[OOP]: {{rootUrl}}/language/oop.md
+[OOP]: {{rootUrl}}/patterns/oop.md
 [DSL]: {{rootUrl}}/engine/dsl.md
 
+[sand-boxed]: {{rootUrl}}/safety/sandbox.md
 [maximum statement depth]: {{rootUrl}}/safety/max-stmt-depth.md
 [maximum call stack depth]: {{rootUrl}}/safety/max-call-stack.md
 [maximum number of operations]: {{rootUrl}}/safety/max-operations.md
