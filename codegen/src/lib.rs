@@ -76,12 +76,13 @@ mod rhai_module;
 
 #[proc_macro_attribute]
 pub fn export_fn(
-    _args: proc_macro::TokenStream,
+    args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let mut output = proc_macro2::TokenStream::from(input.clone());
+    let parsed_params = parse_macro_input!(args as function::ExportedFnParams);
     let function_def = parse_macro_input!(input as function::ExportedFn);
-    output.extend(function_def.generate());
+    output.extend(function_def.generate_with_params(parsed_params));
     proc_macro::TokenStream::from(output)
 }
 

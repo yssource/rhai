@@ -158,3 +158,35 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
     );
     Ok(())
 }
+
+mod rename_fn {
+    use rhai::plugin::*;
+    use rhai::FLOAT;
+
+    #[export_fn(name = "add_float")]
+    pub fn add(f1: FLOAT, f2: FLOAT) -> FLOAT {
+        f1 + f2
+    }
+}
+
+#[test]
+fn rename_fn_test() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    engine.register_fn("get_mystic_number", || 42 as FLOAT);
+    let mut m = Module::new();
+    rhai::register_exported_fn!(m, "add_two_floats", rename_fn::add_float);
+    let mut r = StaticModuleResolver::new();
+    r.insert("Math::Advanced".to_string(), m);
+    engine.set_module_resolver(Some(r));
+
+    assert_eq!(
+        engine.eval::<FLOAT>(
+            r#"import "Math::Advanced" as math;
+           let x = get_mystic_number();
+           let y = math::add_two_floats(x, 1.0);
+           y"#
+        )?,
+        43.0
+    );
+    Ok(())
+}
