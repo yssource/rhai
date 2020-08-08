@@ -19,21 +19,36 @@ Object Map Literals
 ------------------
 
 Object map literals are built within braces '`#{`' ... '`}`' (_name_ `:` _value_ syntax similar to Rust)
-and separated by commas '`,`'.  The property _name_ can be a simple variable name following the same
+and separated by commas '`,`':
+
+> `#{` _property_ `:` _value_ `,` `...` `,` _property_ `:` _value_ `}`
+>
+> `#{` _property_ `:` _value_ `,` `...` `,` _property_ `:` _value_ `,` `}`  `// trailing comma is OK`
+
+The property _name_ can be a simple variable name following the same
 naming rules as [variables], or an arbitrary [string] literal.
 
 
 Access Properties
-----------------
+-----------------
 
-Property values can be accessed via the _dot_ notation (_object_ `.` _property_)
-or _index_ notation (_object_ `[` _property_ `]`).
+### Dot Notation
 
-The dot notation allows only property names that follow the same naming rules as [variables].
+The _dot notation_ allows only property names that follow the same naming rules as [variables].
 
-The index notation allows setting/getting properties of arbitrary names (even the empty [string]).
+> _object_ `.` _property_
 
-**Important:** Trying to read a non-existent property returns [`()`] instead of causing an error.
+### Index Notation
+
+The _index notation_ allows setting/getting properties of arbitrary names (even the empty [string]).
+
+> _object_ `[` _property_ `]`
+
+### Non-Existence
+
+Trying to read a non-existing property returns [`()`] instead of causing an error.
+
+This is similar to JavaScript where accessing a non-existing property returns `undefined`.
 
 
 Built-in Functions
@@ -89,7 +104,7 @@ let foo = #{ a:1, b:2, c:3 }["a"];
 foo == 1;
 
 fn abc() {
-    #{ a:1, b:2, c:3 }  // a function returning an object map
+    ##{ a:1, b:2, c:3 } // a function returning an object map
 }
 
 let foo = abc().b;

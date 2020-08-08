@@ -929,11 +929,11 @@ impl Engine {
                     self.inc_operations(state)
                         .map_err(|err| err.new_position(pos))?;
 
-                    // Turn it into a method call only if the object is not shared
                     args = if target.is_shared() {
-                        arg_values.insert(0, target.clone().clone_inner_data().unwrap());
+                        arg_values.insert(0, target.get_inner_clone());
                         arg_values.iter_mut().collect()
                     } else {
+                        // Turn it into a method call only if the object is not shared
                         is_ref = true;
                         once(target).chain(arg_values.iter_mut()).collect()
                     };

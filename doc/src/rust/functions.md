@@ -7,7 +7,7 @@ Rhai's scripting engine is very lightweight.  It gets most of its abilities from
 
 To call these functions, they need to be _registered_ with the [`Engine`] using `Engine::register_fn`
 (in the `RegisterFn` trait) and `Engine::register_result_fn` (in the `RegisterResultFn` trait,
-see [fallible functions]({{rootUrl}}/rust/fallible.md)).
+see [fallible functions]).
 
 ```rust
 use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString};
@@ -62,8 +62,12 @@ let x = (42_i64).into();                        // 'into()' works for standard t
 let y = Dynamic::from("hello!".to_string());    // remember &str is not supported by Rhai
 ```
 
+
+Function Overloading
+--------------------
+
 Functions registered with the [`Engine`] can be _overloaded_ as long as the _signature_ is unique,
 i.e. different functions can have the same name as long as their parameters are of different types
-and/or different number.
+or different number.
 
 New definitions _overwrite_ previous definitions of the same name and same number/types of parameters.

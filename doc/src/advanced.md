@@ -5,9 +5,9 @@ Advanced Topics
 
 This section covers advanced features such as:
 
-* [Capture the calling scope]({{rootUrl}}/language/fn-capture.md) in a function call.
+* [Advanced patterns]({{rootUrl}}/patterns/index.md) in using Rhai.
 
-* Simulated [Object Oriented Programming (OOP)][OOP].
+* [Capture the calling scope]({{rootUrl}}/language/fn-capture.md) in a function call.
 
 * [`serde`] integration.
 
