@@ -930,7 +930,7 @@ impl Engine {
                         .map_err(|err| err.new_position(pos))?;
 
                     args = if target.is_shared() {
-                        arg_values.insert(0, target.get_inner_clone());
+                        arg_values.insert(0, target.flatten_clone());
                         arg_values.iter_mut().collect()
                     } else {
                         // Turn it into a method call only if the object is not shared
