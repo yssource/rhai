@@ -1,5 +1,6 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
+use std::io::Read;
 
 #[test]
 fn test_functions() -> Result<(), Box<EvalAltResult>> {
@@ -155,8 +156,9 @@ fn test_function_captures() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_object"))]
     assert!(matches!(
-        engine.compile(
-            r#"
+        *engine
+            .compile(
+                r#"
                 fn foo() { this += x; }
 
                 let x = 41;
@@ -164,8 +166,10 @@ fn test_function_captures() -> Result<(), Box<EvalAltResult>> {
 
                 y.foo!();
             "#
-        ).expect_err("should error"),
-        ParseError(err, _) if matches!(*err, ParseErrorType::MalformedCapture(_))
+            )
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedCapture(_)
     ));
 
     Ok(())
