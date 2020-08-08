@@ -21,13 +21,6 @@ use crate::stdlib::rc::Rc;
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::Arc;
 
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::cell::RefCell;
-#[cfg(not(feature = "no_closure"))]
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::RwLock;
-
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
@@ -49,15 +42,6 @@ pub type Shared<T> = Rc<T>;
 #[cfg(feature = "sync")]
 pub type Shared<T> = Arc<T>;
 
-/// Mutable reference-counted container (read-write lock)
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "sync"))]
-pub type SharedMut<T> = Shared<RefCell<T>>;
-/// Mutable reference-counted container (read-write lock)
-#[cfg(not(feature = "no_closure"))]
-#[cfg(feature = "sync")]
-pub type SharedMut<T> = Shared<RwLock<T>>;
-
 /// Consume a `Shared` resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
@@ -67,16 +51,21 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     return Arc::make_mut(value);
 }
 
+/// Consume a `Shared` resource if is unique (i.e. not shared).
+pub fn shared_try_take<T: Clone>(value: Shared<T>) -> Result<T, Shared<T>> {
+    #[cfg(not(feature = "sync"))]
+    return Rc::try_unwrap(value);
+    #[cfg(feature = "sync")]
+    return Arc::try_unwrap(value);
+}
+
 /// Consume a `Shared` resource, assuming that it is unique (i.e. not shared).
 ///
 /// # Panics
 ///
 /// Panics if the resource is shared (i.e. has other outstanding references).
 pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
-    #[cfg(not(feature = "sync"))]
-    return Rc::try_unwrap(value).map_err(|_| ()).unwrap();
-    #[cfg(feature = "sync")]
-    return Arc::try_unwrap(value).map_err(|_| ()).unwrap();
+    shared_try_take(value).map_err(|_| ()).unwrap()
 }
 
 pub type FnCallArgs<'a> = [&'a mut Dynamic];

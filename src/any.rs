@@ -5,7 +5,7 @@ use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 
 #[cfg(not(feature = "no_closure"))]
-use crate::fn_native::SharedMut;
+use crate::fn_native::{shared_try_take, Shared};
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -159,9 +159,15 @@ pub enum Union {
     #[cfg(not(feature = "no_object"))]
     Map(Box<Map>),
     FnPtr(Box<FnPtr>),
+
     Variant(Box<Box<dyn Variant>>),
+
     #[cfg(not(feature = "no_closure"))]
-    Shared(SharedMut<Dynamic>),
+    #[cfg(not(feature = "sync"))]
+    Shared(Shared<RefCell<Dynamic>>),
+    #[cfg(not(feature = "no_closure"))]
+    #[cfg(feature = "sync")]
+    Shared(Shared<RwLock<Dynamic>>),
 }
 
 /// Underlying `Variant` read guard for `Dynamic`.
@@ -176,6 +182,7 @@ pub struct DynamicReadLock<'d, T: Variant + Clone>(DynamicReadLockInner<'d, T>);
 enum DynamicReadLockInner<'d, T: Variant + Clone> {
     /// A simple reference to a non-shared value.
     Reference(&'d T),
+
     /// A read guard to a shared `RefCell`.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
@@ -212,6 +219,7 @@ pub struct DynamicWriteLock<'d, T: Variant + Clone>(DynamicWriteLockInner<'d, T>
 enum DynamicWriteLockInner<'d, T: Variant + Clone> {
     /// A simple mutable reference to a non-shared value.
     Reference(&'d mut T),
+
     /// A write guard to a shared `RefCell`.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
@@ -406,6 +414,7 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => f.write_str("<timestamp>"),
             Union::Variant(value) => f.write_str((*value).type_name()),
+
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
             Union::Shared(cell) => {
@@ -444,6 +453,7 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => write!(f, "<timestamp>"),
             Union::Variant(value) => write!(f, "{}", (*value).type_name()),
+
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
             Union::Shared(cell) => {
@@ -779,25 +789,46 @@ impl Dynamic {
         self.try_cast::<T>().unwrap()
     }
 
-    /// Get a copy of the `Dynamic` as a specific type.
+    /// Dereference the `Dynamic`.
     ///
-    /// If the `Dynamic` is not a shared value, it returns a cloned copy of the value.
+    /// If the `Dynamic` is not a shared value, it returns a cloned copy.
     ///
-    /// If the `Dynamic` is a shared value, it returns a cloned copy of the shared value.
-    ///
-    /// Returns `None` if the cast fails.
+    /// If the `Dynamic` is a shared value, it a cloned copy of the shared value.
     #[inline(always)]
-    pub fn clone_inner_data<T: Variant + Clone>(self) -> Option<T> {
+    pub fn get_inner_clone(&self) -> Self {
+        match &self.0 {
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell) => {
+                #[cfg(not(feature = "sync"))]
+                return cell.borrow().clone();
+
+                #[cfg(feature = "sync")]
+                return cell.read().unwrap().clone();
+            }
+            _ => self.clone(),
+        }
+    }
+
+    /// Flatten the `Dynamic`.
+    ///
+    /// If the `Dynamic` is not a shared value, it returns itself.
+    ///
+    /// If the `Dynamic` is a shared value, it returns the shared value if there are
+    /// no outstanding references, or a cloned copy.
+    #[inline(always)]
+    pub fn flatten(self) -> Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell) => {
                 #[cfg(not(feature = "sync"))]
-                return Some(cell.borrow().downcast_ref::<T>().unwrap().clone());
+                return shared_try_take(cell)
+                    .map_or_else(|c| c.borrow().clone(), RefCell::into_inner);
 
                 #[cfg(feature = "sync")]
-                return Some(cell.read().unwrap().downcast_ref::<T>().unwrap().clone());
+                return shared_try_take(cell)
+                    .map_or_else(|c| c.read().unwrap().clone(), RwLock::into_inner);
             }
-            _ => self.try_cast(),
+            _ => self,
         }
     }
 
