@@ -2,12 +2,45 @@
 use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, spanned::Spanned};
 
+#[derive(Debug, Default)]
+pub(crate) struct ExportedFnParams {
+    name: Option<String>,
+}
+
+impl Parse for ExportedFnParams {
+    fn parse(args: ParseStream) -> syn::Result<Self> {
+        if args.is_empty() {
+            return Ok(ExportedFnParams::default());
+        }
+        let assignment: syn::ExprAssign = args.parse()?;
+
+        let attr_name: syn::Ident = match assignment.left.as_ref() {
+            syn::Expr::Path(syn::ExprPath { path: attr_path, .. }) => attr_path.get_ident().cloned()
+                .ok_or_else(|| syn::Error::new(attr_path.span(), "expecting attribute name"))?,
+            x => return Err(syn::Error::new(x.span(), "expecting attribute name")),
+        };
+        if &attr_name != "name" {
+            return Err(syn::Error::new(attr_name.span(), format!("unknown attribute '{}'", &attr_name)));
+        }
+
+        let attr_value: String = match assignment.right.as_ref() {
+            syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(string), .. }) => string.value(),
+            x => return Err(syn::Error::new(x.span(), "expecting string literal value")),
+        };
+
+        Ok(ExportedFnParams {
+            name: Some(attr_value),
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ExportedFn {
     entire_span: proc_macro2::Span,
     signature: syn::Signature,
     is_public: bool,
     mut_receiver: bool,
+    params: ExportedFnParams,
 }
 
 impl Parse for ExportedFn {
@@ -111,6 +144,7 @@ impl Parse for ExportedFn {
             signature: fn_all.sig,
             is_public,
             mut_receiver,
+            params: ExportedFnParams::default(),
         })
     }
 }
@@ -148,11 +182,20 @@ impl ExportedFn {
         }
     }
 
+    pub fn generate_with_params(mut self,
+                                mut params: ExportedFnParams) -> proc_macro2::TokenStream {
+        self.params = params;
+        self.generate()
+    }
+
     pub fn generate(self) -> proc_macro2::TokenStream {
-        let name: syn::Ident = syn::Ident::new(
-            &format!("rhai_fn_{}", self.name().to_string()),
-            self.name().span(),
-        );
+        let name_str = if let Some(ref name) = self.params.name {
+            name.clone()
+        } else {
+            self.name().to_string()
+        };
+        let name: syn::Ident = syn::Ident::new(&format!("rhai_fn_{}", name_str),
+                                               self.name().span());
         let impl_block = self.generate_impl("Token");
         let callable_block = self.generate_callable("Token");
         let input_types_block = self.generate_input_types("Token");
