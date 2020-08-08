@@ -52,7 +52,7 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
 }
 
 /// Consume a `Shared` resource if is unique (i.e. not shared).
-pub fn shared_try_take<T: Clone>(value: Shared<T>) -> Result<T, Shared<T>> {
+pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     #[cfg(not(feature = "sync"))]
     return Rc::try_unwrap(value);
     #[cfg(feature = "sync")]
@@ -64,7 +64,7 @@ pub fn shared_try_take<T: Clone>(value: Shared<T>) -> Result<T, Shared<T>> {
 /// # Panics
 ///
 /// Panics if the resource is shared (i.e. has other outstanding references).
-pub fn shared_take<T: Clone>(value: Shared<T>) -> T {
+pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value).map_err(|_| ()).unwrap()
 }
 

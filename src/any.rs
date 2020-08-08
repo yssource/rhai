@@ -789,13 +789,13 @@ impl Dynamic {
         self.try_cast::<T>().unwrap()
     }
 
-    /// Dereference the `Dynamic`.
+    /// Flatten the `Dynamic` and clone it.
     ///
     /// If the `Dynamic` is not a shared value, it returns a cloned copy.
     ///
     /// If the `Dynamic` is a shared value, it a cloned copy of the shared value.
     #[inline(always)]
-    pub fn get_inner_clone(&self) -> Self {
+    pub fn flatten_clone(&self) -> Self {
         match &self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell) => {
@@ -826,7 +826,7 @@ impl Dynamic {
 
                 #[cfg(feature = "sync")]
                 return shared_try_take(cell)
-                    .map_or_else(|c| c.read().unwrap().clone(), RwLock::into_inner);
+                    .map_or_else(|c| c.read().unwrap().clone(), |v| v.into_inner().unwrap());
             }
             _ => self,
         }
