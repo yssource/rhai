@@ -134,6 +134,7 @@ impl<T: Any + Clone + SendSync> Variant for T {
 
 impl dyn Variant {
     /// Is this `Variant` a specific type?
+    #[inline(always)]
     pub fn is<T: Any>(&self) -> bool {
         TypeId::of::<T>() == self.type_id()
     }
@@ -250,6 +251,7 @@ impl<'d, T: Variant + Clone> DerefMut for DynamicWriteLock<'d, T> {
 impl Dynamic {
     /// Does this `Dynamic` hold a variant data type
     /// instead of one of the support system primitive types?
+    #[inline(always)]
     pub fn is_variant(&self) -> bool {
         match self.0 {
             Union::Variant(_) => true,
@@ -259,6 +261,7 @@ impl Dynamic {
 
     /// Does this `Dynamic` hold a shared data type
     /// instead of one of the supported system primitive types?
+    #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
@@ -271,6 +274,7 @@ impl Dynamic {
     ///
     /// If the `Dynamic` is a Shared variant checking is performed on
     /// top of it's internal value.
+    #[inline(always)]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         let mut target_type_id = TypeId::of::<T>();
 
@@ -301,7 +305,9 @@ impl Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(_) => TypeId::of::<Map>(),
             Union::FnPtr(_) => TypeId::of::<FnPtr>(),
+
             Union::Variant(value) => (***value).type_id(),
+
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
             Union::Shared(cell) => (*cell.borrow()).type_id(),
@@ -335,6 +341,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::Variant(value) if value.is::<Instant>() => "timestamp",
             Union::Variant(value) => (***value).type_name(),
+
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
             Union::Shared(cell) => cell
@@ -468,7 +475,9 @@ impl Clone for Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value) => Self(Union::Map(value.clone())),
             Union::FnPtr(ref value) => Self(Union::FnPtr(value.clone())),
+
             Union::Variant(ref value) => (***value).clone_into_dynamic(),
+
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell) => Self(Union::Shared(cell.clone())),
         }
@@ -476,6 +485,7 @@ impl Clone for Dynamic {
 }
 
 impl Default for Dynamic {
+    #[inline(always)]
     fn default() -> Self {
         Self(Union::Unit(()))
     }
@@ -1043,6 +1053,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as the system integer type `INT` and return it.
     /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n) => Ok(n),
@@ -1055,6 +1066,7 @@ impl Dynamic {
     /// Cast the `Dynamic` as the system floating-point type `FLOAT` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[cfg(not(feature = "no_float"))]
+    #[inline(always)]
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n) => Ok(n),
@@ -1066,6 +1078,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a `bool` and return it.
     /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b) => Ok(b),
@@ -1077,6 +1090,7 @@ impl Dynamic {
 
     /// Cast the `Dynamic` as a `char` and return it.
     /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n) => Ok(n),
@@ -1090,6 +1104,7 @@ impl Dynamic {
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Cast is failing if `self` is Shared Dynamic
+    #[inline(always)]
     pub fn as_str(&self) -> Result<&str, &'static str> {
         match &self.0 {
             Union::Str(s) => Ok(s),
@@ -1100,6 +1115,7 @@ impl Dynamic {
 
     /// Convert the `Dynamic` into `String` and return it.
     /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
     pub fn take_string(self) -> Result<String, &'static str> {
         self.take_immutable_string()
             .map(ImmutableString::into_owned)
@@ -1138,38 +1154,45 @@ impl Dynamic {
 }
 
 impl From<()> for Dynamic {
+    #[inline(always)]
     fn from(value: ()) -> Self {
         Self(Union::Unit(value))
     }
 }
 impl From<bool> for Dynamic {
+    #[inline(always)]
     fn from(value: bool) -> Self {
         Self(Union::Bool(value))
     }
 }
 impl From<INT> for Dynamic {
+    #[inline(always)]
     fn from(value: INT) -> Self {
         Self(Union::Int(value))
     }
 }
 #[cfg(not(feature = "no_float"))]
 impl From<FLOAT> for Dynamic {
+    #[inline(always)]
     fn from(value: FLOAT) -> Self {
         Self(Union::Float(value))
     }
 }
 impl From<char> for Dynamic {
+    #[inline(always)]
     fn from(value: char) -> Self {
         Self(Union::Char(value))
     }
 }
 impl<S: Into<ImmutableString>> From<S> for Dynamic {
+    #[inline(always)]
     fn from(value: S) -> Self {
         Self(Union::Str(value.into()))
     }
 }
 #[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
+    #[inline(always)]
     fn from(value: Vec<T>) -> Self {
         Self(Union::Array(Box::new(
             value.into_iter().map(Dynamic::from).collect(),
@@ -1178,6 +1201,7 @@ impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<&[T]> for Dynamic {
+    #[inline(always)]
     fn from(value: &[T]) -> Self {
         Self(Union::Array(Box::new(
             value.iter().cloned().map(Dynamic::from).collect(),
@@ -1186,6 +1210,7 @@ impl<T: Variant + Clone> From<&[T]> for Dynamic {
 }
 #[cfg(not(feature = "no_object"))]
 impl<K: Into<ImmutableString>, T: Variant + Clone> From<HashMap<K, T>> for Dynamic {
+    #[inline(always)]
     fn from(value: HashMap<K, T>) -> Self {
         Self(Union::Map(Box::new(
             value
@@ -1196,11 +1221,13 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<HashMap<K, T>> for Dynam
     }
 }
 impl From<FnPtr> for Dynamic {
+    #[inline(always)]
     fn from(value: FnPtr) -> Self {
         Self(Union::FnPtr(Box::new(value)))
     }
 }
 impl From<Box<FnPtr>> for Dynamic {
+    #[inline(always)]
     fn from(value: Box<FnPtr>) -> Self {
         Self(Union::FnPtr(value))
     }
