@@ -42,6 +42,9 @@ fn test_generated_adds() -> Result<(), Box<EvalAltResult>> {
 
     engine.load_package(m);
 
+    #[cfg(feature = "only_i32")]
+    assert_eq!(engine.eval::<INT>("let a = 0; add_i32(a, 1)")?, 1);
+    #[cfg(not(feature = "only_i32"))]
     assert_eq!(engine.eval::<INT>("let a = 0; add_i64(a, 1)")?, 1);
 
     Ok(())
