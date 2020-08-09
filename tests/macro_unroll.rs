@@ -16,7 +16,7 @@ macro_rules! generate_add {
 }
 
 macro_rules! register_adds_in_bulk {
-    ($mod_name:expr, $($type_names:ident),+) => {
+    ($mod_name:ident, $($type_names:ident),+) => {
         $(
             {
                 let type_str = stringify!($type_names);
