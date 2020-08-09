@@ -102,9 +102,9 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             r#"
-                let a = 42.0;
+                let a = 41;
                 let b = 0;
-                let f = || b.custom_call(|| a.to_int());
+                let f = || b.custom_call(|| a + 1);
                 
                 f.call()
             "#
