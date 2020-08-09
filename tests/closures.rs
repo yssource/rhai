@@ -1,6 +1,7 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, RegisterFn, INT};
 use std::any::TypeId;
+use std::mem::take;
 
 #[test]
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
@@ -82,6 +83,29 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
             r#"
                 let a = 41;
                 let f = || plus_one(a);
+                f.call()
+            "#
+        )?,
+        42
+    );
+
+    engine.register_raw_fn(
+        "custom_call",
+        &[TypeId::of::<INT>(), TypeId::of::<FnPtr>()],
+        |engine: &Engine, module: &Module, args: &mut [&mut Dynamic]| {
+            let func = take(args[1]).cast::<FnPtr>();
+
+            func.call_dynamic(engine, module, None, [])
+        },
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let a = 41;
+                let b = 0;
+                let f = || b.custom_call(|| a + 1);
+                
                 f.call()
             "#
         )?,
