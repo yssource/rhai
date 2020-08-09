@@ -1,4 +1,4 @@
-error: expected assignment expression
+error: expecting identifier
  --> $DIR/export_fn_junk_arg.rs:9:13
   |
 9 | #[export_fn("wheeeee")]

@@ -6,7 +6,7 @@ struct Point {
     y: f32,
 }
 
-#[export_fn(unknown = "thing")]
+#[export_fn(rhai::name = "thing")]
 pub fn test_fn(input: Point) -> bool {
     input.x > input.y
 }

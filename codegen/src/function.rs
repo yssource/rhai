@@ -1,10 +1,14 @@
 #![allow(unused)]
+
+use std::collections::HashMap;
+
 use quote::{quote, quote_spanned};
-use syn::{parse::Parse, parse::ParseStream, spanned::Spanned};
+use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
     pub name: Option<String>,
+    pub return_raw: bool,
 }
 
 impl Parse for ExportedFnParams {
@@ -12,25 +16,68 @@ impl Parse for ExportedFnParams {
         if args.is_empty() {
             return Ok(ExportedFnParams::default());
         }
-        let assignment: syn::ExprAssign = args.parse()?;
 
-        let attr_name: syn::Ident = match assignment.left.as_ref() {
-            syn::Expr::Path(syn::ExprPath { path: attr_path, .. }) => attr_path.get_ident().cloned()
-                .ok_or_else(|| syn::Error::new(attr_path.span(), "expecting attribute name"))?,
-            x => return Err(syn::Error::new(x.span(), "expecting attribute name")),
-        };
-        if &attr_name != "name" {
-            return Err(syn::Error::new(attr_name.span(), format!("unknown attribute '{}'", &attr_name)));
+        let arg_list = args.call(
+            syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty,
+        )?;
+
+        let mut attrs: HashMap<proc_macro2::Ident, Option<syn::LitStr>> = HashMap::new();
+        for arg in arg_list {
+            let (left, right) = match arg {
+                syn::Expr::Assign(syn::ExprAssign {
+                    ref left,
+                    ref right,
+                    ..
+                }) => {
+                    let attr_name: syn::Ident = match left.as_ref() {
+                        syn::Expr::Path(syn::ExprPath {
+                            path: attr_path, ..
+                        }) => attr_path.get_ident().cloned().ok_or_else(|| {
+                            syn::Error::new(attr_path.span(), "expecting attribute name")
+                        })?,
+                        x => return Err(syn::Error::new(x.span(), "expecting attribute name")),
+                    };
+                    let attr_value = match right.as_ref() {
+                        syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(string),
+                            ..
+                        }) => string.clone(),
+                        x => return Err(syn::Error::new(x.span(), "expecting string literal")),
+                    };
+                    (attr_name, Some(attr_value))
+                }
+                syn::Expr::Path(syn::ExprPath {
+                    path: attr_path, ..
+                }) => attr_path
+                    .get_ident()
+                    .cloned()
+                    .map(|a| (a, None))
+                    .ok_or_else(|| syn::Error::new(attr_path.span(), "expecting attribute name"))?,
+                x => return Err(syn::Error::new(x.span(), "expecting identifier")),
+            };
+            attrs.insert(left, right);
         }
 
-        let attr_value: String = match assignment.right.as_ref() {
-            syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(string), .. }) => string.value(),
-            x => return Err(syn::Error::new(x.span(), "expecting string literal value")),
-        };
+        let mut name = None;
+        let mut return_raw = false;
+        for (ident, value) in attrs.drain() {
+            match (ident.to_string().as_ref(), value) {
+                ("name", Some(s)) => name = Some(s.value()),
+                ("name", None) => return Err(syn::Error::new(ident.span(), "requires value")),
+                ("return_raw", None) => return_raw = true,
+                ("return_raw", Some(s)) => {
+                    return Err(syn::Error::new(s.span(), "extraneous value"))
+                }
+                (attr, _) => {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        format!("unknown attribute '{}'", attr),
+                    ))
+                }
+            }
+        }
 
-        Ok(ExportedFnParams {
-            name: Some(attr_value),
-        })
+        Ok(ExportedFnParams { name, return_raw })
     }
 }
 
@@ -361,6 +408,19 @@ impl ExportedFn {
             unpack_stmts.push(arg0);
         }
 
+        // Handle "raw returns", aka cases where the result is a dynamic or an error.
+        //
+        // This allows skipping the Dynamic::from wrap.
+        let return_expr = if !self.params.return_raw {
+            quote! {
+                Ok(Dynamic::from(#name(#(#unpack_exprs),*)))
+            }
+        } else {
+            quote! {
+                #name(#(#unpack_exprs),*)
+            }
+        };
+
         let type_name = syn::Ident::new(on_type_name, proc_macro2::Span::call_site());
         quote! {
             impl PluginFunction for #type_name {
@@ -373,7 +433,7 @@ impl ExportedFn {
                                         args.len(), #arg_count), Position::none())));
                     }
                     #(#unpack_stmts)*
-                    Ok(Dynamic::from(#name(#(#unpack_exprs),*)))
+                    #return_expr
                 }
 
                 fn is_method_call(&self) -> bool { #is_method_call }
