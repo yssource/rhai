@@ -1639,7 +1639,8 @@ fn parse_primary(
         // Function call
         Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             // Once the identifier consumed we must enable next variables capturing
-            #[cfg(not(feature = "no_closure"))] {
+            #[cfg(not(feature = "no_closure"))]
+            {
                 state.allow_capture = true;
             }
             Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
