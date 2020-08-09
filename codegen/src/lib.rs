@@ -67,7 +67,7 @@
 //! ```
 //!
 
-use quote::{quote, quote_spanned};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{parse::Parser, parse_macro_input, spanned::Spanned};
 
 mod function;
@@ -79,9 +79,20 @@ pub fn export_fn(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let mut output = proc_macro2::TokenStream::from(input.clone());
+    let output = proc_macro2::TokenStream::from(input.clone());
+
     let parsed_params = parse_macro_input!(args as function::ExportedFnParams);
     let function_def = parse_macro_input!(input as function::ExportedFn);
+
+    let mut output = if let Some(ref rename) = parsed_params.name {
+        // If it wasn't a function, it wouldn't have parsed earlier, so unwrap() is fine.
+        let mut output_fn: syn::ItemFn = syn::parse2(output.clone()).unwrap();
+        let new_name = syn::Ident::new(rename, output_fn.sig.ident.span());
+        output_fn.sig.ident = new_name;
+        output_fn.into_token_stream()
+    } else {
+        output
+    };
     output.extend(function_def.generate_with_params(parsed_params));
     proc_macro::TokenStream::from(output)
 }
