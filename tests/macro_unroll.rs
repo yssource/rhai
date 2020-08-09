@@ -3,15 +3,17 @@
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, INT, Module};
 
-macro_rules! generate_add {
-    ($type_name:ident) => {
-        pub mod $type_name {
+macro_rules! generate_adds {
+    ($($type_names:ident),+) => {
+        $(
+        pub mod $type_names {
             use rhai::plugin::*;
             #[export_fn]
-            pub fn add(x: $type_name, y: $type_name) -> $type_name {
+            pub fn add(x: $type_names, y: $type_names) -> $type_names {
                 x + y
             }
         }
+        )*
     }
 }
 
@@ -28,10 +30,7 @@ macro_rules! register_adds_in_bulk {
     }
 }
 
-generate_add!(i8);
-generate_add!(i16);
-generate_add!(i32);
-generate_add!(i64);
+generate_adds!(i8, i16, i32, i64);
 
 #[test]
 fn test_generated_adds() -> Result<(), Box<EvalAltResult>> {
