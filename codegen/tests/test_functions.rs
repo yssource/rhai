@@ -230,3 +230,44 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(&output_array[1].as_int().unwrap(), &43);
     Ok(())
 }
+
+pub mod raw_returning_fn {
+    use rhai::plugin::*;
+    use rhai::FLOAT;
+
+    #[export_fn(return_raw)]
+    pub fn distance_function(
+        x1: FLOAT,
+        y1: FLOAT,
+        x2: FLOAT,
+        y2: FLOAT,
+    ) -> Result<rhai::Dynamic, Box<rhai::EvalAltResult>> {
+        Ok(Dynamic::from(
+            ((y2 - y1).abs().powf(2.0) + (x2 - x1).abs().powf(2.0)).sqrt(),
+        ))
+    }
+}
+
+#[test]
+fn raw_returning_fn_test() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    engine.register_fn("get_mystic_number", || 42 as FLOAT);
+    let mut m = Module::new();
+    rhai::register_exported_fn!(
+        m,
+        "euclidean_distance".to_string(),
+        raw_returning_fn::distance_function
+    );
+    let mut r = StaticModuleResolver::new();
+    r.insert("Math::Advanced".to_string(), m);
+    engine.set_module_resolver(Some(r));
+
+    assert_eq!(
+        engine.eval::<FLOAT>(
+            r#"import "Math::Advanced" as math;
+           let x = math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#
+        )?,
+        41.0
+    );
+    Ok(())
+}
