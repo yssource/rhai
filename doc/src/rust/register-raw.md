@@ -171,9 +171,9 @@ to partition the slice:
 let (first, rest) = args.split_at_mut(1);
 
 // Mutable reference to the first parameter
-let this_ptr: &mut Dynamic = &mut *first[0].write_lock::<A>().unwrap();
+let this_ptr: &mut A = &mut *first[0].write_lock::<A>().unwrap();
 
 // Immutable reference to the second value parameter
 // This can be mutable but there is no point because the parameter is passed by value
-let value_ref: &Dynamic = &*rest[0].read_lock::<B>().unwrap();
+let value_ref: &B = &*rest[0].read_lock::<B>().unwrap();
 ```
