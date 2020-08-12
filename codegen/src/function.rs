@@ -356,16 +356,15 @@ impl ExportedFn {
                             &syn::Type::Path(ref p) if p.path == str_type_path => {
                                 is_str_ref = true;
                                 quote_spanned!(arg_type.span()=>
-                                                   args[#i]
-                                                   .downcast_clone::<ImmutableString>()
-                                                   .unwrap())
+                                                   std::mem::take(args[#i])
+                                                   .clone().cast::<ImmutableString>())
                             }
                             _ => panic!("internal error: why wasn't this found earlier!?"),
                         },
                         _ => {
                             is_str_ref = false;
                             quote_spanned!(arg_type.span()=>
-                                            args[#i].downcast_clone::<#arg_type>().unwrap())
+                                           std::mem::take(args[#i]).clone().cast::<#arg_type>())
                         }
                     };
 
@@ -768,7 +767,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = args[0usize].downcast_clone::<usize>().unwrap();
+                        let arg0 = std::mem::take(args[0usize]).clone().cast::<usize>();
                         Ok(Dynamic::from(do_something(arg0)))
                     }
 
@@ -808,7 +807,7 @@ mod generate_tests {
                                 format!("wrong arg count: {} != {}",
                                         args.len(), 1usize), Position::none())));
                     }
-                    let arg0 = args[0usize].downcast_clone::<usize>().unwrap();
+                    let arg0 = std::mem::take(args[0usize]).clone().cast::<usize>();
                     Ok(Dynamic::from(do_something(arg0)))
                 }
 
@@ -845,8 +844,8 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 2usize), Position::none())));
                         }
-                        let arg0 = args[0usize].downcast_clone::<usize>().unwrap();
-                        let arg1 = args[1usize].downcast_clone::<usize>().unwrap();
+                        let arg0 = std::mem::take(args[0usize]).clone().cast::<usize>();
+                        let arg1 = std::mem::take(args[1usize]).clone().cast::<usize>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
@@ -891,7 +890,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 2usize), Position::none())));
                         }
-                        let arg1 = args[1usize].downcast_clone::<usize>().unwrap();
+                        let arg1 = std::mem::take(args[1usize]).clone().cast::<usize>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<usize>().unwrap();
                         Ok(Dynamic::from(increment(arg0, arg1)))
                     }
@@ -938,7 +937,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = args[0usize].downcast_clone::<ImmutableString>().unwrap();
+                        let arg0 = std::mem::take(args[0usize]).clone().cast::<ImmutableString>();
                         Ok(Dynamic::from(special_print(&arg0)))
                     }
 
