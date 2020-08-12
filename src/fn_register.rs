@@ -47,10 +47,10 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///     fn is_varadic(&self) -> bool { false }
     ///
     ///     fn call(&self, args: &mut[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
-    ///         let x1: NUMBER = args[0].downcast_clone::<NUMBER>().unwrap();
-    ///         let y1: NUMBER = args[1].downcast_clone::<NUMBER>().unwrap();
-    ///         let x2: NUMBER = args[2].downcast_clone::<NUMBER>().unwrap();
-    ///         let y2: NUMBER = args[3].downcast_clone::<NUMBER>().unwrap();
+    ///         let x1: NUMBER = std::mem::take(args[0]).clone().cast::<NUMBER>();
+    ///         let y1: NUMBER = std::mem::take(args[1]).clone().cast::<NUMBER>();
+    ///         let x2: NUMBER = std::mem::take(args[2]).clone().cast::<NUMBER>();
+    ///         let y2: NUMBER = std::mem::take(args[3]).clone().cast::<NUMBER>();
     /// #       #[cfg(not(feature = "no_float"))]
     ///         let square_sum = (y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0);
     /// #       #[cfg(feature = "no_float")]

@@ -371,7 +371,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = args[0usize].downcast_clone::<INT>().unwrap();
+                        let arg0 = std::mem::take(args[0usize]).clone().cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
@@ -433,8 +433,8 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 2usize), Position::none())));
                         }
-                        let arg0 = args[0usize].downcast_clone::<INT>().unwrap();
-                        let arg1 = args[1usize].downcast_clone::<INT>().unwrap();
+                        let arg0 = std::mem::take(args[0usize]).clone().cast::<INT>();
+                        let arg1 = std::mem::take(args[1usize]).clone().cast::<INT>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
@@ -605,7 +605,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = args[0usize].downcast_clone::<ImmutableString>().unwrap();
+                        let arg0 = std::mem::take(args[0usize]).clone().cast::<ImmutableString>();
                         Ok(Dynamic::from(print_out_to(&arg0)))
                     }
 

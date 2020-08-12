@@ -1082,13 +1082,6 @@ impl Dynamic {
         }
     }
 
-    /// Copy and return a `Dynamic` if it contains a type that can be trivially copied.
-    /// Returns `None` if the cast fails.
-    #[inline(always)]
-    pub fn downcast_clone<T: Variant + Clone>(&self) -> Option<T> {
-        self.downcast_ref::<T>().map(|t| t.clone())
-    }
-
     /// Cast the `Dynamic` as the system integer type `INT` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
