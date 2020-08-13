@@ -166,7 +166,7 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
     };
     let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
     let tokens = quote! {
-        #module_expr.set_fn(#export_name, rhai::FnAccess::Public,
+        #module_expr.set_fn(#export_name, FnAccess::Public,
                             #gen_mod_path::token_input_types().as_ref(),
                             #gen_mod_path::token_callable());
     };
