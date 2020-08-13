@@ -229,8 +229,10 @@ impl ExportedFn {
         }
     }
 
-    pub fn generate_with_params(mut self,
-                                mut params: ExportedFnParams) -> proc_macro2::TokenStream {
+    pub fn generate_with_params(
+        mut self,
+        mut params: ExportedFnParams,
+    ) -> proc_macro2::TokenStream {
         self.params = params;
         self.generate()
     }
@@ -241,11 +243,12 @@ impl ExportedFn {
         } else {
             self.name().to_string()
         };
-        let name: syn::Ident = syn::Ident::new(&format!("rhai_fn_{}", name_str),
-                                               self.name().span());
+        let name: syn::Ident =
+            syn::Ident::new(&format!("rhai_fn_{}", name_str), self.name().span());
         let impl_block = self.generate_impl("Token");
         let callable_block = self.generate_callable("Token");
         let input_types_block = self.generate_input_types("Token");
+        let dyn_result_fn_block = self.generate_dynamic_fn();
         quote! {
             #[allow(unused)]
             pub mod #name {
@@ -254,6 +257,54 @@ impl ExportedFn {
                 #impl_block
                 #callable_block
                 #input_types_block
+                #dyn_result_fn_block
+            }
+        }
+    }
+
+    pub fn generate_dynamic_fn(&self) -> proc_macro2::TokenStream {
+        let name: syn::Ident = if let Some(ref name) = self.params.name {
+            syn::Ident::new(name, self.name().span())
+        } else {
+            self.name().clone()
+        };
+
+        let mut dynamic_signature = self.signature.clone();
+        dynamic_signature.ident =
+            syn::Ident::new("dynamic_result_fn", proc_macro2::Span::call_site());
+        dynamic_signature.output = syn::parse2::<syn::ReturnType>(quote! {
+            -> Result<Dynamic, EvalBox>
+        })
+        .unwrap();
+        let arguments: Vec<syn::Ident> = dynamic_signature
+            .inputs
+            .iter()
+            .filter_map(|fnarg| {
+                if let syn::FnArg::Typed(syn::PatType { ref pat, .. }) = fnarg {
+                    if let syn::Pat::Ident(ref ident) = pat.as_ref() {
+                        Some(ident.ident.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !self.params.return_raw {
+            quote! {
+                type EvalBox = Box<EvalAltResult>;
+                pub #dynamic_signature {
+                    Ok(Dynamic::from(super::#name(#(#arguments),*)))
+                }
+            }
+        } else {
+            quote! {
+                type EvalBox = Box<EvalAltResult>;
+                pub #dynamic_signature {
+                    super::#name(#(#arguments),*)
+                }
             }
         }
     }
@@ -740,6 +791,10 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
+                type EvalBox = Box<EvalAltResult>;
+                pub fn dynamic_result_fn() -> Result<Dynamic, EvalBox> {
+                    Ok(Dynamic::from(super::do_nothing()))
+                }
             }
         };
 
@@ -783,6 +838,10 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
+                }
+                type EvalBox = Box<EvalAltResult>;
+                pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, EvalBox> {
+                    Ok(Dynamic::from(super::do_something(x)))
                 }
             }
         };
@@ -863,6 +922,10 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
+                type EvalBox = Box<EvalAltResult>;
+                pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, EvalBox> {
+                    Ok(Dynamic::from(super::add_together(x, y)))
+                }
             }
         };
 
@@ -909,6 +972,10 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
                 }
+                type EvalBox = Box<EvalAltResult>;
+                pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, EvalBox> {
+                    Ok(Dynamic::from(super::increment(x, y)))
+                }
             }
         };
 
@@ -953,6 +1020,10 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[std::any::TypeId]> {
                     Token().input_types()
+                }
+                type EvalBox = Box<EvalAltResult>;
+                pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, EvalBox> {
+                    Ok(Dynamic::from(super::special_print(message)))
                 }
             }
         };
