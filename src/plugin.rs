@@ -14,6 +14,9 @@ pub use crate::{
     RegisterResultFn,
 };
 
+#[cfg(features = "no_module")]
+pub use rhai_codegen::{export_fn, register_exported_fn};
+#[cfg(not(features = "no_module"))]
 pub use rhai_codegen::*;
 
 #[cfg(features = "sync")]

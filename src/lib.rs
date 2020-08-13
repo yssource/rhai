@@ -70,10 +70,7 @@ mod module;
 mod optimize;
 pub mod packages;
 mod parser;
-#[cfg(not(feature = "no_module"))]
 pub mod plugin;
-#[cfg(feature = "no_module")]
-mod plugin;
 mod result;
 mod scope;
 #[cfg(feature = "serde")]
