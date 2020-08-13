@@ -22,7 +22,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     let mut m = exported_module!(special_array_package);
-    register_exported_fn!(m, "greet", make_greeting);
+    set_exported_fn!(m, "greet", make_greeting);
 
     engine.load_package(m);
 
