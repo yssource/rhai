@@ -1,5 +1,7 @@
 use crate::def_package;
+use crate::module::Module;
 use crate::parser::INT;
+use crate::plugin::*;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -22,35 +24,105 @@ pub const MAX_INT: INT = i32::MAX;
 pub const MAX_INT: INT = i64::MAX;
 
 def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
+    init_module(lib);
+});
+
+#[cfg(not(feature = "no_float"))]
+#[export_module]
+mod trig {
+    use crate::parser::FLOAT;
+
+    pub fn sin(x: FLOAT) -> FLOAT {
+        x.to_radians().sin()
+    }
+    pub fn cos(x: FLOAT) -> FLOAT {
+        x.to_radians().cos()
+    }
+    pub fn tan(x: FLOAT) -> FLOAT {
+        x.to_radians().tan()
+    }
+    pub fn sinh(x: FLOAT) -> FLOAT {
+        x.to_radians().sinh()
+    }
+    pub fn cosh(x: FLOAT) -> FLOAT {
+        x.to_radians().cosh()
+    }
+    pub fn tanh(x: FLOAT) -> FLOAT {
+        x.to_radians().tanh()
+    }
+    pub fn asin(x: FLOAT) -> FLOAT {
+        x.asin().to_degrees()
+    }
+    pub fn acos(x: FLOAT) -> FLOAT {
+        x.acos().to_degrees()
+    }
+    pub fn atan(x: FLOAT) -> FLOAT {
+        x.atan().to_degrees()
+    }
+    pub fn asinh(x: FLOAT) -> FLOAT {
+        x.asinh().to_degrees()
+    }
+    pub fn acosh(x: FLOAT) -> FLOAT {
+        x.acosh().to_degrees()
+    }
+    pub fn atanh(x: FLOAT) -> FLOAT {
+        x.atanh().to_degrees()
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+#[export_module]
+mod float {
+    use crate::parser::FLOAT;
+
+    pub fn sqrt(x: FLOAT) -> FLOAT {
+        x.sqrt()
+    }
+    pub fn exp(x: FLOAT) -> FLOAT {
+        x.exp()
+    }
+    pub fn ln(x: FLOAT) -> FLOAT {
+        x.ln()
+    }
+    pub fn log(x: FLOAT, base: FLOAT) -> FLOAT {
+        x.log(base)
+    }
+    pub fn log10(x: FLOAT) -> FLOAT {
+        x.log10()
+    }
+    pub fn floor(x: FLOAT) -> FLOAT {
+        x.floor()
+    }
+    pub fn ceiling(x: FLOAT) -> FLOAT {
+        x.ceil()
+    }
+    pub fn round(x: FLOAT) -> FLOAT {
+        x.ceil()
+    }
+    pub fn int(x: FLOAT) -> FLOAT {
+        x.trunc()
+    }
+    pub fn fraction(x: FLOAT) -> FLOAT {
+        x.fract()
+    }
+    pub fn is_nan(x: FLOAT) -> bool {
+        x.is_nan()
+    }
+    pub fn is_finite(x: FLOAT) -> bool {
+        x.is_finite()
+    }
+    pub fn is_infinite(x: FLOAT) -> bool {
+        x.is_infinite()
+    }
+}
+
+fn init_module(lib: &mut Module) {
     #[cfg(not(feature = "no_float"))]
     {
-        // Advanced math functions
-        lib.set_fn_1("sin", |x: FLOAT| Ok(x.to_radians().sin()));
-        lib.set_fn_1("cos", |x: FLOAT| Ok(x.to_radians().cos()));
-        lib.set_fn_1("tan", |x: FLOAT| Ok(x.to_radians().tan()));
-        lib.set_fn_1("sinh", |x: FLOAT| Ok(x.to_radians().sinh()));
-        lib.set_fn_1("cosh", |x: FLOAT| Ok(x.to_radians().cosh()));
-        lib.set_fn_1("tanh", |x: FLOAT| Ok(x.to_radians().tanh()));
-        lib.set_fn_1("asin", |x: FLOAT| Ok(x.asin().to_degrees()));
-        lib.set_fn_1("acos", |x: FLOAT| Ok(x.acos().to_degrees()));
-        lib.set_fn_1("atan", |x: FLOAT| Ok(x.atan().to_degrees()));
-        lib.set_fn_1("asinh", |x: FLOAT| Ok(x.asinh().to_degrees()));
-        lib.set_fn_1("acosh", |x: FLOAT| Ok(x.acosh().to_degrees()));
-        lib.set_fn_1("atanh", |x: FLOAT| Ok(x.atanh().to_degrees()));
-        lib.set_fn_1("sqrt", |x: FLOAT| Ok(x.sqrt()));
-        lib.set_fn_1("exp", |x: FLOAT| Ok(x.exp()));
-        lib.set_fn_1("ln", |x: FLOAT| Ok(x.ln()));
-        lib.set_fn_2("log", |x: FLOAT, base: FLOAT| Ok(x.log(base)));
-        lib.set_fn_1("log10", |x: FLOAT| Ok(x.log10()));
-        lib.set_fn_1("floor", |x: FLOAT| Ok(x.floor()));
-        lib.set_fn_1("ceiling", |x: FLOAT| Ok(x.ceil()));
-        lib.set_fn_1("round", |x: FLOAT| Ok(x.ceil()));
-        lib.set_fn_1("int", |x: FLOAT| Ok(x.trunc()));
-        lib.set_fn_1("fraction", |x: FLOAT| Ok(x.fract()));
-        lib.set_fn_1("is_nan", |x: FLOAT| Ok(x.is_nan()));
-        lib.set_fn_1("is_finite", |x: FLOAT| Ok(x.is_finite()));
-        lib.set_fn_1("is_infinite", |x: FLOAT| Ok(x.is_infinite()));
+        // Floating point functions
+        lib.merge(&exported_module!(float));
 
+        // Floating point properties
         #[cfg(not(feature = "no_object"))]
         {
             lib.set_getter_fn("floor", |x: &mut FLOAT| Ok(x.floor()));
@@ -62,6 +134,9 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
             lib.set_getter_fn("is_finite", |x: &mut FLOAT| Ok(x.is_finite()));
             lib.set_getter_fn("is_infinite", |x: &mut FLOAT| Ok(x.is_infinite()));
         }
+
+        // Trig functions
+        lib.merge(&exported_module!(trig));
 
         // Register conversion functions
         lib.set_fn_1("to_float", |x: INT| Ok(x as FLOAT));
@@ -105,32 +180,28 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     #[cfg(not(feature = "no_float"))]
     {
         if cfg!(not(feature = "unchecked")) {
-            lib.set_fn_1(
-                "to_int",
-                |x: f32| {
-                    if x > (MAX_INT as f32) {
-                        return EvalAltResult::ErrorArithmetic(
-                            format!("Integer overflow: to_int({})", x),
-                            Position::none(),
-                        ).into();
-                    }
+            lib.set_fn_1("to_int", |x: f32| {
+                if x > (MAX_INT as f32) {
+                    return EvalAltResult::ErrorArithmetic(
+                        format!("Integer overflow: to_int({})", x),
+                        Position::none(),
+                    )
+                    .into();
+                }
 
-                    Ok(x.trunc() as INT)
-                },
-            );
-            lib.set_fn_1(
-                "to_int",
-                |x: FLOAT| {
-                    if x > (MAX_INT as FLOAT) {
-                        return EvalAltResult::ErrorArithmetic(
-                            format!("Integer overflow: to_int({})", x),
-                            Position::none(),
-                        ).into();
-                    }
+                Ok(x.trunc() as INT)
+            });
+            lib.set_fn_1("to_int", |x: FLOAT| {
+                if x > (MAX_INT as FLOAT) {
+                    return EvalAltResult::ErrorArithmetic(
+                        format!("Integer overflow: to_int({})", x),
+                        Position::none(),
+                    )
+                    .into();
+                }
 
-                    Ok(x.trunc() as INT)
-                },
-            );
+                Ok(x.trunc() as INT)
+            });
         }
 
         if cfg!(feature = "unchecked") {
@@ -138,4 +209,4 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
             lib.set_fn_1("to_int", |x: f64| Ok(x as INT));
         }
     }
-});
+}
