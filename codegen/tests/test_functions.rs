@@ -16,7 +16,7 @@ fn raw_fn_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::register_exported_fn!(
+    rhai::set_exported_fn!(
         m,
         "euclidean_distance".to_string(),
         raw_fn::distance_function
@@ -50,7 +50,7 @@ fn raw_fn_mut_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::register_exported_fn!(m, "add_in_place", raw_fn_mut::add_in_place);
+    rhai::set_exported_fn!(m, "add_in_place", raw_fn_mut::add_in_place);
     let mut r = StaticModuleResolver::new();
     r.insert("Math::Advanced".to_string(), m);
     engine.set_module_resolver(Some(r));
@@ -82,7 +82,7 @@ fn raw_fn_str_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::register_exported_fn!(m, "write_out_str", raw_fn_str::write_out_str);
+    rhai::set_exported_fn!(m, "write_out_str", raw_fn_str::write_out_str);
     let mut r = StaticModuleResolver::new();
     r.insert("Host::IO".to_string(), m);
     engine.set_module_resolver(Some(r));
@@ -138,9 +138,9 @@ mod mut_opaque_ref {
 fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let mut m = Module::new();
-    rhai::register_exported_fn!(m, "new_message", mut_opaque_ref::new_message);
-    rhai::register_exported_fn!(m, "new_os_message", mut_opaque_ref::new_os_message);
-    rhai::register_exported_fn!(m, "write_out_message", mut_opaque_ref::write_out_message);
+    rhai::set_exported_fn!(m, "new_message", mut_opaque_ref::new_message);
+    rhai::set_exported_fn!(m, "new_os_message", mut_opaque_ref::new_os_message);
+    rhai::set_exported_fn!(m, "write_out_message", mut_opaque_ref::write_out_message);
     let mut r = StaticModuleResolver::new();
     r.insert("Host::Msg".to_string(), m);
     engine.set_module_resolver(Some(r));
@@ -174,7 +174,7 @@ fn rename_fn_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::register_exported_fn!(m, "add_two_floats", rename_fn::add_float);
+    rhai::set_exported_fn!(m, "add_two_floats", rename_fn::add_float);
     let mut r = StaticModuleResolver::new();
     r.insert("Math::Advanced".to_string(), m);
     engine.set_module_resolver(Some(r));
@@ -211,8 +211,8 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::register_exported_fn!(m, "add_two_floats", duplicate_fn_rename::add_float);
-    rhai::register_exported_fn!(m, "add_two_ints", duplicate_fn_rename::add_int);
+    rhai::set_exported_fn!(m, "add_two_floats", duplicate_fn_rename::add_float);
+    rhai::set_exported_fn!(m, "add_two_ints", duplicate_fn_rename::add_int);
     let mut r = StaticModuleResolver::new();
     r.insert("Math::Advanced".to_string(), m);
     engine.set_module_resolver(Some(r));
@@ -224,7 +224,7 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
        let ix = 42;
        let iy = math::add_two_ints(ix, 1);
        [fy, iy]
-       "#
+       "#,
     )?;
     assert_eq!(&output_array[0].as_float().unwrap(), &43.0);
     assert_eq!(&output_array[1].as_int().unwrap(), &43);
@@ -253,7 +253,7 @@ fn raw_returning_fn_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::register_exported_fn!(
+    rhai::set_exported_fn!(
         m,
         "euclidean_distance".to_string(),
         raw_returning_fn::distance_function

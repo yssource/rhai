@@ -35,7 +35,7 @@
 //! }
 //! ```
 //!
-//! # Exporting a Function to Rhai
+//! # Exporting a Function to a Rhai Module
 //!
 //! ```
 //! use rhai::{EvalAltResult, FLOAT, Module, RegisterFn};
@@ -52,7 +52,7 @@
 //!     let mut engine = Engine::new();
 //!     engine.register_fn("get_mystic_number", || { 42 as FLOAT });
 //!     let mut m = Module::new();
-//!     rhai::register_exported_fn!(m, "euclidean_distance", distance_function);
+//!     rhai::set_exported_fn!(m, "euclidean_distance", distance_function);
 //!     let mut r = StaticModuleResolver::new();
 //!     r.insert("Math::Advanced".to_string(), m);
 //!     engine.set_module_resolver(Some(r));
@@ -66,12 +66,39 @@
 //! }
 //! ```
 //!
+//! # Exporting a Function to an Engine
+//!
+//! ```
+//! use rhai::{EvalAltResult, FLOAT, Module, RegisterFn};
+//! use rhai::plugin::*;
+//! use rhai::module_resolvers::*;
+//!
+//! #[rhai::export_fn]
+//! pub fn distance_function(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
+//!     ((y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0)).sqrt()
+//! }
+//!
+//! fn main() -> Result<(), Box<EvalAltResult>> {
+//!
+//!     let mut engine = Engine::new();
+//!     engine.register_fn("get_mystic_number", || { 42 as FLOAT });
+//!     rhai::register_exported_fn!(engine, "euclidean_distance", distance_function);
+//!
+//!     assert_eq!(engine.eval::<FLOAT>(
+//!         r#"let m = get_mystic_number();
+//!            let x = euclidean_distance(0.0, 1.0, 0.0, m);
+//!            x"#)?, 41.0);
+//!     Ok(())
+//! }
+//! ```
+//!
 
-use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse::Parser, parse_macro_input, spanned::Spanned};
+use quote::{quote, ToTokens};
+use syn::parse_macro_input;
 
 mod function;
 mod module;
+mod register;
 mod rhai_module;
 
 #[proc_macro_attribute]
@@ -118,47 +145,30 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 
 #[proc_macro]
 pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parser = syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty;
-    let args = parser.parse(args).unwrap();
-    let arg_span = args.span();
-    let items: Vec<syn::Expr> = args.into_iter().collect();
-    if items.len() != 3 {
-        return proc_macro::TokenStream::from(
-            syn::Error::new(arg_span, "this macro requires three arguments").to_compile_error(),
-        );
-    }
-    let rhai_module = &items[0];
-    let export_name = match &items[1] {
-        syn::Expr::Lit(litstr) => quote_spanned!(items[1].span()=>
-                                                 #litstr.to_string()),
-        expr => quote! { #expr },
+    let (engine_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
+    {
+        Ok(triple) => triple,
+        Err(e) => return e.to_compile_error().into(),
     };
-    let rust_modpath = if let syn::Expr::Path(ref path) = &items[2] {
-        &path.path
-    } else {
-        return proc_macro::TokenStream::from(
-            syn::Error::new(items[2].span(), "third argument must be a function name")
-                .to_compile_error(),
-        );
-    };
-    let gen_mod_path: syn::punctuated::Punctuated<syn::PathSegment, _> = {
-        let mut g = rust_modpath.clone().segments;
-        g.pop();
-        let ident = syn::Ident::new(
-            &format!("rhai_fn_{}", rust_modpath.segments.last().unwrap().ident),
-            items[2].span(),
-        );
-        g.push_value(syn::PathSegment {
-            ident,
-            arguments: syn::PathArguments::None,
-        });
-        g
-    };
+    let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
     let tokens = quote! {
-        #rhai_module.set_fn(#export_name, rhai::FnAccess::Public,
+        #engine_expr.register_result_fn(&(#export_name), #gen_mod_path::dynamic_result_fn);
+    };
+    proc_macro::TokenStream::from(tokens)
+}
+
+#[proc_macro]
+pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let (module_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
+    {
+        Ok(triple) => triple,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
+    let tokens = quote! {
+        #module_expr.set_fn(#export_name, rhai::FnAccess::Public,
                             #gen_mod_path::token_input_types().as_ref(),
                             #gen_mod_path::token_callable());
-
     };
     proc_macro::TokenStream::from(tokens)
 }

@@ -11,6 +11,7 @@ pub use crate::{
     ImmutableString,
     Module,
     Position,
+    RegisterResultFn,
 };
 
 pub use rhai_codegen::*;
