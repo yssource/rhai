@@ -6,6 +6,8 @@ use super::logic::{eq, gt, gte, lt, lte, ne};
 use super::math_basic::MAX_INT;
 
 use crate::def_package;
+use crate::engine::make_getter;
+use crate::plugin::*;
 use crate::result::EvalAltResult;
 
 #[cfg(not(feature = "no_float"))]
@@ -26,83 +28,112 @@ use instant::Instant;
 
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     // Register date/time functions
-    lib.set_fn_0("timestamp", || Ok(Instant::now()));
+    set_exported_fn!(lib, "timestamp", create_timestamp);
+    set_exported_fn!(lib, "elapsed", elapsed);
 
-    lib.set_fn_2(
-        "-",
-        |ts1: Instant, ts2: Instant| {
-            if ts2 > ts1 {
-                #[cfg(not(feature = "no_float"))]
-                return Ok(-(ts2 - ts1).as_secs_f64());
+    #[cfg(not(feature = "no_object"))]
+    set_exported_fn!(lib, make_getter("elapsed"), elapsed);
 
-                #[cfg(feature = "no_float")]
-                {
-                    let seconds = (ts2 - ts1).as_secs();
+    set_exported_fn!(lib, "-", time_diff);
 
-                    #[cfg(not(feature = "unchecked"))]
-                    if seconds > (MAX_INT as u64) {
-                        return EvalAltResult::ErrorArithmetic(
-                            format!(
-                                "Integer overflow for timestamp duration: {}",
-                                -(seconds as i64)
-                            ),
-                            Position::none(),
-                        ).into();
-                    }
+    //lib.merge(&exported_module!(time_compare));
 
-                    return Ok(-(seconds as INT));
-                }
-            } else {
-                #[cfg(not(feature = "no_float"))]
-                return Ok((ts1 - ts2).as_secs_f64());
+    lib.set_fn_2("<", |x:Instant, y:Instant| Ok(lt(x, y)));
+    lib.set_fn_2("<=", |x:Instant, y:Instant| Ok(lte(x, y)));
+    lib.set_fn_2(">", |x:Instant, y:Instant| Ok(gt(x, y)));
+    lib.set_fn_2(">=", |x:Instant, y:Instant| Ok(gte(x, y)));
+    lib.set_fn_2("==", |x:Instant, y:Instant| Ok(eq(x, y)));
+    lib.set_fn_2("!=", |x:Instant, y:Instant| Ok(ne(x, y)));
+});
 
-                #[cfg(feature = "no_float")]
-                {
-                    let seconds = (ts1 - ts2).as_secs();
+#[export_fn]
+fn create_timestamp() -> Instant {
+    Instant::now()
+}
 
-                    #[cfg(not(feature = "unchecked"))]
-                    if seconds > (MAX_INT as u64) {
-                        return EvalAltResult::ErrorArithmetic(
-                            format!("Integer overflow for timestamp duration: {}", seconds),
-                            Position::none(),
-                        ).into();
-                    }
+#[cfg(not(feature = "no_float"))]
+#[export_fn]
+fn elapsed(timestamp: &mut Instant) -> FLOAT {
+    timestamp.elapsed().as_secs_f64() as FLOAT
+}
 
-                    return Ok(seconds as INT);
-                }
-            }
-        },
-    );
+#[cfg(feature = "no_float")]
+#[export_fn(return_raw)]
+fn elapsed(timestamp: &mut Instant) -> Result<Dynamic, Box<EvalAltResult>> {
+    let seconds = timestamp.elapsed().as_secs();
 
-    lib.set_fn_2("<", lt::<Instant>);
-    lib.set_fn_2("<=", lte::<Instant>);
-    lib.set_fn_2(">", gt::<Instant>);
-    lib.set_fn_2(">=", gte::<Instant>);
-    lib.set_fn_2("==", eq::<Instant>);
-    lib.set_fn_2("!=", ne::<Instant>);
-
-    #[cfg(not(feature = "no_float"))]
-    fn elapsed (timestamp: &mut Instant) -> Result<FLOAT, Box<EvalAltResult>> {
-        Ok(timestamp.elapsed().as_secs_f64())
+    #[cfg(not(feature = "unchecked"))]
+    if seconds > (MAX_INT as u64) {
+        return EvalAltResult::ErrorArithmetic(
+            format!("Integer overflow for timestamp.elapsed: {}", seconds),
+            Position::none(),
+        )
+        .into();
     }
 
-    #[cfg(feature = "no_float")]
-    fn elapsed (timestamp: &mut Instant) -> Result<INT, Box<EvalAltResult>> {
-        let seconds = timestamp.elapsed().as_secs();
+    Ok((seconds as INT).into())
+}
+
+#[cfg(not(feature = "no_float"))]
+#[export_fn]
+fn time_diff(ts1: Instant, ts2: Instant) -> FLOAT {
+    if ts2 > ts1 {
+        -(ts2 - ts1).as_secs_f64() as FLOAT
+    } else {
+        (ts1 - ts2).as_secs_f64() as FLOAT
+    }
+}
+
+#[cfg(feature = "no_float")]
+#[export_fn(return_raw)]
+fn time_diff(ts1: Instant, ts2: Instant) -> Result<Dynamic, Box<EvalAltResult>> {
+    if ts2 > ts1 {
+        let seconds = (ts2 - ts1).as_secs();
 
         #[cfg(not(feature = "unchecked"))]
         if seconds > (MAX_INT as u64) {
             return EvalAltResult::ErrorArithmetic(
-                format!("Integer overflow for timestamp.elapsed: {}", seconds),
+                format!("Integer overflow for timestamp duration: -{}", seconds),
                 Position::none(),
-            ).into();
+            )
+            .into();
         }
 
-        Ok(seconds as INT)
+        Ok(-(seconds as INT).into())
+    } else {
+        let seconds = (ts1 - ts2).as_secs();
+
+        #[cfg(not(feature = "unchecked"))]
+        if seconds > (MAX_INT as u64) {
+            return EvalAltResult::ErrorArithmetic(
+                format!("Integer overflow for timestamp duration: {}", seconds),
+                Position::none(),
+            )
+            .into();
+        }
+
+        Ok((seconds as INT).into())
     }
+}
 
-    lib.set_fn_1_mut("elapsed", elapsed);
-
-    #[cfg(not(feature = "no_object"))]
-    lib.set_getter_fn("elapsed", elapsed);
-});
+#[export_module]
+mod time_compare {
+    pub fn eq(x: Instant, y: Instant) -> bool {
+        x == y
+    }
+    pub fn ne(x: Instant, y: Instant) -> bool {
+        x != y
+    }
+    pub fn lt(x: Instant, y: Instant) -> bool {
+        x < y
+    }
+    pub fn lte(x: Instant, y: Instant) -> bool {
+        x <= y
+    }
+    pub fn gt(x: Instant, y: Instant) -> bool {
+        x > y
+    }
+    pub fn gte(x: Instant, y: Instant) -> bool {
+        x >= y
+    }
+}
