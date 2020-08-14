@@ -8,6 +8,7 @@ New features
 ------------
 
 * Adds `Engine::register_get_result`, `Engine::register_set_result`, `Engine::register_indexer_get_result`, `Engine::register_indexer_set_result` API.
+* Adds `Module::combine` to combine two modules.
 
 
 Version 0.18.1
