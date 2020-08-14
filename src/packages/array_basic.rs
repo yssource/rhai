@@ -3,7 +3,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
-use crate::engine::{Array, Engine};
+use crate::engine::{make_getter, Array, Engine};
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
@@ -57,7 +57,7 @@ macro_rules! reg_pad {
 }
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    lib.merge(&exported_module!(array_functions));
+    lib.combine(exported_module!(array_functions));
     set_exported_fn!(lib, "+", append);
     set_exported_fn!(lib, "+", concat);
 
@@ -84,7 +84,7 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     }
 
     #[cfg(not(feature = "no_object"))]
-    lib.set_getter_fn("len", |list: &mut Array| Ok(list.len() as INT));
+    set_exported_fn!(lib, make_getter("len"), array_funcs::len);
 
     // Register array iterator
     lib.set_iter(
@@ -106,7 +106,7 @@ fn concat(mut x: Array, y: Array) -> Array {
 #[export_module]
 mod array_functions {
     pub fn len(list: &mut Array) -> INT {
-        list.len() as INT
+        array_funcs::len(list)
     }
     pub fn append(x: &mut Array, y: Array) {
         x.extend(y);
@@ -137,6 +137,17 @@ mod array_functions {
         } else {
             list.clear();
         }
+    }
+}
+
+mod array_funcs {
+    use crate::engine::Array;
+    use crate::parser::INT;
+    use crate::plugin::*;
+
+    #[export_fn]
+    pub fn len(list: &mut Array) -> INT {
+        list.len() as INT
     }
 }
 

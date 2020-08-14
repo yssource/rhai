@@ -1,4 +1,5 @@
 use crate::def_package;
+use crate::engine::make_getter;
 use crate::parser::INT;
 use crate::plugin::*;
 
@@ -26,23 +27,23 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     #[cfg(not(feature = "no_float"))]
     {
         // Floating point functions
-        lib.merge(&exported_module!(float));
+        lib.combine(exported_module!(float_functions));
 
         // Floating point properties
         #[cfg(not(feature = "no_object"))]
         {
-            lib.set_getter_fn("floor", |x: &mut FLOAT| Ok(x.floor()));
-            lib.set_getter_fn("ceiling", |x: &mut FLOAT| Ok(x.ceil()));
-            lib.set_getter_fn("round", |x: &mut FLOAT| Ok(x.ceil()));
-            lib.set_getter_fn("int", |x: &mut FLOAT| Ok(x.trunc()));
-            lib.set_getter_fn("fraction", |x: &mut FLOAT| Ok(x.fract()));
-            lib.set_getter_fn("is_nan", |x: &mut FLOAT| Ok(x.is_nan()));
-            lib.set_getter_fn("is_finite", |x: &mut FLOAT| Ok(x.is_finite()));
-            lib.set_getter_fn("is_infinite", |x: &mut FLOAT| Ok(x.is_infinite()));
+            set_exported_fn!(lib, make_getter("floor"), float_funcs::floor);
+            set_exported_fn!(lib, make_getter("ceiling"), float_funcs::ceiling);
+            set_exported_fn!(lib, make_getter("round"), float_funcs::round);
+            set_exported_fn!(lib, make_getter("int"), float_funcs::int);
+            set_exported_fn!(lib, make_getter("fraction"), float_funcs::fraction);
+            set_exported_fn!(lib, make_getter("is_nan"), float_funcs::is_nan);
+            set_exported_fn!(lib, make_getter("is_finite"), float_funcs::is_finite);
+            set_exported_fn!(lib, make_getter("is_infinite"), float_funcs::is_infinite);
         }
 
         // Trig functions
-        lib.merge(&exported_module!(trig));
+        lib.combine(exported_module!(trig_functions));
 
         // Register conversion functions
         lib.set_fn_1("to_float", |x: INT| Ok(x as FLOAT));
@@ -119,7 +120,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]
-mod trig {
+mod trig_functions {
     use crate::parser::FLOAT;
 
     pub fn sin(x: FLOAT) -> FLOAT {
@@ -162,7 +163,7 @@ mod trig {
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]
-mod float {
+mod float_functions {
     use crate::parser::FLOAT;
 
     pub fn sqrt(x: FLOAT) -> FLOAT {
@@ -181,26 +182,65 @@ mod float {
         x.log10()
     }
     pub fn floor(x: FLOAT) -> FLOAT {
+        float_funcs::floor(x)
+    }
+    pub fn ceiling(x: FLOAT) -> FLOAT {
+        float_funcs::ceiling(x)
+    }
+    pub fn round(x: FLOAT) -> FLOAT {
+        float_funcs::round(x)
+    }
+    pub fn int(x: FLOAT) -> FLOAT {
+        float_funcs::int(x)
+    }
+    pub fn fraction(x: FLOAT) -> FLOAT {
+        float_funcs::fraction(x)
+    }
+    pub fn is_nan(x: FLOAT) -> bool {
+        float_funcs::is_nan(x)
+    }
+    pub fn is_finite(x: FLOAT) -> bool {
+        float_funcs::is_finite(x)
+    }
+    pub fn is_infinite(x: FLOAT) -> bool {
+        float_funcs::is_infinite(x)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+mod float_funcs {
+    use crate::parser::FLOAT;
+    use crate::plugin::*;
+
+    #[export_fn]
+    pub fn floor(x: FLOAT) -> FLOAT {
         x.floor()
     }
+    #[export_fn]
     pub fn ceiling(x: FLOAT) -> FLOAT {
         x.ceil()
     }
+    #[export_fn]
     pub fn round(x: FLOAT) -> FLOAT {
         x.ceil()
     }
+    #[export_fn]
     pub fn int(x: FLOAT) -> FLOAT {
         x.trunc()
     }
+    #[export_fn]
     pub fn fraction(x: FLOAT) -> FLOAT {
         x.fract()
     }
+    #[export_fn]
     pub fn is_nan(x: FLOAT) -> bool {
         x.is_nan()
     }
+    #[export_fn]
     pub fn is_finite(x: FLOAT) -> bool {
         x.is_finite()
     }
+    #[export_fn]
     pub fn is_infinite(x: FLOAT) -> bool {
         x.is_infinite()
     }

@@ -2,78 +2,80 @@
 
 use crate::any::Dynamic;
 use crate::def_package;
-use crate::engine::Map;
-use crate::module::FuncReturn;
+use crate::engine::{make_getter, Map};
 use crate::parser::{ImmutableString, INT};
+use crate::plugin::*;
 
 use crate::stdlib::vec::Vec;
 
-fn map_get_keys(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
-    Ok(map.iter().map(|(k, _)| k.clone().into()).collect())
-}
-fn map_get_values(map: &mut Map) -> FuncReturn<Vec<Dynamic>> {
-    Ok(map.iter().map(|(_, v)| v.clone()).collect())
-}
-
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
-    lib.set_fn_2_mut(
-        "has",
-        |map: &mut Map, prop: ImmutableString| Ok(map.contains_key(&prop)),
-    );
-    lib.set_fn_1_mut("len", |map: &mut Map| Ok(map.len() as INT));
-    lib.set_fn_1_mut("clear", |map: &mut Map| {
-        map.clear();
-        Ok(())
-    });
-    lib.set_fn_2_mut(
-        "remove",
-        |x: &mut Map, name: ImmutableString| Ok(x.remove(&name).unwrap_or_else(|| ().into())),
-    );
-    lib.set_fn_2_mut(
-        "mixin",
-        |map1: &mut Map, map2: Map| {
-            map2.into_iter().for_each(|(key, value)| {
-                map1.insert(key, value);
-            });
-            Ok(())
-        },
-    );
-    lib.set_fn_2_mut(
-        "fill_with",
-        |map1: &mut Map, map2: Map| {
-            map2.into_iter().for_each(|(key, value)| {
-                if !map1.contains_key(&key) {
-                    map1.insert(key, value);
-                }
-            });
-            Ok(())
-        },
-    );
-    lib.set_fn_2_mut(
-        "+=",
-        |map1: &mut Map, map2: Map| {
-            map2.into_iter().for_each(|(key, value)| {
-                map1.insert(key, value);
-            });
-            Ok(())
-        },
-    );
-    lib.set_fn_2(
-        "+",
-        |mut map1: Map, map2: Map| {
-            map2.into_iter().for_each(|(key, value)| {
-                map1.insert(key, value);
-            });
-            Ok(map1)
-        },
-    );
+    lib.combine(exported_module!(map_functions));
+    set_exported_fn!(lib, make_getter("len"), map_funcs::len);
+    set_exported_fn!(lib, "+=", map_funcs::mixin);
+    set_exported_fn!(lib, "+", map_funcs::merge);
 
     // Register map access functions
-    if cfg!(not(feature = "no_index")) {
-        lib.set_fn_1_mut("keys", map_get_keys);
-    }
-
-    if cfg!(not(feature = "no_index")) {
-        lib.set_fn_1_mut("values", map_get_values);
-    }
+    #[cfg(not(feature = "no_index"))]
+    lib.combine(exported_module!(index_functions));
 });
+
+#[export_module]
+mod map_functions {
+    pub fn has(map: &mut Map, prop: ImmutableString) -> bool {
+        map.contains_key(&prop)
+    }
+    pub fn len(map: &mut Map) -> INT {
+        map_funcs::len(map)
+    }
+    pub fn clear(map: &mut Map) {
+        map.clear();
+    }
+    pub fn remove(x: &mut Map, name: ImmutableString) -> Dynamic {
+        x.remove(&name).unwrap_or_else(|| ().into())
+    }
+    pub fn mixin(map1: &mut Map, map2: Map) {
+        map_funcs::mixin(map1, map2);
+    }
+    pub fn fill_with(map1: &mut Map, map2: Map) {
+        map2.into_iter().for_each(|(key, value)| {
+            if !map1.contains_key(&key) {
+                map1.insert(key, value);
+            }
+        });
+    }
+}
+
+mod map_funcs {
+    use crate::engine::Map;
+    use crate::parser::INT;
+    use crate::plugin::*;
+
+    #[export_fn]
+    pub fn len(map: &mut Map) -> INT {
+        map.len() as INT
+    }
+    #[export_fn]
+    pub fn mixin(map1: &mut Map, map2: Map) {
+        map2.into_iter().for_each(|(key, value)| {
+            map1.insert(key, value);
+        });
+    }
+    #[export_fn]
+    pub fn merge(mut map1: Map, map2: Map) -> Map {
+        map2.into_iter().for_each(|(key, value)| {
+            map1.insert(key, value);
+        });
+        map1
+    }
+}
+
+#[cfg(not(feature = "no_index"))]
+#[export_module]
+mod index_functions {
+    pub fn keys(map: &mut Map) -> Vec<Dynamic> {
+        map.iter().map(|(k, _)| k.clone().into()).collect()
+    }
+    pub fn values(map: &mut Map) -> Vec<Dynamic> {
+        map.iter().map(|(_, v)| v.clone()).collect()
+    }
+}

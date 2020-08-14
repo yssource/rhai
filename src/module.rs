@@ -928,6 +928,18 @@ impl Module {
         self.all_functions.get(&hash_qualified_fn)
     }
 
+    /// Combine another module into this module.
+    /// The other module is consumed to merge into this module.
+    pub fn combine(&mut self, other: Self) -> &mut Self {
+        self.variables.extend(other.variables.into_iter());
+        self.functions.extend(other.functions.into_iter());
+        self.type_iterators.extend(other.type_iterators.into_iter());
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.indexed = false;
+        self
+    }
+
     /// Merge another module into this module.
     pub fn merge(&mut self, other: &Self) -> &mut Self {
         self.merge_filtered(other, |_, _, _| true)

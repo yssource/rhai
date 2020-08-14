@@ -35,7 +35,7 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
 
     set_exported_fn!(lib, "-", time_diff);
 
-    //lib.merge(&exported_module!(time_compare));
+    //lib.combine(exported_module!(time_compare));
 
     lib.set_fn_2("<", |x:Instant, y:Instant| Ok(x < y));
     lib.set_fn_2("<=", |x:Instant, y:Instant| Ok(x <= y));

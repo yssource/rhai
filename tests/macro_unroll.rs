@@ -1,7 +1,7 @@
 #![cfg(not(any(feature = "no_index", feature = "no_module")))]
 
 use rhai::plugin::*;
-use rhai::{Engine, EvalAltResult, INT, Module};
+use rhai::{Engine, EvalAltResult, Module, INT};
 
 pub fn add_generic<T: std::ops::Add<Output = T>>(x: T, y: T) -> T {
     x + y
