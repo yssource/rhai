@@ -1,6 +1,7 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, RegisterFn, INT};
 use std::any::TypeId;
+use std::mem::take;
 
 #[test]
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
@@ -88,6 +89,59 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
         42
     );
 
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let a = 40;
+                let f = |x| {
+                    let f = |x| {
+                        let f = |x| plus_one(a) + x;
+                        f.call(x)
+                    };
+                    f.call(x)
+                };
+                f.call(1)
+            "#
+        )?,
+        42
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let a = 21;
+                let f = |x| a += x;
+                f.call(a);
+                a
+            "#
+        )?,
+        42
+    );
+
+    #[allow(deprecated)]
+    engine.register_raw_fn(
+        "custom_call",
+        &[TypeId::of::<INT>(), TypeId::of::<FnPtr>()],
+        |engine: &Engine, module: &Module, args: &mut [&mut Dynamic]| {
+            let func = take(args[1]).cast::<FnPtr>();
+
+            func.call_dynamic(engine, module, None, [])
+        },
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let a = 41;
+                let b = 0;
+                let f = || b.custom_call(|| a + 1);
+                
+                f.call()
+            "#
+        )?,
+        42
+    );
+
     Ok(())
 }
 
@@ -101,12 +155,12 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             r#"
-                    let a = 1;
-                    let b = 40;
-                    let foo = |x| { this += a + x };
-                    b.call(foo, 1);
-                    b
-                "#
+                let a = 1;
+                let b = 40;
+                let foo = |x| { this += a + x };
+                b.call(foo, 1);
+                b
+            "#
         )?,
         42
     );
@@ -115,11 +169,11 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
         *engine
             .eval::<INT>(
                 r#"
-                        let a = 20;
-                        let foo = |x| { this += a + x };
-                        a.call(foo, 1);
-                        a
-                    "#
+                    let a = 20;
+                    let foo = |x| { this += a + x };
+                    a.call(foo, 1);
+                    a
+                "#
             )
             .expect_err("should error"),
         EvalAltResult::ErrorDataRace(_, _)

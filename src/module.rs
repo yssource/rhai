@@ -611,9 +611,9 @@ impl Module {
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
-            let mut a = args[0].write_lock::<A>().unwrap();
+            let a = &mut args[0].write_lock::<A>().unwrap();
 
-            func(&mut a, b).map(Dynamic::from)
+            func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -735,9 +735,9 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
-            let mut a = args[0].write_lock::<A>().unwrap();
+            let a = &mut args[0].write_lock::<A>().unwrap();
 
-            func(&mut a, b, c).map(Dynamic::from)
+            func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
@@ -769,9 +769,9 @@ impl Module {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
-            let mut a = args[0].write_lock::<A>().unwrap();
+            let a = &mut args[0].write_lock::<A>().unwrap();
 
-            func(&mut a, b, c).map(Dynamic::from)
+            func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
@@ -892,9 +892,9 @@ impl Module {
             let b = mem::take(args[1]).cast::<B>();
             let c = mem::take(args[2]).cast::<C>();
             let d = mem::take(args[3]).cast::<D>();
-            let mut a = args[0].write_lock::<A>().unwrap();
+            let a = &mut args[0].write_lock::<A>().unwrap();
 
-            func(&mut a, b, c, d).map(Dynamic::from)
+            func(a, b, c, d).map(Dynamic::from)
         };
         let arg_types = [
             TypeId::of::<A>(),
