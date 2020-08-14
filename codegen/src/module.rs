@@ -314,11 +314,8 @@ mod generate_tests {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if args.len() != 0usize {
-                            return Err(Box::new(EvalAltResult::ErrorRuntime(
-                                    format!("wrong arg count: {} != {}",
-                                            args.len(), 0usize), Position::none())));
-                        }
+                        debug_assert_eq!(args.len(), 0usize,
+                                            "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(get_mystic_number()))
                     }
 
@@ -374,11 +371,8 @@ mod generate_tests {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if args.len() != 1usize {
-                            return Err(Box::new(EvalAltResult::ErrorRuntime(
-                                    format!("wrong arg count: {} != {}",
-                                            args.len(), 1usize), Position::none())));
-                        }
+                        debug_assert_eq!(args.len(), 1usize,
+                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
@@ -436,11 +430,8 @@ mod generate_tests {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if args.len() != 2usize {
-                            return Err(Box::new(EvalAltResult::ErrorRuntime(
-                                    format!("wrong arg count: {} != {}",
-                                            args.len(), 2usize), Position::none())));
-                        }
+                        debug_assert_eq!(args.len(), 2usize,
+                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
                         let arg1 = mem::take(args[1usize]).clone().cast::<INT>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
@@ -608,11 +599,8 @@ mod generate_tests {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if args.len() != 1usize {
-                            return Err(Box::new(EvalAltResult::ErrorRuntime(
-                                    format!("wrong arg count: {} != {}",
-                                            args.len(), 1usize), Position::none())));
-                        }
+                        debug_assert_eq!(args.len(), 1usize,
+                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).clone().cast::<ImmutableString>();
                         Ok(Dynamic::from(print_out_to(&arg0)))
                     }
@@ -670,11 +658,8 @@ mod generate_tests {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if args.len() != 1usize {
-                            return Err(Box::new(EvalAltResult::ErrorRuntime(
-                                    format!("wrong arg count: {} != {}",
-                                            args.len(), 1usize), Position::none())));
-                        }
+                        debug_assert_eq!(args.len(), 1usize,
+                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0: &mut _ = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                         Ok(Dynamic::from(increment(arg0)))
                     }
