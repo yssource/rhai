@@ -11,9 +11,6 @@ use crate::utils::StaticVec;
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};
 
-#[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
-
 use crate::stdlib::{
     any::TypeId, boxed::Box, fmt::Display, format, mem, string::ToString, vec::Vec,
 };
