@@ -2,7 +2,7 @@ use crate::def_package;
 use crate::plugin::*;
 
 macro_rules! gen_cmp_functions {
-    ($op_name:tt = $op_fn:ident ( $($arg_type:ident),+ ) -> $return_type:ident) => {
+    ($op_name:literal = $op_fn:ident ( $($arg_type:ident),+ ) -> $return_type:ident) => {
         pub mod $op_fn { $(
             pub mod $arg_type {
                 use crate::plugin::*;

@@ -1,5 +1,4 @@
 #![cfg(not(feature = "no_std"))]
-use super::logic::{eq, gt, gte, lt, lte, ne};
 
 #[cfg(feature = "no_float")]
 #[cfg(not(feature = "unchecked"))]
@@ -38,12 +37,12 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
 
     //lib.merge(&exported_module!(time_compare));
 
-    lib.set_fn_2("<", |x:Instant, y:Instant| Ok(lt(x, y)));
-    lib.set_fn_2("<=", |x:Instant, y:Instant| Ok(lte(x, y)));
-    lib.set_fn_2(">", |x:Instant, y:Instant| Ok(gt(x, y)));
-    lib.set_fn_2(">=", |x:Instant, y:Instant| Ok(gte(x, y)));
-    lib.set_fn_2("==", |x:Instant, y:Instant| Ok(eq(x, y)));
-    lib.set_fn_2("!=", |x:Instant, y:Instant| Ok(ne(x, y)));
+    lib.set_fn_2("<", |x:Instant, y:Instant| Ok(x < y));
+    lib.set_fn_2("<=", |x:Instant, y:Instant| Ok(x <= y));
+    lib.set_fn_2(">", |x:Instant, y:Instant| Ok(x > y));
+    lib.set_fn_2(">=", |x:Instant, y:Instant| Ok(x >= y));
+    lib.set_fn_2("==", |x:Instant, y:Instant| Ok(x == y));
+    lib.set_fn_2("!=", |x:Instant, y:Instant| Ok(x != y));
 });
 
 #[export_fn]
