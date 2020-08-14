@@ -1,5 +1,8 @@
 #![allow(unused)]
 
+#[cfg(no_std)]
+use core::mem;
+
 use std::collections::HashMap;
 
 use quote::{quote, quote_spanned};
@@ -329,7 +332,7 @@ impl ExportedFn {
             self.name().span(),
         );
         quote! {
-            pub fn #input_types_fn_name() -> Box<[std::any::TypeId]> {
+            pub fn #input_types_fn_name() -> Box<[TypeId]> {
                 #token_name().input_types()
             }
         }
@@ -375,7 +378,7 @@ impl ExportedFn {
                     );
                     input_type_exprs.push(
                         syn::parse2::<syn::Expr>(quote_spanned!(
-                            arg_type.span()=> std::any::TypeId::of::<#arg_type>()
+                            arg_type.span()=> TypeId::of::<#arg_type>()
                         ))
                         .unwrap(),
                     );
@@ -407,7 +410,7 @@ impl ExportedFn {
                             &syn::Type::Path(ref p) if p.path == str_type_path => {
                                 is_str_ref = true;
                                 quote_spanned!(arg_type.span()=>
-                                                   std::mem::take(args[#i])
+                                                   mem::take(args[#i])
                                                    .clone().cast::<ImmutableString>())
                             }
                             _ => panic!("internal error: why wasn't this found earlier!?"),
@@ -415,7 +418,7 @@ impl ExportedFn {
                         _ => {
                             is_str_ref = false;
                             quote_spanned!(arg_type.span()=>
-                                           std::mem::take(args[#i]).clone().cast::<#arg_type>())
+                                           mem::take(args[#i]).clone().cast::<#arg_type>())
                         }
                     };
 
@@ -428,14 +431,14 @@ impl ExportedFn {
                     if !is_str_ref {
                         input_type_exprs.push(
                             syn::parse2::<syn::Expr>(quote_spanned!(
-                                arg_type.span()=> std::any::TypeId::of::<#arg_type>()
+                                arg_type.span()=> TypeId::of::<#arg_type>()
                             ))
                             .unwrap(),
                         );
                     } else {
                         input_type_exprs.push(
                             syn::parse2::<syn::Expr>(quote_spanned!(
-                                arg_type.span()=> std::any::TypeId::of::<ImmutableString>()
+                                arg_type.span()=> TypeId::of::<ImmutableString>()
                             ))
                             .unwrap(),
                         );
@@ -489,8 +492,8 @@ impl ExportedFn {
                 fn is_method_call(&self) -> bool { #is_method_call }
                 fn is_varadic(&self) -> bool { false }
                 fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(#type_name()) }
-                fn input_types(&self) -> Box<[std::any::TypeId]> {
-                    vec![#(#input_type_exprs),*].into_boxed_slice()
+                fn input_types(&self) -> Box<[TypeId]> {
+                    new_vec![#(#input_type_exprs),*].into_boxed_slice()
                 }
             }
         }
@@ -781,14 +784,14 @@ mod generate_tests {
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![].into_boxed_slice()
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
                 type EvalBox = Box<EvalAltResult>;
@@ -822,21 +825,21 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = std::mem::take(args[0usize]).clone().cast::<usize>();
+                        let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
                         Ok(Dynamic::from(do_something(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<usize>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<usize>()].into_boxed_slice()
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
                 type EvalBox = Box<EvalAltResult>;
@@ -866,15 +869,15 @@ mod generate_tests {
                                 format!("wrong arg count: {} != {}",
                                         args.len(), 1usize), Position::none())));
                     }
-                    let arg0 = std::mem::take(args[0usize]).clone().cast::<usize>();
+                    let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
                     Ok(Dynamic::from(do_something(arg0)))
                 }
 
                 fn is_method_call(&self) -> bool { false }
                 fn is_varadic(&self) -> bool { false }
                 fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(MyType()) }
-                fn input_types(&self) -> Box<[std::any::TypeId]> {
-                    vec![std::any::TypeId::of::<usize>()].into_boxed_slice()
+                fn input_types(&self) -> Box<[TypeId]> {
+                    new_vec![TypeId::of::<usize>()].into_boxed_slice()
                 }
             }
         };
@@ -903,23 +906,23 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 2usize), Position::none())));
                         }
-                        let arg0 = std::mem::take(args[0usize]).clone().cast::<usize>();
-                        let arg1 = std::mem::take(args[1usize]).clone().cast::<usize>();
+                        let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
+                        let arg1 = mem::take(args[1usize]).clone().cast::<usize>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<usize>(),
-                             std::any::TypeId::of::<usize>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<usize>(),
+                             TypeId::of::<usize>()].into_boxed_slice()
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
                 type EvalBox = Box<EvalAltResult>;
@@ -953,7 +956,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 2usize), Position::none())));
                         }
-                        let arg1 = std::mem::take(args[1usize]).clone().cast::<usize>();
+                        let arg1 = mem::take(args[1usize]).clone().cast::<usize>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<usize>().unwrap();
                         Ok(Dynamic::from(increment(arg0, arg1)))
                     }
@@ -961,15 +964,15 @@ mod generate_tests {
                     fn is_method_call(&self) -> bool { true }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<usize>(),
-                             std::any::TypeId::of::<usize>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<usize>(),
+                             TypeId::of::<usize>()].into_boxed_slice()
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
                 type EvalBox = Box<EvalAltResult>;
@@ -1004,21 +1007,21 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = std::mem::take(args[0usize]).clone().cast::<ImmutableString>();
+                        let arg0 = mem::take(args[0usize]).clone().cast::<ImmutableString>();
                         Ok(Dynamic::from(special_print(&arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { false }
                     fn is_varadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<ImmutableString>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(Token())
                 }
-                pub fn token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
                 type EvalBox = Box<EvalAltResult>;

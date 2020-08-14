@@ -4,6 +4,14 @@ use syn::{parse::Parse, parse::ParseStream};
 use crate::function::ExportedFn;
 use crate::rhai_module::ExportedConst;
 
+#[cfg(no_std)]
+use alloc::vec as new_vec;
+#[cfg(not(no_std))]
+use std::vec as new_vec;
+
+#[cfg(no_std)]
+use core::mem;
+
 #[derive(Debug)]
 pub(crate) struct Module {
     mod_all: Option<syn::ItemMod>,
@@ -53,8 +61,8 @@ impl Parse for Module {
                 })
                 .collect();
         } else {
-            consts = vec![];
-            fns = vec![];
+            consts = new_vec![];
+            fns = new_vec![];
         }
         Ok(Module {
             mod_all: Some(mod_all),
@@ -319,14 +327,14 @@ mod generate_tests {
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(get_mystic_number_token())
                     }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![].into_boxed_slice()
                     }
                 }
                 pub fn get_mystic_number_token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(get_mystic_number_token())
                 }
-                pub fn get_mystic_number_token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
                     get_mystic_number_token().input_types()
                 }
             }
@@ -371,7 +379,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = std::mem::take(args[0usize]).clone().cast::<INT>();
+                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
@@ -380,14 +388,14 @@ mod generate_tests {
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_one_to_token())
                     }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<INT>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<INT>()].into_boxed_slice()
                     }
                 }
                 pub fn add_one_to_token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(add_one_to_token())
                 }
-                pub fn add_one_to_token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
                     add_one_to_token().input_types()
                 }
             }
@@ -433,8 +441,8 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 2usize), Position::none())));
                         }
-                        let arg0 = std::mem::take(args[0usize]).clone().cast::<INT>();
-                        let arg1 = std::mem::take(args[1usize]).clone().cast::<INT>();
+                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
+                        let arg1 = mem::take(args[1usize]).clone().cast::<INT>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
@@ -443,15 +451,15 @@ mod generate_tests {
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_together_token())
                     }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<INT>(),
-                             std::any::TypeId::of::<INT>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<INT>(),
+                             TypeId::of::<INT>()].into_boxed_slice()
                     }
                 }
                 pub fn add_together_token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(add_together_token())
                 }
-                pub fn add_together_token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn add_together_token_input_types() -> Box<[TypeId]> {
                     add_together_token().input_types()
                 }
             }
@@ -605,7 +613,7 @@ mod generate_tests {
                                     format!("wrong arg count: {} != {}",
                                             args.len(), 1usize), Position::none())));
                         }
-                        let arg0 = std::mem::take(args[0usize]).clone().cast::<ImmutableString>();
+                        let arg0 = mem::take(args[0usize]).clone().cast::<ImmutableString>();
                         Ok(Dynamic::from(print_out_to(&arg0)))
                     }
 
@@ -614,14 +622,14 @@ mod generate_tests {
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(print_out_to_token())
                     }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<ImmutableString>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
                 }
                 pub fn print_out_to_token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(print_out_to_token())
                 }
-                pub fn print_out_to_token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
                     print_out_to_token().input_types()
                 }
             }
@@ -676,14 +684,14 @@ mod generate_tests {
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(increment_token())
                     }
-                    fn input_types(&self) -> Box<[std::any::TypeId]> {
-                        vec![std::any::TypeId::of::<FLOAT>()].into_boxed_slice()
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
                     }
                 }
                 pub fn increment_token_callable() -> CallableFunction {
                     CallableFunction::from_plugin(increment_token())
                 }
-                pub fn increment_token_input_types() -> Box<[std::any::TypeId]> {
+                pub fn increment_token_input_types() -> Box<[TypeId]> {
                     increment_token().input_types()
                 }
         }

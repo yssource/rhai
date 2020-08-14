@@ -1,8 +1,11 @@
 //! Module defining plugins in Rhai. Is exported for use by plugin authors.
 
-use crate::stdlib::{any::TypeId, boxed::Box};
-
 pub use crate::{
+    stdlib::any::TypeId,
+    stdlib::boxed::Box,
+    stdlib::vec::Vec,
+    stdlib::vec as new_vec,
+    stdlib::mem,
     fn_native::CallableFunction,
     Dynamic,
     Engine,
