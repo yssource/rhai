@@ -2,8 +2,6 @@
 
 use crate::any::Dynamic;
 use crate::def_package;
-#[cfg(not(feature = "no_object"))]
-use crate::engine::make_getter;
 use crate::engine::Engine;
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
@@ -12,6 +10,9 @@ use crate::utils::StaticVec;
 
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::make_getter;
 
 use crate::stdlib::{
     any::TypeId, boxed::Box, fmt::Display, format, mem, string::String, string::ToString, vec::Vec,
@@ -73,6 +74,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     set_exported_fn!(lib, "index_of", string_funcs::index_of_string);
     set_exported_fn!(lib, "index_of", string_funcs::index_of_string_starting_from);
     set_exported_fn!(lib, "append", string_funcs::append_char);
+    set_exported_fn!(lib, "+=", string_funcs::append_char);
     set_exported_fn!(lib, "append", string_funcs::append_string);
     set_exported_fn!(lib, "sub_string", string_funcs::sub_string);
     set_exported_fn!(lib, "sub_string", string_funcs::sub_string_starting_from);
@@ -193,8 +195,8 @@ mod string_functions {
 mod string_funcs_array {
     use crate::engine::Array;
     use crate::plugin::*;
-    use crate::utils::ImmutableString;
     use crate::stdlib::string::String;
+    use crate::utils::ImmutableString;
 
     #[export_fn]
     pub fn append_array(x: &mut ImmutableString, y: Array) -> String {
@@ -209,8 +211,8 @@ mod string_funcs_array {
 mod string_funcs {
     use crate::parser::INT;
     use crate::plugin::*;
-    use crate::utils::{ImmutableString, StaticVec};
     use crate::stdlib::string::{String, ToString};
+    use crate::utils::{ImmutableString, StaticVec};
 
     #[export_fn]
     pub fn append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
@@ -280,11 +282,11 @@ mod string_funcs {
     }
     #[export_fn]
     pub fn append_char(s: &mut ImmutableString, ch: char) {
-        s.make_mut().push(ch);
+        *s += ch;
     }
     #[export_fn]
     pub fn append_string(s: &mut ImmutableString, add: ImmutableString) {
-        s.make_mut().push_str(add.as_str());
+        *s += &add;
     }
     #[export_fn]
     pub fn sub_string(s: ImmutableString, start: INT, len: INT) -> ImmutableString {

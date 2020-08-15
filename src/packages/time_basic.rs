@@ -5,8 +5,6 @@
 use super::math_basic::MAX_INT;
 
 use crate::def_package;
-#[cfg(not(feature = "no_object"))]
-use crate::engine::make_getter;
 use crate::plugin::*;
 use crate::result::EvalAltResult;
 
@@ -19,6 +17,9 @@ use crate::parser::INT;
 #[cfg(feature = "no_float")]
 #[cfg(not(feature = "unchecked"))]
 use crate::token::Position;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::make_getter;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::time::Instant;

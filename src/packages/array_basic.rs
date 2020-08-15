@@ -3,8 +3,6 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
-#[cfg(not(feature = "no_object"))]
-use crate::engine::make_getter;
 use crate::engine::{Array, Engine};
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
@@ -12,6 +10,9 @@ use crate::plugin::*;
 
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::make_getter;
 
 use crate::stdlib::{any::TypeId, boxed::Box};
 

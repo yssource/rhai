@@ -1,6 +1,4 @@
 use crate::def_package;
-#[cfg(not(feature = "no_object"))]
-use crate::engine::make_getter;
 use crate::parser::INT;
 use crate::plugin::*;
 
@@ -9,6 +7,9 @@ use crate::parser::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
 use crate::{result::EvalAltResult, token::Position};
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::make_getter;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]

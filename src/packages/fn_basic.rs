@@ -1,8 +1,9 @@
 use crate::def_package;
-#[cfg(not(feature = "no_object"))]
-use crate::engine::make_getter;
 use crate::fn_native::FnPtr;
 use crate::plugin::*;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::make_getter;
 
 #[export_fn]
 fn get_fn_name(f: &mut FnPtr) -> ImmutableString {
