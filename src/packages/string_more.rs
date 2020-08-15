@@ -2,7 +2,9 @@
 
 use crate::any::Dynamic;
 use crate::def_package;
-use crate::engine::{make_getter, Engine};
+#[cfg(not(feature = "no_object"))]
+use crate::engine::make_getter;
+use crate::engine::Engine;
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
@@ -11,11 +13,8 @@ use crate::utils::StaticVec;
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};
 
-#[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
-
 use crate::stdlib::{
-    any::TypeId, boxed::Box, fmt::Display, format, mem, string::ToString, vec::Vec,
+    any::TypeId, boxed::Box, fmt::Display, format, mem, string::String, string::ToString, vec::Vec,
 };
 
 macro_rules! gen_concat_functions {
@@ -47,8 +46,6 @@ macro_rules! reg_functions {
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
     reg_functions!(lib += basic; INT, bool, char, FnPtr);
-    set_exported_fn!(lib, "+", string_funcs::append_unit);
-    set_exported_fn!(lib, "+", string_funcs::prepend_unit);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
@@ -64,8 +61,8 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
     #[cfg(not(feature = "no_index"))]
     {
-        set_exported_fn!(lib, "+", string_funcs::append_array);
-        set_exported_fn!(lib, "+", string_funcs::prepend_array);
+        set_exported_fn!(lib, "+", string_funcs_array::append_array);
+        set_exported_fn!(lib, "+", string_funcs_array::prepend_array);
     }
 
     lib.combine(exported_module!(string_functions));
@@ -192,11 +189,28 @@ mod string_functions {
     }
 }
 
-mod string_funcs {
+#[cfg(not(feature = "no_index"))]
+mod string_funcs_array {
     use crate::engine::Array;
+    use crate::plugin::*;
+    use crate::utils::ImmutableString;
+    use crate::stdlib::string::String;
+
+    #[export_fn]
+    pub fn append_array(x: &mut ImmutableString, y: Array) -> String {
+        format!("{}{:?}", x, y)
+    }
+    #[export_fn]
+    pub fn prepend_array(x: &mut Array, y: ImmutableString) -> String {
+        format!("{:?}{}", x, y)
+    }
+}
+
+mod string_funcs {
     use crate::parser::INT;
     use crate::plugin::*;
     use crate::utils::{ImmutableString, StaticVec};
+    use crate::stdlib::string::{String, ToString};
 
     #[export_fn]
     pub fn append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
@@ -205,14 +219,6 @@ mod string_funcs {
     #[export_fn]
     pub fn prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
         s
-    }
-    #[export_fn]
-    pub fn append_array(x: &mut ImmutableString, y: Array) -> String {
-        format!("{}{:?}", x, y)
-    }
-    #[export_fn]
-    pub fn prepend_array(x: &mut Array, y: ImmutableString) -> String {
-        format!("{:?}{}", x, y)
     }
     #[export_fn]
     pub fn len(s: &mut ImmutableString) -> INT {

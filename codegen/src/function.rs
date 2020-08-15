@@ -3,6 +3,11 @@
 #[cfg(no_std)]
 use core::mem;
 
+#[cfg(no_std)]
+use alloc::format;
+#[cfg(not(no_std))]
+use std::format;
+
 use std::collections::HashMap;
 
 use quote::{quote, quote_spanned};

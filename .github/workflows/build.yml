@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - plugins
   pull_request: {}
 
 jobs:

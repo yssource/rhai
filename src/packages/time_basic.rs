@@ -5,6 +5,7 @@
 use super::math_basic::MAX_INT;
 
 use crate::def_package;
+#[cfg(not(feature = "no_object"))]
 use crate::engine::make_getter;
 use crate::plugin::*;
 use crate::result::EvalAltResult;
@@ -98,7 +99,7 @@ fn time_diff(ts1: Instant, ts2: Instant) -> Result<Dynamic, Box<EvalAltResult>> 
             .into();
         }
 
-        Ok(-(seconds as INT).into())
+        Ok(Dynamic::from(-(seconds as INT)))
     } else {
         let seconds = (ts1 - ts2).as_secs();
 

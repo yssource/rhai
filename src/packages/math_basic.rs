@@ -1,4 +1,5 @@
 use crate::def_package;
+#[cfg(not(feature = "no_object"))]
 use crate::engine::make_getter;
 use crate::parser::INT;
 use crate::plugin::*;
@@ -211,6 +212,8 @@ mod float_functions {
 mod float_funcs {
     use crate::parser::FLOAT;
     use crate::plugin::*;
+    #[cfg(feature = "no_std")]
+    use num_traits::float::Float;
 
     #[export_fn]
     pub fn floor(x: FLOAT) -> FLOAT {
