@@ -211,6 +211,8 @@ mod float_functions {
 mod float_funcs {
     use crate::parser::FLOAT;
     use crate::plugin::*;
+    #[cfg(feature = "no_std")]
+    use num_traits::float::Float;
 
     #[export_fn]
     pub fn floor(x: FLOAT) -> FLOAT {
