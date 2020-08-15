@@ -12,7 +12,7 @@ use crate::utils::StaticVec;
 use crate::{result::EvalAltResult, token::Position};
 
 use crate::stdlib::{
-    any::TypeId, boxed::Box, fmt::Display, format, mem, string::ToString, vec::Vec,
+    any::TypeId, boxed::Box, fmt::Display, format, mem, string::String, string::ToString, vec::Vec,
 };
 
 macro_rules! gen_concat_functions {
@@ -192,6 +192,7 @@ mod string_funcs_array {
     use crate::engine::Array;
     use crate::plugin::*;
     use crate::utils::ImmutableString;
+    use crate::stdlib::string::String;
 
     #[export_fn]
     pub fn append_array(x: &mut ImmutableString, y: Array) -> String {
@@ -207,6 +208,7 @@ mod string_funcs {
     use crate::parser::INT;
     use crate::plugin::*;
     use crate::utils::{ImmutableString, StaticVec};
+    use crate::stdlib::string::{String, ToString};
 
     #[export_fn]
     pub fn append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
