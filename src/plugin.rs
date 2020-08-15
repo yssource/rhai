@@ -3,6 +3,7 @@
 pub use crate::{
     stdlib::any::TypeId,
     stdlib::boxed::Box,
+    stdlib::format,
     stdlib::string::ToString,
     stdlib::vec::Vec,
     stdlib::vec as new_vec,
