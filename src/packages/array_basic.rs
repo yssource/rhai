@@ -3,7 +3,9 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
-use crate::engine::{make_getter, Array, Engine};
+#[cfg(not(feature = "no_object"))]
+use crate::engine::make_getter;
+use crate::engine::{Array, Engine};
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;

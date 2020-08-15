@@ -5,6 +5,7 @@
 use super::math_basic::MAX_INT;
 
 use crate::def_package;
+#[cfg(not(feature = "no_object"))]
 use crate::engine::make_getter;
 use crate::plugin::*;
 use crate::result::EvalAltResult;

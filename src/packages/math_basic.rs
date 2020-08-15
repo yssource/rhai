@@ -1,4 +1,5 @@
 use crate::def_package;
+#[cfg(not(feature = "no_object"))]
 use crate::engine::make_getter;
 use crate::parser::INT;
 use crate::plugin::*;
