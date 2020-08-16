@@ -342,7 +342,7 @@ mod index_functions {
 #[cfg(not(feature = "no_object"))]
 #[export_module]
 mod object_functions {
-    #[rhai_fn(name = "get$len")]
+    #[rhai_fn(get = "len")]
     pub fn len(s: &mut ImmutableString) -> INT {
         string_functions::len(s)
     }

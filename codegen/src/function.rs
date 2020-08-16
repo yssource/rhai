@@ -13,9 +13,15 @@ use std::collections::HashMap;
 use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
+use super::rhai_module::get_register_name;
+
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
     pub name: Option<String>,
+    pub get: Option<String>,
+    pub set: Option<String>,
+    pub index_get: bool,
+    pub index_set: bool,
     pub return_raw: bool,
     pub skip: bool,
 }
@@ -76,14 +82,24 @@ impl Parse for ExportedFnParams {
         }
 
         let mut name = None;
+        let mut get = None;
+        let mut set = None;
+        let mut index_get = false;
+        let mut index_set = false;
         let mut return_raw = false;
         let mut skip = false;
         for (ident, value) in attrs.drain() {
             match (ident.to_string().as_ref(), value) {
                 ("name", Some(s)) => name = Some(s.value()),
-                ("name", None) => return Err(syn::Error::new(ident.span(), "requires value")),
+                ("get", Some(s)) => get = Some(s.value()),
+                ("set", Some(s)) => set = Some(s.value()),
+                ("get", None) | ("set", None) | ("name", None) => {
+                    return Err(syn::Error::new(ident.span(), "requires value"))
+                }
+                ("index_get", None) => index_get = true,
+                ("index_set", None) => index_get = true,
                 ("return_raw", None) => return_raw = true,
-                ("return_raw", Some(s)) => {
+                ("index_get", Some(s)) | ("index_set", Some(s)) | ("return_raw", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
                 ("skip", None) => skip = true,
@@ -99,6 +115,10 @@ impl Parse for ExportedFnParams {
 
         Ok(ExportedFnParams {
             name,
+            get,
+            set,
+            index_get,
+            index_set,
             return_raw,
             skip,
             ..Default::default()
@@ -353,11 +373,7 @@ impl ExportedFn {
 
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let sig_name = self.name().clone();
-        let name = if let Some(ref name) = self.params.name {
-            name.clone()
-        } else {
-            self.name().to_string()
-        };
+        let name = get_register_name(self);
 
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();

@@ -24,7 +24,7 @@ mod map_functions {
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT
     }
-    #[rhai_fn(name = "get$len")]
+    #[rhai_fn(get = "len")]
     pub fn len_prop(map: &mut Map) -> INT {
         len(map)
     }

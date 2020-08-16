@@ -140,7 +140,7 @@ mod array_functions {
 #[cfg(not(feature = "no_object"))]
 #[export_module]
 mod object_functions {
-    #[rhai_fn(name = "get$len")]
+    #[rhai_fn(get = "len")]
     pub fn len(list: &mut Array) -> INT {
         array_functions::len(list)
     }
