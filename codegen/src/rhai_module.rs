@@ -29,8 +29,12 @@ pub(crate) fn generate_body(
             &format!("{}_token", function.name().to_string()),
             function.name().span(),
         );
-        let fn_literal =
-            syn::LitStr::new(&function.name().to_string(), proc_macro2::Span::call_site());
+        let reg_name = if let Some(ref name) = function.params.name {
+            name.clone()
+        } else {
+            function.name().to_string()
+        };
+        let fn_literal = syn::LitStr::new(&reg_name, proc_macro2::Span::call_site());
         let fn_input_types: Vec<syn::Expr> = function
             .arg_list()
             .map(|fnarg| match fnarg {

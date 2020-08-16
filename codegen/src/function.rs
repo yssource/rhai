@@ -87,9 +87,7 @@ impl Parse for ExportedFnParams {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
                 ("skip", None) => skip = true,
-                ("skip", Some(s)) => {
-                    return Err(syn::Error::new(s.span(), "extraneous value"))
-                }
+                ("skip", Some(s)) => return Err(syn::Error::new(s.span(), "extraneous value")),
                 (attr, _) => {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -99,7 +97,12 @@ impl Parse for ExportedFnParams {
             }
         }
 
-        Ok(ExportedFnParams { name, return_raw, skip, ..Default::default() })
+        Ok(ExportedFnParams {
+            name,
+            return_raw,
+            skip,
+            ..Default::default()
+        })
     }
 }
 
@@ -260,13 +263,8 @@ impl ExportedFn {
     }
 
     pub fn generate(self) -> proc_macro2::TokenStream {
-        let name_str = if let Some(ref name) = self.params.name {
-            name.clone()
-        } else {
-            self.name().to_string()
-        };
         let name: syn::Ident =
-            syn::Ident::new(&format!("rhai_fn_{}", name_str), self.name().span());
+            syn::Ident::new(&format!("rhai_fn_{}", self.name()), self.name().span());
         let impl_block = self.generate_impl("Token");
         let callable_block = self.generate_callable("Token");
         let input_types_block = self.generate_input_types("Token");
@@ -285,11 +283,7 @@ impl ExportedFn {
     }
 
     pub fn generate_dynamic_fn(&self) -> proc_macro2::TokenStream {
-        let name: syn::Ident = if let Some(ref name) = self.params.name {
-            syn::Ident::new(name, self.name().span())
-        } else {
-            self.name().clone()
-        };
+        let name = self.name().clone();
 
         let mut dynamic_signature = self.signature.clone();
         dynamic_signature.ident =
@@ -358,10 +352,11 @@ impl ExportedFn {
     }
 
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let name: syn::Ident = if let Some(ref name) = self.params.name {
-            syn::Ident::new(name, self.name().span())
+        let sig_name = self.name().clone();
+        let name = if let Some(ref name) = self.params.name {
+            name.clone()
         } else {
-            self.name().clone()
+            self.name().to_string()
         };
 
         let arg_count = self.arg_count();
@@ -485,11 +480,11 @@ impl ExportedFn {
         // This allows skipping the Dynamic::from wrap.
         let return_expr = if !self.params.return_raw {
             quote! {
-                Ok(Dynamic::from(#name(#(#unpack_exprs),*)))
+                Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
             }
         } else {
             quote! {
-                #name(#(#unpack_exprs),*)
+                #sig_name(#(#unpack_exprs),*)
             }
         };
 
