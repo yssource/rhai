@@ -1,6 +1,6 @@
 use rhai::module_resolvers::*;
 use rhai::plugin::*;
-use rhai::{Array, Engine, EvalAltResult, Module, RegisterFn, FLOAT};
+use rhai::{Engine, EvalAltResult, Module, RegisterFn, FLOAT};
 
 pub mod raw_fn {
     use rhai::plugin::*;

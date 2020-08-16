@@ -1,5 +1,5 @@
 use rhai::module_resolvers::*;
-use rhai::{Engine, EvalAltResult, RegisterFn, FLOAT, INT};
+use rhai::{Array, Engine, EvalAltResult, RegisterFn, FLOAT, INT};
 
 pub mod empty_module {
     use rhai::plugin::*;
@@ -178,5 +178,46 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
         )?,
         true
     );
+    Ok(())
+}
+
+mod duplicate_fn_rename {
+    use rhai::plugin::*;
+    #[export_module]
+    pub mod my_adds {
+        use rhai::{FLOAT, INT};
+
+        #[rhai_fn(name = "add_f")]
+        pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+
+        #[rhai_fn(name = "add_i")]
+        pub fn add_int(i1: INT, i2: INT) -> INT {
+            i1 + i2
+        }
+    }
+}
+
+#[test]
+fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    engine.register_fn("get_mystic_number", || 42 as FLOAT);
+    let m = rhai::exported_module!(crate::duplicate_fn_rename::my_adds);
+    let mut r = StaticModuleResolver::new();
+    r.insert("Math::Advanced".to_string(), m);
+    engine.set_module_resolver(Some(r));
+
+    let output_array = engine.eval::<Array>(
+        r#"import "Math::Advanced" as math;
+       let fx = get_mystic_number();
+       let fy = math::add_f(fx, 1.0);
+       let ix = 42;
+       let iy = math::add_i(ix, 1);
+       [fy, iy]
+       "#,
+    )?;
+    assert_eq!(&output_array[0].as_float().unwrap(), &43.0);
+    assert_eq!(&output_array[1].as_int().unwrap(), &43);
     Ok(())
 }
