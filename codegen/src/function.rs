@@ -17,6 +17,15 @@ use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 pub(crate) struct ExportedFnParams {
     pub name: Option<String>,
     pub return_raw: bool,
+    pub skip: bool,
+}
+
+impl ExportedFnParams {
+    pub fn skip() -> ExportedFnParams {
+        let mut skip = ExportedFnParams::default();
+        skip.skip = true;
+        skip
+    }
 }
 
 impl Parse for ExportedFnParams {
@@ -68,12 +77,17 @@ impl Parse for ExportedFnParams {
 
         let mut name = None;
         let mut return_raw = false;
+        let mut skip = false;
         for (ident, value) in attrs.drain() {
             match (ident.to_string().as_ref(), value) {
                 ("name", Some(s)) => name = Some(s.value()),
                 ("name", None) => return Err(syn::Error::new(ident.span(), "requires value")),
                 ("return_raw", None) => return_raw = true,
                 ("return_raw", Some(s)) => {
+                    return Err(syn::Error::new(s.span(), "extraneous value"))
+                }
+                ("skip", None) => skip = true,
+                ("skip", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
                 (attr, _) => {
@@ -85,7 +99,7 @@ impl Parse for ExportedFnParams {
             }
         }
 
-        Ok(ExportedFnParams { name, return_raw })
+        Ok(ExportedFnParams { name, return_raw, skip, ..Default::default() })
     }
 }
 
@@ -95,7 +109,7 @@ pub(crate) struct ExportedFn {
     signature: syn::Signature,
     is_public: bool,
     mut_receiver: bool,
-    params: ExportedFnParams,
+    pub params: ExportedFnParams,
 }
 
 impl Parse for ExportedFn {
