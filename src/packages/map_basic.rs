@@ -2,7 +2,7 @@
 
 use crate::any::Dynamic;
 use crate::def_package;
-use crate::engine::{make_getter, Map};
+use crate::engine::Map;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
 
@@ -10,9 +10,6 @@ use crate::stdlib::vec::Vec;
 
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     lib.combine(exported_module!(map_functions));
-    set_exported_fn!(lib, make_getter("len"), map_funcs::len);
-    set_exported_fn!(lib, "+=", map_funcs::mixin);
-    set_exported_fn!(lib, "+", map_funcs::merge);
 
     // Register map access functions
     #[cfg(not(feature = "no_index"))]
@@ -25,7 +22,11 @@ mod map_functions {
         map.contains_key(&prop)
     }
     pub fn len(map: &mut Map) -> INT {
-        map_funcs::len(map)
+        map.len() as INT
+    }
+    #[rhai_fn(name = "get$len")]
+    pub fn len_prop(map: &mut Map) -> INT {
+        len(map)
     }
     pub fn clear(map: &mut Map) {
         map.clear();
@@ -34,7 +35,20 @@ mod map_functions {
         x.remove(&name).unwrap_or_else(|| ().into())
     }
     pub fn mixin(map1: &mut Map, map2: Map) {
-        map_funcs::mixin(map1, map2);
+        map2.into_iter().for_each(|(key, value)| {
+            map1.insert(key, value);
+        });
+    }
+    #[rhai_fn(name = "+=")]
+    pub fn mixin_operator(map1: &mut Map, map2: Map) {
+        mixin(map1, map2)
+    }
+    #[rhai_fn(name = "+")]
+    pub fn merge(mut map1: Map, map2: Map) -> Map {
+        map2.into_iter().for_each(|(key, value)| {
+            map1.insert(key, value);
+        });
+        map1
     }
     pub fn fill_with(map1: &mut Map, map2: Map) {
         map2.into_iter().for_each(|(key, value)| {
@@ -42,30 +56,6 @@ mod map_functions {
                 map1.insert(key, value);
             }
         });
-    }
-}
-
-mod map_funcs {
-    use crate::engine::Map;
-    use crate::parser::INT;
-    use crate::plugin::*;
-
-    #[export_fn]
-    pub fn len(map: &mut Map) -> INT {
-        map.len() as INT
-    }
-    #[export_fn]
-    pub fn mixin(map1: &mut Map, map2: Map) {
-        map2.into_iter().for_each(|(key, value)| {
-            map1.insert(key, value);
-        });
-    }
-    #[export_fn]
-    pub fn merge(mut map1: Map, map2: Map) -> Map {
-        map2.into_iter().for_each(|(key, value)| {
-            map1.insert(key, value);
-        });
-        map1
     }
 }
 

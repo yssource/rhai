@@ -7,8 +7,13 @@ use rhai::{Engine, EvalAltResult, INT};
 mod special_array_package {
     use rhai::{Array, INT};
 
+    #[rhai_fn(name = "test")]
     pub fn len(array: &mut Array, mul: INT) -> INT {
         (array.len() as INT) * mul
+    }
+    #[rhai_fn(name = "+")]
+    pub fn funky_add(x: INT, y: INT) -> INT {
+        x / 2 + y * 2
     }
 }
 
@@ -18,7 +23,7 @@ macro_rules! gen_unary_functions {
             pub mod $arg_type {
                 use super::super::*;
 
-                #[export_fn]
+                #[export_fn(name="test")]
                 pub fn single(x: $arg_type) -> $return_type {
                     super::super::$op_fn(x)
                 }
@@ -48,9 +53,10 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 
     reg_functions!(engine += greet::single(INT, bool, char));
 
-    assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; len(a, 2)")?, 6);
+    assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; test(a, 2)")?, 6);
+    assert_eq!(engine.eval::<INT>("2 + 2")?, 5);
     assert_eq!(
-        engine.eval::<String>("let a = [1, 2, 3]; greet(len(a, 2))")?,
+        engine.eval::<String>("let a = [1, 2, 3]; greet(test(a, 2))")?,
         "6 kitties"
     );
 

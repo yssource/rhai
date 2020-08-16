@@ -11,9 +11,6 @@ use crate::plugin::*;
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};
 
-#[cfg(not(feature = "no_object"))]
-use crate::engine::make_getter;
-
 use crate::stdlib::{any::TypeId, boxed::Box};
 
 #[cfg(not(feature = "unchecked"))]
@@ -61,8 +58,9 @@ macro_rules! reg_pad {
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     lib.combine(exported_module!(array_functions));
-    set_exported_fn!(lib, "+", append);
-    set_exported_fn!(lib, "+", concat);
+
+    #[cfg(not(feature = "no_object"))]
+    lib.combine(exported_module!(object_functions));
 
     reg_functions!(lib += basic; INT, bool, char, ImmutableString, FnPtr, Array, Unit);
     reg_pad!(lib, INT, bool, char, ImmutableString, FnPtr, Array, Unit);
@@ -86,9 +84,6 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
         reg_pad!(lib, f32, f64);
     }
 
-    #[cfg(not(feature = "no_object"))]
-    set_exported_fn!(lib, make_getter("len"), array_funcs::len);
-
     // Register array iterator
     lib.set_iter(
         TypeId::of::<Array>(),
@@ -96,23 +91,22 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     );
 });
 
-#[export_fn]
-fn append(x: &mut Array, y: Array) {
-    x.extend(y);
-}
-#[export_fn]
-fn concat(mut x: Array, y: Array) -> Array {
-    x.extend(y);
-    x
-}
-
 #[export_module]
 mod array_functions {
     pub fn len(list: &mut Array) -> INT {
-        array_funcs::len(list)
+        list.len() as INT
     }
     pub fn append(x: &mut Array, y: Array) {
         x.extend(y);
+    }
+    #[rhai_fn(name = "+=")]
+    pub fn append_operator(x: &mut Array, y: Array) {
+        append(x, y)
+    }
+    #[rhai_fn(name = "+")]
+    pub fn concat(mut x: Array, y: Array) -> Array {
+        x.extend(y);
+        x
     }
     pub fn pop(list: &mut Array) -> Dynamic {
         list.pop().unwrap_or_else(|| ().into())
@@ -143,14 +137,12 @@ mod array_functions {
     }
 }
 
-mod array_funcs {
-    use crate::engine::Array;
-    use crate::parser::INT;
-    use crate::plugin::*;
-
-    #[export_fn]
+#[cfg(not(feature = "no_object"))]
+#[export_module]
+mod object_functions {
+    #[rhai_fn(name = "get$len")]
     pub fn len(list: &mut Array) -> INT {
-        list.len() as INT
+        array_functions::len(list)
     }
 }
 

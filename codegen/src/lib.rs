@@ -93,7 +93,7 @@
 //! ```
 //!
 
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::parse_macro_input;
 
 mod function;
