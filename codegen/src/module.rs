@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, parse::ParseStream};
 
-use crate::function::ExportedFn;
+use crate::function::{ExportedFn, ExportedFnParams};
 use crate::rhai_module::ExportedConst;
 
 #[cfg(no_std)]
@@ -12,6 +12,22 @@ use std::vec as new_vec;
 #[cfg(no_std)]
 use core::mem;
 
+fn inner_fn_attributes(f: &mut syn::ItemFn) -> syn::Result<ExportedFnParams> {
+    if let Some(rhai_fn_idx) = f.attrs.iter().position(|a| {
+        a.path
+            .get_ident()
+            .map(|i| i.to_string() == "rhai_fn")
+            .unwrap_or(false)
+    }) {
+        let rhai_fn_attr = f.attrs.remove(rhai_fn_idx);
+        rhai_fn_attr.parse_args()
+    } else if let syn::Visibility::Public(_) = f.vis {
+        Ok(ExportedFnParams::default())
+    } else {
+        Ok(ExportedFnParams::skip())
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Module {
     mod_all: Option<syn::ItemMod>,
@@ -21,25 +37,27 @@ pub(crate) struct Module {
 
 impl Parse for Module {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mod_all: syn::ItemMod = input.parse()?;
+        let mut mod_all: syn::ItemMod = input.parse()?;
         let fns: Vec<_>;
         let consts: Vec<_>;
-        if let Some((_, ref content)) = mod_all.content {
+        if let Some((_, ref mut content)) = mod_all.content {
             fns = content
-                .iter()
+                .iter_mut()
                 .filter_map(|item| match item {
-                    syn::Item::Fn(f) => {
-                        if let syn::Visibility::Public(_) = f.vis {
-                            Some(f)
-                        } else {
-                            None
-                        }
-                    }
+                    syn::Item::Fn(f) => Some(f),
                     _ => None,
                 })
-                .try_fold(Vec::new(), |mut vec, itemfn| {
+                .try_fold(Vec::new(), |mut vec, mut itemfn| {
+                    let params = match inner_fn_attributes(&mut itemfn) {
+                        Ok(p) => p,
+                        Err(e) => return Err(e),
+                    };
                     syn::parse2::<ExportedFn>(itemfn.to_token_stream())
-                        .map(|f| vec.push(f))
+                        .map(|mut f| {
+                            f.params = params;
+                            f
+                        })
+                        .map(|f| if !f.params.skip { vec.push(f) })
                         .map(|_| vec)
                 })?;
             consts = content
@@ -207,6 +225,22 @@ mod module_tests {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 fn get_mystic_number() -> INT {
+                    42
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert!(item_mod.fns.is_empty());
+        assert!(item_mod.consts.is_empty());
+    }
+
+    #[test]
+    fn one_skipped_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                #[rhai_fn(skip)]
+                pub fn get_mystic_number() -> INT {
                     42
                 }
             }
@@ -536,6 +570,36 @@ mod generate_tests {
         let expected_tokens = quote! {
             pub mod one_fn {
                 fn get_mystic_number() -> INT {
+                    42
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    m
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn one_skipped_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                #[rhai_fn(skip)]
+                pub fn get_mystic_number() -> INT {
+                    42
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_fn {
+                pub fn get_mystic_number() -> INT {
                     42
                 }
                 #[allow(unused_imports)]
