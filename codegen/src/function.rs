@@ -13,15 +13,9 @@ use std::collections::HashMap;
 use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
-use super::rhai_module::get_register_name;
-
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
     pub name: Option<String>,
-    pub get: Option<String>,
-    pub set: Option<String>,
-    pub index_get: bool,
-    pub index_set: bool,
     pub return_raw: bool,
     pub skip: bool,
 }
@@ -32,6 +26,16 @@ impl ExportedFnParams {
         skip.skip = true;
         skip
     }
+}
+
+pub const FN_IDX_GET: &str = "index$get$";
+pub const FN_IDX_SET: &str = "index$set$";
+
+pub fn make_getter(id: &str) -> String {
+    format!("get${}", id)
+}
+pub fn make_setter(id: &str) -> String {
+    format!("set${}", id)
 }
 
 impl Parse for ExportedFnParams {
@@ -82,22 +86,18 @@ impl Parse for ExportedFnParams {
         }
 
         let mut name = None;
-        let mut get = None;
-        let mut set = None;
-        let mut index_get = false;
-        let mut index_set = false;
         let mut return_raw = false;
         let mut skip = false;
         for (ident, value) in attrs.drain() {
             match (ident.to_string().as_ref(), value) {
                 ("name", Some(s)) => name = Some(s.value()),
-                ("get", Some(s)) => get = Some(s.value()),
-                ("set", Some(s)) => set = Some(s.value()),
+                ("get", Some(s)) => name = Some(make_getter(&s.value())),
+                ("set", Some(s)) => name = Some(make_setter(&s.value())),
                 ("get", None) | ("set", None) | ("name", None) => {
                     return Err(syn::Error::new(ident.span(), "requires value"))
                 }
-                ("index_get", None) => index_get = true,
-                ("index_set", None) => index_get = true,
+                ("index_get", None) => name = Some(FN_IDX_GET.to_string()),
+                ("index_set", None) => name = Some(FN_IDX_SET.to_string()),
                 ("return_raw", None) => return_raw = true,
                 ("index_get", Some(s)) | ("index_set", Some(s)) | ("return_raw", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
@@ -115,10 +115,6 @@ impl Parse for ExportedFnParams {
 
         Ok(ExportedFnParams {
             name,
-            get,
-            set,
-            index_get,
-            index_set,
             return_raw,
             skip,
             ..Default::default()
@@ -373,7 +369,11 @@ impl ExportedFn {
 
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let sig_name = self.name().clone();
-        let name = get_register_name(self);
+        let name = self
+            .params
+            .name
+            .clone()
+            .unwrap_or_else(|| self.name().to_string());
 
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();

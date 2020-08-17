@@ -4,32 +4,6 @@ use crate::function::ExportedFn;
 
 pub(crate) type ExportedConst = (String, syn::Expr);
 
-pub(crate) fn get_register_name(function: &ExportedFn) -> String {
-    pub const FN_IDX_GET: &str = "index$get$";
-    pub const FN_IDX_SET: &str = "index$set$";
-
-    pub fn make_getter(id: &str) -> String {
-        format!("get${}", id)
-    }
-    pub fn make_setter(id: &str) -> String {
-        format!("set${}", id)
-    }
-
-    if let Some(ref name) = function.params.name {
-        name.clone()
-    } else if let Some(ref name) = function.params.get {
-        make_getter(name).clone()
-    } else if let Some(ref name) = function.params.set {
-        make_setter(name).clone()
-    } else if function.params.index_get {
-        FN_IDX_GET.to_string()
-    } else if function.params.index_set {
-        FN_IDX_SET.to_string()
-    } else {
-        function.name().to_string()
-    }
-}
-
 pub(crate) fn generate_body(
     fns: &Vec<ExportedFn>,
     consts: &Vec<ExportedConst>,
@@ -55,7 +29,11 @@ pub(crate) fn generate_body(
             &format!("{}_token", function.name().to_string()),
             function.name().span(),
         );
-        let reg_name = get_register_name(function);
+        let reg_name = function
+            .params
+            .name
+            .clone()
+            .unwrap_or_else(|| function.name().to_string());
         let fn_literal = syn::LitStr::new(&reg_name, proc_macro2::Span::call_site());
         let fn_input_types: Vec<syn::Expr> = function
             .arg_list()
