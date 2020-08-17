@@ -23,12 +23,12 @@ macro_rules! gen_concat_functions {
 
                 #[export_fn]
                 pub fn append_func(x: ImmutableString, y: $arg_type) -> String {
-                    super::super::append(x, y)
+                    super::super::add_append(x, y)
                 }
 
                 #[export_fn]
                 pub fn prepend_func(x: $arg_type, y: ImmutableString) -> String {
-                    super::super::prepend(x, y)
+                    super::super::add_prepend(x, y)
                 }
             }
         )* }
@@ -120,10 +120,10 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     );
 });
 
-fn prepend<T: Display>(x: T, y: ImmutableString) -> String {
+fn add_prepend<T: Display>(x: T, y: ImmutableString) -> String {
     format!("{}{}", x, y)
 }
-fn append<T: Display>(x: ImmutableString, y: T) -> String {
+fn add_append<T: Display>(x: ImmutableString, y: T) -> String {
     format!("{}{}", x, y)
 }
 
@@ -144,18 +144,18 @@ gen_concat_functions!(float => f32, f64);
 #[export_module]
 mod string_functions {
     #[rhai_fn(name = "+")]
-    pub fn append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
+    pub fn add_append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
         s
     }
     #[rhai_fn(name = "+")]
-    pub fn prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
+    pub fn add_prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
         s
     }
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(name = "+=")]
     pub fn append_char(s: &mut ImmutableString, ch: char) {
         *s += ch;
     }
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(name = "+=")]
     pub fn append_string(s: &mut ImmutableString, add: ImmutableString) {
         *s += &add;
     }
