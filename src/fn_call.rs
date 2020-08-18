@@ -521,13 +521,13 @@ impl Engine {
 
                 let result = if _is_method {
                     // Method call of script function - map first argument to `this`
-                    let (first, rest) = args.split_at_mut(1);
+                    let (first, rest) = args.split_first_mut().unwrap();
                     self.call_script_fn(
                         scope,
                         mods,
                         state,
                         lib,
-                        &mut Some(first[0]),
+                        &mut Some(*first),
                         fn_name,
                         func,
                         rest,
