@@ -7,6 +7,10 @@ use rhai::{Engine, EvalAltResult, INT};
 mod special_array_package {
     use rhai::{Array, INT};
 
+    #[rhai_fn(get = "foo", return_raw)]
+    pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {
+        Ok(array[0].clone())
+    }
     #[rhai_fn(name = "test")]
     pub fn len(array: &mut Array, mul: INT) -> INT {
         (array.len() as INT) * mul
@@ -53,6 +57,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 
     reg_functions!(engine += greet::single(INT, bool, char));
 
+    assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; test(a, 2)")?, 6);
     assert_eq!(engine.eval::<INT>("2 + 2")?, 5);
     assert_eq!(
