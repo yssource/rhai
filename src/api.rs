@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, Imports, State};
-use crate::error::ParseError;
+use crate::error::{ParseError, ParseErrorType};
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::module::{FuncReturn, Module};
 use crate::optimize::OptimizationLevel;
@@ -895,24 +895,39 @@ impl Engine {
 
     /// Parse a JSON string into a map.
     ///
+    /// The JSON string must be an object hash.  It cannot be a simple JavaScript primitive.
+    ///
     /// Set `has_null` to `true` in order to map `null` values to `()`.
     /// Setting it to `false` will cause a _variable not found_ error during parsing.
+    ///
+    /// # JSON With Sub-Objects
+    ///
+    /// This method assumes no sub-objects in the JSON string.  That is because the syntax
+    /// of a JSON sub-object (or object hash), `{ .. }`, is different from Rhai's syntax, `#{ .. }`.
+    /// Parsing a JSON string with sub-objects will cause a syntax error.
+    ///
+    /// If it is certain that the character `{` never appears in any text string within the JSON object,
+    /// then globally replace `{` with `#{` before calling this method.
     ///
     /// # Example
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use rhai::{Engine, Map};
     ///
     /// let engine = Engine::new();
     ///
-    /// let map = engine.parse_json(r#"{"a":123, "b":42, "c":false, "d":null}"#, true)?;
+    /// let map = engine.parse_json(
+    ///     r#"{"a":123, "b":42, "c":{"x":false, "y":true}, "d":null}"#
+    ///         .replace("{", "#{").as_str(), true)?;
     ///
     /// assert_eq!(map.len(), 4);
-    /// assert_eq!(map.get("a").cloned().unwrap().cast::<i64>(), 123);
-    /// assert_eq!(map.get("b").cloned().unwrap().cast::<i64>(), 42);
-    /// assert_eq!(map.get("c").cloned().unwrap().cast::<bool>(), false);
-    /// assert_eq!(map.get("d").cloned().unwrap().cast::<()>(), ());
+    /// assert_eq!(map["a"].as_int().unwrap(), 123);
+    /// assert_eq!(map["b"].as_int().unwrap(), 42);
+    /// assert!(map["d"].is::<()>());
+    ///
+    /// let c = map["c"].read_lock::<Map>().unwrap();
+    /// assert_eq!(c["x"].as_bool().unwrap(), false);
     /// # Ok(())
     /// # }
     /// ```
@@ -921,7 +936,20 @@ impl Engine {
         let mut scope = Scope::new();
 
         // Trims the JSON string and add a '#' in front
-        let scripts = ["#", json.trim()];
+        let json_text = json.trim_start();
+        let scripts = if json_text.starts_with(Token::MapStart.syntax().as_ref()) {
+            [json_text, ""]
+        } else if json_text.starts_with(Token::LeftBrace.syntax().as_ref()) {
+            ["#", json_text]
+        } else {
+            return Err(ParseErrorType::MissingToken(
+                Token::LeftBrace.syntax().to_string(),
+                "to start a JSON object hash".to_string(),
+            )
+            .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
+            .into());
+        };
+
         let stream = lex(
             &scripts,
             if has_null {
