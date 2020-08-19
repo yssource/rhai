@@ -261,7 +261,9 @@ impl CallableFunction {
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Pure(_) => true,
-            Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => false,
+            Self::Method(_) | Self::Iterator(_) => false,
+
+            Self::Plugin(p) => !p.is_method_call(),
 
             #[cfg(not(feature = "no_function"))]
             Self::Script(_) => false,
@@ -271,7 +273,9 @@ impl CallableFunction {
     pub fn is_method(&self) -> bool {
         match self {
             Self::Method(_) => true,
-            Self::Pure(_) | Self::Iterator(_) | Self::Plugin(_) => false,
+            Self::Pure(_) | Self::Iterator(_) => false,
+
+            Self::Plugin(p) => p.is_method_call(),
 
             #[cfg(not(feature = "no_function"))]
             Self::Script(_) => false,
