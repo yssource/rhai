@@ -57,7 +57,9 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 
     reg_functions!(engine += greet::single(INT, bool, char));
 
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
+
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; test(a, 2)")?, 6);
     assert_eq!(engine.eval::<INT>("2 + 2")?, 5);
     assert_eq!(
