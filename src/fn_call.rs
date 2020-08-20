@@ -521,13 +521,13 @@ impl Engine {
 
                 let result = if _is_method {
                     // Method call of script function - map first argument to `this`
-                    let (first, rest) = args.split_at_mut(1);
+                    let (first, rest) = args.split_first_mut().unwrap();
                     self.call_script_fn(
                         scope,
                         mods,
                         state,
                         lib,
-                        &mut Some(first[0]),
+                        &mut Some(*first),
                         fn_name,
                         func,
                         rest,
@@ -974,6 +974,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let modules = modules.as_ref().unwrap();
         let mut arg_values: StaticVec<_>;
+        let mut first_arg_value = None;
         let mut args: StaticVec<_>;
 
         if args_expr.is_empty() {
@@ -988,17 +989,28 @@ impl Engine {
                 Expr::Variable(x) if x.1.is_none() => {
                     arg_values = args_expr
                         .iter()
-                        .skip(1)
-                        .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
+                        .enumerate()
+                        .map(|(i, expr)| {
+                            // Skip the first argument
+                            if i == 0 {
+                                Ok(Default::default())
+                            } else {
+                                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                            }
+                        })
                         .collect::<Result<_, _>>()?;
 
+                    // Get target reference to first argument
                     let (target, _, _, pos) =
                         search_scope_only(scope, state, this_ptr, args_expr.get(0).unwrap())?;
 
                     self.inc_operations(state)
                         .map_err(|err| err.new_position(pos))?;
 
-                    args = once(target).chain(arg_values.iter_mut()).collect();
+                    let (first, rest) = arg_values.split_first_mut().unwrap();
+                    first_arg_value = Some(first);
+
+                    args = once(target).chain(rest.iter_mut()).collect();
                 }
                 // func(..., ...) or func(mod::x, ...)
                 _ => {
@@ -1037,6 +1049,13 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
+                // Clone first argument
+                if let Some(first) = first_arg_value {
+                    let first_val = args[0].clone();
+                    args[0] = first;
+                    *args[0] = first_val;
+                }
+
                 let args = args.as_mut();
                 let func = f.get_fn_def();
 
@@ -1055,7 +1074,19 @@ impl Engine {
 
                 self.call_script_fn(scope, mods, state, lib, &mut None, name, func, args, level)
             }
-            Some(f) => f.get_native_fn()(self, lib, args.as_mut()),
+            Some(f) if f.is_native() => {
+                if !f.is_method() {
+                    // Clone first argument
+                    if let Some(first) = first_arg_value {
+                        let first_val = args[0].clone();
+                        args[0] = first;
+                        *args[0] = first_val;
+                    }
+                }
+
+                f.get_native_fn()(self, lib, args.as_mut())
+            }
+            Some(_) => unreachable!(),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),
             None => EvalAltResult::ErrorFunctionNotFound(
                 format!(
