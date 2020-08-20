@@ -113,6 +113,14 @@ impl Parse for ExportedFnParams {
             }
         }
 
+        // Check validity of name, if present.
+        if name.as_ref().filter(|n| n.contains('.')).is_some() {
+            return Err(syn::Error::new(
+                span,
+                "Rhai function names may not contain dot"
+            ))
+        }
+
         Ok(ExportedFnParams {
             name,
             return_raw,
