@@ -27,13 +27,11 @@ use instant::Instant;
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     // Register date/time functions
     lib.combine(exported_module!(time_functions));
-
-    #[cfg(not(feature = "no_object"))]
-    lib.set_getter_fn("elapsed", time_functions::elapsed);
 });
 
 #[export_module]
 mod time_functions {
+    #[inline(always)]
     pub fn timestamp() -> Instant {
         Instant::now()
     }
@@ -59,6 +57,12 @@ mod time_functions {
 
             Ok((seconds as INT).into())
         }
+    }
+
+    #[rhai_fn(get = "elapsed", return_raw)]
+    #[inline(always)]
+    pub fn elapsed_prop(timestamp: &mut Instant) -> Result<Dynamic, Box<EvalAltResult>> {
+        elapsed(timestamp)
     }
 
     #[rhai_fn(return_raw, name = "-")]
@@ -104,26 +108,32 @@ mod time_functions {
     }
 
     #[rhai_fn(name = "==")]
+    #[inline(always)]
     pub fn eq(x: Instant, y: Instant) -> bool {
         x == y
     }
     #[rhai_fn(name = "!=")]
+    #[inline(always)]
     pub fn ne(x: Instant, y: Instant) -> bool {
         x != y
     }
     #[rhai_fn(name = "<")]
+    #[inline(always)]
     pub fn lt(x: Instant, y: Instant) -> bool {
         x < y
     }
     #[rhai_fn(name = "<=")]
+    #[inline(always)]
     pub fn lte(x: Instant, y: Instant) -> bool {
         x <= y
     }
     #[rhai_fn(name = ">")]
+    #[inline(always)]
     pub fn gt(x: Instant, y: Instant) -> bool {
         x > y
     }
     #[rhai_fn(name = ">=")]
+    #[inline(always)]
     pub fn gte(x: Instant, y: Instant) -> bool {
         x >= y
     }

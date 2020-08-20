@@ -25,11 +25,13 @@ macro_rules! gen_array_functions {
                 use super::super::*;
 
                 #[export_fn]
+                #[inline(always)]
                 pub fn push_func(list: &mut Array, item: $arg_type) {
                     super::super::push(list, item);
                 }
 
                 #[export_fn]
+                #[inline(always)]
                 pub fn insert_func(list: &mut Array, len: INT, item: $arg_type) {
                     super::super::insert(list, len, item);
                 }
@@ -58,9 +60,6 @@ macro_rules! reg_pad {
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     lib.combine(exported_module!(array_functions));
-
-    #[cfg(not(feature = "no_object"))]
-    lib.combine(exported_module!(object_functions));
 
     reg_functions!(lib += basic; INT, bool, char, ImmutableString, FnPtr, Array, Unit);
     reg_pad!(lib, INT, bool, char, ImmutableString, FnPtr, Array, Unit);
@@ -93,21 +92,31 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 
 #[export_module]
 mod array_functions {
+    #[inline(always)]
     pub fn len(list: &mut Array) -> INT {
         list.len() as INT
     }
+    #[rhai_fn(get = "len")]
+    #[inline(always)]
+    pub fn len_prop(list: &mut Array) -> INT {
+        len(list)
+    }
+    #[inline(always)]
     pub fn append(x: &mut Array, y: Array) {
         x.extend(y);
     }
     #[rhai_fn(name = "+=")]
+    #[inline(always)]
     pub fn append_operator(x: &mut Array, y: Array) {
         append(x, y)
     }
     #[rhai_fn(name = "+")]
+    #[inline]
     pub fn concat(mut x: Array, y: Array) -> Array {
         x.extend(y);
         x
     }
+    #[inline]
     pub fn pop(list: &mut Array) -> Dynamic {
         list.pop().unwrap_or_else(|| ().into())
     }
@@ -125,6 +134,7 @@ mod array_functions {
             list.remove(len as usize)
         }
     }
+    #[inline(always)]
     pub fn clear(list: &mut Array) {
         list.clear();
     }
@@ -137,16 +147,8 @@ mod array_functions {
     }
 }
 
-#[cfg(not(feature = "no_object"))]
-#[export_module]
-mod object_functions {
-    #[rhai_fn(get = "len")]
-    pub fn len(list: &mut Array) -> INT {
-        array_functions::len(list)
-    }
-}
-
 // Register array utility functions
+#[inline(always)]
 fn push<T: Variant + Clone>(list: &mut Array, item: T) {
     list.push(Dynamic::from(item));
 }
