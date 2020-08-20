@@ -18,6 +18,7 @@ pub(crate) struct ExportedFnParams {
     pub name: Option<String>,
     pub return_raw: bool,
     pub skip: bool,
+    pub span: Option<proc_macro2::Span>,
 }
 
 impl ExportedFnParams {
@@ -47,6 +48,7 @@ impl Parse for ExportedFnParams {
         let arg_list = args.call(
             syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty,
         )?;
+        let span = arg_list.span();
 
         let mut attrs: HashMap<proc_macro2::Ident, Option<syn::LitStr>> = HashMap::new();
         for arg in arg_list {
@@ -113,10 +115,19 @@ impl Parse for ExportedFnParams {
             }
         }
 
+        // Check validity of name, if present.
+        if name.as_ref().filter(|n| n.contains('.')).is_some() {
+            return Err(syn::Error::new(
+                span,
+                "Rhai function names may not contain dot"
+            ))
+        }
+
         Ok(ExportedFnParams {
             name,
             return_raw,
             skip,
+            span: Some(span),
             ..Default::default()
         })
     }
