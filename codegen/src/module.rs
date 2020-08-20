@@ -12,6 +12,8 @@ use std::vec as new_vec;
 #[cfg(no_std)]
 use core::mem;
 
+use std::collections::HashMap;
+
 fn inner_fn_attributes(f: &mut syn::ItemFn) -> syn::Result<ExportedFnParams> {
     if let Some(rhai_fn_idx) = f.attrs.iter().position(|a| {
         a.path
@@ -26,6 +28,48 @@ fn inner_fn_attributes(f: &mut syn::ItemFn) -> syn::Result<ExportedFnParams> {
     } else {
         Ok(ExportedFnParams::skip())
     }
+}
+
+fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> {
+    let mut renames = HashMap::<String, proc_macro2::Span>::new();
+    let mut names = HashMap::<String, proc_macro2::Span>::new();
+    for itemfn in fns.iter() {
+        if let Some(ref name) = itemfn.params.name {
+            let current_span = itemfn.params.span.as_ref().unwrap();
+            let key = itemfn.arg_list().fold(name.clone(), |mut argstr, fnarg| {
+                let type_string: String = match fnarg {
+                    syn::FnArg::Receiver(_) => unimplemented!("receiver rhai_fns not implemented"),
+                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) =>
+                        ty.as_ref().to_token_stream().to_string(),
+                };
+                argstr.push('.');
+                argstr.extend(type_string.chars());
+                argstr
+            });
+            if let Some(other_span) = renames.insert(key,
+                                                     current_span.clone()) {
+                let mut err = syn::Error::new(current_span.clone(),
+                                              format!("duplicate Rhai signature for '{}'", &name));
+                err.combine(syn::Error::new(other_span,
+                                            format!("duplicated function renamed '{}'", &name)));
+                return Err(err);
+            }
+        } else {
+            let ident = itemfn.name();
+            names.insert(ident.to_string(), ident.span());
+        }
+    }
+    for (new_name, attr_span) in renames.drain() {
+        let new_name = new_name.split('.').next().unwrap();
+        if let Some(fn_span) = names.get(new_name) {
+            let mut err = syn::Error::new(attr_span,
+                                          format!("duplicate Rhai signature for '{}'", &new_name));
+            err.combine(syn::Error::new(fn_span.clone(),
+                                        format!("duplicated function '{}'", &new_name)));
+            return Err(err);
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -92,7 +136,15 @@ impl Parse for Module {
 
 impl Module {
     pub fn generate(self) -> proc_macro2::TokenStream {
+        // Check for collisions if the "name" attribute was used on inner functions.
+        if let Err(e) = check_rename_collisions(&self.fns) {
+            return e.to_compile_error();
+        }
+
+        // Perform the generation of new module items.
         let mod_gen = crate::rhai_module::generate_body(&self.fns, &self.consts);
+
+        // Rebuild the structure of the module, with the new content added.
         let Module { mod_all, .. } = self;
         let mut mod_all = mod_all.unwrap();
         let mod_name = mod_all.ident.clone();

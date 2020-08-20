@@ -187,12 +187,12 @@ mod duplicate_fn_rename {
     pub mod my_adds {
         use rhai::{FLOAT, INT};
 
-        #[rhai_fn(name = "add_f")]
+        #[rhai_fn(name = "add")]
         pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
             f1 + f2
         }
 
-        #[rhai_fn(name = "add_i")]
+        #[rhai_fn(name = "add")]
         pub fn add_int(i1: INT, i2: INT) -> INT {
             i1 + i2
         }
@@ -211,9 +211,9 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
     let output_array = engine.eval::<Array>(
         r#"import "Math::Advanced" as math;
        let fx = get_mystic_number();
-       let fy = math::add_f(fx, 1.0);
+       let fy = math::add(fx, 1.0);
        let ix = 42;
-       let iy = math::add_i(ix, 1);
+       let iy = math::add(ix, 1);
        [fy, iy]
        "#,
     )?;
