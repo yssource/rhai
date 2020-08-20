@@ -22,11 +22,13 @@ macro_rules! gen_concat_functions {
                 use super::super::*;
 
                 #[export_fn]
+                #[inline(always)]
                 pub fn append_func(x: &mut ImmutableString, y: $arg_type) -> String {
                     super::super::add_append(x, y)
                 }
 
                 #[export_fn]
+                #[inline(always)]
                 pub fn prepend_func(x: &mut $arg_type, y: ImmutableString) -> String {
                     super::super::add_prepend(x, y)
                 }
@@ -59,9 +61,6 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
     #[cfg(not(feature = "no_index"))]
     lib.combine(exported_module!(index_functions));
-
-    #[cfg(not(feature = "no_object"))]
-    lib.combine(exported_module!(object_functions));
 
     lib.combine(exported_module!(string_functions));
 
@@ -120,9 +119,11 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     );
 });
 
+#[inline]
 fn add_prepend<T: Display>(x: &mut T, y: ImmutableString) -> String {
     format!("{}{}", x, y)
 }
+#[inline]
 fn add_append<T: Display>(x: &mut ImmutableString, y: T) -> String {
     format!("{}{}", x, y)
 }
@@ -144,26 +145,38 @@ gen_concat_functions!(float => f32, f64);
 #[export_module]
 mod string_functions {
     #[rhai_fn(name = "+")]
+    #[inline(always)]
     pub fn add_append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
         s
     }
     #[rhai_fn(name = "+")]
+    #[inline(always)]
     pub fn add_prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
         s
     }
     #[rhai_fn(name = "+=")]
+    #[inline(always)]
     pub fn append_char(s: &mut ImmutableString, ch: char) {
         *s += ch;
     }
     #[rhai_fn(name = "+=")]
+    #[inline(always)]
     pub fn append_string(s: &mut ImmutableString, add: ImmutableString) {
         *s += &add;
     }
 
+    #[inline(always)]
     pub fn len(s: &mut ImmutableString) -> INT {
         s.chars().count() as INT
     }
 
+    #[rhai_fn(get = "len")]
+    #[inline(always)]
+    pub fn len_prop(s: &mut ImmutableString) -> INT {
+        len(s)
+    }
+
+    #[inline(always)]
     pub fn clear(s: &mut ImmutableString) {
         s.make_mut().clear();
     }
@@ -186,10 +199,12 @@ mod string_functions {
     }
 
     #[rhai_fn(name = "contains")]
+    #[inline(always)]
     pub fn contains_char(s: &mut ImmutableString, ch: char) -> bool {
         s.contains(ch)
     }
     #[rhai_fn(name = "contains")]
+    #[inline(always)]
     pub fn contains_string(s: &mut ImmutableString, find: ImmutableString) -> bool {
         s.contains(find.as_str())
     }
@@ -270,6 +285,7 @@ mod string_functions {
             .into()
     }
     #[rhai_fn(name = "sub_string")]
+    #[inline(always)]
     pub fn sub_string_starting_from(s: ImmutableString, start: INT) -> ImmutableString {
         let len = s.len() as INT;
         sub_string(s, start, len)
@@ -302,23 +318,28 @@ mod string_functions {
         copy.extend(chars.iter().skip(offset).take(len));
     }
     #[rhai_fn(name = "crop")]
+    #[inline(always)]
     pub fn crop_string_starting_from(s: &mut ImmutableString, start: INT) {
         crop_string(s, start, s.len() as INT);
     }
 
     #[rhai_fn(name = "replace")]
+    #[inline(always)]
     pub fn replace_string(s: &mut ImmutableString, find: ImmutableString, sub: ImmutableString) {
         *s = s.replace(find.as_str(), sub.as_str()).into();
     }
     #[rhai_fn(name = "replace")]
+    #[inline(always)]
     pub fn replace_string_with_char(s: &mut ImmutableString, find: ImmutableString, sub: char) {
         *s = s.replace(find.as_str(), &sub.to_string()).into();
     }
     #[rhai_fn(name = "replace")]
+    #[inline(always)]
     pub fn replace_char_with_string(s: &mut ImmutableString, find: char, sub: ImmutableString) {
         *s = s.replace(&find.to_string(), sub.as_str()).into();
     }
     #[rhai_fn(name = "replace")]
+    #[inline(always)]
     pub fn replace_char(s: &mut ImmutableString, find: char, sub: char) {
         *s = s.replace(&find.to_string(), &sub.to_string()).into();
     }
@@ -330,20 +351,13 @@ mod index_functions {
     use crate::engine::Array;
 
     #[rhai_fn(name = "+")]
+    #[inline]
     pub fn append(x: &mut ImmutableString, y: Array) -> String {
         format!("{}{:?}", x, y)
     }
     #[rhai_fn(name = "+")]
+    #[inline]
     pub fn prepend(x: &mut Array, y: ImmutableString) -> String {
         format!("{:?}{}", x, y)
-    }
-}
-
-#[cfg(not(feature = "no_object"))]
-#[export_module]
-mod object_functions {
-    #[rhai_fn(get = "len")]
-    pub fn len(s: &mut ImmutableString) -> INT {
-        string_functions::len(s)
     }
 }

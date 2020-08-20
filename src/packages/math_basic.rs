@@ -8,9 +8,6 @@ use crate::parser::FLOAT;
 #[cfg(not(feature = "no_float"))]
 use crate::{result::EvalAltResult, token::Position};
 
-#[cfg(not(feature = "no_object"))]
-use crate::engine::make_getter;
-
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
@@ -30,19 +27,6 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     {
         // Floating point functions
         lib.combine(exported_module!(float_functions));
-
-        // Floating point properties
-        #[cfg(not(feature = "no_object"))]
-        {
-            set_exported_fn!(lib, make_getter("floor"), float_funcs::floor);
-            set_exported_fn!(lib, make_getter("ceiling"), float_funcs::ceiling);
-            set_exported_fn!(lib, make_getter("round"), float_funcs::round);
-            set_exported_fn!(lib, make_getter("int"), float_funcs::int);
-            set_exported_fn!(lib, make_getter("fraction"), float_funcs::fraction);
-            set_exported_fn!(lib, make_getter("is_nan"), float_funcs::is_nan);
-            set_exported_fn!(lib, make_getter("is_finite"), float_funcs::is_finite);
-            set_exported_fn!(lib, make_getter("is_infinite"), float_funcs::is_infinite);
-        }
 
         // Trig functions
         lib.combine(exported_module!(trig_functions));
@@ -125,39 +109,51 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 mod trig_functions {
     use crate::parser::FLOAT;
 
+    #[inline(always)]
     pub fn sin(x: FLOAT) -> FLOAT {
         x.to_radians().sin()
     }
+    #[inline(always)]
     pub fn cos(x: FLOAT) -> FLOAT {
         x.to_radians().cos()
     }
+    #[inline(always)]
     pub fn tan(x: FLOAT) -> FLOAT {
         x.to_radians().tan()
     }
+    #[inline(always)]
     pub fn sinh(x: FLOAT) -> FLOAT {
         x.to_radians().sinh()
     }
+    #[inline(always)]
     pub fn cosh(x: FLOAT) -> FLOAT {
         x.to_radians().cosh()
     }
+    #[inline(always)]
     pub fn tanh(x: FLOAT) -> FLOAT {
         x.to_radians().tanh()
     }
+    #[inline(always)]
     pub fn asin(x: FLOAT) -> FLOAT {
         x.asin().to_degrees()
     }
+    #[inline(always)]
     pub fn acos(x: FLOAT) -> FLOAT {
         x.acos().to_degrees()
     }
+    #[inline(always)]
     pub fn atan(x: FLOAT) -> FLOAT {
         x.atan().to_degrees()
     }
+    #[inline(always)]
     pub fn asinh(x: FLOAT) -> FLOAT {
         x.asinh().to_degrees()
     }
+    #[inline(always)]
     pub fn acosh(x: FLOAT) -> FLOAT {
         x.acosh().to_degrees()
     }
+    #[inline(always)]
     pub fn atanh(x: FLOAT) -> FLOAT {
         x.atanh().to_degrees()
     }
@@ -168,84 +164,96 @@ mod trig_functions {
 mod float_functions {
     use crate::parser::FLOAT;
 
+    #[inline(always)]
     pub fn sqrt(x: FLOAT) -> FLOAT {
         x.sqrt()
     }
+    #[inline(always)]
     pub fn exp(x: FLOAT) -> FLOAT {
         x.exp()
     }
+    #[inline(always)]
     pub fn ln(x: FLOAT) -> FLOAT {
         x.ln()
     }
+    #[inline(always)]
     pub fn log(x: FLOAT, base: FLOAT) -> FLOAT {
         x.log(base)
     }
+    #[inline(always)]
     pub fn log10(x: FLOAT) -> FLOAT {
         x.log10()
     }
-    pub fn floor(x: FLOAT) -> FLOAT {
-        float_funcs::floor(x)
-    }
-    pub fn ceiling(x: FLOAT) -> FLOAT {
-        float_funcs::ceiling(x)
-    }
-    pub fn round(x: FLOAT) -> FLOAT {
-        float_funcs::round(x)
-    }
-    pub fn int(x: FLOAT) -> FLOAT {
-        float_funcs::int(x)
-    }
-    pub fn fraction(x: FLOAT) -> FLOAT {
-        float_funcs::fraction(x)
-    }
-    pub fn is_nan(x: FLOAT) -> bool {
-        float_funcs::is_nan(x)
-    }
-    pub fn is_finite(x: FLOAT) -> bool {
-        float_funcs::is_finite(x)
-    }
-    pub fn is_infinite(x: FLOAT) -> bool {
-        float_funcs::is_infinite(x)
-    }
-}
-
-#[cfg(not(feature = "no_float"))]
-mod float_funcs {
-    use crate::parser::FLOAT;
-    use crate::plugin::*;
-    #[cfg(feature = "no_std")]
-    use num_traits::float::Float;
-
-    #[export_fn]
+    #[inline(always)]
     pub fn floor(x: FLOAT) -> FLOAT {
         x.floor()
     }
-    #[export_fn]
+    #[rhai_fn(get = "floor")]
+    #[inline(always)]
+    pub fn floor_prop(x: FLOAT) -> FLOAT {
+        floor(x)
+    }
+    #[inline(always)]
     pub fn ceiling(x: FLOAT) -> FLOAT {
         x.ceil()
     }
-    #[export_fn]
+    #[rhai_fn(get = "ceiling")]
+    #[inline(always)]
+    pub fn ceiling_prop(x: FLOAT) -> FLOAT {
+        ceiling(x)
+    }
+    #[inline(always)]
     pub fn round(x: FLOAT) -> FLOAT {
         x.ceil()
     }
-    #[export_fn]
+    #[rhai_fn(get = "round")]
+    #[inline(always)]
+    pub fn round_prop(x: FLOAT) -> FLOAT {
+        ceiling(x)
+    }
+    #[inline(always)]
     pub fn int(x: FLOAT) -> FLOAT {
         x.trunc()
     }
-    #[export_fn]
+    #[rhai_fn(get = "int")]
+    #[inline(always)]
+    pub fn int_prop(x: FLOAT) -> FLOAT {
+        int(x)
+    }
+    #[inline(always)]
     pub fn fraction(x: FLOAT) -> FLOAT {
         x.fract()
     }
-    #[export_fn]
+    #[rhai_fn(get = "fraction")]
+    #[inline(always)]
+    pub fn fraction_prop(x: FLOAT) -> FLOAT {
+        fraction(x)
+    }
+    #[inline(always)]
     pub fn is_nan(x: FLOAT) -> bool {
         x.is_nan()
     }
-    #[export_fn]
+    #[rhai_fn(get = "is_nan")]
+    #[inline(always)]
+    pub fn is_nan_prop(x: FLOAT) -> bool {
+        is_nan(x)
+    }
+    #[inline(always)]
     pub fn is_finite(x: FLOAT) -> bool {
         x.is_finite()
     }
-    #[export_fn]
+    #[rhai_fn(get = "is_finite")]
+    #[inline(always)]
+    pub fn is_finite_prop(x: FLOAT) -> bool {
+        is_finite(x)
+    }
+    #[inline(always)]
     pub fn is_infinite(x: FLOAT) -> bool {
         x.is_infinite()
+    }
+    #[rhai_fn(get = "is_infinite")]
+    #[inline(always)]
+    pub fn is_infinite_prop(x: FLOAT) -> bool {
+        is_infinite(x)
     }
 }

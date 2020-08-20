@@ -27,6 +27,7 @@ macro_rules! gen_functions {
                 use super::super::*;
 
                 #[export_fn]
+                #[inline(always)]
                 pub fn to_string_func(x: &mut $arg_type) -> ImmutableString {
                     super::super::$fn_name(x)
                 }
@@ -125,29 +126,36 @@ gen_functions!(print_array => to_debug(Array));
 
 // Register print and debug
 #[export_fn]
+#[inline(always)]
 fn print_empty_string() -> ImmutableString {
     "".to_string().into()
 }
 #[export_fn]
+#[inline(always)]
 fn print_unit(_x: ()) -> ImmutableString {
     "".to_string().into()
 }
 #[export_fn]
+#[inline(always)]
 fn print_string(s: ImmutableString) -> ImmutableString {
     s
 }
 #[export_fn]
+#[inline(always)]
 fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
     f.to_string().into()
 }
+#[inline(always)]
 fn to_string<T: Display>(x: &mut T) -> ImmutableString {
     x.to_string().into()
 }
+#[inline]
 fn to_debug<T: Debug>(x: &mut T) -> ImmutableString {
     format!("{:?}", x).into()
 }
 #[cfg(not(feature = "no_object"))]
 #[export_fn]
+#[inline]
 fn format_map(x: &mut Map) -> ImmutableString {
     format!("#{:?}", x).into()
 }

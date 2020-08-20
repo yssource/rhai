@@ -3,21 +3,28 @@
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, INT};
 
-#[export_module]
-mod special_array_package {
-    use rhai::{Array, INT};
+mod test {
+    use rhai::plugin::*;
 
-    #[rhai_fn(get = "foo", return_raw)]
-    pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {
-        Ok(array[0].clone())
-    }
-    #[rhai_fn(name = "test")]
-    pub fn len(array: &mut Array, mul: INT) -> INT {
-        (array.len() as INT) * mul
-    }
-    #[rhai_fn(name = "+")]
-    pub fn funky_add(x: INT, y: INT) -> INT {
-        x / 2 + y * 2
+    #[export_module]
+    pub mod special_array_package {
+        use rhai::{Array, INT};
+
+        #[rhai_fn(get = "foo", return_raw)]
+        #[inline(always)]
+        pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {
+            Ok(array[0].clone())
+        }
+        #[rhai_fn(name = "test")]
+        #[inline(always)]
+        pub fn len(array: &mut Array, mul: INT) -> INT {
+            (array.len() as INT) * mul
+        }
+        #[rhai_fn(name = "+")]
+        #[inline(always)]
+        pub fn funky_add(x: INT, y: INT) -> INT {
+            x / 2 + y * 2
+        }
     }
 }
 
@@ -52,7 +59,7 @@ gen_unary_functions!(greet = make_greeting(INT, bool, char) -> String);
 fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    let m = exported_module!(special_array_package);
+    let m = exported_module!(test::special_array_package);
     engine.load_package(m);
 
     reg_functions!(engine += greet::single(INT, bool, char));
