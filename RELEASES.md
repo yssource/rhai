@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.19.0
 ==============
 
+Bug fixes
+---------
+
+* Fixes bug that prevents calling functions in closures.
+* Fixes bug that erroneously consumes the first argument to a module-qualified function call.
+
 New features
 ------------
 
