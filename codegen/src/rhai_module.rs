@@ -1,15 +1,18 @@
 use quote::quote;
 
 use crate::function::ExportedFn;
+use crate::module::Module;
 
 pub(crate) type ExportedConst = (String, syn::Expr);
 
 pub(crate) fn generate_body(
     fns: &Vec<ExportedFn>,
     consts: &Vec<ExportedConst>,
+    submodules: &Vec<Module>,
 ) -> proc_macro2::TokenStream {
     let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
     let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
+    let mut add_mod_stmts: Vec<syn::Stmt> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
 
     for (const_name, const_expr) in consts {
@@ -21,6 +24,22 @@ pub(crate) fn generate_body(
             .unwrap(),
         );
     }
+
+    for itemmod in submodules {
+        let module_name: &syn::Ident = itemmod.module_name().unwrap();
+        let exported_name: syn::LitStr = if let Some(name) = itemmod.exported_name() {
+            syn::LitStr::new(&name, proc_macro2::Span::call_site())
+        } else {
+            syn::LitStr::new(&module_name.to_string(), proc_macro2::Span::call_site())
+        };
+        add_mod_stmts.push(
+            syn::parse2::<syn::Stmt>(quote! {
+                m.set_sub_module(#exported_name, self::#module_name::rhai_module_generate());
+            })
+            .unwrap(),
+        );
+    }
+
 
     // NB: these are token streams, because reparsing messes up "> >" vs ">>"
     let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
@@ -98,6 +117,7 @@ pub(crate) fn generate_body(
                 let mut m = Module::new();
                 #(#set_fn_stmts)*
                 #(#set_const_stmts)*
+                #(#add_mod_stmts)*
                 m
             }
         }
