@@ -9,11 +9,11 @@ use crate::plugin::*;
 use crate::stdlib::vec::Vec;
 
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
-    lib.combine(exported_module!(map_functions));
+    lib.combine_flatten(exported_module!(map_functions));
 
     // Register map access functions
     #[cfg(not(feature = "no_index"))]
-    lib.combine(exported_module!(index_functions));
+    lib.combine_flatten(exported_module!(index_functions));
 });
 
 #[export_module]

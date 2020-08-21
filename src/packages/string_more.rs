@@ -60,9 +60,9 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     reg_functions!(lib += float; f32, f64);
 
     #[cfg(not(feature = "no_index"))]
-    lib.combine(exported_module!(index_functions));
+    lib.combine_flatten(exported_module!(index_functions));
 
-    lib.combine(exported_module!(string_functions));
+    lib.combine_flatten(exported_module!(string_functions));
 
     lib.set_raw_fn(
         "pad",

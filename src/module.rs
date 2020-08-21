@@ -931,6 +931,24 @@ impl Module {
     /// Combine another module into this module.
     /// The other module is consumed to merge into this module.
     pub fn combine(&mut self, other: Self) -> &mut Self {
+        self.modules.extend(other.modules.into_iter());
+        self.variables.extend(other.variables.into_iter());
+        self.functions.extend(other.functions.into_iter());
+        self.type_iterators.extend(other.type_iterators.into_iter());
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.indexed = false;
+        self
+    }
+
+    /// Combine another module into this module.
+    /// The other module is consumed to merge into this module.
+    /// Sub-modules are flattened onto the root module, with higher level overriding lower level.
+    pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
+        other.modules.into_iter().for_each(|(_, m)| {
+            self.combine_flatten(m);
+        });
+
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
         self.type_iterators.extend(other.type_iterators.into_iter());
@@ -942,15 +960,26 @@ impl Module {
 
     /// Merge another module into this module.
     pub fn merge(&mut self, other: &Self) -> &mut Self {
-        self.merge_filtered(other, |_, _, _| true)
+        self.merge_filtered(other, &|_, _, _| true)
     }
 
     /// Merge another module into this module, with only selected script-defined functions based on a filter predicate.
     pub(crate) fn merge_filtered(
         &mut self,
         other: &Self,
-        _filter: impl Fn(FnAccess, &str, usize) -> bool,
+        _filter: &impl Fn(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_function"))]
+        for (k, v) in &other.modules {
+            let mut m = Self::new();
+            m.merge_filtered(v, _filter);
+            self.modules.insert(k.clone(), m);
+        }
+
+        #[cfg(feature = "no_function")]
+        self.modules
+            .extend(other.modules.iter().map(|(k, v)| (k.clone(), v.clone())));
+
         self.variables
             .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
 

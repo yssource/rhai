@@ -3,7 +3,7 @@ use crate::fn_native::FnPtr;
 use crate::plugin::*;
 
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
-    lib.combine(exported_module!(fn_ptr_functions));
+    lib.combine_flatten(exported_module!(fn_ptr_functions));
 });
 
 #[export_module]

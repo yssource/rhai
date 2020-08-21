@@ -47,7 +47,7 @@ macro_rules! gen_cmp_functions {
 
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => {
-        $($mod_name.combine(exported_module!($root::$arg_type::functions));)*
+        $($mod_name.combine_flatten(exported_module!($root::$arg_type::functions));)*
     }
 }
 

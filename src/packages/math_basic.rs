@@ -26,10 +26,10 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     #[cfg(not(feature = "no_float"))]
     {
         // Floating point functions
-        lib.combine(exported_module!(float_functions));
+        lib.combine_flatten(exported_module!(float_functions));
 
         // Trig functions
-        lib.combine(exported_module!(trig_functions));
+        lib.combine_flatten(exported_module!(trig_functions));
 
         // Register conversion functions
         lib.set_fn_1("to_float", |x: INT| Ok(x as FLOAT));

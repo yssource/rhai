@@ -10,11 +10,16 @@ mod test {
     pub mod special_array_package {
         use rhai::{Array, INT};
 
-        #[rhai_fn(get = "foo", return_raw)]
-        #[inline(always)]
-        pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {
-            Ok(array[0].clone())
+        #[cfg(not(feature = "no_object"))]
+        #[rhai_mod()]
+        pub mod feature {
+            #[rhai_fn(get = "foo", return_raw)]
+            #[inline(always)]
+            pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {
+                Ok(array[0].clone())
+            }
         }
+
         #[rhai_fn(name = "test")]
         #[inline(always)]
         pub fn len(array: &mut Array, mul: INT) -> INT {
@@ -59,7 +64,8 @@ gen_unary_functions!(greet = make_greeting(INT, bool, char) -> String);
 fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    let m = exported_module!(test::special_array_package);
+    let mut m = Module::new();
+    m.combine_flatten(exported_module!(test::special_array_package));
     engine.load_package(m);
 
     reg_functions!(engine += greet::single(INT, bool, char));

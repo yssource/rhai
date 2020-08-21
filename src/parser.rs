@@ -133,7 +133,7 @@ impl AST {
         filter: impl Fn(FnAccess, &str, usize) -> bool,
     ) -> Self {
         let mut functions: Module = Default::default();
-        functions.merge_filtered(&self.1, filter);
+        functions.merge_filtered(&self.1, &filter);
         Self(Default::default(), functions)
     }
 
@@ -266,7 +266,7 @@ impl AST {
         };
 
         let mut functions = functions.clone();
-        functions.merge_filtered(&other.1, filter);
+        functions.merge_filtered(&other.1, &filter);
 
         Self::new(ast, functions)
     }
