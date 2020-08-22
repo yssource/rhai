@@ -88,9 +88,9 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
     #[cfg(not(feature = "no_object"))]
     {
-        set_exported_fn!(lib, KEYWORD_PRINT, format_map);
-        set_exported_fn!(lib, FN_TO_STRING, format_map);
-        set_exported_fn!(lib, KEYWORD_DEBUG, format_map);
+        set_exported_fn!(lib, KEYWORD_PRINT, format_map::format_map);
+        set_exported_fn!(lib, FN_TO_STRING, format_map::format_map);
+        set_exported_fn!(lib, KEYWORD_DEBUG, format_map::format_map);
     }
 });
 
@@ -154,8 +154,11 @@ fn to_debug<T: Debug>(x: &mut T) -> ImmutableString {
     format!("{:?}", x).into()
 }
 #[cfg(not(feature = "no_object"))]
-#[export_fn]
-#[inline]
-fn format_map(x: &mut Map) -> ImmutableString {
-    format!("#{:?}", x).into()
+mod format_map {
+    use super::*;
+    #[inline]
+    #[export_fn]
+    pub fn format_map(x: &mut Map) -> ImmutableString {
+        format!("#{:?}", x).into()
+    }
 }

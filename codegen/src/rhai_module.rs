@@ -12,7 +12,7 @@ pub(crate) fn generate_body(
 ) -> proc_macro2::TokenStream {
     let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
     let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
-    let mut add_mod_stmts: Vec<syn::Stmt> = Vec::new();
+    let mut add_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
 
     for (const_name, const_expr) in consts {
@@ -32,9 +32,16 @@ pub(crate) fn generate_body(
         } else {
             syn::LitStr::new(&module_name.to_string(), proc_macro2::Span::call_site())
         };
-        add_mod_stmts.push(
-            syn::parse2::<syn::Stmt>(quote! {
-                m.set_sub_module(#exported_name, self::#module_name::rhai_module_generate());
+        let cfg_attrs: Vec<&syn::Attribute> = itemmod.attrs().unwrap().iter().filter(|&a| {
+            a.path.get_ident()
+                .map(|i| i.to_string() == "cfg")
+                .unwrap_or(false)
+        }).collect();
+        add_mod_blocks.push(
+            syn::parse2::<syn::ExprBlock>(quote! {
+                #(#cfg_attrs)* {
+                    m.set_sub_module(#exported_name, self::#module_name::rhai_module_generate());
+                }
             })
             .unwrap(),
         );
@@ -117,7 +124,7 @@ pub(crate) fn generate_body(
                 let mut m = Module::new();
                 #(#set_fn_stmts)*
                 #(#set_const_stmts)*
-                #(#add_mod_stmts)*
+                #(#add_mod_blocks)*
                 m
             }
         }
