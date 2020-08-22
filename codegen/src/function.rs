@@ -1067,12 +1067,3 @@ mod generate_tests {
         assert_streams_eq(item_fn.generate(), expected_tokens);
     }
 }
-
-#[cfg(test)]
-mod ui_tests {
-    #[test]
-    fn all() {
-        let t = trybuild::TestCases::new();
-        t.compile_fail("ui_tests/*.rs");
-    }
-}
