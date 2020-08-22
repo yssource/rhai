@@ -1,11 +1,12 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{
-    Dynamic, Engine, EvalAltResult, FnPtr, Map, Module, ParseErrorType, RegisterFn, Scope, INT,
-};
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, ParseErrorType, RegisterFn, Scope, INT};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem::take;
 use std::rc::Rc;
+
+#[cfg(not(feature = "no_object"))]
+use rhai::Map;
 
 #[test]
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
