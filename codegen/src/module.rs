@@ -199,7 +199,7 @@ impl Parse for Module {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut mod_all: syn::ItemMod = input.parse()?;
         let fns: Vec<_>;
-        let consts: Vec<_>;
+        let mut consts: Vec<_> = new_vec![];
         let mut submodules: Vec<_> = Vec::new();
         if let Some((_, ref mut content)) = mod_all.content {
             // Gather and parse functions.
@@ -223,24 +223,33 @@ impl Parse for Module {
                         .map(|_| vec)
                 })?;
             // Gather and parse constants definitions.
-            consts = content
-                .iter()
-                .filter_map(|item| match item {
+            for item in content.iter() {
+                match item {
                     syn::Item::Const(syn::ItemConst {
                         vis,
                         ref expr,
                         ident,
+                        attrs,
                         ..
                     }) => {
-                        if let syn::Visibility::Public(_) = vis {
-                            Some((ident.to_string(), expr.as_ref().clone()))
-                        } else {
-                            None
+                        // #[cfg] attributes are not allowed on const declarations
+                        if let Some(cfg_attr) = attrs.iter().find(|a| {
+                            a.path
+                                .get_ident()
+                                .map(|i| i.to_string() == "cfg")
+                                .unwrap_or(false)
+                        }) {
+                            return Err(syn::Error::new(
+                                    cfg_attr.span(),
+                                    "cfg attributes not allowed on this item"));
                         }
-                    }
-                    _ => None,
-                })
-                .collect();
+                        if let syn::Visibility::Public(_) = vis {
+                            consts.push((ident.to_string(), expr.as_ref().clone()));
+                        }
+                    },
+                    _ => {},
+                }
+            };
             // Gather and parse submodule definitions.
             //
             // They are actually removed from the module's body, because they will need
@@ -270,7 +279,6 @@ impl Parse for Module {
                 }
             }
         } else {
-            consts = new_vec![];
             fns = new_vec![];
         }
         Ok(Module {
