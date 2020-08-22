@@ -148,6 +148,16 @@ impl Parse for ExportedFn {
         let entire_span = fn_all.span();
         let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
 
+        // #[cfg] attributes are not allowed on functions due to what is generated for them
+        if let Some(cfg_attr) = fn_all.attrs.iter().find(|a| {
+            a.path
+                .get_ident()
+                .map(|i| i.to_string() == "cfg")
+                .unwrap_or(false)
+        }) {
+            return Err(syn::Error::new(cfg_attr.span(), "cfg attributes not allowed on this item"));
+        }
+
         // Determine if the function is public.
         let is_public = match fn_all.vis {
             syn::Visibility::Public(_) => true,

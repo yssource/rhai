@@ -16,6 +16,17 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 fn inner_fn_attributes(f: &mut syn::ItemFn) -> syn::Result<ExportedFnParams> {
+    // #[cfg] attributes are not allowed on objects
+    if let Some(cfg_attr) = f.attrs.iter().find(|a| {
+        a.path
+            .get_ident()
+            .map(|i| i.to_string() == "cfg")
+            .unwrap_or(false)
+    }) {
+        return Err(syn::Error::new(cfg_attr.span(), "cfg attributes not allowed on this item"));
+    }
+
+    // Find the #[rhai_fn] attribute which will turn be read for the function parameters.
     if let Some(rhai_fn_idx) = f.attrs.iter().position(|a| {
         a.path
             .get_ident()
