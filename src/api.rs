@@ -2,7 +2,7 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, Imports, State};
-use crate::error::{ParseError, ParseErrorType};
+use crate::error::ParseError;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::module::{FuncReturn, Module};
 use crate::optimize::OptimizationLevel;
@@ -18,6 +18,7 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 #[cfg(not(feature = "no_object"))]
 use crate::{
     engine::{make_getter, make_setter, Map},
+    error::ParseErrorType,
     fn_register::{RegisterFn, RegisterResultFn},
     token::Token,
 };
@@ -34,7 +35,6 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    string::ToString,
 };
 
 #[cfg(not(feature = "no_optimize"))]
@@ -944,8 +944,8 @@ impl Engine {
             ["#", json_text]
         } else {
             return Err(ParseErrorType::MissingToken(
-                Token::LeftBrace.syntax().to_string(),
-                "to start a JSON object hash".to_string(),
+                Token::LeftBrace.syntax().into(),
+                "to start a JSON object hash".into(),
             )
             .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
             .into());
