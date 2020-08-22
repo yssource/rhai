@@ -1,8 +1,24 @@
 Rhai Release Notes
 ==================
 
-Version 0.19.0
+Version 0.18.3
 ==============
+
+Bug fixes
+---------
+
+* `Engine::compile_expression`, `Engine::eval_expression` etc. no longer parse anonymous functions and closures.
+* Imported modules now work inside closures.
+
+
+Version 0.18.2
+==============
+
+Bug fixes
+---------
+
+* Fixes bug that prevents calling functions in closures.
+* Fixes bug that erroneously consumes the first argument to a module-qualified function call.
 
 New features
 ------------

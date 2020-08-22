@@ -18,6 +18,7 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 #[cfg(not(feature = "no_object"))]
 use crate::{
     engine::{make_getter, make_setter, Map},
+    error::ParseErrorType,
     fn_register::{RegisterFn, RegisterResultFn},
     token::Token,
 };
@@ -895,6 +896,8 @@ impl Engine {
 
     /// Parse a JSON string into a map.
     ///
+    /// The JSON string must be an object hash.  It cannot be a simple JavaScript primitive.
+    ///
     /// Set `has_null` to `true` in order to map `null` values to `()`.
     /// Setting it to `false` will cause a _variable not found_ error during parsing.
     ///
@@ -934,12 +937,20 @@ impl Engine {
         let mut scope = Scope::new();
 
         // Trims the JSON string and add a '#' in front
-        let json = json.trim();
-        let scripts = if json.starts_with(Token::MapStart.syntax().as_ref()) {
-            [json, ""]
+        let json_text = json.trim_start();
+        let scripts = if json_text.starts_with(Token::MapStart.syntax().as_ref()) {
+            [json_text, ""]
+        } else if json_text.starts_with(Token::LeftBrace.syntax().as_ref()) {
+            ["#", json_text]
         } else {
-            ["#", json]
+            return Err(ParseErrorType::MissingToken(
+                Token::LeftBrace.syntax().into(),
+                "to start a JSON object hash".into(),
+            )
+            .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
+            .into());
         };
+
         let stream = lex(
             &scripts,
             if has_null {
