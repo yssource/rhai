@@ -10,10 +10,6 @@ use crate::stdlib::vec::Vec;
 
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     lib.combine_flatten(exported_module!(map_functions));
-
-    // Register map access functions
-    #[cfg(not(feature = "no_index"))]
-    lib.combine_flatten(exported_module!(index_functions));
 });
 
 #[export_module]
@@ -63,15 +59,14 @@ mod map_functions {
             }
         });
     }
-}
 
-#[cfg(not(feature = "no_index"))]
-#[export_module]
-mod index_functions {
-    pub fn keys(map: &mut Map) -> Vec<Dynamic> {
-        map.iter().map(|(k, _)| k.clone().into()).collect()
-    }
-    pub fn values(map: &mut Map) -> Vec<Dynamic> {
-        map.iter().map(|(_, v)| v.clone()).collect()
+    #[cfg(not(feature = "no_index"))]
+    pub mod indexing {
+        pub fn keys(map: &mut Map) -> Vec<Dynamic> {
+            map.iter().map(|(k, _)| k.clone().into()).collect()
+        }
+        pub fn values(map: &mut Map) -> Vec<Dynamic> {
+            map.iter().map(|(_, v)| v.clone()).collect()
+        }
     }
 }
