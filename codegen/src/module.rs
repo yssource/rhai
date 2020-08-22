@@ -11,11 +11,24 @@ use std::vec as new_vec;
 
 #[cfg(no_std)]
 use core::mem;
+#[cfg(not(no_std))]
+use std::mem;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 fn inner_fn_attributes(f: &mut syn::ItemFn) -> syn::Result<ExportedFnParams> {
+    // #[cfg] attributes are not allowed on objects
+    if let Some(cfg_attr) = f.attrs.iter().find(|a| {
+        a.path
+            .get_ident()
+            .map(|i| i.to_string() == "cfg")
+            .unwrap_or(false)
+    }) {
+        return Err(syn::Error::new(cfg_attr.span(), "cfg attributes not allowed on this item"));
+    }
+
+    // Find the #[rhai_fn] attribute which will turn be read for the function parameters.
     if let Some(rhai_fn_idx) = f.attrs.iter().position(|a| {
         a.path
             .get_ident()
@@ -186,7 +199,7 @@ impl Parse for Module {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut mod_all: syn::ItemMod = input.parse()?;
         let fns: Vec<_>;
-        let consts: Vec<_>;
+        let mut consts: Vec<_> = new_vec![];
         let mut submodules: Vec<_> = Vec::new();
         if let Some((_, ref mut content)) = mod_all.content {
             // Gather and parse functions.
@@ -210,24 +223,33 @@ impl Parse for Module {
                         .map(|_| vec)
                 })?;
             // Gather and parse constants definitions.
-            consts = content
-                .iter()
-                .filter_map(|item| match item {
+            for item in content.iter() {
+                match item {
                     syn::Item::Const(syn::ItemConst {
                         vis,
                         ref expr,
                         ident,
+                        attrs,
                         ..
                     }) => {
-                        if let syn::Visibility::Public(_) = vis {
-                            Some((ident.to_string(), expr.as_ref().clone()))
-                        } else {
-                            None
+                        // #[cfg] attributes are not allowed on const declarations
+                        if let Some(cfg_attr) = attrs.iter().find(|a| {
+                            a.path
+                                .get_ident()
+                                .map(|i| i.to_string() == "cfg")
+                                .unwrap_or(false)
+                        }) {
+                            return Err(syn::Error::new(
+                                    cfg_attr.span(),
+                                    "cfg attributes not allowed on this item"));
                         }
-                    }
-                    _ => None,
-                })
-                .collect();
+                        if let syn::Visibility::Public(_) = vis {
+                            consts.push((ident.to_string(), expr.as_ref().clone()));
+                        }
+                    },
+                    _ => {},
+                }
+            };
             // Gather and parse submodule definitions.
             //
             // They are actually removed from the module's body, because they will need
@@ -257,7 +279,6 @@ impl Parse for Module {
                 }
             }
         } else {
-            consts = new_vec![];
             fns = new_vec![];
         }
         Ok(Module {
@@ -271,6 +292,10 @@ impl Parse for Module {
 }
 
 impl Module {
+    pub fn attrs(&self) -> Option<&Vec<syn::Attribute>> {
+        self.mod_all.as_ref().map(|m| &m.attrs)
+    }
+
     pub fn module_name(&self) -> Option<&syn::Ident> {
         self.mod_all.as_ref().map(|m| &m.ident)
     }
@@ -313,8 +338,10 @@ impl Module {
         let mut mod_all = mod_all.unwrap();
         let mod_name = mod_all.ident.clone();
         let (_, orig_content) = mod_all.content.take().unwrap();
+        let mod_attrs = mem::replace(&mut mod_all.attrs, Vec::with_capacity(0));
 
         Ok(quote! {
+            #(#mod_attrs)*
             pub mod #mod_name {
                 #(#orig_content)*
                 #(#inner_modules)*
@@ -1101,7 +1128,82 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_sub_module("it_is", self::it_is::rhai_module_generate());
+                    { m.set_sub_module("it_is", self::it_is::rhai_module_generate()); }
+                    m
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn one_fn_with_cfg_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                #[cfg(not(feature = "no_float"))]
+                pub mod it_is {
+                    pub fn increment(x: &mut FLOAT) {
+                        *x += 1.0 as FLOAT;
+                    }
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_fn {
+                #[cfg(not(feature = "no_float"))]
+                pub mod it_is {
+                    pub fn increment(x: &mut FLOAT) {
+                        *x += 1.0 as FLOAT;
+                    }
+                    #[allow(unused_imports)]
+                    use super::*;
+                    #[allow(unused_mut)]
+                    pub fn rhai_module_generate() -> Module {
+                        let mut m = Module::new();
+                        m.set_fn("increment", FnAccess::Public,
+                                 &[core::any::TypeId::of::<FLOAT>()],
+                                 CallableFunction::from_plugin(increment_token()));
+                        m
+                    }
+                    #[allow(non_camel_case_types)]
+                    struct increment_token();
+                    impl PluginFunction for increment_token {
+                        fn call(&self,
+                                args: &mut [&mut Dynamic], pos: Position
+                        ) -> Result<Dynamic, Box<EvalAltResult>> {
+                            debug_assert_eq!(args.len(), 1usize,
+                                                "wrong arg count: {} != {}", args.len(), 1usize);
+                            let arg0: &mut _ = &mut args[0usize].write_lock::<FLOAT>().unwrap();
+                            Ok(Dynamic::from(increment(arg0)))
+                        }
+
+                        fn is_method_call(&self) -> bool { true }
+                        fn is_varadic(&self) -> bool { false }
+                        fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                            Box::new(increment_token())
+                        }
+                        fn input_types(&self) -> Box<[TypeId]> {
+                            new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
+                        }
+                    }
+                    pub fn increment_token_callable() -> CallableFunction {
+                        CallableFunction::from_plugin(increment_token())
+                    }
+                    pub fn increment_token_input_types() -> Box<[TypeId]> {
+                        increment_token().input_types()
+                    }
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    #[cfg(not(feature = "no_float"))] {
+                        m.set_sub_module("it_is", self::it_is::rhai_module_generate());
+                    }
                     m
                 }
             }
@@ -1139,7 +1241,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_sub_module("it_is", self::it_is::rhai_module_generate());
+                    { m.set_sub_module("it_is", self::it_is::rhai_module_generate()); }
                     m
                 }
             }
@@ -1191,8 +1293,8 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_sub_module("first_is", self::first_is::rhai_module_generate());
-                    m.set_sub_module("second_is", self::second_is::rhai_module_generate());
+                    { m.set_sub_module("first_is", self::first_is::rhai_module_generate()); }
+                    { m.set_sub_module("second_is", self::second_is::rhai_module_generate()); }
                     m
                 }
             }
@@ -1269,8 +1371,8 @@ mod generate_tests {
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             m.set_var("VALUE", 17);
-                            m.set_sub_module("left", self::left::rhai_module_generate());
-                            m.set_sub_module("right", self::right::rhai_module_generate());
+                            { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                            { m.set_sub_module("right", self::right::rhai_module_generate()); }
                             m
                         }
                     }
@@ -1291,8 +1393,8 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         m.set_var("VALUE", 19);
-                        m.set_sub_module("left", self::left::rhai_module_generate());
-                        m.set_sub_module("right", self::right::rhai_module_generate());
+                        { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                        { m.set_sub_module("right", self::right::rhai_module_generate()); }
                         m
                     }
                 }
@@ -1326,8 +1428,8 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         m.set_var("VALUE", 36);
-                        m.set_sub_module("left", self::left::rhai_module_generate());
-                        m.set_sub_module("right", self::right::rhai_module_generate());
+                        { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                        { m.set_sub_module("right", self::right::rhai_module_generate()); }
                         m
                     }
                 }
@@ -1337,8 +1439,8 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     m.set_var("VALUE", 100);
-                    m.set_sub_module("left", self::left::rhai_module_generate());
-                    m.set_sub_module("right", self::right::rhai_module_generate());
+                    { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                    { m.set_sub_module("right", self::right::rhai_module_generate()); }
                     m
                 }
             }
