@@ -1645,11 +1645,22 @@ fn parse_primary(
             }
             Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
         }
+        // Module qualification
+        #[cfg(not(feature = "no_module"))]
+        Token::Identifier(s) if *next_token == Token::DoubleColon => {
+            // Once the identifier consumed we must enable next variables capturing
+            #[cfg(not(feature = "no_closure"))]
+            {
+                state.allow_capture = true;
+            }
+            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+        }
         // Normal variable access
         Token::Identifier(s) => {
             let index = state.access_var(&s, settings.pos);
             Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
         }
+
         // Function call is allowed to have reserved keyword
         Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
@@ -1658,6 +1669,7 @@ fn parse_primary(
                 return Err(PERR::Reserved(s).into_err(settings.pos));
             }
         }
+
         // Access to `this` as a variable is OK
         Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
@@ -1669,9 +1681,11 @@ fn parse_primary(
                 Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
             }
         }
+
         Token::Reserved(s) if is_valid_identifier(s.chars()) => {
             return Err(PERR::Reserved(s).into_err(settings.pos));
         }
+
         Token::LeftParen => parse_paren_expr(input, state, lib, settings.level_up())?,
         #[cfg(not(feature = "no_index"))]
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
@@ -1680,6 +1694,7 @@ fn parse_primary(
         Token::True => Expr::True(settings.pos),
         Token::False => Expr::False(settings.pos),
         Token::LexError(err) => return Err(err.into_err(settings.pos)),
+
         _ => {
             return Err(
                 PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(settings.pos)
