@@ -1862,7 +1862,7 @@ fn parse_unary(
         }
         // | ...
         #[cfg(not(feature = "no_function"))]
-        Token::Pipe | Token::Or => {
+        Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
             let mut new_state = ParseState::new(
                 state.engine,
                 #[cfg(not(feature = "unchecked"))]
@@ -3352,6 +3352,8 @@ impl Engine {
             pos: Position::none(),
         };
         let expr = parse_expr(input, &mut state, &mut functions, settings)?;
+
+        assert!(functions.is_empty());
 
         match input.peek().unwrap() {
             (Token::EOF, _) => (),

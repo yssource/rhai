@@ -1,7 +1,11 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, RegisterFn, INT};
+use rhai::{
+    Dynamic, Engine, EvalAltResult, FnPtr, Map, Module, ParseErrorType, RegisterFn, Scope, INT,
+};
 use std::any::TypeId;
+use std::cell::RefCell;
 use std::mem::take;
+use std::rc::Rc;
 
 #[test]
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
@@ -38,6 +42,14 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
 #[cfg(not(feature = "no_object"))]
 fn test_closures() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
+
+    assert!(matches!(
+        *engine
+            .compile_expression("let f = |x| {};")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::BadInput(_)
+    ));
 
     assert_eq!(
         engine.eval::<INT>(
@@ -178,6 +190,62 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
             .expect_err("should error"),
         EvalAltResult::ErrorDataRace(_, _)
     ));
+
+    Ok(())
+}
+
+type MyType = Rc<RefCell<INT>>;
+
+#[test]
+#[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "sync"))]
+fn test_closure_shared_obj() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    // Register API on MyType
+    engine
+        .register_type_with_name::<MyType>("MyType")
+        .register_get_set(
+            "data",
+            |p: &mut MyType| *p.borrow(),
+            |p: &mut MyType, value: INT| *p.borrow_mut() = value,
+        )
+        .register_fn("+=", |p1: &mut MyType, p2: MyType| {
+            *p1.borrow_mut() += *p2.borrow()
+        })
+        .register_fn("-=", |p1: &mut MyType, p2: MyType| {
+            *p1.borrow_mut() -= *p2.borrow()
+        });
+
+    let engine = engine; // Make engine immutable
+
+    let code = r#"
+        #{
+            name: "A",
+            description: "B",
+            cost: 1,
+            health_added: 0,
+            action: |p1, p2| { p1 += p2 }
+        }
+    "#;
+
+    let ast = engine.compile(code)?;
+    let res = engine.eval_ast::<Map>(&ast)?;
+
+    // Make closure
+    let f = move |p1: MyType, p2: MyType| -> Result<(), Box<EvalAltResult>> {
+        let action_ptr = res["action"].clone().cast::<FnPtr>();
+        let name = action_ptr.fn_name();
+        engine.call_fn::<_, ()>(&mut Scope::new(), &ast, name, (p1, p2))
+    };
+
+    // Test closure
+    let p1 = Rc::new(RefCell::new(41));
+    let p2 = Rc::new(RefCell::new(1));
+
+    f(p1.clone(), p2.clone())?;
+
+    assert_eq!(*p1.borrow(), 42);
 
     Ok(())
 }

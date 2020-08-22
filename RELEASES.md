@@ -7,6 +7,15 @@ Version 0.19.0
 Bug fixes
 ---------
 
+* `Engine::compile_expression`, `Engine::eval_expression` etc. no longer parse anonymous functions and closures.
+
+
+Version 0.18.2
+==============
+
+Bug fixes
+---------
+
 * Fixes bug that prevents calling functions in closures.
 * Fixes bug that erroneously consumes the first argument to a module-qualified function call.
 
