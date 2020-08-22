@@ -11,7 +11,6 @@ mod test {
         use rhai::{Array, INT};
 
         #[cfg(not(feature = "no_object"))]
-        #[rhai_mod()]
         pub mod feature {
             #[rhai_fn(get = "foo", return_raw)]
             #[inline(always)]
