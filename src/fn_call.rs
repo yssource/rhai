@@ -1280,7 +1280,7 @@ pub fn run_builtin_op_assignment(
                 "/=" => return Ok(Some(*x /= y)),
                 "%=" => return Ok(Some(*x %= y)),
                 "~=" => return Ok(Some(*x = x.pow(y as u32))),
-                ">>=" => return Ok(Some(*x = *x << y)),
+                ">>=" => return Ok(Some(*x = *x >> y)),
                 "<<=" => return Ok(Some(*x = *x << y)),
                 _ => (),
             }
