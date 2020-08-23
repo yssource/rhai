@@ -2,6 +2,8 @@
 
 #[cfg(no_std)]
 use core::mem;
+#[cfg(not(no_std))]
+use std::mem;
 
 #[cfg(no_std)]
 use alloc::format;
@@ -291,12 +293,21 @@ impl ExportedFn {
         }
     }
 
-    pub fn generate_with_params(
-        mut self,
-        mut params: ExportedFnParams,
-    ) -> proc_macro2::TokenStream {
+    pub fn set_params(
+        &mut self, mut params: ExportedFnParams,
+    ) -> syn::Result<()> {
+
+        // Do not allow non-returning raw functions.
+        //
+        // This is caught now to avoid issues with diagnostics later.
+        if params.return_raw && mem::discriminant(&self.signature.output) == 
+                                mem::discriminant(&syn::ReturnType::Default) {
+            return Err(syn::Error::new(self.signature.span(),
+                                       "return_raw functions must return Result<T>"));
+        }
+
         self.params = params;
-        self.generate()
+        Ok(())
     }
 
     pub fn generate(self) -> proc_macro2::TokenStream {
@@ -353,7 +364,7 @@ impl ExportedFn {
                 }
             }
         } else {
-            quote! {
+            quote_spanned! { self.return_type().unwrap().span()=>
                 type EvalBox = Box<EvalAltResult>;
                 pub #dynamic_signature {
                     super::#name(#(#arguments),*)
@@ -520,7 +531,7 @@ impl ExportedFn {
                 Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
             }
         } else {
-            quote! {
+            quote_spanned! { self.return_type().unwrap().span()=>
                 #sig_name(#(#unpack_exprs),*)
             }
         };

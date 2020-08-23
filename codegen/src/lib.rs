@@ -109,9 +109,12 @@ pub fn export_fn(
     let mut output = proc_macro2::TokenStream::from(input.clone());
 
     let parsed_params = parse_macro_input!(args as function::ExportedFnParams);
-    let function_def = parse_macro_input!(input as function::ExportedFn);
+    let mut function_def = parse_macro_input!(input as function::ExportedFn);
+    if let Err(e) = function_def.set_params(parsed_params) {
+        return e.to_compile_error().into();
+    }
 
-    output.extend(function_def.generate_with_params(parsed_params));
+    output.extend(function_def.generate());
     proc_macro::TokenStream::from(output)
 }
 
