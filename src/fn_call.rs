@@ -52,6 +52,10 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::{collections::HashSet, string::String};
 
+#[cfg(feature = "no_std")]
+#[cfg(not(feature = "no_float"))]
+use num_traits::float::Float;
+
 /// Extract the property name from a getter function name.
 #[inline(always)]
 fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
