@@ -200,7 +200,7 @@ type MyType = Rc<RefCell<INT>>;
 #[test]
 #[cfg(not(feature = "no_object"))]
 #[cfg(not(feature = "sync"))]
-fn test_closure_shared_obj() -> Result<(), Box<EvalAltResult>> {
+fn test_closures_shared_obj() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     // Register API on MyType
@@ -247,6 +247,33 @@ fn test_closure_shared_obj() -> Result<(), Box<EvalAltResult>> {
     f(p1.clone(), p2.clone())?;
 
     assert_eq!(*p1.borrow(), 42);
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_closure"))]
+fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let mut ast = engine.compile(
+        r#"
+            let test = "hello";
+
+            |x| test + x
+    "#,
+    )?;
+
+    // Save the function pointer together with captured variables
+    let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
+
+    // Get rid of the script, retaining only functions
+    ast.retain_functions(|_, _, _| true);
+
+    // Closure 'f' captures: the engine, the AST, and the curried function pointer
+    let f = move |x: INT| fn_ptr.call_dynamic(&engine, ast, None, [x.into()]);
+
+    assert_eq!(f(42)?.as_str(), Ok("hello42"));
 
     Ok(())
 }

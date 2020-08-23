@@ -5,6 +5,14 @@ Create a Custom Package
 
 Sometimes specific functionalities are needed, so custom packages can be created.
 
+A custom package is a convenient means to gather up a number of functions for later use.
+An [`Engine`] only needs to `Engine::load_package` the custom package once to gain access
+to the entire set of functions within.
+
+Loading a package into an [`Engine`] is functionally equivalent to calling `Engine::register_fn` etc.
+on _each_ of the functions inside the package.  But because packages are _shared_, loading an existing
+package is _much_ cheaper than registering all the functions one by one.
+
 The macro `rhai::def_package!` is used to create a new custom package.
 
 
