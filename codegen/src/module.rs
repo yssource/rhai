@@ -925,6 +925,70 @@ mod generate_tests {
     }
 
     #[test]
+    fn one_skipped_submodule() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                pub fn get_mystic_number() -> INT {
+                    42
+                }
+                #[rhai_mod(skip)]
+                pub mod inner_secrets {
+                    pub const SECRET_NUMBER: INT = 86;
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_fn {
+                pub fn get_mystic_number() -> INT {
+                    42
+                }
+                pub mod inner_secrets {
+                    pub const SECRET_NUMBER: INT = 86;
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    m.set_fn("get_mystic_number", FnAccess::Public, &[],
+                             CallableFunction::from_plugin(get_mystic_number_token()));
+                    m
+                }
+                #[allow(non_camel_case_types)]
+                struct get_mystic_number_token();
+                impl PluginFunction for get_mystic_number_token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 0usize,
+                                            "wrong arg count: {} != {}", args.len(), 0usize);
+                        Ok(Dynamic::from(get_mystic_number()))
+                    }
+
+                    fn is_method_call(&self) -> bool { false }
+                    fn is_varadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(get_mystic_number_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![].into_boxed_slice()
+                    }
+                }
+                pub fn get_mystic_number_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(get_mystic_number_token())
+                }
+                pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
+                    get_mystic_number_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
     fn one_private_constant_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
