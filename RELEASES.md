@@ -9,6 +9,7 @@ Bug fixes
 
 * `Engine::compile_expression`, `Engine::eval_expression` etc. no longer parse anonymous functions and closures.
 * Imported modules now work inside closures.
+* Closures that capture now work under `no_object`.
 
 
 Version 0.18.2

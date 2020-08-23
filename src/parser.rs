@@ -3167,6 +3167,8 @@ fn make_curry_from_externals(
     let num_externals = externals.len();
     let mut args: StaticVec<_> = Default::default();
 
+    args.push(fn_expr);
+
     #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|(var_name, pos)| {
         args.push(Expr::Variable(Box::new((
@@ -3182,17 +3184,15 @@ fn make_curry_from_externals(
         args.push(Expr::Variable(Box::new(((var_name, pos), None, 0, None))));
     });
 
-    let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals, empty());
+    let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1, empty());
 
-    let fn_call = Expr::FnCall(Box::new((
+    let expr = Expr::FnCall(Box::new((
         (KEYWORD_FN_PTR_CURRY.into(), false, false, pos),
         None,
         hash,
         args,
         None,
     )));
-
-    let expr = Expr::Dot(Box::new((fn_expr, fn_call, pos)));
 
     // If there are captured variables, convert the entire expression into a statement block,
     // then insert the relevant `Share` statements.
