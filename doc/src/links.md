@@ -31,6 +31,8 @@
 [built-in operators]: {{rootUrl}}/engine/raw.md#built-in-operators
 [package]: {{rootUrl}}/rust/packages/index.md
 [packages]: {{rootUrl}}/rust/packages/index.md
+[custom package]: {{rootUrl}}/rust/packages/create.md
+[custom packages]: {{rootUrl}}/rust/packages/create.md
 [`Scope`]: {{rootUrl}}/rust/scope.md
 [`serde`]: {{rootUrl}}/rust/serde.md
 

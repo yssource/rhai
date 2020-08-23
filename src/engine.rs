@@ -378,7 +378,6 @@ pub struct Limits {
 /// ```
 ///
 /// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
-#[derive(Clone)]
 pub struct Engine {
     /// A unique ID identifying this scripting `Engine`.
     pub id: Option<String>,
