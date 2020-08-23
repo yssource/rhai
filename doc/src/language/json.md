@@ -75,3 +75,17 @@ let map = engine.parse_json(&new_json, false)?;
 
 map.len() == 2;       // 'map' contains two properties: 'a' and 'b'
 ```
+
+
+Use `serde` to Serialize/Deserialize to/from JSON
+------------------------------------------------
+
+Remember, `Engine::parse_json` is nothing more than a _cheap_ alternative to true JSON parsing.
+
+If correctness is needed, or for more configuration possibilities, turn on the [`serde`][features]
+feature to pull in the [`serde`](https://crates.io/crates/serde) crate which enables
+serialization and deserialization to/from multiple formats, including JSON.
+
+Beware, though... the [`serde`](https://crates.io/crates/serde) crate is quite heavy.
+
+See _[Serialization/Deserialization of `Dynamic` with `serde`][`serde`]_ for more details.
