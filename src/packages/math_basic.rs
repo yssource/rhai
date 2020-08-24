@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::def_package;
 use crate::parser::INT;
 use crate::plugin::*;
@@ -22,85 +24,58 @@ pub const MAX_INT: INT = i32::MAX;
 #[cfg(not(feature = "only_i32"))]
 pub const MAX_INT: INT = i64::MAX;
 
+macro_rules! gen_conversion_functions {
+    ($root:ident => $func_name:ident ( $($arg_type:ident),+ ) -> $result_type:ty) => {
+        pub mod $root { $(
+            pub mod $arg_type {
+                use super::super::*;
+
+                #[export_fn]
+                #[inline(always)]
+                pub fn $func_name(x: $arg_type) -> $result_type {
+                    x as $result_type
+                }
+            }
+        )* }
+    }
+}
+
+macro_rules! reg_functions {
+    ($mod_name:ident += $root:ident :: $func_name:ident ( $($arg_type:ident),+ ) ) => {
+        $(set_exported_fn!($mod_name, stringify!($func_name), $root::$arg_type::$func_name);)*
+    }
+}
+
 def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     #[cfg(not(feature = "no_float"))]
     {
         // Floating point functions
-        lib.combine(exported_module!(float_functions));
+        lib.combine_flatten(exported_module!(float_functions));
 
         // Trig functions
-        lib.combine(exported_module!(trig_functions));
+        lib.combine_flatten(exported_module!(trig_functions));
 
-        // Register conversion functions
-        lib.set_fn_1("to_float", |x: INT| Ok(x as FLOAT));
-        lib.set_fn_1("to_float", |x: f32| Ok(x as FLOAT));
+        reg_functions!(lib += basic_to_float::to_float(INT));
 
-        if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
-            lib.set_fn_1("to_float", |x: i8| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: u8| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: i16| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: u16| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: i32| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: u32| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: i64| Ok(x as FLOAT));
-            lib.set_fn_1("to_float", |x: u64| Ok(x as FLOAT));
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_functions!(lib += numbers_to_float::to_float(i8, u8, i16, u16, i32, u32, i64, u32));
 
-            if cfg!(not(target_arch = "wasm32")) {
-                lib.set_fn_1("to_float", |x: i128| Ok(x as FLOAT));
-                lib.set_fn_1("to_float", |x: u128| Ok(x as FLOAT));
-            }
+            #[cfg(not(target_arch = "wasm32"))]
+            reg_functions!(lib += num_128_to_float::to_float(i128, u128));
         }
     }
 
-    lib.set_fn_1("to_int", |ch: char| Ok(ch as INT));
+    reg_functions!(lib += basic_to_int::to_int(char));
 
-    if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
-        lib.set_fn_1("to_int", |x: i8| Ok(x as INT));
-        lib.set_fn_1("to_int", |x: u8| Ok(x as INT));
-        lib.set_fn_1("to_int", |x: i16| Ok(x as INT));
-        lib.set_fn_1("to_int", |x: u16| Ok(x as INT));
-    }
-
-    if cfg!(not(feature = "only_i32")) {
-        lib.set_fn_1("to_int", |x: i32| Ok(x as INT));
-        lib.set_fn_1("to_int", |x: u64| Ok(x as INT));
-
-        if cfg!(feature = "only_i64") {
-            lib.set_fn_1("to_int", |x: u32| Ok(x as INT));
-        }
-    }
-
-    #[cfg(not(feature = "no_float"))]
+    #[cfg(not(feature = "only_i32"))]
+    #[cfg(not(feature = "only_i64"))]
     {
-        if cfg!(not(feature = "unchecked")) {
-            lib.set_fn_1("to_int", |x: f32| {
-                if x > (MAX_INT as f32) {
-                    return EvalAltResult::ErrorArithmetic(
-                        format!("Integer overflow: to_int({})", x),
-                        Position::none(),
-                    )
-                    .into();
-                }
+        reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
 
-                Ok(x.trunc() as INT)
-            });
-            lib.set_fn_1("to_int", |x: FLOAT| {
-                if x > (MAX_INT as FLOAT) {
-                    return EvalAltResult::ErrorArithmetic(
-                        format!("Integer overflow: to_int({})", x),
-                        Position::none(),
-                    )
-                    .into();
-                }
-
-                Ok(x.trunc() as INT)
-            });
-        }
-
-        if cfg!(feature = "unchecked") {
-            lib.set_fn_1("to_int", |x: f32| Ok(x as INT));
-            lib.set_fn_1("to_int", |x: f64| Ok(x as INT));
-        }
+        #[cfg(not(target_arch = "wasm32"))]
+        reg_functions!(lib += num_128_to_int::to_int(i128, u128));
     }
 });
 
@@ -256,4 +231,55 @@ mod float_functions {
     pub fn is_infinite_prop(x: FLOAT) -> bool {
         is_infinite(x)
     }
+    #[rhai_fn(name = "to_int", return_raw)]
+    #[inline]
+    pub fn f32_to_int(x: f32) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
+            EvalAltResult::ErrorArithmetic(
+                format!("Integer overflow: to_int({})", x),
+                Position::none(),
+            )
+            .into()
+        } else {
+            Ok((x.trunc() as INT).into())
+        }
+    }
+    #[rhai_fn(name = "to_int", return_raw)]
+    #[inline]
+    pub fn f64_to_int(x: f64) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
+            EvalAltResult::ErrorArithmetic(
+                format!("Integer overflow: to_int({})", x),
+                Position::none(),
+            )
+            .into()
+        } else {
+            Ok((x.trunc() as INT).into())
+        }
+    }
 }
+
+#[cfg(not(feature = "no_float"))]
+gen_conversion_functions!(basic_to_float => to_float (INT) -> FLOAT);
+
+#[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+gen_conversion_functions!(numbers_to_float => to_float (i8, u8, i16, u16, i32, u32, i64, u64) -> FLOAT);
+
+#[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+#[cfg(not(target_arch = "wasm32"))]
+gen_conversion_functions!(num_128_to_float => to_float (i128, u128) -> FLOAT);
+
+gen_conversion_functions!(basic_to_int => to_int (char) -> INT);
+
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+gen_conversion_functions!(numbers_to_int => to_int (i8, u8, i16, u16, i32, u32, i64, u64) -> INT);
+
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+#[cfg(not(target_arch = "wasm32"))]
+gen_conversion_functions!(num_128_to_int => to_int (i128, u128) -> INT);

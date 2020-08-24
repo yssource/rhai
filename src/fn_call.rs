@@ -52,6 +52,10 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::{collections::HashSet, string::String};
 
+#[cfg(feature = "no_std")]
+#[cfg(not(feature = "no_float"))]
+use num_traits::float::Float;
+
 /// Extract the property name from a getter function name.
 #[inline(always)]
 fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
@@ -1120,7 +1124,7 @@ pub fn run_builtin_binary_op(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
-    use crate::packages::arithmetic::*;
+    use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
 
@@ -1134,14 +1138,14 @@ pub fn run_builtin_binary_op(
 
         if cfg!(not(feature = "unchecked")) {
             match op {
-                "+" => return add(x, y).map(Into::into).map(Some),
-                "-" => return sub(x, y).map(Into::into).map(Some),
-                "*" => return mul(x, y).map(Into::into).map(Some),
-                "/" => return div(x, y).map(Into::into).map(Some),
-                "%" => return modulo(x, y).map(Into::into).map(Some),
-                "~" => return pow_i_i(x, y).map(Into::into).map(Some),
-                ">>" => return shr(x, y).map(Into::into).map(Some),
-                "<<" => return shl(x, y).map(Into::into).map(Some),
+                "+" => return add(x, y).map(Some),
+                "-" => return subtract(x, y).map(Some),
+                "*" => return multiply(x, y).map(Some),
+                "/" => return divide(x, y).map(Some),
+                "%" => return modulo(x, y).map(Some),
+                "~" => return power(x, y).map(Some),
+                ">>" => return shift_right(x, y).map(Some),
+                "<<" => return shift_left(x, y).map(Some),
                 _ => (),
             }
         } else {
@@ -1151,9 +1155,9 @@ pub fn run_builtin_binary_op(
                 "*" => return Ok(Some((x * y).into())),
                 "/" => return Ok(Some((x / y).into())),
                 "%" => return Ok(Some((x % y).into())),
-                "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
-                ">>" => return shr_u(x, y).map(Into::into).map(Some),
-                "<<" => return shl_u(x, y).map(Into::into).map(Some),
+                "~" => return Ok(Some(x.pow(y as u32).into())),
+                ">>" => return Ok(Some((x >> y).into())),
+                "<<" => return Ok(Some((x << y).into())),
                 _ => (),
             }
         }
@@ -1228,7 +1232,7 @@ pub fn run_builtin_binary_op(
             "*" => return Ok(Some((x * y).into())),
             "/" => return Ok(Some((x / y).into())),
             "%" => return Ok(Some((x % y).into())),
-            "~" => return pow_f_f(x, y).map(Into::into).map(Some),
+            "~" => return Ok(Some(x.powf(y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             ">" => return Ok(Some((x > y).into())),
@@ -1248,7 +1252,7 @@ pub fn run_builtin_op_assignment(
     x: &mut Dynamic,
     y: &Dynamic,
 ) -> Result<Option<()>, Box<EvalAltResult>> {
-    use crate::packages::arithmetic::*;
+    use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
 
@@ -1262,14 +1266,14 @@ pub fn run_builtin_op_assignment(
 
         if cfg!(not(feature = "unchecked")) {
             match op {
-                "+=" => return Ok(Some(*x = add(*x, y)?)),
-                "-=" => return Ok(Some(*x = sub(*x, y)?)),
-                "*=" => return Ok(Some(*x = mul(*x, y)?)),
-                "/=" => return Ok(Some(*x = div(*x, y)?)),
-                "%=" => return Ok(Some(*x = modulo(*x, y)?)),
-                "~=" => return Ok(Some(*x = pow_i_i(*x, y)?)),
-                ">>=" => return Ok(Some(*x = shr(*x, y)?)),
-                "<<=" => return Ok(Some(*x = shl(*x, y)?)),
+                "+=" => return Ok(Some(*x = add(*x, y)?.as_int().unwrap())),
+                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_int().unwrap())),
+                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_int().unwrap())),
+                "/=" => return Ok(Some(*x = divide(*x, y)?.as_int().unwrap())),
+                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_int().unwrap())),
+                "~=" => return Ok(Some(*x = power(*x, y)?.as_int().unwrap())),
+                ">>=" => return Ok(Some(*x = shift_right(*x, y)?.as_int().unwrap())),
+                "<<=" => return Ok(Some(*x = shift_left(*x, y)?.as_int().unwrap())),
                 _ => (),
             }
         } else {
@@ -1279,9 +1283,9 @@ pub fn run_builtin_op_assignment(
                 "*=" => return Ok(Some(*x *= y)),
                 "/=" => return Ok(Some(*x /= y)),
                 "%=" => return Ok(Some(*x %= y)),
-                "~=" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
-                ">>=" => return Ok(Some(*x = shr_u(*x, y)?)),
-                "<<=" => return Ok(Some(*x = shl_u(*x, y)?)),
+                "~=" => return Ok(Some(*x = x.pow(y as u32))),
+                ">>=" => return Ok(Some(*x = *x >> y)),
+                "<<=" => return Ok(Some(*x = *x << y)),
                 _ => (),
             }
         }
@@ -1322,7 +1326,7 @@ pub fn run_builtin_op_assignment(
             "*=" => return Ok(Some(*x *= y)),
             "/=" => return Ok(Some(*x /= y)),
             "%=" => return Ok(Some(*x %= y)),
-            "~=" => return Ok(Some(*x = pow_f_f(*x, y)?)),
+            "~=" => return Ok(Some(*x = x.powf(y))),
             _ => (),
         }
     }

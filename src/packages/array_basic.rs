@@ -59,7 +59,7 @@ macro_rules! reg_pad {
 }
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    lib.combine(exported_module!(array_functions));
+    lib.combine_flatten(exported_module!(array_functions));
 
     reg_functions!(lib += basic; INT, bool, char, ImmutableString, FnPtr, Array, Unit);
     reg_pad!(lib, INT, bool, char, ImmutableString, FnPtr, Array, Unit);

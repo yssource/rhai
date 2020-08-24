@@ -59,10 +59,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     #[cfg(not(feature = "no_float"))]
     reg_functions!(lib += float; f32, f64);
 
-    #[cfg(not(feature = "no_index"))]
-    lib.combine(exported_module!(index_functions));
-
-    lib.combine(exported_module!(string_functions));
+    lib.combine_flatten(exported_module!(string_functions));
 
     lib.set_raw_fn(
         "pad",
@@ -343,21 +340,20 @@ mod string_functions {
     pub fn replace_char(s: &mut ImmutableString, find: char, sub: char) {
         *s = s.replace(&find.to_string(), &sub.to_string()).into();
     }
-}
 
-#[cfg(not(feature = "no_index"))]
-#[export_module]
-mod index_functions {
-    use crate::engine::Array;
+    #[cfg(not(feature = "no_index"))]
+    pub mod arrays {
+        use crate::engine::Array;
 
-    #[rhai_fn(name = "+")]
-    #[inline]
-    pub fn append(x: &mut ImmutableString, y: Array) -> String {
-        format!("{}{:?}", x, y)
-    }
-    #[rhai_fn(name = "+")]
-    #[inline]
-    pub fn prepend(x: &mut Array, y: ImmutableString) -> String {
-        format!("{:?}{}", x, y)
+        #[rhai_fn(name = "+")]
+        #[inline]
+        pub fn append(x: &mut ImmutableString, y: Array) -> String {
+            format!("{}{:?}", x, y)
+        }
+        #[rhai_fn(name = "+")]
+        #[inline]
+        pub fn prepend(x: &mut Array, y: ImmutableString) -> String {
+            format!("{:?}{}", x, y)
+        }
     }
 }

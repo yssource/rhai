@@ -15,6 +15,15 @@ Bug fixes
 Version 0.18.2
 ==============
 
+New features
+------------
+
+* Adds `Module::combine_flatten` to combine two modules while flattening to the root level.
+
+
+Version 0.18.2
+==============
+
 Bug fixes
 ---------
 
