@@ -1,4 +1,6 @@
-use quote::quote;
+use std::collections::HashMap;
+
+use quote::{quote, ToTokens};
 
 use crate::function::ExportedFn;
 use crate::module::Module;
@@ -6,9 +8,9 @@ use crate::module::Module;
 pub(crate) type ExportedConst = (String, syn::Expr);
 
 pub(crate) fn generate_body(
-    fns: &Vec<ExportedFn>,
-    consts: &Vec<ExportedConst>,
-    submodules: &Vec<Module>,
+    fns: &[ExportedFn],
+    consts: &[ExportedConst],
+    submodules: &[Module],
 ) -> proc_macro2::TokenStream {
     let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
     let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
@@ -26,17 +28,21 @@ pub(crate) fn generate_body(
     }
 
     for itemmod in submodules {
+        if itemmod.skipped() {
+            continue;
+        }
         let module_name: &syn::Ident = itemmod.module_name().unwrap();
         let exported_name: syn::LitStr = if let Some(name) = itemmod.exported_name() {
             syn::LitStr::new(&name, proc_macro2::Span::call_site())
         } else {
             syn::LitStr::new(&module_name.to_string(), proc_macro2::Span::call_site())
         };
-        let cfg_attrs: Vec<&syn::Attribute> = itemmod.attrs().unwrap().iter().filter(|&a| {
-            a.path.get_ident()
-                .map(|i| i.to_string() == "cfg")
-                .unwrap_or(false)
-        }).collect();
+        let cfg_attrs: Vec<&syn::Attribute> = itemmod
+            .attrs()
+            .unwrap()
+            .iter()
+            .filter(|&a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
+            .collect();
         add_mod_blocks.push(
             syn::parse2::<syn::ExprBlock>(quote! {
                 #(#cfg_attrs)* {
@@ -47,10 +53,12 @@ pub(crate) fn generate_body(
         );
     }
 
-
     // NB: these are token streams, because reparsing messes up "> >" vs ">>"
     let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
     for function in fns {
+        if function.params.skip {
+            continue;
+        }
         let fn_token_name = syn::Ident::new(
             &format!("{}_token", function.name().to_string()),
             function.name().span(),
@@ -67,24 +75,24 @@ pub(crate) fn generate_body(
                 syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
                 syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
                     let arg_type = match ty.as_ref() {
-                        &syn::Type::Reference(syn::TypeReference {
+                        syn::Type::Reference(syn::TypeReference {
                             mutability: None,
                             ref elem,
                             ..
                         }) => match elem.as_ref() {
-                            &syn::Type::Path(ref p) if p.path == str_type_path => {
+                            syn::Type::Path(ref p) if p.path == str_type_path => {
                                 syn::parse2::<syn::Type>(quote! {
                                 ImmutableString })
                                 .unwrap()
                             }
                             _ => panic!("internal error: non-string shared reference!?"),
                         },
-                        &syn::Type::Reference(syn::TypeReference {
+                        syn::Type::Reference(syn::TypeReference {
                             mutability: Some(_),
                             ref elem,
                             ..
                         }) => match elem.as_ref() {
-                            &syn::Type::Path(ref p) => syn::parse2::<syn::Type>(quote! {
+                            syn::Type::Path(ref p) => syn::parse2::<syn::Type>(quote! {
                             #p })
                             .unwrap(),
                             _ => panic!("internal error: non-string shared reference!?"),
@@ -137,4 +145,54 @@ pub(crate) fn generate_body(
         #(#generate_call_content)*
         #(#gen_fn_tokens)*
     }
+}
+
+pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> {
+    let mut renames = HashMap::<String, proc_macro2::Span>::new();
+    let mut names = HashMap::<String, proc_macro2::Span>::new();
+    for itemfn in fns.iter() {
+        if let Some(ref name) = itemfn.params.name {
+            let current_span = itemfn.params.span.as_ref().unwrap();
+            let key = itemfn.arg_list().fold(name.clone(), |mut argstr, fnarg| {
+                let type_string: String = match fnarg {
+                    syn::FnArg::Receiver(_) => unimplemented!("receiver rhai_fns not implemented"),
+                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
+                        ty.as_ref().to_token_stream().to_string()
+                    }
+                };
+                argstr.push('.');
+                argstr.push_str(&type_string);
+                argstr
+            });
+            if let Some(other_span) = renames.insert(key, *current_span) {
+                let mut err = syn::Error::new(
+                    *current_span,
+                    format!("duplicate Rhai signature for '{}'", &name),
+                );
+                err.combine(syn::Error::new(
+                    other_span,
+                    format!("duplicated function renamed '{}'", &name),
+                ));
+                return Err(err);
+            }
+        } else {
+            let ident = itemfn.name();
+            names.insert(ident.to_string(), ident.span());
+        }
+    }
+    for (new_name, attr_span) in renames.drain() {
+        let new_name = new_name.split('.').next().unwrap();
+        if let Some(fn_span) = names.get(new_name) {
+            let mut err = syn::Error::new(
+                attr_span,
+                format!("duplicate Rhai signature for '{}'", &new_name),
+            );
+            err.combine(syn::Error::new(
+                *fn_span,
+                format!("duplicated function '{}'", &new_name),
+            ));
+            return Err(err);
+        }
+    }
+    Ok(())
 }

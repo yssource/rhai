@@ -289,7 +289,7 @@ mod string_functions {
     }
 
     #[rhai_fn(name = "crop")]
-    fn crop_string(s: &mut ImmutableString, start: INT, len: INT) {
+    pub fn crop_string(s: &mut ImmutableString, start: INT, len: INT) {
         let offset = if s.is_empty() || len <= 0 {
             s.make_mut().clear();
             return;
