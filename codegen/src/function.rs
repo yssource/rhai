@@ -2,16 +2,18 @@
 
 #[cfg(no_std)]
 use core::mem;
+#[cfg(not(no_std))]
+use std::mem;
 
 #[cfg(no_std)]
 use alloc::format;
 #[cfg(not(no_std))]
 use std::format;
 
-use std::collections::HashMap;
-
 use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
+
+use crate::attrs::{ExportInfo, ExportedParams};
 
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
@@ -19,14 +21,6 @@ pub(crate) struct ExportedFnParams {
     pub return_raw: bool,
     pub skip: bool,
     pub span: Option<proc_macro2::Span>,
-}
-
-impl ExportedFnParams {
-    pub fn skip() -> ExportedFnParams {
-        let mut skip = ExportedFnParams::default();
-        skip.skip = true;
-        skip
-    }
 }
 
 pub const FN_IDX_GET: &str = "index$get$";
@@ -45,58 +39,44 @@ impl Parse for ExportedFnParams {
             return Ok(ExportedFnParams::default());
         }
 
-        let arg_list = args.call(
-            syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty,
-        )?;
-        let span = arg_list.span();
+        let info = crate::attrs::parse_attr_items(args)?;
+        Self::from_info(info)
+    }
+}
 
-        let mut attrs: HashMap<proc_macro2::Ident, Option<syn::LitStr>> = HashMap::new();
-        for arg in arg_list {
-            let (left, right) = match arg {
-                syn::Expr::Assign(syn::ExprAssign {
-                    ref left,
-                    ref right,
-                    ..
-                }) => {
-                    let attr_name: syn::Ident = match left.as_ref() {
-                        syn::Expr::Path(syn::ExprPath {
-                            path: attr_path, ..
-                        }) => attr_path.get_ident().cloned().ok_or_else(|| {
-                            syn::Error::new(attr_path.span(), "expecting attribute name")
-                        })?,
-                        x => return Err(syn::Error::new(x.span(), "expecting attribute name")),
-                    };
-                    let attr_value = match right.as_ref() {
-                        syn::Expr::Lit(syn::ExprLit {
-                            lit: syn::Lit::Str(string),
-                            ..
-                        }) => string.clone(),
-                        x => return Err(syn::Error::new(x.span(), "expecting string literal")),
-                    };
-                    (attr_name, Some(attr_value))
-                }
-                syn::Expr::Path(syn::ExprPath {
-                    path: attr_path, ..
-                }) => attr_path
-                    .get_ident()
-                    .cloned()
-                    .map(|a| (a, None))
-                    .ok_or_else(|| syn::Error::new(attr_path.span(), "expecting attribute name"))?,
-                x => return Err(syn::Error::new(x.span(), "expecting identifier")),
-            };
-            attrs.insert(left, right);
-        }
+impl ExportedParams for ExportedFnParams {
+    fn parse_stream(args: ParseStream) -> syn::Result<Self> {
+        Self::parse(args)
+    }
 
+    fn no_attrs() -> Self {
+        Default::default()
+    }
+
+    fn from_info(
+        info: crate::attrs::ExportInfo,
+    ) -> syn::Result<Self> {
+        let ExportInfo { item_span: span, items: attrs } = info;
         let mut name = None;
         let mut return_raw = false;
         let mut skip = false;
-        for (ident, value) in attrs.drain() {
-            match (ident.to_string().as_ref(), value) {
-                ("name", Some(s)) => name = Some(s.value()),
+        for attr in attrs {
+            let crate::attrs::AttrItem { key, value } = attr;
+            match (key.to_string().as_ref(), value) {
+                ("name", Some(s)) => {
+                    // check validity of name
+                    if s.value().contains('.') {
+                        return Err(syn::Error::new(
+                            s.span(),
+                            "Rhai function names may not contain dot",
+                        ));
+                    }
+                    name = Some(s.value())
+                }
                 ("get", Some(s)) => name = Some(make_getter(&s.value())),
                 ("set", Some(s)) => name = Some(make_setter(&s.value())),
                 ("get", None) | ("set", None) | ("name", None) => {
-                    return Err(syn::Error::new(ident.span(), "requires value"))
+                    return Err(syn::Error::new(key.span(), "requires value"))
                 }
                 ("index_get", None) => name = Some(FN_IDX_GET.to_string()),
                 ("index_set", None) => name = Some(FN_IDX_SET.to_string()),
@@ -108,19 +88,11 @@ impl Parse for ExportedFnParams {
                 ("skip", Some(s)) => return Err(syn::Error::new(s.span(), "extraneous value")),
                 (attr, _) => {
                     return Err(syn::Error::new(
-                        ident.span(),
+                        key.span(),
                         format!("unknown attribute '{}'", attr),
                     ))
                 }
             }
-        }
-
-        // Check validity of name, if present.
-        if name.as_ref().filter(|n| n.contains('.')).is_some() {
-            return Err(syn::Error::new(
-                span,
-                "Rhai function names may not contain dot"
-            ))
         }
 
         Ok(ExportedFnParams {
@@ -149,20 +121,10 @@ impl Parse for ExportedFn {
         let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
 
         // #[cfg] attributes are not allowed on functions due to what is generated for them
-        if let Some(cfg_attr) = fn_all.attrs.iter().find(|a| {
-            a.path
-                .get_ident()
-                .map(|i| i.to_string() == "cfg")
-                .unwrap_or(false)
-        }) {
-            return Err(syn::Error::new(cfg_attr.span(), "cfg attributes not allowed on this item"));
-        }
+        crate::attrs::deny_cfg_attr(&fn_all.attrs)?;
 
         // Determine if the function is public.
-        let is_public = match fn_all.vis {
-            syn::Visibility::Public(_) => true,
-            _ => false,
-        };
+        let is_public = matches!(fn_all.vis, syn::Visibility::Public(_));
         // Determine whether function generates a special calling convention for a mutable
         // reciever.
         let mut_receiver = {
@@ -214,10 +176,7 @@ impl Parse for ExportedFn {
                     mutability: None,
                     ref elem,
                     ..
-                }) => match elem.as_ref() {
-                    &syn::Type::Path(ref p) if p.path == str_type_path => true,
-                    _ => false,
-                },
+                }) => matches!(elem.as_ref(), &syn::Type::Path(ref p) if p.path == str_type_path),
                 &syn::Type::Verbatim(_) => false,
                 _ => true,
             };
@@ -291,12 +250,22 @@ impl ExportedFn {
         }
     }
 
-    pub fn generate_with_params(
-        mut self,
-        mut params: ExportedFnParams,
-    ) -> proc_macro2::TokenStream {
+    pub fn set_params(&mut self, mut params: ExportedFnParams) -> syn::Result<()> {
+        // Do not allow non-returning raw functions.
+        //
+        // This is caught now to avoid issues with diagnostics later.
+        if params.return_raw
+            && mem::discriminant(&self.signature.output)
+                == mem::discriminant(&syn::ReturnType::Default)
+        {
+            return Err(syn::Error::new(
+                self.signature.span(),
+                "return_raw functions must return Result<T>",
+            ));
+        }
+
         self.params = params;
-        self.generate()
+        Ok(())
     }
 
     pub fn generate(self) -> proc_macro2::TokenStream {
@@ -353,7 +322,7 @@ impl ExportedFn {
                 }
             }
         } else {
-            quote! {
+            quote_spanned! { self.return_type().unwrap().span()=>
                 type EvalBox = Box<EvalAltResult>;
                 pub #dynamic_signature {
                     super::#name(#(#arguments),*)
@@ -520,7 +489,7 @@ impl ExportedFn {
                 Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
             }
         } else {
-            quote! {
+            quote_spanned! { self.return_type().unwrap().span()=>
                 #sig_name(#(#unpack_exprs),*)
             }
         };
@@ -607,7 +576,7 @@ mod function_tests {
             &syn::parse2::<syn::FnArg>(quote! { x: usize }).unwrap()
         );
         assert_eq!(
-            item_fn.arg_list().skip(1).next().unwrap(),
+            item_fn.arg_list().nth(1).unwrap(),
             &syn::parse2::<syn::FnArg>(quote! { y: f32 }).unwrap()
         );
     }
@@ -728,7 +697,7 @@ mod function_tests {
             &syn::parse2::<syn::FnArg>(quote! { level: usize }).unwrap()
         );
         assert_eq!(
-            item_fn.arg_list().skip(1).next().unwrap(),
+            item_fn.arg_list().nth(1).unwrap(),
             &syn::parse2::<syn::FnArg>(quote! { message: &str }).unwrap()
         );
     }

@@ -96,6 +96,7 @@
 use quote::quote;
 use syn::parse_macro_input;
 
+mod attrs;
 mod function;
 mod module;
 mod register;
@@ -108,10 +109,16 @@ pub fn export_fn(
 ) -> proc_macro::TokenStream {
     let mut output = proc_macro2::TokenStream::from(input.clone());
 
-    let parsed_params = parse_macro_input!(args as function::ExportedFnParams);
-    let function_def = parse_macro_input!(input as function::ExportedFn);
+    let parsed_params = match crate::attrs::outer_item_attributes(args.into(), "export_fn") {
+        Ok(args) => args,
+        Err(err) => return proc_macro::TokenStream::from(err.to_compile_error()),
+    };
+    let mut function_def = parse_macro_input!(input as function::ExportedFn);
+    if let Err(e) = function_def.set_params(parsed_params) {
+        return e.to_compile_error().into();
+    }
 
-    output.extend(function_def.generate_with_params(parsed_params));
+    output.extend(function_def.generate());
     proc_macro::TokenStream::from(output)
 }
 
