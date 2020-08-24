@@ -41,9 +41,9 @@ macro_rules! gen_conversion_functions {
 }
 
 macro_rules! reg_functions {
-    ($mod_name:ident += $root:ident :: $func_name:ident ( $($arg_type:ident),+ ) ) => {
-        $(set_exported_fn!($mod_name, stringify!($func_name), $root::$arg_type::$func_name);)*
-    }
+    ($mod_name:ident += $root:ident :: $func_name:ident ( $($arg_type:ident),+ ) ) => { $(
+        set_exported_fn!($mod_name, stringify!($func_name), $root::$arg_type::$func_name);
+    )* }
 }
 
 def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {

@@ -265,9 +265,9 @@ macro_rules! gen_signed_functions {
 }
 
 macro_rules! reg_functions {
-    ($mod_name:ident += $root:ident ; $($arg_type:ident),+ ) => {
-        $($mod_name.combine_flatten(exported_module!($root::$arg_type::functions));)*
-    }
+    ($mod_name:ident += $root:ident ; $($arg_type:ident),+ ) => { $(
+        $mod_name.combine_flatten(exported_module!($root::$arg_type::functions));
+    )* }
 }
 
 def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
@@ -288,7 +288,10 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
 
     // Basic arithmetic for floating-point
     #[cfg(not(feature = "no_float"))]
-    lib.combine_flatten(exported_module!(float_functions));
+    {
+        lib.combine_flatten(exported_module!(f32_functions));
+        lib.combine_flatten(exported_module!(f64_functions));
+    }
 });
 
 gen_arithmetic_functions!(arith_basic => INT);
@@ -315,7 +318,7 @@ gen_signed_functions!(signed_num_128 => i128);
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]
-mod float_functions {
+mod f32_functions {
     #[rhai_fn(name = "+")]
     #[inline(always)]
     pub fn add(x: f32, y: f32) -> f32 {
@@ -343,38 +346,15 @@ mod float_functions {
     }
     #[rhai_fn(name = "-")]
     #[inline(always)]
-    pub fn neg_f32(x: f32) -> f32 {
+    pub fn neg(x: f32) -> f32 {
         -x
     }
-    #[rhai_fn(name = "-")]
     #[inline(always)]
-    pub fn neg_f64(x: f64) -> f64 {
-        -x
-    }
-    #[rhai_fn(name = "abs")]
-    #[inline(always)]
-    pub fn abs_f32(x: f32) -> f32 {
+    pub fn abs(x: f32) -> f32 {
         x.abs()
     }
-    #[rhai_fn(name = "abs")]
-    #[inline(always)]
-    pub fn abs_f64(x: f64) -> f64 {
-        x.abs()
-    }
-    #[rhai_fn(name = "sign")]
     #[inline]
-    pub fn sign_f32(x: f32) -> INT {
-        if x == 0.0 {
-            0
-        } else if x < 0.0 {
-            -1
-        } else {
-            1
-        }
-    }
-    #[rhai_fn(name = "sign")]
-    #[inline]
-    pub fn sign_f64(x: f64) -> INT {
+    pub fn sign(x: f32) -> INT {
         if x == 0.0 {
             0
         } else if x < 0.0 {
@@ -385,8 +365,45 @@ mod float_functions {
     }
     #[rhai_fn(name = "~", return_raw)]
     #[inline(always)]
-    pub fn pow_f_f(x: FLOAT, y: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
-        Ok(x.powf(y).into())
+    pub fn pow_f_f(x: f32, y: f32) -> Result<Dynamic, Box<EvalAltResult>> {
+        Ok(Dynamic::from(x.powf(y)))
+    }
+    #[rhai_fn(name = "~", return_raw)]
+    #[inline]
+    pub fn pow_f_i(x: f32, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
+            EvalAltResult::ErrorArithmetic(
+                format!("Number raised to too large an index: {} ~ {}", x, y),
+                Position::none(),
+            )
+            .into()
+        } else {
+            Ok(Dynamic::from(x.powi(y as i32)))
+        }
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+#[export_module]
+mod f64_functions {
+    #[rhai_fn(name = "-")]
+    #[inline(always)]
+    pub fn neg(x: f64) -> f64 {
+        -x
+    }
+    #[inline(always)]
+    pub fn abs(x: f64) -> f64 {
+        x.abs()
+    }
+    #[inline]
+    pub fn sign(x: f64) -> INT {
+        if x == 0.0 {
+            0
+        } else if x < 0.0 {
+            -1
+        } else {
+            1
+        }
     }
     #[rhai_fn(name = "~", return_raw)]
     #[inline]

@@ -38,10 +38,10 @@ macro_rules! gen_concat_functions {
 }
 
 macro_rules! reg_functions {
-    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => {
-        $(set_exported_fn!($mod_name, "+", $root::$arg_type::append_func);)*
-        $(set_exported_fn!($mod_name, "+", $root::$arg_type::prepend_func);)*
-    }
+    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
+        set_exported_fn!($mod_name, "+", $root::$arg_type::append_func);
+        set_exported_fn!($mod_name, "+", $root::$arg_type::prepend_func);
+    )* }
 }
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
