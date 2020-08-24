@@ -197,17 +197,17 @@ macro_rules! gen_arithmetic_functions {
                     }
                     #[rhai_fn(name = "&")]
                     #[inline(always)]
-                    fn binary_and(x: $arg_type, y: $arg_type) -> $arg_type {
+                    pub fn binary_and(x: $arg_type, y: $arg_type) -> $arg_type {
                         x & y
                     }
                     #[rhai_fn(name = "|")]
                     #[inline(always)]
-                    fn binary_or(x: $arg_type, y: $arg_type) -> $arg_type {
+                    pub fn binary_or(x: $arg_type, y: $arg_type) -> $arg_type {
                         x | y
                     }
                     #[rhai_fn(name = "^")]
                     #[inline(always)]
-                    fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
+                    pub fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
                         x ^ y
                     }
                 }

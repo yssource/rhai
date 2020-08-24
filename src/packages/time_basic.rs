@@ -66,7 +66,7 @@ mod time_functions {
     }
 
     #[rhai_fn(return_raw, name = "-")]
-    fn time_diff(ts1: Instant, ts2: Instant) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn time_diff(ts1: Instant, ts2: Instant) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
         {
             Ok(if ts2 > ts1 {
