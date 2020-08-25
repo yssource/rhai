@@ -4,9 +4,6 @@ use crate::parser::INT;
 
 use crate::{result::EvalAltResult, token::Position};
 
-#[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
-
 use num_traits::{
     identities::Zero, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl,
     CheckedShr, CheckedSub,
@@ -238,18 +235,28 @@ pub fn pow_i_i(x: INT, y: INT) -> FuncReturn<INT> {
         }
     }
 }
-// Unchecked integer power - may panic on overflow or if the power index is too high (> u32::MAX)
-pub fn pow_i_i_u(x: INT, y: INT) -> FuncReturn<INT> {
-    Ok(x.pow(y as u32))
-}
 // Floating-point power - always well-defined
 #[cfg(not(feature = "no_float"))]
-pub fn pow_f_f(x: FLOAT, y: FLOAT) -> FuncReturn<FLOAT> {
+pub fn pow_f_f_32(x: f32, y: f32) -> FuncReturn<f32> {
     Ok(x.powf(y))
 }
 // Checked power
 #[cfg(not(feature = "no_float"))]
-pub fn pow_f_i(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
+pub fn pow_f_i_32(x: f32, y: INT) -> FuncReturn<f32> {
+    // Raise to power that is larger than an i32
+    if y > (i32::MAX as INT) {
+        return EvalAltResult::ErrorArithmetic(
+            format!("Number raised to too large an index: {} ~ {}", x, y),
+            Position::none(),
+        )
+        .into();
+    }
+
+    Ok(x.powi(y as i32))
+}
+// Checked power
+#[cfg(not(feature = "no_float"))]
+pub fn pow_f_i_64(x: f64, y: INT) -> FuncReturn<f64> {
     // Raise to power that is larger than an i32
     if y > (i32::MAX as INT) {
         return EvalAltResult::ErrorArithmetic(
@@ -263,7 +270,12 @@ pub fn pow_f_i(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
 }
 // Unchecked power - may be incorrect if the power index is too high (> i32::MAX)
 #[cfg(not(feature = "no_float"))]
-pub fn pow_f_i_u(x: FLOAT, y: INT) -> FuncReturn<FLOAT> {
+pub fn pow_f_i_u_32(x: f32, y: INT) -> FuncReturn<f32> {
+    Ok(x.powi(y as i32))
+}
+// Unchecked power - may be incorrect if the power index is too high (> i32::MAX)
+#[cfg(not(feature = "no_float"))]
+pub fn pow_f_i_u_64(x: f64, y: INT) -> FuncReturn<f64> {
     Ok(x.powi(y as i32))
 }
 
@@ -352,6 +364,7 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
         reg_op!(lib, "-", sub_u, f32);
         reg_op!(lib, "*", mul_u, f32);
         reg_op!(lib, "/", div_u, f32);
+        reg_op!(lib, "%", modulo_u, f32);
         reg_sign!(lib, "sign", f32, f32);
         reg_sign!(lib, "sign", f64, f64);
     }
@@ -370,15 +383,17 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
 
     #[cfg(not(feature = "no_float"))]
     {
-        // Checked power
-        if cfg!(not(feature = "unchecked")) {
-            lib.set_fn_2("~", pow_f_i);
-        } else {
-            lib.set_fn_2("~", pow_f_i_u);
-        }
+        // Power
+        lib.set_fn_2("~", pow_f_f_32);
 
-        // Floating-point modulo and power
-        reg_op!(lib, "%", modulo_u, f32);
+        // Checked float raised to integer power
+        if cfg!(not(feature = "unchecked")) {
+            lib.set_fn_2("~", pow_f_i_32);
+            lib.set_fn_2("~", pow_f_i_64);
+        } else {
+            lib.set_fn_2("~", pow_f_i_u_32);
+            lib.set_fn_2("~", pow_f_i_u_64);
+        }
 
         // Floating-point unary
         reg_unary!(lib, "-", neg_u, f32, f64);
