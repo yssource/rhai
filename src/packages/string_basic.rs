@@ -37,16 +37,16 @@ macro_rules! gen_functions {
 }
 
 macro_rules! reg_print_functions {
-    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => {
-        $(set_exported_fn!($mod_name, FN_TO_STRING, $root::$arg_type::to_string_func);)*
-        $(set_exported_fn!($mod_name, KEYWORD_PRINT, $root::$arg_type::to_string_func);)*
-    }
+    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
+        set_exported_fn!($mod_name, FN_TO_STRING, $root::$arg_type::to_string_func);
+        set_exported_fn!($mod_name, KEYWORD_PRINT, $root::$arg_type::to_string_func);
+    )* }
 }
 
 macro_rules! reg_debug_functions {
-    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => {
-        $(set_exported_fn!($mod_name, KEYWORD_DEBUG, $root::$arg_type::to_string_func);)*
-    }
+    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
+        set_exported_fn!($mod_name, KEYWORD_DEBUG, $root::$arg_type::to_string_func);
+    )* }
 }
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {

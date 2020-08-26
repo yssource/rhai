@@ -11,6 +11,9 @@ use crate::plugin::*;
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};
 
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
+
 use crate::stdlib::{any::TypeId, boxed::Box};
 
 #[cfg(not(feature = "unchecked"))]
@@ -41,47 +44,35 @@ macro_rules! gen_array_functions {
 }
 
 macro_rules! reg_functions {
-    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => {
-        $(set_exported_fn!($mod_name, "push", $root::$arg_type::push_func);)*
-        $(set_exported_fn!($mod_name, "insert", $root::$arg_type::insert_func);)*
-    }
-}
+    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
+        set_exported_fn!($mod_name, "push", $root::$arg_type::push_func);
+        set_exported_fn!($mod_name, "insert", $root::$arg_type::insert_func);
 
-macro_rules! reg_pad {
-    ($lib:expr, $($par:ty),*) => {
-        $({
-            $lib.set_raw_fn("pad",
-                &[TypeId::of::<Array>(), TypeId::of::<INT>(), TypeId::of::<$par>()],
-                pad::<$par>
-            );
-        })*
-    };
+        $mod_name.set_raw_fn("pad",
+            &[TypeId::of::<Array>(), TypeId::of::<INT>(), TypeId::of::<$arg_type>()],
+            pad::<$arg_type>);
+    )* }
 }
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     lib.combine_flatten(exported_module!(array_functions));
 
     reg_functions!(lib += basic; INT, bool, char, ImmutableString, FnPtr, Array, Unit);
-    reg_pad!(lib, INT, bool, char, ImmutableString, FnPtr, Array, Unit);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
         reg_functions!(lib += numbers; i8, u8, i16, u16, i32, i64, u32, u64);
-        reg_pad!(lib, u8, i16, u16, i32, u32, i64, u64);
 
         #[cfg(not(target_arch = "wasm32"))]
-        {
-            reg_functions!(lib += num_128; i128, u128);
-            reg_pad!(lib, i128, u128);
-        }
+        reg_functions!(lib += num_128; i128, u128);
     }
 
     #[cfg(not(feature = "no_float"))]
-    {
-        reg_functions!(lib += float; f32, f64);
-        reg_pad!(lib, f32, f64);
-    }
+    reg_functions!(lib += float; f32, f64);
+
+    #[cfg(not(feature = "no_object"))]
+    reg_functions!(lib += map; Map);
 
     // Register array iterator
     lib.set_iter(
@@ -207,3 +198,6 @@ gen_array_functions!(num_128 => i128, u128);
 
 #[cfg(not(feature = "no_float"))]
 gen_array_functions!(float => f32, f64);
+
+#[cfg(not(feature = "no_object"))]
+gen_array_functions!(map => Map);
