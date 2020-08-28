@@ -112,9 +112,9 @@ impl Parse for Module {
                         true
                     };
                     syn::parse2::<ExportedFn>(itemfn.to_token_stream())
-                        .map(|mut f| {
-                            f.params = params;
-                            f
+                        .and_then(|mut f| {
+                            f.set_params(params)?;
+                            Ok(f)
                         })
                         .map(|f| vec.push(f))
                         .map(|_| vec)
@@ -411,7 +411,7 @@ mod module_tests {
         assert!(item_mod.consts.is_empty());
         assert_eq!(item_mod.submodules.len(), 1);
         assert_eq!(item_mod.submodules[0].fns.len(), 1);
-        assert!(item_mod.submodules[0].fns[0].params.skip);
+        assert!(item_mod.submodules[0].fns[0].skipped());
         assert!(item_mod.submodules[0].consts.is_empty());
         assert!(item_mod.submodules[0].submodules.is_empty());
     }
@@ -433,7 +433,7 @@ mod module_tests {
         assert!(item_mod.fns.is_empty());
         assert!(item_mod.consts.is_empty());
         assert_eq!(item_mod.submodules.len(), 1);
-        assert!(item_mod.submodules[0].params.skip);
+        assert!(item_mod.submodules[0].skipped());
     }
 
     #[test]
@@ -466,7 +466,7 @@ mod module_tests {
 
         let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
         assert_eq!(item_mod.fns.len(), 1);
-        assert!(item_mod.fns[0].params.skip);
+        assert!(item_mod.fns[0].skipped());
         assert!(item_mod.consts.is_empty());
     }
 
@@ -483,7 +483,7 @@ mod module_tests {
 
         let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
         assert_eq!(item_mod.fns.len(), 1);
-        assert!(item_mod.fns[0].params.skip);
+        assert!(item_mod.fns[0].skipped());
         assert!(item_mod.consts.is_empty());
     }
 

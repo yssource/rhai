@@ -111,7 +111,7 @@ pub(crate) struct ExportedFn {
     signature: syn::Signature,
     is_public: bool,
     mut_receiver: bool,
-    pub params: ExportedFnParams,
+    params: ExportedFnParams,
 }
 
 impl Parse for ExportedFn {
@@ -218,6 +218,14 @@ impl Parse for ExportedFn {
 }
 
 impl ExportedFn {
+    pub(crate) fn params(&self) -> &ExportedFnParams {
+        &self.params
+    }
+
+    pub(crate) fn skipped(&self) -> bool {
+        self.params.skip
+    }
+
     pub(crate) fn mutable_receiver(&self) -> bool {
         self.mut_receiver
     }
