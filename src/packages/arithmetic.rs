@@ -17,250 +17,246 @@ use crate::stdlib::format;
 
 macro_rules! gen_arithmetic_functions {
     ($root:ident => $($arg_type:ident),+) => {
-        pub mod $root { $(
-            pub mod $arg_type {
-                use super::super::*;
+        pub mod $root { $(pub mod $arg_type {
+            use super::super::*;
 
-                #[export_module]
-                pub mod functions {
-                    #[rhai_fn(name = "+", return_raw)]
-                    #[inline]
-                    pub fn add(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            x.checked_add(y).ok_or_else(|| {
+            #[export_module]
+            pub mod functions {
+                #[rhai_fn(name = "+", return_raw)]
+                #[inline]
+                pub fn add(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        x.checked_add(y).ok_or_else(|| {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Addition overflow: {} + {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        }).map(Dynamic::from)
+                    } else {
+                        Ok(Dynamic::from(x + y))
+                    }
+                }
+                #[rhai_fn(name = "-", return_raw)]
+                #[inline]
+                pub fn subtract(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        x.checked_sub(y).ok_or_else(|| {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Subtraction overflow: {} - {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        }).map(Dynamic::from)
+                    } else {
+                        Ok(Dynamic::from(x - y))
+                    }
+                }
+                #[rhai_fn(name = "*", return_raw)]
+                #[inline]
+                pub fn multiply(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        x.checked_mul(y).ok_or_else(|| {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Multiplication overflow: {} * {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        }).map(Dynamic::from)
+                    } else {
+                        Ok(Dynamic::from(x * y))
+                    }
+                }
+                #[rhai_fn(name = "/", return_raw)]
+                #[inline]
+                pub fn divide(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        // Detect division by zero
+                        if y == 0 {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Division by zero: {} / {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        } else {
+                            x.checked_div(y).ok_or_else(|| {
                                 EvalAltResult::ErrorArithmetic(
-                                    format!("Addition overflow: {} + {}", x, y),
+                                    format!("Division overflow: {} / {}", x, y),
                                     Position::none(),
                                 )
                                 .into()
                             }).map(Dynamic::from)
-                        } else {
-                            Ok(Dynamic::from(x + y))
                         }
+                    } else {
+                        Ok(Dynamic::from(x / y))
                     }
-                    #[rhai_fn(name = "-", return_raw)]
-                    #[inline]
-                    pub fn subtract(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            x.checked_sub(y).ok_or_else(|| {
+                }
+                #[rhai_fn(name = "%", return_raw)]
+                #[inline]
+                pub fn modulo(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        x.checked_rem(y).ok_or_else(|| {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Modulo division by zero or overflow: {} % {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        }).map(Dynamic::from)
+                    } else {
+                        Ok(Dynamic::from(x % y))
+                    }
+                }
+                #[rhai_fn(name = "~", return_raw)]
+                #[inline]
+                pub fn power(x: INT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Integer raised to too large an index: {} ~ {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        } else if y < 0 {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Integer raised to a negative index: {} ~ {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        } else {
+                            x.checked_pow(y as u32).ok_or_else(|| {
                                 EvalAltResult::ErrorArithmetic(
-                                    format!("Subtraction overflow: {} - {}", x, y),
+                                    format!("Power overflow: {} ~ {}", x, y),
                                     Position::none(),
                                 )
                                 .into()
                             }).map(Dynamic::from)
-                        } else {
-                            Ok(Dynamic::from(x - y))
                         }
+                    } else {
+                        Ok(Dynamic::from(x.pow(y as u32)))
                     }
-                    #[rhai_fn(name = "*", return_raw)]
-                    #[inline]
-                    pub fn multiply(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            x.checked_mul(y).ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Multiplication overflow: {} * {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            }).map(Dynamic::from)
-                        } else {
-                            Ok(Dynamic::from(x * y))
-                        }
-                    }
-                    #[rhai_fn(name = "/", return_raw)]
-                    #[inline]
-                    pub fn divide(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            // Detect division by zero
-                            if y == 0 {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Division by zero: {} / {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            } else {
-                                x.checked_div(y).ok_or_else(|| {
-                                    EvalAltResult::ErrorArithmetic(
-                                        format!("Division overflow: {} / {}", x, y),
-                                        Position::none(),
-                                    )
-                                    .into()
-                                }).map(Dynamic::from)
-                            }
-                        } else {
-                            Ok(Dynamic::from(x / y))
-                        }
-                    }
-                    #[rhai_fn(name = "%", return_raw)]
-                    #[inline]
-                    pub fn modulo(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            x.checked_rem(y).ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Modulo division by zero or overflow: {} % {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            }).map(Dynamic::from)
-                        } else {
-                            Ok(Dynamic::from(x % y))
-                        }
-                    }
-                    #[rhai_fn(name = "~", return_raw)]
-                    #[inline]
-                    pub fn power(x: INT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Integer raised to too large an index: {} ~ {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            } else if y < 0 {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Integer raised to a negative index: {} ~ {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            } else {
-                                x.checked_pow(y as u32).ok_or_else(|| {
-                                    EvalAltResult::ErrorArithmetic(
-                                        format!("Power overflow: {} ~ {}", x, y),
-                                        Position::none(),
-                                    )
-                                    .into()
-                                }).map(Dynamic::from)
-                            }
-                        } else {
-                            Ok(Dynamic::from(x.pow(y as u32)))
-                        }
-                    }
+                }
 
-                    #[rhai_fn(name = "<<", return_raw)]
-                    #[inline]
-                    pub fn shift_left(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
+                #[rhai_fn(name = "<<", return_raw)]
+                #[inline]
+                pub fn shift_left(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Left-shift by too many bits: {} << {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        } else if y < 0 {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Left-shift by a negative number: {} << {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        } else {
+                            x.checked_shl(y as u32).ok_or_else(|| {
                                 EvalAltResult::ErrorArithmetic(
                                     format!("Left-shift by too many bits: {} << {}", x, y),
                                     Position::none(),
                                 )
                                 .into()
-                            } else if y < 0 {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Left-shift by a negative number: {} << {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            } else {
-                                x.checked_shl(y as u32).ok_or_else(|| {
-                                    EvalAltResult::ErrorArithmetic(
-                                        format!("Left-shift by too many bits: {} << {}", x, y),
-                                        Position::none(),
-                                    )
-                                    .into()
-                                }).map(Dynamic::from)
-                            }
-                        } else {
-                            Ok(Dynamic::from(x << y))
+                            }).map(Dynamic::from)
                         }
+                    } else {
+                        Ok(Dynamic::from(x << y))
                     }
-                    #[rhai_fn(name = ">>", return_raw)]
-                    #[inline]
-                    pub fn shift_right(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
+                }
+                #[rhai_fn(name = ">>", return_raw)]
+                #[inline]
+                pub fn shift_right(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Right-shift by too many bits: {} >> {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        } else if y < 0 {
+                            EvalAltResult::ErrorArithmetic(
+                                format!("Right-shift by a negative number: {} >> {}", x, y),
+                                Position::none(),
+                            )
+                            .into()
+                        } else {
+                            x.checked_shr(y as u32).ok_or_else(|| {
                                 EvalAltResult::ErrorArithmetic(
                                     format!("Right-shift by too many bits: {} >> {}", x, y),
                                     Position::none(),
                                 )
                                 .into()
-                            } else if y < 0 {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Right-shift by a negative number: {} >> {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            } else {
-                                x.checked_shr(y as u32).ok_or_else(|| {
-                                    EvalAltResult::ErrorArithmetic(
-                                        format!("Right-shift by too many bits: {} >> {}", x, y),
-                                        Position::none(),
-                                    )
-                                    .into()
-                                }).map(Dynamic::from)
-                            }
-                        } else {
-                            Ok(Dynamic::from(x >> y))
+                            }).map(Dynamic::from)
                         }
-                    }
-                    #[rhai_fn(name = "&")]
-                    #[inline(always)]
-                    pub fn binary_and(x: $arg_type, y: $arg_type) -> $arg_type {
-                        x & y
-                    }
-                    #[rhai_fn(name = "|")]
-                    #[inline(always)]
-                    pub fn binary_or(x: $arg_type, y: $arg_type) -> $arg_type {
-                        x | y
-                    }
-                    #[rhai_fn(name = "^")]
-                    #[inline(always)]
-                    pub fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
-                        x ^ y
+                    } else {
+                        Ok(Dynamic::from(x >> y))
                     }
                 }
+                #[rhai_fn(name = "&")]
+                #[inline(always)]
+                pub fn binary_and(x: $arg_type, y: $arg_type) -> $arg_type {
+                    x & y
+                }
+                #[rhai_fn(name = "|")]
+                #[inline(always)]
+                pub fn binary_or(x: $arg_type, y: $arg_type) -> $arg_type {
+                    x | y
+                }
+                #[rhai_fn(name = "^")]
+                #[inline(always)]
+                pub fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
+                    x ^ y
+                }
             }
-        )* }
+        })* }
     }
 }
 
 macro_rules! gen_signed_functions {
     ($root:ident => $($arg_type:ident),+) => {
-        pub mod $root { $(
-            pub mod $arg_type {
-                use super::super::*;
+        pub mod $root { $(pub mod $arg_type {
+            use super::super::*;
 
-                #[export_module]
-                pub mod functions {
-                    #[rhai_fn(name = "-", return_raw)]
-                    #[inline]
-                    pub fn neg(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            x.checked_neg().ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
-                                    .into()
-                            }).map(Dynamic::from)
-                        } else {
-                            Ok(Dynamic::from(-x))
-                        }
+            #[export_module]
+            pub mod functions {
+                #[rhai_fn(name = "-", return_raw)]
+                #[inline]
+                pub fn neg(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        x.checked_neg().ok_or_else(|| {
+                            EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
+                                .into()
+                        }).map(Dynamic::from)
+                    } else {
+                        Ok(Dynamic::from(-x))
                     }
-                    #[rhai_fn(return_raw)]
-                    #[inline]
-                    pub fn abs(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                        if cfg!(not(feature = "unchecked")) {
-                            x.checked_abs().ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
-                                    .into()
-                            }).map(Dynamic::from)
-                        } else {
-                            Ok(Dynamic::from(x.abs()))
-                        }
+                }
+                #[rhai_fn(return_raw)]
+                #[inline]
+                pub fn abs(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                    if cfg!(not(feature = "unchecked")) {
+                        x.checked_abs().ok_or_else(|| {
+                            EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
+                                .into()
+                        }).map(Dynamic::from)
+                    } else {
+                        Ok(Dynamic::from(x.abs()))
                     }
-                    #[inline]
-                    pub fn sign(x: $arg_type) -> INT {
-                        if x == 0 {
-                            0
-                        } else if x < 0 {
-                            -1
-                        } else {
-                            1
-                        }
+                }
+                #[inline]
+                pub fn sign(x: $arg_type) -> INT {
+                    if x == 0 {
+                        0
+                    } else if x < 0 {
+                        -1
+                    } else {
+                        1
                     }
                 }
             }
-        )* }
+        })* }
     }
 }
 
