@@ -26,17 +26,15 @@ pub const MAX_INT: INT = i64::MAX;
 
 macro_rules! gen_conversion_functions {
     ($root:ident => $func_name:ident ( $($arg_type:ident),+ ) -> $result_type:ty) => {
-        pub mod $root { $(
-            pub mod $arg_type {
-                use super::super::*;
+        pub mod $root { $(pub mod $arg_type {
+            use super::super::*;
 
-                #[export_fn]
-                #[inline(always)]
-                pub fn $func_name(x: $arg_type) -> $result_type {
-                    x as $result_type
-                }
+            #[export_fn]
+            #[inline(always)]
+            pub fn $func_name(x: $arg_type) -> $result_type {
+                x as $result_type
             }
-        )* }
+        })* }
     }
 }
 

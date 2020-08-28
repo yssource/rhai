@@ -3,45 +3,43 @@ use crate::plugin::*;
 
 macro_rules! gen_cmp_functions {
     ($root:ident => $($arg_type:ident),+) => {
-        mod $root { $(
-            pub mod $arg_type {
-                use crate::plugin::*;
+        mod $root { $(pub mod $arg_type {
+            use super::super::*;
 
-                #[export_module]
-                pub mod functions {
-                    #[rhai_fn(name = "<")]
-                    #[inline(always)]
-                    pub fn lt(x: $arg_type, y: $arg_type) -> bool {
-                        x < y
-                    }
-                    #[rhai_fn(name = "<=")]
-                    #[inline(always)]
-                    pub fn lte(x: $arg_type, y: $arg_type) -> bool {
-                        x <= y
-                    }
-                    #[rhai_fn(name = ">")]
-                    #[inline(always)]
-                    pub fn gt(x: $arg_type, y: $arg_type) -> bool {
-                        x > y
-                    }
-                    #[rhai_fn(name = ">=")]
-                    #[inline(always)]
-                    pub fn gte(x: $arg_type, y: $arg_type) -> bool {
-                        x >= y
-                    }
-                    #[rhai_fn(name = "==")]
-                    #[inline(always)]
-                    pub fn eq(x: $arg_type, y: $arg_type) -> bool {
-                        x == y
-                    }
-                    #[rhai_fn(name = "!=")]
-                    #[inline(always)]
-                    pub fn ne(x: $arg_type, y: $arg_type) -> bool {
-                        x != y
-                    }
+            #[export_module]
+            pub mod functions {
+                #[rhai_fn(name = "<")]
+                #[inline(always)]
+                pub fn lt(x: $arg_type, y: $arg_type) -> bool {
+                    x < y
+                }
+                #[rhai_fn(name = "<=")]
+                #[inline(always)]
+                pub fn lte(x: $arg_type, y: $arg_type) -> bool {
+                    x <= y
+                }
+                #[rhai_fn(name = ">")]
+                #[inline(always)]
+                pub fn gt(x: $arg_type, y: $arg_type) -> bool {
+                    x > y
+                }
+                #[rhai_fn(name = ">=")]
+                #[inline(always)]
+                pub fn gte(x: $arg_type, y: $arg_type) -> bool {
+                    x >= y
+                }
+                #[rhai_fn(name = "==")]
+                #[inline(always)]
+                pub fn eq(x: $arg_type, y: $arg_type) -> bool {
+                    x == y
+                }
+                #[rhai_fn(name = "!=")]
+                #[inline(always)]
+                pub fn ne(x: $arg_type, y: $arg_type) -> bool {
+                    x != y
                 }
             }
-        )* }
+        })* }
     };
 }
 
