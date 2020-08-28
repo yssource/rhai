@@ -111,7 +111,7 @@ pub(crate) struct ExportedFn {
     signature: syn::Signature,
     is_public: bool,
     mut_receiver: bool,
-    pub params: ExportedFnParams,
+    params: ExportedFnParams,
 }
 
 impl Parse for ExportedFn {
@@ -218,6 +218,14 @@ impl Parse for ExportedFn {
 }
 
 impl ExportedFn {
+    pub(crate) fn params(&self) -> &ExportedFnParams {
+        &self.params
+    }
+
+    pub(crate) fn skipped(&self) -> bool {
+        self.params.skip
+    }
+
     pub(crate) fn mutable_receiver(&self) -> bool {
         self.mut_receiver
     }
@@ -314,15 +322,17 @@ impl ExportedFn {
             })
             .collect();
 
+        let return_span = self.return_type().map(|r| r.span())
+            .unwrap_or_else(|| proc_macro2::Span::call_site());
         if !self.params.return_raw {
-            quote! {
+            quote_spanned! { return_span=>
                 type EvalBox = Box<EvalAltResult>;
                 pub #dynamic_signature {
                     Ok(Dynamic::from(super::#name(#(#arguments),*)))
                 }
             }
         } else {
-            quote_spanned! { self.return_type().unwrap().span()=>
+            quote_spanned! { return_span=>
                 type EvalBox = Box<EvalAltResult>;
                 pub #dynamic_signature {
                     super::#name(#(#arguments),*)
@@ -484,12 +494,14 @@ impl ExportedFn {
         // Handle "raw returns", aka cases where the result is a dynamic or an error.
         //
         // This allows skipping the Dynamic::from wrap.
+        let return_span = self.return_type().map(|r| r.span())
+            .unwrap_or_else(|| proc_macro2::Span::call_site());
         let return_expr = if !self.params.return_raw {
-            quote! {
+            quote_spanned! { return_span=>
                 Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
             }
         } else {
-            quote_spanned! { self.return_type().unwrap().span()=>
+            quote_spanned! { return_span=>
                 #sig_name(#(#unpack_exprs),*)
             }
         };

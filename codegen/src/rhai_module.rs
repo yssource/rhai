@@ -56,7 +56,7 @@ pub(crate) fn generate_body(
     // NB: these are token streams, because reparsing messes up "> >" vs ">>"
     let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
     for function in fns {
-        if function.params.skip {
+        if function.skipped() {
             continue;
         }
         let fn_token_name = syn::Ident::new(
@@ -64,7 +64,7 @@ pub(crate) fn generate_body(
             function.name().span(),
         );
         let reg_name = function
-            .params
+            .params()
             .name
             .clone()
             .unwrap_or_else(|| function.name().to_string());
@@ -151,8 +151,8 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
     let mut renames = HashMap::<String, proc_macro2::Span>::new();
     let mut names = HashMap::<String, proc_macro2::Span>::new();
     for itemfn in fns.iter() {
-        if let Some(ref name) = itemfn.params.name {
-            let current_span = itemfn.params.span.as_ref().unwrap();
+        if let Some(ref name) = itemfn.params().name {
+            let current_span = itemfn.params().span.as_ref().unwrap();
             let key = itemfn.arg_list().fold(name.clone(), |mut argstr, fnarg| {
                 let type_string: String = match fnarg {
                     syn::FnArg::Receiver(_) => unimplemented!("receiver rhai_fns not implemented"),
@@ -177,7 +177,17 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
             }
         } else {
             let ident = itemfn.name();
-            names.insert(ident.to_string(), ident.span());
+            if let Some(other_span) = names.insert(ident.to_string(), ident.span()) {
+                let mut err = syn::Error::new(
+                    ident.span(),
+                    format!("duplicate function '{}'", ident.to_string()),
+                );
+                err.combine(syn::Error::new(
+                    other_span,
+                    format!("duplicated function '{}'", ident.to_string()),
+                ));
+                return Err(err);
+            }
         }
     }
     for (new_name, attr_span) in renames.drain() {
