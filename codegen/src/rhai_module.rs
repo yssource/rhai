@@ -177,7 +177,17 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
             }
         } else {
             let ident = itemfn.name();
-            names.insert(ident.to_string(), ident.span());
+            if let Some(other_span) = names.insert(ident.to_string(), ident.span()) {
+                let mut err = syn::Error::new(
+                    ident.span(),
+                    format!("duplicate function '{}'", ident.to_string()),
+                );
+                err.combine(syn::Error::new(
+                    other_span,
+                    format!("duplicated function '{}'", ident.to_string()),
+                ));
+                return Err(err);
+            }
         }
     }
     for (new_name, attr_span) in renames.drain() {
