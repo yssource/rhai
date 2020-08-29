@@ -52,6 +52,10 @@ use crate::stdlib::{
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::{collections::HashSet, string::String};
 
+#[cfg(feature = "no_std")]
+#[cfg(not(feature = "no_float"))]
+use num_traits::float::Float;
+
 /// Extract the property name from a getter function name.
 #[inline(always)]
 fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
@@ -1146,9 +1150,9 @@ pub fn run_builtin_binary_op(
                 "*" => return Ok(Some((x * y).into())),
                 "/" => return Ok(Some((x / y).into())),
                 "%" => return Ok(Some((x % y).into())),
-                "~" => return pow_i_i_u(x, y).map(Into::into).map(Some),
-                ">>" => return shr_u(x, y).map(Into::into).map(Some),
-                "<<" => return shl_u(x, y).map(Into::into).map(Some),
+                "~" => return Ok(Some(x.pow(y as u32).into())),
+                ">>" => return Ok(Some((x >> y).into())),
+                "<<" => return Ok(Some((x << y).into())),
                 _ => (),
             }
         }
@@ -1223,7 +1227,7 @@ pub fn run_builtin_binary_op(
             "*" => return Ok(Some((x * y).into())),
             "/" => return Ok(Some((x / y).into())),
             "%" => return Ok(Some((x % y).into())),
-            "~" => return pow_f_f(x, y).map(Into::into).map(Some),
+            "~" => return Ok(Some(x.powf(y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             ">" => return Ok(Some((x > y).into())),
@@ -1274,9 +1278,9 @@ pub fn run_builtin_op_assignment(
                 "*=" => return Ok(Some(*x *= y)),
                 "/=" => return Ok(Some(*x /= y)),
                 "%=" => return Ok(Some(*x %= y)),
-                "~=" => return Ok(Some(*x = pow_i_i_u(*x, y)?)),
-                ">>=" => return Ok(Some(*x = shr_u(*x, y)?)),
-                "<<=" => return Ok(Some(*x = shl_u(*x, y)?)),
+                "~=" => return Ok(Some(*x = x.pow(y as u32))),
+                ">>=" => return Ok(Some(*x = *x >> y)),
+                "<<=" => return Ok(Some(*x = *x << y)),
                 _ => (),
             }
         }
@@ -1317,7 +1321,7 @@ pub fn run_builtin_op_assignment(
             "*=" => return Ok(Some(*x *= y)),
             "/=" => return Ok(Some(*x /= y)),
             "%=" => return Ok(Some(*x %= y)),
-            "~=" => return Ok(Some(*x = pow_f_f(*x, y)?)),
+            "~=" => return Ok(Some(*x = x.powf(y))),
             _ => (),
         }
     }
