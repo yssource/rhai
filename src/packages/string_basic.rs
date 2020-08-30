@@ -126,12 +126,12 @@ gen_functions!(print_array => to_debug(Array));
 #[export_fn]
 #[inline(always)]
 fn print_empty_string() -> ImmutableString {
-    String::new().into()
+    "".to_string().into()
 }
 #[export_fn]
 #[inline(always)]
 fn print_unit(_x: ()) -> ImmutableString {
-    String::new().into()
+    "".to_string().into()
 }
 #[export_fn]
 #[inline(always)]
