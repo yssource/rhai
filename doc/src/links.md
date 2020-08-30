@@ -33,7 +33,7 @@
 [packages]: {{rootUrl}}/rust/packages/index.md
 [custom package]: {{rootUrl}}/rust/packages/create.md
 [custom packages]: {{rootUrl}}/rust/packages/create.md
-[`Scope`]: {{rootUrl}}/rust/scope.md
+[`Scope`]: {{rootUrl}}/engine/scope.md
 [`serde`]: {{rootUrl}}/rust/serde.md
 
 [`type_of()`]: {{rootUrl}}/language/type-of.md
