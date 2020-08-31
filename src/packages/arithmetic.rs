@@ -13,7 +13,7 @@ use crate::parser::FLOAT;
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
 
-use crate::stdlib::format;
+use crate::stdlib::{format, string::String};
 
 #[inline(always)]
 pub fn make_err(msg: String) -> Box<EvalAltResult> {
