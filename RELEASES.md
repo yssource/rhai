@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.0
+==============
+
+New features
+------------
+
+* Plugins support via procedural macros.
+
+
 Version 0.18.3
 ==============
 

@@ -66,6 +66,8 @@ Flexible
 
 * Supports [most build targets](targets.md) including `no-std` and [WASM].
 
+* [Plugins] system powered by procedural macros simplifies custom API development.
+
 * Surgically [disable keywords and operators] to restrict the language.
 
 * Use as a [DSL] by [disabling keywords/operators][disable keywords and operators], [custom operators]
