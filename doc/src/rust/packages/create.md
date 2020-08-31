@@ -1,5 +1,5 @@
-Create a Custom Package
-======================
+Manually Create a Custom Package
+===============================
 
 {{#include ../../links.md}}
 
@@ -13,7 +13,7 @@ Loading a package into an [`Engine`] is functionally equivalent to calling `Engi
 on _each_ of the functions inside the package.  But because packages are _shared_, loading an existing
 package is _much_ cheaper than registering all the functions one by one.
 
-The macro `rhai::def_package!` is used to create a new custom package.
+The macro `rhai::def_package!` can be used to create a new custom package.
 
 
 Macro Parameters
@@ -51,5 +51,50 @@ def_package!(rhai:MyPackage:"My own personal super package", module, {
     module.set_fn_1("foo", |s: ImmutableString| {
         Ok(foo(s.into_owned()))
     });
+});
+```
+
+
+Create a Custom Package from a Plugin Module
+-------------------------------------------
+
+By far the easiest way to create a custom module is to call `Module::merge_flatten` from within
+`rhai::def_package!` which simply merges in all the functions defined within a [plugin module].
+
+In fact, this exactly is how Rhai's built-in packages, such as `BasicMathPackage`, are implemented.
+
+`rhai::plugins::exported_module!` generates a module from the [plugins][plugin module] definition,
+and `Module::merge_flatten` consumes its, adding all its registered functions into the package itself.
+
+```rust
+// Import necessary types and traits.
+use rhai::{
+    def_package,
+    packages::Package,
+    packages::{ArithmeticPackage, BasicArrayPackage, BasicMapPackage, LogicPackage}
+};
+use rhai::plugin::*;
+
+// Define plugin module.
+#[export_module]
+mod my_module {
+    pub fn greet(name: &str) -> String {
+        format!("hello, {}!", name)
+    }
+    pub fn get_num() -> i64 {
+        42
+    }
+}
+
+// Define the package 'MyPackage'.
+def_package!(rhai:MyPackage:"My own personal super package", module, {
+    // Aggregate existing packages simply by calling 'init' on each.
+    ArithmeticPackage::init(module);
+    LogicPackage::init(module);
+    BasicArrayPackage::init(module);
+    BasicMapPackage::init(module);
+
+    // Merge the plugin module into the custom package.
+    module.merge_flatten(exported_module!(my_module));
 });
 ```

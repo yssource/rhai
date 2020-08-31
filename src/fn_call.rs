@@ -231,7 +231,11 @@ impl Engine {
             backup.change_first_arg_to_copy(is_ref && func.is_pure(), args);
 
             // Run external function
-            let result = func.get_native_fn()(self, lib, args);
+            let result = if func.is_plugin_fn() {
+                func.get_plugin_fn().call(args, Position::none())
+            } else {
+                func.get_native_fn()(self, lib, args)
+            };
 
             // Restore the original reference
             backup.restore_first_arg(args);
@@ -1078,6 +1082,7 @@ impl Engine {
 
                 self.call_script_fn(scope, mods, state, lib, &mut None, name, func, args, level)
             }
+            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut(), Position::none()),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1119,7 +1124,7 @@ pub fn run_builtin_binary_op(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
-    use crate::packages::arithmetic::*;
+    use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
 
@@ -1133,14 +1138,14 @@ pub fn run_builtin_binary_op(
 
         if cfg!(not(feature = "unchecked")) {
             match op {
-                "+" => return add(x, y).map(Into::into).map(Some),
-                "-" => return sub(x, y).map(Into::into).map(Some),
-                "*" => return mul(x, y).map(Into::into).map(Some),
-                "/" => return div(x, y).map(Into::into).map(Some),
-                "%" => return modulo(x, y).map(Into::into).map(Some),
-                "~" => return pow_i_i(x, y).map(Into::into).map(Some),
-                ">>" => return shr(x, y).map(Into::into).map(Some),
-                "<<" => return shl(x, y).map(Into::into).map(Some),
+                "+" => return add(x, y).map(Some),
+                "-" => return subtract(x, y).map(Some),
+                "*" => return multiply(x, y).map(Some),
+                "/" => return divide(x, y).map(Some),
+                "%" => return modulo(x, y).map(Some),
+                "~" => return power(x, y).map(Some),
+                ">>" => return shift_right(x, y).map(Some),
+                "<<" => return shift_left(x, y).map(Some),
                 _ => (),
             }
         } else {
@@ -1247,7 +1252,7 @@ pub fn run_builtin_op_assignment(
     x: &mut Dynamic,
     y: &Dynamic,
 ) -> Result<Option<()>, Box<EvalAltResult>> {
-    use crate::packages::arithmetic::*;
+    use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
 
@@ -1261,14 +1266,14 @@ pub fn run_builtin_op_assignment(
 
         if cfg!(not(feature = "unchecked")) {
             match op {
-                "+=" => return Ok(Some(*x = add(*x, y)?)),
-                "-=" => return Ok(Some(*x = sub(*x, y)?)),
-                "*=" => return Ok(Some(*x = mul(*x, y)?)),
-                "/=" => return Ok(Some(*x = div(*x, y)?)),
-                "%=" => return Ok(Some(*x = modulo(*x, y)?)),
-                "~=" => return Ok(Some(*x = pow_i_i(*x, y)?)),
-                ">>=" => return Ok(Some(*x = shr(*x, y)?)),
-                "<<=" => return Ok(Some(*x = shl(*x, y)?)),
+                "+=" => return Ok(Some(*x = add(*x, y)?.as_int().unwrap())),
+                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_int().unwrap())),
+                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_int().unwrap())),
+                "/=" => return Ok(Some(*x = divide(*x, y)?.as_int().unwrap())),
+                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_int().unwrap())),
+                "~=" => return Ok(Some(*x = power(*x, y)?.as_int().unwrap())),
+                ">>=" => return Ok(Some(*x = shift_right(*x, y)?.as_int().unwrap())),
+                "<<=" => return Ok(Some(*x = shift_left(*x, y)?.as_int().unwrap())),
                 _ => (),
             }
         } else {

@@ -17,8 +17,8 @@ keywords = [ "scripting" ]
 categories = [ "no-std", "embedded", "wasm", "parser-implementations" ]
 
 [dependencies]
-num-traits = { version = "0.2.11", default-features = false }
 smallvec = { version = "1.4.1", default-features = false }
+rhai_codegen = { version = "0.1", path = "codegen" }
 
 [features]
 #default = ["unchecked", "sync", "no_optimize", "no_float", "only_i32", "no_index", "no_object", "no_function", "no_module"]
@@ -49,6 +49,11 @@ codegen-units = 1
 [dependencies.libm]
 version = "0.2.1"
 default_features = false
+optional = true
+
+[dependencies.num-traits]
+version = "0.2.11"
+default-features = false
 optional = true
 
 [dependencies.core-error]
