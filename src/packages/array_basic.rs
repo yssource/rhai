@@ -23,30 +23,33 @@ pub type Unit = ();
 
 macro_rules! gen_array_functions {
     ($root:ident => $($arg_type:ident),+ ) => {
-        pub mod $root { $(
-            pub mod $arg_type {
-                use super::super::*;
+        pub mod $root { $(pub mod $arg_type {
+            use super::super::*;
 
-                #[export_fn]
-                #[inline(always)]
-                pub fn push_func(list: &mut Array, item: $arg_type) {
-                    super::super::push(list, item);
-                }
+            #[export_fn]
+            #[inline(always)]
+            pub fn push(list: &mut Array, item: $arg_type) {
+                list.push(Dynamic::from(item));
+            }
 
-                #[export_fn]
-                #[inline(always)]
-                pub fn insert_func(list: &mut Array, len: INT, item: $arg_type) {
-                    super::super::insert(list, len, item);
+            #[export_fn]
+            pub fn insert(list: &mut Array, position: INT, item: $arg_type) {
+                if position <= 0 {
+                    list.insert(0, Dynamic::from(item));
+                } else if (position as usize) >= list.len() - 1 {
+                    push(list, item);
+                } else {
+                    list.insert(position as usize, Dynamic::from(item));
                 }
             }
-        )* }
+        })* }
     }
 }
 
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        set_exported_fn!($mod_name, "push", $root::$arg_type::push_func);
-        set_exported_fn!($mod_name, "insert", $root::$arg_type::insert_func);
+        set_exported_fn!($mod_name, "push", $root::$arg_type::push);
+        set_exported_fn!($mod_name, "insert", $root::$arg_type::insert);
 
         $mod_name.set_raw_fn("pad",
             &[TypeId::of::<Array>(), TypeId::of::<INT>(), TypeId::of::<$arg_type>()],
@@ -138,20 +141,6 @@ mod array_functions {
     }
 }
 
-// Register array utility functions
-#[inline(always)]
-fn push<T: Variant + Clone>(list: &mut Array, item: T) {
-    list.push(Dynamic::from(item));
-}
-fn insert<T: Variant + Clone>(list: &mut Array, position: INT, item: T) {
-    if position <= 0 {
-        list.insert(0, Dynamic::from(item));
-    } else if (position as usize) >= list.len() - 1 {
-        push(list, item);
-    } else {
-        list.insert(position as usize, Dynamic::from(item));
-    }
-}
 fn pad<T: Variant + Clone>(
     _engine: &Engine,
     _: &Module,

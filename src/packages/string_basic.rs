@@ -22,17 +22,15 @@ type Unit = ();
 
 macro_rules! gen_functions {
     ($root:ident => $fn_name:ident ( $($arg_type:ident),+ )) => {
-        pub mod $root { $(
-            pub mod $arg_type {
-                use super::super::*;
+        pub mod $root { $(pub mod $arg_type {
+            use super::super::*;
 
-                #[export_fn]
-                #[inline(always)]
-                pub fn to_string_func(x: &mut $arg_type) -> ImmutableString {
-                    super::super::$fn_name(x)
-                }
+            #[export_fn]
+            #[inline(always)]
+            pub fn to_string_func(x: &mut $arg_type) -> ImmutableString {
+                super::super::$fn_name(x)
             }
-        )* }
+        })* }
     }
 }
 
@@ -143,7 +141,7 @@ fn print_string(s: ImmutableString) -> ImmutableString {
 #[export_fn]
 #[inline(always)]
 fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
-    f.to_string().into()
+    to_string(f)
 }
 #[inline(always)]
 fn to_string<T: Display>(x: &mut T) -> ImmutableString {

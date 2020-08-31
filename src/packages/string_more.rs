@@ -12,28 +12,26 @@ use crate::utils::StaticVec;
 use crate::{result::EvalAltResult, token::Position};
 
 use crate::stdlib::{
-    any::TypeId, boxed::Box, fmt::Display, format, mem, string::String, string::ToString, vec::Vec,
+    any::TypeId, boxed::Box, format, mem, string::String, string::ToString, vec::Vec,
 };
 
 macro_rules! gen_concat_functions {
     ($root:ident => $($arg_type:ident),+ ) => {
-        pub mod $root { $(
-            pub mod $arg_type {
-                use super::super::*;
+        pub mod $root { $(pub mod $arg_type {
+            use super::super::*;
 
-                #[export_fn]
-                #[inline(always)]
-                pub fn append_func(x: &mut ImmutableString, y: $arg_type) -> String {
-                    super::super::add_append(x, y)
-                }
-
-                #[export_fn]
-                #[inline(always)]
-                pub fn prepend_func(x: &mut $arg_type, y: ImmutableString) -> String {
-                    super::super::add_prepend(x, y)
-                }
+            #[export_fn]
+            #[inline]
+            pub fn append_func(x: &mut ImmutableString, y: $arg_type) -> String {
+                format!("{}{}", x, y)
             }
-        )* }
+
+            #[export_fn]
+            #[inline]
+            pub fn prepend_func(x: &mut $arg_type, y: ImmutableString) -> String {
+                format!("{}{}", x, y)
+            }
+        })* }
     }
 }
 
@@ -115,15 +113,6 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
         ) as Box<dyn Iterator<Item = Dynamic>>,
     );
 });
-
-#[inline]
-fn add_prepend<T: Display>(x: &mut T, y: ImmutableString) -> String {
-    format!("{}{}", x, y)
-}
-#[inline]
-fn add_append<T: Display>(x: &mut ImmutableString, y: T) -> String {
-    format!("{}{}", x, y)
-}
 
 gen_concat_functions!(basic => INT, bool, char, FnPtr);
 
