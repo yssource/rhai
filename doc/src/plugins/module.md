@@ -20,12 +20,12 @@ Macros
 | --------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------- |
 | `#[export_module]`          | Rust module                                                                   | Export all `pub` functions                      |
 | `#[rhai_fn(skip)]`          | Function in Rust module                                                       | Do not export this function                     |
-| `#[rhai_fn(return_raw)]`    | `pub` function in Rust module returning `Result<Dynamic, Box<EvalAltResult>>` | Specify that this is a fallible function        |
+| `#[rhai_fn(return_raw)]`    | `pub` function in Rust module returning `Result<Dynamic, Box<EvalAltResult>>` | Specify that this is a [fallible function]      |
 | `#[rhai_fn(name = "...")]`  | `pub` function in Rust module                                                 | Register function under specific name           |
 | `#[rhai_fn(get = "...")]`   | `pub` function in Rust module (first parameter must be `&mut`)                | Register a property getter under specific name  |
 | `#[rhai_fn(set = "...")]`   | `pub` function in Rust module (first parameter must be `&mut`)                | Register a property setter under specific name  |
-| `#[rhai_fn(index_get]`      | `pub` function in Rust module (first parameter must be `&mut`)                | Register a index getter                         |
-| `#[rhai_fn(index_set)]`     | `pub` function in Rust module (first parameter must be `&mut`)                | Register a index setter                         |
+| `#[rhai_fn(index_get]`      | `pub` function in Rust module (first parameter must be `&mut`)                | Register an index getter                        |
+| `#[rhai_fn(index_set)]`     | `pub` function in Rust module (first parameter must be `&mut`)                | Register an index setter                        |
 | `#[rhai_mod(name = "...")]` | `pub` sub-module in Rust module                                               | Export the sub-module under specific name       |
 | `exported_module!`          | Rust module name                                                              | Create a [module] containing exported functions |
 
@@ -121,7 +121,7 @@ mod my_module {
         obj.list[index]
     }
     // This is an index setter for 'MyType'.
-    #[rhai_fn(index_get)]
+    #[rhai_fn(index_set)]
     pub fn get_index(obj: &mut MyType, index: i64, state: bool) {
         obj.list[index] = state;
     }

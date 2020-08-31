@@ -14,9 +14,9 @@ Macros
 | Macro                    | Apply to                                                      | Behavior                                                  |
 | ------------------------ | ------------------------------------------------------------- | --------------------------------------------------------- |
 | `#[export_fn]`           | Rust function defined in module                               | Export the function                                       |
-| `#[rhai_fn(return_raw)]` | Rust function returning `Result<Dynamic, Box<EvalAltResult>>` | Specify that this is a fallible function                  |
-| `register_exported_fn!`  | [`Engine`] instance, register name, function name             | Register function with the [`Engine`] under specific name |
-| `set_exported_fn!`       | [`Module`], register name, function name                      | Register function with the [`Module`] under specific name |
+| `#[rhai_fn(return_raw)]` | Rust function returning `Result<Dynamic, Box<EvalAltResult>>` | Specify that this is a [fallible function]                |
+| `register_exported_fn!`  | [`Engine`] instance, register name, function name             | Register function into the [`Engine`] under specific name |
+| `set_exported_fn!`       | [`Module`], register name, function name                      | Register function into the [`Module`] under specific name |
 
 
 `#[export_fn]` and `register_exported_fn!`
