@@ -1,8 +1,7 @@
 #![cfg(not(feature = "no_std"))]
 
 #[cfg(feature = "no_float")]
-#[cfg(not(feature = "unchecked"))]
-use super::math_basic::MAX_INT;
+use super::{arithmetic::make_err, math_basic::MAX_INT};
 
 use crate::def_package;
 use crate::plugin::*;
@@ -13,10 +12,6 @@ use crate::parser::FLOAT;
 
 #[cfg(feature = "no_float")]
 use crate::parser::INT;
-
-#[cfg(feature = "no_float")]
-#[cfg(not(feature = "unchecked"))]
-use crate::token::Position;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::time::Instant;
@@ -46,16 +41,14 @@ mod time_functions {
         {
             let seconds = timestamp.elapsed().as_secs();
 
-            #[cfg(not(feature = "unchecked"))]
-            if seconds > (MAX_INT as u64) {
-                return EvalAltResult::ErrorArithmetic(
-                    format!("Integer overflow for timestamp.elapsed: {}", seconds),
-                    Position::none(),
-                )
-                .into();
+            if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
+                Err(make_err(format!(
+                    "Integer overflow for timestamp.elapsed: {}",
+                    seconds
+                )))
+            } else {
+                Ok((seconds as INT).into())
             }
-
-            Ok((seconds as INT).into())
         }
     }
 
@@ -81,29 +74,25 @@ mod time_functions {
         if ts2 > ts1 {
             let seconds = (ts2 - ts1).as_secs();
 
-            #[cfg(not(feature = "unchecked"))]
-            if seconds > (MAX_INT as u64) {
-                return EvalAltResult::ErrorArithmetic(
-                    format!("Integer overflow for timestamp duration: -{}", seconds),
-                    Position::none(),
-                )
-                .into();
+            if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
+                Err(make_err(format!(
+                    "Integer overflow for timestamp duration: -{}",
+                    seconds
+                )))
+            } else {
+                Ok(Dynamic::from(-(seconds as INT)))
             }
-
-            Ok(Dynamic::from(-(seconds as INT)))
         } else {
             let seconds = (ts1 - ts2).as_secs();
 
-            #[cfg(not(feature = "unchecked"))]
-            if seconds > (MAX_INT as u64) {
-                return EvalAltResult::ErrorArithmetic(
-                    format!("Integer overflow for timestamp duration: {}", seconds),
-                    Position::none(),
-                )
-                .into();
+            if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
+                Err(make_err(format!(
+                    "Integer overflow for timestamp duration: {}",
+                    seconds
+                )))
+            } else {
+                Ok((seconds as INT).into())
             }
-
-            Ok((seconds as INT).into())
         }
     }
 

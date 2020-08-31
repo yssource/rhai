@@ -15,6 +15,11 @@ use num_traits::float::Float;
 
 use crate::stdlib::format;
 
+#[inline(always)]
+pub fn make_err(msg: String) -> Box<EvalAltResult> {
+    EvalAltResult::ErrorArithmetic(msg, Position::none()).into()
+}
+
 macro_rules! gen_arithmetic_functions {
     ($root:ident => $($arg_type:ident),+) => {
         pub mod $root { $(pub mod $arg_type {
@@ -26,13 +31,7 @@ macro_rules! gen_arithmetic_functions {
                 #[inline]
                 pub fn add(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
-                        x.checked_add(y).ok_or_else(|| {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Addition overflow: {} + {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
-                        }).map(Dynamic::from)
+                        x.checked_add(y).ok_or_else(|| make_err(format!("Addition overflow: {} + {}", x, y))).map(Dynamic::from)
                     } else {
                         Ok(Dynamic::from(x + y))
                     }
@@ -41,13 +40,7 @@ macro_rules! gen_arithmetic_functions {
                 #[inline]
                 pub fn subtract(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
-                        x.checked_sub(y).ok_or_else(|| {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Subtraction overflow: {} - {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
-                        }).map(Dynamic::from)
+                        x.checked_sub(y).ok_or_else(|| make_err(format!("Subtraction overflow: {} - {}", x, y))).map(Dynamic::from)
                     } else {
                         Ok(Dynamic::from(x - y))
                     }
@@ -56,13 +49,7 @@ macro_rules! gen_arithmetic_functions {
                 #[inline]
                 pub fn multiply(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
-                        x.checked_mul(y).ok_or_else(|| {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Multiplication overflow: {} * {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
-                        }).map(Dynamic::from)
+                        x.checked_mul(y).ok_or_else(|| make_err(format!("Multiplication overflow: {} * {}", x, y))).map(Dynamic::from)
                     } else {
                         Ok(Dynamic::from(x * y))
                     }
@@ -73,19 +60,9 @@ macro_rules! gen_arithmetic_functions {
                     if cfg!(not(feature = "unchecked")) {
                         // Detect division by zero
                         if y == 0 {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Division by zero: {} / {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
+                            Err(make_err(format!("Division by zero: {} / {}", x, y)))
                         } else {
-                            x.checked_div(y).ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Division overflow: {} / {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            }).map(Dynamic::from)
+                            x.checked_div(y).ok_or_else(|| make_err(format!("Division overflow: {} / {}", x, y))).map(Dynamic::from)
                         }
                     } else {
                         Ok(Dynamic::from(x / y))
@@ -95,13 +72,7 @@ macro_rules! gen_arithmetic_functions {
                 #[inline]
                 pub fn modulo(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
-                        x.checked_rem(y).ok_or_else(|| {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Modulo division by zero or overflow: {} % {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
-                        }).map(Dynamic::from)
+                        x.checked_rem(y).ok_or_else(|| make_err(format!("Modulo division by zero or overflow: {} % {}", x, y))).map(Dynamic::from)
                     } else {
                         Ok(Dynamic::from(x % y))
                     }
@@ -111,25 +82,11 @@ macro_rules! gen_arithmetic_functions {
                 pub fn power(x: INT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Integer raised to too large an index: {} ~ {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
+                            Err(make_err(format!("Integer raised to too large an index: {} ~ {}", x, y)))
                         } else if y < 0 {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Integer raised to a negative index: {} ~ {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
+                            Err(make_err(format!("Integer raised to a negative index: {} ~ {}", x, y)))
                         } else {
-                            x.checked_pow(y as u32).ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Power overflow: {} ~ {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            }).map(Dynamic::from)
+                            x.checked_pow(y as u32).ok_or_else(|| make_err(format!("Power overflow: {} ~ {}", x, y))).map(Dynamic::from)
                         }
                     } else {
                         Ok(Dynamic::from(x.pow(y as u32)))
@@ -141,25 +98,11 @@ macro_rules! gen_arithmetic_functions {
                 pub fn shift_left(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Left-shift by too many bits: {} << {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
+                            Err(make_err(format!("Left-shift by too many bits: {} << {}", x, y)))
                         } else if y < 0 {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Left-shift by a negative number: {} << {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
+                            Err(make_err(format!("Left-shift by a negative number: {} << {}", x, y)))
                         } else {
-                            x.checked_shl(y as u32).ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Left-shift by too many bits: {} << {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            }).map(Dynamic::from)
+                            x.checked_shl(y as u32).ok_or_else(|| make_err(format!("Left-shift by too many bits: {} << {}", x, y))).map(Dynamic::from)
                         }
                     } else {
                         Ok(Dynamic::from(x << y))
@@ -170,25 +113,11 @@ macro_rules! gen_arithmetic_functions {
                 pub fn shift_right(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Right-shift by too many bits: {} >> {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
+                            Err(make_err(format!("Right-shift by too many bits: {} >> {}", x, y)))
                         } else if y < 0 {
-                            EvalAltResult::ErrorArithmetic(
-                                format!("Right-shift by a negative number: {} >> {}", x, y),
-                                Position::none(),
-                            )
-                            .into()
+                            Err(make_err(format!("Right-shift by a negative number: {} >> {}", x, y)))
                         } else {
-                            x.checked_shr(y as u32).ok_or_else(|| {
-                                EvalAltResult::ErrorArithmetic(
-                                    format!("Right-shift by too many bits: {} >> {}", x, y),
-                                    Position::none(),
-                                )
-                                .into()
-                            }).map(Dynamic::from)
+                            x.checked_shr(y as u32).ok_or_else(|| make_err(format!("Right-shift by too many bits: {} >> {}", x, y))).map(Dynamic::from)
                         }
                     } else {
                         Ok(Dynamic::from(x >> y))
@@ -225,10 +154,7 @@ macro_rules! gen_signed_functions {
                 #[inline]
                 pub fn neg(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
-                        x.checked_neg().ok_or_else(|| {
-                            EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
-                                .into()
-                        }).map(Dynamic::from)
+                        x.checked_neg().ok_or_else(|| make_err(format!("Negation overflow: -{}", x))).map(Dynamic::from)
                     } else {
                         Ok(Dynamic::from(-x))
                     }
@@ -237,10 +163,7 @@ macro_rules! gen_signed_functions {
                 #[inline]
                 pub fn abs(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
-                        x.checked_abs().ok_or_else(|| {
-                            EvalAltResult::ErrorArithmetic(format!("Negation overflow: -{}", x), Position::none())
-                                .into()
-                        }).map(Dynamic::from)
+                        x.checked_abs().ok_or_else(|| make_err(format!("Negation overflow: -{}", x))).map(Dynamic::from)
                     } else {
                         Ok(Dynamic::from(x.abs()))
                     }
@@ -368,11 +291,10 @@ mod f32_functions {
     #[inline]
     pub fn pow_f_i(x: f32, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
-            EvalAltResult::ErrorArithmetic(
-                format!("Number raised to too large an index: {} ~ {}", x, y),
-                Position::none(),
-            )
-            .into()
+            Err(make_err(format!(
+                "Number raised to too large an index: {} ~ {}",
+                x, y
+            )))
         } else {
             Ok(Dynamic::from(x.powi(y as i32)))
         }
@@ -405,11 +327,10 @@ mod f64_functions {
     #[inline]
     pub fn pow_f_i(x: FLOAT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
-            EvalAltResult::ErrorArithmetic(
-                format!("Number raised to too large an index: {} ~ {}", x, y),
-                Position::none(),
-            )
-            .into()
+            Err(make_err(format!(
+                "Number raised to too large an index: {} ~ {}",
+                x, y
+            )))
         } else {
             Ok(x.powi(y as i32).into())
         }
