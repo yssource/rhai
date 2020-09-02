@@ -2,15 +2,17 @@ use std::collections::HashMap;
 
 use quote::{quote, ToTokens};
 
+use crate::attrs::ExportScope;
 use crate::function::ExportedFn;
 use crate::module::Module;
 
 pub(crate) type ExportedConst = (String, syn::Expr);
 
 pub(crate) fn generate_body(
-    fns: &[ExportedFn],
+    fns: &mut [ExportedFn],
     consts: &[ExportedConst],
-    submodules: &[Module],
+    submodules: &mut [Module],
+    parent_scope: &ExportScope,
 ) -> proc_macro2::TokenStream {
     let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
     let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
@@ -28,6 +30,7 @@ pub(crate) fn generate_body(
     }
 
     for itemmod in submodules {
+        itemmod.update_scope(&parent_scope);
         if itemmod.skipped() {
             continue;
         }
@@ -56,6 +59,7 @@ pub(crate) fn generate_body(
     // NB: these are token streams, because reparsing messes up "> >" vs ">>"
     let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
     for function in fns {
+        function.update_scope(&parent_scope);
         if function.skipped() {
             continue;
         }

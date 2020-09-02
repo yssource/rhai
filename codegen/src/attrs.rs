@@ -1,5 +1,18 @@
 use syn::{parse::ParseStream, parse::Parser, spanned::Spanned};
 
+#[derive(Debug)]
+pub enum ExportScope {
+    PubOnly,
+    Prefix(String),
+    All,
+}
+
+impl Default for ExportScope {
+    fn default() -> ExportScope {
+        ExportScope::PubOnly
+    }
+}
+
 pub trait ExportedParams: Sized {
     fn parse_stream(args: ParseStream) -> syn::Result<Self>;
     fn no_attrs() -> Self;

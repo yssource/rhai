@@ -16,13 +16,14 @@ use std::mem;
 
 use std::borrow::Cow;
 
-use crate::attrs::{AttrItem, ExportInfo, ExportedParams};
-use crate::function::{ExportedFnParams};
+use crate::attrs::{AttrItem, ExportInfo, ExportScope, ExportedParams};
+use crate::function::ExportedFnParams;
 
 #[derive(Debug, Default)]
 pub(crate) struct ExportedModParams {
     pub name: Option<String>,
-    pub skip: bool,
+    skip: bool,
+    pub scope: ExportScope,
 }
 
 impl Parse for ExportedModParams {
@@ -50,6 +51,7 @@ impl ExportedParams for ExportedModParams {
         let ExportInfo { items: attrs, .. } = info;
         let mut name = None;
         let mut skip = false;
+        let mut scope = ExportScope::default();
         for attr in attrs {
             let AttrItem { key, value } = attr;
             match (key.to_string().as_ref(), value) {
@@ -57,6 +59,14 @@ impl ExportedParams for ExportedModParams {
                 ("name", None) => return Err(syn::Error::new(key.span(), "requires value")),
                 ("skip", None) => skip = true,
                 ("skip", Some(s)) => return Err(syn::Error::new(s.span(), "extraneous value")),
+                ("export_prefix", Some(s)) => scope = ExportScope::Prefix(s.value()),
+                ("export_prefix", None) => {
+                    return Err(syn::Error::new(key.span(), "requires value"))
+                }
+                ("export_all", None) => scope = ExportScope::All,
+                ("export_all", Some(s)) => {
+                    return Err(syn::Error::new(s.span(), "extraneous value"))
+                }
                 (attr, _) => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -69,6 +79,7 @@ impl ExportedParams for ExportedModParams {
         Ok(ExportedModParams {
             name,
             skip,
+            scope,
             ..Default::default()
         })
     }
@@ -81,6 +92,13 @@ pub(crate) struct Module {
     consts: Vec<ExportedConst>,
     submodules: Vec<Module>,
     params: ExportedModParams,
+}
+
+impl Module {
+    pub fn set_params(&mut self, params: ExportedModParams) -> syn::Result<()> {
+        self.params = params;
+        Ok(())
+    }
 }
 
 impl Parse for Module {
@@ -101,16 +119,11 @@ impl Parse for Module {
                     // #[cfg] attributes are not allowed on functions
                     crate::attrs::deny_cfg_attr(&itemfn.attrs)?;
 
-                    let mut params: ExportedFnParams =
+                    let params: ExportedFnParams =
                         match crate::attrs::inner_item_attributes(&mut itemfn.attrs, "rhai_fn") {
                             Ok(p) => p,
                             Err(e) => return Err(e),
                         };
-                    params.skip = if let syn::Visibility::Public(_) = itemfn.vis {
-                        params.skip
-                    } else {
-                        true
-                    };
                     syn::parse2::<ExportedFn>(itemfn.to_token_stream())
                         .and_then(|mut f| {
                             f.set_params(params)?;
@@ -150,20 +163,15 @@ impl Parse for Module {
                         syn::Item::Mod(m) => m,
                         _ => unreachable!(),
                     };
-                    let mut params: ExportedModParams =
+                    let params: ExportedModParams =
                         match crate::attrs::inner_item_attributes(&mut itemmod.attrs, "rhai_mod") {
                             Ok(p) => p,
                             Err(e) => return Err(e),
                         };
-                    params.skip = if let syn::Visibility::Public(_) = itemmod.vis {
-                        params.skip
-                    } else {
-                        true
-                    };
                     let module =
-                        syn::parse2::<Module>(itemmod.to_token_stream()).map(|mut f| {
-                            f.params = params;
-                            f
+                        syn::parse2::<Module>(itemmod.to_token_stream()).and_then(|mut m| {
+                            m.set_params(params)?;
+                            Ok(m)
                         })?;
                     submodules.push(module);
                 } else {
@@ -200,6 +208,28 @@ impl Module {
         }
     }
 
+    pub fn update_scope(&mut self, parent_scope: &ExportScope) {
+        let keep = match (self.params.skip, parent_scope) {
+            (true, _) => false,
+            (_, ExportScope::PubOnly) => {
+                if let Some(ref mod_all) = self.mod_all {
+                    matches!(mod_all.vis, syn::Visibility::Public(_))
+                } else {
+                    false
+                }
+            }
+            (_, ExportScope::Prefix(s)) => {
+                if let Some(ref mod_all) = self.mod_all {
+                    mod_all.ident.to_string().starts_with(s)
+                } else {
+                    false
+                }
+            }
+            (_, ExportScope::All) => true,
+        };
+        self.params.skip = !keep;
+    }
+
     pub fn skipped(&self) -> bool {
         self.params.skip
     }
@@ -218,7 +248,7 @@ impl Module {
         // Extract the current structure of the module.
         let Module {
             mod_all,
-            fns,
+            mut fns,
             consts,
             mut submodules,
             params,
@@ -233,7 +263,12 @@ impl Module {
             // Generate new module items.
             //
             // This is done before inner module recursive generation, because that is destructive.
-            let mod_gen = crate::rhai_module::generate_body(&fns, &consts, &submodules);
+            let mod_gen = crate::rhai_module::generate_body(
+                &mut fns,
+                &consts,
+                &mut submodules,
+                &params.scope,
+            );
 
             // NB: submodules must have their new items for exporting generated in depth-first order
             // to avoid issues caused by re-parsing them
@@ -452,22 +487,6 @@ mod module_tests {
             item_mod.consts[0].1,
             syn::parse2::<syn::Expr>(quote! { 42 }).unwrap()
         );
-    }
-
-    #[test]
-    fn one_private_fn_module() {
-        let input_tokens: TokenStream = quote! {
-            pub mod one_fn {
-                fn get_mystic_number() -> INT {
-                    42
-                }
-            }
-        };
-
-        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
-        assert_eq!(item_mod.fns.len(), 1);
-        assert!(item_mod.fns[0].skipped());
-        assert!(item_mod.consts.is_empty());
     }
 
     #[test]

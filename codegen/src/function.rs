@@ -10,10 +10,12 @@ use alloc::format;
 #[cfg(not(no_std))]
 use std::format;
 
+use std::borrow::Cow;
+
 use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
-use crate::attrs::{ExportInfo, ExportedParams};
+use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
 
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
@@ -222,8 +224,22 @@ impl ExportedFn {
         &self.params
     }
 
+    pub(crate) fn update_scope(&mut self, parent_scope: &ExportScope) {
+        let keep = match (self.params.skip, parent_scope) {
+            (true, _) => false,
+            (_, ExportScope::PubOnly) => self.is_public,
+            (_, ExportScope::Prefix(s)) => self.exported_name().as_ref().starts_with(s),
+            (_, ExportScope::All) => true,
+        };
+        self.params.skip = !keep;
+    }
+
     pub(crate) fn skipped(&self) -> bool {
         self.params.skip
+    }
+
+    pub(crate) fn signature(&self) -> &syn::Signature {
+        &self.signature
     }
 
     pub(crate) fn mutable_receiver(&self) -> bool {
@@ -240,6 +256,14 @@ impl ExportedFn {
 
     pub(crate) fn name(&self) -> &syn::Ident {
         &self.signature.ident
+    }
+
+    pub(crate) fn exported_name<'n>(&'n self) -> Cow<'n, str> {
+        if let Some(ref name) = self.params.name {
+            Cow::Borrowed(name.as_str())
+        } else {
+            Cow::Owned(self.signature.ident.to_string())
+        }
     }
 
     pub(crate) fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
