@@ -229,16 +229,16 @@ mod export_by_prefix {
         use rhai::{FLOAT, INT};
 
         #[rhai_fn(name = "foo_add_f")]
-        pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
+        pub fn foo_add1(f1: FLOAT, f2: FLOAT) -> FLOAT {
             f1 + f2
         }
 
-        #[rhai_fn(name = "foo_add_i")]
-        fn add_int(i1: INT, i2: INT) -> INT {
+        #[rhai_fn(name = "bar_add_i")]
+        fn foo_add_int(i1: INT, i2: INT) -> INT {
             i1 + i2
         }
 
-        #[rhai_fn(name = "bar_add")]
+        #[rhai_fn(name = "foo_add_float2")]
         pub fn add_float2(f1: FLOAT, f2: FLOAT) -> FLOAT {
             f1 + f2
         }
@@ -271,7 +271,7 @@ fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
        let fx = math::foo_add_f(ex, 1.0);
        let gx = math::foo_m(41.0, 1.0);
        let ei = 41;
-       let fi = math::foo_add_i(ei, 1);
+       let fi = math::bar_add_i(ei, 1);
        let gi = math::foo_n(41, 1);
        [fx, gx, fi, gi]
        "#,
@@ -284,21 +284,11 @@ fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(*engine.eval::<FLOAT>(
         r#"import "Math::Advanced" as math;
        let ex = 41.0;
-       let fx = math::bar_add(ex, 1.0);
+       let fx = math::foo_add_float2(ex, 1.0);
        fx
        "#).unwrap_err(),
        EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::bar_add (f64, f64)"
-            && p == rhai::Position::new(3, 23)));
-
-    assert!(matches!(*engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::add_float2(ex, 1.0);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::add_float2 (f64, f64)"
+            if s == "math::foo_add_float2 (f64, f64)"
             && p == rhai::Position::new(3, 23)));
 
     assert!(matches!(*engine.eval::<FLOAT>(

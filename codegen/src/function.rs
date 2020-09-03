@@ -228,7 +228,7 @@ impl ExportedFn {
         let keep = match (self.params.skip, parent_scope) {
             (true, _) => false,
             (_, ExportScope::PubOnly) => self.is_public,
-            (_, ExportScope::Prefix(s)) => self.exported_name().as_ref().starts_with(s),
+            (_, ExportScope::Prefix(s)) => self.name().to_string().starts_with(s),
             (_, ExportScope::All) => true,
         };
         self.params.skip = !keep;
