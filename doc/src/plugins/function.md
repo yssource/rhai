@@ -1,5 +1,5 @@
-Exporting a Rust Function to Rhai
-=================================
+Export a Rust Function to Rhai
+=============================
 
 {{#include ../links.md}}
 
@@ -11,11 +11,11 @@ individual functions instead of a full-blown [plugin module].
 Macros
 ------
 
-| Macro                    | Apply to                                                      | Behavior                                                  |
-| ------------------------ | ------------------------------------------------------------- | --------------------------------------------------------- |
-| `#[export_fn]`           | Rust function defined in a Rust module                        | Export the function                                       |
-| `register_exported_fn!`  | [`Engine`] instance, register name string, use path to function             | Register function into an [`Engine`] under specific name |
-| `set_exported_fn!`       | [`Module`] instance, register name string, use path to function                      | Register function into an [`Module`] under specific name |
+| Macro                   | Apply to                                                        | Behavior                                                 |
+| ----------------------- | --------------------------------------------------------------- | -------------------------------------------------------- |
+| `#[export_fn]`          | Rust function defined in a Rust module                          | Export the function                                      |
+| `register_exported_fn!` | [`Engine`] instance, register name string, use path to function | Register function into an [`Engine`] under specific name |
+| `set_exported_fn!`      | [`Module`] instance, register name string, use path to function | Register function into an [`Module`] under specific name |
 
 
 `#[export_fn]` and `register_exported_fn!`

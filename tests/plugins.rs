@@ -12,6 +12,8 @@ mod test {
 
         #[cfg(not(feature = "no_object"))]
         pub mod feature {
+            use rhai::{Array, Dynamic, EvalAltResult};
+
             #[rhai_fn(get = "foo", return_raw)]
             #[inline(always)]
             pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {

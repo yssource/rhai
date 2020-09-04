@@ -1,10 +1,10 @@
-Exporting a Rust Module to Rhai
-===============================
+Export a Rust Module to Rhai
+============================
 
 {{#include ../links.md}}
 
 
-When applied to a Rust module, the `#[export_module]` attribute will generate the necessary
+When applied to a Rust module, the `#[export_module]` attribute generates the necessary
 code and metadata to allow Rhai access to its public (i.e. marked `pub`) functions. This code
 is exactly what would need to be written by hand to achieve the same goal, and is custom fit
 to each exported item.
@@ -14,7 +14,7 @@ registered as a [custom package]. This is done by using the `exported_module!` m
 
 
 Using`#[export_module]` and `exported_module!`
-----------------------------------------
+---------------------------------------------
 
 Apply `#[export_module]` onto a Rust module to convert all `pub` functions into Rhai plugin
 functions.
@@ -183,19 +183,33 @@ mod my_module {
 ```
 
 
+`#[export_module]` Parameters
+----------------------------
+
+Parameters can be applied to the `#[export_module]` attribute to override its default behavior.
+
+| Parameter               | Behavior                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| _None_                  | Export only public (i.e. `pub`) functions                                                                                     |
+| `export_all`            | Export all functions (including private, non-`pub` functions); use `#[rhai_fn(skip)]` on individual functions to avoid export |
+| `export_prefix = "..."` | Export functions (including private, non-`pub` functions) with names starting with a specific prefix                          |
+
+
 Inner Attributes
-------
+----------------
 
-As shown above, inner attributes can be applied to inner items to tweak the export process. `#[rhai_fn]` is applied to functions, and `#[rhai_mod]` is applied to inner modules.
+Inner attributes can be applied to the inner items of a module to tweak the export process.
 
-Here is the complete list of parameters currently supported:
+`#[rhai_fn]` is applied to functions, while `#[rhai_mod]` is applied to sub-modules.
 
-| Attribute                   | Use with | Apply to                                                                      | Behavior                                        |
-| ----------------------------- | ------------ | -------------------------------------------------------------------- | ----------------------------------------------- |
-| `skip`          | `#[rhai_fn]`  `#[rhai_mod]` | Function or submodule| Do not export this item |
-| `name = "..."`  | `#[rhai_fn]`  `#[rhai_mod]` | `pub` item | Register under the specified name           |
-| `get = "..."`   | `#[rhai_fn]` | function with `&mut` first parameter | Register a getter for the named property |
-| `set = "..."`   | `#[rhai_fn]` | function with `&mut` first parameter | Register a setter for the named property |
-| `index_get`      | `#[rhai_fn]` | function with `&mut` first parameter | Register an index getter                        |
-| `index_set`     | `#[rhai_fn]` | function with `&mut` first parameter | Register an index setter                        |
-| `return_raw`    | `#[rhai_fn]` | function returning `Result<Dynamic, Box<EvalAltResult>>` | Mark this as a [fallible function]      |
+Parameters should be set on inner attributes to specify the desired behavior.
+
+| Attribute Parameter | Use with                    | Apply to                                                 | Behavior                                              |
+| ------------------- | --------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | Function or sub-module                                   | Do not export this function/sub-module                |
+| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | Function or sub-module                                   | Register function/sub-module under the specified name |
+| `get = "..."`       | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register a getter for the named property              |
+| `set = "..."`       | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register a setter for the named property              |
+| `index_get`         | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register an index getter                              |
+| `index_set`         | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register an index setter                              |
+| `return_raw`        | `#[rhai_fn]`                | Function returning `Result<Dynamic, Box<EvalAltResult>>` | Mark this as a [fallible function]                    |
