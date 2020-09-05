@@ -102,6 +102,9 @@ mod module;
 mod register;
 mod rhai_module;
 
+#[cfg(test)]
+mod test;
+
 #[proc_macro_attribute]
 pub fn export_fn(
     args: proc_macro::TokenStream,
