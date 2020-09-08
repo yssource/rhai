@@ -86,23 +86,15 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 
 #[export_module]
 mod array_functions {
+    #[rhai_fn(name = "len", get = "len")]
     #[inline(always)]
     pub fn len(list: &mut Array) -> INT {
         list.len() as INT
     }
-    #[rhai_fn(get = "len")]
-    #[inline(always)]
-    pub fn len_prop(list: &mut Array) -> INT {
-        len(list)
-    }
+    #[rhai_fn(name = "append", name = "+=")]
     #[inline(always)]
     pub fn append(x: &mut Array, y: Array) {
         x.extend(y);
-    }
-    #[rhai_fn(name = "+=")]
-    #[inline(always)]
-    pub fn append_operator(x: &mut Array, y: Array) {
-        append(x, y)
     }
     #[rhai_fn(name = "+")]
     #[inline]
