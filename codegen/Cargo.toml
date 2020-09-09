@@ -2,7 +2,7 @@
 name = "rhai_codegen"
 version = "0.1.0"
 edition = "2018"
-authors = ["jhwgh1968", "Stephen Chung"]
+authors = ["jhwgh1968"]
 description = "Proceducral macro support package for Rhai, a scripting language for Rust"
 homepage = "https://github.com/jonathandturner/rhai"
 repository = "https://github.com/jonathandturner/rhai"
