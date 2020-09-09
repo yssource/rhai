@@ -1,3 +1,9 @@
+[workspace]
+members = [
+  ".",
+  "codegen"
+]
+
 [package]
 name = "rhai"
 version = "0.18.3"

@@ -52,7 +52,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all ${{matrix.flags}}
+        args: ${{matrix.flags}}
   # no-std builds are a bit more extensive to test
   no_std_build:
     name: NoStdBuild
