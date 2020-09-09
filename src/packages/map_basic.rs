@@ -18,32 +18,24 @@ mod map_functions {
     pub fn has(map: &mut Map, prop: ImmutableString) -> bool {
         map.contains_key(&prop)
     }
+    #[rhai_fn(name = "len", get = "len")]
     #[inline(always)]
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT
-    }
-    #[rhai_fn(get = "len")]
-    #[inline(always)]
-    pub fn len_prop(map: &mut Map) -> INT {
-        len(map)
     }
     #[inline(always)]
     pub fn clear(map: &mut Map) {
         map.clear();
     }
-    #[inline]
+    #[inline(always)]
     pub fn remove(x: &mut Map, name: ImmutableString) -> Dynamic {
         x.remove(&name).unwrap_or_else(|| ().into())
     }
+    #[rhai_fn(name = "mixin", name = "+=")]
     pub fn mixin(map1: &mut Map, map2: Map) {
         map2.into_iter().for_each(|(key, value)| {
             map1.insert(key, value);
         });
-    }
-    #[rhai_fn(name = "+=")]
-    #[inline(always)]
-    pub fn mixin_operator(map1: &mut Map, map2: Map) {
-        mixin(map1, map2)
     }
     #[rhai_fn(name = "+")]
     pub fn merge(mut map1: Map, map2: Map) -> Map {

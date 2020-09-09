@@ -1,43 +1,26 @@
-Create a Plugin Module
-======================
+Export a Rust Module to Rhai
+============================
 
 {{#include ../links.md}}
 
 
-The core of creating a plugin [module] is the `#[export_module]` attribute.
+When applied to a Rust module, the `#[export_module]` attribute generates the necessary
+code and metadata to allow Rhai access to its public (i.e. marked `pub`) functions. This code
+is exactly what would need to be written by hand to achieve the same goal, and is custom fit
+to each exported item.
 
-When applied on a module definition, `#[export_module]` automatically generates Rhai-acceptable
-functions from all `pub` functions defined within.
-
-The resulting module can then be loaded into an [`Engine`] as a normal [module],
-or as a [custom package].
-
-
-Macros
-------
-
-| Macro                       | Apply to                                                                      | Behavior                                        |
-| --------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------- |
-| `#[export_module]`          | Rust module                                                                   | Export all `pub` functions                      |
-| `#[rhai_fn(skip)]`          | Function in Rust module                                                       | Do not export this function                     |
-| `#[rhai_fn(return_raw)]`    | `pub` function in Rust module returning `Result<Dynamic, Box<EvalAltResult>>` | Specify that this is a [fallible function]      |
-| `#[rhai_fn(name = "...")]`  | `pub` function in Rust module                                                 | Register function under specific name           |
-| `#[rhai_fn(get = "...")]`   | `pub` function in Rust module (first parameter must be `&mut`)                | Register a property getter under specific name  |
-| `#[rhai_fn(set = "...")]`   | `pub` function in Rust module (first parameter must be `&mut`)                | Register a property setter under specific name  |
-| `#[rhai_fn(index_get]`      | `pub` function in Rust module (first parameter must be `&mut`)                | Register an index getter                        |
-| `#[rhai_fn(index_set)]`     | `pub` function in Rust module (first parameter must be `&mut`)                | Register an index setter                        |
-| `#[rhai_mod(name = "...")]` | `pub` sub-module in Rust module                                               | Export the sub-module under specific name       |
-| `exported_module!`          | Rust module name                                                              | Create a [module] containing exported functions |
+This Rust module can then either be loaded into an [`Engine`] as a normal [module] or
+registered as a [custom package]. This is done by using the `exported_module!` macro.
 
 
-`#[export_module]` and `exported_module!`
-----------------------------------------
+Using`#[export_module]` and `exported_module!`
+---------------------------------------------
 
-Apply `#[export_module]` onto a standard module to convert all `pub` functions
-into Rhai plugin functions.
+Apply `#[export_module]` onto a Rust module to convert all `pub` functions into Rhai plugin
+functions.
 
 ```rust
-use rhai::plugins::*;       // import macros
+use rhai::plugins::*;       // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
@@ -58,22 +41,24 @@ mod my_module {
         42
     }
 }
+```
 
+In order to load this into an [`Engine`], use the `load_package` method on the exported module:
+
+```rust
 fn main() {
     let mut engine = Engine::new();
 
-    // 'exported_module!' creates the plugin module.
+    // The macro call creates the Rhai module.
     let module = exported_module!(my_module);
 
-    // A module can simply be loaded as a custom package.
+    // A module can simply be loaded, registering all public its contents.
     engine.load_package(module);
 }
 ```
 
-The above automatically defines a plugin module named `my_module` which can be converted into
-a Rhai [module] via `exported_module!`.  The functions contained within the module definition
-(i.e. `greet`, `get_num` and `increment`) are automatically registered into the [`Engine`] when
-`Engine::load_package` is called.
+The functions contained within the module definition (i.e. `greet`, `get_num` and `increment`)
+are automatically registered into the [`Engine`] when `Engine::load_package` is called.
 
 ```rust
 let x = greet("world");
@@ -89,6 +74,47 @@ increment(x);
 x == 43;
 ```
 
+Registering this as a custom package is almost the same, except that a module resolver must
+point to the module, rather than being loaded directly. See the [module] section for more
+information.
+
+
+Function Overloading and Operators
+---------------------------------
+
+Operators and overloaded functions can be specified via applying the `#[rhai_fn(name = "...")]`
+attribute to individual functions.
+
+The text string given as the `name` parameter to `#[rhai_fn]` is used to register the function with
+the [`Engine`], disregarding the actual name of the function.
+
+With `#[rhai_fn(name = "...")]`, multiple functions may be registered under the same name in Rhai, so long as they have different parameters.
+
+Operators (which require function names that are not valid for Rust) can also be registered this way.
+
+```rust
+use rhai::plugins::*;       // a "prelude" import for macros
+
+#[export_module]
+mod my_module {
+    // This is the '+' operator for 'MyType'.
+    #[rhai_fn(name = "+")]
+    pub fn add(obj: &mut MyType, value: i64) {
+        obj.prop += value;
+    }
+    // This function is 'calc (i64)'.
+    #[rhai_fn(name = "calc")]
+    pub fn calc_with_default(num: i64) -> i64 {
+        ...
+    }
+    // This function is 'calc (i64, bool)'.
+    #[rhai_fn(name = "calc")]
+    pub fn calc_with_option(num: i64, option: bool) -> i64 {
+        ...
+    }
+}
+```
+
 
 Getters, Setters and Indexers
 -----------------------------
@@ -97,7 +123,7 @@ Functions can be marked as [getters/setters] and [indexers] for [custom types] v
 attribute, which is applied on a function level.
 
 ```rust
-use rhai::plugins::*;       // import macros
+use rhai::plugins::*;       // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
@@ -129,43 +155,6 @@ mod my_module {
 ```
 
 
-Function Overloading and Operators
----------------------------------
-
-Operators and overloaded functions can be specified via `#[rhai_fn(name = "...")]` applied upon
-individual functions.
-
-The text string given as the `name` parameter to `#[rhai_fn]` is used to register the function with
-the [`Engine`], disregarding the actual name of the function.
-
-With `#[rhai_fn(name = "...")]`, multiple functions may be registered under the same name in Rhai.
-
-Operators (which require function names that are not valid for Rust) can also be registered this way.
-
-```rust
-use rhai::plugins::*;       // import macros
-
-#[export_module]
-mod my_module {
-    // This is the '+' operator for 'MyType'.
-    #[rhai_fn(name = "+")]
-    pub fn add(obj: &mut MyType, value: i64) {
-        obj.prop += value;
-    }
-    // This function is 'calc (i64)'.
-    #[rhai_fn(name = "calc")]
-    pub fn calc_with_default(num: i64) -> i64 {
-        ...
-    }
-    // This function is 'calc (i64, bool)'.
-    #[rhai_fn(name = "calc")]
-    pub fn calc_with_option(num: i64, option: bool) -> i64 {
-        ...
-    }
-}
-```
-
-
 Fallible Functions
 ------------------
 
@@ -176,7 +165,7 @@ A syntax error is generated if the function with `#[rhai_fn(return_raw)]` does n
 have the appropriate return type.
 
 ```rust
-use rhai::plugins::*;       // import macros
+use rhai::plugins::*;       // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
@@ -192,3 +181,35 @@ mod my_module {
     }
 }
 ```
+
+
+`#[export_module]` Parameters
+----------------------------
+
+Parameters can be applied to the `#[export_module]` attribute to override its default behavior.
+
+| Parameter               | Behavior                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| _None_                  | Export only public (i.e. `pub`) functions                                                                                     |
+| `export_all`            | Export all functions (including private, non-`pub` functions); use `#[rhai_fn(skip)]` on individual functions to avoid export |
+| `export_prefix = "..."` | Export functions (including private, non-`pub` functions) with names starting with a specific prefix                          |
+
+
+Inner Attributes
+----------------
+
+Inner attributes can be applied to the inner items of a module to tweak the export process.
+
+`#[rhai_fn]` is applied to functions, while `#[rhai_mod]` is applied to sub-modules.
+
+Parameters should be set on inner attributes to specify the desired behavior.
+
+| Attribute Parameter | Use with                    | Apply to                                                 | Behavior                                              |
+| ------------------- | --------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | Function or sub-module                                   | Do not export this function/sub-module                |
+| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | Function or sub-module                                   | Register function/sub-module under the specified name |
+| `get = "..."`       | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register a getter for the named property              |
+| `set = "..."`       | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register a setter for the named property              |
+| `index_get`         | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register an index getter                              |
+| `index_set`         | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register an index setter                              |
+| `return_raw`        | `#[rhai_fn]`                | Function returning `Result<Dynamic, Box<EvalAltResult>>` | Mark this as a [fallible function]                    |

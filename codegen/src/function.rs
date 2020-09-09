@@ -10,14 +10,16 @@ use alloc::format;
 #[cfg(not(no_std))]
 use std::format;
 
+use std::borrow::Cow;
+
 use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
-use crate::attrs::{ExportInfo, ExportedParams};
+use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
 
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
-    pub name: Option<String>,
+    pub name: Option<Vec<String>>,
     pub return_raw: bool,
     pub skip: bool,
     pub span: Option<proc_macro2::Span>,
@@ -53,11 +55,12 @@ impl ExportedParams for ExportedFnParams {
         Default::default()
     }
 
-    fn from_info(
-        info: crate::attrs::ExportInfo,
-    ) -> syn::Result<Self> {
-        let ExportInfo { item_span: span, items: attrs } = info;
-        let mut name = None;
+    fn from_info(info: crate::attrs::ExportInfo) -> syn::Result<Self> {
+        let ExportInfo {
+            item_span: span,
+            items: attrs,
+        } = info;
+        let mut name = Vec::new();
         let mut return_raw = false;
         let mut skip = false;
         for attr in attrs {
@@ -71,15 +74,15 @@ impl ExportedParams for ExportedFnParams {
                             "Rhai function names may not contain dot",
                         ));
                     }
-                    name = Some(s.value())
+                    name.push(s.value())
                 }
-                ("get", Some(s)) => name = Some(make_getter(&s.value())),
-                ("set", Some(s)) => name = Some(make_setter(&s.value())),
+                ("get", Some(s)) => name.push(make_getter(&s.value())),
+                ("set", Some(s)) => name.push(make_setter(&s.value())),
                 ("get", None) | ("set", None) | ("name", None) => {
                     return Err(syn::Error::new(key.span(), "requires value"))
                 }
-                ("index_get", None) => name = Some(FN_IDX_GET.to_string()),
-                ("index_set", None) => name = Some(FN_IDX_SET.to_string()),
+                ("index_get", None) => name.push(FN_IDX_GET.to_string()),
+                ("index_set", None) => name.push(FN_IDX_SET.to_string()),
                 ("return_raw", None) => return_raw = true,
                 ("index_get", Some(s)) | ("index_set", Some(s)) | ("return_raw", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
@@ -96,7 +99,7 @@ impl ExportedParams for ExportedFnParams {
         }
 
         Ok(ExportedFnParams {
-            name,
+            name: if name.is_empty() { None } else { Some(name) },
             return_raw,
             skip,
             span: Some(span),
@@ -222,8 +225,22 @@ impl ExportedFn {
         &self.params
     }
 
+    pub(crate) fn update_scope(&mut self, parent_scope: &ExportScope) {
+        let keep = match (self.params.skip, parent_scope) {
+            (true, _) => false,
+            (_, ExportScope::PubOnly) => self.is_public,
+            (_, ExportScope::Prefix(s)) => self.name().to_string().starts_with(s),
+            (_, ExportScope::All) => true,
+        };
+        self.params.skip = !keep;
+    }
+
     pub(crate) fn skipped(&self) -> bool {
         self.params.skip
+    }
+
+    pub(crate) fn signature(&self) -> &syn::Signature {
+        &self.signature
     }
 
     pub(crate) fn mutable_receiver(&self) -> bool {
@@ -240,6 +257,14 @@ impl ExportedFn {
 
     pub(crate) fn name(&self) -> &syn::Ident {
         &self.signature.ident
+    }
+
+    pub(crate) fn exported_name<'n>(&'n self) -> Cow<'n, str> {
+        if let Some(ref name) = self.params.name {
+            Cow::Borrowed(name.last().unwrap().as_str())
+        } else {
+            Cow::Owned(self.signature.ident.to_string())
+        }
     }
 
     pub(crate) fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
@@ -322,7 +347,9 @@ impl ExportedFn {
             })
             .collect();
 
-        let return_span = self.return_type().map(|r| r.span())
+        let return_span = self
+            .return_type()
+            .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
         if !self.params.return_raw {
             quote_spanned! { return_span=>
@@ -369,11 +396,10 @@ impl ExportedFn {
 
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let sig_name = self.name().clone();
-        let name = self
-            .params
-            .name
-            .clone()
-            .unwrap_or_else(|| self.name().to_string());
+        let name = self.params.name.as_ref().map_or_else(
+            || self.name().to_string(),
+            |names| names.last().unwrap().clone(),
+        );
 
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();
@@ -494,7 +520,9 @@ impl ExportedFn {
         // Handle "raw returns", aka cases where the result is a dynamic or an error.
         //
         // This allows skipping the Dynamic::from wrap.
-        let return_span = self.return_type().map(|r| r.span())
+        let return_span = self
+            .return_type()
+            .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
         let return_expr = if !self.params.return_raw {
             quote_spanned! { return_span=>
@@ -527,524 +555,5 @@ impl ExportedFn {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod function_tests {
-    use super::ExportedFn;
-
-    use proc_macro2::TokenStream;
-    use quote::quote;
-
-    #[test]
-    fn minimal_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn do_nothing() { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "do_nothing");
-        assert!(!item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-        assert_eq!(item_fn.arg_list().count(), 0);
-    }
-
-    #[test]
-    fn one_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn do_something(x: usize) { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "do_something");
-        assert_eq!(item_fn.arg_list().count(), 1);
-        assert!(!item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-
-        assert_eq!(
-            item_fn.arg_list().next().unwrap(),
-            &syn::parse2::<syn::FnArg>(quote! { x: usize }).unwrap()
-        );
-    }
-
-    #[test]
-    fn two_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn do_something(x: usize, y: f32) { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "do_something");
-        assert_eq!(item_fn.arg_list().count(), 2);
-        assert!(!item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-
-        assert_eq!(
-            item_fn.arg_list().next().unwrap(),
-            &syn::parse2::<syn::FnArg>(quote! { x: usize }).unwrap()
-        );
-        assert_eq!(
-            item_fn.arg_list().nth(1).unwrap(),
-            &syn::parse2::<syn::FnArg>(quote! { y: f32 }).unwrap()
-        );
-    }
-
-    #[test]
-    fn usize_returning_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn get_magic_number() -> usize { 42 }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "get_magic_number");
-        assert!(!item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert_eq!(item_fn.arg_list().count(), 0);
-        assert_eq!(
-            item_fn.return_type().unwrap(),
-            &syn::Type::Path(syn::TypePath {
-                qself: None,
-                path: syn::parse2::<syn::Path>(quote! { usize }).unwrap()
-            })
-        );
-    }
-
-    #[test]
-    fn ref_returning_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn get_magic_phrase() -> &'static str { "open sesame" }
-        };
-
-        let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err), "cannot return a reference to Rhai");
-    }
-
-    #[test]
-    fn ptr_returning_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn get_magic_phrase() -> *const str { "open sesame" }
-        };
-
-        let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err), "cannot return a pointer to Rhai");
-    }
-
-    #[test]
-    fn ref_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn greet(who: &Person) { }
-        };
-
-        let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(
-            format!("{}", err),
-            "references from Rhai in this position must be mutable"
-        );
-    }
-
-    #[test]
-    fn ref_second_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn greet(count: usize, who: &Person) { }
-        };
-
-        let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(
-            format!("{}", err),
-            "this type in this position passes from Rhai by value"
-        );
-    }
-
-    #[test]
-    fn mut_ref_second_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn give(item_name: &str, who: &mut Person) { }
-        };
-
-        let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(
-            format!("{}", err),
-            "this type in this position passes from Rhai by value"
-        );
-    }
-
-    #[test]
-    fn str_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn log(message: &str) { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "log");
-        assert_eq!(item_fn.arg_list().count(), 1);
-        assert!(!item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-
-        assert_eq!(
-            item_fn.arg_list().next().unwrap(),
-            &syn::parse2::<syn::FnArg>(quote! { message: &str }).unwrap()
-        );
-    }
-
-    #[test]
-    fn str_second_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn log(level: usize, message: &str) { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "log");
-        assert_eq!(item_fn.arg_list().count(), 2);
-        assert!(!item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-
-        assert_eq!(
-            item_fn.arg_list().next().unwrap(),
-            &syn::parse2::<syn::FnArg>(quote! { level: usize }).unwrap()
-        );
-        assert_eq!(
-            item_fn.arg_list().nth(1).unwrap(),
-            &syn::parse2::<syn::FnArg>(quote! { message: &str }).unwrap()
-        );
-    }
-
-    #[test]
-    fn private_fn() {
-        let input_tokens: TokenStream = quote! {
-            fn do_nothing() { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "do_nothing");
-        assert!(!item_fn.mutable_receiver());
-        assert!(!item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-        assert_eq!(item_fn.arg_list().count(), 0);
-    }
-
-    #[test]
-    fn receiver_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn act_upon(&mut self) { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "act_upon");
-        assert!(item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-        assert_eq!(item_fn.arg_list().count(), 1);
-    }
-
-    #[test]
-    fn immutable_receiver_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn act_upon(&self) { }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_eq!(&item_fn.name().to_string(), "act_upon");
-        assert!(item_fn.mutable_receiver());
-        assert!(item_fn.is_public());
-        assert!(item_fn.return_type().is_none());
-        assert_eq!(item_fn.arg_list().count(), 1);
-    }
-}
-
-#[cfg(test)]
-mod generate_tests {
-    use super::ExportedFn;
-
-    use proc_macro2::TokenStream;
-    use quote::quote;
-
-    fn assert_streams_eq(actual: TokenStream, expected: TokenStream) {
-        let actual = actual.to_string();
-        let expected = expected.to_string();
-        if &actual != &expected {
-            let mut counter = 0;
-            let iter = actual
-                .chars()
-                .zip(expected.chars())
-                .inspect(|_| counter += 1)
-                .skip_while(|(a, e)| *a == *e);
-            let (actual_diff, expected_diff) = {
-                let mut actual_diff = String::new();
-                let mut expected_diff = String::new();
-                for (a, e) in iter.take(50) {
-                    actual_diff.push(a);
-                    expected_diff.push(e);
-                }
-                (actual_diff, expected_diff)
-            };
-            eprintln!("actual != expected, diverge at char {}", counter);
-        }
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn minimal_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn do_nothing() { }
-        };
-
-        let expected_tokens = quote! {
-            #[allow(unused)]
-            pub mod rhai_fn_do_nothing {
-                use super::*;
-                struct Token();
-                impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        debug_assert_eq!(args.len(), 0usize,
-                                         "wrong arg count: {} != {}", args.len(), 0usize);
-                        Ok(Dynamic::from(do_nothing()))
-                    }
-
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![].into_boxed_slice()
-                    }
-                }
-                pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
-                }
-                pub fn token_input_types() -> Box<[TypeId]> {
-                    Token().input_types()
-                }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn() -> Result<Dynamic, EvalBox> {
-                    Ok(Dynamic::from(super::do_nothing()))
-                }
-            }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_streams_eq(item_fn.generate(), expected_tokens);
-    }
-
-    #[test]
-    fn one_arg_usize_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn do_something(x: usize) { }
-        };
-
-        let expected_tokens = quote! {
-            #[allow(unused)]
-            pub mod rhai_fn_do_something {
-                use super::*;
-                struct Token();
-                impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        debug_assert_eq!(args.len(), 1usize,
-                                    "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
-                        Ok(Dynamic::from(do_something(arg0)))
-                    }
-
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<usize>()].into_boxed_slice()
-                    }
-                }
-                pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
-                }
-                pub fn token_input_types() -> Box<[TypeId]> {
-                    Token().input_types()
-                }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, EvalBox> {
-                    Ok(Dynamic::from(super::do_something(x)))
-                }
-            }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_streams_eq(item_fn.generate(), expected_tokens);
-    }
-
-    #[test]
-    fn one_arg_usize_fn_impl() {
-        let input_tokens: TokenStream = quote! {
-            pub fn do_something(x: usize) { }
-        };
-
-        let expected_tokens = quote! {
-            impl PluginFunction for MyType {
-                fn call(&self,
-                        args: &mut [&mut Dynamic], pos: Position
-                ) -> Result<Dynamic, Box<EvalAltResult>> {
-                    debug_assert_eq!(args.len(), 1usize,
-                                "wrong arg count: {} != {}", args.len(), 1usize);
-                    let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
-                    Ok(Dynamic::from(do_something(arg0)))
-                }
-
-                fn is_method_call(&self) -> bool { false }
-                fn is_varadic(&self) -> bool { false }
-                fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(MyType()) }
-                fn input_types(&self) -> Box<[TypeId]> {
-                    new_vec![TypeId::of::<usize>()].into_boxed_slice()
-                }
-            }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_streams_eq(item_fn.generate_impl("MyType"), expected_tokens);
-    }
-
-    #[test]
-    fn two_arg_returning_usize_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn add_together(x: usize, y: usize) -> usize { x + y }
-        };
-
-        let expected_tokens = quote! {
-            #[allow(unused)]
-            pub mod rhai_fn_add_together {
-                use super::*;
-                struct Token();
-                impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        debug_assert_eq!(args.len(), 2usize,
-                                    "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
-                        let arg1 = mem::take(args[1usize]).clone().cast::<usize>();
-                        Ok(Dynamic::from(add_together(arg0, arg1)))
-                    }
-
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<usize>(),
-                             TypeId::of::<usize>()].into_boxed_slice()
-                    }
-                }
-                pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
-                }
-                pub fn token_input_types() -> Box<[TypeId]> {
-                    Token().input_types()
-                }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, EvalBox> {
-                    Ok(Dynamic::from(super::add_together(x, y)))
-                }
-            }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_streams_eq(item_fn.generate(), expected_tokens);
-    }
-
-    #[test]
-    fn mut_arg_usize_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn increment(x: &mut usize, y: usize) { *x += y; }
-        };
-
-        let expected_tokens = quote! {
-            #[allow(unused)]
-            pub mod rhai_fn_increment {
-                use super::*;
-                struct Token();
-                impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        debug_assert_eq!(args.len(), 2usize,
-                                    "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<usize>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<usize>().unwrap();
-                        Ok(Dynamic::from(increment(arg0, arg1)))
-                    }
-
-                    fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<usize>(),
-                             TypeId::of::<usize>()].into_boxed_slice()
-                    }
-                }
-                pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
-                }
-                pub fn token_input_types() -> Box<[TypeId]> {
-                    Token().input_types()
-                }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, EvalBox> {
-                    Ok(Dynamic::from(super::increment(x, y)))
-                }
-            }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert!(item_fn.mutable_receiver());
-        assert_streams_eq(item_fn.generate(), expected_tokens);
-    }
-
-    #[test]
-    fn str_arg_fn() {
-        let input_tokens: TokenStream = quote! {
-            pub fn special_print(message: &str) { eprintln!("----{}----", message); }
-        };
-
-        let expected_tokens = quote! {
-            #[allow(unused)]
-            pub mod rhai_fn_special_print {
-                use super::*;
-                struct Token();
-                impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        debug_assert_eq!(args.len(), 1usize,
-                                    "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<ImmutableString>();
-                        Ok(Dynamic::from(special_print(&arg0)))
-                    }
-
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
-                    }
-                }
-                pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
-                }
-                pub fn token_input_types() -> Box<[TypeId]> {
-                    Token().input_types()
-                }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, EvalBox> {
-                    Ok(Dynamic::from(super::special_print(message)))
-                }
-            }
-        };
-
-        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert!(!item_fn.mutable_receiver());
-        assert_streams_eq(item_fn.generate(), expected_tokens);
     }
 }

@@ -140,6 +140,7 @@ mod string_functions {
     pub fn add_prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
         s
     }
+
     #[rhai_fn(name = "+=")]
     #[inline(always)]
     pub fn append_char(s: &mut ImmutableString, ch: char) {
@@ -151,15 +152,10 @@ mod string_functions {
         *s += &add;
     }
 
+    #[rhai_fn(name = "len", get = "len")]
     #[inline(always)]
     pub fn len(s: &mut ImmutableString) -> INT {
         s.chars().count() as INT
-    }
-
-    #[rhai_fn(get = "len")]
-    #[inline(always)]
-    pub fn len_prop(s: &mut ImmutableString) -> INT {
-        len(s)
     }
 
     #[inline(always)]

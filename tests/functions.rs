@@ -1,6 +1,5 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
-use std::io::Read;
 
 #[test]
 fn test_functions() -> Result<(), Box<EvalAltResult>> {

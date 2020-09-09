@@ -1,8 +1,14 @@
+[workspace]
+members = [
+  ".",
+  "codegen"
+]
+
 [package]
 name = "rhai"
 version = "0.18.3"
 edition = "2018"
-authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung"]
+authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"
 homepage = "https://github.com/jonathandturner/rhai"
 repository = "https://github.com/jonathandturner/rhai"
@@ -38,7 +44,7 @@ internals = []      # expose internal data structures
 unicode-xid-ident = ["unicode-xid"]  # allow Unicode Standard Annex #31 for identifiers.
 
 # compiling for no-std
-no_std = [ "no_closure", "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]
+no_std = [ "smallvec/union", "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]
 
 [profile.release]
 lto = "fat"

@@ -102,6 +102,9 @@ mod module;
 mod register;
 mod rhai_module;
 
+#[cfg(test)]
+mod test;
+
 #[proc_macro_attribute]
 pub fn export_fn(
     args: proc_macro::TokenStream,
@@ -124,10 +127,18 @@ pub fn export_fn(
 
 #[proc_macro_attribute]
 pub fn export_module(
-    _args: proc_macro::TokenStream,
+    args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let module_def = parse_macro_input!(input as module::Module);
+    let parsed_params = match crate::attrs::outer_item_attributes(args.into(), "export_module") {
+        Ok(args) => args,
+        Err(err) => return proc_macro::TokenStream::from(err.to_compile_error()),
+    };
+    let mut module_def = parse_macro_input!(input as module::Module);
+    if let Err(e) = module_def.set_params(parsed_params) {
+        return e.to_compile_error().into();
+    }
+
     let tokens = module_def.generate();
     proc_macro::TokenStream::from(tokens)
 }

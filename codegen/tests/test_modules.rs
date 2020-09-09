@@ -221,3 +221,225 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(&output_array[1].as_int().unwrap(), &43);
     Ok(())
 }
+
+mod multiple_fn_rename {
+    use rhai::plugin::*;
+    #[export_module]
+    pub mod my_adds {
+        use rhai::{FLOAT, INT};
+
+        pub fn get_mystic_number() -> FLOAT {
+            42.0
+        }
+        #[rhai_fn(name = "add", name = "+", name = "add_together")]
+        pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2 * 2.0
+        }
+
+        #[rhai_fn(name = "add", name = "+", name = "add_together")]
+        pub fn add_int(i1: INT, i2: INT) -> INT {
+            i1 + i2 * 2
+        }
+
+        #[rhai_fn(name = "prop", get = "prop")]
+        pub fn get_prop(x: FLOAT) -> FLOAT {
+            x * 2.0
+        }
+
+        #[rhai_fn(name = "idx", index_get)]
+        pub fn index(x: FLOAT, i: INT) -> FLOAT {
+            x + (i as FLOAT)
+        }
+    }
+}
+
+#[test]
+fn multiple_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    let m = rhai::exported_module!(crate::multiple_fn_rename::my_adds);
+    engine.load_package(m);
+
+    let output_array = engine.eval::<Array>(
+        r#"
+       let fx = get_mystic_number();
+       let fy1 = add(fx, 1.0);
+       let fy2 = add_together(fx, 1.0);
+       let fy3 = fx + 1.0;
+       let p1 = fx.prop;
+       let p2 = prop(fx);
+       let idx1 = fx[1];
+       let idx2 = idx(fx, 1);
+       let ix = 42;
+       let iy1 = add(ix, 1);
+       let iy2 = add_together(ix, 1);
+       let iy3 = ix + 1;
+       [fy1, fy2, fy3, iy1, iy2, iy3, p1, p2, idx1, idx2]
+       "#,
+    )?;
+    assert_eq!(&output_array[0].as_float().unwrap(), &44.0);
+    assert_eq!(&output_array[1].as_float().unwrap(), &44.0);
+    assert_eq!(&output_array[2].as_float().unwrap(), &44.0);
+    assert_eq!(&output_array[3].as_int().unwrap(), &44);
+    assert_eq!(&output_array[4].as_int().unwrap(), &44);
+    assert_eq!(&output_array[5].as_int().unwrap(), &44);
+    assert_eq!(&output_array[6].as_float().unwrap(), &84.0);
+    assert_eq!(&output_array[7].as_float().unwrap(), &84.0);
+    assert_eq!(&output_array[8].as_float().unwrap(), &43.0);
+    assert_eq!(&output_array[9].as_float().unwrap(), &43.0);
+    Ok(())
+}
+
+mod export_by_prefix {
+    use rhai::plugin::*;
+    #[export_module(export_prefix = "foo_")]
+    pub mod my_adds {
+        use rhai::{FLOAT, INT};
+
+        #[rhai_fn(name = "foo_add_f")]
+        pub fn foo_add1(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+
+        #[rhai_fn(name = "bar_add_i")]
+        fn foo_add_int(i1: INT, i2: INT) -> INT {
+            i1 + i2
+        }
+
+        #[rhai_fn(name = "foo_add_float2")]
+        pub fn add_float2(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+
+        pub fn foo_m(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+
+        fn foo_n(i1: INT, i2: INT) -> INT {
+            i1 + i2
+        }
+
+        pub fn bar_m(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+    }
+}
+
+#[test]
+fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    let m = rhai::exported_module!(crate::export_by_prefix::my_adds);
+    let mut r = StaticModuleResolver::new();
+    r.insert("Math::Advanced".to_string(), m);
+    engine.set_module_resolver(Some(r));
+
+    let output_array = engine.eval::<Array>(
+        r#"import "Math::Advanced" as math;
+       let ex = 41.0;
+       let fx = math::foo_add_f(ex, 1.0);
+       let gx = math::foo_m(41.0, 1.0);
+       let ei = 41;
+       let fi = math::bar_add_i(ei, 1);
+       let gi = math::foo_n(41, 1);
+       [fx, gx, fi, gi]
+       "#,
+    )?;
+    assert_eq!(&output_array[0].as_float().unwrap(), &42.0);
+    assert_eq!(&output_array[1].as_float().unwrap(), &42.0);
+    assert_eq!(&output_array[2].as_int().unwrap(), &42);
+    assert_eq!(&output_array[3].as_int().unwrap(), &42);
+
+    assert!(matches!(*engine.eval::<FLOAT>(
+        r#"import "Math::Advanced" as math;
+       let ex = 41.0;
+       let fx = math::foo_add_float2(ex, 1.0);
+       fx
+       "#).unwrap_err(),
+       EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "math::foo_add_float2 (f64, f64)"
+            && p == rhai::Position::new(3, 23)));
+
+    assert!(matches!(*engine.eval::<FLOAT>(
+        r#"import "Math::Advanced" as math;
+       let ex = 41.0;
+       let fx = math::bar_m(ex, 1.0);
+       fx
+       "#).unwrap_err(),
+       EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "math::bar_m (f64, f64)"
+            && p == rhai::Position::new(3, 23)));
+
+    Ok(())
+}
+
+mod export_all {
+    use rhai::plugin::*;
+    #[export_module(export_all)]
+    pub mod my_adds {
+        use rhai::{FLOAT, INT};
+
+        #[rhai_fn(name = "foo_add_f")]
+        pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+
+        #[rhai_fn(name = "foo_add_i")]
+        fn add_int(i1: INT, i2: INT) -> INT {
+            i1 + i2
+        }
+
+        #[rhai_fn(skip)]
+        pub fn add_float2(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+
+        pub fn foo_m(f1: FLOAT, f2: FLOAT) -> FLOAT {
+            f1 + f2
+        }
+
+        fn foo_n(i1: INT, i2: INT) -> INT {
+            i1 + i2
+        }
+
+        #[rhai_fn(skip)]
+        fn foo_p(i1: INT, i2: INT) -> INT {
+            i1 * i2
+        }
+    }
+}
+
+#[test]
+fn export_all_test() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    let m = rhai::exported_module!(crate::export_all::my_adds);
+    let mut r = StaticModuleResolver::new();
+    r.insert("Math::Advanced".to_string(), m);
+    engine.set_module_resolver(Some(r));
+
+    let output_array = engine.eval::<Array>(
+        r#"import "Math::Advanced" as math;
+       let ex = 41.0;
+       let fx = math::foo_add_f(ex, 1.0);
+       let gx = math::foo_m(41.0, 1.0);
+       let ei = 41;
+       let fi = math::foo_add_i(ei, 1);
+       let gi = math::foo_n(41, 1);
+       [fx, gx, fi, gi]
+       "#,
+    )?;
+    assert_eq!(&output_array[0].as_float().unwrap(), &42.0);
+    assert_eq!(&output_array[1].as_float().unwrap(), &42.0);
+    assert_eq!(&output_array[2].as_int().unwrap(), &42);
+    assert_eq!(&output_array[3].as_int().unwrap(), &42);
+
+    assert!(matches!(*engine.eval::<INT>(
+        r#"import "Math::Advanced" as math;
+       let ex = 41;
+       let fx = math::foo_p(ex, 1);
+       fx
+       "#).unwrap_err(),
+       EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "math::foo_p (i64, i64)"
+            && p == rhai::Position::new(3, 23)));
+
+    Ok(())
+}

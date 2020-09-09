@@ -30,7 +30,8 @@ mod time_functions {
     pub fn timestamp() -> Instant {
         Instant::now()
     }
-    #[rhai_fn(return_raw)]
+
+    #[rhai_fn(name = "elapsed", get = "elapsed", return_raw)]
     pub fn elapsed(timestamp: &mut Instant) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
         {
@@ -50,12 +51,6 @@ mod time_functions {
                 Ok((seconds as INT).into())
             }
         }
-    }
-
-    #[rhai_fn(get = "elapsed", return_raw)]
-    #[inline(always)]
-    pub fn elapsed_prop(timestamp: &mut Instant) -> Result<Dynamic, Box<EvalAltResult>> {
-        elapsed(timestamp)
     }
 
     #[rhai_fn(return_raw, name = "-")]

@@ -1,5 +1,7 @@
 cargo-features = ["named-profiles"]
 
+[workspace]
+
 [package]
 name = "no_std_test"
 version = "0.1.0"

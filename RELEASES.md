@@ -20,10 +20,6 @@ Bug fixes
 * Imported modules now work inside closures.
 * Closures that capture now work under `no_object`.
 
-
-Version 0.18.2
-==============
-
 New features
 ------------
 

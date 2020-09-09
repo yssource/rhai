@@ -157,77 +157,45 @@ mod float_functions {
     pub fn log10(x: FLOAT) -> FLOAT {
         x.log10()
     }
+    #[rhai_fn(name = "floor", get = "floor")]
     #[inline(always)]
     pub fn floor(x: FLOAT) -> FLOAT {
         x.floor()
     }
-    #[rhai_fn(get = "floor")]
-    #[inline(always)]
-    pub fn floor_prop(x: FLOAT) -> FLOAT {
-        floor(x)
-    }
+    #[rhai_fn(name = "ceiling", get = "ceiling")]
     #[inline(always)]
     pub fn ceiling(x: FLOAT) -> FLOAT {
         x.ceil()
     }
-    #[rhai_fn(get = "ceiling")]
-    #[inline(always)]
-    pub fn ceiling_prop(x: FLOAT) -> FLOAT {
-        ceiling(x)
-    }
+    #[rhai_fn(name = "round", get = "round")]
     #[inline(always)]
     pub fn round(x: FLOAT) -> FLOAT {
         x.ceil()
     }
-    #[rhai_fn(get = "round")]
-    #[inline(always)]
-    pub fn round_prop(x: FLOAT) -> FLOAT {
-        ceiling(x)
-    }
+    #[rhai_fn(name = "int", get = "int")]
     #[inline(always)]
     pub fn int(x: FLOAT) -> FLOAT {
         x.trunc()
     }
-    #[rhai_fn(get = "int")]
-    #[inline(always)]
-    pub fn int_prop(x: FLOAT) -> FLOAT {
-        int(x)
-    }
+    #[rhai_fn(name = "fraction", get = "fraction")]
     #[inline(always)]
     pub fn fraction(x: FLOAT) -> FLOAT {
         x.fract()
     }
-    #[rhai_fn(get = "fraction")]
-    #[inline(always)]
-    pub fn fraction_prop(x: FLOAT) -> FLOAT {
-        fraction(x)
-    }
+    #[rhai_fn(name = "is_nan", get = "is_nan")]
     #[inline(always)]
     pub fn is_nan(x: FLOAT) -> bool {
         x.is_nan()
     }
-    #[rhai_fn(get = "is_nan")]
-    #[inline(always)]
-    pub fn is_nan_prop(x: FLOAT) -> bool {
-        is_nan(x)
-    }
+    #[rhai_fn(name = "is_finite", get = "is_finite")]
     #[inline(always)]
     pub fn is_finite(x: FLOAT) -> bool {
         x.is_finite()
     }
-    #[rhai_fn(get = "is_finite")]
-    #[inline(always)]
-    pub fn is_finite_prop(x: FLOAT) -> bool {
-        is_finite(x)
-    }
+    #[rhai_fn(name = "is_infinite", get = "is_infinite")]
     #[inline(always)]
     pub fn is_infinite(x: FLOAT) -> bool {
         x.is_infinite()
-    }
-    #[rhai_fn(get = "is_infinite")]
-    #[inline(always)]
-    pub fn is_infinite_prop(x: FLOAT) -> bool {
-        is_infinite(x)
     }
     #[rhai_fn(name = "to_int", return_raw)]
     #[inline]

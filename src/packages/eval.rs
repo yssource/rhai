@@ -5,10 +5,13 @@ use crate::plugin::*;
 use crate::result::EvalAltResult;
 
 def_package!(crate:EvalPackage:"Disable 'eval'.", lib, {
-    set_exported_fn!(lib, "eval", eval_override);
+    lib.combine_flatten(exported_module!(eval_override));
 });
 
-#[export_fn(return_raw)]
-fn eval_override(_script: ImmutableString) -> Result<Dynamic, Box<EvalAltResult>> {
-    Err("eval is evil!".into())
+#[export_module]
+mod eval_override {
+    #[rhai_fn(return_raw)]
+    pub fn eval(_script: ImmutableString) -> Result<Dynamic, Box<EvalAltResult>> {
+        Err("eval is evil!".into())
+    }
 }
