@@ -64,23 +64,38 @@ impl ExportedParams for ExportedFnParams {
         let mut return_raw = false;
         let mut skip = false;
         for attr in attrs {
-            let crate::attrs::AttrItem { key, value } = attr;
+            let crate::attrs::AttrItem { key, value, span: item_span } = attr;
             match (key.to_string().as_ref(), value) {
-                ("name", Some(s)) => {
-                    // check validity of name
-                    if s.value().contains('.') {
-                        return Err(syn::Error::new(
-                            s.span(),
-                            "Rhai function names may not contain dot",
-                        ));
-                    }
-                    name.push(s.value())
-                }
-                ("get", Some(s)) => name.push(make_getter(&s.value())),
-                ("set", Some(s)) => name.push(make_setter(&s.value())),
                 ("get", None) | ("set", None) | ("name", None) => {
                     return Err(syn::Error::new(key.span(), "requires value"))
-                }
+                },
+                ("name", Some(s)) if &s.value() == FN_IDX_GET => {
+                    return Err(syn::Error::new(item_span,
+                               "use attribute 'index_get' instead"))
+                },
+                ("name", Some(s)) if &s.value() == FN_IDX_SET => {
+                    return Err(syn::Error::new(item_span,
+                               "use attribute 'index_set' instead"))
+                },
+                ("name", Some(s)) if s.value().starts_with("get$") => {
+                    return Err(syn::Error::new(item_span,
+                               format!("use attribute 'getter = \"{}\"' instead",
+                                       &s.value()["get$".len()..])))
+                },
+                ("name", Some(s)) if s.value().starts_with("set$") => {
+                    return Err(syn::Error::new(item_span,
+                               format!("use attribute 'setter = \"{}\"' instead",
+                                       &s.value()["set$".len()..])))
+                },
+                ("name", Some(s)) if s.value().contains('.') => {
+                    return Err(syn::Error::new(s.span(),
+                               "Rhai function names may not contain dot"))
+                },
+                ("name", Some(s)) => {
+                    name.push(s.value())
+                },
+                ("get", Some(s)) => name.push(make_getter(&s.value())),
+                ("set", Some(s)) => name.push(make_setter(&s.value())),
                 ("index_get", None) => name.push(FN_IDX_GET.to_string()),
                 ("index_set", None) => name.push(FN_IDX_SET.to_string()),
                 ("return_raw", None) => return_raw = true,
