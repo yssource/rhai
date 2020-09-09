@@ -87,6 +87,10 @@ impl ExportedParams for ExportedFnParams {
                                format!("use attribute 'setter = \"{}\"' instead",
                                        &s.value()["set$".len()..])))
                 },
+                ("name", Some(s)) if s.value().contains('$') => {
+                    return Err(syn::Error::new(s.span(),
+                               "Rhai function names may not contain dollar sign"))
+                },
                 ("name", Some(s)) if s.value().contains('.') => {
                     return Err(syn::Error::new(s.span(),
                                "Rhai function names may not contain dot"))
