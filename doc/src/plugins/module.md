@@ -13,8 +13,8 @@ This Rust module can then either be loaded into an [`Engine`] as a normal [modul
 registered as a [custom package]. This is done by using the `exported_module!` macro.
 
 
-Using`#[export_module]` and `exported_module!`
----------------------------------------------
+`#[export_module]` and `exported_module!`
+----------------------------------------
 
 Apply `#[export_module]` onto a Rust module to convert all `pub` functions into Rhai plugin
 functions.
@@ -92,6 +92,8 @@ With `#[rhai_fn(name = "...")]`, multiple functions may be registered under the 
 
 Operators (which require function names that are not valid for Rust) can also be registered this way.
 
+Registering the same function name with the same parameter types will cause a parsing error.
+
 ```rust
 use rhai::plugins::*;       // a "prelude" import for macros
 
@@ -153,6 +155,38 @@ mod my_module {
     }
 }
 ```
+
+
+Multiple Registrations
+----------------------
+
+Parameters to the `#[rhai_fn(...)]` attribute can be applied multiple times.
+
+This is especially useful for the `name = "..."`, `get = "..."` and `set = "..."` parameters
+to give multiple alternative names to the same function.
+
+```rust
+use rhai::plugins::*;       // a "prelude" import for macros
+
+#[export_module]
+mod my_module {
+    // This function can be called in five ways
+    #[rhai_fn(name = "get_prop_value", name = "prop", name = "+", set = "prop", index_get)]
+    pub fn prop_function(obj: &mut MyType, index: i64) -> i64 {
+        obj.prop[index]
+    }
+}
+```
+
+The above function can be called in five ways:
+
+| Parameter for `#[rhai_fn(...)]` |      Type       | Call style                                    |
+| ------------------------------- | :-------------: | --------------------------------------------- |
+| `name = "get_prop_value"`       | Method function | `get_prop_value(x, 0)`, `x.get_prop_value(0)` |
+| `name = "prop"`                 | Method function | `prop(x, 0)`, `x.prop(0)`                     |
+| `name = "+"`                    |    Operator     | `x + 42`                                      |
+| `set = "prop"`                  |     Setter      | `x.prop = 42`                                 |
+| `index_get`                     |  Index getter   | `x[0]`                                        |
 
 
 Fallible Functions
