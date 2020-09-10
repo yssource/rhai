@@ -1,28 +1,15 @@
-//! Module defining plugins in Rhai. Is exported for use by plugin authors.
+//! Module defining plugins in Rhai for use by plugin authors.
 
 pub use crate::{
-    stdlib::any::TypeId,
-    stdlib::boxed::Box,
-    stdlib::format,
-    stdlib::string::ToString,
-    stdlib::vec::Vec,
-    stdlib::vec as new_vec,
-    stdlib::mem,
-    fn_native::CallableFunction,
-    Dynamic,
-    Engine,
-    EvalAltResult,
-    FnAccess,
-    ImmutableString,
-    Module,
-    Position,
-    RegisterResultFn,
+    fn_native::CallableFunction, stdlib::any::TypeId, stdlib::boxed::Box, stdlib::format,
+    stdlib::mem, stdlib::string::ToString, stdlib::vec as new_vec, stdlib::vec::Vec, Dynamic,
+    Engine, EvalAltResult, FnAccess, ImmutableString, Module, Position, RegisterResultFn,
 };
 
-#[cfg(features = "no_module")]
-pub use rhai_codegen::{export_fn, register_exported_fn};
 #[cfg(not(features = "no_module"))]
 pub use rhai_codegen::*;
+#[cfg(features = "no_module")]
+pub use rhai_codegen::{export_fn, register_exported_fn};
 
 #[cfg(features = "sync")]
 /// Represents an externally-written plugin for the Rhai interpreter.
