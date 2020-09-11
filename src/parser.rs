@@ -1838,7 +1838,7 @@ fn parse_unary(
                 // Call negative function
                 expr => {
                     let op = "-";
-                    let hash = calc_fn_hash(empty(), op, 2, empty());
+                    let hash = calc_fn_hash(empty(), op, 1, empty());
                     let mut args = StaticVec::new();
                     args.push(expr);
 
@@ -1865,7 +1865,7 @@ fn parse_unary(
             args.push(expr);
 
             let op = "!";
-            let hash = calc_fn_hash(empty(), op, 2, empty());
+            let hash = calc_fn_hash(empty(), op, 1, empty());
 
             Ok(Expr::FnCall(Box::new((
                 (op.into(), true, false, pos),
