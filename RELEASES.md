@@ -8,6 +8,7 @@ New features
 ------------
 
 * Plugins support via procedural macros.
+* Scripted functions are allowed in packages.
 
 
 Version 0.18.3

@@ -1,10 +1,10 @@
-use rhai::{Engine, EvalAltResult, INT, Scope};
 use rhai::packages::{Package, StandardPackage};
+use rhai::{Engine, EvalAltResult, Module, Scope, INT};
 
 #[test]
 fn test_packages() -> Result<(), Box<EvalAltResult>> {
-    let e = Engine::new();
-    let ast = e.compile("x")?;
+    let engine = Engine::new();
+    let ast = engine.compile("x")?;
     let std_pkg = StandardPackage::new();
 
     let make_call = |x: INT| -> Result<INT, Box<EvalAltResult>> {
@@ -24,10 +24,20 @@ fn test_packages() -> Result<(), Box<EvalAltResult>> {
         engine.eval_ast_with_scope::<INT>(&mut scope, &ast)
     };
 
-    // The following loop creates 10,000 Engine instances!
-    for x in 0..10_000 {
-        assert_eq!(make_call(x)?, x);
-    }
+    assert_eq!(make_call(42)?, 42);
+
+    Ok(())
+}
+
+#[test]
+fn test_packages_with_script() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    let ast = engine.compile("fn foo(x) { x + 1 }")?;
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+
+    engine.load_package(module);
+
+    assert_eq!(engine.eval::<INT>("foo(41)")?, 42);
 
     Ok(())
 }

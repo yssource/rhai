@@ -444,7 +444,7 @@ impl Engine {
             //|| self.global_module.contains_fn(hash_script, pub_only)
             || self.global_module.contains_fn(hash_fn, pub_only)
             // Then check packages
-            //|| self.packages.contains_fn(hash_script, pub_only)
+            || self.packages.contains_fn(hash_script, pub_only)
             || self.packages.contains_fn(hash_fn, pub_only)
     }
 
@@ -477,7 +477,17 @@ impl Engine {
 
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
         let arg_types = args.iter().map(|a| a.type_id());
-        let hash_fn = calc_fn_hash(empty(), fn_name, args.len(), arg_types);
+        let hash_fn = calc_fn_hash(
+            empty(),
+            fn_name,
+            if args.is_empty() {
+                // Distinguish between a script function and a native function with no parameters
+                usize::MAX
+            } else {
+                args.len()
+            },
+            arg_types,
+        );
 
         match fn_name {
             // type_of
@@ -514,9 +524,15 @@ impl Engine {
 
             // Normal script function call
             #[cfg(not(feature = "no_function"))]
-            _ if hash_script > 0 && lib.contains_fn(hash_script, pub_only) => {
+            _ if lib.contains_fn(hash_script, pub_only)
+                || self.packages.contains_fn(hash_script, pub_only) =>
+            {
                 // Get scripted function
-                let func = lib.get_fn(hash_script, pub_only).unwrap().get_fn_def();
+                let func = lib
+                    .get_fn(hash_script, pub_only)
+                    .or_else(|| self.packages.get_fn(hash_script, pub_only))
+                    .unwrap()
+                    .get_fn_def();
 
                 let scope = &mut Scope::new();
                 let mods = &mut Imports::new();
@@ -559,6 +575,7 @@ impl Engine {
 
                 Ok((result, false))
             }
+
             // Normal native function call
             _ => self.call_native_fn(
                 state, lib, fn_name, hash_fn, args, is_ref, pub_only, def_val,
