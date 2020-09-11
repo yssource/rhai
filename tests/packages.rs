@@ -29,6 +29,8 @@ fn test_packages() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_module"))]
 #[test]
 fn test_packages_with_script() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
