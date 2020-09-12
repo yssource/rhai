@@ -1123,6 +1123,135 @@ mod generate_tests {
     }
 
     #[test]
+    fn one_index_getter_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_index_fn {
+                #[rhai_fn(index_get)]
+                pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
+                    x.get(i)
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_index_fn {
+                pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
+                    x.get(i)
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    m.set_fn("index$get$", FnAccess::Public,
+                             &[core::any::TypeId::of::<MyCollection>(),
+                               core::any::TypeId::of::<u64>()],
+                             CallableFunction::from_plugin(get_by_index_token()));
+                    m
+                }
+                #[allow(non_camel_case_types)]
+                struct get_by_index_token();
+                impl PluginFunction for get_by_index_token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 2usize,
+                                            "wrong arg count: {} != {}", args.len(), 2usize);
+                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
+                        let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
+                        Ok(Dynamic::from(get_by_index(arg0, arg1)))
+                    }
+
+                    fn is_method_call(&self) -> bool { true }
+                    fn is_varadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(get_by_index_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<MyCollection>(),
+                                 TypeId::of::<u64>()].into_boxed_slice()
+                    }
+                }
+                pub fn get_by_index_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(get_by_index_token())
+                }
+                pub fn get_by_index_token_input_types() -> Box<[TypeId]> {
+                    get_by_index_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn one_index_setter_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_index_fn {
+                #[rhai_fn(index_set)]
+                pub fn set_by_index(x: &mut MyCollection, i: u64, item: FLOAT) {
+                    x.entry(i).set(item)
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_index_fn {
+                pub fn set_by_index(x: &mut MyCollection, i: u64, item: FLOAT) {
+                    x.entry(i).set(item)
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    m.set_fn("index$set$", FnAccess::Public,
+                             &[core::any::TypeId::of::<MyCollection>(),
+                               core::any::TypeId::of::<u64>(),
+                               core::any::TypeId::of::<FLOAT>()],
+                             CallableFunction::from_plugin(set_by_index_token()));
+                    m
+                }
+                #[allow(non_camel_case_types)]
+                struct set_by_index_token();
+                impl PluginFunction for set_by_index_token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 3usize,
+                                            "wrong arg count: {} != {}", args.len(), 3usize);
+                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
+                        let arg2 = mem::take(args[2usize]).clone().cast::<FLOAT>();
+                        let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
+                        Ok(Dynamic::from(set_by_index(arg0, arg1, arg2)))
+                    }
+
+                    fn is_method_call(&self) -> bool { true }
+                    fn is_varadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(set_by_index_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<MyCollection>(),
+                                 TypeId::of::<u64>(),
+                                 TypeId::of::<FLOAT>()].into_boxed_slice()
+                    }
+                }
+                pub fn set_by_index_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(set_by_index_token())
+                }
+                pub fn set_by_index_token_input_types() -> Box<[TypeId]> {
+                    set_by_index_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
     fn one_constant_nested_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
