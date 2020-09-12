@@ -539,6 +539,74 @@ mod generate_tests {
     }
 
     #[test]
+    fn one_double_rename_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                #[rhai_fn(name = "add", name = "+", name = "add_together")]
+                pub fn add_together(x: INT, y: INT) -> INT {
+                    x + y
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_fn {
+                pub fn add_together(x: INT, y: INT) -> INT {
+                    x + y
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    m.set_fn("add", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                 core::any::TypeId::of::<INT>()],
+                             CallableFunction::from_plugin(add_together_token()));
+                    m.set_fn("+", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                 core::any::TypeId::of::<INT>()],
+                             CallableFunction::from_plugin(add_together_token()));
+                    m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                 core::any::TypeId::of::<INT>()],
+                             CallableFunction::from_plugin(add_together_token()));
+                    m
+                }
+                #[allow(non_camel_case_types)]
+                struct add_together_token();
+                impl PluginFunction for add_together_token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 2usize,
+                                            "wrong arg count: {} != {}", args.len(), 2usize);
+                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
+                        let arg1 = mem::take(args[1usize]).clone().cast::<INT>();
+                        Ok(Dynamic::from(add_together(arg0, arg1)))
+                    }
+
+                    fn is_method_call(&self) -> bool { false }
+                    fn is_varadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(add_together_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<INT>(),
+                             TypeId::of::<INT>()].into_boxed_slice()
+                    }
+                }
+                pub fn add_together_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(add_together_token())
+                }
+                pub fn add_together_token_input_types() -> Box<[TypeId]> {
+                    add_together_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
     fn one_constant_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
