@@ -1005,6 +1005,124 @@ mod generate_tests {
     }
 
     #[test]
+    fn one_getter_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                #[rhai_fn(get = "square")]
+                pub fn int_foo(x: &mut u64) -> u64 {
+                    (*x) * (*x)
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_fn {
+                pub fn int_foo(x: &mut u64) -> u64 {
+                    (*x) * (*x)
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    m.set_fn("get$square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                             CallableFunction::from_plugin(int_foo_token()));
+                    m
+                }
+                #[allow(non_camel_case_types)]
+                struct int_foo_token();
+                impl PluginFunction for int_foo_token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 1usize,
+                                            "wrong arg count: {} != {}", args.len(), 1usize);
+                        let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
+                        Ok(Dynamic::from(int_foo(arg0)))
+                    }
+
+                    fn is_method_call(&self) -> bool { true }
+                    fn is_varadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(int_foo_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<u64>()].into_boxed_slice()
+                    }
+                }
+                pub fn int_foo_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(int_foo_token())
+                }
+                pub fn int_foo_token_input_types() -> Box<[TypeId]> {
+                    int_foo_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn one_setter_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                #[rhai_fn(set = "squared")]
+                pub fn int_foo(x: &mut u64) {
+                    *x = (*x) * (*x)
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_fn {
+                pub fn int_foo(x: &mut u64) {
+                    *x = (*x) * (*x)
+                }
+                #[allow(unused_imports)]
+                use super::*;
+                #[allow(unused_mut)]
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    m.set_fn("set$squared", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                             CallableFunction::from_plugin(int_foo_token()));
+                    m
+                }
+                #[allow(non_camel_case_types)]
+                struct int_foo_token();
+                impl PluginFunction for int_foo_token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic], pos: Position
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 1usize,
+                                            "wrong arg count: {} != {}", args.len(), 1usize);
+                        let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
+                        Ok(Dynamic::from(int_foo(arg0)))
+                    }
+
+                    fn is_method_call(&self) -> bool { true }
+                    fn is_varadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(int_foo_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<u64>()].into_boxed_slice()
+                    }
+                }
+                pub fn int_foo_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(int_foo_token())
+                }
+                pub fn int_foo_token_input_types() -> Box<[TypeId]> {
+                    int_foo_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
     fn one_constant_nested_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
