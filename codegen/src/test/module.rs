@@ -109,7 +109,7 @@ mod module_tests {
         assert_eq!(item_mod.submodules().len(), 1);
         assert_eq!(&item_mod.submodules()[0].consts()[0].0, "MYSTIC_NUMBER");
         assert_eq!(
-            item_mod.submodules()[0].consts()[0].1,
+            item_mod.submodules()[0].consts()[0].2,
             syn::parse2::<syn::Expr>(quote! { 42 }).unwrap()
         );
     }
@@ -170,7 +170,7 @@ mod module_tests {
         assert_eq!(item_mod.consts().len(), 1);
         assert_eq!(&item_mod.consts()[0].0, "MYSTIC_NUMBER");
         assert_eq!(
-            item_mod.consts()[0].1,
+            item_mod.consts()[0].2,
             syn::parse2::<syn::Expr>(quote! { 42 }).unwrap()
         );
     }
