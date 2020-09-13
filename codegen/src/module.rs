@@ -282,6 +282,7 @@ impl Module {
             // Regenerate the module with the new content added.
             Ok(quote! {
                 #(#mod_attrs)*
+                #[allow(dead_code)]
                 pub mod #mod_name {
                     #(#orig_content)*
                     #(#inner_modules)*
