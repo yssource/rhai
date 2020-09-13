@@ -17,23 +17,42 @@ use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Index {
+    Get,
+    Set,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Property {
+    Get(syn::Ident),
+    Set(syn::Ident),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FnSpecialAccess {
+    None,
+    Index(Index),
+    Property(Property),
+}
+
+impl Default for FnSpecialAccess {
+    fn default() -> FnSpecialAccess {
+        FnSpecialAccess::None
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
     pub name: Option<Vec<String>>,
     pub return_raw: bool,
     pub skip: bool,
     pub span: Option<proc_macro2::Span>,
+    pub special: FnSpecialAccess,
 }
 
 pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
-
-pub fn make_getter(id: &str) -> String {
-    format!("get${}", id)
-}
-pub fn make_setter(id: &str) -> String {
-    format!("set${}", id)
-}
 
 impl Parse for ExportedFnParams {
     fn parse(args: ParseStream) -> syn::Result<Self> {
@@ -63,26 +82,73 @@ impl ExportedParams for ExportedFnParams {
         let mut name = Vec::new();
         let mut return_raw = false;
         let mut skip = false;
+        let mut special = FnSpecialAccess::None;
         for attr in attrs {
-            let crate::attrs::AttrItem { key, value } = attr;
+            let crate::attrs::AttrItem { key, value, span: item_span } = attr;
             match (key.to_string().as_ref(), value) {
-                ("name", Some(s)) => {
-                    // check validity of name
-                    if s.value().contains('.') {
-                        return Err(syn::Error::new(
-                            s.span(),
-                            "Rhai function names may not contain dot",
-                        ));
-                    }
-                    name.push(s.value())
-                }
-                ("get", Some(s)) => name.push(make_getter(&s.value())),
-                ("set", Some(s)) => name.push(make_setter(&s.value())),
                 ("get", None) | ("set", None) | ("name", None) => {
                     return Err(syn::Error::new(key.span(), "requires value"))
-                }
-                ("index_get", None) => name.push(FN_IDX_GET.to_string()),
-                ("index_set", None) => name.push(FN_IDX_SET.to_string()),
+                },
+                ("name", Some(s)) if &s.value() == FN_IDX_GET => {
+                    return Err(syn::Error::new(item_span,
+                               "use attribute 'index_get' instead"))
+                },
+                ("name", Some(s)) if &s.value() == FN_IDX_SET => {
+                    return Err(syn::Error::new(item_span,
+                               "use attribute 'index_set' instead"))
+                },
+                ("name", Some(s)) if s.value().starts_with("get$") => {
+                    return Err(syn::Error::new(item_span,
+                               format!("use attribute 'getter = \"{}\"' instead",
+                                       &s.value()["get$".len()..])))
+                },
+                ("name", Some(s)) if s.value().starts_with("set$") => {
+                    return Err(syn::Error::new(item_span,
+                               format!("use attribute 'setter = \"{}\"' instead",
+                                       &s.value()["set$".len()..])))
+                },
+                ("name", Some(s)) if s.value().contains('$') => {
+                    return Err(syn::Error::new(s.span(),
+                               "Rhai function names may not contain dollar sign"))
+                },
+                ("name", Some(s)) if s.value().contains('.') => {
+                    return Err(syn::Error::new(s.span(),
+                               "Rhai function names may not contain dot"))
+                },
+                ("name", Some(s)) => {
+                    name.push(s.value())
+                },
+                ("set", Some(s)) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Property(Property::Set(syn::Ident::new(&s.value(),
+                                                                s.span()))),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting setter"))
+                    }
+                },
+                ("get", Some(s)) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Property(Property::Get(syn::Ident::new(&s.value(),
+                                                                s.span()))),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting getter"))
+                    }
+                },
+                ("index_get", None) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Index(Index::Get),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting index_get"))
+                    }
+                },
+
+                ("index_set", None) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Index(Index::Set),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting index_set"))
+                    }
+                },
                 ("return_raw", None) => return_raw = true,
                 ("index_get", Some(s)) | ("index_set", Some(s)) | ("return_raw", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
@@ -102,6 +168,7 @@ impl ExportedParams for ExportedFnParams {
             name: if name.is_empty() { None } else { Some(name) },
             return_raw,
             skip,
+            special,
             span: Some(span),
             ..Default::default()
         })
@@ -259,6 +326,32 @@ impl ExportedFn {
         &self.signature.ident
     }
 
+    pub(crate) fn exported_names(&self) -> Vec<syn::LitStr> {
+        let mut literals = self.params.name.as_ref()
+            .map(|v| v.iter()
+                 .map(|s| syn::LitStr::new(s, proc_macro2::Span::call_site())).collect())
+            .unwrap_or_else(|| Vec::new());
+
+        match self.params.special {
+            FnSpecialAccess::None => {},
+            FnSpecialAccess::Property(Property::Get(ref g)) =>
+                literals.push(syn::LitStr::new(&format!("get${}", g.to_string()), g.span())),
+            FnSpecialAccess::Property(Property::Set(ref s)) =>
+                literals.push(syn::LitStr::new(&format!("set${}", s.to_string()), s.span())),
+            FnSpecialAccess::Index(Index::Get) =>
+                literals.push(syn::LitStr::new(FN_IDX_GET, proc_macro2::Span::call_site())),
+            FnSpecialAccess::Index(Index::Set) =>
+                literals.push(syn::LitStr::new(FN_IDX_SET, proc_macro2::Span::call_site())),
+        }
+
+        if literals.is_empty() {
+            literals.push(syn::LitStr::new(&self.signature.ident.to_string(),
+                                           self.signature.ident.span()));
+        }
+
+        literals
+    }
+
     pub(crate) fn exported_name<'n>(&'n self) -> Cow<'n, str> {
         if let Some(ref name) = self.params.name {
             Cow::Borrowed(name.last().unwrap().as_str())
@@ -284,9 +377,11 @@ impl ExportedFn {
     }
 
     pub fn set_params(&mut self, mut params: ExportedFnParams) -> syn::Result<()> {
-        // Do not allow non-returning raw functions.
+        // Several issues are checked here to avoid issues with diagnostics caused by raising them
+        // later.
         //
-        // This is caught now to avoid issues with diagnostics later.
+        // 1. Do not allow non-returning raw functions.
+        //
         if params.return_raw
             && mem::discriminant(&self.signature.output)
                 == mem::discriminant(&syn::ReturnType::Default)
@@ -295,6 +390,58 @@ impl ExportedFn {
                 self.signature.span(),
                 "return_raw functions must return Result<T>",
             ));
+        }
+
+        match params.special {
+            // 2a. Property getters must take only the subject as an argument.
+            FnSpecialAccess::Property(Property::Get(_)) if self.arg_count() != 1 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property getter requires exactly 1 argument",
+                )),
+            // 2b. Property getters must return a value.
+            FnSpecialAccess::Property(Property::Get(_)) if self.return_type().is_none() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property getter must return a value"
+                )),
+            // 3a. Property setters must take the subject and a new value as arguments.
+            FnSpecialAccess::Property(Property::Set(_)) if self.arg_count() != 2 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property setter requires exactly 2 arguments",
+                )),
+            // 3b. Property setters must return nothing.
+            FnSpecialAccess::Property(Property::Set(_)) if self.return_type().is_some() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property setter must return no value"
+                )),
+            // 4a. Index getters must take the subject and the accessed "index" as arguments.
+            FnSpecialAccess::Index(Index::Get) if self.arg_count() != 2 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index getter requires exactly 2 arguments",
+                )),
+            // 4b. Index getters must return a value.
+            FnSpecialAccess::Index(Index::Get) if self.return_type().is_none() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index getter must return a value"
+                )),
+            // 5a. Index setters must take the subject, "index", and new value as arguments.
+            FnSpecialAccess::Index(Index::Set) if self.arg_count() != 3 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index setter requires exactly 3 arguments",
+                )),
+            // 5b. Index setters must return nothing.
+            FnSpecialAccess::Index(Index::Set) if self.return_type().is_some() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index setter must return no value"
+                )),
+            _ => {}
         }
 
         self.params = params;

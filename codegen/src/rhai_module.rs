@@ -67,11 +67,7 @@ pub(crate) fn generate_body(
             &format!("{}_token", function.name().to_string()),
             function.name().span(),
         );
-        let reg_names = function
-            .params()
-            .name
-            .clone()
-            .unwrap_or_else(|| vec![function.name().to_string()]);
+        let reg_names = function.exported_names();
 
         let fn_input_types: Vec<syn::Expr> = function
             .arg_list()
@@ -110,9 +106,7 @@ pub(crate) fn generate_body(
             })
             .collect();
 
-        for reg_name in reg_names {
-            let fn_literal = syn::LitStr::new(&reg_name, proc_macro2::Span::call_site());
-
+        for fn_literal in reg_names {
             set_fn_stmts.push(
                 syn::parse2::<syn::Stmt>(quote! {
                     m.set_fn(#fn_literal, FnAccess::Public, &[#(#fn_input_types),*],

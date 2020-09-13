@@ -1,0 +1,11 @@
+error: Rhai function names may not contain dollar sign
+  --> $DIR/rhai_fn_rename_dollar_sign.rs:12:22
+   |
+12 |     #[rhai_fn(name = "big$caching")]
+   |                      ^^^^^^^^^^^^^
+
+error[E0433]: failed to resolve: use of undeclared crate or module `test_module`
+  --> $DIR/rhai_fn_rename_dollar_sign.rs:23:8
+   |
+23 |     if test_module::test_fn(n) {
+   |        ^^^^^^^^^^^ use of undeclared crate or module `test_module`
