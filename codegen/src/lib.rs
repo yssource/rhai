@@ -153,6 +153,20 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 }
 
 #[proc_macro]
+pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    #[allow(unused_variables)]
+    let (module_expr, export_name, module_path) = match crate::register::parse_register_macro(args)
+    {
+        Ok(triple) => triple,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let tokens = quote! {
+        #module_path::rhai_generate_into_module(#module_expr);
+    };
+    proc_macro::TokenStream::from(tokens)
+}
+
+#[proc_macro]
 pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (engine_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
     {

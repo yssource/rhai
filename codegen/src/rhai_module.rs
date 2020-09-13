@@ -17,6 +17,7 @@ pub(crate) fn generate_body(
     let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
     let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
     let mut add_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
+    let mut set_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
 
     for (const_name, const_expr) in consts {
@@ -50,6 +51,14 @@ pub(crate) fn generate_body(
             syn::parse2::<syn::ExprBlock>(quote! {
                 #(#cfg_attrs)* {
                     m.set_sub_module(#exported_name, self::#module_name::rhai_module_generate());
+                }
+            })
+            .unwrap(),
+        );
+        set_mod_blocks.push(
+            syn::parse2::<syn::ExprBlock>(quote! {
+                #(#cfg_attrs)* {
+                    self::#module_name::rhai_generate_into_module(m);
                 }
             })
             .unwrap(),
@@ -136,6 +145,11 @@ pub(crate) fn generate_body(
                 #(#set_const_stmts)*
                 #(#add_mod_blocks)*
                 m
+            }
+            pub fn rhai_generate_into_module(m: &mut Module) {
+                #(#set_fn_stmts)*
+                #(#set_const_stmts)*
+                #(#set_mod_blocks)*
             }
         }
     })

@@ -63,8 +63,8 @@ By far the easiest way to create a custom module is to call `Module::merge_flatt
 
 In fact, this exactly is how Rhai's built-in packages, such as `BasicMathPackage`, are implemented.
 
-`rhai::plugins::exported_module!` generates a module from the [plugins][plugin module] definition,
-and `Module::merge_flatten` consumes its, adding all its registered functions into the package itself.
+`rhai::plugins::combine_with_exported_module!` adds all functions and constants from the
+[plugins][plugin module] definition into the package itself.
 
 ```rust
 // Import necessary types and traits.
@@ -94,7 +94,10 @@ def_package!(rhai:MyPackage:"My own personal super package", module, {
     BasicArrayPackage::init(module);
     BasicMapPackage::init(module);
 
-    // Merge the plugin module into the custom package.
-    module.merge_flatten(exported_module!(my_module));
+    // Merge all registered functions and constants from the plugin module into the custom package.
+    //
+    // The text string name in the middle parameter can be anything and is reserved for future use;
+    // it is recommended to be an ID string that uniquely identifies the module.
+    combine_with_exported_module!(module, "my-functions", my_module));
 });
 ```

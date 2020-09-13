@@ -24,6 +24,9 @@ use rhai::plugins::*;       // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
+    // This constant will be registered as a the constant variable 'SOME_NUMBER'.
+    pub const SOME_NUMBER: i64 = 42;
+
     // This function will be registered as 'greet'.
     pub fn greet(name: &str) -> String {
         format!("hello, {}!", name)

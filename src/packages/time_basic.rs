@@ -21,7 +21,7 @@ use instant::Instant;
 
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     // Register date/time functions
-    lib.combine_flatten(exported_module!(time_functions));
+    combine_with_exported_module!(lib, "time", time_functions);
 });
 
 #[export_module]

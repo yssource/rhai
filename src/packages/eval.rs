@@ -5,7 +5,7 @@ use crate::plugin::*;
 use crate::result::EvalAltResult;
 
 def_package!(crate:EvalPackage:"Disable 'eval'.", lib, {
-    lib.combine_flatten(exported_module!(eval_override));
+    combine_with_exported_module!(lib, "eval", eval_override);
 });
 
 #[export_module]

@@ -191,6 +191,7 @@ impl Parse for Module {
     }
 }
 
+#[allow(dead_code)]
 impl Module {
     pub fn attrs(&self) -> Option<&Vec<syn::Attribute>> {
         self.mod_all.as_ref().map(|m| &m.attrs)
