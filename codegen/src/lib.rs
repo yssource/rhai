@@ -161,7 +161,7 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
         Err(e) => return e.to_compile_error().into(),
     };
     let tokens = quote! {
-        #module_path::rhai_generate_into_module(#module_expr, true);
+        #module_path::rhai_generate_into_module(#module_expr);
     };
     proc_macro::TokenStream::from(tokens)
 }
