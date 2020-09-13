@@ -11,7 +11,7 @@ mod test {
     pub mod special_array_package {
         use rhai::{Array, INT};
 
-        pub const MYSTIC_NUMBER: INT = 42 as INT;
+        pub const MYSTIC_NUMBER: INT = 42;
 
         #[cfg(not(feature = "no_object"))]
         pub mod feature {
