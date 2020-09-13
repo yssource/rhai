@@ -6,7 +6,7 @@ use crate::attrs::ExportScope;
 use crate::function::ExportedFn;
 use crate::module::Module;
 
-pub(crate) type ExportedConst = (String, syn::Expr);
+pub(crate) type ExportedConst = (String, Box<syn::Type>, syn::Expr);
 
 pub(crate) fn generate_body(
     fns: &mut [ExportedFn],
@@ -20,11 +20,11 @@ pub(crate) fn generate_body(
     let mut set_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
 
-    for (const_name, const_expr) in consts {
+    for (const_name, const_type, const_expr) in consts {
         let const_literal = syn::LitStr::new(&const_name, proc_macro2::Span::call_site());
         set_const_stmts.push(
             syn::parse2::<syn::Stmt>(quote! {
-                m.set_var(#const_literal, #const_expr);
+                m.set_var(#const_literal, (#const_expr) as #const_type);
             })
             .unwrap(),
         );
