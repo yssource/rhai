@@ -17,23 +17,42 @@ use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Index {
+    Get,
+    Set,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Property {
+    Get(syn::Ident),
+    Set(syn::Ident),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FnSpecialAccess {
+    None,
+    Index(Index),
+    Property(Property),
+}
+
+impl Default for FnSpecialAccess {
+    fn default() -> FnSpecialAccess {
+        FnSpecialAccess::None
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
     pub name: Option<Vec<String>>,
     pub return_raw: bool,
     pub skip: bool,
     pub span: Option<proc_macro2::Span>,
+    pub special: FnSpecialAccess,
 }
 
 pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
-
-pub fn make_getter(id: &str) -> String {
-    format!("get${}", id)
-}
-pub fn make_setter(id: &str) -> String {
-    format!("set${}", id)
-}
 
 impl Parse for ExportedFnParams {
     fn parse(args: ParseStream) -> syn::Result<Self> {
@@ -63,6 +82,7 @@ impl ExportedParams for ExportedFnParams {
         let mut name = Vec::new();
         let mut return_raw = false;
         let mut skip = false;
+        let mut special = FnSpecialAccess::None;
         for attr in attrs {
             let crate::attrs::AttrItem { key, value, span: item_span } = attr;
             match (key.to_string().as_ref(), value) {
@@ -98,10 +118,37 @@ impl ExportedParams for ExportedFnParams {
                 ("name", Some(s)) => {
                     name.push(s.value())
                 },
-                ("get", Some(s)) => name.push(make_getter(&s.value())),
-                ("set", Some(s)) => name.push(make_setter(&s.value())),
-                ("index_get", None) => name.push(FN_IDX_GET.to_string()),
-                ("index_set", None) => name.push(FN_IDX_SET.to_string()),
+                ("set", Some(s)) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Property(Property::Set(syn::Ident::new(&s.value(),
+                                                                s.span()))),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting setter"))
+                    }
+                },
+                ("get", Some(s)) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Property(Property::Get(syn::Ident::new(&s.value(),
+                                                                s.span()))),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting getter"))
+                    }
+                },
+                ("index_get", None) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Index(Index::Get),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting index_get"))
+                    }
+                },
+
+                ("index_set", None) => special = match special {
+                    FnSpecialAccess::None =>
+                        FnSpecialAccess::Index(Index::Set),
+                    _ => {
+                        return Err(syn::Error::new(item_span.span(), "conflicting index_set"))
+                    }
+                },
                 ("return_raw", None) => return_raw = true,
                 ("index_get", Some(s)) | ("index_set", Some(s)) | ("return_raw", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
@@ -121,6 +168,7 @@ impl ExportedParams for ExportedFnParams {
             name: if name.is_empty() { None } else { Some(name) },
             return_raw,
             skip,
+            special,
             span: Some(span),
             ..Default::default()
         })
@@ -276,6 +324,32 @@ impl ExportedFn {
 
     pub(crate) fn name(&self) -> &syn::Ident {
         &self.signature.ident
+    }
+
+    pub(crate) fn exported_names(&self) -> Vec<syn::LitStr> {
+        let mut literals = self.params.name.as_ref()
+            .map(|v| v.iter()
+                 .map(|s| syn::LitStr::new(s, proc_macro2::Span::call_site())).collect())
+            .unwrap_or_else(|| Vec::new());
+
+        match self.params.special {
+            FnSpecialAccess::None => {},
+            FnSpecialAccess::Property(Property::Get(ref g)) =>
+                literals.push(syn::LitStr::new(&format!("get${}", g.to_string()), g.span())),
+            FnSpecialAccess::Property(Property::Set(ref s)) =>
+                literals.push(syn::LitStr::new(&format!("set${}", s.to_string()), s.span())),
+            FnSpecialAccess::Index(Index::Get) =>
+                literals.push(syn::LitStr::new(FN_IDX_GET, proc_macro2::Span::call_site())),
+            FnSpecialAccess::Index(Index::Set) =>
+                literals.push(syn::LitStr::new(FN_IDX_SET, proc_macro2::Span::call_site())),
+        }
+
+        if literals.is_empty() {
+            literals.push(syn::LitStr::new(&self.signature.ident.to_string(),
+                                           self.signature.ident.span()));
+        }
+
+        literals
     }
 
     pub(crate) fn exported_name<'n>(&'n self) -> Cow<'n, str> {
