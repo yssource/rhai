@@ -377,9 +377,11 @@ impl ExportedFn {
     }
 
     pub fn set_params(&mut self, mut params: ExportedFnParams) -> syn::Result<()> {
-        // Do not allow non-returning raw functions.
+        // Several issues are checked here to avoid issues with diagnostics caused by raising them
+        // later.
         //
-        // This is caught now to avoid issues with diagnostics later.
+        // 1. Do not allow non-returning raw functions.
+        //
         if params.return_raw
             && mem::discriminant(&self.signature.output)
                 == mem::discriminant(&syn::ReturnType::Default)
@@ -388,6 +390,58 @@ impl ExportedFn {
                 self.signature.span(),
                 "return_raw functions must return Result<T>",
             ));
+        }
+
+        match params.special {
+            // 2a. Property getters must take only the subject as an argument.
+            FnSpecialAccess::Property(Property::Get(_)) if self.arg_count() != 1 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property getter requires exactly 1 argument",
+                )),
+            // 2b. Property getters must return a value.
+            FnSpecialAccess::Property(Property::Get(_)) if self.return_type().is_none() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property getter must return a value"
+                )),
+            // 3a. Property setters must take the subject and a new value as arguments.
+            FnSpecialAccess::Property(Property::Set(_)) if self.arg_count() != 2 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property setter requires exactly 2 arguments",
+                )),
+            // 3b. Property setters must return nothing.
+            FnSpecialAccess::Property(Property::Set(_)) if self.return_type().is_some() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "property setter must return no value"
+                )),
+            // 4a. Index getters must take the subject and the accessed "index" as arguments.
+            FnSpecialAccess::Index(Index::Get) if self.arg_count() != 2 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index getter requires exactly 2 arguments",
+                )),
+            // 4b. Index getters must return a value.
+            FnSpecialAccess::Index(Index::Get) if self.return_type().is_none() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index getter must return a value"
+                )),
+            // 5a. Index setters must take the subject, "index", and new value as arguments.
+            FnSpecialAccess::Index(Index::Set) if self.arg_count() != 3 =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index setter requires exactly 3 arguments",
+                )),
+            // 5b. Index setters must return nothing.
+            FnSpecialAccess::Index(Index::Set) if self.return_type().is_some() =>
+                return Err(syn::Error::new(
+                    self.signature.span(),
+                    "index setter must return no value"
+                )),
+            _ => {}
         }
 
         self.params = params;

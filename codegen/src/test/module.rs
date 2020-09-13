@@ -1197,23 +1197,25 @@ mod generate_tests {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 #[rhai_fn(set = "squared")]
-                pub fn int_foo(x: &mut u64) {
-                    *x = (*x) * (*x)
+                pub fn int_foo(x: &mut u64, y: u64) {
+                    *x = y * y
                 }
             }
         };
 
         let expected_tokens = quote! {
             pub mod one_fn {
-                pub fn int_foo(x: &mut u64) {
-                    *x = (*x) * (*x)
+                pub fn int_foo(x: &mut u64, y: u64) {
+                    *x = y * y
                 }
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_fn("set$squared", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("set$squared", FnAccess::Public,
+                             &[core::any::TypeId::of::<u64>(),
+                               core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
                     m
                 }
@@ -1223,10 +1225,11 @@ mod generate_tests {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
+                        debug_assert_eq!(args.len(), 2usize,
+                                            "wrong arg count: {} != {}", args.len(), 2usize);
+                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
-                        Ok(Dynamic::from(int_foo(arg0)))
+                        Ok(Dynamic::from(int_foo(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
@@ -1235,7 +1238,7 @@ mod generate_tests {
                         Box::new(int_foo_token())
                     }
                     fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<u64>()].into_boxed_slice()
+                        new_vec![TypeId::of::<u64>(), TypeId::of::<u64>()].into_boxed_slice()
                     }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
@@ -1256,25 +1259,29 @@ mod generate_tests {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 #[rhai_fn(name = "set_sq", set = "squared")]
-                pub fn int_foo(x: &mut u64) {
-                    *x = (*x) * (*x)
+                pub fn int_foo(x: &mut u64, y: u64) {
+                    *x = y * y
                 }
             }
         };
 
         let expected_tokens = quote! {
             pub mod one_fn {
-                pub fn int_foo(x: &mut u64) {
-                    *x = (*x) * (*x)
+                pub fn int_foo(x: &mut u64, y: u64) {
+                    *x = y * y
                 }
                 #[allow(unused_imports)]
                 use super::*;
                 #[allow(unused_mut)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_fn("set_sq", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("set_sq", FnAccess::Public,
+                             &[core::any::TypeId::of::<u64>(),
+                               core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
-                    m.set_fn("set$squared", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("set$squared", FnAccess::Public,
+                             &[core::any::TypeId::of::<u64>(),
+                               core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
                     m
                 }
@@ -1284,10 +1291,11 @@ mod generate_tests {
                     fn call(&self,
                             args: &mut [&mut Dynamic], pos: Position
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
+                        debug_assert_eq!(args.len(), 2usize,
+                                            "wrong arg count: {} != {}", args.len(), 2usize);
+                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
-                        Ok(Dynamic::from(int_foo(arg0)))
+                        Ok(Dynamic::from(int_foo(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
@@ -1296,7 +1304,7 @@ mod generate_tests {
                         Box::new(int_foo_token())
                     }
                     fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<u64>()].into_boxed_slice()
+                        new_vec![TypeId::of::<u64>(), TypeId::of::<u64>()].into_boxed_slice()
                     }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
