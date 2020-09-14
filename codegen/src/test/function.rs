@@ -237,11 +237,14 @@ mod generate_tests {
         let expected = expected.to_string();
         if &actual != &expected {
             let mut counter = 0;
-            let iter = actual
-                .chars()
-                .zip(expected.chars())
-                .inspect(|_| counter += 1)
-                .skip_while(|(a, e)| *a == *e);
+            let iter = actual.chars().zip(expected.chars()).skip_while(|(a, e)| {
+                if *a == *e {
+                    counter += 1;
+                    true
+                } else {
+                    false
+                }
+            });
             let (actual_diff, expected_diff) = {
                 let mut actual_diff = String::new();
                 let mut expected_diff = String::new();
@@ -252,8 +255,10 @@ mod generate_tests {
                 (actual_diff, expected_diff)
             };
             eprintln!("actual != expected, diverge at char {}", counter);
+            eprintln!("  actual: {}", actual_diff);
+            eprintln!("expected: {}", expected_diff);
+            assert!(false);
         }
-        assert_eq!(actual, expected);
     }
 
     #[test]

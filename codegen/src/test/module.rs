@@ -218,12 +218,15 @@ mod generate_tests {
         let expected = expected.to_string();
         if &actual != &expected {
             let mut counter = 0;
-            let iter = actual
-                .chars()
-                .zip(expected.chars())
-                .inspect(|_| counter += 1)
-                .skip_while(|(a, e)| *a == *e);
-            let (_actual_diff, _expected_diff) = {
+            let iter = actual.chars().zip(expected.chars()).skip_while(|(a, e)| {
+                if *a == *e {
+                    counter += 1;
+                    true
+                } else {
+                    false
+                }
+            });
+            let (actual_diff, expected_diff) = {
                 let mut actual_diff = String::new();
                 let mut expected_diff = String::new();
                 for (a, e) in iter.take(50) {
@@ -233,8 +236,11 @@ mod generate_tests {
                 (actual_diff, expected_diff)
             };
             eprintln!("actual != expected, diverge at char {}", counter);
+            eprintln!("  actual: {}", actual_diff);
+            eprintln!("expected: {}", expected_diff);
+            assert!(false);
         }
-        assert_eq!(actual, expected);
+        //assert_eq!(actual, expected);
     }
 
     #[test]
@@ -244,13 +250,19 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod empty {
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {} else {}
                 }
             }
         };
@@ -270,18 +282,24 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
                     42
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnAccess::Public, &[],
                              CallableFunction::from_plugin(get_mystic_number_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct get_mystic_number_token();
@@ -327,18 +345,24 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn add_one_to(x: INT) -> INT {
                     x + 1
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_one_to", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
                              CallableFunction::from_plugin(add_one_to_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct add_one_to_token();
@@ -391,6 +415,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod two_fns {
                 pub fn add_one_to(x: INT) -> INT {
                     x + 1
@@ -402,17 +427,21 @@ mod generate_tests {
 
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_n", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
                              CallableFunction::from_plugin(add_one_to_token()));
                     m.set_fn("add_n", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                           core::any::TypeId::of::<INT>()],
                              CallableFunction::from_plugin(add_n_to_token()));
-                    m
+                    if flatten {} else {}
                 }
-
                 #[allow(non_camel_case_types)]
                 struct add_one_to_token();
                 impl PluginFunction for add_one_to_token {
@@ -488,19 +517,25 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn add_together(x: INT, y: INT) -> INT {
                     x + y
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
                              CallableFunction::from_plugin(add_together_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct add_together_token();
@@ -550,15 +585,21 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn add_together(x: INT, y: INT) -> INT {
                     x + y
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
                              CallableFunction::from_plugin(add_together_token()));
@@ -568,7 +609,7 @@ mod generate_tests {
                     m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
                              CallableFunction::from_plugin(add_together_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct add_together_token();
@@ -607,6 +648,44 @@ mod generate_tests {
     }
 
     #[test]
+    fn one_constant_type_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_constant {
+                #[derive(Debug, Clone)]
+                pub struct Foo(pub INT);
+
+                pub const MYSTIC_NUMBER: Foo = Foo(42);
+            }
+        };
+
+        let expected_tokens = quote! {
+            #[allow(dead_code)]
+            pub mod one_constant {
+                #[derive(Debug, Clone)]
+                pub struct Foo(pub INT);
+
+                pub const MYSTIC_NUMBER: Foo = Foo(42);
+                #[allow(unused_imports)]
+                use super::*;
+
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_var("MYSTIC_NUMBER", (Foo(42)) as Foo);
+                    if flatten {} else {}
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
     fn one_constant_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
@@ -615,15 +694,21 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_constant {
                 pub const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_var("MYSTIC_NUMBER", 42);
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_var("MYSTIC_NUMBER", (42) as INT);
+                    if flatten {} else {}
                 }
             }
         };
@@ -642,16 +727,22 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_constant {
                 pub use rhai::INT;
                 pub const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_var("MYSTIC_NUMBER", 42);
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_var("MYSTIC_NUMBER", (42) as INT);
+                    if flatten {} else {}
                 }
             }
         };
@@ -671,16 +762,22 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 fn get_mystic_number() -> INT {
                     42
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {} else {}
                 }
             }
         };
@@ -701,16 +798,22 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
                     42
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {} else {}
                 }
             }
         };
@@ -734,6 +837,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
                     42
@@ -743,12 +847,17 @@ mod generate_tests {
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnAccess::Public, &[],
                              CallableFunction::from_plugin(get_mystic_number_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct get_mystic_number_token();
@@ -792,14 +901,20 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_constant {
                 const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {} else {}
                 }
             }
         };
@@ -819,19 +934,25 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod str_fn {
                 pub fn print_out_to(x: &str) {
                     x + 1
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("print_out_to", FnAccess::Public,
                              &[core::any::TypeId::of::<ImmutableString>()],
                              CallableFunction::from_plugin(print_out_to_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct print_out_to_token();
@@ -878,19 +999,25 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod ref_fn {
                 pub fn increment(x: &mut FLOAT) {
                     *x += 1.0 as FLOAT;
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("increment", FnAccess::Public,
                              &[core::any::TypeId::of::<FLOAT>()],
                              CallableFunction::from_plugin(increment_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct increment_token();
@@ -939,20 +1066,27 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
+                #[allow(dead_code)]
                 pub mod it_is {
                     pub fn increment(x: &mut FLOAT) {
                         *x += 1.0 as FLOAT;
                     }
                     #[allow(unused_imports)]
                     use super::*;
-                    #[allow(unused_mut)]
+
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
+                        rhai_generate_into_module(&mut m, false);
+                        m
+                    }
+                    #[allow(unused_mut)]
+                    pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnAccess::Public,
                                  &[core::any::TypeId::of::<FLOAT>()],
                                  CallableFunction::from_plugin(increment_token()));
-                        m
+                        if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
                     struct increment_token();
@@ -984,11 +1118,19 @@ mod generate_tests {
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    { m.set_sub_module("it_is", self::it_is::rhai_module_generate()); }
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {
+                        { self::it_is::rhai_generate_into_module(m, flatten); }
+                    } else {
+                        { m.set_sub_module("it_is", self::it_is::rhai_module_generate()); }
+                    }
                 }
             }
         };
@@ -1011,21 +1153,28 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 #[cfg(not(feature = "no_float"))]
+                #[allow(dead_code)]
                 pub mod it_is {
                     pub fn increment(x: &mut FLOAT) {
                         *x += 1.0 as FLOAT;
                     }
                     #[allow(unused_imports)]
                     use super::*;
-                    #[allow(unused_mut)]
+
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
+                        rhai_generate_into_module(&mut m, false);
+                        m
+                    }
+                    #[allow(unused_mut)]
+                    pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnAccess::Public,
                                  &[core::any::TypeId::of::<FLOAT>()],
                                  CallableFunction::from_plugin(increment_token()));
-                        m
+                        if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
                     struct increment_token();
@@ -1057,13 +1206,23 @@ mod generate_tests {
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    #[cfg(not(feature = "no_float"))] {
-                        m.set_sub_module("it_is", self::it_is::rhai_module_generate());
-                    }
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {
+                        #[cfg(not(feature = "no_float"))] {
+                            self::it_is::rhai_generate_into_module(m, flatten);
+                        }
+                    } else {
+                        #[cfg(not(feature = "no_float"))] {
+                            m.set_sub_module("it_is", self::it_is::rhai_module_generate());
+                        }
+                    }
                 }
             }
         };
@@ -1084,18 +1243,24 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64) -> u64 {
                     (*x) * (*x)
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get$square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
@@ -1143,20 +1308,26 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64) -> u64 {
                     (*x) * (*x)
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
                     m.set_fn("get$square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
@@ -1204,20 +1375,26 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64, y: u64) {
                     *x = y * y
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("set$squared", FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
@@ -1266,15 +1443,21 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64, y: u64) {
                     *x = y * y
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("set_sq", FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
@@ -1283,7 +1466,7 @@ mod generate_tests {
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(int_foo_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
@@ -1332,20 +1515,26 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
                     x.get(i)
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("index$get$", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(get_by_index_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct get_by_index_token();
@@ -1395,15 +1584,21 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
                     x.get(i)
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
@@ -1412,7 +1607,7 @@ mod generate_tests {
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              CallableFunction::from_plugin(get_by_index_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct get_by_index_token();
@@ -1462,21 +1657,27 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn set_by_index(x: &mut MyCollection, i: u64, item: FLOAT) {
                     x.entry(i).set(item)
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("index$set$", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
                              CallableFunction::from_plugin(set_by_index_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct set_by_index_token();
@@ -1528,15 +1729,21 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn set_by_index(x: &mut MyCollection, i: u64, item: FLOAT) {
                     x.entry(i).set(item)
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("set", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
@@ -1547,7 +1754,7 @@ mod generate_tests {
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
                              CallableFunction::from_plugin(set_by_index_token()));
-                    m
+                    if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
                 struct set_by_index_token();
@@ -1598,25 +1805,40 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod one_constant {
+                #[allow(dead_code)]
                 pub mod it_is {
                     pub const MYSTIC_NUMBER: INT = 42;
                     #[allow(unused_imports)]
                     use super::*;
-                    #[allow(unused_mut)]
+
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
-                        m.set_var("MYSTIC_NUMBER", 42);
+                        rhai_generate_into_module(&mut m, false);
                         m
+                    }
+                    #[allow(unused_mut)]
+                    pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                        m.set_var("MYSTIC_NUMBER", (42) as INT);
+                        if flatten {} else {}
                     }
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    { m.set_sub_module("it_is", self::it_is::rhai_module_generate()); }
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {
+                        { self::it_is::rhai_generate_into_module(m, flatten); }
+                    } else {
+                        { m.set_sub_module("it_is", self::it_is::rhai_module_generate()); }
+                    }
                 }
             }
         };
@@ -1639,37 +1861,59 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod two_constants {
+                #[allow(dead_code)]
                 pub mod first_is {
                     pub const MYSTIC_NUMBER: INT = 42;
                     #[allow(unused_imports)]
                     use super::*;
-                    #[allow(unused_mut)]
+
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
-                        m.set_var("MYSTIC_NUMBER", 42);
+                        rhai_generate_into_module(&mut m, false);
                         m
                     }
+                    #[allow(unused_mut)]
+                    pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                        m.set_var("MYSTIC_NUMBER", (42) as INT);
+                        if flatten {} else {}
+                    }
                 }
+                #[allow(dead_code)]
                 pub mod second_is {
                     pub const SPECIAL_CPU_NUMBER: INT = 68000;
                     #[allow(unused_imports)]
                     use super::*;
-                    #[allow(unused_mut)]
+
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
-                        m.set_var("SPECIAL_CPU_NUMBER", 68000);
+                        rhai_generate_into_module(&mut m, false);
                         m
+                    }
+                    #[allow(unused_mut)]
+                    pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                        m.set_var("SPECIAL_CPU_NUMBER", (68000) as INT);
+                        if flatten {} else {}
                     }
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    { m.set_sub_module("first_is", self::first_is::rhai_module_generate()); }
-                    { m.set_sub_module("second_is", self::second_is::rhai_module_generate()); }
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    if flatten {
+                        { self::first_is::rhai_generate_into_module(m, flatten); }
+                        { self::second_is::rhai_generate_into_module(m, flatten); }
+                    } else {
+                        { m.set_sub_module("first_is", self::first_is::rhai_module_generate()); }
+                        { m.set_sub_module("second_is", self::second_is::rhai_module_generate()); }
+                    }
                 }
             }
         };
@@ -1711,111 +1955,185 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[allow(dead_code)]
             pub mod heap_root {
                 pub const VALUE: INT = 100;
+                #[allow(dead_code)]
                 pub mod left {
                     pub const VALUE: INT = 19;
+                    #[allow(dead_code)]
                     pub mod left {
                         pub const VALUE: INT = 17;
+                        #[allow(dead_code)]
                         pub mod left {
                             pub const VALUE: INT = 2;
                             #[allow(unused_imports)]
                             use super::*;
-                            #[allow(unused_mut)]
+
                             pub fn rhai_module_generate() -> Module {
                                 let mut m = Module::new();
-                                m.set_var("VALUE", 2);
+                                rhai_generate_into_module(&mut m, false);
                                 m
                             }
+                            #[allow(unused_mut)]
+                            pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                                m.set_var("VALUE", (2) as INT);
+                                if flatten {} else {}
+                            }
                         }
+                        #[allow(dead_code)]
                         pub mod right {
                             pub const VALUE: INT = 7;
                             #[allow(unused_imports)]
                             use super::*;
-                            #[allow(unused_mut)]
+
                             pub fn rhai_module_generate() -> Module {
                                 let mut m = Module::new();
-                                m.set_var("VALUE", 7);
+                                rhai_generate_into_module(&mut m, false);
                                 m
+                            }
+                            #[allow(unused_mut)]
+                            pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                                m.set_var("VALUE", (7) as INT);
+                                if flatten {} else {}
                             }
                         }
                         #[allow(unused_imports)]
                         use super::*;
-                        #[allow(unused_mut)]
+
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
-                            m.set_var("VALUE", 17);
-                            { m.set_sub_module("left", self::left::rhai_module_generate()); }
-                            { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                            rhai_generate_into_module(&mut m, false);
                             m
                         }
+                        #[allow(unused_mut)]
+                        pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                            m.set_var("VALUE", (17) as INT);
+
+                            if flatten {
+                                { self::left::rhai_generate_into_module(m, flatten); }
+                                { self::right::rhai_generate_into_module(m, flatten); }
+                            } else {
+                                { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                                { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                            }
+                        }
                     }
+                    #[allow(dead_code)]
                     pub mod right {
                         pub const VALUE: INT = 3;
                         #[allow(unused_imports)]
                         use super::*;
-                        #[allow(unused_mut)]
+
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
-                            m.set_var("VALUE", 3);
+                            rhai_generate_into_module(&mut m, false);
                             m
+                        }
+                        #[allow(unused_mut)]
+                        pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                            m.set_var("VALUE", (3) as INT);
+                            if flatten {} else {}
                         }
                     }
                     #[allow(unused_imports)]
                     use super::*;
-                    #[allow(unused_mut)]
+
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
-                        m.set_var("VALUE", 19);
-                        { m.set_sub_module("left", self::left::rhai_module_generate()); }
-                        { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                        rhai_generate_into_module(&mut m, false);
                         m
                     }
+                    #[allow(unused_mut)]
+                    pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                        m.set_var("VALUE", (19) as INT);
+
+                        if flatten {
+                            { self::left::rhai_generate_into_module(m, flatten); }
+                            { self::right::rhai_generate_into_module(m, flatten); }
+                        } else {
+                            { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                            { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                        }
+                    }
                 }
+                #[allow(dead_code)]
                 pub mod right {
                     pub const VALUE: INT = 36;
+                    #[allow(dead_code)]
                     pub mod left {
                         pub const VALUE: INT = 25;
                         #[allow(unused_imports)]
                         use super::*;
-                        #[allow(unused_mut)]
+
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
-                            m.set_var("VALUE", 25);
+                            rhai_generate_into_module(&mut m, false);
                             m
                         }
+                        #[allow(unused_mut)]
+                        pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                            m.set_var("VALUE", (25) as INT);
+                            if flatten {} else {}
+                        }
                     }
+                    #[allow(dead_code)]
                     pub mod right {
                         pub const VALUE: INT = 1;
                         #[allow(unused_imports)]
                         use super::*;
-                        #[allow(unused_mut)]
+
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
-                            m.set_var("VALUE", 1);
+                            rhai_generate_into_module(&mut m, false);
                             m
+                        }
+                        #[allow(unused_mut)]
+                        pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                            m.set_var("VALUE", (1) as INT);
+                            if flatten {} else {}
                         }
                     }
                     #[allow(unused_imports)]
                     use super::*;
-                    #[allow(unused_mut)]
+
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
-                        m.set_var("VALUE", 36);
-                        { m.set_sub_module("left", self::left::rhai_module_generate()); }
-                        { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                        rhai_generate_into_module(&mut m, false);
                         m
+                    }
+                    #[allow(unused_mut)]
+                    pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                        m.set_var("VALUE", (36) as INT);
+
+                        if flatten {
+                            { self::left::rhai_generate_into_module(m, flatten); }
+                            { self::right::rhai_generate_into_module(m, flatten); }
+                        } else {
+                            { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                            { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                        }
                     }
                 }
                 #[allow(unused_imports)]
                 use super::*;
-                #[allow(unused_mut)]
+
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
-                    m.set_var("VALUE", 100);
-                    { m.set_sub_module("left", self::left::rhai_module_generate()); }
-                    { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                    rhai_generate_into_module(&mut m, false);
                     m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_var("VALUE", (100) as INT);
+
+                    if flatten {
+                        { self::left::rhai_generate_into_module(m, flatten); }
+                        { self::right::rhai_generate_into_module(m, flatten); }
+                    } else {
+                        { m.set_sub_module("left", self::left::rhai_module_generate()); }
+                        { m.set_sub_module("right", self::right::rhai_module_generate()); }
+                    }
                 }
             }
         };
