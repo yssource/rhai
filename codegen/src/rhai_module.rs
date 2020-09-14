@@ -17,7 +17,7 @@ pub(crate) fn generate_body(
     let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
     let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
     let mut add_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
-    let mut set_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
+    let mut set_flattened_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
 
     for (const_name, const_type, const_expr) in consts {
@@ -55,10 +55,10 @@ pub(crate) fn generate_body(
             })
             .unwrap(),
         );
-        set_mod_blocks.push(
+        set_flattened_mod_blocks.push(
             syn::parse2::<syn::ExprBlock>(quote! {
                 #(#cfg_attrs)* {
-                    self::#module_name::rhai_generate_into_module(m);
+                    self::#module_name::rhai_generate_into_module(m, flatten);
                 }
             })
             .unwrap(),
@@ -138,18 +138,22 @@ pub(crate) fn generate_body(
         pub mod generate_info {
             #[allow(unused_imports)]
             use super::*;
-            #[allow(unused_mut)]
+
             pub fn rhai_module_generate() -> Module {
                 let mut m = Module::new();
-                #(#set_fn_stmts)*
-                #(#set_const_stmts)*
-                #(#add_mod_blocks)*
+                rhai_generate_into_module(&mut m, false);
                 m
             }
-            pub fn rhai_generate_into_module(m: &mut Module) {
+            #[allow(unused_mut)]
+            pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                 #(#set_fn_stmts)*
                 #(#set_const_stmts)*
-                #(#set_mod_blocks)*
+
+                if flatten {
+                    #(#set_flattened_mod_blocks)*
+                } else {
+                    #(#add_mod_blocks)*
+                }
             }
         }
     })
