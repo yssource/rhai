@@ -53,7 +53,7 @@ impl ExportedParams for ExportedModParams {
         let mut skip = false;
         let mut scope = ExportScope::default();
         for attr in attrs {
-            let AttrItem { key, value } = attr;
+            let AttrItem { key, value, .. } = attr;
             match (key.to_string().as_ref(), value) {
                 ("name", Some(s)) => name = Some(s.value()),
                 ("name", None) => return Err(syn::Error::new(key.span(), "requires value")),

@@ -43,6 +43,9 @@ export x as answer;     // the variable 'x' is exported under the alias 'answer'
 }
 ```
 
+[`private`] variables are used to initialize the module.
+They cannot be used apart from this.
+
 
 Functions
 ---------
@@ -58,6 +61,9 @@ fn inc(x) { x + 1 }     // script-defined function - default public
 
 private fn foo() {}     // private function - hidden
 ```
+
+[`private`] functions are commonly called to initialize the module.
+They cannot be called apart from this.
 
 
 Sub-Modules

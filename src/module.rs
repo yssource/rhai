@@ -247,9 +247,13 @@ impl Module {
         &mut self,
         hash_var: u64,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
-        self.all_variables.get_mut(&hash_var).ok_or_else(|| {
-            EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into()
-        })
+        if hash_var == 0 {
+            Err(EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into())
+        } else {
+            self.all_variables.get_mut(&hash_var).ok_or_else(|| {
+                EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into()
+            })
+        }
     }
 
     /// Set a script-defined function into the module.
@@ -354,7 +358,9 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     pub fn contains_fn(&self, hash_fn: u64, public_only: bool) -> bool {
-        if public_only {
+        if hash_fn == 0 {
+            false
+        } else if public_only {
             self.functions
                 .get(&hash_fn)
                 .map(|(_, access, _, _)| match access {
@@ -383,7 +389,14 @@ impl Module {
     ) -> u64 {
         let name = name.into();
 
-        let hash_fn = calc_fn_hash(empty(), &name, arg_types.len(), arg_types.iter().cloned());
+        let args_len = if arg_types.is_empty() {
+            // Distinguish between a script function and a function with no parameters
+            usize::MAX
+        } else {
+            arg_types.len()
+        };
+
+        let hash_fn = calc_fn_hash(empty(), &name, args_len, arg_types.iter().cloned());
 
         let params = arg_types.into_iter().cloned().collect();
 
@@ -910,13 +923,17 @@ impl Module {
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
     pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&Func> {
-        self.functions
-            .get(&hash_fn)
-            .and_then(|(_, access, _, f)| match access {
-                _ if !public_only => Some(f),
-                FnAccess::Public => Some(f),
-                FnAccess::Private => None,
-            })
+        if hash_fn == 0 {
+            None
+        } else {
+            self.functions
+                .get(&hash_fn)
+                .and_then(|(_, access, _, f)| match access {
+                    _ if !public_only => Some(f),
+                    FnAccess::Public => Some(f),
+                    FnAccess::Private => None,
+                })
+        }
     }
 
     /// Get a modules-qualified function.

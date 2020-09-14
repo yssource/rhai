@@ -22,6 +22,7 @@ pub trait ExportedParams: Sized {
 pub struct AttrItem {
     pub key: proc_macro2::Ident,
     pub value: Option<syn::LitStr>,
+    pub span: proc_macro2::Span,
 }
 
 pub struct ExportInfo {
@@ -46,6 +47,7 @@ pub fn parse_punctuated_items(
 
     let mut attrs: Vec<AttrItem> = Vec::new();
     for arg in arg_list {
+        let arg_span = arg.span();
         let (key, value) = match arg {
             syn::Expr::Assign(syn::ExprAssign {
                 ref left,
@@ -78,7 +80,7 @@ pub fn parse_punctuated_items(
                 .ok_or_else(|| syn::Error::new(attr_path.span(), "expecting attribute name"))?,
             x => return Err(syn::Error::new(x.span(), "expecting identifier")),
         };
-        attrs.push(AttrItem { key, value });
+        attrs.push(AttrItem { key, value, span: arg_span });
     }
 
     Ok(ExportInfo { item_span: list_span, items: attrs })

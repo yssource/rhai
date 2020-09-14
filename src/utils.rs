@@ -69,7 +69,7 @@ impl BuildHasher for StraightHasherBuilder {
 /// # Note
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
-pub fn calc_fn_spec<'a>(
+pub fn calc_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
     fn_name: &str,
     num: usize,

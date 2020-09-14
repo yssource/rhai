@@ -93,7 +93,7 @@ pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use syntax::{EvalContext, Expression};
 pub use token::Position;
-pub use utils::calc_fn_spec as calc_fn_hash;
+pub use utils::calc_fn_hash;
 
 pub use rhai_codegen::*;
 
