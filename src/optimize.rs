@@ -149,7 +149,7 @@ fn call_fn_with_constant_arguments(
 fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
     match stmt {
         // if expr { Noop }
-        Stmt::IfThenElse(x) if matches!(x.1, Stmt::Noop(_)) => {
+        Stmt::IfThenElse(x) if matches!(x.1, Stmt::Noop(_)) && x.2.is_none() => {
             state.set_dirty();
 
             let pos = x.0.position();
