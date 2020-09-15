@@ -78,6 +78,15 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         Ok(())
     });
 
+    #[cfg(not(feature = "no_float"))]
+        module.set_fn_4_mut(
+        "sum_of_three_args".to_string(),
+        |target: &mut INT, a: INT, b: INT, c: f64| {
+            *target = a + b + c as INT;
+            Ok(())
+        }
+    );
+
     resolver.insert("hello", module);
 
     let mut engine = Engine::new();
@@ -130,6 +139,20 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         )?,
         42
     );
+    #[cfg(not(feature = "no_float"))]
+    {
+        assert_eq!(
+            engine.eval::<INT>(
+                r#"
+                        import "hello" as h;
+                        let x = 21;
+                        h::sum_of_three_args(x, 14, 26, 2.0);
+                        x
+                    "#
+            )?,
+            42
+        );
+    }
 
     #[cfg(not(feature = "unchecked"))]
     {
