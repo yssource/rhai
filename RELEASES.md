@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.19.0
 ==============
 
+Bug fixes
+---------
+
+* `if` statement with an empty `true` block would not evaluate the `false` block.  This is now fixed.
+* Fixes a bug in `Module::set_fn_4_mut`.
+
 New features
 ------------
 

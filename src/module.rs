@@ -913,7 +913,7 @@ impl Module {
             TypeId::of::<A>(),
             TypeId::of::<B>(),
             TypeId::of::<C>(),
-            TypeId::of::<C>(),
+            TypeId::of::<D>(),
         ];
         self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
     }
