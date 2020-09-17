@@ -218,7 +218,7 @@ mod generate_tests {
         let expected = expected.to_string();
         if &actual != &expected {
             let mut counter = 0;
-            let iter = actual.chars().zip(expected.chars()).skip_while(|(a, e)| {
+            let _iter = actual.chars().zip(expected.chars()).skip_while(|(a, e)| {
                 if *a == *e {
                     counter += 1;
                     true
@@ -231,7 +231,7 @@ mod generate_tests {
             let (actual_diff, expected_diff) = {
                 let mut actual_diff = String::new();
                 let mut expected_diff = String::new();
-                for (a, e) in iter.take(50) {
+                for (a, e) in _iter.take(50) {
                     actual_diff.push(a);
                     expected_diff.push(e);
                 }
@@ -252,7 +252,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod empty {
                 #[allow(unused_imports)]
                 use super::*;
@@ -284,7 +283,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
                     42
@@ -347,7 +345,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn add_one_to(x: INT) -> INT {
                     x + 1
@@ -417,7 +414,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod two_fns {
                 pub fn add_one_to(x: INT) -> INT {
                     x + 1
@@ -519,7 +515,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn add_together(x: INT, y: INT) -> INT {
                     x + y
@@ -587,7 +582,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn add_together(x: INT, y: INT) -> INT {
                     x + y
@@ -661,7 +655,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_constant {
                 #[derive(Debug, Clone)]
                 pub struct Foo(pub INT);
@@ -677,7 +670,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_var("MYSTIC_NUMBER", (Foo(42)) as Foo);
+                    m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                     if flatten {} else {}
                 }
             }
@@ -696,7 +689,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_constant {
                 pub const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
@@ -709,7 +701,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_var("MYSTIC_NUMBER", (42) as INT);
+                    m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                     if flatten {} else {}
                 }
             }
@@ -729,7 +721,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_constant {
                 pub use rhai::INT;
                 pub const MYSTIC_NUMBER: INT = 42;
@@ -743,7 +734,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_var("MYSTIC_NUMBER", (42) as INT);
+                    m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                     if flatten {} else {}
                 }
             }
@@ -764,7 +755,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 fn get_mystic_number() -> INT {
                     42
@@ -800,7 +790,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
                     42
@@ -839,7 +828,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {
                     42
@@ -903,7 +891,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_constant {
                 const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
@@ -936,7 +923,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod str_fn {
                 pub fn print_out_to(x: &str) {
                     x + 1
@@ -1001,7 +987,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod ref_fn {
                 pub fn increment(x: &mut FLOAT) {
                     *x += 1.0 as FLOAT;
@@ -1068,9 +1053,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
-                #[allow(dead_code)]
                 pub mod it_is {
                     pub fn increment(x: &mut FLOAT) {
                         *x += 1.0 as FLOAT;
@@ -1155,10 +1138,9 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 #[cfg(not(feature = "no_float"))]
-                #[allow(dead_code)]
+
                 pub mod it_is {
                     pub fn increment(x: &mut FLOAT) {
                         *x += 1.0 as FLOAT;
@@ -1245,7 +1227,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64) -> u64 {
                     (*x) * (*x)
@@ -1310,7 +1291,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64) -> u64 {
                     (*x) * (*x)
@@ -1377,7 +1357,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64, y: u64) {
                     *x = y * y
@@ -1445,7 +1424,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_fn {
                 pub fn int_foo(x: &mut u64, y: u64) {
                     *x = y * y
@@ -1517,7 +1495,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
                     x.get(i)
@@ -1586,7 +1563,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
                     x.get(i)
@@ -1659,7 +1635,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn set_by_index(x: &mut MyCollection, i: u64, item: FLOAT) {
                     x.entry(i).set(item)
@@ -1731,7 +1706,6 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_index_fn {
                 pub fn set_by_index(x: &mut MyCollection, i: u64, item: FLOAT) {
                     x.entry(i).set(item)
@@ -1807,9 +1781,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod one_constant {
-                #[allow(dead_code)]
                 pub mod it_is {
                     pub const MYSTIC_NUMBER: INT = 42;
                     #[allow(unused_imports)]
@@ -1822,7 +1794,7 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_var("MYSTIC_NUMBER", (42) as INT);
+                        m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                         if flatten {} else {}
                     }
                 }
@@ -1863,9 +1835,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod two_constants {
-                #[allow(dead_code)]
                 pub mod first_is {
                     pub const MYSTIC_NUMBER: INT = 42;
                     #[allow(unused_imports)]
@@ -1878,11 +1848,10 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_var("MYSTIC_NUMBER", (42) as INT);
+                        m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                         if flatten {} else {}
                     }
                 }
-                #[allow(dead_code)]
                 pub mod second_is {
                     pub const SPECIAL_CPU_NUMBER: INT = 68000;
                     #[allow(unused_imports)]
@@ -1895,7 +1864,7 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_var("SPECIAL_CPU_NUMBER", (68000) as INT);
+                        m.set_var("SPECIAL_CPU_NUMBER", SPECIAL_CPU_NUMBER);
                         if flatten {} else {}
                     }
                 }
@@ -1957,16 +1926,12 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(dead_code)]
             pub mod heap_root {
                 pub const VALUE: INT = 100;
-                #[allow(dead_code)]
                 pub mod left {
                     pub const VALUE: INT = 19;
-                    #[allow(dead_code)]
                     pub mod left {
                         pub const VALUE: INT = 17;
-                        #[allow(dead_code)]
                         pub mod left {
                             pub const VALUE: INT = 2;
                             #[allow(unused_imports)]
@@ -1979,11 +1944,10 @@ mod generate_tests {
                             }
                             #[allow(unused_mut)]
                             pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                                m.set_var("VALUE", (2) as INT);
+                                m.set_var("VALUE", VALUE);
                                 if flatten {} else {}
                             }
                         }
-                        #[allow(dead_code)]
                         pub mod right {
                             pub const VALUE: INT = 7;
                             #[allow(unused_imports)]
@@ -1996,7 +1960,7 @@ mod generate_tests {
                             }
                             #[allow(unused_mut)]
                             pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                                m.set_var("VALUE", (7) as INT);
+                                m.set_var("VALUE", VALUE);
                                 if flatten {} else {}
                             }
                         }
@@ -2010,7 +1974,7 @@ mod generate_tests {
                         }
                         #[allow(unused_mut)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                            m.set_var("VALUE", (17) as INT);
+                            m.set_var("VALUE", VALUE);
 
                             if flatten {
                                 { self::left::rhai_generate_into_module(m, flatten); }
@@ -2021,7 +1985,6 @@ mod generate_tests {
                             }
                         }
                     }
-                    #[allow(dead_code)]
                     pub mod right {
                         pub const VALUE: INT = 3;
                         #[allow(unused_imports)]
@@ -2034,7 +1997,7 @@ mod generate_tests {
                         }
                         #[allow(unused_mut)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                            m.set_var("VALUE", (3) as INT);
+                            m.set_var("VALUE", VALUE);
                             if flatten {} else {}
                         }
                     }
@@ -2048,7 +2011,7 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_var("VALUE", (19) as INT);
+                        m.set_var("VALUE", VALUE);
 
                         if flatten {
                             { self::left::rhai_generate_into_module(m, flatten); }
@@ -2059,10 +2022,8 @@ mod generate_tests {
                         }
                     }
                 }
-                #[allow(dead_code)]
                 pub mod right {
                     pub const VALUE: INT = 36;
-                    #[allow(dead_code)]
                     pub mod left {
                         pub const VALUE: INT = 25;
                         #[allow(unused_imports)]
@@ -2075,11 +2036,10 @@ mod generate_tests {
                         }
                         #[allow(unused_mut)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                            m.set_var("VALUE", (25) as INT);
+                            m.set_var("VALUE", VALUE);
                             if flatten {} else {}
                         }
                     }
-                    #[allow(dead_code)]
                     pub mod right {
                         pub const VALUE: INT = 1;
                         #[allow(unused_imports)]
@@ -2092,7 +2052,7 @@ mod generate_tests {
                         }
                         #[allow(unused_mut)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                            m.set_var("VALUE", (1) as INT);
+                            m.set_var("VALUE", VALUE);
                             if flatten {} else {}
                         }
                     }
@@ -2106,7 +2066,7 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_var("VALUE", (36) as INT);
+                        m.set_var("VALUE", VALUE);
 
                         if flatten {
                             { self::left::rhai_generate_into_module(m, flatten); }
@@ -2127,7 +2087,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_var("VALUE", (100) as INT);
+                    m.set_var("VALUE", VALUE);
 
                     if flatten {
                         { self::left::rhai_generate_into_module(m, flatten); }
