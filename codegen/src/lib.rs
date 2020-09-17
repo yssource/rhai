@@ -154,8 +154,7 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 
 #[proc_macro]
 pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    #[allow(unused_variables)]
-    let (module_expr, export_name, module_path) = match crate::register::parse_register_macro(args)
+    let (module_expr, _export_name, module_path) = match crate::register::parse_register_macro(args)
     {
         Ok(triple) => triple,
         Err(e) => return e.to_compile_error().into(),
