@@ -226,6 +226,8 @@ mod generate_tests {
                     false
                 }
             });
+            eprintln!("actual != expected, diverge at char {}", counter);
+            /*
             let (actual_diff, expected_diff) = {
                 let mut actual_diff = String::new();
                 let mut expected_diff = String::new();
@@ -235,12 +237,12 @@ mod generate_tests {
                 }
                 (actual_diff, expected_diff)
             };
-            eprintln!("actual != expected, diverge at char {}", counter);
             eprintln!("  actual: {}", actual_diff);
             eprintln!("expected: {}", expected_diff);
             assert!(false);
+            */
         }
-        //assert_eq!(actual, expected);
+        assert_eq!(actual, expected);
     }
 
     #[test]
