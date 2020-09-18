@@ -140,12 +140,13 @@ impl Parse for Module {
                         ref expr,
                         ident,
                         attrs,
+                        ty,
                         ..
                     }) => {
                         // #[cfg] attributes are not allowed on const declarations
                         crate::attrs::deny_cfg_attr(&attrs)?;
                         if let syn::Visibility::Public(_) = vis {
-                            consts.push((ident.to_string(), expr.as_ref().clone()));
+                            consts.push((ident.to_string(), ty.clone(), expr.as_ref().clone()));
                         }
                     }
                     _ => {}
@@ -191,6 +192,7 @@ impl Parse for Module {
     }
 }
 
+#[allow(dead_code)]
 impl Module {
     pub fn attrs(&self) -> Option<&Vec<syn::Attribute>> {
         self.mod_all.as_ref().map(|m| &m.attrs)

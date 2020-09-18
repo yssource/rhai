@@ -9,7 +9,7 @@ use crate::plugin::*;
 use crate::stdlib::vec::Vec;
 
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
-    lib.combine_flatten(exported_module!(map_functions));
+    combine_with_exported_module!(lib, "map", map_functions);
 });
 
 #[export_module]

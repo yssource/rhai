@@ -57,7 +57,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     #[cfg(not(feature = "no_float"))]
     reg_functions!(lib += float; f32, f64);
 
-    lib.combine_flatten(exported_module!(string_functions));
+    combine_with_exported_module!(lib, "string", string_functions);
 
     lib.set_raw_fn(
         "pad",

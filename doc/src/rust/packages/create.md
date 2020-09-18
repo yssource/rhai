@@ -63,8 +63,11 @@ By far the easiest way to create a custom module is to call `Module::merge_flatt
 
 In fact, this exactly is how Rhai's built-in packages, such as `BasicMathPackage`, are implemented.
 
-`rhai::plugins::exported_module!` generates a module from the [plugins][plugin module] definition,
-and `Module::merge_flatten` consumes its, adding all its registered functions into the package itself.
+`rhai::plugins::combine_with_exported_module!` adds all functions and constants from the
+[plugins][plugin module] definition into the package itself.
+
+All sub-modules are _flattened_ (i.e. all functions and constants defined within sub-modules are registered
+at the top level) and so there will not be any sub-modules added to the package.
 
 ```rust
 // Import necessary types and traits.
@@ -84,6 +87,14 @@ mod my_module {
     pub fn get_num() -> i64 {
         42
     }
+
+    // This is a sub-module, but if using combine_with_exported_module!, it will
+    // be flattened and all functions registered at the top level.
+    pub mod my_sub_module {
+        pub fn get_sub_num() -> i64 {
+            0
+        }
+    }
 }
 
 // Define the package 'MyPackage'.
@@ -94,7 +105,19 @@ def_package!(rhai:MyPackage:"My own personal super package", module, {
     BasicArrayPackage::init(module);
     BasicMapPackage::init(module);
 
-    // Merge the plugin module into the custom package.
-    module.merge_flatten(exported_module!(my_module));
+    // Merge all registered functions and constants from the plugin module into the custom package.
+    //
+    // Functions in the sub-module 'my_sub_module' are flattened and registered at the top level
+    // instead of in a sub-module.
+    //
+    // The text string name in the middle parameter can be anything and is reserved for future use;
+    // it is recommended to be an ID string that uniquely identifies the module.
+    //
+    // This call ends up registering three functions at the top level of the package:
+    //   1) greet
+    //   2) get_num
+    //   3) get_sub_num (flattened from sub-module 'my_sub_module')
+    //
+    combine_with_exported_module!(module, "my-functions", my_module));
 });
 ```
