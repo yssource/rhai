@@ -3,7 +3,7 @@
 pub use crate::{
     fn_native::CallableFunction, stdlib::any::TypeId, stdlib::boxed::Box, stdlib::format,
     stdlib::mem, stdlib::string::ToString, stdlib::vec as new_vec, stdlib::vec::Vec, Dynamic,
-    Engine, EvalAltResult, FnAccess, ImmutableString, Module, Position, RegisterResultFn,
+    Engine, EvalAltResult, FnAccess, ImmutableString, Module, RegisterResultFn,
 };
 
 #[cfg(not(features = "no_module"))]
@@ -34,8 +34,7 @@ pub trait PluginFunction {
     fn is_method_call(&self) -> bool;
     fn is_varadic(&self) -> bool;
 
-    fn call(&self, args: &mut [&mut Dynamic], pos: Position)
-        -> Result<Dynamic, Box<EvalAltResult>>;
+    fn call(&self, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>;
 
     fn clone_boxed(&self) -> Box<dyn PluginFunction>;
 

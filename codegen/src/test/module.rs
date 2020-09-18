@@ -307,7 +307,7 @@ mod generate_tests {
                 struct get_mystic_number_token();
                 impl PluginFunction for get_mystic_number_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                             "wrong arg count: {} != {}", args.len(), 0usize);
@@ -369,7 +369,7 @@ mod generate_tests {
                 struct add_one_to_token();
                 impl PluginFunction for add_one_to_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
@@ -446,7 +446,7 @@ mod generate_tests {
                 struct add_one_to_token();
                 impl PluginFunction for add_one_to_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
@@ -474,7 +474,7 @@ mod generate_tests {
                 struct add_n_to_token();
                 impl PluginFunction for add_n_to_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
@@ -540,7 +540,7 @@ mod generate_tests {
                 struct add_together_token();
                 impl PluginFunction for add_together_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
@@ -613,7 +613,7 @@ mod generate_tests {
                 struct add_together_token();
                 impl PluginFunction for add_together_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
@@ -855,7 +855,7 @@ mod generate_tests {
                 struct get_mystic_number_token();
                 impl PluginFunction for get_mystic_number_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                             "wrong arg count: {} != {}", args.len(), 0usize);
@@ -948,7 +948,7 @@ mod generate_tests {
                 struct print_out_to_token();
                 impl PluginFunction for print_out_to_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
@@ -1012,7 +1012,7 @@ mod generate_tests {
                 struct increment_token();
                 impl PluginFunction for increment_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
@@ -1079,7 +1079,7 @@ mod generate_tests {
                     struct increment_token();
                     impl PluginFunction for increment_token {
                         fn call(&self,
-                                args: &mut [&mut Dynamic], pos: Position
+                                args: &mut [&mut Dynamic]
                         ) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
@@ -1166,7 +1166,7 @@ mod generate_tests {
                     struct increment_token();
                     impl PluginFunction for increment_token {
                         fn call(&self,
-                                args: &mut [&mut Dynamic], pos: Position
+                                args: &mut [&mut Dynamic]
                         ) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
@@ -1251,7 +1251,7 @@ mod generate_tests {
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
@@ -1317,7 +1317,7 @@ mod generate_tests {
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
@@ -1383,7 +1383,7 @@ mod generate_tests {
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
@@ -1454,7 +1454,7 @@ mod generate_tests {
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
@@ -1521,7 +1521,7 @@ mod generate_tests {
                 struct get_by_index_token();
                 impl PluginFunction for get_by_index_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
@@ -1593,7 +1593,7 @@ mod generate_tests {
                 struct get_by_index_token();
                 impl PluginFunction for get_by_index_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
@@ -1662,7 +1662,7 @@ mod generate_tests {
                 struct set_by_index_token();
                 impl PluginFunction for set_by_index_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
@@ -1738,7 +1738,7 @@ mod generate_tests {
                 struct set_by_index_token();
                 impl PluginFunction for set_by_index_token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
