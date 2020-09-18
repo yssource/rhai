@@ -232,7 +232,7 @@ impl Engine {
 
             // Run external function
             let result = if func.is_plugin_fn() {
-                func.get_plugin_fn().call(args, Position::none())
+                func.get_plugin_fn().call(args)
             } else {
                 func.get_native_fn()(self, lib, args)
             };
@@ -1099,7 +1099,7 @@ impl Engine {
 
                 self.call_script_fn(scope, mods, state, lib, &mut None, name, func, args, level)
             }
-            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut(), Position::none()),
+            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut()),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument

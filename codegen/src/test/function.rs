@@ -279,7 +279,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
@@ -323,7 +323,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
@@ -364,7 +364,7 @@ mod generate_tests {
         let expected_tokens = quote! {
             impl PluginFunction for MyType {
                 fn call(&self,
-                        args: &mut [&mut Dynamic], pos: Position
+                        args: &mut [&mut Dynamic]
                 ) -> Result<Dynamic, Box<EvalAltResult>> {
                     debug_assert_eq!(args.len(), 1usize,
                                 "wrong arg count: {} != {}", args.len(), 1usize);
@@ -398,7 +398,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
@@ -445,7 +445,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
@@ -493,7 +493,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
