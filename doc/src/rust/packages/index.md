@@ -29,13 +29,18 @@ engine.load_package(package.get()); // load the package manually. 'get' returns 
 Difference Between a Package and a Module
 ----------------------------------------
 
-Packages are actually implemented as [modules], so they share a lot of behavior and characteristics.
+Packages are internally implemented as [modules], so they share a lot of behavior and characteristics.
 
 The main difference is that a package loads under the _global_ namespace, while a module loads under its own
 namespace alias specified in an [`import`] statement (see also [modules]).
 
 A package is _static_ (i.e. pre-loaded into an [`Engine`]), while a module is _dynamic_ (i.e. loaded with
 the `import` statement).
+
+Functions in a package are _flattened_, meaning that functions from sub-modules must be pulled up to the root level.
+In other words, there can be no sub-modules in a package, and everything should reside in one, flat namespace.
+
+Only functions matter for a package.  Constant variables registered in a package are ignored.
 
 
 Load a Module as a Package
