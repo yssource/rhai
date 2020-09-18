@@ -46,7 +46,7 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///     fn is_method_call(&self) -> bool { false }
     ///     fn is_varadic(&self) -> bool { false }
     ///
-    ///     fn call(&self, args: &mut[&mut Dynamic], pos: Position) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn call(&self, args: &mut[&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         let x1: NUMBER = std::mem::take(args[0]).clone().cast::<NUMBER>();
     ///         let y1: NUMBER = std::mem::take(args[1]).clone().cast::<NUMBER>();
     ///         let x2: NUMBER = std::mem::take(args[2]).clone().cast::<NUMBER>();
