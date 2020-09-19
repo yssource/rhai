@@ -7,7 +7,8 @@ Create a Module from Rust
 Create via Plugin
 -----------------
 
-By far the simplest way to create a [module] is via a [plugin module].
+By far the simplest way to create a [module] is via a [plugin module]
+which converts a normal Rust module into a Rhai [module] via procedural macros.
 
 
 Create via `Module` API
@@ -21,7 +22,8 @@ For the complete `Module` API, refer to the [documentation](https://docs.rs/rhai
 Make the `Module` Available to the `Engine`
 ------------------------------------------
 
-In order to _use_ a custom module, there must be a [module resolver].
+In order to _use_ a custom module, there must be a [module resolver], which serves the module when
+loaded via `import` statements.
 
 The easiest way is to use, for example, the [`StaticModuleResolver`][module resolver] to hold such
 a custom module.

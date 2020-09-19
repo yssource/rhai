@@ -1,5 +1,5 @@
-`type_of`
-=========
+`type_of()`
+===========
 
 {{#include ../links.md}}
 

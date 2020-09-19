@@ -20,14 +20,15 @@ Global Variables
 
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
 
-Variables not exported are _private_ and hidden to the outside.
+Variables not exported are _private_ and hidden. They are merely used to initialize the module,
+but cannot be accessed from outside.
 
 Everything exported from a module is **constant** (**read-only**).
 
 ```rust
 // This is a module script.
 
-let private = 123;      // variable not exported - default hidden
+let hidden = 123;       // variable not exported - default hidden
 let x = 42;             // this will be exported below
 
 export x;               // the variable 'x' is exported under its own name
@@ -42,9 +43,6 @@ export x as answer;     // the variable 'x' is exported under the alias 'answer'
     export inner;       // exporting an temporary variable has no effect
 }
 ```
-
-[`private`] variables are used to initialize the module.
-They cannot be used apart from this.
 
 
 Functions

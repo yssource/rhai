@@ -10,7 +10,7 @@ Unary Operators
 
 | Operator | Description |
 | -------- | ----------- |
-| `+`      | Plus        |
+| `+`      | Positive    |
 | `-`      | Negative    |
 
 ```rust

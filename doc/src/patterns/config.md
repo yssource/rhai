@@ -137,7 +137,7 @@ For example, the above configuration example may be expressed by this custom syn
 id "hello";
 
 // Add to list
-list +"foo"
+list + "foo";
 
 // Add to map
 map "bar" => true;

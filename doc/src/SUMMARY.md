@@ -52,7 +52,7 @@ The Rhai Scripting Language
    1. [Comments](language/comments.md)
    2. [Values and Types](language/values-and-types.md)
       1. [Dynamic Values](language/dynamic.md)
-      2. [type-of()](language/type-of.md)
+      2. [type_of()](language/type-of.md)
       3. [Numbers](language/numbers.md)
          1. [Operators](language/num-op.md)
          2. [Functions](language/num-fn.md)

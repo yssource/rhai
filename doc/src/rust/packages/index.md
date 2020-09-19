@@ -37,7 +37,7 @@ namespace alias specified in an [`import`] statement (see also [modules]).
 A package is _static_ (i.e. pre-loaded into an [`Engine`]), while a module is _dynamic_ (i.e. loaded with
 the `import` statement).
 
-Functions in a package are _flattened_, meaning that functions from sub-modules must be pulled up to the root level.
+Sub-modules in a package are _flattened_, meaning that functions from them must be pulled up to the root level.
 In other words, there can be no sub-modules in a package, and everything should reside in one, flat namespace.
 
 Only functions matter for a package.  Constant variables registered in a package are ignored.
