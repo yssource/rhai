@@ -638,11 +638,13 @@ impl ExportedFn {
         // Handle the rest of the arguments, which all are passed by value.
         //
         // The only exception is strings, which need to be downcast to ImmutableString to enable a
-        // zero-copy conversion to &str by reference.
+        // zero-copy conversion to &str by reference, or a cloned String.
         let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
+        let string_type_path = syn::parse2::<syn::Path>(quote! { String }).unwrap();
         for (i, arg) in self.arg_list().enumerate().skip(skip_first_arg as usize) {
             let var = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
-            let is_str_ref;
+            let is_string;
+            let is_ref;
             match arg {
                 syn::FnArg::Typed(pattern) => {
                     let arg_type: &syn::Type = pattern.ty.as_ref();
@@ -653,15 +655,24 @@ impl ExportedFn {
                             ..
                         }) => match elem.as_ref() {
                             &syn::Type::Path(ref p) if p.path == str_type_path => {
-                                is_str_ref = true;
+                                is_string = true;
+                                is_ref = true;
                                 quote_spanned!(arg_type.span()=>
                                                    mem::take(args[#i])
                                                    .clone().cast::<ImmutableString>())
                             }
                             _ => panic!("internal error: why wasn't this found earlier!?"),
                         },
+                        &syn::Type::Path(ref p) if p.path == string_type_path => {
+                            is_string = true;
+                            is_ref = false;
+                            quote_spanned!(arg_type.span()=>
+                                                   mem::take(args[#i])
+                                                   .clone().cast::<#arg_type>())
+                        }
                         _ => {
-                            is_str_ref = false;
+                            is_string = false;
+                            is_ref = false;
                             quote_spanned!(arg_type.span()=>
                                            mem::take(args[#i]).clone().cast::<#arg_type>())
                         }
@@ -673,7 +684,7 @@ impl ExportedFn {
                         })
                         .unwrap(),
                     );
-                    if !is_str_ref {
+                    if !is_string {
                         input_type_exprs.push(
                             syn::parse2::<syn::Expr>(quote_spanned!(
                                 arg_type.span()=> TypeId::of::<#arg_type>()
@@ -691,7 +702,7 @@ impl ExportedFn {
                 }
                 syn::FnArg::Receiver(_) => panic!("internal error: how did this happen!?"),
             }
-            if !is_str_ref {
+            if !is_ref {
                 unpack_exprs.push(syn::parse2::<syn::Expr>(quote! { #var }).unwrap());
             } else {
                 unpack_exprs.push(syn::parse2::<syn::Expr>(quote! { &#var }).unwrap());
