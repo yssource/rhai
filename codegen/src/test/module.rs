@@ -226,8 +226,7 @@ mod generate_tests {
                     false
                 }
             });
-            /*
-            let (actual_diff, expected_diff) = {
+            let (_actual_diff, _expected_diff) = {
                 let mut actual_diff = String::new();
                 let mut expected_diff = String::new();
                 for (a, e) in _iter.take(50) {
@@ -236,13 +235,10 @@ mod generate_tests {
                 }
                 (actual_diff, expected_diff)
             };
-            */
             eprintln!("actual != expected, diverge at char {}", counter);
-            /*
-            eprintln!("  actual: {}", actual_diff);
-            eprintln!("expected: {}", expected_diff);
-            assert!(false);
-            */
+            // eprintln!("  actual: {}", _actual_diff);
+            // eprintln!("expected: {}", _expected_diff);
+            // assert!(false);
         }
         assert_eq!(actual, expected);
     }
@@ -954,6 +950,70 @@ mod generate_tests {
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).clone().cast::<ImmutableString>();
                         Ok(Dynamic::from(print_out_to(&arg0)))
+                    }
+
+                    fn is_method_call(&self) -> bool { false }
+                    fn is_varadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(print_out_to_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
+                    }
+                }
+                pub fn print_out_to_token_callable() -> CallableFunction {
+                    CallableFunction::from_plugin(print_out_to_token())
+                }
+                pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
+                    print_out_to_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn one_string_arg_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod str_fn {
+                pub fn print_out_to(x: String) {
+                    x + 1
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod str_fn {
+                pub fn print_out_to(x: String) {
+                    x + 1
+                }
+                #[allow(unused_imports)]
+                use super::*;
+
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_fn("print_out_to", FnAccess::Public,
+                             &[core::any::TypeId::of::<ImmutableString>()],
+                             CallableFunction::from_plugin(print_out_to_token()));
+                    if flatten {} else {}
+                }
+                #[allow(non_camel_case_types)]
+                struct print_out_to_token();
+                impl PluginFunction for print_out_to_token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic]
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 1usize,
+                                            "wrong arg count: {} != {}", args.len(), 1usize);
+                        let arg0 = mem::take(args[0usize]).clone().cast::<String>();
+                        Ok(Dynamic::from(print_out_to(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { false }

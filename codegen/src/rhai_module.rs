@@ -19,6 +19,7 @@ pub(crate) fn generate_body(
     let mut add_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let mut set_flattened_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
+    let string_type_path = syn::parse2::<syn::Path>(quote! { String }).unwrap();
 
     for (const_name, _, _) in consts {
         let const_literal = syn::LitStr::new(&const_name, proc_macro2::Span::call_site());
@@ -97,6 +98,11 @@ pub(crate) fn generate_body(
                             }
                             _ => panic!("internal error: non-string shared reference!?"),
                         },
+                        syn::Type::Path(ref p) if p.path == string_type_path => {
+                            syn::parse2::<syn::Type>(quote! {
+                            ImmutableString })
+                            .unwrap()
+                        }
                         syn::Type::Reference(syn::TypeReference {
                             mutability: Some(_),
                             ref elem,

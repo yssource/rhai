@@ -245,8 +245,7 @@ mod generate_tests {
                     false
                 }
             });
-            /*
-            let (actual_diff, expected_diff) = {
+            let (_actual_diff, _expected_diff) = {
                 let mut actual_diff = String::new();
                 let mut expected_diff = String::new();
                 for (a, e) in _iter.take(50) {
@@ -255,13 +254,10 @@ mod generate_tests {
                 }
                 (actual_diff, expected_diff)
             };
-            */
             eprintln!("actual != expected, diverge at char {}", counter);
-            /*
-            eprintln!("  actual: {}", actual_diff);
-            eprintln!("expected: {}", expected_diff);
-            assert!(false);
-            */
+            // eprintln!("  actual: {}", _actual_diff);
+            // eprintln!("expected: {}", _expected_diff);
+            // assert!(false);
         }
         assert_eq!(actual, expected);
     }
