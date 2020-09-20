@@ -658,8 +658,7 @@ impl ExportedFn {
                                 is_string = true;
                                 is_ref = true;
                                 quote_spanned!(arg_type.span()=>
-                                                   mem::take(args[#i])
-                                                   .clone().cast::<ImmutableString>())
+                                               mem::take(args[#i]).take_immutable_string().unwrap())
                             }
                             _ => panic!("internal error: why wasn't this found earlier!?"),
                         },
@@ -667,8 +666,7 @@ impl ExportedFn {
                             is_string = true;
                             is_ref = false;
                             quote_spanned!(arg_type.span()=>
-                                                   mem::take(args[#i])
-                                                   .clone().cast::<#arg_type>())
+                                           mem::take(args[#i]).take_string().unwrap())
                         }
                         _ => {
                             is_string = false;

@@ -948,7 +948,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<ImmutableString>();
+                        let arg0 = mem::take(args[0usize]).take_immutable_string().unwrap();
                         Ok(Dynamic::from(print_out_to(&arg0)))
                     }
 
@@ -1012,7 +1012,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<String>();
+                        let arg0 = mem::take(args[0usize]).take_string().unwrap();
                         Ok(Dynamic::from(print_out_to(arg0)))
                     }
 

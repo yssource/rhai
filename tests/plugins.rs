@@ -27,6 +27,9 @@ mod test {
         pub fn hash(_text: String) -> INT {
             42
         }
+        pub fn hash2(_text: &str) -> INT {
+            42
+        }
 
         #[rhai_fn(name = "test", name = "hi")]
         #[inline(always)]
@@ -82,6 +85,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
 
     assert_eq!(engine.eval::<INT>(r#"hash("hello")"#)?, 42);
+    assert_eq!(engine.eval::<INT>(r#"hash2("hello")"#)?, 42);
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; test(a, 2)")?, 6);
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; hi(a, 2)")?, 6);
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; test(a, 2)")?, 6);
