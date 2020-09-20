@@ -32,7 +32,10 @@ pub struct ExportInfo {
 
 pub fn parse_attr_items(args: ParseStream) -> syn::Result<ExportInfo> {
     if args.is_empty() {
-        return Ok(ExportInfo { item_span: args.span(), items: Vec::new()});
+        return Ok(ExportInfo {
+            item_span: args.span(),
+            items: Vec::new(),
+        });
     }
     let arg_list = args
         .call(syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty)?;
@@ -80,10 +83,17 @@ pub fn parse_punctuated_items(
                 .ok_or_else(|| syn::Error::new(attr_path.span(), "expecting attribute name"))?,
             x => return Err(syn::Error::new(x.span(), "expecting identifier")),
         };
-        attrs.push(AttrItem { key, value, span: arg_span });
+        attrs.push(AttrItem {
+            key,
+            value,
+            span: arg_span,
+        });
     }
 
-    Ok(ExportInfo { item_span: list_span, items: attrs })
+    Ok(ExportInfo {
+        item_span: list_span,
+        items: attrs,
+    })
 }
 
 pub(crate) fn outer_item_attributes<T: ExportedParams>(
