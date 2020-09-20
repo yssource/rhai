@@ -808,7 +808,7 @@ impl Module {
     }
 
     /// Set a pair of Rust index getter and setter functions, returning both hash keys.
-    /// This is a shorthand for `set_indexer_get_fn` and `set_indexer_set_fn`.
+    /// This is a short-hand for `set_indexer_get_fn` and `set_indexer_set_fn`.
     ///
     /// If there are similar existing Rust functions, they are replaced.
     ///

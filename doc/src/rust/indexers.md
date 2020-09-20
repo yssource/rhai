@@ -52,7 +52,7 @@ let mut engine = Engine::new();
 engine
     .register_type::<TestStruct>()
     .register_fn("new_ts", TestStruct::new)
-    // Shorthand: .register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
+    // Short-hand: .register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
     .register_indexer_get(TestStruct::get_field)
     .register_indexer_set(TestStruct::set_field);
 

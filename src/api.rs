@@ -12,16 +12,17 @@ use crate::scope::Scope;
 use crate::token::{lex, Position};
 
 #[cfg(not(feature = "no_index"))]
-#[cfg(not(feature = "no_object"))]
 use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
 use crate::{
     engine::{make_getter, make_setter, Map},
     error::ParseErrorType,
-    fn_register::{RegisterFn, RegisterResultFn},
     token::Token,
 };
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+use crate::fn_register::{RegisterFn, RegisterResultFn};
 
 #[cfg(not(feature = "no_function"))]
 use crate::{
@@ -375,7 +376,7 @@ impl Engine {
         self.register_result_fn(&make_setter(name), callback)
     }
 
-    /// Shorthand for registering both getter and setter functions
+    /// Short-hand for registering both getter and setter functions
     /// of a registered type with the `Engine`.
     ///
     /// All function signatures must start with `&mut self` and not `&self`.
@@ -427,7 +428,7 @@ impl Engine {
         self.register_get(name, get_fn).register_set(name, set_fn)
     }
 
-    /// Register an index getter for a registered type with the `Engine`.
+    /// Register an index getter for a custom type with the `Engine`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
@@ -476,7 +477,7 @@ impl Engine {
         self.register_fn(FN_IDX_GET, callback)
     }
 
-    /// Register an index getter for a registered type with the `Engine`.
+    /// Register an index getter for a custom type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
@@ -527,7 +528,7 @@ impl Engine {
         self.register_result_fn(FN_IDX_GET, callback)
     }
 
-    /// Register an index setter for a registered type with the `Engine`.
+    /// Register an index setter for a custom type with the `Engine`.
     ///
     /// # Example
     ///
@@ -575,7 +576,7 @@ impl Engine {
         self.register_fn(FN_IDX_SET, callback)
     }
 
-    /// Register an index setter for a registered type with the `Engine`.
+    /// Register an index setter for a custom type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
     /// # Example
@@ -627,7 +628,7 @@ impl Engine {
         self.register_result_fn(FN_IDX_SET, callback)
     }
 
-    /// Shorthand for register both index getter and setter functions for a registered type with the `Engine`.
+    /// Short-hand for register both index getter and setter functions for a custom type with the `Engine`.
     ///
     /// # Example
     ///

@@ -74,7 +74,7 @@ New features
 * Currying of function pointers is supported via the new `curry` keyword.
 * Automatic currying of anonymous functions to capture shared variables from the external scope.
 * Capturing of the calling scope for function call via the `func!(...)` syntax.
-* `Module::set_indexer_get_set_fn` is added as a shorthand of both `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn`.
+* `Module::set_indexer_get_set_fn` is added as a short-hand of both `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn`.
 * New `unicode-xid-ident` feature to allow [Unicode Standard Annex #31](http://www.unicode.org/reports/tr31/) for identifiers.
 * `Scope::iter_raw` returns an iterator with a reference to the underlying `Dynamic` value (which may be shared).
 
@@ -200,7 +200,7 @@ Breaking changes
 New features
 ------------
 
-* Indexers are now split into getters and setters (which now support updates).  The API is split into `Engine::register_indexer_get` and `Engine::register_indexer_set` with `Engine::register_indexer_get_set` being a shorthand.  Similarly, `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn` are added.
+* Indexers are now split into getters and setters (which now support updates).  The API is split into `Engine::register_indexer_get` and `Engine::register_indexer_set` with `Engine::register_indexer_get_set` being a short-hand.  Similarly, `Module::set_indexer_get_fn` and `Module::set_indexer_set_fn` are added.
 * `Engine:register_fn` and `Engine:register_result_fn` accepts functions that take parameters of type `&str` (immutable string slice), which maps directly to `ImmutableString`. This is to avoid needing wrappers for functions taking string parameters.
 * Set maximum limit on data sizes: `Engine::set_max_string_size`, `Engine::set_max_array_size` and `Engine::set_max_map_size`.
 * Supports trailing commas on array literals, object map literals, function definitions and function calls.
