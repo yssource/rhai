@@ -45,6 +45,15 @@ The following methods (mostly defined in the [`BasicArrayPackage`][packages] but
 | `truncate`                | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
 
+Use Custom Types With Arrays
+---------------------------
+
+To use a [custom type] with arrays, a number of array functions need to be manually implemented,
+in particular `push`, `pad` and the `==` operator (in order to support the `in` operator).
+
+See the section on [custom types] for more details.
+
+
 Examples
 --------
 
@@ -122,10 +131,4 @@ y.len == 5;
 y.clear();              // empty the array
 
 y.len == 0;
-```
-
-`push` and `pad` are only defined for standard built-in types. For custom types, type-specific versions must be registered:
-
-```rust
-engine.register_fn("push", |list: &mut Array, item: MyType| list.push(Box::new(item)) );
 ```

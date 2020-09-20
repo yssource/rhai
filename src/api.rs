@@ -463,7 +463,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_get<T, X, U>(
         &mut self,
@@ -516,7 +515,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_get_result<T, X>(
         &mut self,
@@ -564,7 +562,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_set<T, X, U>(
         &mut self,
@@ -617,7 +614,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_set_result<T, X, U>(
         &mut self,
@@ -664,7 +660,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_get_set<T, X, U>(
         &mut self,

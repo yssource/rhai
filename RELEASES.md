@@ -9,6 +9,8 @@ Bug fixes
 
 * `if` statement with an empty `true` block would not evaluate the `false` block.  This is now fixed.
 * Fixes a bug in `Module::set_fn_4_mut`.
+* Module API's now properly handle `&str` and `String` parameters.
+* Indexers are available under `no_object`.
 
 New features
 ------------
