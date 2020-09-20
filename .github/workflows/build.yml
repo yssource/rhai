@@ -95,11 +95,11 @@ jobs:
       with:
         command: fmt
         args: --all -- --check
-    - name: Run Rustfmt
+    - name: Run Clippy
       uses: actions-rs/cargo@v1
       with:
         command: clippy
-        args: --
+        args: --all -- -Aclippy::all -Dclippy::perf
   codegen_build:
     name: Codegen Build
     runs-on: ${{matrix.os}}
