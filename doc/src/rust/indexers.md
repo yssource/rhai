@@ -16,6 +16,18 @@ Indexers are disabled when the [`no_index`] feature is used.
 For efficiency reasons, indexers **cannot** be used to overload (i.e. override) built-in indexing operations for
 [arrays] and [object maps].
 
+| `Engine` API                  | Description                                              |       Return Value of Function        |
+| ----------------------------- | -------------------------------------------------------- | :-----------------------------------: |
+| `register_indexer_get`        | Register an index getter                                 |                 _Any_                 |
+| `register_indexer_set`        | Register an index setter                                 |                 _Any_                 |
+| `register_indexer_get_set`    | Short-hand to register both an index getter and a setter |                _None_                 |
+| `register_indexer_get_result` | Register an index getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
+| `register_indexer_set_result` | Register an index setter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
+
+
+Examples
+--------
+
 ```rust
 #[derive(Clone)]
 struct TestStruct {
@@ -40,7 +52,7 @@ let mut engine = Engine::new();
 engine
     .register_type::<TestStruct>()
     .register_fn("new_ts", TestStruct::new)
-    // Shorthand: .register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
+    // Short-hand: .register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
     .register_indexer_get(TestStruct::get_field)
     .register_indexer_set(TestStruct::set_field);
 

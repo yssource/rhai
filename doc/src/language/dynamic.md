@@ -6,8 +6,8 @@ Dynamic Values
 A `Dynamic` value can be _any_ type. However, under [`sync`], all types must be `Send + Sync`.
 
 
-Use [`type_of()`] to Get Value Type
-----------------------------------
+Use `type_of()` to Get Value Type
+--------------------------------
 
 Because [`type_of()`] a `Dynamic` value returns the type of the actual value,
 it is usually used to perform type-specific actions based on the actual value's type.

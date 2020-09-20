@@ -69,12 +69,12 @@ For example, the following is a SQL-like syntax for some obscure DSL operation:
 ```rust
 let table = [..., ..., ..., ...];
 
-// Syntax = calculate $ident$ $ident$ from $expr$ -> $ident$ : $expr$
-let total = calculate sum price from table -> row : row.weight > 50;
+// Syntax = calculate $ident$ ( $expr$ -> $ident$ ) => $ident$ : $expr$
+let total = calculate sum(table->price) => row : row.weight > 50;
 
 // Note: There is nothing special about those symbols; to make it look exactly like SQL:
-// Syntax = SELECT $ident$ ( $ident$ ) FROM $expr$ AS $ident$ WHERE $expr$
-let total = SELECT sum(price) FROM table AS row WHERE row.weight > 50;
+// Syntax = SELECT $ident$ ( $ident$ ) AS $ident$ FROM $expr$ WHERE $expr$
+let total = SELECT sum(price) AS row FROM table WHERE row.weight > 50;
 ```
 
 After registering this custom syntax with Rhai, it can be used anywhere inside a script as
@@ -84,9 +84,9 @@ For its evaluation, the callback function will receive the following list of inp
 
 * `inputs[0] = "sum"` - math operator
 * `inputs[1] = "price"` - field name
-* `inputs[2] = Expression(table)` - data source
-* `inputs[3] = "row"` - loop variable name
+* `inputs[2] = "row"` - loop variable name
+* `inputs[3] = Expression(table)` - data source
 * `inputs[4] = Expression(row.wright > 50)` - filter predicate
 
-Other identifiers, such as `"calculate"`, `"from"`, as well as symbols such as `->` and `:`,
+Other identifiers, such as `"calculate"`, `"FROM"`, as well as symbols such as `->` and `:` etc.,
 are parsed in the order defined within the custom syntax.

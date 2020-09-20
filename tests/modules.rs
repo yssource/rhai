@@ -1,7 +1,7 @@
 #![cfg(not(feature = "no_module"))]
 use rhai::{
-    module_resolvers::StaticModuleResolver, Dynamic, Engine, EvalAltResult, Module, ParseError,
-    ParseErrorType, Scope, INT,
+    module_resolvers::StaticModuleResolver, Dynamic, Engine, EvalAltResult, ImmutableString,
+    Module, ParseError, ParseErrorType, Scope, INT,
 };
 
 #[test]
@@ -79,12 +79,12 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     });
 
     #[cfg(not(feature = "no_float"))]
-        module.set_fn_4_mut(
+    module.set_fn_4_mut(
         "sum_of_three_args".to_string(),
         |target: &mut INT, a: INT, b: INT, c: f64| {
             *target = a + b + c as INT;
             Ok(())
-        }
+        },
     );
 
     resolver.insert("hello", module);
@@ -313,6 +313,44 @@ fn test_module_export() -> Result<(), Box<EvalAltResult>> {
         engine.compile(r"fn abc(x) { export x; }").expect_err("should error"),
         ParseError(x, _) if *x == ParseErrorType::WrongExport
     ));
+
+    Ok(())
+}
+
+#[test]
+fn test_module_str() -> Result<(), Box<EvalAltResult>> {
+    fn test_fn(_input: ImmutableString) -> Result<INT, Box<EvalAltResult>> {
+        Ok(42)
+    }
+    fn test_fn2(_input: &str) -> Result<INT, Box<EvalAltResult>> {
+        Ok(42)
+    }
+    fn test_fn3(_input: String) -> Result<INT, Box<EvalAltResult>> {
+        Ok(42)
+    }
+
+    let mut engine = rhai::Engine::new();
+    let mut module = Module::new();
+    module.set_fn_1("test", test_fn);
+    module.set_fn_1("test2", test_fn2);
+    module.set_fn_1("test3", test_fn3);
+
+    let mut static_modules = rhai::module_resolvers::StaticModuleResolver::new();
+    static_modules.insert("test", module);
+    engine.set_module_resolver(Some(static_modules));
+
+    assert_eq!(
+        engine.eval::<INT>(r#"import "test" as test; test::test("test");"#)?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"import "test" as test; test::test2("test");"#)?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"import "test" as test; test::test3("test");"#)?,
+        42
+    );
 
     Ok(())
 }

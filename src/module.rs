@@ -4,10 +4,11 @@ use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync};
+use crate::fn_register::by_value as cast_arg;
 use crate::parser::{FnAccess, FnAccess::Public, ScriptFnDef};
 use crate::result::EvalAltResult;
 use crate::token::{Position, Token};
-use crate::utils::{StaticVec, StraightHasherBuilder};
+use crate::utils::{ImmutableString, StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
 use crate::fn_native::Shared;
@@ -32,7 +33,6 @@ use crate::stdlib::{
     collections::HashMap,
     fmt, format,
     iter::empty,
-    mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     string::{String, ToString},
@@ -396,9 +396,21 @@ impl Module {
             arg_types.len()
         };
 
-        let hash_fn = calc_fn_hash(empty(), &name, args_len, arg_types.iter().cloned());
+        let params = arg_types
+            .into_iter()
+            .cloned()
+            .map(|id| {
+                if id == TypeId::of::<&str>() {
+                    TypeId::of::<ImmutableString>()
+                } else if id == TypeId::of::<String>() {
+                    TypeId::of::<ImmutableString>()
+                } else {
+                    id
+                }
+            })
+            .collect();
 
-        let params = arg_types.into_iter().cloned().collect();
+        let hash_fn = calc_fn_hash(empty(), &name, args_len, arg_types.iter().cloned());
 
         self.functions
             .insert(hash_fn, (name, access, params, func.into()));
@@ -518,7 +530,7 @@ impl Module {
         func: impl Fn(A) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            func(mem::take(args[0]).cast::<A>()).map(Dynamic::from)
+            func(cast_arg::<A>(&mut args[0])).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
@@ -592,8 +604,8 @@ impl Module {
         func: impl Fn(A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            let a = mem::take(args[0]).cast::<A>();
-            let b = mem::take(args[1]).cast::<B>();
+            let a = cast_arg::<A>(&mut args[0]);
+            let b = cast_arg::<B>(&mut args[1]);
 
             func(a, b).map(Dynamic::from)
         };
@@ -623,7 +635,7 @@ impl Module {
         func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            let b = mem::take(args[1]).cast::<B>();
+            let b = cast_arg::<B>(&mut args[1]);
             let a = &mut args[0].write_lock::<A>().unwrap();
 
             func(a, b).map(Dynamic::from)
@@ -709,9 +721,9 @@ impl Module {
         func: impl Fn(A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            let a = mem::take(args[0]).cast::<A>();
-            let b = mem::take(args[1]).cast::<B>();
-            let c = mem::take(args[2]).cast::<C>();
+            let a = cast_arg::<A>(&mut args[0]);
+            let b = cast_arg::<B>(&mut args[1]);
+            let c = cast_arg::<C>(&mut args[2]);
 
             func(a, b, c).map(Dynamic::from)
         };
@@ -746,8 +758,8 @@ impl Module {
         func: impl Fn(&mut A, B, C) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            let b = mem::take(args[1]).cast::<B>();
-            let c = mem::take(args[2]).cast::<C>();
+            let b = cast_arg::<B>(&mut args[2]);
+            let c = cast_arg::<C>(&mut args[3]);
             let a = &mut args[0].write_lock::<A>().unwrap();
 
             func(a, b, c).map(Dynamic::from)
@@ -780,8 +792,8 @@ impl Module {
         func: impl Fn(&mut A, B, C) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            let b = mem::take(args[1]).cast::<B>();
-            let c = mem::take(args[2]).cast::<C>();
+            let b = cast_arg::<B>(&mut args[1]);
+            let c = cast_arg::<C>(&mut args[2]);
             let a = &mut args[0].write_lock::<A>().unwrap();
 
             func(a, b, c).map(Dynamic::from)
@@ -796,7 +808,7 @@ impl Module {
     }
 
     /// Set a pair of Rust index getter and setter functions, returning both hash keys.
-    /// This is a shorthand for `set_indexer_get_fn` and `set_indexer_set_fn`.
+    /// This is a short-hand for `set_indexer_get_fn` and `set_indexer_set_fn`.
     ///
     /// If there are similar existing Rust functions, they are replaced.
     ///
@@ -858,10 +870,10 @@ impl Module {
         func: impl Fn(A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            let a = mem::take(args[0]).cast::<A>();
-            let b = mem::take(args[1]).cast::<B>();
-            let c = mem::take(args[2]).cast::<C>();
-            let d = mem::take(args[3]).cast::<D>();
+            let a = cast_arg::<A>(&mut args[0]);
+            let b = cast_arg::<B>(&mut args[1]);
+            let c = cast_arg::<C>(&mut args[2]);
+            let d = cast_arg::<D>(&mut args[3]);
 
             func(a, b, c, d).map(Dynamic::from)
         };
@@ -902,9 +914,9 @@ impl Module {
         func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
-            let b = mem::take(args[1]).cast::<B>();
-            let c = mem::take(args[2]).cast::<C>();
-            let d = mem::take(args[3]).cast::<D>();
+            let b = cast_arg::<B>(&mut args[1]);
+            let c = cast_arg::<C>(&mut args[2]);
+            let d = cast_arg::<D>(&mut args[3]);
             let a = &mut args[0].write_lock::<A>().unwrap();
 
             func(a, b, c, d).map(Dynamic::from)

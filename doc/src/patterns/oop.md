@@ -6,8 +6,8 @@ Object-Oriented Programming (OOP)
 Rhai does not have _objects_ per se, but it is possible to _simulate_ object-oriented programming.
 
 
-Use [Object Maps] to Simulate OOP
---------------------------------
+Use Object Maps to Simulate OOP
+------------------------------
 
 Rhai's [object maps] has [special support for OOP]({{rootUrl}}/language/object-maps-oop.md).
 
@@ -22,8 +22,8 @@ a valid [function pointer] (perhaps defined via an [anonymous function] or more 
 then the call will be dispatched to the actual function with `this` binding to the [object map] itself.
 
 
-Use Anonymous Functions to Define Methods
-----------------------------------------
+Use Closures to Define Methods
+-----------------------------
 
 [Anonymous functions] or [closures] defined as values for [object map] properties take on
 a syntactic shape that resembles very closely that of class methods in an OOP language.

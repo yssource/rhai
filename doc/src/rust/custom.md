@@ -38,12 +38,14 @@ let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 println!("result: {}", result.field);       // prints 42
 ```
 
+
 Register a Custom Type
 ---------------------
 
 A custom type must implement `Clone` as this allows the [`Engine`] to pass by value.
 
-Notice that the custom type needs to be _registered_ using `Engine::register_type`.
+Notice that the custom type needs to be _registered_ using `Engine::register_type`
+or `Engine::register_type_with_name`.
 
 ```rust
 #[derive(Clone)]
@@ -66,7 +68,8 @@ let mut engine = Engine::new();
 engine.register_type::<TestStruct>();
 ```
 
-Methods on The Custom Type
+
+Methods on the Custom Type
 -------------------------
 
 To use native custom types, methods and functions in Rhai scripts, simply register them
@@ -85,6 +88,7 @@ so that invoking methods can update the types. All other parameters in Rhai are 
 
 **IMPORTANT: Rhai does NOT support normal references (i.e. `&T`) as parameters.**
 
+
 Use the Custom Type in Scripts
 -----------------------------
 
@@ -96,6 +100,7 @@ let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 
 println!("result: {}", result.field);               // prints 42
 ```
+
 
 Method-Call Style vs. Function-Call Style
 ----------------------------------------
@@ -127,6 +132,7 @@ Under [`no_object`], however, the _method_ style of function calls
 let result = engine.eval::<()>("let x = [1, 2, 3]; x.clear()")?;
 ```
 
+
 `type_of()` a Custom Type
 -------------------------
 
@@ -149,4 +155,34 @@ engine
 
 let x = new_ts();
 x.type_of() == "Hello";
+```
+
+
+Use the Custom Type With Arrays
+------------------------------
+
+The `push` and `pad` functions for [arrays] are only defined for standard built-in types.
+For custom types, type-specific versions must be registered:
+
+```rust
+engine
+    .register_fn("push", |list: &mut Array, item: TestStruct| {
+        list.push(Dynamic::from(item));
+    }).register_fn("pad", |list: &mut Array, len: i64, item: TestStruct| {
+        if len as usize > list.len() {
+            list.resize(len as usize, item);
+        }
+    });
+```
+
+In particular, in order to use the `in` operator with a custom type for an [array],
+the `==` operator must be registered for that custom type:
+
+```rust
+// Assume 'TestStruct' implements `PartialEq`
+engine.register_fn("==", |item1: &mut TestStruct, item2: TestStruct| item1 == item2);
+
+// Then this works in Rhai:
+let item = new_ts();        // construct a new 'TestStruct'
+item in array;              // 'in' operator uses '=='
 ```

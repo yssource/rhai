@@ -65,17 +65,15 @@ disable `eval` by overloading it, probably with something that throws.
 ```rust
 fn eval(script) { throw "eval is evil! I refuse to run " + script }
 
-let x = eval("40 + 2");         // 'eval' here throws "eval is evil! I refuse to run 40 + 2"
+let x = eval("40 + 2");         // throws "eval is evil! I refuse to run 40 + 2"
 ```
 
 Or overload it from Rust:
 
 ```rust
-fn alt_eval(script: String) -> Result<(), Box<EvalAltResult>> {
+engine.register_result_fn("eval", |script: String| -> Result<(), Box<EvalAltResult>> {
     Err(format!("eval is evil! I refuse to run {}", script).into())
-}
-
-engine.register_result_fn("eval", alt_eval);
+});
 ```
 
 

@@ -5,9 +5,11 @@ Export a Rust Module to Rhai
 
 
 When applied to a Rust module, the `#[export_module]` attribute generates the necessary
-code and metadata to allow Rhai access to its public (i.e. marked `pub`) functions. This code
-is exactly what would need to be written by hand to achieve the same goal, and is custom fit
-to each exported item.
+code and metadata to allow Rhai access to its public (i.e. marked `pub`) functions, constants
+and sub-modules.
+
+This code is exactly what would need to be written by hand to achieve the same goal,
+and is custom fit to each exported item.
 
 This Rust module can then either be loaded into an [`Engine`] as a normal [module] or
 registered as a [custom package]. This is done by using the `exported_module!` macro.
@@ -16,14 +18,21 @@ registered as a [custom package]. This is done by using the `exported_module!` m
 `#[export_module]` and `exported_module!`
 ----------------------------------------
 
-Apply `#[export_module]` onto a Rust module to convert all `pub` functions into Rhai plugin
-functions.
+Apply `#[export_module]` onto a Rust module to register automatically construct a Rhai [module],
+which can then be loaded into an [`Engine`].
+
+All `pub` functions become registered functions, all `pub` constants become [module] constant variables,
+and all sub-modules become Rhai sub-modules.
 
 ```rust
 use rhai::plugins::*;       // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
+    // This constant will be registered as the constant variable 'SOME_NUMBER'.
+    // Ignored when loaded as a package.
+    pub const SOME_NUMBER: i64 = 42;
+
     // This function will be registered as 'greet'.
     pub fn greet(name: &str) -> String {
         format!("hello, {}!", name)
@@ -36,14 +45,23 @@ mod my_module {
     pub fn increment(num: &mut i64) {
         *num += 1;
     }
-    // This function is NOT registered.
+    // This function is not 'pub', so NOT registered.
     fn mystic_number() -> i64 {
         42
+    }
+
+    // This sub-module is ignored when loaded as a package.
+    pub mod my_sub_module {
+        // This function is ignored when loaded as a package.
+        // Otherwise it is a valid registered function under a sub-module.
+        pub fn get_info() -> String {
+            "hello".to_string()
+        }
     }
 }
 ```
 
-In order to load this into an [`Engine`], use the `load_package` method on the exported module:
+The simplest way to load this into an [`Engine`] is to use the `load_package` method on the exported module:
 
 ```rust
 fn main() {
@@ -52,7 +70,7 @@ fn main() {
     // The macro call creates the Rhai module.
     let module = exported_module!(my_module);
 
-    // A module can simply be loaded, registering all public its contents.
+    // A module can simply be loaded, registering all public functions.
     engine.load_package(module);
 }
 ```
@@ -74,9 +92,12 @@ increment(x);
 x == 43;
 ```
 
-Registering this as a custom package is almost the same, except that a module resolver must
-point to the module, rather than being loaded directly. See the [module] section for more
-information.
+Notice that, when using a [module] as a [package], only functions registered at the _top level_
+can be accessed.  Variables as well as sub-modules are ignored.
+
+Using this directly as a Rhai module is almost the same, except that a [module resolver] must
+be used to serve the module, and the module is loaded via `import` statements.
+See the [module] section for more information.
 
 
 Function Overloading and Operators
@@ -88,7 +109,8 @@ attribute to individual functions.
 The text string given as the `name` parameter to `#[rhai_fn]` is used to register the function with
 the [`Engine`], disregarding the actual name of the function.
 
-With `#[rhai_fn(name = "...")]`, multiple functions may be registered under the same name in Rhai, so long as they have different parameters.
+With `#[rhai_fn(name = "...")]`, multiple functions may be registered under the same name in Rhai,
+so long as they have different parameters.
 
 Operators (which require function names that are not valid for Rust) can also be registered this way.
 

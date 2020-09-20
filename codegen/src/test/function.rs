@@ -237,21 +237,27 @@ mod generate_tests {
         let expected = expected.to_string();
         if &actual != &expected {
             let mut counter = 0;
-            let iter = actual
-                .chars()
-                .zip(expected.chars())
-                .inspect(|_| counter += 1)
-                .skip_while(|(a, e)| *a == *e);
-            let (actual_diff, expected_diff) = {
+            let _iter = actual.chars().zip(expected.chars()).skip_while(|(a, e)| {
+                if *a == *e {
+                    counter += 1;
+                    true
+                } else {
+                    false
+                }
+            });
+            let (_actual_diff, _expected_diff) = {
                 let mut actual_diff = String::new();
                 let mut expected_diff = String::new();
-                for (a, e) in iter.take(50) {
+                for (a, e) in _iter.take(50) {
                     actual_diff.push(a);
                     expected_diff.push(e);
                 }
                 (actual_diff, expected_diff)
             };
             eprintln!("actual != expected, diverge at char {}", counter);
+            // eprintln!("  actual: {}", _actual_diff);
+            // eprintln!("expected: {}", _expected_diff);
+            // assert!(false);
         }
         assert_eq!(actual, expected);
     }
@@ -269,7 +275,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
@@ -313,7 +319,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
@@ -354,7 +360,7 @@ mod generate_tests {
         let expected_tokens = quote! {
             impl PluginFunction for MyType {
                 fn call(&self,
-                        args: &mut [&mut Dynamic], pos: Position
+                        args: &mut [&mut Dynamic]
                 ) -> Result<Dynamic, Box<EvalAltResult>> {
                     debug_assert_eq!(args.len(), 1usize,
                                 "wrong arg count: {} != {}", args.len(), 1usize);
@@ -388,7 +394,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
@@ -435,7 +441,7 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
@@ -483,11 +489,11 @@ mod generate_tests {
                 struct Token();
                 impl PluginFunction for Token {
                     fn call(&self,
-                            args: &mut [&mut Dynamic], pos: Position
+                            args: &mut [&mut Dynamic]
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<ImmutableString>();
+                        let arg0 = mem::take(args[0usize]).take_immutable_string().unwrap();
                         Ok(Dynamic::from(special_print(&arg0)))
                     }
 

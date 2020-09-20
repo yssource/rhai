@@ -9,6 +9,9 @@ is provided by the `for` ... `in` loop.
 Like C, `continue` can be used to skip to the next iteration, by-passing all following statements;
 `break` can be used to break out of the loop unconditionally.
 
+To loop through a number sequence (with or without steps), use the `range` function to
+return a numeric iterator.
+
 ```rust
 // Iterate through string, yielding characters
 let s = "hello, world!";

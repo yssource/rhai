@@ -185,7 +185,7 @@ macro_rules! gen_signed_functions {
 
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+ ) => { $(
-        $mod_name.combine_flatten(exported_module!($root::$arg_type::functions));
+        combine_with_exported_module!($mod_name, "arithmetic", $root::$arg_type::functions);
     )* }
 }
 
@@ -208,8 +208,8 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
     // Basic arithmetic for floating-point
     #[cfg(not(feature = "no_float"))]
     {
-        lib.combine_flatten(exported_module!(f32_functions));
-        lib.combine_flatten(exported_module!(f64_functions));
+        combine_with_exported_module!(lib, "f32", f32_functions);
+        combine_with_exported_module!(lib, "f64", f64_functions);
     }
 });
 

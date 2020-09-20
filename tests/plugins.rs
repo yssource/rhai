@@ -1,5 +1,6 @@
 #![cfg(not(any(feature = "no_index", feature = "no_module")))]
 
+use rhai::module_resolvers::StaticModuleResolver;
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, INT};
 
@@ -10,6 +11,8 @@ mod test {
     pub mod special_array_package {
         use rhai::{Array, INT};
 
+        pub const MYSTIC_NUMBER: INT = 42;
+
         #[cfg(not(feature = "no_object"))]
         pub mod feature {
             use rhai::{Array, Dynamic, EvalAltResult};
@@ -19,6 +22,13 @@ mod test {
             pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {
                 Ok(array[0].clone())
             }
+        }
+
+        pub fn hash(_text: String) -> INT {
+            42
+        }
+        pub fn hash2(_text: &str) -> INT {
+            42
         }
 
         #[rhai_fn(name = "test", name = "hi")]
@@ -66,7 +76,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     let mut m = Module::new();
-    m.combine_flatten(exported_module!(test::special_array_package));
+    combine_with_exported_module!(&mut m, "test", test::special_array_package);
     engine.load_package(m);
 
     reg_functions!(engine += greet::single(INT, bool, char));
@@ -74,6 +84,8 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_object"))]
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
 
+    assert_eq!(engine.eval::<INT>(r#"hash("hello")"#)?, 42);
+    assert_eq!(engine.eval::<INT>(r#"hash2("hello")"#)?, 42);
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; test(a, 2)")?, 6);
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; hi(a, 2)")?, 6);
     assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; test(a, 2)")?, 6);
@@ -81,6 +93,15 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<String>("let a = [1, 2, 3]; greet(test(a, 2))")?,
         "6 kitties"
+    );
+
+    let mut resolver = StaticModuleResolver::new();
+    resolver.insert("test", exported_module!(test::special_array_package));
+
+    engine.set_module_resolver(Some(resolver));
+    assert_eq!(
+        engine.eval::<INT>(r#"import "test" as test; test::MYSTIC_NUMBER"#)?,
+        42
     );
 
     Ok(())

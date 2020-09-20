@@ -6,7 +6,7 @@ use crate::attrs::ExportScope;
 use crate::function::ExportedFn;
 use crate::module::Module;
 
-pub(crate) type ExportedConst = (String, syn::Expr);
+pub(crate) type ExportedConst = (String, Box<syn::Type>, syn::Expr);
 
 pub(crate) fn generate_body(
     fns: &mut [ExportedFn],
@@ -17,13 +17,16 @@ pub(crate) fn generate_body(
     let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
     let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
     let mut add_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
+    let mut set_flattened_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
+    let string_type_path = syn::parse2::<syn::Path>(quote! { String }).unwrap();
 
-    for (const_name, const_expr) in consts {
+    for (const_name, _, _) in consts {
         let const_literal = syn::LitStr::new(&const_name, proc_macro2::Span::call_site());
+        let const_ref = syn::Ident::new(&const_name, proc_macro2::Span::call_site());
         set_const_stmts.push(
             syn::parse2::<syn::Stmt>(quote! {
-                m.set_var(#const_literal, #const_expr);
+                m.set_var(#const_literal, #const_ref);
             })
             .unwrap(),
         );
@@ -50,6 +53,14 @@ pub(crate) fn generate_body(
             syn::parse2::<syn::ExprBlock>(quote! {
                 #(#cfg_attrs)* {
                     m.set_sub_module(#exported_name, self::#module_name::rhai_module_generate());
+                }
+            })
+            .unwrap(),
+        );
+        set_flattened_mod_blocks.push(
+            syn::parse2::<syn::ExprBlock>(quote! {
+                #(#cfg_attrs)* {
+                    self::#module_name::rhai_generate_into_module(m, flatten);
                 }
             })
             .unwrap(),
@@ -87,6 +98,11 @@ pub(crate) fn generate_body(
                             }
                             _ => panic!("internal error: non-string shared reference!?"),
                         },
+                        syn::Type::Path(ref p) if p.path == string_type_path => {
+                            syn::parse2::<syn::Type>(quote! {
+                            ImmutableString })
+                            .unwrap()
+                        }
                         syn::Type::Reference(syn::TypeReference {
                             mutability: Some(_),
                             ref elem,
@@ -129,13 +145,22 @@ pub(crate) fn generate_body(
         pub mod generate_info {
             #[allow(unused_imports)]
             use super::*;
-            #[allow(unused_mut)]
+
             pub fn rhai_module_generate() -> Module {
                 let mut m = Module::new();
+                rhai_generate_into_module(&mut m, false);
+                m
+            }
+            #[allow(unused_mut)]
+            pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                 #(#set_fn_stmts)*
                 #(#set_const_stmts)*
-                #(#add_mod_blocks)*
-                m
+
+                if flatten {
+                    #(#set_flattened_mod_blocks)*
+                } else {
+                    #(#add_mod_blocks)*
+                }
             }
         }
     })

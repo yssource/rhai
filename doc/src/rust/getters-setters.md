@@ -7,6 +7,20 @@ A custom type can also expose members by registering `get` and/or `set` function
 
 Getters and setters each take a `&mut` reference to the first parameter.
 
+Getters and setters are disabled when the [`no_object`] feature is used.
+
+| `Engine` API          | Description                                       |       Return Value of Function        |
+| --------------------- | ------------------------------------------------- | :-----------------------------------: |
+| `register_get`        | Register a getter                                 |                 _Any_                 |
+| `register_set`        | Register a setter                                 |                 _Any_                 |
+| `register_get_set`    | Short-hand to register both a getter and a setter |                _None_                 |
+| `register_get_result` | Register a getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
+| `register_set_result` | Register a setter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
+
+
+Examples
+--------
+
 ```rust
 #[derive(Clone)]
 struct TestStruct {

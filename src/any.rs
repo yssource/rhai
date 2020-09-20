@@ -1136,6 +1136,7 @@ impl Dynamic {
     }
 
     /// Convert the `Dynamic` into `String` and return it.
+    /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
     pub fn take_string(self) -> Result<String, &'static str> {
@@ -1145,7 +1146,8 @@ impl Dynamic {
 
     /// Convert the `Dynamic` into `ImmutableString` and return it.
     /// Returns the name of the actual type if the cast fails.
-    pub(crate) fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
+    #[inline]
+    pub fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s) => Ok(s),
             Union::FnPtr(f) => Ok(f.take_data().0),

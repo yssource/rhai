@@ -68,19 +68,19 @@ let bunny: Rc<RefCell<EnergizerBunny>> = Rc::new(RefCell::(EnergizerBunny::new()
 // Notice 'move' is used to move the shared API object into the closure.
 let b = bunny.clone();
 engine.register_fn("bunny_power", move |on: bool| {
-        if on {
-            if b.borrow().is_going() {
-                println!("Still going...");
-            } else {
-                b.borrow_mut().go();
-            }
+    if on {
+        if b.borrow().is_going() {
+            println!("Still going...");
         } else {
-            if b.borrow().is_going() {
-                b.borrow_mut().stop();
-            } else {
-                println!("Already out of battery!");
-            }
+            b.borrow_mut().go();
         }
+    } else {
+        if b.borrow().is_going() {
+            b.borrow_mut().stop();
+        } else {
+            println!("Already out of battery!");
+        }
+    }
 });
 
 let b = bunny.clone();
@@ -88,24 +88,24 @@ engine.register_fn("bunny_is_going", move || b.borrow().is_going());
 
 let b = bunny.clone();
 engine.register_fn("bunny_get_speed", move ||
-        if b.borrow().is_going() { b.borrow().get_speed() } else { 0 }
+    if b.borrow().is_going() { b.borrow().get_speed() } else { 0 }
 );
 
 let b = bunny.clone();
 engine.register_result_fn("bunny_set_speed", move |speed: i64|
-        if speed <= 0 {
-            return Err("Speed must be positive!".into());
-        } else if speed > 100 {
-            return Err("Bunny will be going too fast!".into());
-        }
+    if speed <= 0 {
+        return Err("Speed must be positive!".into());
+    } else if speed > 100 {
+        return Err("Bunny will be going too fast!".into());
+    }
 
-        if b.borrow().is_going() {
-            b.borrow_mut().set_speed(speed)
-        } else {
-            return Err("Bunny is not yet going!".into());
-        }
+    if b.borrow().is_going() {
+        b.borrow_mut().set_speed(speed)
+    } else {
+        return Err("Bunny is not yet going!".into());
+    }
 
-        Ok(().into())
+    Ok(().into())
 );
 ```
 
