@@ -666,7 +666,8 @@ impl ExportedFn {
                             is_string = true;
                             is_ref = false;
                             quote_spanned!(arg_type.span()=>
-                                           mem::take(args[#i]).take_string().unwrap())
+                                                   mem::take(args[#i])
+                                                   .clone().cast::<#arg_type>())
                         }
                         _ => {
                             is_string = false;
