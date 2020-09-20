@@ -1134,8 +1134,7 @@ impl Engine {
     ) -> Result<Target<'a>, Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
-        #[cfg(not(feature = "no_index"))]
-        #[cfg(not(feature = "no_object"))]
+        #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
         let is_ref = target.is_ref();
 
         let val = target.as_mut();
@@ -1200,7 +1199,6 @@ impl Engine {
                 }
             }
 
-            #[cfg(not(feature = "no_object"))]
             #[cfg(not(feature = "no_index"))]
             _ if _indexers => {
                 let type_name = val.type_name();

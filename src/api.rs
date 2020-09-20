@@ -453,6 +453,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register the custom type.
+    /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
     /// engine.register_fn("new_ts", TestStruct::new);
@@ -505,6 +506,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register the custom type.
+    /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
     /// engine.register_fn("new_ts", TestStruct::new);
@@ -549,6 +551,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register the custom type.
+    /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
     /// engine.register_fn("new_ts", TestStruct::new);
@@ -601,6 +604,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register the custom type.
+    /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
     /// engine.register_fn("new_ts", TestStruct::new);
@@ -650,6 +654,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register the custom type.
+    /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
     /// engine.register_fn("new_ts", TestStruct::new);
