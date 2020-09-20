@@ -77,6 +77,29 @@ jobs:
       with:
         command: build
         args: --manifest-path=no_std/no_std_test/Cargo.toml ${{matrix.flags}}
+  rustfmt:
+    name: Check Formatting
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+        components: rustfmt, clippy
+    - name: Run Rustfmt
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all -- --check
+    - name: Run Rustfmt
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --
   codegen_build:
     name: Codegen Build
     runs-on: ${{matrix.os}}
