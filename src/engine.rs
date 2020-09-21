@@ -3,7 +3,7 @@
 use crate::any::{map_std_type_name, Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{CallableFunction, Callback, FnPtr};
+use crate::fn_native::{Callback, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
