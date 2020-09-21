@@ -1168,7 +1168,7 @@ impl Engine {
                         .take_immutable_string()
                         .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
-                    map.entry(index).or_insert(Default::default()).into()
+                    map.entry(index).or_insert_with(Default::default).into()
                 } else {
                     let index = idx
                         .read_lock::<ImmutableString>()
@@ -2014,6 +2014,6 @@ impl Engine {
         self.type_names
             .as_ref()
             .and_then(|t| t.get(name).map(String::as_str))
-            .unwrap_or(map_std_type_name(name))
+            .unwrap_or_else(|| map_std_type_name(name))
     }
 }
