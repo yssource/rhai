@@ -11,6 +11,7 @@ Bug fixes
 * Fixes a bug in `Module::set_fn_4_mut`.
 * Module API's now properly handle `&str` and `String` parameters.
 * Indexers are available under `no_object`.
+* Registered operator-assignment functions (e.g. `+=`) now work correctly.
 
 New features
 ------------

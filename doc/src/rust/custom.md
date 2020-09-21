@@ -161,12 +161,14 @@ x.type_of() == "Hello";
 Use the Custom Type With Arrays
 ------------------------------
 
-The `push` and `pad` functions for [arrays] are only defined for standard built-in types.
-For custom types, type-specific versions must be registered:
+The `push` and `pad` functions, as well as the `+=` operator, for [arrays] are only defined for
+standard built-in types. For custom types, type-specific versions must be registered:
 
 ```rust
 engine
     .register_fn("push", |list: &mut Array, item: TestStruct| {
+        list.push(Dynamic::from(item));
+    }).register_fn("+=", |list: &mut Array, item: TestStruct| {
         list.push(Dynamic::from(item));
     }).register_fn("pad", |list: &mut Array, len: i64, item: TestStruct| {
         if len as usize > list.len() {
@@ -176,7 +178,7 @@ engine
 ```
 
 In particular, in order to use the `in` operator with a custom type for an [array],
-the `==` operator must be registered for that custom type:
+the `==` operator must be registered for the custom type:
 
 ```rust
 // Assume 'TestStruct' implements `PartialEq`

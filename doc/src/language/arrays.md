@@ -33,7 +33,9 @@ The following methods (mostly defined in the [`BasicArrayPackage`][packages] but
 | Function                  | Parameter(s)                                                          | Description                                                                                          |
 | ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `push`                    | element to insert                                                     | inserts an element at the end                                                                        |
-| `+=` operator, `append`   | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+=` operator             | array, element to insert (not another array)                          | inserts an element at the end                                                                        |
+| `append`                  | array to append                                                       | concatenates the second array to the end of the first                                                |
+| `+=` operator             | array, array to append                                                | concatenates the second array to the end of the first                                                |
 | `+` operator              | first array, second array                                             | concatenates the first array with the second                                                         |
 | `insert`                  | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
 | `pop`                     | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
@@ -49,7 +51,9 @@ Use Custom Types With Arrays
 ---------------------------
 
 To use a [custom type] with arrays, a number of array functions need to be manually implemented,
-in particular `push`, `pad` and the `==` operator (in order to support the `in` operator).
+in particular `push`, `pad` and the `+=` operator.  In addition, the `==` operator must be
+implemented for the [custom type] in order to support the `in` operator which uses `==` to
+compare elements.
 
 See the section on [custom types] for more details.
 
@@ -104,7 +108,7 @@ let foo = y[0];
 foo == 1;
 
 y.push(4);              // 4 elements
-y.push(5);              // 5 elements
+y += 5;                 // 5 elements
 
 y.len == 5;
 

@@ -49,6 +49,7 @@ macro_rules! gen_array_functions {
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
         set_exported_fn!($mod_name, "push", $root::$arg_type::push);
+        set_exported_fn!($mod_name, "+=", $root::$arg_type::push);
         set_exported_fn!($mod_name, "insert", $root::$arg_type::insert);
 
         $mod_name.set_raw_fn("pad",
@@ -58,8 +59,6 @@ macro_rules! reg_functions {
 }
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    combine_with_exported_module!(lib, "array", array_functions);
-
     reg_functions!(lib += basic; INT, bool, char, ImmutableString, FnPtr, Array, Unit);
 
     #[cfg(not(feature = "only_i32"))]
@@ -76,6 +75,9 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 
     #[cfg(not(feature = "no_object"))]
     reg_functions!(lib += map; Map);
+
+    // Merge in the module at the end to override `+=` for arrays
+    combine_with_exported_module!(lib, "array", array_functions);
 
     // Register array iterator
     lib.set_iter(
