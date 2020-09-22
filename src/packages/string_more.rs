@@ -17,28 +17,30 @@ use crate::stdlib::{
 
 macro_rules! gen_concat_functions {
     ($root:ident => $($arg_type:ident),+ ) => {
-        pub mod $root { $(pub mod $arg_type {
+        pub mod $root { $( pub mod $arg_type {
             use super::super::*;
 
-            #[export_fn]
-            #[inline]
-            pub fn append_func(x: &mut ImmutableString, y: $arg_type) -> String {
-                format!("{}{}", x, y)
-            }
+            #[export_module]
+            pub mod functions {
+                #[rhai_fn(name = "+")]
+                #[inline]
+                pub fn append_func(x: &mut ImmutableString, y: $arg_type) -> String {
+                    format!("{}{}", x, y)
+                }
 
-            #[export_fn]
-            #[inline]
-            pub fn prepend_func(x: &mut $arg_type, y: ImmutableString) -> String {
-                format!("{}{}", x, y)
+                #[rhai_fn(name = "+")]
+                #[inline]
+                pub fn prepend_func(x: &mut $arg_type, y: ImmutableString) -> String {
+                    format!("{}{}", x, y)
+                }
             }
-        })* }
+        } )* }
     }
 }
 
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        set_exported_fn!($mod_name, "+", $root::$arg_type::append_func);
-        set_exported_fn!($mod_name, "+", $root::$arg_type::prepend_func);
+        combine_with_exported_module!($mod_name, "append", $root::$arg_type::functions);
     )* }
 }
 
