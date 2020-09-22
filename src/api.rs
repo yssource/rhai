@@ -191,7 +191,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                { TestStruct { field: 1 } }
-    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
@@ -242,8 +241,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { field: 1 } }
-    ///
+    ///     fn new() -> Self { TestStruct { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.field.into())
@@ -324,7 +322,7 @@ impl Engine {
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
-    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    /// Returns `Result<(), Box<EvalAltResult>>`.
     ///
     /// # Example
     ///
@@ -337,10 +335,10 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                        { TestStruct { field: 1 } }
-    ///     fn set_field(&mut self, new_val: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn new() -> Self { TestStruct { field: 1 } }
+    ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.field = new_val;
-    ///         Ok(().into())
+    ///         Ok(())
     ///     }
     /// }
     ///
@@ -367,13 +365,16 @@ impl Engine {
     pub fn register_set_result<T, U>(
         &mut self,
         name: &str,
-        callback: impl Fn(&mut T, U) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        callback: impl Fn(&mut T, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self
     where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_result_fn(&make_setter(name), callback)
+        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
+            callback(obj, value)?;
+            Ok(().into())
+        })
     }
 
     /// Short-hand for registering both getter and setter functions
@@ -391,8 +392,8 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                        { TestStruct { field: 1 } }
-    ///     fn get_field(&mut self) -> i64          { self.field }
     ///     // Even a getter must start with `&mut self` and not `&self`.
+    ///     fn get_field(&mut self) -> i64          { self.field }
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
@@ -441,8 +442,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
-    ///
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
     /// }
@@ -494,8 +494,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
-    ///
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize].into())
@@ -541,7 +540,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -569,7 +568,7 @@ impl Engine {
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_set<T, X, U>(
         &mut self,
-        callback: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
+        callback: impl Fn(&mut T, X, U) + SendSync + 'static,
     ) -> &mut Self
     where
         T: Variant + Clone,
@@ -580,7 +579,7 @@ impl Engine {
     }
 
     /// Register an index setter for a custom type with the `Engine`.
-    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    /// Returns `Result<(), Box<EvalAltResult>>`.
     ///
     /// # Example
     ///
@@ -593,10 +592,10 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
-    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.fields[index as usize] = value;
-    ///         Ok(().into())
+    ///         Ok(())
     ///     }
     /// }
     ///
@@ -622,14 +621,17 @@ impl Engine {
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_set_result<T, X, U>(
         &mut self,
-        callback: impl Fn(&mut T, X, U) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        callback: impl Fn(&mut T, X, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self
     where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_result_fn(FN_IDX_SET, callback)
+        self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
+            callback(obj, index, value)?;
+            Ok(().into())
+        })
     }
 
     /// Short-hand for register both index getter and setter functions for a custom type with the `Engine`.
@@ -643,7 +645,8 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self                                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64      { self.fields[index as usize] }
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }

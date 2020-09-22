@@ -13,6 +13,11 @@ Bug fixes
 * Indexers are available under `no_object`.
 * Registered operator-assignment functions (e.g. `+=`) now work correctly.
 
+Breaking changes
+----------------
+
+* `Engine::register_set_result` and `Engine::register_indexer_set_result` now take a function that returns `Result<(), Box<EvalAltResult>>`.
+
 New features
 ------------
 
