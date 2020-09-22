@@ -24,13 +24,13 @@ macro_rules! gen_concat_functions {
             pub mod functions {
                 #[rhai_fn(name = "+")]
                 #[inline]
-                pub fn append_func(x: &mut ImmutableString, y: $arg_type) -> String {
+                pub fn append_func(x: &str, y: $arg_type) -> String {
                     format!("{}{}", x, y)
                 }
 
                 #[rhai_fn(name = "+")]
                 #[inline]
-                pub fn prepend_func(x: &mut $arg_type, y: ImmutableString) -> String {
+                pub fn prepend_func(x: &mut $arg_type, y: &str) -> String {
                     format!("{}{}", x, y)
                 }
             }
@@ -40,7 +40,7 @@ macro_rules! gen_concat_functions {
 
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        combine_with_exported_module!($mod_name, "append", $root::$arg_type::functions);
+        combine_with_exported_module!($mod_name, "strings_merge", $root::$arg_type::functions);
     )* }
 }
 
