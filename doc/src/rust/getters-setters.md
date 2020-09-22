@@ -18,6 +18,15 @@ Getters and setters are disabled when the [`no_object`] feature is used.
 | `register_set_result` | Register a setter                                 |   `Result<(), Box<EvalAltResult>>`    |
 
 
+Cannot Override Object Maps
+--------------------------
+
+Getters and setters are only intended for [custom types].
+
+Any getter or setter function registered for [object maps] is simply ignored because
+the get/set calls will be interpreted as properties on the [object maps].
+
+
 Examples
 --------
 
@@ -28,15 +37,13 @@ struct TestStruct {
 }
 
 impl TestStruct {
-    // Returning a 'String' is OK - Rhai converts it into 'ImmutableString'
+    // Remember &mut must be used even for getters
     fn get_field(&mut self) -> String {
         self.field.clone()
     }
 
-    // Remember Rhai uses 'ImmutableString' or '&str' instead of 'String'
-    fn set_field(&mut self, new_val: ImmutableString) {
-        // Get a 'String' from an 'ImmutableString'
-        self.field = (*new_val).clone();
+    fn set_field(&mut self, new_val: &str) {
+        self.field = new_val.to_string();
     }
 
     fn new() -> Self {
@@ -51,7 +58,6 @@ let mut engine = Engine::new();
         .register_get_set("xyz", TestStruct::get_field, TestStruct::set_field)
         .register_fn("new_ts", TestStruct::new);
 
-// Return result can be 'String' - Rhai will automatically convert it from 'ImmutableString'
 let result = engine.eval::<String>(r#"let a = new_ts(); a.xyz = "42"; a.xyz"#)?;
 
 println!("Answer: {}", result);                     // prints 42

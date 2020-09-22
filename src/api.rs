@@ -12,7 +12,10 @@ use crate::scope::Scope;
 use crate::token::{lex, Position};
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::{FN_IDX_GET, FN_IDX_SET};
+use crate::{
+    engine::{Array, FN_IDX_GET, FN_IDX_SET},
+    utils::ImmutableString,
+};
 
 #[cfg(not(feature = "no_object"))]
 use crate::{
@@ -433,6 +436,11 @@ impl Engine {
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
+    ///
     /// # Example
     ///
     /// ```
@@ -475,6 +483,20 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.register_fn(FN_IDX_GET, callback)
     }
 
@@ -482,6 +504,11 @@ impl Engine {
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///
@@ -526,10 +553,29 @@ impl Engine {
         T: Variant + Clone,
         X: Variant + Clone,
     {
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.register_result_fn(FN_IDX_GET, callback)
     }
 
     /// Register an index setter for a custom type with the `Engine`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///
@@ -575,11 +621,30 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.register_fn(FN_IDX_SET, callback)
     }
 
     /// Register an index setter for a custom type with the `Engine`.
     /// Returns `Result<(), Box<EvalAltResult>>`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///
@@ -628,6 +693,20 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
             callback(obj, index, value)?;
             Ok(().into())
@@ -635,6 +714,11 @@ impl Engine {
     }
 
     /// Short-hand for register both index getter and setter functions for a custom type with the `Engine`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///

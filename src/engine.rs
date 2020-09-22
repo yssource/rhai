@@ -756,10 +756,7 @@ impl Engine {
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
                                 #[cfg(not(feature = "no_index"))]
-                                EvalAltResult::ErrorIndexingType(_, _) => {
-                                    // Raise error if there is no index getter nor setter
-                                    Some(new_val.unwrap())
-                                }
+                                EvalAltResult::ErrorIndexingType(_, _) => Some(new_val.unwrap()),
                                 // Any other error - return
                                 err => return Err(Box::new(err)),
                             },

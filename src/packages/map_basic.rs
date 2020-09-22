@@ -18,7 +18,6 @@ mod map_functions {
     pub fn has(map: &mut Map, prop: ImmutableString) -> bool {
         map.contains_key(&prop)
     }
-    #[rhai_fn(name = "len", get = "len")]
     #[inline(always)]
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT

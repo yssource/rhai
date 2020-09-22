@@ -17,6 +17,7 @@ Breaking changes
 ----------------
 
 * `Engine::register_set_result` and `Engine::register_indexer_set_result` now take a function that returns `Result<(), Box<EvalAltResult>>`.
+* `Engine::register_indexer_XXX` and `Module::set_indexer_XXX` panic when the type is `Arrary`, `Map` or `String`.
 
 New features
 ------------
