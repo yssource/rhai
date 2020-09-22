@@ -40,7 +40,7 @@ macro_rules! gen_concat_functions {
 
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        combine_with_exported_module!($mod_name, "strings_merge", $root::$arg_type::functions);
+        combine_with_exported_module!($mod_name, "strings_concat", $root::$arg_type::functions);
     )* }
 }
 
