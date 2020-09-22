@@ -156,7 +156,7 @@ mod string_functions {
 
     #[rhai_fn(name = "len", get = "len")]
     #[inline(always)]
-    pub fn len(s: &mut ImmutableString) -> INT {
+    pub fn len(s: &str) -> INT {
         s.chars().count() as INT
     }
 
@@ -184,17 +184,17 @@ mod string_functions {
 
     #[rhai_fn(name = "contains")]
     #[inline(always)]
-    pub fn contains_char(s: &mut ImmutableString, ch: char) -> bool {
+    pub fn contains_char(s: &str, ch: char) -> bool {
         s.contains(ch)
     }
     #[rhai_fn(name = "contains")]
     #[inline(always)]
-    pub fn contains_string(s: &mut ImmutableString, find: ImmutableString) -> bool {
+    pub fn contains_string(s: &str, find: ImmutableString) -> bool {
         s.contains(find.as_str())
     }
 
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_char_starting_from(s: &mut ImmutableString, ch: char, start: INT) -> INT {
+    pub fn index_of_char_starting_from(s: &str, ch: char, start: INT) -> INT {
         let start = if start < 0 {
             0
         } else if (start as usize) >= s.chars().count() {
@@ -209,17 +209,13 @@ mod string_functions {
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_char(s: &mut ImmutableString, ch: char) -> INT {
+    pub fn index_of_char(s: &str, ch: char) -> INT {
         s.find(ch)
             .map(|index| s[0..index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_string_starting_from(
-        s: &mut ImmutableString,
-        find: ImmutableString,
-        start: INT,
-    ) -> INT {
+    pub fn index_of_string_starting_from(s: &str, find: ImmutableString, start: INT) -> INT {
         let start = if start < 0 {
             0
         } else if (start as usize) >= s.chars().count() {
@@ -234,14 +230,14 @@ mod string_functions {
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_string(s: &mut ImmutableString, find: ImmutableString) -> INT {
+    pub fn index_of_string(s: &str, find: ImmutableString) -> INT {
         s.find(find.as_str())
             .map(|index| s[0..index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
 
     #[rhai_fn(name = "sub_string")]
-    pub fn sub_string(s: ImmutableString, start: INT, len: INT) -> ImmutableString {
+    pub fn sub_string(s: &str, start: INT, len: INT) -> ImmutableString {
         let offset = if s.is_empty() || len <= 0 {
             return "".to_string().into();
         } else if start < 0 {
@@ -270,7 +266,7 @@ mod string_functions {
     }
     #[rhai_fn(name = "sub_string")]
     #[inline(always)]
-    pub fn sub_string_starting_from(s: ImmutableString, start: INT) -> ImmutableString {
+    pub fn sub_string_starting_from(s: &str, start: INT) -> ImmutableString {
         let len = s.len() as INT;
         sub_string(s, start, len)
     }
@@ -334,13 +330,29 @@ mod string_functions {
 
         #[rhai_fn(name = "+")]
         #[inline]
-        pub fn append(x: &mut ImmutableString, y: Array) -> String {
+        pub fn append(x: &str, y: Array) -> String {
             format!("{}{:?}", x, y)
         }
         #[rhai_fn(name = "+")]
         #[inline]
-        pub fn prepend(x: &mut Array, y: ImmutableString) -> String {
+        pub fn prepend(x: &mut Array, y: &str) -> String {
             format!("{:?}{}", x, y)
+        }
+    }
+
+    #[cfg(not(feature = "no_object"))]
+    pub mod maps {
+        use crate::engine::Map;
+
+        #[rhai_fn(name = "+")]
+        #[inline]
+        pub fn append(x: &str, y: Map) -> String {
+            format!("{}#{:?}", x, y)
+        }
+        #[rhai_fn(name = "+")]
+        #[inline]
+        pub fn prepend(x: &mut Map, y: &str) -> String {
+            format!("#{:?}{}", x, y)
         }
     }
 }
