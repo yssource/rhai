@@ -39,6 +39,7 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    string::String,
 };
 
 #[cfg(not(feature = "no_optimize"))]
