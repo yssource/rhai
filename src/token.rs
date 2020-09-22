@@ -752,8 +752,10 @@ pub fn parse_string_literal(
     let mut result: StaticVec<char> = Default::default();
     let mut escape: StaticVec<char> = Default::default();
 
+    let start = *pos;
+
     loop {
-        let next_char = stream.get_next().ok_or((LERR::UnterminatedString, *pos))?;
+        let next_char = stream.get_next().ok_or((LERR::UnterminatedString, start))?;
 
         pos.advance();
 
@@ -838,17 +840,19 @@ pub fn parse_string_literal(
             ch if enclosing_char == ch && escape.is_empty() => break,
 
             // Unknown escape sequence
-            _ if !escape.is_empty() => {
+            ch if !escape.is_empty() => {
+                escape.push(ch);
+
                 return Err((
                     LERR::MalformedEscapeSequence(escape.into_iter().collect()),
                     *pos,
-                ))
+                ));
             }
 
             // Cannot have new-lines inside string literals
             '\n' => {
                 pos.rewind();
-                return Err((LERR::UnterminatedString, *pos));
+                return Err((LERR::UnterminatedString, start));
             }
 
             // All other characters
