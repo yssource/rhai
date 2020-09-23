@@ -67,6 +67,9 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 
     reg_functions!(lib += basic_to_int::to_int(char));
 
+    set_exported_fn!(lib, "parse_int", parse_int);
+    set_exported_fn!(lib, "parse_int", parse_int_radix);
+
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
@@ -223,6 +226,21 @@ mod float_functions {
             Ok((x.trunc() as INT).into())
         }
     }
+
+    #[rhai_fn(return_raw)]
+    #[inline]
+    pub fn parse_float(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
+        s.trim()
+            .parse::<FLOAT>()
+            .map(Into::<Dynamic>::into)
+            .map_err(|err| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Error parsing floating-point number '{}': {}", s, err),
+                    Position::none(),
+                )
+                .into()
+            })
+    }
 }
 
 #[cfg(not(feature = "no_float"))]
@@ -249,3 +267,30 @@ gen_conversion_functions!(numbers_to_int => to_int (i8, u8, i16, u16, i32, u32, 
 #[cfg(not(feature = "only_i64"))]
 #[cfg(not(target_arch = "wasm32"))]
 gen_conversion_functions!(num_128_to_int => to_int (i128, u128) -> INT);
+
+#[export_fn(return_raw)]
+fn parse_int_radix(s: &str, radix: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+    if radix < 2 || radix > 36 {
+        return EvalAltResult::ErrorArithmetic(
+            format!("Invalid radix: '{}'", radix),
+            Position::none(),
+        )
+        .into();
+    }
+
+    INT::from_str_radix(s.trim(), radix as u32)
+        .map(Into::<Dynamic>::into)
+        .map_err(|err| {
+            EvalAltResult::ErrorArithmetic(
+                format!("Error parsing integer number '{}': {}", s, err),
+                Position::none(),
+            )
+            .into()
+        })
+}
+
+#[export_fn(return_raw)]
+#[inline(always)]
+fn parse_int(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
+    parse_int_radix(s, 10)
+}

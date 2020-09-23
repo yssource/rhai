@@ -21,6 +21,15 @@ fn test_float() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+fn test_float_parse() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!((engine.eval::<FLOAT>(r#"parse_float("9.9999")"#)? - 9.9999 as FLOAT).abs() < EPSILON);
+
+    Ok(())
+}
+
+#[test]
 #[cfg(not(feature = "no_object"))]
 fn test_struct_with_float() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
