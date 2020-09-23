@@ -1,8 +1,5 @@
 //! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-// Hide clippy errors from exported modules
-#![allow(clippy::redundant_clone)]
-
 use crate::fn_native::{CallableFunction, IteratorFn, Shared};
 use crate::module::Module;
 use crate::utils::StaticVec;
