@@ -108,3 +108,14 @@ fn test_math() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_math_parse() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(engine.eval::<INT>(r#"parse_int("42")"#)?, 42);
+    assert_eq!(engine.eval::<INT>(r#"parse_int("42", 16)"#)?, 0x42);
+    assert_eq!(engine.eval::<INT>(r#"parse_int("abcdef", 16)"#)?, 0xabcdef);
+
+    Ok(())
+}

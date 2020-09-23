@@ -24,6 +24,7 @@ New features
 
 * Plugins support via procedural macros.
 * Scripted functions are allowed in packages.
+* `parse_int` and `parse_float` functions.
 
 
 Version 0.18.3

@@ -151,6 +151,7 @@ fn to_string<T: Display>(x: &mut T) -> ImmutableString {
 fn to_debug<T: Debug>(x: &mut T) -> ImmutableString {
     format!("{:?}", x).into()
 }
+
 #[cfg(not(feature = "no_object"))]
 mod format_map {
     use super::*;
