@@ -3,12 +3,13 @@
 use crate::def_package;
 use crate::parser::INT;
 use crate::plugin::*;
+use crate::token::Position;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
-use crate::{result::EvalAltResult, token::Position};
+use crate::result::EvalAltResult;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
