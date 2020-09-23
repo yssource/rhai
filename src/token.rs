@@ -731,6 +731,7 @@ pub struct TokenizeState {
 ///
 /// This trait is volatile and may change.
 pub trait InputStream {
+    fn unread(&mut self, ch: char);
     /// Get the next character
     fn get_next(&mut self) -> Option<char>;
     /// Peek the next character
@@ -1014,8 +1015,21 @@ fn get_next_token_inner(
                         }
                         #[cfg(not(feature = "no_float"))]
                         '.' => {
-                            result.push(next_char);
-                            eat_next(stream, pos);
+                            stream.get_next().unwrap();
+
+                            // Check if followed by digits (or _)
+                            match stream.peek_next().unwrap_or('\0') {
+                                '0'..='9' | '_' => {
+                                    result.push(next_char);
+                                    pos.advance()
+                                }
+                                _ => {
+                                    // Not a floating-point number
+                                    stream.unread(next_char);
+                                    break;
+                                }
+                            }
+
                             while let Some(next_char_in_float) = stream.peek_next() {
                                 match next_char_in_float {
                                     '0'..='9' | '_' => {
@@ -1499,6 +1513,8 @@ fn is_id_continue(x: char) -> bool {
 /// A type that implements the `InputStream` trait.
 /// Multiple character streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
+    /// Buffered character, if any.
+    buf: Option<char>,
     /// The input character streams.
     streams: StaticVec<Peekable<Chars<'a>>>,
     /// The current stream index.
@@ -1506,8 +1522,16 @@ pub struct MultiInputsStream<'a> {
 }
 
 impl InputStream for MultiInputsStream<'_> {
+    /// Buffer a character.
+    fn unread(&mut self, ch: char) {
+        self.buf = Some(ch);
+    }
     /// Get the next character
     fn get_next(&mut self) -> Option<char> {
+        if let Some(ch) = self.buf.take() {
+            return Some(ch);
+        }
+
         loop {
             if self.index >= self.streams.len() {
                 // No more streams
@@ -1523,6 +1547,10 @@ impl InputStream for MultiInputsStream<'_> {
     }
     /// Peek the next character
     fn peek_next(&mut self) -> Option<char> {
+        if let Some(ch) = self.buf {
+            return Some(ch);
+        }
+
         loop {
             if self.index >= self.streams.len() {
                 // No more streams
@@ -1673,6 +1701,7 @@ pub fn lex<'a, 'e>(
         },
         pos: Position::new(1, 0),
         stream: MultiInputsStream {
+            buf: None,
             streams: input.iter().map(|s| s.chars().peekable()).collect(),
             index: 0,
         },

@@ -4,7 +4,17 @@ use rhai::{Engine, EvalAltResult, INT};
 fn test_number_literal() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    assert_eq!(engine.eval::<INT>("65")?, 65);
+    assert_eq!(engine.eval::<INT>("42")?, 42);
+
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<String>("42.type_of()")?,
+        if cfg!(feature = "only_i32") {
+            "i32"
+        } else {
+            "i64"
+        }
+    );
 
     Ok(())
 }
