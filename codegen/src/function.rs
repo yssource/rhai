@@ -672,7 +672,7 @@ impl ExportedFn {
                             is_string = false;
                             is_ref = false;
                             quote_spanned!(arg_type.span()=>
-                                           mem::take(args[#i]).clone().cast::<#arg_type>())
+                                           mem::take(args[#i]).cast::<#arg_type>())
                         }
                     };
 
