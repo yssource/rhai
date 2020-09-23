@@ -369,7 +369,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
+                        let arg0 = mem::take(args[0usize]).cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
@@ -446,7 +446,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
+                        let arg0 = mem::take(args[0usize]).cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
@@ -474,8 +474,8 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
-                        let arg1 = mem::take(args[1usize]).clone().cast::<INT>();
+                        let arg0 = mem::take(args[0usize]).cast::<INT>();
+                        let arg1 = mem::take(args[1usize]).cast::<INT>();
                         Ok(Dynamic::from(add_n_to(arg0, arg1)))
                     }
 
@@ -540,8 +540,8 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
-                        let arg1 = mem::take(args[1usize]).clone().cast::<INT>();
+                        let arg0 = mem::take(args[0usize]).cast::<INT>();
+                        let arg1 = mem::take(args[1usize]).cast::<INT>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
@@ -613,8 +613,8 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<INT>();
-                        let arg1 = mem::take(args[1usize]).clone().cast::<INT>();
+                        let arg0 = mem::take(args[0usize]).cast::<INT>();
+                        let arg1 = mem::take(args[1usize]).cast::<INT>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
@@ -1447,7 +1447,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
+                        let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0, arg1)))
                     }
@@ -1518,7 +1518,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
+                        let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0, arg1)))
                     }
@@ -1585,7 +1585,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
+                        let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(get_by_index(arg0, arg1)))
                     }
@@ -1657,7 +1657,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
+                        let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(get_by_index(arg0, arg1)))
                     }
@@ -1726,8 +1726,8 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
-                        let arg2 = mem::take(args[2usize]).clone().cast::<FLOAT>();
+                        let arg1 = mem::take(args[1usize]).cast::<u64>();
+                        let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(set_by_index(arg0, arg1, arg2)))
                     }
@@ -1802,8 +1802,8 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<u64>();
-                        let arg2 = mem::take(args[2usize]).clone().cast::<FLOAT>();
+                        let arg1 = mem::take(args[1usize]).cast::<u64>();
+                        let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(set_by_index(arg0, arg1, arg2)))
                     }

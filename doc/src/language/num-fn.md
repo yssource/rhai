@@ -9,11 +9,11 @@ Integer Functions
 The following standard functions (defined in the [`BasicMathPackage`][packages] but excluded if using a [raw `Engine`])
 operate on `i8`, `i16`, `i32`, `i64`, `f32` and `f64` only:
 
-| Function     | Description                                                             |
-| ------------ | ----------------------------------------------------------------------- |
-| `abs`        | absolute value                                                          |
-| `sign`       | returns -1 (`INT`) if the number is negative, +1 if positive, 0 if zero |
-| [`to_float`] | converts an integer type to `FLOAT`                                     |
+| Function | No available under | Description                                                            |
+| -------- | :----------------: | ---------------------------------------------------------------------- |
+| `abs`    |                    | absolute value                                                         |
+| `sign`   |                    | return -1 (`INT`) if the number is negative, +1 if positive, 0 if zero |
+
 
 Floating-Point Functions
 -----------------------
@@ -31,3 +31,16 @@ operate on `f64` only:
 | Rounding         | `floor`, `ceiling`, `round`, `int`, `fraction` methods and properties |
 | Conversion       | [`to_int`]                                                            |
 | Testing          | `is_nan`, `is_finite`, `is_infinite` methods and properties           |
+
+
+Conversion Functions
+-------------------
+
+The following standard functions (defined in the [`BasicMathPackage`][packages] but excluded if using a [raw `Engine`])
+parse numbers:
+
+| Function        | No available under | Description                                        |
+| --------------- | :----------------: | -------------------------------------------------- |
+| [`to_float`]    |    [`no_float`]    | convert an integer type to `FLOAT`                 |
+| [`parse_int`]   |                    | convert a [string] to `INT` with an optional radix |
+| [`parse_float`] |    [`no_float`]    | convert a [string] to `FLOAT`                      |

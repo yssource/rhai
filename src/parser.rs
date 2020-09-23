@@ -3479,7 +3479,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),
         Union::Char(value) => Some(Expr::CharConstant(Box::new((value, pos)))),
-        Union::Str(value) => Some(Expr::StringConstant(Box::new((value.clone(), pos)))),
+        Union::Str(value) => Some(Expr::StringConstant(Box::new((value, pos)))),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]

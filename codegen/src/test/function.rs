@@ -323,7 +323,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
+                        let arg0 = mem::take(args[0usize]).cast::<usize>();
                         Ok(Dynamic::from(do_something(arg0)))
                     }
 
@@ -364,7 +364,7 @@ mod generate_tests {
                 ) -> Result<Dynamic, Box<EvalAltResult>> {
                     debug_assert_eq!(args.len(), 1usize,
                                 "wrong arg count: {} != {}", args.len(), 1usize);
-                    let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
+                    let arg0 = mem::take(args[0usize]).cast::<usize>();
                     Ok(Dynamic::from(do_something(arg0)))
                 }
 
@@ -398,8 +398,8 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg0 = mem::take(args[0usize]).clone().cast::<usize>();
-                        let arg1 = mem::take(args[1usize]).clone().cast::<usize>();
+                        let arg0 = mem::take(args[0usize]).cast::<usize>();
+                        let arg1 = mem::take(args[1usize]).cast::<usize>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
@@ -445,7 +445,7 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
-                        let arg1 = mem::take(args[1usize]).clone().cast::<usize>();
+                        let arg1 = mem::take(args[1usize]).cast::<usize>();
                         let arg0: &mut _ = &mut args[0usize].write_lock::<usize>().unwrap();
                         Ok(Dynamic::from(increment(arg0, arg1)))
                     }

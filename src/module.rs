@@ -21,11 +21,10 @@ use crate::{
 };
 
 #[cfg(not(feature = "no_index"))]
-#[cfg(not(feature = "no_object"))]
-use crate::engine::{FN_IDX_GET, FN_IDX_SET};
+use crate::engine::{Array, FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter};
+use crate::engine::{make_getter, make_setter, Map};
 
 use crate::stdlib::{
     any::TypeId,
@@ -675,6 +674,11 @@ impl Module {
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
     ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
+    ///
     /// # Examples
     ///
     /// ```
@@ -686,12 +690,25 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
     ) -> u64 {
+        if TypeId::of::<A>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<A>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<A>() == TypeId::of::<String>()
+            || TypeId::of::<A>() == TypeId::of::<&str>()
+            || TypeId::of::<A>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.set_fn_2_mut(FN_IDX_GET, func)
     }
 
@@ -773,6 +790,11 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
+    ///
     /// # Examples
     ///
     /// ```
@@ -785,12 +807,25 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B, C) -> FuncReturn<()> + SendSync + 'static,
     ) -> u64 {
+        if TypeId::of::<A>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<A>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<A>() == TypeId::of::<String>()
+            || TypeId::of::<A>() == TypeId::of::<&str>()
+            || TypeId::of::<A>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[1]);
             let c = cast_arg::<C>(&mut args[2]);
@@ -812,6 +847,11 @@ impl Module {
     ///
     /// If there are similar existing Rust functions, they are replaced.
     ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
+    ///
     /// # Examples
     ///
     /// ```
@@ -830,7 +870,6 @@ impl Module {
     /// assert!(module.contains_fn(hash_get, true));
     /// assert!(module.contains_fn(hash_set, true));
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[cfg(not(feature = "no_index"))]
     pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,

@@ -187,7 +187,6 @@ fn export_nested_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
             if s == "math::bar_fourth_adders::add_int (i64, i64)"
             && p == rhai::Position::new(3, 42)));
 
-
     assert!(matches!(*engine.eval::<FLOAT>(
         r#"import "Math::Advanced" as math;
        let ex = 41.0;

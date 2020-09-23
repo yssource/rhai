@@ -3,7 +3,7 @@
 use crate::any::{map_std_type_name, Dynamic, Union};
 use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{CallableFunction, Callback, FnPtr};
+use crate::fn_native::{Callback, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
@@ -756,10 +756,7 @@ impl Engine {
                             Err(err) => match *err {
                                 // No index getter - try to call an index setter
                                 #[cfg(not(feature = "no_index"))]
-                                EvalAltResult::ErrorIndexingType(_, _) => {
-                                    // Raise error if there is no index getter nor setter
-                                    Some(new_val.unwrap())
-                                }
+                                EvalAltResult::ErrorIndexingType(_, _) => Some(new_val.unwrap()),
                                 // Any other error - return
                                 err => return Err(Box::new(err)),
                             },
@@ -1168,7 +1165,7 @@ impl Engine {
                         .take_immutable_string()
                         .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
 
-                    map.entry(index).or_insert(Default::default()).into()
+                    map.entry(index).or_insert_with(Default::default).into()
                 } else {
                     let index = idx
                         .read_lock::<ImmutableString>()
@@ -1360,40 +1357,56 @@ impl Engine {
                         let arg_types = once(lhs_ptr.type_id()).chain(once(rhs_val.type_id()));
                         let hash_fn = calc_fn_hash(empty(), op, 2, arg_types);
 
-                        if let Some(CallableFunction::Method(func)) = self
+                        match self
                             .global_module
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn, false))
                         {
-                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                let mut lock_guard = lhs_ptr.write_lock::<Dynamic>().unwrap();
-                                let lhs_ptr_inner = lock_guard.deref_mut();
+                            // op= function registered as method
+                            Some(func) if func.is_method() => {
+                                let mut lock_guard;
+                                let lhs_ptr_inner;
+
+                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                                    lock_guard = lhs_ptr.write_lock::<Dynamic>().unwrap();
+                                    lhs_ptr_inner = lock_guard.deref_mut();
+                                } else {
+                                    lhs_ptr_inner = lhs_ptr;
+                                }
+
+                                let args = &mut [lhs_ptr_inner, &mut rhs_val];
 
                                 // Overriding exact implementation
-                                func(self, lib, &mut [lhs_ptr_inner, &mut rhs_val])?;
-                            } else {
-                                // Overriding exact implementation
-                                func(self, lib, &mut [lhs_ptr, &mut rhs_val])?;
+                                if func.is_plugin_fn() {
+                                    func.get_plugin_fn().call(args)?;
+                                } else {
+                                    func.get_native_fn()(self, lib, args)?;
+                                }
                             }
-                        } else if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_none() {
-                            // Not built in, map to `var = var op rhs`
-                            let op = &op[..op.len() - 1]; // extract operator without =
+                            // Built-in op-assignment function
+                            _ if run_builtin_op_assignment(op, lhs_ptr, &rhs_val)?.is_some() => {}
+                            // Not built-in: expand to `var = var op rhs`
+                            _ => {
+                                let op = &op[..op.len() - 1]; // extract operator without =
 
-                            // Clone the LHS value
-                            let args = &mut [&mut lhs_ptr.clone(), &mut rhs_val];
+                                // Clone the LHS value
+                                let args = &mut [&mut lhs_ptr.clone(), &mut rhs_val];
 
-                            // Run function
-                            let (value, _) = self
-                                .exec_fn_call(
-                                    state, lib, op, 0, args, false, false, false, None, None, level,
-                                )
-                                .map_err(|err| err.new_position(*op_pos))?;
+                                // Run function
+                                let (value, _) = self
+                                    .exec_fn_call(
+                                        state, lib, op, 0, args, false, false, false, None, None,
+                                        level,
+                                    )
+                                    .map_err(|err| err.new_position(*op_pos))?;
 
-                            let value = value.flatten();
-                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
-                            } else {
-                                *lhs_ptr = value;
+                                let value = value.flatten();
+
+                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                                    *lhs_ptr.write_lock::<Dynamic>().unwrap() = value;
+                                } else {
+                                    *lhs_ptr = value;
+                                }
                             }
                         }
                         Ok(Default::default())
@@ -2014,6 +2027,6 @@ impl Engine {
         self.type_names
             .as_ref()
             .and_then(|t| t.get(name).map(String::as_str))
-            .unwrap_or(map_std_type_name(name))
+            .unwrap_or_else(|| map_std_type_name(name))
     }
 }

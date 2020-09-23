@@ -85,12 +85,12 @@ pub(crate) fn generate_body(
             .map(|fnarg| match fnarg {
                 syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
                 syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
-                    let arg_type = match ty.as_ref() {
+                    let arg_type = match flatten_type_groups(ty.as_ref()) {
                         syn::Type::Reference(syn::TypeReference {
                             mutability: None,
                             ref elem,
                             ..
-                        }) => match elem.as_ref() {
+                        }) => match flatten_type_groups(elem.as_ref()) {
                             syn::Type::Path(ref p) if p.path == str_type_path => {
                                 syn::parse2::<syn::Type>(quote! {
                                 ImmutableString })
@@ -107,11 +107,11 @@ pub(crate) fn generate_body(
                             mutability: Some(_),
                             ref elem,
                             ..
-                        }) => match elem.as_ref() {
+                        }) => match flatten_type_groups(elem.as_ref()) {
                             syn::Type::Path(ref p) => syn::parse2::<syn::Type>(quote! {
                             #p })
                             .unwrap(),
-                            _ => panic!("internal error: non-string shared reference!?"),
+                            _ => panic!("internal error: invalid mutable reference!?"),
                         },
                         t => t.clone(),
                     };
@@ -171,6 +171,14 @@ pub(crate) fn generate_body(
     quote! {
         #(#generate_call_content)*
         #(#gen_fn_tokens)*
+    }
+}
+
+pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
+    match ty {
+        syn::Type::Group(syn::TypeGroup { ref elem, .. })
+        | syn::Type::Paren(syn::TypeParen { ref elem, .. }) => flatten_type_groups(elem.as_ref()),
+        _ => ty,
     }
 }
 

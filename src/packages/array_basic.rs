@@ -23,23 +23,25 @@ pub type Unit = ();
 
 macro_rules! gen_array_functions {
     ($root:ident => $($arg_type:ident),+ ) => {
-        pub mod $root { $(pub mod $arg_type {
+        pub mod $root { $( pub mod $arg_type {
             use super::super::*;
 
-            #[export_fn]
-            #[inline(always)]
-            pub fn push(list: &mut Array, item: $arg_type) {
-                list.push(Dynamic::from(item));
-            }
+            #[export_module]
+            pub mod functions {
+                #[rhai_fn(name = "push", name = "+=")]
+                #[inline(always)]
+                pub fn push(list: &mut Array, item: $arg_type) {
+                    list.push(Dynamic::from(item));
+                }
 
-            #[export_fn]
-            pub fn insert(list: &mut Array, position: INT, item: $arg_type) {
-                if position <= 0 {
-                    list.insert(0, Dynamic::from(item));
-                } else if (position as usize) >= list.len() - 1 {
-                    push(list, item);
-                } else {
-                    list.insert(position as usize, Dynamic::from(item));
+                pub fn insert(list: &mut Array, position: INT, item: $arg_type) {
+                    if position <= 0 {
+                        list.insert(0, Dynamic::from(item));
+                    } else if (position as usize) >= list.len() - 1 {
+                        push(list, item);
+                    } else {
+                        list.insert(position as usize, Dynamic::from(item));
+                    }
                 }
             }
         })* }
@@ -48,8 +50,7 @@ macro_rules! gen_array_functions {
 
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        set_exported_fn!($mod_name, "push", $root::$arg_type::push);
-        set_exported_fn!($mod_name, "insert", $root::$arg_type::insert);
+        combine_with_exported_module!($mod_name, "array_functions", $root::$arg_type::functions);
 
         $mod_name.set_raw_fn("pad",
             &[TypeId::of::<Array>(), TypeId::of::<INT>(), TypeId::of::<$arg_type>()],
@@ -58,8 +59,6 @@ macro_rules! reg_functions {
 }
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    combine_with_exported_module!(lib, "array", array_functions);
-
     reg_functions!(lib += basic; INT, bool, char, ImmutableString, FnPtr, Array, Unit);
 
     #[cfg(not(feature = "only_i32"))]
@@ -76,6 +75,9 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 
     #[cfg(not(feature = "no_object"))]
     reg_functions!(lib += map; Map);
+
+    // Merge in the module at the end to override `+=` for arrays
+    combine_with_exported_module!(lib, "array", array_functions);
 
     // Register array iterator
     lib.set_iter(

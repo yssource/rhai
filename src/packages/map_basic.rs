@@ -18,7 +18,6 @@ mod map_functions {
     pub fn has(map: &mut Map, prop: ImmutableString) -> bool {
         map.contains_key(&prop)
     }
-    #[rhai_fn(name = "len", get = "len")]
     #[inline(always)]
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT
@@ -46,9 +45,7 @@ mod map_functions {
     }
     pub fn fill_with(map1: &mut Map, map2: Map) {
         map2.into_iter().for_each(|(key, value)| {
-            if !map1.contains_key(&key) {
-                map1.insert(key, value);
-            }
+            map1.entry(key).or_insert(value);
         });
     }
 

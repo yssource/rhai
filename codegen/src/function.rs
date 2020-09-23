@@ -16,6 +16,7 @@ use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
+use crate::rhai_module::flatten_type_groups;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Index {
@@ -223,27 +224,29 @@ impl Parse for ExportedFn {
                     syn::FnArg::Receiver(syn::Receiver {
                         reference: Some(_), ..
                     }) => true,
-                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => match ty.as_ref() {
-                        &syn::Type::Reference(syn::TypeReference {
-                            mutability: Some(_),
-                            ..
-                        }) => true,
-                        &syn::Type::Reference(syn::TypeReference {
-                            mutability: None,
-                            ref elem,
-                            ..
-                        }) => match elem.as_ref() {
-                            &syn::Type::Path(ref p) if p.path == str_type_path => false,
-                            _ => {
-                                return Err(syn::Error::new(
-                                    ty.span(),
-                                    "references from Rhai in this position \
+                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
+                        match flatten_type_groups(ty.as_ref()) {
+                            &syn::Type::Reference(syn::TypeReference {
+                                mutability: Some(_),
+                                ..
+                            }) => true,
+                            &syn::Type::Reference(syn::TypeReference {
+                                mutability: None,
+                                ref elem,
+                                ..
+                            }) => match flatten_type_groups(elem.as_ref()) {
+                                &syn::Type::Path(ref p) if p.path == str_type_path => false,
+                                _ => {
+                                    return Err(syn::Error::new(
+                                        ty.span(),
+                                        "references from Rhai in this position \
                                             must be mutable",
-                                ))
-                            }
-                        },
-                        _ => false,
-                    },
+                                    ))
+                                }
+                            },
+                            _ => false,
+                        }
+                    }
                     _ => false,
                 }
             } else {
@@ -257,7 +260,7 @@ impl Parse for ExportedFn {
                 syn::FnArg::Typed(syn::PatType { ref ty, .. }) => ty,
                 _ => panic!("internal error: receiver argument outside of first position!?"),
             };
-            let is_ok = match ty.as_ref() {
+            let is_ok = match flatten_type_groups(ty.as_ref()) {
                 &syn::Type::Reference(syn::TypeReference {
                     mutability: Some(_),
                     ..
@@ -266,7 +269,9 @@ impl Parse for ExportedFn {
                     mutability: None,
                     ref elem,
                     ..
-                }) => matches!(elem.as_ref(), &syn::Type::Path(ref p) if p.path == str_type_path),
+                }) => {
+                    matches!(flatten_type_groups(elem.as_ref()), &syn::Type::Path(ref p) if p.path == str_type_path)
+                }
                 &syn::Type::Verbatim(_) => false,
                 _ => true,
             };
@@ -605,13 +610,9 @@ impl ExportedFn {
             let var = syn::Ident::new("arg0", proc_macro2::Span::call_site());
             match first_arg {
                 syn::FnArg::Typed(pattern) => {
-                    let arg_type: &syn::Type = {
-                        match pattern.ty.as_ref() {
-                            &syn::Type::Reference(syn::TypeReference { ref elem, .. }) => {
-                                elem.as_ref()
-                            }
-                            ref p => p,
-                        }
+                    let arg_type: &syn::Type = match flatten_type_groups(pattern.ty.as_ref()) {
+                        &syn::Type::Reference(syn::TypeReference { ref elem, .. }) => elem.as_ref(),
+                        p => p,
                     };
                     let downcast_span = quote_spanned!(
                         arg_type.span()=> &mut args[0usize].write_lock::<#arg_type>().unwrap());
@@ -648,12 +649,12 @@ impl ExportedFn {
             match arg {
                 syn::FnArg::Typed(pattern) => {
                     let arg_type: &syn::Type = pattern.ty.as_ref();
-                    let downcast_span = match pattern.ty.as_ref() {
+                    let downcast_span = match flatten_type_groups(pattern.ty.as_ref()) {
                         &syn::Type::Reference(syn::TypeReference {
                             mutability: None,
                             ref elem,
                             ..
-                        }) => match elem.as_ref() {
+                        }) => match flatten_type_groups(elem.as_ref()) {
                             &syn::Type::Path(ref p) if p.path == str_type_path => {
                                 is_string = true;
                                 is_ref = true;
@@ -672,7 +673,7 @@ impl ExportedFn {
                             is_string = false;
                             is_ref = false;
                             quote_spanned!(arg_type.span()=>
-                                           mem::take(args[#i]).clone().cast::<#arg_type>())
+                                           mem::take(args[#i]).cast::<#arg_type>())
                         }
                     };
 

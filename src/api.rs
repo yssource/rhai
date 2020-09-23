@@ -12,7 +12,10 @@ use crate::scope::Scope;
 use crate::token::{lex, Position};
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::{FN_IDX_GET, FN_IDX_SET};
+use crate::{
+    engine::{Array, FN_IDX_GET, FN_IDX_SET},
+    utils::ImmutableString,
+};
 
 #[cfg(not(feature = "no_object"))]
 use crate::{
@@ -36,6 +39,7 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    string::String,
 };
 
 #[cfg(not(feature = "no_optimize"))]
@@ -191,7 +195,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                { TestStruct { field: 1 } }
-    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
@@ -242,8 +245,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { field: 1 } }
-    ///
+    ///     fn new() -> Self { TestStruct { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.field.into())
@@ -324,7 +326,7 @@ impl Engine {
     }
 
     /// Register a setter function for a member of a registered type with the `Engine`.
-    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    /// Returns `Result<(), Box<EvalAltResult>>`.
     ///
     /// # Example
     ///
@@ -337,10 +339,10 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                        { TestStruct { field: 1 } }
-    ///     fn set_field(&mut self, new_val: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn new() -> Self { TestStruct { field: 1 } }
+    ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.field = new_val;
-    ///         Ok(().into())
+    ///         Ok(())
     ///     }
     /// }
     ///
@@ -367,13 +369,16 @@ impl Engine {
     pub fn register_set_result<T, U>(
         &mut self,
         name: &str,
-        callback: impl Fn(&mut T, U) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        callback: impl Fn(&mut T, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self
     where
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_result_fn(&make_setter(name), callback)
+        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
+            callback(obj, value)?;
+            Ok(().into())
+        })
     }
 
     /// Short-hand for registering both getter and setter functions
@@ -391,8 +396,8 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                        { TestStruct { field: 1 } }
-    ///     fn get_field(&mut self) -> i64          { self.field }
     ///     // Even a getter must start with `&mut self` and not `&self`.
+    ///     fn get_field(&mut self) -> i64          { self.field }
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
@@ -432,6 +437,11 @@ impl Engine {
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
+    ///
     /// # Example
     ///
     /// ```
@@ -441,8 +451,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
-    ///
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
     /// }
@@ -475,6 +484,20 @@ impl Engine {
         U: Variant + Clone,
         X: Variant + Clone,
     {
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.register_fn(FN_IDX_GET, callback)
     }
 
@@ -482,6 +505,11 @@ impl Engine {
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///
@@ -494,8 +522,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
-    ///
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize].into())
@@ -527,10 +554,29 @@ impl Engine {
         T: Variant + Clone,
         X: Variant + Clone,
     {
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.register_result_fn(FN_IDX_GET, callback)
     }
 
     /// Register an index setter for a custom type with the `Engine`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///
@@ -541,7 +587,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -569,18 +615,37 @@ impl Engine {
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_set<T, X, U>(
         &mut self,
-        callback: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
+        callback: impl Fn(&mut T, X, U) + SendSync + 'static,
     ) -> &mut Self
     where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
         self.register_fn(FN_IDX_SET, callback)
     }
 
     /// Register an index setter for a custom type with the `Engine`.
-    /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
+    /// Returns `Result<(), Box<EvalAltResult>>`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///
@@ -593,10 +658,10 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
-    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.fields[index as usize] = value;
-    ///         Ok(().into())
+    ///         Ok(())
     ///     }
     /// }
     ///
@@ -622,17 +687,39 @@ impl Engine {
     #[cfg(not(feature = "no_index"))]
     pub fn register_indexer_set_result<T, X, U>(
         &mut self,
-        callback: impl Fn(&mut T, X, U) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        callback: impl Fn(&mut T, X, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self
     where
         T: Variant + Clone,
         U: Variant + Clone,
         X: Variant + Clone,
     {
-        self.register_result_fn(FN_IDX_SET, callback)
+        if TypeId::of::<T>() == TypeId::of::<Array>() {
+            panic!("Cannot register indexer for arrays.");
+        }
+        #[cfg(not(feature = "no_object"))]
+        if TypeId::of::<T>() == TypeId::of::<Map>() {
+            panic!("Cannot register indexer for object maps.");
+        }
+        if TypeId::of::<T>() == TypeId::of::<String>()
+            || TypeId::of::<T>() == TypeId::of::<&str>()
+            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+        {
+            panic!("Cannot register indexer for strings.");
+        }
+
+        self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
+            callback(obj, index, value)?;
+            Ok(().into())
+        })
     }
 
     /// Short-hand for register both index getter and setter functions for a custom type with the `Engine`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type is `Array` or `Map`.
+    /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
     ///
@@ -643,7 +730,8 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self                                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64      { self.fields[index as usize] }
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
