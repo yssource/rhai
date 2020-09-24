@@ -1124,6 +1124,14 @@ impl Module {
             .map(|f| f.get_shared_fn_def())
     }
 
+    #[cfg(not(feature = "no_function"))]
+    pub fn iter_script_fn_info(&self, action: impl Fn(FnAccess, &str, usize)) {
+        self.functions.iter().for_each(|(_, (_, _, _, v))| match v {
+            Func::Script(ref f) => action(f.access, f.name.as_str(), f.params.len()),
+            _ => (),
+        });
+    }
+
     /// Create a new `Module` by evaluating an `AST`.
     ///
     /// # Examples
@@ -1493,24 +1501,23 @@ mod file {
                 #[cfg(feature = "sync")]
                 let c = self.cache.read().unwrap();
 
-                match c.get(&file_path) {
-                    Some(ast) => (
+                if let Some(ast) = c.get(&file_path) {
+                    (
                         Module::eval_ast_as_new(scope, ast, engine)
                             .map_err(|err| err.new_position(pos))?,
                         None,
-                    ),
-                    None => {
-                        // Load the file and compile it if not found
-                        let ast = engine
-                            .compile_file(file_path.clone())
-                            .map_err(|err| err.new_position(pos))?;
+                    )
+                } else {
+                    // Load the file and compile it if not found
+                    let ast = engine
+                        .compile_file(file_path.clone())
+                        .map_err(|err| err.new_position(pos))?;
 
-                        (
-                            Module::eval_ast_as_new(scope, &ast, engine)
-                                .map_err(|err| err.new_position(pos))?,
-                            Some(ast),
-                        )
-                    }
+                    (
+                        Module::eval_ast_as_new(scope, &ast, engine)
+                            .map_err(|err| err.new_position(pos))?,
+                        Some(ast),
+                    )
                 }
             };
 

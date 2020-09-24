@@ -25,6 +25,7 @@ New features
 * Plugins support via procedural macros.
 * Scripted functions are allowed in packages.
 * `parse_int` and `parse_float` functions.
+* `AST::iter_functions` and `Module::iter_script_fn_info` to iterate functions.
 
 
 Version 0.18.3

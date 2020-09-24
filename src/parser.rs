@@ -299,6 +299,12 @@ impl AST {
         self.1.retain_functions(filter);
     }
 
+    /// Iterate through all functions
+    #[cfg(not(feature = "no_function"))]
+    pub fn iter_functions(&self, action: impl Fn(FnAccess, &str, usize)) {
+        self.1.iter_script_fn_info(action);
+    }
+
     /// Clear all function definitions in the `AST`.
     #[cfg(not(feature = "no_function"))]
     pub fn clear_functions(&mut self) {
