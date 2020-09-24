@@ -25,7 +25,9 @@ New features
 * Plugins support via procedural macros.
 * Scripted functions are allowed in packages.
 * `parse_int` and `parse_float` functions.
-
+* `AST::iter_functions` and `Module::iter_script_fn_info` to iterate functions.
+* Functions iteration functions now take `FnMut` instead of `Fn`.
+* New `FileModuleResolver` that encapsulates the entire `AST` of the module script, allowing function cross-calling. The old version is renamed `MergingFileModuleResolver`.
 
 Version 0.18.3
 ==============

@@ -7,9 +7,12 @@ use crate::engine::{
 };
 use crate::fn_native::FnPtr;
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, Expr, ReturnType, ScriptFnDef, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::utils::StaticVec;
+
+#[cfg(not(feature = "no_function"))]
+use crate::parser::ReturnType;
 
 #[cfg(feature = "internals")]
 use crate::parser::CustomExpr;
@@ -575,7 +578,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
-            let has_script_fn = cfg!(not(feature = "no_function")) && state.lib.iter_fn().find(|(_, _, _, f)| {
+            let has_script_fn = cfg!(not(feature = "no_function")) && state.lib.iter_fn().find(|(_, _, _, _,f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
                 fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
@@ -749,7 +752,8 @@ pub fn optimize_into_ast(
         level
     };
 
-    let lib = if cfg!(not(feature = "no_function")) {
+    #[cfg(not(feature = "no_function"))]
+    let lib = {
         let mut module = Module::new();
 
         if !level.is_none() {
@@ -811,9 +815,10 @@ pub fn optimize_into_ast(
         }
 
         module
-    } else {
-        Default::default()
     };
+
+    #[cfg(feature = "no_function")]
+    let lib = Default::default();
 
     AST::new(
         match level {

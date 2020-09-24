@@ -19,7 +19,7 @@ This check can be disabled via the [`unchecked`] feature for higher performance 
 ```rust
 let mut engine = Engine::new();
 
-engine.set_max_array_size(500);	// allow arrays only up to 500 items
+engine.set_max_array_size(500); // allow arrays only up to 500 items
 
 engine.set_max_array_size(0);   // allow unlimited arrays
 ```

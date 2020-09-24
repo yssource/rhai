@@ -1502,7 +1502,9 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let result = self.call_fn_dynamic_raw(scope, ast, name, &mut None, arg_values.as_mut())?;
+        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+
+        let result = self.call_fn_dynamic_raw(scope, ast, name, &mut None, args.as_mut())?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1574,7 +1576,9 @@ impl Engine {
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> FuncReturn<Dynamic> {
-        self.call_fn_dynamic_raw(scope, lib, name, &mut this_ptr, arg_values.as_mut())
+        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+
+        self.call_fn_dynamic_raw(scope, lib, name, &mut this_ptr, args.as_mut())
     }
 
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
@@ -1592,16 +1596,14 @@ impl Engine {
         lib: impl AsRef<Module>,
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
-        arg_values: &mut [Dynamic],
+        args: &mut [&mut Dynamic],
     ) -> FuncReturn<Dynamic> {
         let lib = lib.as_ref();
-        let mut args: StaticVec<_> = arg_values.iter_mut().collect();
         let fn_def = get_script_function_by_signature(lib, name, args.len(), true)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 
         let mut state = State::new();
         let mut mods = Imports::new();
-        let args = args.as_mut();
 
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {
@@ -1634,8 +1636,8 @@ impl Engine {
         let lib = if cfg!(not(feature = "no_function")) {
             ast.lib()
                 .iter_fn()
-                .filter(|(_, _, _, f)| f.is_script())
-                .map(|(_, _, _, f)| f.get_fn_def().clone())
+                .filter(|(_, _, _, _, f)| f.is_script())
+                .map(|(_, _, _, _, f)| f.get_fn_def().clone())
                 .collect()
         } else {
             Default::default()

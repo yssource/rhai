@@ -45,11 +45,11 @@ Boolean operators
 
 | Operator          | Description                           |
 | ----------------- | ------------------------------------- |
-| `!`               | Boolean _Not_                         |
-| `&&`              | Boolean _And_ (short-circuits)        |
-| <code>\|\|</code> | Boolean _Or_ (short-circuits)         |
-| `&`               | Boolean _And_ (doesn't short-circuit) |
-| <code>\|</code>   | Boolean _Or_ (doesn't short-circuit)  |
+| `!`               | boolean _Not_                         |
+| `&&`              | boolean _And_ (short-circuits)        |
+| <code>\|\|</code> | boolean _Or_ (short-circuits)         |
+| `&`               | boolean _And_ (doesn't short-circuit) |
+| <code>\|</code>   | boolean _Or_ (doesn't short-circuit)  |
 
 Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated
 if the first one already proves the condition wrong.

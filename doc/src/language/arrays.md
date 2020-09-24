@@ -37,10 +37,11 @@ The following methods (mostly defined in the [`BasicArrayPackage`][packages] but
 | `append`                  | array to append                                                       | concatenates the second array to the end of the first                                                |
 | `+=` operator             | array, array to append                                                | concatenates the second array to the end of the first                                                |
 | `+` operator              | first array, second array                                             | concatenates the first array with the second                                                         |
-| `insert`                  | element to insert, position<br/>(beginning if <= 0, end if >= length) | insert an element at a certain index                                                                 |
+| `insert`                  | element to insert, position<br/>(beginning if <= 0, end if >= length) | inserts an element at a certain index                                                                |
 | `pop`                     | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
 | `shift`                   | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
 | `remove`                  | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `reverse`                 | _none_                                                                | reverses the array                                                                                   |
 | `len` method and property | _none_                                                                | returns the number of elements                                                                       |
 | `pad`                     | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
 | `clear`                   | _none_                                                                | empties the array                                                                                    |
@@ -51,7 +52,7 @@ Use Custom Types With Arrays
 ---------------------------
 
 To use a [custom type] with arrays, a number of array functions need to be manually implemented,
-in particular `push`, `pad` and the `+=` operator.  In addition, the `==` operator must be
+in particular `push`, `insert`, `pad` and the `+=` operator.  In addition, the `==` operator must be
 implemented for the [custom type] in order to support the `in` operator which uses `==` to
 compare elements.
 
