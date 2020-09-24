@@ -5,13 +5,13 @@ use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
-use crate::parser::{FnAccess, FnAccess::Public, ScriptFnDef};
+use crate::parser::{FnAccess, FnAccess::Public};
 use crate::result::EvalAltResult;
 use crate::token::{Position, Token};
 use crate::utils::{ImmutableString, StaticVec, StraightHasherBuilder};
 
 #[cfg(not(feature = "no_function"))]
-use crate::fn_native::Shared;
+use crate::{fn_native::Shared, parser::ScriptFnDef};
 
 #[cfg(not(feature = "no_module"))]
 use crate::{
@@ -262,6 +262,7 @@ impl Module {
     /// Set a script-defined function into the module.
     ///
     /// If there is an existing function of the same name and number of arguments, it is replaced.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) -> u64 {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
@@ -494,6 +495,7 @@ impl Module {
     }
 
     /// Set a raw function but with a signature that is a scripted function, but the implementation is in Rust.
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn set_raw_fn_as_scripted(
         &mut self,
         name: impl Into<String>,
@@ -1235,7 +1237,7 @@ impl Module {
                 variables.push((hash_var, value.clone()));
             }
             // Index all Rust functions
-            for (&hash, (name, access, num_args, params, func)) in module.functions.iter() {
+            for (&_hash, (name, access, _num_args, params, func)) in module.functions.iter() {
                 match access {
                     // Private functions are not exported
                     FnAccess::Private => continue,
@@ -1245,10 +1247,10 @@ impl Module {
                 #[cfg(not(feature = "no_function"))]
                 if params.is_none() {
                     let hash_qualified_script = if qualifiers.is_empty() {
-                        hash
+                        _hash
                     } else {
                         // Qualifiers + function name + number of arguments.
-                        calc_fn_hash(qualifiers.iter().map(|&v| v), &name, *num_args, empty())
+                        calc_fn_hash(qualifiers.iter().map(|&v| v), &name, *_num_args, empty())
                     };
                     functions.push((hash_qualified_script, func.clone()));
                     continue;
@@ -1730,15 +1732,16 @@ mod file {
 
             let ast = c.get(&file_path).unwrap();
 
-            let mut module = Module::eval_ast_as_new(Scope::new(), ast, engine)?;
+            let mut _module = Module::eval_ast_as_new(Scope::new(), ast, engine)?;
 
+            #[cfg(not(feature = "no_function"))]
             ast.iter_functions(|access, name, num_args| match access {
                 FnAccess::Private => (),
                 FnAccess::Public => {
                     let fn_name = name.to_string();
                     let ast_lib = ast.lib().clone();
 
-                    module.set_raw_fn_as_scripted(
+                    _module.set_raw_fn_as_scripted(
                         name,
                         num_args,
                         move |engine: &Engine, _, args: &mut [&mut Dynamic]| {
@@ -1754,7 +1757,7 @@ mod file {
                 }
             });
 
-            Ok(module)
+            Ok(_module)
         }
     }
 }
