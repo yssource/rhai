@@ -575,7 +575,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
             // First search in functions lib (can override built-in)
             // Cater for both normal function call style and method call style (one additional arguments)
-            let has_script_fn = cfg!(not(feature = "no_function")) && state.lib.iter_fn().find(|(_, _, _, f)| {
+            let has_script_fn = cfg!(not(feature = "no_function")) && state.lib.iter_fn().find(|(_, _, _, _,f)| {
                 if !f.is_script() { return false; }
                 let fn_def = f.get_fn_def();
                 fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())

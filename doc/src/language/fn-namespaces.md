@@ -10,7 +10,7 @@ Each Function is a Separate Compilation Unit
 This means that individual functions can be separated, exported, re-grouped, imported,
 and generally mix-'n-match-ed with other completely unrelated scripts.
 
-For example, the `AST::merge` method allows merging all functions in one [`AST`] into another,
+For example, the `AST::merge` method allows Global all functions in one [`AST`] into another,
 forming a new, combined, group of functions.
 
 In general, there are two types of _namespaces_ where functions are looked up:
@@ -43,10 +43,10 @@ This aspect is very similar to JavaScript before ES6 modules.
 // Compile a script into AST
 let ast1 = engine.compile(
     r#"
-        fn message() { "Hello!" }   // greeting message
+        fn get_message() { "Hello!" }   // greeting message
 
         fn say_hello() {
-            print(message());       // prints message
+            print(get_message());       // prints message
         }
 
         say_hello();
@@ -54,7 +54,7 @@ let ast1 = engine.compile(
 )?;
 
 // Compile another script with an overriding function
-let ast2 = engine.compile(r#"fn message() { "Boo!" }"#)?;
+let ast2 = engine.compile(r#"fn get_message() { "Boo!" }"#)?;
 
 // Merge the two AST's
 let ast = ast1.merge(ast2);         // 'message' will be overwritten
@@ -73,7 +73,7 @@ i.e. define the function in a separate module and then [`import`] it:
 | message.rhai |
 ----------------
 
-fn message() { "Hello!" }
+fn get_message() { "Hello!" }
 
 
 ---------------
@@ -82,40 +82,52 @@ fn message() { "Hello!" }
 
 fn say_hello() {
     import "message" as msg;
-    print(msg::message());
+    print(msg::get_message());
 }
 say_hello();
 ```
 
 
-Module Namespaces
------------------
+Namespace Consideration When Not Using `FileModuleResolver`
+---------------------------------------------------------
 
 [Modules] can be dynamically loaded into a Rhai script using the [`import`] keyword.
 When that happens, functions defined within the [module] can be called with a _qualified_ name.
 
-There is a catch, though, if functions in a module script refer to global functions
-defined _within the script_.  When called later, those functions will be searched in the
-current global namespace and may not be found.
+The [`FileModuleResolver`][module resolver] encapsulates the namespace inside the module itself,
+so everything works as expected.  A function defined in the module script cannot access functions
+defined in the calling script, but it can freely call functions defined within the same module script.
+
+There is a catch, though.  When using anything other than the [`FileModuleResolver`][module resolver],
+functions in a module script refer to functions defined in the _global namespace_.
+When called later, those functions may not be found.
+
+When using the [`GlobalFileModuleResolver`][module resolver], for example:
 
 ```rust
+Using GlobalFileModuleResolver
+==============================
+
 -----------------
 | greeting.rhai |
 -----------------
 
-fn message() { "Hello!" };
+fn get_message() { "Hello!" };
 
-fn say_hello() { print(message()); }
+fn say_hello() {
+    print(get_message());           // 'get_message' is looked up in the global namespace
+                                    // when exported
+}
 
-say_hello();                        // 'message' is looked up in the global namespace
-
+say_hello();                        // Here, 'get_message' is found in the module namespace
 
 ---------------
 | script.rhai |
 ---------------
 
 import "greeting" as g;
-g::say_hello();                     // <- error: function not found - 'message'
+g::say_hello();                     // <- error: function not found - 'get_message'
+                                    //    because it does not exist in the global namespace
 ```
 
 In the example above, although the module `greeting.rhai` loads fine (`"Hello!"` is printed),
@@ -123,22 +135,23 @@ the subsequent call using the _namespace-qualified_ function name fails to find 
 '`message`' which now essentially becomes `g::message`.  The call fails as there is no more
 function named '`message`' in the global namespace.
 
-Therefore, when writing functions for a [module], make sure that those functions are as _pure_
-as possible and avoid cross-calling them from each other.  A [function pointer] is a valid technique
-to call another function within a module-defined function:
+Therefore, when writing functions for a [module] intended for the [`GlobalFileModuleResolver`][module resolver],
+make sure that those functions are as _pure_ as possible and avoid cross-calling them from each other.
+
+A [function pointer] is a valid technique to call another function in an environment-independent manner:
 
 ```rust
 -----------------
 | greeting.rhai |
 -----------------
 
-fn message() { "Hello!" };
+fn get_message() { "Hello!" };
 
 fn say_hello(msg_func) {            // 'msg_func' is a function pointer
     print(msg_func.call());         // call via the function pointer
 }
 
-say_hello();                        // 'message' is looked up in the global namespace
+say_hello(Fn("get_message"));
 
 
 ---------------
@@ -149,7 +162,7 @@ import "greeting" as g;
 
 fn my_msg() {
     import "greeting" as g;         // <- must import again here...
-    g::message()                    // <- ... otherwise will not find module 'g'
+    g::get_message()                // <- ... otherwise will not find module 'g'
 }
 
 g::say_hello(Fn("my_msg"));         // prints 'Hello!'

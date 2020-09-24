@@ -130,10 +130,10 @@ impl AST {
     /// This operation is cheap because functions are shared.
     pub fn clone_functions_only_filtered(
         &self,
-        filter: impl Fn(FnAccess, &str, usize) -> bool,
+        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> Self {
         let mut functions: Module = Default::default();
-        functions.merge_filtered(&self.1, &filter);
+        functions.merge_filtered(&self.1, &mut filter);
         Self(Default::default(), functions)
     }
 
@@ -250,7 +250,7 @@ impl AST {
     pub fn merge_filtered(
         &self,
         other: &Self,
-        filter: impl Fn(FnAccess, &str, usize) -> bool,
+        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> Self {
         let Self(statements, functions) = self;
 
@@ -266,7 +266,7 @@ impl AST {
         };
 
         let mut functions = functions.clone();
-        functions.merge_filtered(&other.1, &filter);
+        functions.merge_filtered(&other.1, &mut filter);
 
         Self::new(ast, functions)
     }
@@ -295,13 +295,13 @@ impl AST {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
-    pub fn retain_functions(&mut self, filter: impl Fn(FnAccess, &str, usize) -> bool) {
+    pub fn retain_functions(&mut self, filter: impl FnMut(FnAccess, &str, usize) -> bool) {
         self.1.retain_functions(filter);
     }
 
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_functions(&self, action: impl Fn(FnAccess, &str, usize)) {
+    pub fn iter_functions(&self, action: impl FnMut(FnAccess, &str, usize)) {
         self.1.iter_script_fn_info(action);
     }
 
