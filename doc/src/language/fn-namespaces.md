@@ -17,8 +17,8 @@ In general, there are two types of _namespaces_ where functions are looked up:
 
 | Namespace | Source                                                                 | Lookup method                     |         How Many         |
 | --------- | ---------------------------------------------------------------------- | --------------------------------- | :----------------------: |
-| Global    | `Engine::register_XXX` API, [`AST`] being evaluated, [packages] loaded | Simple function name              |           One            |
-| Module    | [`Module`]                                                             | Namespace-qualified function name | As many as [`import`]-ed |
+| Global    | `Engine::register_XXX` API, [`AST`] being evaluated, [packages] loaded | simple function name              |           one            |
+| Module    | [`Module`]                                                             | namespace-qualified function name | as many as [`import`]-ed |
 
 
 Global Namespace

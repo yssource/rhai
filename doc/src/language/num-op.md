@@ -10,8 +10,8 @@ Unary Operators
 
 | Operator | Description |
 | -------- | ----------- |
-| `+`      | Positive    |
-| `-`      | Negative    |
+| `+`      | positive    |
+| `-`      | negative    |
 
 ```rust
 let number = -5;
@@ -24,17 +24,17 @@ Binary Operators
 
 | Operator        | Description                                          | Integers only |
 | --------------- | ---------------------------------------------------- | :-----------: |
-| `+`             | Plus                                                 |               |
-| `-`             | Minus                                                |               |
-| `*`             | Multiply                                             |               |
-| `/`             | Divide (integer division if acting on integer types) |               |
-| `%`             | Modulo (remainder)                                   |               |
-| `~`             | Power                                                |               |
-| `&`             | Bit-wise _And_                                       |      Yes      |
-| <code>\|</code> | Bit-wise _Or_                                        |      Yes      |
-| `^`             | Bit-wise _Xor_                                       |      Yes      |
-| `<<`            | Left bit-shift                                       |      Yes      |
-| `>>`            | Right bit-shift                                      |      Yes      |
+| `+`             | plus                                                 |               |
+| `-`             | minus                                                |               |
+| `*`             | multiply                                             |               |
+| `/`             | divide (integer division if acting on integer types) |               |
+| `%`             | modulo (remainder)                                   |               |
+| `~`             | power                                                |               |
+| `&`             | bit-wise _And_                                       |      Yes      |
+| <code>\|</code> | bit-wise _Or_                                        |      Yes      |
+| `^`             | bit-wise _Xor_                                       |      Yes      |
+| `<<`            | left bit-shift                                       |      Yes      |
+| `>>`            | right bit-shift                                      |      Yes      |
 
 ```rust
 let x = (1 + 2) * (6 - 4) / 2;  // arithmetic, with parentheses

@@ -11,11 +11,11 @@ Getters and setters are disabled when the [`no_object`] feature is used.
 
 | `Engine` API          | Description                                       |       Return Value of Function        |
 | --------------------- | ------------------------------------------------- | :-----------------------------------: |
-| `register_get`        | Register a getter                                 |                 _Any_                 |
-| `register_set`        | Register a setter                                 |                _None_                 |
-| `register_get_set`    | Short-hand to register both a getter and a setter |                _None_                 |
-| `register_get_result` | Register a getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
-| `register_set_result` | Register a setter                                 |   `Result<(), Box<EvalAltResult>>`    |
+| `register_get`        | register a getter                                 |                 _any_                 |
+| `register_set`        | register a setter                                 |                _none_                 |
+| `register_get_set`    | short-hand to register both a getter and a setter |                _none_                 |
+| `register_get_result` | register a getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
+| `register_set_result` | register a setter                                 |   `Result<(), Box<EvalAltResult>>`    |
 
 
 Cannot Override Object Maps

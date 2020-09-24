@@ -15,11 +15,11 @@ Indexers are disabled when the [`no_index`] feature is used.
 
 | `Engine` API                  | Description                                              |       Return Value of Function        |
 | ----------------------------- | -------------------------------------------------------- | :-----------------------------------: |
-| `register_indexer_get`        | Register an index getter                                 |                 _Any_                 |
-| `register_indexer_set`        | Register an index setter                                 |                _None_                 |
-| `register_indexer_get_set`    | Short-hand to register both an index getter and a setter |                _None_                 |
-| `register_indexer_get_result` | Register an index getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
-| `register_indexer_set_result` | Register an index setter                                 |   `Result<(), Box<EvalAltResult>>`    |
+| `register_indexer_get`        | register an index getter                                 |                 _any_                 |
+| `register_indexer_set`        | register an index setter                                 |                _none_                 |
+| `register_indexer_get_set`    | short-hand to register both an index getter and a setter |                _none_                 |
+| `register_indexer_get_result` | register an index getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
+| `register_indexer_set_result` | register an index setter                                 |   `Result<(), Box<EvalAltResult>>`    |
 
 
 Cannot Override Arrays, Object Maps and Strings

@@ -5,34 +5,34 @@ Keywords List
 
 |        Keyword        | Description                              | Inactive under  | Overloadable |
 | :-------------------: | ---------------------------------------- | :-------------: | :----------: |
-|        `true`         | Boolean true literal                     |                 |      No      |
-|        `false`        | Boolean false literal                    |                 |      No      |
-|         `let`         | Variable declaration                     |                 |      No      |
-|        `const`        | Constant declaration                     |                 |      No      |
-|      `is_shared`      | Is a value shared?                       |                 |      No      |
-|         `if`          | If statement                             |                 |      No      |
-|        `else`         | else block of if statement               |                 |      No      |
-|        `while`        | While loop                               |                 |      No      |
-|        `loop`         | Infinite loop                            |                 |      No      |
-|         `for`         | For loop                                 |                 |      No      |
-|         `in`          | Containment test, part of for loop       |                 |      No      |
-|      `continue`       | Continue a loop at the next iteration    |                 |      No      |
-|        `break`        | Loop breaking                            |                 |      No      |
-|       `return`        | Return value                             |                 |      No      |
-|        `throw`        | Throw exception                          |                 |      No      |
-|       `import`        | Import module                            |  [`no_module`]  |      No      |
-|       `export`        | Export variable                          |  [`no_module`]  |      No      |
-|         `as`          | Alias for variable export                |  [`no_module`]  |      No      |
-|       `private`       | Mark function private                    | [`no_function`] |      No      |
-| `fn` (lower-case `f`) | Function definition                      | [`no_function`] |      No      |
-|  `Fn` (capital `F`)   | Function to create a [function pointer]  |                 |     Yes      |
-|        `call`         | Call a [function pointer]                |                 |      No      |
-|        `curry`        | Curry a [function pointer]               |                 |      No      |
-|        `this`         | Reference to base object for method call | [`no_function`] |      No      |
-|       `type_of`       | Get type name of value                   |                 |     Yes      |
-|        `print`        | Print value                              |                 |     Yes      |
-|        `debug`        | Print value in debug format              |                 |     Yes      |
-|        `eval`         | Evaluate script                          |                 |     Yes      |
+|        `true`         | boolean true literal                     |                 |      no      |
+|        `false`        | boolean false literal                    |                 |      no      |
+|         `let`         | variable declaration                     |                 |      no      |
+|        `const`        | constant declaration                     |                 |      no      |
+|      `is_shared`      | is a value shared?                       |                 |      no      |
+|         `if`          | if statement                             |                 |      no      |
+|        `else`         | else block of if statement               |                 |      no      |
+|        `while`        | while loop                               |                 |      no      |
+|        `loop`         | infinite loop                            |                 |      no      |
+|         `for`         | for loop                                 |                 |      no      |
+|         `in`          | containment test, part of for loop       |                 |      no      |
+|      `continue`       | continue a loop at the next iteration    |                 |      no      |
+|        `break`        | loop breaking                            |                 |      no      |
+|       `return`        | return value                             |                 |      no      |
+|        `throw`        | throw exception                          |                 |      no      |
+|       `import`        | import module                            |  [`no_module`]  |      no      |
+|       `export`        | export variable                          |  [`no_module`]  |      no      |
+|         `as`          | alias for variable export                |  [`no_module`]  |      no      |
+|       `private`       | mark function private                    | [`no_function`] |      no      |
+| `fn` (lower-case `f`) | function definition                      | [`no_function`] |      no      |
+|  `Fn` (capital `F`)   | function to create a [function pointer]  |                 |     yes      |
+|        `call`         | call a [function pointer]                |                 |      no      |
+|        `curry`        | curry a [function pointer]               |                 |      no      |
+|        `this`         | reference to base object for method call | [`no_function`] |      no      |
+|       `type_of`       | get type name of value                   |                 |     yes      |
+|        `print`        | print value                              |                 |     yes      |
+|        `debug`        | print value in debug format              |                 |     yes      |
+|        `eval`         | evaluate script                          |                 |     yes      |
 
 
 Reserved Keywords
@@ -40,32 +40,32 @@ Reserved Keywords
 
 | Keyword   | Potential usage       |
 | --------- | --------------------- |
-| `var`     | Variable declaration  |
-| `static`  | Variable declaration  |
-| `shared`  | Share value           |
-| `do`      | Looping               |
-| `each`    | Looping               |
-| `then`    | Control flow          |
-| `goto`    | Control flow          |
-| `exit`    | Control flow          |
-| `switch`  | Matching              |
-| `match`   | Matching              |
-| `case`    | Matching              |
-| `public`  | Function/field access |
-| `new`     | Constructor           |
-| `try`     | Trap exception        |
-| `catch`   | Catch exception       |
-| `use`     | Import namespace      |
-| `with`    | Scope                 |
-| `module`  | Module                |
-| `package` | Package               |
-| `spawn`   | Threading             |
-| `go`      | Threading             |
-| `await`   | Async                 |
-| `async`   | Async                 |
-| `sync`    | Async                 |
-| `yield`   | Async                 |
-| `default` | Special value         |
-| `void`    | Special value         |
-| `null`    | Special value         |
-| `nil`     | Special value         |
+| `var`     | variable declaration  |
+| `static`  | variable declaration  |
+| `shared`  | share value           |
+| `do`      | looping               |
+| `each`    | looping               |
+| `then`    | control flow          |
+| `goto`    | control flow          |
+| `exit`    | control flow          |
+| `switch`  | matching              |
+| `match`   | matching              |
+| `case`    | matching              |
+| `public`  | function/field access |
+| `new`     | constructor           |
+| `try`     | trap exception        |
+| `catch`   | catch exception       |
+| `use`     | import namespace      |
+| `with`    | scope                 |
+| `module`  | module                |
+| `package` | package               |
+| `spawn`   | threading             |
+| `go`      | threading             |
+| `await`   | async                 |
+| `async`   | async                 |
+| `sync`    | async                 |
+| `yield`   | async                 |
+| `default` | special value         |
+| `void`    | special value         |
+| `null`    | special value         |
+| `nil`     | special value         |

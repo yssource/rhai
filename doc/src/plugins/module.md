@@ -204,11 +204,11 @@ The above function can be called in five ways:
 
 | Parameter for `#[rhai_fn(...)]` |      Type       | Call style                                    |
 | ------------------------------- | :-------------: | --------------------------------------------- |
-| `name = "get_prop_value"`       | Method function | `get_prop_value(x, 0)`, `x.get_prop_value(0)` |
-| `name = "prop"`                 | Method function | `prop(x, 0)`, `x.prop(0)`                     |
-| `name = "+"`                    |    Operator     | `x + 42`                                      |
-| `set = "prop"`                  |     Setter      | `x.prop = 42`                                 |
-| `index_get`                     |  Index getter   | `x[0]`                                        |
+| `name = "get_prop_value"`       | method function | `get_prop_value(x, 0)`, `x.get_prop_value(0)` |
+| `name = "prop"`                 | method function | `prop(x, 0)`, `x.prop(0)`                     |
+| `name = "+"`                    |    operator     | `x + 42`                                      |
+| `set = "prop"`                  |     setter      | `x.prop = 42`                                 |
+| `index_get`                     |  index getter   | `x[0]`                                        |
 
 
 Fallible Functions
@@ -244,11 +244,11 @@ mod my_module {
 
 Parameters can be applied to the `#[export_module]` attribute to override its default behavior.
 
-| Parameter               | Behavior                                                                                                                      |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| _None_                  | Export only public (i.e. `pub`) functions                                                                                     |
-| `export_all`            | Export all functions (including private, non-`pub` functions); use `#[rhai_fn(skip)]` on individual functions to avoid export |
-| `export_prefix = "..."` | Export functions (including private, non-`pub` functions) with names starting with a specific prefix                          |
+| Parameter               | Description                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| _none_                  | exports only public (i.e. `pub`) functions                                                                                     |
+| `export_all`            | exports all functions (including private, non-`pub` functions); use `#[rhai_fn(skip)]` on individual functions to avoid export |
+| `export_prefix = "..."` | exports functions (including private, non-`pub` functions) with names starting with a specific prefix                          |
 
 
 Inner Attributes
@@ -260,12 +260,12 @@ Inner attributes can be applied to the inner items of a module to tweak the expo
 
 Parameters should be set on inner attributes to specify the desired behavior.
 
-| Attribute Parameter | Use with                    | Apply to                                                 | Behavior                                              |
-| ------------------- | --------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
-| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | Function or sub-module                                   | Do not export this function/sub-module                |
-| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | Function or sub-module                                   | Register function/sub-module under the specified name |
-| `get = "..."`       | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register a getter for the named property              |
-| `set = "..."`       | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register a setter for the named property              |
-| `index_get`         | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register an index getter                              |
-| `index_set`         | `#[rhai_fn]`                | Function with `&mut` first parameter                     | Register an index setter                              |
-| `return_raw`        | `#[rhai_fn]`                | Function returning `Result<Dynamic, Box<EvalAltResult>>` | Mark this as a [fallible function]                    |
+| Attribute Parameter | Use with                    | Apply to                                                 | Description                                            |
+| ------------------- | --------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
+| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                   | do not export this function/sub-module                 |
+| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                   | registers function/sub-module under the specified name |
+| `get = "..."`       | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers a getter for the named property              |
+| `set = "..."`       | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers a setter for the named property              |
+| `index_get`         | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers an index getter                              |
+| `index_set`         | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers an index setter                              |
+| `return_raw`        | `#[rhai_fn]`                | function returning `Result<Dynamic, Box<EvalAltResult>>` | marks this as a [fallible function]                    |

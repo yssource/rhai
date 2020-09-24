@@ -9,19 +9,19 @@ Built-In Packages
 
 | Package                | Description                                                                                            | In `Core` | In `Standard` |
 | ---------------------- | ------------------------------------------------------------------------------------------------------ | :-------: | :-----------: |
-| `ArithmeticPackage`    | Arithmetic operators (e.g. `+`, `-`, `*`, `/`) for numeric types that are not built in (e.g. `u16`)    |    Yes    |      Yes      |
-| `BasicIteratorPackage` | Numeric ranges (e.g. `range(1, 10)`)                                                                   |    Yes    |      Yes      |
-| `LogicPackage`         | Logical and comparison operators (e.g. `==`, `>`) for numeric types that are not built in (e.g. `u16`) |    Yes    |      Yes      |
-| `BasicStringPackage`   | Basic string functions (e.g. `print`, `debug`, `len`) that are not built in                            |    Yes    |      Yes      |
-| `BasicTimePackage`     | Basic time functions (e.g. [timestamps])                                                               |    Yes    |      Yes      |
-| `MoreStringPackage`    | Additional string functions, including converting common types to string                               |    No     |      Yes      |
-| `BasicMathPackage`     | Basic math functions (e.g. `sin`, `sqrt`)                                                              |    No     |      Yes      |
-| `BasicArrayPackage`    | Basic [array] functions (not available under `no_index`)                                               |    No     |      Yes      |
-| `BasicMapPackage`      | Basic [object map] functions (not available under `no_object`)                                         |    No     |      Yes      |
-| `BasicFnPackage`       | Basic methods for [function pointers].                                                                 |    Yes    |      Yes      |
-| `EvalPackage`          | Disable [`eval`]                                                                                       |    No     |      No       |
-| `CorePackage`          | Basic essentials                                                                                       |    Yes    |      Yes      |
-| `StandardPackage`      | Standard library (default for `Engine::new`)                                                           |    No     |      Yes      |
+| `ArithmeticPackage`    | arithmetic operators (e.g. `+`, `-`, `*`, `/`) for numeric types that are not built in (e.g. `u16`)    |    yes    |      yes      |
+| `BasicIteratorPackage` | numeric ranges (e.g. `range(1, 10)`)                                                                   |    yes    |      yes      |
+| `LogicPackage`         | logical and comparison operators (e.g. `==`, `>`) for numeric types that are not built in (e.g. `u16`) |    yes    |      yes      |
+| `BasicStringPackage`   | basic string functions (e.g. `print`, `debug`, `len`) that are not built in                            |    yes    |      yes      |
+| `BasicTimePackage`     | basic time functions (e.g. [timestamps])                                                               |    yes    |      yes      |
+| `MoreStringPackage`    | additional string functions, including converting common types to string                               |    no     |      yes      |
+| `BasicMathPackage`     | basic math functions (e.g. `sin`, `sqrt`)                                                              |    no     |      yes      |
+| `BasicArrayPackage`    | basic [array] functions (not available under `no_index`)                                               |    no     |      yes      |
+| `BasicMapPackage`      | basic [object map] functions (not available under `no_object`)                                         |    no     |      yes      |
+| `BasicFnPackage`       | basic methods for [function pointers].                                                                 |    yes    |      yes      |
+| `EvalPackage`          | disable [`eval`]                                                                                       |    no     |      no       |
+| `CorePackage`          | basic essentials                                                                                       |    yes    |      yes      |
+| `StandardPackage`      | standard library (default for `Engine::new`)                                                           |    no     |      yes      |
 
 
 Load the `CorePackage`
