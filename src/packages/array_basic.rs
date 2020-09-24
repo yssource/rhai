@@ -133,6 +133,10 @@ mod array_functions {
             list.clear();
         }
     }
+    #[inline(always)]
+    pub fn reverse(list: &mut Array) {
+        list.reverse();
+    }
 }
 
 fn pad<T: Variant + Clone>(

@@ -41,6 +41,7 @@ The following methods (mostly defined in the [`BasicArrayPackage`][packages] but
 | `pop`                     | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
 | `shift`                   | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
 | `remove`                  | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `reverse`                 | _none_                                                                | reverses the array                                                                                   |
 | `len` method and property | _none_                                                                | returns the number of elements                                                                       |
 | `pad`                     | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
 | `clear`                   | _none_                                                                | empties the array                                                                                    |
