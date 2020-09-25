@@ -262,7 +262,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
 
     engine.set_module_resolver(Some(resolver1));
 
-    let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
 
     let mut resolver2 = StaticModuleResolver::new();
     resolver2.insert("testing", module);

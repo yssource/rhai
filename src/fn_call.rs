@@ -221,6 +221,7 @@ impl Engine {
         let func = self
             .global_module
             .get_fn(hash_fn, pub_only)
+            .or_else(|| lib.get_fn(hash_fn, pub_only))
             .or_else(|| self.packages.get_fn(hash_fn, pub_only));
 
         if let Some(func) = func {
@@ -439,9 +440,9 @@ impl Engine {
 
         // First check script-defined functions
         lib.contains_fn(hash_script, pub_only)
-            //|| lib.contains_fn(hash_fn, pub_only)
+            || lib.contains_fn(hash_fn, pub_only)
             // Then check registered functions
-            //|| self.global_module.contains_fn(hash_script, pub_only)
+            || self.global_module.contains_fn(hash_script, pub_only)
             || self.global_module.contains_fn(hash_fn, pub_only)
             // Then check packages
             || self.packages.contains_fn(hash_script, pub_only)
@@ -522,58 +523,76 @@ impl Engine {
                 .into()
             }
 
-            // Normal script function call
+            // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if lib.contains_fn(hash_script, pub_only)
+            _ if self.global_module.contains_fn(hash_script, pub_only)
+                || lib.contains_fn(hash_script, pub_only)
                 || self.packages.contains_fn(hash_script, pub_only) =>
             {
-                // Get scripted function
-                let func = lib
+                // Get function
+                let func = self
+                    .global_module
                     .get_fn(hash_script, pub_only)
+                    .or_else(|| lib.get_fn(hash_script, pub_only))
                     .or_else(|| self.packages.get_fn(hash_script, pub_only))
-                    .unwrap()
-                    .get_fn_def();
+                    .unwrap();
 
-                let scope = &mut Scope::new();
-                let mods = &mut Imports::new();
+                if func.is_script() {
+                    let func = func.get_fn_def();
 
-                // Add captured variables into scope
-                #[cfg(not(feature = "no_closure"))]
-                if let Some(captured) = _capture {
-                    add_captured_variables_into_scope(&func.externals, captured, scope);
-                }
+                    let scope = &mut Scope::new();
+                    let mods = &mut Imports::new();
 
-                let result = if _is_method {
-                    // Method call of script function - map first argument to `this`
-                    let (first, rest) = args.split_first_mut().unwrap();
-                    self.call_script_fn(
-                        scope,
-                        mods,
+                    // Add captured variables into scope
+                    #[cfg(not(feature = "no_closure"))]
+                    if let Some(captured) = _capture {
+                        add_captured_variables_into_scope(&func.externals, captured, scope);
+                    }
+
+                    let result = if _is_method {
+                        // Method call of script function - map first argument to `this`
+                        let (first, rest) = args.split_first_mut().unwrap();
+                        self.call_script_fn(
+                            scope,
+                            mods,
+                            state,
+                            lib,
+                            &mut Some(*first),
+                            fn_name,
+                            func,
+                            rest,
+                            _level,
+                        )?
+                    } else {
+                        // Normal call of script function - map first argument to `this`
+                        // The first argument is a reference?
+                        let mut backup: ArgBackup = Default::default();
+                        backup.change_first_arg_to_copy(is_ref, args);
+
+                        let result = self.call_script_fn(
+                            scope, mods, state, lib, &mut None, fn_name, func, args, _level,
+                        );
+
+                        // Restore the original reference
+                        backup.restore_first_arg(args);
+
+                        result?
+                    };
+
+                    Ok((result, false))
+                } else {
+                    // If it is a native function, redirect it
+                    self.call_native_fn(
                         state,
                         lib,
-                        &mut Some(*first),
                         fn_name,
-                        func,
-                        rest,
-                        _level,
-                    )?
-                } else {
-                    // Normal call of script function - map first argument to `this`
-                    // The first argument is a reference?
-                    let mut backup: ArgBackup = Default::default();
-                    backup.change_first_arg_to_copy(is_ref, args);
-
-                    let result = self.call_script_fn(
-                        scope, mods, state, lib, &mut None, fn_name, func, args, _level,
-                    );
-
-                    // Restore the original reference
-                    backup.restore_first_arg(args);
-
-                    result?
-                };
-
-                Ok((result, false))
+                        hash_script,
+                        args,
+                        is_ref,
+                        pub_only,
+                        def_val,
+                    )
+                }
             }
 
             // Normal native function call

@@ -34,12 +34,15 @@ fn test_packages() -> Result<(), Box<EvalAltResult>> {
 #[test]
 fn test_packages_with_script() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
-    let ast = engine.compile("fn foo(x) { x + 1 }")?;
-    let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+    let ast = engine.compile("fn foo(x) { x + 1 }  fn bar(x) { foo(x) + 1 }")?;
 
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, false, &engine)?;
     engine.load_package(module);
-
     assert_eq!(engine.eval::<INT>("foo(41)")?, 42);
+
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
+    engine.load_package(module);
+    assert_eq!(engine.eval::<INT>("bar(40)")?, 42);
 
     Ok(())
 }
