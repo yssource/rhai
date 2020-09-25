@@ -186,3 +186,24 @@ fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[cfg(not(feature = "no_object"))]
+#[test]
+fn test_string_split() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x.split(' ').len"#
+        )?,
+        3
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x.split("hello").len"#
+        )?,
+        2
+    );
+
+    Ok(())
+}
