@@ -1233,7 +1233,7 @@ impl Module {
     ///
     /// let engine = Engine::new();
     /// let ast = engine.compile("let answer = 42; export answer;")?;
-    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine, true)?;
+    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
     /// assert!(module.contains_var("answer"));
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// # Ok(())
