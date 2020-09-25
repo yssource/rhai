@@ -10,7 +10,7 @@ Each Function is a Separate Compilation Unit
 This means that individual functions can be separated, exported, re-grouped, imported,
 and generally mix-'n-match-ed with other completely unrelated scripts.
 
-For example, the `AST::merge` method allows Global all functions in one [`AST`] into another,
+For example, the `AST::merge` method allows merging all functions in one [`AST`] into another,
 forming a new, combined, group of functions.
 
 In general, there are two types of _namespaces_ where functions are looked up:
@@ -136,7 +136,7 @@ the subsequent call using the _namespace-qualified_ function name fails to find 
 function named '`message`' in the global namespace.
 
 Therefore, when writing functions for a [module] intended for the [`GlobalFileModuleResolver`][module resolver],
-make sure that those functions are as _pure_ as possible and avoid cross-calling them from each other.
+make sure that those functions are as independent as possible and avoid cross-calling them from each other.
 
 A [function pointer] is a valid technique to call another function in an environment-independent manner:
 

@@ -1400,7 +1400,7 @@ mod file {
 
     /// Module resolution service that loads module script files from the file system.
     ///
-    /// All functions in each module are treated as strictly _pure_ and cannot refer to
+    /// All functions in each module are treated as strictly independent and cannot refer to
     /// other functions within the same module.  Functions are searched in the _global_ namespace.
     ///
     /// For simple utility libraries, this usually performs better than the full `FileModuleResolver`.
