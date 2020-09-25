@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use quote::{quote, ToTokens};
 
 use crate::attrs::ExportScope;
-use crate::function::ExportedFn;
+use crate::function::{ExportedFn, FnSpecialAccess};
 use crate::module::Module;
 
 pub(crate) type ExportedConst = (String, Box<syn::Type>, syn::Expr);
@@ -202,18 +202,29 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
     let mut fn_sig = HashMap::<String, proc_macro2::Span>::new();
 
     for itemfn in fns.iter() {
-        if let Some(ref names) = itemfn.params().name {
-            for name in names {
+        if itemfn.params().name.is_some() || itemfn.params().special != FnSpecialAccess::None {
+            let mut names = itemfn
+                .params()
+                .name
+                .as_ref()
+                .map(|v| v.iter().map(|n| (n.clone(), n.clone())).collect())
+                .unwrap_or_else(|| Vec::new());
+
+            if let Some((s, n, _)) = itemfn.params().special.get_fn_name() {
+                names.push((s, n));
+            }
+
+            for (name, fn_name) in names {
                 let current_span = itemfn.params().span.as_ref().unwrap();
                 let key = make_key(name.clone(), itemfn);
                 if let Some(other_span) = renames.insert(key, *current_span) {
                     let mut err = syn::Error::new(
                         *current_span,
-                        format!("duplicate Rhai signature for '{}'", &name),
+                        format!("duplicate Rhai signature for '{}'", &fn_name),
                     );
                     err.combine(syn::Error::new(
                         other_span,
-                        format!("duplicated function renamed '{}'", &name),
+                        format!("duplicated function renamed '{}'", &fn_name),
                     ));
                     return Err(err);
                 }
@@ -237,14 +248,15 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
     }
 
     for (new_name, attr_span) in renames.drain() {
+        let fn_name = new_name.split('.').next().unwrap();
         if let Some(fn_span) = fn_sig.get(&new_name) {
             let mut err = syn::Error::new(
                 attr_span,
-                format!("duplicate Rhai signature for '{}'", &new_name),
+                format!("duplicate Rhai signature for '{}'", &fn_name),
             );
             err.combine(syn::Error::new(
                 *fn_span,
-                format!("duplicated function '{}'", &new_name),
+                format!("duplicated function '{}'", &fn_name),
             ));
             return Err(err);
         }

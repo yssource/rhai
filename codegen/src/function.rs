@@ -43,6 +43,30 @@ impl Default for FnSpecialAccess {
     }
 }
 
+impl FnSpecialAccess {
+    pub fn get_fn_name(&self) -> Option<(String, String, proc_macro2::Span)> {
+        match self {
+            FnSpecialAccess::None => None,
+            FnSpecialAccess::Property(Property::Get(ref g)) => {
+                Some((format!("get${}", g.to_string()), g.to_string(), g.span()))
+            }
+            FnSpecialAccess::Property(Property::Set(ref s)) => {
+                Some((format!("set${}", s.to_string()), s.to_string(), s.span()))
+            }
+            FnSpecialAccess::Index(Index::Get) => Some((
+                FN_IDX_GET.to_string(),
+                "index_get".to_string(),
+                proc_macro2::Span::call_site(),
+            )),
+            FnSpecialAccess::Index(Index::Set) => Some((
+                FN_IDX_SET.to_string(),
+                "index_set".to_string(),
+                proc_macro2::Span::call_site(),
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
     pub name: Option<Vec<String>>,
@@ -363,22 +387,8 @@ impl ExportedFn {
             })
             .unwrap_or_else(|| Vec::new());
 
-        match self.params.special {
-            FnSpecialAccess::None => {}
-            FnSpecialAccess::Property(Property::Get(ref g)) => literals.push(syn::LitStr::new(
-                &format!("get${}", g.to_string()),
-                g.span(),
-            )),
-            FnSpecialAccess::Property(Property::Set(ref s)) => literals.push(syn::LitStr::new(
-                &format!("set${}", s.to_string()),
-                s.span(),
-            )),
-            FnSpecialAccess::Index(Index::Get) => {
-                literals.push(syn::LitStr::new(FN_IDX_GET, proc_macro2::Span::call_site()))
-            }
-            FnSpecialAccess::Index(Index::Set) => {
-                literals.push(syn::LitStr::new(FN_IDX_SET, proc_macro2::Span::call_site()))
-            }
+        if let Some((s, _, span)) = self.params.special.get_fn_name() {
+            literals.push(syn::LitStr::new(&s, span));
         }
 
         if literals.is_empty() {
