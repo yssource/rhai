@@ -2,7 +2,7 @@ error: duplicate Rhai signature for 'bar'
   --> $DIR/rhai_fn_rename_collision_oneattr_multiple.rs:17:15
    |
 17 |     #[rhai_fn(get = "bar")]
-   |               ^^^
+   |               ^^^^^^^^^^^
 
 error: duplicated function renamed 'bar'
   --> $DIR/rhai_fn_rename_collision_oneattr_multiple.rs:12:15

@@ -188,6 +188,7 @@ fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_index"))]
 #[test]
 fn test_string_split() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
