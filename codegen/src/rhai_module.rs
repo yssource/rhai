@@ -183,25 +183,29 @@ pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
 }
 
 pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> {
+    fn make_key(name: String, itemfn: &ExportedFn) -> String {
+        itemfn.arg_list().fold(name, |mut argstr, fnarg| {
+            let type_string: String = match fnarg {
+                syn::FnArg::Receiver(_) => unimplemented!("receiver rhai_fns not implemented"),
+                syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
+                    ty.as_ref().to_token_stream().to_string()
+                }
+            };
+            argstr.push('.');
+            argstr.push_str(&type_string);
+            argstr
+        })
+    }
+
     let mut renames = HashMap::<String, proc_macro2::Span>::new();
-    let mut names = HashMap::<String, proc_macro2::Span>::new();
+    let mut fn_names = HashMap::<String, proc_macro2::Span>::new();
+    let mut fn_sig = HashMap::<String, proc_macro2::Span>::new();
+
     for itemfn in fns.iter() {
         if let Some(ref names) = itemfn.params().name {
             for name in names {
                 let current_span = itemfn.params().span.as_ref().unwrap();
-                let key = itemfn.arg_list().fold(name.clone(), |mut argstr, fnarg| {
-                    let type_string: String = match fnarg {
-                        syn::FnArg::Receiver(_) => {
-                            unimplemented!("receiver rhai_fns not implemented")
-                        }
-                        syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
-                            ty.as_ref().to_token_stream().to_string()
-                        }
-                    };
-                    argstr.push('.');
-                    argstr.push_str(&type_string);
-                    argstr
-                });
+                let key = make_key(name.clone(), itemfn);
                 if let Some(other_span) = renames.insert(key, *current_span) {
                     let mut err = syn::Error::new(
                         *current_span,
@@ -216,7 +220,7 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
             }
         } else {
             let ident = itemfn.name();
-            if let Some(other_span) = names.insert(ident.to_string(), ident.span()) {
+            if let Some(other_span) = fn_names.insert(ident.to_string(), ident.span()) {
                 let mut err = syn::Error::new(
                     ident.span(),
                     format!("duplicate function '{}'", ident.to_string()),
@@ -227,11 +231,13 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
                 ));
                 return Err(err);
             }
+            let key = make_key(ident.to_string(), itemfn);
+            fn_sig.insert(key, ident.span());
         }
     }
+
     for (new_name, attr_span) in renames.drain() {
-        let new_name = new_name.split('.').next().unwrap();
-        if let Some(fn_span) = names.get(new_name) {
+        if let Some(fn_span) = fn_sig.get(&new_name) {
             let mut err = syn::Error::new(
                 attr_span,
                 format!("duplicate Rhai signature for '{}'", &new_name),
