@@ -18,6 +18,9 @@ Breaking changes
 
 * `Engine::register_set_result` and `Engine::register_indexer_set_result` now take a function that returns `Result<(), Box<EvalAltResult>>`.
 * `Engine::register_indexer_XXX` and `Module::set_indexer_XXX` panic when the type is `Arrary`, `Map` or `String`.
+* `EvalAltResult` has a new variant `ErrorInModule` which holds errors when loading an external module.
+* `Module::eval_ast_as_new` now takes an extra boolean parameter, indicating whether to encapsulate the entire module into a separate namespace.
+* Functions in `FileModuleResolver` loaded modules now can cross-call each other, but cannot access the global namespace. For the old behavior, use `MergingFileModuleResolver` instead.
 
 New features
 ------------

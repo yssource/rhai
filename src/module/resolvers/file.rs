@@ -1,17 +1,10 @@
-use crate::any::Dynamic;
 use crate::engine::Engine;
 use crate::module::{Module, ModuleResolver};
-use crate::parser::{FnAccess, AST};
+use crate::parser::AST;
 use crate::result::EvalAltResult;
-use crate::scope::Scope;
 use crate::token::Position;
 
-use crate::stdlib::{
-    boxed::Box,
-    collections::HashMap,
-    path::PathBuf,
-    string::{String, ToString},
-};
+use crate::stdlib::{boxed::Box, collections::HashMap, path::PathBuf, string::String};
 
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::cell::RefCell;
@@ -149,61 +142,42 @@ impl ModuleResolver for FileModuleResolver {
         file_path.push(path);
         file_path.set_extension(&self.extension); // Force extension
 
+        let scope = Default::default();
+        let module;
+
         // See if it is cached
-        let exists = {
+        let ast = {
             #[cfg(not(feature = "sync"))]
             let c = self.cache.borrow();
             #[cfg(feature = "sync")]
             let c = self.cache.read().unwrap();
 
-            c.contains_key(&file_path)
+            if let Some(ast) = c.get(&file_path) {
+                module = Module::eval_ast_as_new(scope, ast, true, engine).map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
+                })?;
+                None
+            } else {
+                // Load the file and compile it if not found
+                let ast = engine.compile_file(file_path.clone()).map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
+                })?;
+
+                module = Module::eval_ast_as_new(scope, &ast, true, engine).map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
+                })?;
+                Some(ast)
+            }
         };
 
-        if !exists {
-            // Load the file and compile it if not found
-            let ast = engine
-                .compile_file(file_path.clone())
-                .map_err(|err| err.new_position(pos))?;
-
+        if let Some(ast) = ast {
             // Put it into the cache
             #[cfg(not(feature = "sync"))]
-            self.cache.borrow_mut().insert(file_path.clone(), ast);
+            self.cache.borrow_mut().insert(file_path, ast);
             #[cfg(feature = "sync")]
-            self.cache.write().unwrap().insert(file_path.clone(), ast);
+            self.cache.write().unwrap().insert(file_path, ast);
         }
 
-        #[cfg(not(feature = "sync"))]
-        let c = self.cache.borrow();
-        #[cfg(feature = "sync")]
-        let c = self.cache.read().unwrap();
-
-        let ast = c.get(&file_path).unwrap();
-
-        let mut _module = Module::eval_ast_as_new(Scope::new(), ast, engine)?;
-
-        #[cfg(not(feature = "no_function"))]
-        ast.iter_functions(|access, name, num_args| match access {
-            FnAccess::Private => (),
-            FnAccess::Public => {
-                let fn_name = name.to_string();
-                let ast_lib = ast.lib().clone();
-
-                _module.set_raw_fn_as_scripted(
-                    name,
-                    num_args,
-                    move |engine: &Engine, _, args: &mut [&mut Dynamic]| {
-                        engine.call_fn_dynamic_raw(
-                            &mut Scope::new(),
-                            &ast_lib,
-                            &fn_name,
-                            &mut None,
-                            args,
-                        )
-                    },
-                );
-            }
-        });
-
-        Ok(_module)
+        Ok(module)
     }
 }

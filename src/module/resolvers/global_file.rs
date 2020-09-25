@@ -148,31 +148,30 @@ impl ModuleResolver for GlobalFileModuleResolver {
         file_path.set_extension(&self.extension); // Force extension
 
         let scope = Default::default();
+        let module;
 
         // See if it is cached
-        let (module, ast) = {
+        let ast = {
             #[cfg(not(feature = "sync"))]
             let c = self.cache.borrow();
             #[cfg(feature = "sync")]
             let c = self.cache.read().unwrap();
 
             if let Some(ast) = c.get(&file_path) {
-                (
-                    Module::eval_ast_as_new(scope, ast, engine)
-                        .map_err(|err| err.new_position(pos))?,
-                    None,
-                )
+                module = Module::eval_ast_as_new(scope, ast, false, engine).map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
+                })?;
+                None
             } else {
                 // Load the file and compile it if not found
-                let ast = engine
-                    .compile_file(file_path.clone())
-                    .map_err(|err| err.new_position(pos))?;
+                let ast = engine.compile_file(file_path.clone()).map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
+                })?;
 
-                (
-                    Module::eval_ast_as_new(scope, &ast, engine)
-                        .map_err(|err| err.new_position(pos))?,
-                    Some(ast),
-                )
+                module = Module::eval_ast_as_new(scope, &ast, false, engine).map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
+                })?;
+                Some(ast)
             }
         };
 

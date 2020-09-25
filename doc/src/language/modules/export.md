@@ -3,16 +3,24 @@ Export Variables, Functions and Sub-Modules in Module
 
 {{#include ../../links.md}}
 
-A _module_ is a single script (or pre-compiled [`AST`]) containing global variables, functions and sub-modules.
+A _module_ can be created from a single script (or pre-compiled [`AST`]) containing global variables,
+functions and sub-modules via the `Module::eval_ast_as_new` method.
 
-A module can be created from a script via the `Module::eval_ast_as_new` method. When given an [`AST`],
-it is first evaluated, then the following items are exposed as members of the new module:
+When given an [`AST`], it is first evaluated, then the following items are exposed as members of the new module:
 
 * Global variables - essentially all variables that remain in the [`Scope`] at the end of a script run - that are exported. Variables not exported (via the `export` statement) remain hidden.
 
 * Functions not specifically marked `private`.
 
 * Global modules that remain in the [`Scope`] at the end of a script run.
+
+The parameter `private_namespace` in `Module::eval_ast_as_new` determines the exact behavior of
+functions exposed by the module and the namespace that they can access:
+
+| `private_namespace` value | Behavior of module functions                         | Namespace | Call global functions | Call functions in same module |
+| :-----------------------: | ---------------------------------------------------- | :-------: | :-------------------: | :---------------------------: |
+|          `true`           | encapsulate the entire `AST` into each function call |  module   |          no           |              yes              |
+|          `false`          | register each function independently                 |  global   |          yes          |              no               |
 
 
 Global Variables

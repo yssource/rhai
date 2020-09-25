@@ -44,7 +44,13 @@ let ast = engine.compile(r#"
 "#)?;
 
 // Convert the 'AST' into a module, using the 'Engine' to evaluate it first
-let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+//
+// The second parameter ('private_namespace'), when set to true, will encapsulate
+// a copy of the entire 'AST' into each function, allowing functions in the module script
+// to cross-call each other. Otherwise module script functions access the global namespace.
+//
+// This incurs additional overhead, avoidable by setting 'private_namespace' to false.
+let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
 
 // 'module' now can be loaded into a custom 'Scope' for future use.  It contains:
 //   - sub-module: 'foobar' (renamed from 'extra')
