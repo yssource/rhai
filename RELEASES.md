@@ -21,6 +21,7 @@ Breaking changes
 * `EvalAltResult` has a new variant `ErrorInModule` which holds errors when loading an external module.
 * `Module::eval_ast_as_new` now takes an extra boolean parameter, indicating whether to encapsulate the entire module into a separate namespace.
 * Functions in `FileModuleResolver` loaded modules now can cross-call each other, but cannot access the global namespace. For the old behavior, use `MergingFileModuleResolver` instead.
+* New `EvalAltResult::ErrorInModule` variant capturing errors when loading a module from a script file.
 
 New features
 ------------

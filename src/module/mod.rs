@@ -1280,13 +1280,22 @@ impl Module {
                         name,
                         num_args,
                         move |engine: &Engine, _, args: &mut [&mut Dynamic]| {
-                            engine.call_fn_dynamic_raw(
-                                &mut Scope::new(),
-                                &ast_lib,
-                                &fn_name,
-                                &mut None,
-                                args,
-                            )
+                            engine
+                                .call_fn_dynamic_raw(
+                                    &mut Scope::new(),
+                                    &ast_lib,
+                                    &fn_name,
+                                    &mut None,
+                                    args,
+                                )
+                                .map_err(|err| {
+                                    // Wrap the error in a module-error
+                                    Box::new(EvalAltResult::ErrorInModule(
+                                        "".to_string(),
+                                        err,
+                                        Position::none(),
+                                    ))
+                                })
                         },
                     );
                 }

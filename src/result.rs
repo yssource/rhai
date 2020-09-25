@@ -182,9 +182,12 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
             Self::ErrorInFunctionCall(s, err, _) => {
-                write!(f, "Error in call to function '{}' : {}", s, err)?
+                write!(f, "Error in call to function '{}': {}", s, err)?
             }
-            Self::ErrorInModule(s, err, _) => write!(f, "Error in module '{}' : {}", s, err)?,
+            Self::ErrorInModule(s, err, _) if s.is_empty() => {
+                write!(f, "Error in module: {}", err)?
+            }
+            Self::ErrorInModule(s, err, _) => write!(f, "Error in module '{}': {}", s, err)?,
 
             Self::ErrorFunctionNotFound(s, _)
             | Self::ErrorVariableNotFound(s, _)
