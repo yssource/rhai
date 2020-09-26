@@ -769,7 +769,7 @@ impl Engine {
                             let args = &mut [val, &mut idx_val2, &mut new_val];
 
                             self.exec_fn_call(
-                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, None,
+                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, &None,
                                 level,
                             )
                             .map_err(|err| match *err {
@@ -798,8 +798,9 @@ impl Engine {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x) if x.1.is_none() => {
                         let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
+                        let def_val = def_val.map(Into::<Dynamic>::into);
                         self.make_method_call(
-                            state, lib, name, *hash, target, idx_val, *def_val, *native, false,
+                            state, lib, name, *hash, target, idx_val, &def_val, *native, false,
                             level,
                         )
                         .map_err(|err| err.new_position(*pos))
@@ -833,7 +834,7 @@ impl Engine {
                         let mut new_val = new_val;
                         let mut args = [target.as_mut(), new_val.as_mut().unwrap()];
                         self.exec_fn_call(
-                            state, lib, setter, 0, &mut args, is_ref, true, false, None, None,
+                            state, lib, setter, 0, &mut args, is_ref, true, false, None, &None,
                             level,
                         )
                         .map(|(v, _)| (v, true))
@@ -844,7 +845,7 @@ impl Engine {
                         let ((_, getter, _), pos) = x.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
-                            state, lib, getter, 0, &mut args, is_ref, true, false, None, None,
+                            state, lib, getter, 0, &mut args, is_ref, true, false, None, &None,
                             level,
                         )
                         .map(|(v, _)| (v, false))
@@ -865,9 +866,10 @@ impl Engine {
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x) if x.1.is_none() => {
                                 let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
+                                let def_val = def_val.map(Into::<Dynamic>::into);
                                 let (val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, idx_val, *def_val,
+                                        state, lib, name, *hash, target, idx_val, &def_val,
                                         *native, false, level,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
@@ -898,7 +900,7 @@ impl Engine {
                                 let (mut val, updated) = self
                                     .exec_fn_call(
                                         state, lib, getter, 0, args, is_ref, true, false, None,
-                                        None, level,
+                                        &None, level,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -924,7 +926,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         state, lib, setter, 0, arg_values, is_ref, true, false,
-                                        None, None, level,
+                                        None, &None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -942,9 +944,10 @@ impl Engine {
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(x) if x.1.is_none() => {
                                 let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
+                                let def_val = def_val.map(Into::<Dynamic>::into);
                                 let (mut val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, idx_val, *def_val,
+                                        state, lib, name, *hash, target, idx_val, &def_val,
                                         *native, false, level,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
@@ -1202,7 +1205,7 @@ impl Engine {
                 let mut idx = idx;
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(
-                    state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, None, _level,
+                    state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, &None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1245,8 +1248,9 @@ impl Engine {
                 let op = "==";
 
                 // Call the `==` operator to compare each value
+                let def_value = Some(false.into());
+
                 for value in rhs_value.iter_mut() {
-                    let def_value = Some(false);
                     let args = &mut [&mut lhs_value.clone(), value];
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
@@ -1254,7 +1258,7 @@ impl Engine {
                         calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
 
                     if self
-                        .call_native_fn(state, lib, op, hash, args, false, false, def_value)
+                        .call_native_fn(state, lib, op, hash, args, false, false, &def_value)
                         .map_err(|err| err.new_position(rhs.position()))?
                         .0
                         .as_bool()
@@ -1264,7 +1268,7 @@ impl Engine {
                     }
                 }
 
-                Ok(false.into())
+                Ok(def_value.unwrap())
             }
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
@@ -1395,7 +1399,7 @@ impl Engine {
                                 // Run function
                                 let (value, _) = self
                                     .exec_fn_call(
-                                        state, lib, op, 0, args, false, false, false, None, None,
+                                        state, lib, op, 0, args, false, false, false, None, &None,
                                         level,
                                     )
                                     .map_err(|err| err.new_position(*op_pos))?;
@@ -1431,7 +1435,7 @@ impl Engine {
                         &mut rhs_val,
                     ];
                     self.exec_fn_call(
-                        state, lib, op, 0, args, false, false, false, None, None, level,
+                        state, lib, op, 0, args, false, false, false, None, &None, level,
                     )
                     .map(|(v, _)| v)
                     .map_err(|err| err.new_position(*op_pos))?
@@ -1499,8 +1503,9 @@ impl Engine {
             // Normal function call
             Expr::FnCall(x) if x.1.is_none() => {
                 let ((name, native, capture, pos), _, hash, args_expr, def_val) = x.as_ref();
+                let def_val = def_val.map(Into::<Dynamic>::into);
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args_expr, *def_val, *hash, *native,
+                    scope, mods, state, lib, this_ptr, name, args_expr, &def_val, *hash, *native,
                     false, *capture, level,
                 )
                 .map_err(|err| err.new_position(*pos))

@@ -790,7 +790,7 @@ pub enum Expr {
             Option<Box<ModuleRef>>,
             u64,
             StaticVec<Expr>,
-            Option<bool>,
+            Option<bool>, // Default value is `bool` in order for `Expr` to be `Hash`.
         )>,
     ),
     /// expr op= expr

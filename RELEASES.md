@@ -32,6 +32,8 @@ New features
 * `AST::iter_functions` and `Module::iter_script_fn_info` to iterate functions.
 * Functions iteration functions now take `FnMut` instead of `Fn`.
 * New `FileModuleResolver` that encapsulates the entire `AST` of the module script, allowing function cross-calling. The old version is renamed `MergingFileModuleResolver`.
+* `split` function for splitting strings.
+
 
 Version 0.18.3
 ==============
