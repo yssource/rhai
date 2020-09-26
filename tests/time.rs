@@ -50,3 +50,60 @@ fn test_timestamp() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_timestamp_op() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    #[cfg(not(feature = "no_float"))]
+    assert!(
+        (engine.eval::<FLOAT>(
+            r#"
+                let time1 = timestamp();
+                let time2 = time1 + 123.45;
+                time2 - time1
+    "#
+        )? - 123.45)
+            .abs()
+            < 0.001
+    );
+
+    #[cfg(not(feature = "no_float"))]
+    assert!(
+        (engine.eval::<FLOAT>(
+            r#"
+                let time1 = timestamp();
+                let time2 = time1 - 123.45;
+                time1 - time2
+    "#
+        )? - 123.45)
+            .abs()
+            < 0.001
+    );
+
+    #[cfg(feature = "no_float")]
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let time1 = timestamp();
+                let time2 = time1 + 42;
+                time2 - time1
+    "#
+        )?,
+        42
+    );
+
+    #[cfg(feature = "no_float")]
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let time1 = timestamp();
+                let time2 = time1 - 42;
+                time1 - time2
+    "#
+        )?,
+        42
+    );
+
+    Ok(())
+}

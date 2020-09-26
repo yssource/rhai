@@ -1,23 +1,23 @@
 #![cfg(not(feature = "no_std"))]
 
-#[cfg(feature = "no_float")]
-use super::{arithmetic::make_err, math_basic::MAX_INT};
+use super::{arithmetic::make_err as make_arithmetic_err, math_basic::MAX_INT};
 
+use crate::any::Dynamic;
 use crate::def_package;
+use crate::parser::INT;
 use crate::plugin::*;
 use crate::result::EvalAltResult;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
 
-#[cfg(feature = "no_float")]
-use crate::parser::INT;
+use crate::stdlib::boxed::Box;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::stdlib::time::Instant;
+use crate::stdlib::time::{Duration, Instant};
 
 #[cfg(target_arch = "wasm32")]
-use instant::Instant;
+use instant::{Duration, Instant};
 
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
     // Register date/time functions
@@ -43,7 +43,7 @@ mod time_functions {
             let seconds = timestamp.elapsed().as_secs();
 
             if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
-                Err(make_err(format!(
+                Err(make_arithmetic_err(format!(
                     "Integer overflow for timestamp.elapsed: {}",
                     seconds
                 )))
@@ -70,24 +70,121 @@ mod time_functions {
             let seconds = (ts2 - ts1).as_secs();
 
             if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
-                Err(make_err(format!(
+                Err(make_arithmetic_err(format!(
                     "Integer overflow for timestamp duration: -{}",
                     seconds
                 )))
             } else {
-                Ok(Dynamic::from(-(seconds as INT)))
+                Ok((-(seconds as INT)).into())
             }
         } else {
             let seconds = (ts1 - ts2).as_secs();
 
             if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
-                Err(make_err(format!(
+                Err(make_arithmetic_err(format!(
                     "Integer overflow for timestamp duration: {}",
                     seconds
                 )))
             } else {
                 Ok((seconds as INT).into())
             }
+        }
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    pub mod float_functions {
+        #[rhai_fn(return_raw, name = "+")]
+        pub fn add(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+            if seconds < 0.0 {
+                return subtract(x, -seconds);
+            }
+
+            if cfg!(not(feature = "unchecked")) {
+                if seconds > (MAX_INT as FLOAT) {
+                    Err(make_arithmetic_err(format!(
+                        "Integer overflow for timestamp add: {}",
+                        seconds
+                    )))
+                } else {
+                    x.checked_add(Duration::from_millis((seconds * 1000.0) as u64))
+                        .ok_or_else(|| {
+                            make_arithmetic_err(format!(
+                                "Timestamp overflow when adding {} second(s)",
+                                seconds
+                            ))
+                        })
+                        .map(Into::<Dynamic>::into)
+                }
+            } else {
+                Ok((x + Duration::from_millis((seconds * 1000.0) as u64)).into())
+            }
+        }
+
+        #[rhai_fn(return_raw, name = "-")]
+        pub fn subtract(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+            if seconds < 0.0 {
+                return add(x, -seconds);
+            }
+
+            if cfg!(not(feature = "unchecked")) {
+                if seconds > (MAX_INT as FLOAT) {
+                    Err(make_arithmetic_err(format!(
+                        "Integer overflow for timestamp add: {}",
+                        seconds
+                    )))
+                } else {
+                    x.checked_sub(Duration::from_millis((seconds * 1000.0) as u64))
+                        .ok_or_else(|| {
+                            make_arithmetic_err(format!(
+                                "Timestamp overflow when adding {} second(s)",
+                                seconds
+                            ))
+                        })
+                        .map(Into::<Dynamic>::into)
+                }
+            } else {
+                Ok((x - Duration::from_millis((seconds * 1000.0) as u64)).into())
+            }
+        }
+    }
+
+    #[rhai_fn(return_raw, name = "+")]
+    pub fn add(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        if seconds < 0 {
+            return subtract(x, -seconds);
+        }
+
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_add(Duration::from_secs(seconds as u64))
+                .ok_or_else(|| {
+                    make_arithmetic_err(format!(
+                        "Timestamp overflow when adding {} second(s)",
+                        seconds
+                    ))
+                })
+                .map(Into::<Dynamic>::into)
+        } else {
+            Ok((x + Duration::from_secs(seconds as u64)).into())
+        }
+    }
+
+    #[rhai_fn(return_raw, name = "-")]
+    pub fn subtract(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        if seconds < 0 {
+            return add(x, -seconds);
+        }
+
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_sub(Duration::from_secs(seconds as u64))
+                .ok_or_else(|| {
+                    make_arithmetic_err(format!(
+                        "Timestamp overflow when adding {} second(s)",
+                        seconds
+                    ))
+                })
+                .map(Into::<Dynamic>::into)
+        } else {
+            Ok((x - Duration::from_secs(seconds as u64)).into())
         }
     }
 
