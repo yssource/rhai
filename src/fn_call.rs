@@ -288,7 +288,7 @@ impl Engine {
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(
-                    "Unknown property '{}' for {}, or it is write-only",
+                    "Failed to get property '{}' of '{}' - the property may not exist, or it may be write-only",
                     prop,
                     self.map_type_name(args[0].type_name())
                 ),
@@ -301,9 +301,10 @@ impl Engine {
         if let Some(prop) = extract_prop_from_setter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(
-                    "Unknown property '{}' for {}, or it is read-only",
+                    "Failed to set property '{}' of '{}' - the property may not exist, may be read-only, or '{}' is the wrong type",
                     prop,
-                    self.map_type_name(args[0].type_name())
+                    self.map_type_name(args[0].type_name()),
+                    self.map_type_name(args[1].type_name()),
                 ),
                 Position::none(),
             )
