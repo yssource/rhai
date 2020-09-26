@@ -1256,3 +1256,9 @@ impl From<Box<FnPtr>> for Dynamic {
         Self(Union::FnPtr(value))
     }
 }
+impl From<Instant> for Dynamic {
+    #[inline(always)]
+    fn from(value: Instant) -> Self {
+        Self(Union::Variant(Box::new(Box::new(value))))
+    }
+}
