@@ -629,7 +629,7 @@ impl Dynamic {
         };
 
         #[cfg(feature = "no_closure")]
-        unimplemented!()
+        panic!("'no_closure' feature does not support converting into a shared value");
     }
 
     /// Convert the `Dynamic` value into specific type.
@@ -781,7 +781,20 @@ impl Dynamic {
     /// ```
     #[inline(always)]
     pub fn cast<T: Variant + Clone>(self) -> T {
-        self.try_cast::<T>().unwrap()
+        let self_type_name = if self.is_shared() {
+            // Avoid panics/deadlocks with shared values
+            "<shared>"
+        } else {
+            self.type_name()
+        };
+
+        self.try_cast::<T>().unwrap_or_else(|| {
+            panic!(
+                "value is {} and cannot be cast to {}",
+                self_type_name,
+                type_name::<T>()
+            )
+        })
     }
 
     /// Flatten the `Dynamic` and clone it.
