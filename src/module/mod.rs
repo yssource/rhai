@@ -497,8 +497,6 @@ impl Module {
     /// are not determined), but the implementation is in Rust.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
-    #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn set_raw_fn_as_scripted(
         &mut self,
         name: impl Into<String>,

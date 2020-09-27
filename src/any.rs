@@ -1269,6 +1269,7 @@ impl From<Box<FnPtr>> for Dynamic {
         Self(Union::FnPtr(value))
     }
 }
+#[cfg(not(feature = "no_std"))]
 impl From<Instant> for Dynamic {
     #[inline(always)]
     fn from(value: Instant) -> Self {
