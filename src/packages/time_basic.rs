@@ -93,13 +93,10 @@ mod time_functions {
 
     #[cfg(not(feature = "no_float"))]
     pub mod float_functions {
-        #[rhai_fn(return_raw, name = "+")]
-        pub fn add(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+        fn add_impl(x: Instant, seconds: FLOAT) -> Result<Instant, Box<EvalAltResult>> {
             if seconds < 0.0 {
-                return subtract(x, -seconds);
-            }
-
-            if cfg!(not(feature = "unchecked")) {
+                subtract_impl(x, -seconds)
+            } else if cfg!(not(feature = "unchecked")) {
                 if seconds > (MAX_INT as FLOAT) {
                     Err(make_arithmetic_err(format!(
                         "Integer overflow for timestamp add: {}",
@@ -113,20 +110,15 @@ mod time_functions {
                                 seconds
                             ))
                         })
-                        .map(Into::<Dynamic>::into)
                 }
             } else {
-                Ok((x + Duration::from_millis((seconds * 1000.0) as u64)).into())
+                Ok(x + Duration::from_millis((seconds * 1000.0) as u64))
             }
         }
-
-        #[rhai_fn(return_raw, name = "-")]
-        pub fn subtract(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+        fn subtract_impl(x: Instant, seconds: FLOAT) -> Result<Instant, Box<EvalAltResult>> {
             if seconds < 0.0 {
-                return add(x, -seconds);
-            }
-
-            if cfg!(not(feature = "unchecked")) {
+                add_impl(x, -seconds)
+            } else if cfg!(not(feature = "unchecked")) {
                 if seconds > (MAX_INT as FLOAT) {
                     Err(make_arithmetic_err(format!(
                         "Integer overflow for timestamp add: {}",
@@ -140,21 +132,39 @@ mod time_functions {
                                 seconds
                             ))
                         })
-                        .map(Into::<Dynamic>::into)
                 }
             } else {
-                Ok((x - Duration::from_millis((seconds * 1000.0) as u64)).into())
+                Ok(x - Duration::from_millis((seconds * 1000.0) as u64))
             }
+        }
+
+        #[rhai_fn(return_raw, name = "+")]
+        pub fn add(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+            add_impl(x, seconds).map(Into::<Dynamic>::into)
+        }
+        #[rhai_fn(return_raw, name = "+=")]
+        pub fn add_assign(x: &mut Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+            *x = add_impl(*x, seconds)?;
+            Ok(().into())
+        }
+        #[rhai_fn(return_raw, name = "-")]
+        pub fn subtract(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+            subtract_impl(x, seconds).map(Into::<Dynamic>::into)
+        }
+        #[rhai_fn(return_raw, name = "-=")]
+        pub fn subtract_assign(
+            x: &mut Instant,
+            seconds: FLOAT,
+        ) -> Result<Dynamic, Box<EvalAltResult>> {
+            *x = subtract_impl(*x, seconds)?;
+            Ok(().into())
         }
     }
 
-    #[rhai_fn(return_raw, name = "+")]
-    pub fn add(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+    fn add_impl(x: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
         if seconds < 0 {
-            return subtract(x, -seconds);
-        }
-
-        if cfg!(not(feature = "unchecked")) {
+            subtract_impl(x, -seconds)
+        } else if cfg!(not(feature = "unchecked")) {
             x.checked_add(Duration::from_secs(seconds as u64))
                 .ok_or_else(|| {
                     make_arithmetic_err(format!(
@@ -162,19 +172,14 @@ mod time_functions {
                         seconds
                     ))
                 })
-                .map(Into::<Dynamic>::into)
         } else {
-            Ok((x + Duration::from_secs(seconds as u64)).into())
+            Ok(x + Duration::from_secs(seconds as u64))
         }
     }
-
-    #[rhai_fn(return_raw, name = "-")]
-    pub fn subtract(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+    fn subtract_impl(x: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
         if seconds < 0 {
-            return add(x, -seconds);
-        }
-
-        if cfg!(not(feature = "unchecked")) {
+            add_impl(x, -seconds)
+        } else if cfg!(not(feature = "unchecked")) {
             x.checked_sub(Duration::from_secs(seconds as u64))
                 .ok_or_else(|| {
                     make_arithmetic_err(format!(
@@ -182,10 +187,28 @@ mod time_functions {
                         seconds
                     ))
                 })
-                .map(Into::<Dynamic>::into)
         } else {
-            Ok((x - Duration::from_secs(seconds as u64)).into())
+            Ok(x - Duration::from_secs(seconds as u64))
         }
+    }
+
+    #[rhai_fn(return_raw, name = "+")]
+    pub fn add(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        add_impl(x, seconds).map(Into::<Dynamic>::into)
+    }
+    #[rhai_fn(return_raw, name = "+=")]
+    pub fn add_assign(x: &mut Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        *x = add_impl(*x, seconds)?;
+        Ok(().into())
+    }
+    #[rhai_fn(return_raw, name = "-")]
+    pub fn subtract(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        subtract_impl(x, seconds).map(Into::<Dynamic>::into)
+    }
+    #[rhai_fn(return_raw, name = "-=")]
+    pub fn subtract_assign(x: &mut Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        *x = subtract_impl(*x, seconds)?;
+        Ok(().into())
     }
 
     #[rhai_fn(name = "==")]
