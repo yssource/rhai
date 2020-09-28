@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::Engine;
-use crate::fn_native::{CallableFunction, FnCallArgs, FnPtr, IteratorFn, SendSync};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::parser::{FnAccess, FnAccess::Public};
 use crate::result::EvalAltResult;
@@ -1215,15 +1215,12 @@ impl Module {
 
     /// Create a new `Module` by evaluating an `AST`.
     ///
-    /// ### `private_namespace` parameter
+    /// ### `merge_namespaces` parameter
     ///
-    /// * If `true`, the entire `AST` is encapsulated into each function as a private namespace,
-    ///   allowing functions to cross-call each other.  Functions are searched in the module's
-    ///   private namespace, and the global namespace cannot be accessed.
-    ///
-    ///   Under this scenario, if any argument is a function pointer, then the function referred
-    ///   to by the function pointer is also _merged_ into the module's private namespace before
-    ///   the function call, so passing simple closures to functions work as expected.
+    /// * If `true`, the entire `AST` is encapsulated into each function, allowing functions
+    ///   to cross-call each other.  Functions in the global namespace, plus all functions
+    ///   defined in the module, are _merged_ into a _unified_ namespace before each call.
+    ///   Therefore, all functions will be found, at the expense of some performance.
     ///
     /// * If `false`, each function is registered independently and cannot cross-call
     ///   each other. Functions are searched in the global namespace.
@@ -1246,7 +1243,7 @@ impl Module {
     pub fn eval_ast_as_new(
         mut scope: Scope,
         ast: &AST,
-        private_namespace: bool,
+        merge_namespaces: bool,
         engine: &Engine,
     ) -> FuncReturn<Self> {
         let mut mods = Imports::new();
@@ -1272,7 +1269,7 @@ impl Module {
         });
 
         #[cfg(not(feature = "no_function"))]
-        if private_namespace {
+        if merge_namespaces {
             ast.iter_functions(|access, name, num_args| match access {
                 FnAccess::Private => (),
                 FnAccess::Public => {
@@ -1283,31 +1280,13 @@ impl Module {
                         name,
                         num_args,
                         move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-                            // Get anonymous functions
-                            let anon_fns: StaticVec<_> = args
-                                .iter()
-                                .filter(|&arg| arg.is::<FnPtr>())
-                                .map(|arg| arg.read_lock::<FnPtr>().unwrap().get_fn_name().clone())
-                                .collect();
-
-                            let mut lib_merged;
-
-                            let call_lib = if anon_fns.is_empty() {
-                                // No anonymous functions - just pass the AST through
-                                &ast_lib
-                            } else {
-                                // If there are anonymous functions, merge them in
-                                lib_merged = ast_lib.clone();
-                                lib_merged.merge_filtered(&lib, &mut |_, name, _| {
-                                    anon_fns.iter().find(|s| s.as_str() == name).is_some()
-                                });
-                                &lib_merged
-                            };
+                            let mut lib_merged = lib.clone();
+                            lib_merged.merge(&ast_lib);
 
                             engine
                                 .call_fn_dynamic_raw(
                                     &mut Scope::new(),
-                                    call_lib,
+                                    &lib_merged,
                                     &fn_name,
                                     &mut None,
                                     args,
