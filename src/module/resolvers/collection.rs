@@ -70,8 +70,13 @@ impl ModuleResolver for ModuleResolversCollection {
         pos: Position,
     ) -> Result<Module, Box<EvalAltResult>> {
         for resolver in self.0.iter() {
-            if let Ok(module) = resolver.resolve(engine, path, pos) {
-                return Ok(module);
+            match resolver.resolve(engine, path, pos) {
+                Ok(module) => return Ok(module),
+                Err(err) => match *err {
+                    EvalAltResult::ErrorModuleNotFound(_, _) => continue,
+                    EvalAltResult::ErrorInModule(_, err, _) => return Err(err),
+                    _ => panic!("ModuleResolver::resolve returns error that is not ErrorModuleNotFound or ErrorInModule"),
+                },
             }
         }
 
