@@ -6,19 +6,20 @@ Built-in String Functions
 The following standard methods (mostly defined in the [`MoreStringPackage`][packages] but excluded if
 using a [raw `Engine`]) operate on [strings]:
 
-| Function                  | Parameter(s)                                                 | Description                                                                                       |
-| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `len` method and property | _none_                                                       | returns the number of characters (not number of bytes) in the string                              |
-| `pad`                     | character to pad, target length                              | pads the string with an character to at least a specified length                                  |
-| `+=` operator, `append`   | character/string to append                                   | Adds a character or a string to the end of another string                                         |
-| `clear`                   | _none_                                                       | empties the string                                                                                |
-| `truncate`                | target length                                                | cuts off the string at exactly a specified number of characters                                   |
-| `contains`                | character/sub-string to search for                           | checks if a certain character or sub-string occurs in the string                                  |
-| `index_of`                | character/sub-string to search for, start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found |
-| `sub_string`              | start index, length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                       |
-| `crop`                    | start index, length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)        |
-| `replace`                 | target character/sub-string, replacement character/string    | replaces a sub-string with another                                                                |
-| `trim`                    | _none_                                                       | trims the string of whitespace at the beginning and end                                           |
+| Function                  | Parameter(s)                                                          | Description                                                                                                             |
+| ------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `len` method and property | _none_                                                                | returns the number of characters (not number of bytes) in the string                                                    |
+| `pad`                     | 1) character to pad<br/>2) target length                              | pads the string with an character to at least a specified length                                                        |
+| `+=` operator, `append`   | character/string to append                                            | Adds a character or a string to the end of another string                                                               |
+| `clear`                   | _none_                                                                | empties the string                                                                                                      |
+| `truncate`                | target length                                                         | cuts off the string at exactly a specified number of characters                                                         |
+| `contains`                | character/sub-string to search for                                    | checks if a certain character or sub-string occurs in the string                                                        |
+| `index_of`                | 1) character/sub-string to search for<br/>2) start index _(optional)_ | returns the index that a certain character or sub-string occurs in the string, or -1 if not found                       |
+| `sub_string`              | 1) start index<br/>2) length _(optional)_                             | extracts a sub-string (to the end of the string if length is not specified)                                             |
+| `split`                   | delimiter character/string                                            | splits the string by the specified delimiter, returning an [array] of string segments; not available under [`no_index`] |
+| `crop`                    | 1) start index<br/>2) length _(optional)_                             | retains only a portion of the string (to the end of the string if length is not specified)                              |
+| `replace`                 | 1) target character/sub-string<br/>2) replacement character/string    | replaces a sub-string with another                                                                                      |
+| `trim`                    | _none_                                                                | trims the string of whitespace at the beginning and end                                                                 |
 
 Examples
 --------

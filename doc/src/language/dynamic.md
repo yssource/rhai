@@ -58,15 +58,15 @@ The `cast` method then converts the value into a specific, known type.
 Alternatively, use the `try_cast` method which does not panic but returns `None` when the cast fails.
 
 ```rust
-let list: Array = engine.eval("...")?;          // return type is 'Array'
-let item = list[0];                             // an element in an 'Array' is 'Dynamic'
+let list: Array = engine.eval("...")?;      // return type is 'Array'
+let item = list[0];                         // an element in an 'Array' is 'Dynamic'
 
-item.is::<i64>() == true;                       // 'is' returns whether a 'Dynamic' value is of a particular type
+item.is::<i64>() == true;                   // 'is' returns whether a 'Dynamic' value is of a particular type
 
-let value = item.cast::<i64>();                 // if the element is 'i64', this succeeds; otherwise it panics
-let value: i64 = item.cast();                   // type can also be inferred
+let value = item.cast::<i64>();             // if the element is 'i64', this succeeds; otherwise it panics
+let value: i64 = item.cast();               // type can also be inferred
 
-let value = item.try_cast::<i64>()?;            // 'try_cast' does not panic when the cast fails, but returns 'None'
+let value = item.try_cast::<i64>()?;        // 'try_cast' does not panic when the cast fails, but returns 'None'
 ```
 
 Type Name
@@ -76,16 +76,20 @@ The `type_name` method gets the name of the actual type as a static string slice
 which can be `match`-ed against.
 
 ```rust
-let list: Array = engine.eval("...")?;          // return type is 'Array'
-let item = list[0];                             // an element in an 'Array' is 'Dynamic'
+let list: Array = engine.eval("...")?;      // return type is 'Array'
+let item = list[0];                         // an element in an 'Array' is 'Dynamic'
 
-match item.type_name() {                        // 'type_name' returns the name of the actual Rust type
+match item.type_name() {                    // 'type_name' returns the name of the actual Rust type
     "i64" => ...
     "alloc::string::String" => ...
     "bool" => ...
-    "path::to::module::TestStruct" => ...
+    "crate::path::to::module::TestStruct" => ...
 }
 ```
+
+**Note:** `type_name` always returns the _full_ Rust path name of the type, even when the type
+has been registered with a friendly name via `Engine::register_type_with_name`.  This behavior
+is different from that of the [`type_of`][`type_of()`] function in Rhai.
 
 
 Conversion Traits
@@ -100,4 +104,5 @@ The following conversion traits are implemented for `Dynamic`:
 * `From<String>`
 * `From<char>`
 * `From<Vec<T>>` (into an [array])
-* `From<HashMap<String, T>>` (into an [object map]).
+* `From<HashMap<String, T>>` (into an [object map])
+* `From<Instant>` (into a [timestamp] if not [`no_std`])

@@ -187,9 +187,8 @@ mod string_functions {
     pub fn contains_char(s: &str, ch: char) -> bool {
         s.contains(ch)
     }
-    #[rhai_fn(name = "contains")]
     #[inline(always)]
-    pub fn contains_string(s: &str, find: ImmutableString) -> bool {
+    pub fn contains(s: &str, find: ImmutableString) -> bool {
         s.contains(find.as_str())
     }
 
@@ -230,13 +229,12 @@ mod string_functions {
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_string(s: &str, find: ImmutableString) -> INT {
+    pub fn index_of(s: &str, find: ImmutableString) -> INT {
         s.find(find.as_str())
             .map(|index| s[0..index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
 
-    #[rhai_fn(name = "sub_string")]
     pub fn sub_string(s: &str, start: INT, len: INT) -> ImmutableString {
         let offset = if s.is_empty() || len <= 0 {
             return "".to_string().into();
@@ -272,7 +270,7 @@ mod string_functions {
     }
 
     #[rhai_fn(name = "crop")]
-    pub fn crop_string(s: &mut ImmutableString, start: INT, len: INT) {
+    pub fn crop(s: &mut ImmutableString, start: INT, len: INT) {
         let offset = if s.is_empty() || len <= 0 {
             s.make_mut().clear();
             return;
@@ -300,12 +298,12 @@ mod string_functions {
     #[rhai_fn(name = "crop")]
     #[inline(always)]
     pub fn crop_string_starting_from(s: &mut ImmutableString, start: INT) {
-        crop_string(s, start, s.len() as INT);
+        crop(s, start, s.len() as INT);
     }
 
     #[rhai_fn(name = "replace")]
     #[inline(always)]
-    pub fn replace_string(s: &mut ImmutableString, find: ImmutableString, sub: ImmutableString) {
+    pub fn replace(s: &mut ImmutableString, find: ImmutableString, sub: ImmutableString) {
         *s = s.replace(find.as_str(), sub.as_str()).into();
     }
     #[rhai_fn(name = "replace")]
@@ -337,6 +335,18 @@ mod string_functions {
         #[inline]
         pub fn prepend(x: &mut Array, y: &str) -> String {
             format!("{:?}{}", x, y)
+        }
+
+        #[inline(always)]
+        pub fn split(s: &str, delimiter: ImmutableString) -> Array {
+            s.split(delimiter.as_str())
+                .map(Into::<Dynamic>::into)
+                .collect()
+        }
+        #[rhai_fn(name = "split")]
+        #[inline(always)]
+        pub fn split_char(s: &str, delimiter: char) -> Array {
+            s.split(delimiter).map(Into::<Dynamic>::into).collect()
         }
     }
 

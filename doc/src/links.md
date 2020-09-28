@@ -49,6 +49,8 @@
 [`Dynamic`]: {{rootUrl}}/language/dynamic.md
 [`to_int`]: {{rootUrl}}/language/convert.md
 [`to_float`]: {{rootUrl}}/language/convert.md
+[`parse_int`]: {{rootUrl}}/language/convert.md
+[`parse_float`]: {{rootUrl}}/language/convert.md
 
 [custom type]: {{rootUrl}}/rust/custom.md
 [custom types]: {{rootUrl}}/rust/custom.md

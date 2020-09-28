@@ -11,11 +11,11 @@ individual functions instead of a full-blown [plugin module].
 Macros
 ------
 
-| Macro                   | Apply to                                                        | Description                                                   |
-| ----------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
-| `#[export_fn]`          | rust function defined in a Rust module                          | exports the function                                          |
-| `register_exported_fn!` | [`Engine`] instance, register name string, use path to function | registers the function into an [`Engine`] under specific name |
-| `set_exported_fn!`      | [`Module`] instance, register name string, use path to function | registers the function into an [`Module`] under specific name |
+| Macro                   | Signature                                                          | Description                                                     |
+| ----------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `#[export_fn]`          | apply to rust function defined in a Rust module                    | exports the function                                            |
+| `register_exported_fn!` | `register_exported_fn!(&mut `_engine_`, "`_name_`", `_function_`)` | registers the function into an [`Engine`] under a specific name |
+| `set_exported_fn!`      | `set_exported_fn!(&mut `_module_`, "`_name_`", `_function_`)`      | registers the function into a [`Module`] under a specific name  |
 
 
 `#[export_fn]` and `register_exported_fn!`

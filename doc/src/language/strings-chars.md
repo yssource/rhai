@@ -43,17 +43,17 @@ Hex sequences map to ASCII characters, while '`\u`' maps to 16-bit common Unicod
 
 Standard escape sequences:
 
-| Escape sequence | Meaning                        |
-| --------------- | ------------------------------ |
-| `\\`            | back-slash `\`                 |
-| `\t`            | tab                            |
-| `\r`            | carriage-return `CR`           |
-| `\n`            | line-feed `LF`                 |
-| `\"`            | double-quote `"` in strings    |
-| `\'`            | single-quote `'` in characters |
-| `\x`_xx_        | Unicode in 2-digit hex         |
-| `\u`_xxxx_      | Unicode in 4-digit hex         |
-| `\U`_xxxxxxxx_  | Unicode in 8-digit hex         |
+| Escape sequence | Meaning                          |
+| --------------- | -------------------------------- |
+| `\\`            | back-slash `\`                   |
+| `\t`            | tab                              |
+| `\r`            | carriage-return `CR`             |
+| `\n`            | line-feed `LF`                   |
+| `\"`            | double-quote `"`                 |
+| `\'`            | single-quote `'`                 |
+| `\x`_xx_        | ASCII character in 2-digit hex   |
+| `\u`_xxxx_      | Unicode character in 4-digit hex |
+| `\U`_xxxxxxxx_  | Unicode character in 8-digit hex |
 
 
 Differences from Rust Strings

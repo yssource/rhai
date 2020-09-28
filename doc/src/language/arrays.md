@@ -30,22 +30,22 @@ Built-in Functions
 
 The following methods (mostly defined in the [`BasicArrayPackage`][packages] but excluded if using a [raw `Engine`]) operate on arrays:
 
-| Function                  | Parameter(s)                                                          | Description                                                                                          |
-| ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `push`                    | element to insert                                                     | inserts an element at the end                                                                        |
-| `+=` operator             | array, element to insert (not another array)                          | inserts an element at the end                                                                        |
-| `append`                  | array to append                                                       | concatenates the second array to the end of the first                                                |
-| `+=` operator             | array, array to append                                                | concatenates the second array to the end of the first                                                |
-| `+` operator              | first array, second array                                             | concatenates the first array with the second                                                         |
-| `insert`                  | element to insert, position<br/>(beginning if <= 0, end if >= length) | inserts an element at a certain index                                                                |
-| `pop`                     | _none_                                                                | removes the last element and returns it ([`()`] if empty)                                            |
-| `shift`                   | _none_                                                                | removes the first element and returns it ([`()`] if empty)                                           |
-| `remove`                  | index                                                                 | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
-| `reverse`                 | _none_                                                                | reverses the array                                                                                   |
-| `len` method and property | _none_                                                                | returns the number of elements                                                                       |
-| `pad`                     | element to pad, target length                                         | pads the array with an element to at least a specified length                                        |
-| `clear`                   | _none_                                                                | empties the array                                                                                    |
-| `truncate`                | target length                                                         | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
+| Function                  | Parameter(s)                                                               | Description                                                                                          |
+| ------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `push`                    | element to insert                                                          | inserts an element at the end                                                                        |
+| `append`                  | array to append                                                            | concatenates the second array to the end of the first                                                |
+| `+=` operator             | 1) array<br/>2) element to insert (not another array)                      | inserts an element at the end                                                                        |
+| `+=` operator             | 1) array<br/>2) array to append                                            | concatenates the second array to the end of the first                                                |
+| `+` operator              | 1) first array<br/>2) second array                                         | concatenates the first array with the second                                                         |
+| `insert`                  | 1) element to insert<br/>2) position (beginning if <= 0, end if >= length) | inserts an element at a certain index                                                                |
+| `pop`                     | _none_                                                                     | removes the last element and returns it ([`()`] if empty)                                            |
+| `shift`                   | _none_                                                                     | removes the first element and returns it ([`()`] if empty)                                           |
+| `remove`                  | index                                                                      | removes an element at a particular index and returns it, or returns [`()`] if the index is not valid |
+| `reverse`                 | _none_                                                                     | reverses the array                                                                                   |
+| `len` method and property | _none_                                                                     | returns the number of elements                                                                       |
+| `pad`                     | 1) target length<br/>2) element to pad                                     | pads the array with an element to at least a specified length                                        |
+| `clear`                   | _none_                                                                     | empties the array                                                                                    |
+| `truncate`                | target length                                                              | cuts off the array at exactly a specified length (discarding all subsequent elements)                |
 
 
 Use Custom Types With Arrays

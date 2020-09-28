@@ -37,7 +37,7 @@ Dynamic
 
 * Dynamic dispatch via [function pointers] with additional support for [currying].
 
-* Closures via [automatic currying] with capturing shared variables from the external scope.
+* [Closures] that can capture shared variables.
 
 * Some support for [object-oriented programming (OOP)][OOP].
 

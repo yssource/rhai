@@ -84,12 +84,12 @@ Extract Arguments
 
 To extract an argument from the `args` parameter (`&mut [&mut Dynamic]`), use the following:
 
-| Argument type                  | Access (`n` = argument position)      | Result                                                    |
-| ------------------------------ | ------------------------------------- | --------------------------------------------------------- |
-| [Primary type][standard types] | `args[n].clone().cast::<T>()`         | copy of value                                             |
-| Custom type                    | `args[n].read_lock::<T>().unwrap()`   | immutable reference to value                              |
-| Custom type (consumed)         | `std::mem::take(args[n]).cast::<T>()` | the _consumed_ value.<br/>The original value becomes `()` |
-| `this` object                  | `args[0].write_lock::<T>().unwrap()`  | mutable reference to value                                |
+| Argument type                  | Access (`n` = argument position)      | Result                                                |
+| ------------------------------ | ------------------------------------- | ----------------------------------------------------- |
+| [Primary type][standard types] | `args[n].clone().cast::<T>()`         | copy of value                                         |
+| [Custom type]                  | `args[n].read_lock::<T>().unwrap()`   | immutable reference to value                          |
+| [Custom type] (consumed)       | `std::mem::take(args[n]).cast::<T>()` | the _consumed_ value; the original value becomes `()` |
+| `this` object                  | `args[0].write_lock::<T>().unwrap()`  | mutable reference to value                            |
 
 When there is a mutable reference to the `this` object (i.e. the first argument),
 there can be no other immutable references to `args`, otherwise the Rust borrow checker will complain.

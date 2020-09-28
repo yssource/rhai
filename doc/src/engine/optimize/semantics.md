@@ -8,13 +8,13 @@ Some optimizations can alter subtle semantics of the script.
 For example:
 
 ```rust
-if true {                   // condition always true
-    123.456;                // eliminated
-    hello;                  // eliminated, EVEN THOUGH the variable doesn't exist!
-    foo(42)                 // promoted up-level
+if true {           // condition always true
+    123.456;        // eliminated
+    hello;          // eliminated, EVEN THOUGH the variable doesn't exist!
+    foo(42)         // promoted up-level
 }
 
-foo(42)                     // <- the above optimizes to this
+foo(42)             // <- the above optimizes to this
 ```
 
 If the original script were evaluated instead, it would have been an error - the variable `hello` does not exist,

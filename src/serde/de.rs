@@ -160,9 +160,8 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             #[cfg(not(feature = "no_object"))]
             Union::Map(_) => self.deserialize_map(visitor),
             Union::FnPtr(_) => self.type_error(),
-
             #[cfg(not(feature = "no_std"))]
-            Union::Variant(value) if value.is::<Instant>() => self.type_error(),
+            Union::TimeStamp(_) => self.type_error(),
 
             Union::Variant(value) if value.is::<i8>() => self.deserialize_i8(visitor),
             Union::Variant(value) if value.is::<i16>() => self.deserialize_i16(visitor),

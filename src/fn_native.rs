@@ -145,7 +145,7 @@ impl FnPtr {
                 has_this,
                 true,
                 None,
-                None,
+                &None,
                 0,
             )
             .map(|(v, _)| v)

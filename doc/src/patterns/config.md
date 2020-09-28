@@ -51,6 +51,12 @@ let config: Rc<RefCell<Config>> = Rc::new(RefCell::new(Default::default()));
 
 ### Register Config API
 
+The trick to building a Config API is to clone the shared configuration object and
+move it into each function registration as a closure.
+
+It is not possible to use a [plugin module] to achieve this, so each function must
+be registered one after another.
+
 ```rust
 // Notice 'move' is used to move the shared configuration object into the closure.
 let cfg = config.clone();
@@ -66,27 +72,27 @@ engine.register_fn("config_set", move |value: i64| *cfg.borrow_mut().some_field 
 
 let cfg = config.clone();
 engine.register_fn("config_add", move |value: String|
-        cfg.borrow_mut().some_list.push(value)
+    cfg.borrow_mut().some_list.push(value)
 );
 
 let cfg = config.clone();
 engine.register_fn("config_add", move |values: &mut Array|
-        cfg.borrow_mut().some_list.extend(values.into_iter().map(|v| v.to_string()))
+    cfg.borrow_mut().some_list.extend(values.into_iter().map(|v| v.to_string()))
 );
 
 let cfg = config.clone();
 engine.register_fn("config_add", move |key: String, value: bool|
-        cfg.borrow_mut().some_map.insert(key, value)
+    cfg.borrow_mut().some_map.insert(key, value)
 );
 
 let cfg = config.clone();
 engine.register_fn("config_contains", move |value: String|
-        cfg.borrow().some_list.contains(&value)
+    cfg.borrow().some_list.contains(&value)
 );
 
 let cfg = config.clone();
 engine.register_fn("config_is_set", move |value: String|
-        cfg.borrow().some_map.get(&value).cloned().unwrap_or(false)
+    cfg.borrow().some_map.get(&value).cloned().unwrap_or(false)
 );
 ```
 

@@ -29,9 +29,9 @@ use rhai::plugins::*;       // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
-    // This constant will be registered as the constant variable 'SOME_NUMBER'.
+    // This constant will be registered as the constant variable 'MY_NUMBER'.
     // Ignored when loaded as a package.
-    pub const SOME_NUMBER: i64 = 42;
+    pub const MY_NUMBER: i64 = 42;
 
     // This function will be registered as 'greet'.
     pub fn greet(name: &str) -> String {
@@ -260,12 +260,12 @@ Inner attributes can be applied to the inner items of a module to tweak the expo
 
 Parameters should be set on inner attributes to specify the desired behavior.
 
-| Attribute Parameter | Use with                    | Apply to                                                 | Description                                            |
-| ------------------- | --------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
-| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                   | do not export this function/sub-module                 |
-| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                   | registers function/sub-module under the specified name |
-| `get = "..."`       | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers a getter for the named property              |
-| `set = "..."`       | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers a setter for the named property              |
-| `index_get`         | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers an index getter                              |
-| `index_set`         | `#[rhai_fn]`                | function with `&mut` first parameter                     | registers an index setter                              |
-| `return_raw`        | `#[rhai_fn]`                | function returning `Result<Dynamic, Box<EvalAltResult>>` | marks this as a [fallible function]                    |
+| Attribute Parameter | Use with                    | Apply to                                              | Description                                            |
+| ------------------- | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | do not export this function/sub-module                 |
+| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | registers function/sub-module under the specified name |
+| `get = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type) -> Value`                         | registers a getter for the named property              |
+| `set = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type, Value)`                           | registers a setter for the named property              |
+| `index_get`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT) -> Value`                    | registers an index getter                              |
+| `index_set`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT, Value)`                      | registers an index setter                              |
+| `return_raw`        | `#[rhai_fn]`                | `pub fn (...) -> Result<Dynamic, Box<EvalAltResult>>` | marks this as a [fallible function]                    |

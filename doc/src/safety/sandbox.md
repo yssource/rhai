@@ -11,11 +11,15 @@ Furthermore, an [`Engine`] created non-`mut` cannot mutate any state, including 
 It is highly recommended that [`Engine`]'s be created immutable as much as possible.
 
 ```rust
-// Use the fluent API to configure an 'Engine' and then keep an immutable instance.
-let engine = Engine::new()
-               .register_get("field", get_field)
-               .register_set("field", set_field)
-               .register_fn("do_work", action);
+let mut engine = Engine::new();
+
+// Use the fluent API to configure an 'Engine'
+engine.register_get("field", get_field)
+      .register_set("field", set_field)
+      .register_fn("do_work", action);
+
+// Then turn it into an immutable instance
+let engine = engine;
 
 // 'engine' is immutable...
 ```

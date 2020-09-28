@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::calc_fn_hash;
 use crate::engine::Engine;
-use crate::fn_native::{CallableFunction as Func, FnCallArgs, IteratorFn, SendSync};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::parser::{FnAccess, FnAccess::Public};
 use crate::result::EvalAltResult;
@@ -38,18 +38,16 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(feature = "no_module"))]
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::cell::RefCell;
-
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(feature = "no_module"))]
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::RwLock;
-
 /// Return type of module-level Rust function.
 pub type FuncReturn<T> = Result<T, Box<EvalAltResult>>;
+
+pub type FuncInfo = (
+    String,
+    FnAccess,
+    usize,
+    Option<StaticVec<TypeId>>,
+    CallableFunction,
+);
 
 /// An imported module, which may contain variables, sub-modules,
 /// external Rust functions, and script-defined functions.
@@ -67,18 +65,14 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
 
     /// External Rust functions.
-    functions: HashMap<
-        u64,
-        (String, FnAccess, usize, Option<StaticVec<TypeId>>, Func),
-        StraightHasherBuilder,
-    >,
+    functions: HashMap<u64, FuncInfo, StraightHasherBuilder>,
 
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: HashMap<TypeId, IteratorFn>,
 
     /// Flattened collection of all external Rust functions, native or scripted,
     /// including those in sub-modules.
-    all_functions: HashMap<u64, Func, StraightHasherBuilder>,
+    all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
 
     /// Is the module indexed?
     indexed: bool,
@@ -391,7 +385,7 @@ impl Module {
         name: impl Into<String>,
         access: FnAccess,
         arg_types: &[TypeId],
-        func: Func,
+        func: CallableFunction,
     ) -> u64 {
         let name = name.into();
 
@@ -491,11 +485,18 @@ impl Module {
         let f = move |engine: &Engine, lib: &Module, args: &mut FnCallArgs| {
             func(engine, lib, args).map(Dynamic::from)
         };
-        self.set_fn(name, Public, arg_types, Func::from_method(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            arg_types,
+            CallableFunction::from_method(Box::new(f)),
+        )
     }
 
-    /// Set a raw function but with a signature that is a scripted function, but the implementation is in Rust.
+    /// Set a raw function but with a signature that is a scripted function (meaning that the types
+    /// are not determined), but the implementation is in Rust.
     #[cfg(not(feature = "no_function"))]
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn set_raw_fn_as_scripted(
         &mut self,
         name: impl Into<String>,
@@ -513,7 +514,7 @@ impl Module {
                 FnAccess::Public,
                 num_args,
                 None,
-                Func::from_pure(Box::new(f)),
+                CallableFunction::from_pure(Box::new(f)),
             ),
         );
         self.indexed = false;
@@ -540,7 +541,12 @@ impl Module {
     ) -> u64 {
         let f = move |_: &Engine, _: &Module, _: &mut FnCallArgs| func().map(Dynamic::from);
         let arg_types = [];
-        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking one parameter into the module, returning a hash key.
@@ -565,7 +571,12 @@ impl Module {
             func(cast_arg::<A>(&mut args[0])).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
@@ -590,7 +601,12 @@ impl Module {
             func(&mut args[0].write_lock::<A>().unwrap()).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
-        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_method(Box::new(f)),
+        )
     }
 
     /// Set a Rust getter function taking one mutable parameter, returning a hash key.
@@ -642,7 +658,12 @@ impl Module {
             func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking two parameters (the first one mutable) into the module,
@@ -673,7 +694,12 @@ impl Module {
             func(a, b).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
-        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_method(Box::new(f)),
+        )
     }
 
     /// Set a Rust setter function taking two parameters (the first one mutable) into the module,
@@ -778,7 +804,12 @@ impl Module {
             func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking three parameters (the first one mutable) into the module,
@@ -815,7 +846,12 @@ impl Module {
             func(a, b, c).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
-        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_method(Box::new(f)),
+        )
     }
 
     /// Set a Rust index setter taking three parameters (the first one mutable) into the module,
@@ -871,7 +907,7 @@ impl Module {
             FN_IDX_SET,
             Public,
             &arg_types,
-            Func::from_method(Box::new(f)),
+            CallableFunction::from_method(Box::new(f)),
         )
     }
 
@@ -955,7 +991,12 @@ impl Module {
             TypeId::of::<C>(),
             TypeId::of::<D>(),
         ];
-        self.set_fn(name, Public, &arg_types, Func::from_pure(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_pure(Box::new(f)),
+        )
     }
 
     /// Set a Rust function taking four parameters (the first one mutable) into the module,
@@ -999,14 +1040,19 @@ impl Module {
             TypeId::of::<C>(),
             TypeId::of::<D>(),
         ];
-        self.set_fn(name, Public, &arg_types, Func::from_method(Box::new(f)))
+        self.set_fn(
+            name,
+            Public,
+            &arg_types,
+            CallableFunction::from_method(Box::new(f)),
+        )
     }
 
     /// Get a Rust function.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
-    pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&Func> {
+    pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&CallableFunction> {
         if hash_fn == 0 {
             None
         } else {
@@ -1025,7 +1071,7 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
-    pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&Func> {
+    pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
         self.all_functions.get(&hash_qualified_fn)
     }
 
@@ -1090,7 +1136,9 @@ impl Module {
                 .iter()
                 .filter(|(_, (_, _, _, _, v))| match v {
                     #[cfg(not(feature = "no_function"))]
-                    Func::Script(ref f) => _filter(f.access, f.name.as_str(), f.params.len()),
+                    CallableFunction::Script(f) => {
+                        _filter(f.access, f.name.as_str(), f.params.len())
+                    }
                     _ => true,
                 })
                 .map(|(&k, v)| (k, v.clone())),
@@ -1112,7 +1160,7 @@ impl Module {
         mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         self.functions.retain(|_, (_, _, _, _, v)| match v {
-            Func::Script(ref f) => filter(f.access, f.name.as_str(), f.params.len()),
+            CallableFunction::Script(f) => filter(f.access, f.name.as_str(), f.params.len()),
             _ => true,
         });
 
@@ -1141,9 +1189,7 @@ impl Module {
     }
 
     /// Get an iterator to the functions in the module.
-    pub(crate) fn iter_fn(
-        &self,
-    ) -> impl Iterator<Item = &(String, FnAccess, usize, Option<StaticVec<TypeId>>, Func)> {
+    pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
         self.functions.values()
     }
 
@@ -1162,12 +1208,22 @@ impl Module {
         self.functions
             .iter()
             .for_each(|(_, (_, _, _, _, v))| match v {
-                Func::Script(ref f) => action(f.access, f.name.as_str(), f.params.len()),
+                CallableFunction::Script(f) => action(f.access, f.name.as_str(), f.params.len()),
                 _ => (),
             });
     }
 
     /// Create a new `Module` by evaluating an `AST`.
+    ///
+    /// ### `merge_namespaces` parameter
+    ///
+    /// * If `true`, the entire `AST` is encapsulated into each function, allowing functions
+    ///   to cross-call each other.  Functions in the global namespace, plus all functions
+    ///   defined in the module, are _merged_ into a _unified_ namespace before each call.
+    ///   Therefore, all functions will be found, at the expense of some performance.
+    ///
+    /// * If `false`, each function is registered independently and cannot cross-call
+    ///   each other. Functions are searched in the global namespace.
     ///
     /// # Examples
     ///
@@ -1177,14 +1233,19 @@ impl Module {
     ///
     /// let engine = Engine::new();
     /// let ast = engine.compile("let answer = 42; export answer;")?;
-    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
     /// assert!(module.contains_var("answer"));
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn eval_ast_as_new(mut scope: Scope, ast: &AST, engine: &Engine) -> FuncReturn<Self> {
+    pub fn eval_ast_as_new(
+        mut scope: Scope,
+        ast: &AST,
+        merge_namespaces: bool,
+        engine: &Engine,
+    ) -> FuncReturn<Self> {
         let mut mods = Imports::new();
 
         // Run the script
@@ -1207,7 +1268,44 @@ impl Module {
             module.modules.insert(alias.to_string(), m);
         });
 
-        module.merge(ast.lib());
+        #[cfg(not(feature = "no_function"))]
+        if merge_namespaces {
+            ast.iter_functions(|access, name, num_args| match access {
+                FnAccess::Private => (),
+                FnAccess::Public => {
+                    let fn_name = name.to_string();
+                    let ast_lib = ast.lib().clone();
+
+                    module.set_raw_fn_as_scripted(
+                        name,
+                        num_args,
+                        move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+                            let mut lib_merged = lib.clone();
+                            lib_merged.merge(&ast_lib);
+
+                            engine
+                                .call_fn_dynamic_raw(
+                                    &mut Scope::new(),
+                                    &lib_merged,
+                                    &fn_name,
+                                    &mut None,
+                                    args,
+                                )
+                                .map_err(|err| {
+                                    // Wrap the error in a module-error
+                                    Box::new(EvalAltResult::ErrorInModule(
+                                        "".to_string(),
+                                        err,
+                                        Position::none(),
+                                    ))
+                                })
+                        },
+                    );
+                }
+            });
+        } else {
+            module.merge(ast.lib());
+        }
 
         Ok(module)
     }
@@ -1221,7 +1319,7 @@ impl Module {
             module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
             variables: &mut Vec<(u64, Dynamic)>,
-            functions: &mut Vec<(u64, Func)>,
+            functions: &mut Vec<(u64, CallableFunction)>,
         ) {
             for (name, m) in &module.modules {
                 // Index all the sub-modules first.
@@ -1372,573 +1470,10 @@ impl ModuleRef {
     }
 }
 
-/// Trait that encapsulates a module resolution service.
-pub trait ModuleResolver: SendSync {
-    /// Resolve a module based on a path string.
-    fn resolve(&self, _: &Engine, path: &str, pos: Position) -> Result<Module, Box<EvalAltResult>>;
-}
+/// Re-export module resolver trait.
+#[cfg(not(feature = "no_module"))]
+pub use resolvers::ModuleResolver;
 
 /// Re-export module resolvers.
 #[cfg(not(feature = "no_module"))]
-pub mod resolvers {
-    pub use super::collection::ModuleResolversCollection;
-    #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
-    pub use super::file::{FileModuleResolver, GlobalFileModuleResolver};
-    pub use super::stat::StaticModuleResolver;
-}
-#[cfg(feature = "no_module")]
-pub mod resolvers {}
-
-/// Script file-based module resolver.
-#[cfg(not(feature = "no_module"))]
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-mod file {
-    use super::*;
-    use crate::stdlib::path::PathBuf;
-
-    /// Module resolution service that loads module script files from the file system.
-    ///
-    /// All functions in each module are treated as strictly _pure_ and cannot refer to
-    /// other functions within the same module.  Functions are searched in the _global_ namespace.
-    ///
-    /// For simple utility libraries, this usually performs better than the full `FileModuleResolver`.
-    ///
-    /// Script files are cached so they are are not reloaded and recompiled in subsequent requests.
-    ///
-    /// The `new_with_path` and `new_with_path_and_extension` constructor functions
-    /// allow specification of a base directory with module path used as a relative path offset
-    /// to the base directory. The script file is then forced to be in a specified extension
-    /// (default `.rhai`).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Engine;
-    /// use rhai::module_resolvers::GlobalFileModuleResolver;
-    ///
-    /// // Create a new 'GlobalFileModuleResolver' loading scripts from the 'scripts' subdirectory
-    /// // with file extension '.x'.
-    /// let resolver = GlobalFileModuleResolver::new_with_path_and_extension("./scripts", "x");
-    ///
-    /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(resolver));
-    /// ```
-    #[derive(Debug)]
-    pub struct GlobalFileModuleResolver {
-        path: PathBuf,
-        extension: String,
-
-        #[cfg(not(feature = "sync"))]
-        cache: RefCell<HashMap<PathBuf, AST>>,
-
-        #[cfg(feature = "sync")]
-        cache: RwLock<HashMap<PathBuf, AST>>,
-    }
-
-    impl Default for GlobalFileModuleResolver {
-        fn default() -> Self {
-            Self::new_with_path(PathBuf::default())
-        }
-    }
-
-    impl GlobalFileModuleResolver {
-        /// Create a new `GlobalFileModuleResolver` with a specific base path.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::Engine;
-        /// use rhai::module_resolvers::GlobalFileModuleResolver;
-        ///
-        /// // Create a new 'GlobalFileModuleResolver' loading scripts from the 'scripts' subdirectory
-        /// // with file extension '.rhai' (the default).
-        /// let resolver = GlobalFileModuleResolver::new_with_path("./scripts");
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(resolver));
-        /// ```
-        pub fn new_with_path<P: Into<PathBuf>>(path: P) -> Self {
-            Self::new_with_path_and_extension(path, "rhai")
-        }
-
-        /// Create a new `GlobalFileModuleResolver` with a specific base path and file extension.
-        ///
-        /// The default extension is `.rhai`.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::Engine;
-        /// use rhai::module_resolvers::GlobalFileModuleResolver;
-        ///
-        /// // Create a new 'GlobalFileModuleResolver' loading scripts from the 'scripts' subdirectory
-        /// // with file extension '.x'.
-        /// let resolver = GlobalFileModuleResolver::new_with_path_and_extension("./scripts", "x");
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(resolver));
-        /// ```
-        pub fn new_with_path_and_extension<P: Into<PathBuf>, E: Into<String>>(
-            path: P,
-            extension: E,
-        ) -> Self {
-            Self {
-                path: path.into(),
-                extension: extension.into(),
-                cache: Default::default(),
-            }
-        }
-
-        /// Create a new `GlobalFileModuleResolver` with the current directory as base path.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::Engine;
-        /// use rhai::module_resolvers::GlobalFileModuleResolver;
-        ///
-        /// // Create a new 'GlobalFileModuleResolver' loading scripts from the current directory
-        /// // with file extension '.rhai' (the default).
-        /// let resolver = GlobalFileModuleResolver::new();
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(resolver));
-        /// ```
-        pub fn new() -> Self {
-            Default::default()
-        }
-
-        /// Create a `Module` from a file path.
-        pub fn create_module<P: Into<PathBuf>>(
-            &self,
-            engine: &Engine,
-            path: &str,
-        ) -> Result<Module, Box<EvalAltResult>> {
-            self.resolve(engine, path, Default::default())
-        }
-    }
-
-    impl ModuleResolver for GlobalFileModuleResolver {
-        fn resolve(
-            &self,
-            engine: &Engine,
-            path: &str,
-            pos: Position,
-        ) -> Result<Module, Box<EvalAltResult>> {
-            // Construct the script file path
-            let mut file_path = self.path.clone();
-            file_path.push(path);
-            file_path.set_extension(&self.extension); // Force extension
-
-            let scope = Default::default();
-
-            // See if it is cached
-            let (module, ast) = {
-                #[cfg(not(feature = "sync"))]
-                let c = self.cache.borrow();
-                #[cfg(feature = "sync")]
-                let c = self.cache.read().unwrap();
-
-                if let Some(ast) = c.get(&file_path) {
-                    (
-                        Module::eval_ast_as_new(scope, ast, engine)
-                            .map_err(|err| err.new_position(pos))?,
-                        None,
-                    )
-                } else {
-                    // Load the file and compile it if not found
-                    let ast = engine
-                        .compile_file(file_path.clone())
-                        .map_err(|err| err.new_position(pos))?;
-
-                    (
-                        Module::eval_ast_as_new(scope, &ast, engine)
-                            .map_err(|err| err.new_position(pos))?,
-                        Some(ast),
-                    )
-                }
-            };
-
-            if let Some(ast) = ast {
-                // Put it into the cache
-                #[cfg(not(feature = "sync"))]
-                self.cache.borrow_mut().insert(file_path, ast);
-                #[cfg(feature = "sync")]
-                self.cache.write().unwrap().insert(file_path, ast);
-            }
-
-            Ok(module)
-        }
-    }
-
-    /// Module resolution service that loads module script files from the file system.
-    ///
-    /// Script files are cached so they are are not reloaded and recompiled in subsequent requests.
-    ///
-    /// The `new_with_path` and `new_with_path_and_extension` constructor functions
-    /// allow specification of a base directory with module path used as a relative path offset
-    /// to the base directory. The script file is then forced to be in a specified extension
-    /// (default `.rhai`).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Engine;
-    /// use rhai::module_resolvers::FileModuleResolver;
-    ///
-    /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
-    /// // with file extension '.x'.
-    /// let resolver = FileModuleResolver::new_with_path_and_extension("./scripts", "x");
-    ///
-    /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(resolver));
-    /// ```
-    #[derive(Debug)]
-    pub struct FileModuleResolver {
-        path: PathBuf,
-        extension: String,
-
-        #[cfg(not(feature = "sync"))]
-        cache: RefCell<HashMap<PathBuf, AST>>,
-
-        #[cfg(feature = "sync")]
-        cache: RwLock<HashMap<PathBuf, AST>>,
-    }
-
-    impl Default for FileModuleResolver {
-        fn default() -> Self {
-            Self::new_with_path(PathBuf::default())
-        }
-    }
-
-    impl FileModuleResolver {
-        /// Create a new `FileModuleResolver` with a specific base path.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::Engine;
-        /// use rhai::module_resolvers::FileModuleResolver;
-        ///
-        /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
-        /// // with file extension '.rhai' (the default).
-        /// let resolver = FileModuleResolver::new_with_path("./scripts");
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(resolver));
-        /// ```
-        pub fn new_with_path<P: Into<PathBuf>>(path: P) -> Self {
-            Self::new_with_path_and_extension(path, "rhai")
-        }
-
-        /// Create a new `FileModuleResolver` with a specific base path and file extension.
-        ///
-        /// The default extension is `.rhai`.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::Engine;
-        /// use rhai::module_resolvers::FileModuleResolver;
-        ///
-        /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
-        /// // with file extension '.x'.
-        /// let resolver = FileModuleResolver::new_with_path_and_extension("./scripts", "x");
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(resolver));
-        /// ```
-        pub fn new_with_path_and_extension<P: Into<PathBuf>, E: Into<String>>(
-            path: P,
-            extension: E,
-        ) -> Self {
-            Self {
-                path: path.into(),
-                extension: extension.into(),
-                cache: Default::default(),
-            }
-        }
-
-        /// Create a new `FileModuleResolver` with the current directory as base path.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::Engine;
-        /// use rhai::module_resolvers::FileModuleResolver;
-        ///
-        /// // Create a new 'FileModuleResolver' loading scripts from the current directory
-        /// // with file extension '.rhai' (the default).
-        /// let resolver = FileModuleResolver::new();
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(resolver));
-        /// ```
-        pub fn new() -> Self {
-            Default::default()
-        }
-
-        /// Create a `Module` from a file path.
-        pub fn create_module<P: Into<PathBuf>>(
-            &self,
-            engine: &Engine,
-            path: &str,
-        ) -> Result<Module, Box<EvalAltResult>> {
-            self.resolve(engine, path, Default::default())
-        }
-    }
-
-    impl ModuleResolver for FileModuleResolver {
-        fn resolve(
-            &self,
-            engine: &Engine,
-            path: &str,
-            pos: Position,
-        ) -> Result<Module, Box<EvalAltResult>> {
-            // Construct the script file path
-            let mut file_path = self.path.clone();
-            file_path.push(path);
-            file_path.set_extension(&self.extension); // Force extension
-
-            // See if it is cached
-            let exists = {
-                #[cfg(not(feature = "sync"))]
-                let c = self.cache.borrow();
-                #[cfg(feature = "sync")]
-                let c = self.cache.read().unwrap();
-
-                c.contains_key(&file_path)
-            };
-
-            if !exists {
-                // Load the file and compile it if not found
-                let ast = engine
-                    .compile_file(file_path.clone())
-                    .map_err(|err| err.new_position(pos))?;
-
-                // Put it into the cache
-                #[cfg(not(feature = "sync"))]
-                self.cache.borrow_mut().insert(file_path.clone(), ast);
-                #[cfg(feature = "sync")]
-                self.cache.write().unwrap().insert(file_path.clone(), ast);
-            }
-
-            #[cfg(not(feature = "sync"))]
-            let c = self.cache.borrow();
-            #[cfg(feature = "sync")]
-            let c = self.cache.read().unwrap();
-
-            let ast = c.get(&file_path).unwrap();
-
-            let mut _module = Module::eval_ast_as_new(Scope::new(), ast, engine)?;
-
-            #[cfg(not(feature = "no_function"))]
-            ast.iter_functions(|access, name, num_args| match access {
-                FnAccess::Private => (),
-                FnAccess::Public => {
-                    let fn_name = name.to_string();
-                    let ast_lib = ast.lib().clone();
-
-                    _module.set_raw_fn_as_scripted(
-                        name,
-                        num_args,
-                        move |engine: &Engine, _, args: &mut [&mut Dynamic]| {
-                            engine.call_fn_dynamic_raw(
-                                &mut Scope::new(),
-                                &ast_lib,
-                                &fn_name,
-                                &mut None,
-                                args,
-                            )
-                        },
-                    );
-                }
-            });
-
-            Ok(_module)
-        }
-    }
-}
-
-/// Static module resolver.
-#[cfg(not(feature = "no_module"))]
-mod stat {
-    use super::*;
-
-    /// Module resolution service that serves modules added into it.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::{Engine, Module};
-    /// use rhai::module_resolvers::StaticModuleResolver;
-    ///
-    /// let mut resolver = StaticModuleResolver::new();
-    ///
-    /// let module = Module::new();
-    /// resolver.insert("hello".to_string(), module);
-    ///
-    /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(resolver));
-    /// ```
-    #[derive(Debug, Clone, Default)]
-    pub struct StaticModuleResolver(HashMap<String, Module>);
-
-    impl StaticModuleResolver {
-        /// Create a new `StaticModuleResolver`.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::{Engine, Module};
-        /// use rhai::module_resolvers::StaticModuleResolver;
-        ///
-        /// let mut resolver = StaticModuleResolver::new();
-        ///
-        /// let module = Module::new();
-        /// resolver.insert("hello", module);
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(resolver));
-        /// ```
-        pub fn new() -> Self {
-            Default::default()
-        }
-    }
-
-    impl StaticModuleResolver {
-        /// Add a module keyed by its path.
-        pub fn insert<S: Into<String>>(&mut self, path: S, mut module: Module) {
-            module.index_all_sub_modules();
-            self.0.insert(path.into(), module);
-        }
-        /// Remove a module given its path.
-        pub fn remove(&mut self, path: &str) -> Option<Module> {
-            self.0.remove(path)
-        }
-        /// Does the path exist?
-        pub fn contains_path(&self, path: &str) -> bool {
-            self.0.contains_key(path)
-        }
-        /// Get an iterator of all the modules.
-        pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
-            self.0.iter().map(|(k, v)| (k.as_str(), v))
-        }
-        /// Get a mutable iterator of all the modules.
-        pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Module)> {
-            self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
-        }
-        /// Get an iterator of all the module paths.
-        pub fn paths(&self) -> impl Iterator<Item = &str> {
-            self.0.keys().map(String::as_str)
-        }
-        /// Get an iterator of all the modules.
-        pub fn values(&self) -> impl Iterator<Item = &Module> {
-            self.0.values()
-        }
-        /// Get a mutable iterator of all the modules.
-        pub fn values_mut(&mut self) -> impl Iterator<Item = &mut Module> {
-            self.0.values_mut()
-        }
-        /// Remove all modules.
-        pub fn clear(&mut self) {
-            self.0.clear();
-        }
-    }
-
-    impl ModuleResolver for StaticModuleResolver {
-        fn resolve(
-            &self,
-            _: &Engine,
-            path: &str,
-            pos: Position,
-        ) -> Result<Module, Box<EvalAltResult>> {
-            self.0
-                .get(path)
-                .cloned()
-                .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
-        }
-    }
-}
-
-/// Module resolver collection.
-#[cfg(not(feature = "no_module"))]
-mod collection {
-    use super::*;
-
-    /// Module resolution service that holds a collection of module resolves,
-    /// to be searched in sequential order.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::{Engine, Module};
-    /// use rhai::module_resolvers::{StaticModuleResolver, ModuleResolversCollection};
-    ///
-    /// let mut collection = ModuleResolversCollection::new();
-    ///
-    /// let resolver = StaticModuleResolver::new();
-    /// collection.push(resolver);
-    ///
-    /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(collection));
-    /// ```
-    #[derive(Default)]
-    pub struct ModuleResolversCollection(Vec<Box<dyn ModuleResolver>>);
-
-    impl ModuleResolversCollection {
-        /// Create a new `ModuleResolversCollection`.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use rhai::{Engine, Module};
-        /// use rhai::module_resolvers::{StaticModuleResolver, ModuleResolversCollection};
-        ///
-        /// let mut collection = ModuleResolversCollection::new();
-        ///
-        /// let resolver = StaticModuleResolver::new();
-        /// collection.push(resolver);
-        ///
-        /// let mut engine = Engine::new();
-        /// engine.set_module_resolver(Some(collection));
-        /// ```
-        pub fn new() -> Self {
-            Default::default()
-        }
-    }
-
-    impl ModuleResolversCollection {
-        /// Add a module keyed by its path.
-        pub fn push(&mut self, resolver: impl ModuleResolver + 'static) {
-            self.0.push(Box::new(resolver));
-        }
-        /// Get an iterator of all the module resolvers.
-        pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
-            self.0.iter().map(|v| v.as_ref())
-        }
-        /// Remove all module resolvers.
-        pub fn clear(&mut self) {
-            self.0.clear();
-        }
-    }
-
-    impl ModuleResolver for ModuleResolversCollection {
-        fn resolve(
-            &self,
-            engine: &Engine,
-            path: &str,
-            pos: Position,
-        ) -> Result<Module, Box<EvalAltResult>> {
-            for resolver in self.0.iter() {
-                if let Ok(module) = resolver.resolve(engine, path, pos) {
-                    return Ok(module);
-                }
-            }
-
-            EvalAltResult::ErrorModuleNotFound(path.into(), pos).into()
-        }
-    }
-}
+pub mod resolvers;

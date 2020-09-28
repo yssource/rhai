@@ -4,7 +4,7 @@ Extend Rhai with Custom Syntax
 {{#include ../links.md}}
 
 
-For the ultimate advantageous, there is a built-in facility to _extend_ the Rhai language
+For the ultimate adventurous, there is a built-in facility to _extend_ the Rhai language
 with custom-defined _syntax_.
 
 But before going off to define the next weird statement type, heed this warning:
@@ -28,7 +28,7 @@ Where This Might Be Useful
 
 * Where a custom syntax _significantly_ simplifies the code and _significantly_ enhances understanding of the code's intent.
 
-* Where certain logic cannot be easily encapsulated inside a function.  This is usually the case where _closures_ are required, because Rhai does not have closures.
+* Where certain logic cannot be easily encapsulated inside a function.
 
 * Where you just want to confuse your user and make their lives miserable, because you can.
 
@@ -154,10 +154,10 @@ let result = engine.eval_expression_tree(context, scope, expr)?;
 
 New variables maybe declared (usually with a variable name that is passed in via `$ident$).
 
-It can simply be pushed into the [`scope`].
+It can simply be pushed into the [`Scope`].
 
 However, beware that all new variables must be declared _prior_ to evaluating any expression tree.
-In other words, any `scope.push(...)` calls must come _before_ any `engine::eval_expression_tree(...)` calls.
+In other words, any `Scope::push` calls must come _before_ any `Engine::eval_expression_tree` calls.
 
 ```rust
 let var_name = inputs[0].get_variable_name().unwrap().to_string();

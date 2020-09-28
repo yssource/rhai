@@ -58,7 +58,7 @@ impl EnergizerBunny {
     pub fn new () -> Self { ... }
     pub fn go (&mut self) { ... }
     pub fn stop (&mut self) { ... }
-    pub fn is_going (&self) { ... }
+    pub fn is_going (&self) -> bol { ... }
     pub fn get_speed (&self) -> i64 { ... }
     pub fn set_speed (&mut self, speed: i64) { ... }
     pub fn turn (&mut self, left_turn: bool) { ... }
@@ -77,37 +77,52 @@ let SharedBunnyType = Rc<RefCell<EnergizerBunny>>;
 engine.register_type_with_name::<SharedBunnyType>("EnergizerBunny");
 ```
 
-### Register Methods and Getters/Setters
+### Develop a Plugin with Methods and Getters/Setters
+
+The easiest way to develop a complete set of API for a [custom type] is via a [plugin module].
 
 ```rust
-engine
-    .register_get_set("power",
-        |bunny: &mut SharedBunnyType| bunny.borrow().is_going(),
-        |bunny: &mut SharedBunnyType, on: bool| {
-            if on {
-                if bunny.borrow().is_going() {
-                    println!("Still going...");
-                } else {
-                    bunny.borrow_mut().go();
-                }
+use rhai::plugins::*;
+
+#[export_module]
+pub mod bunny_api {
+    pub const MAX_SPEED: i64 = 100;
+
+    #[rhai_fn(get = "power")]
+    pub fn get_power(bunny: &mut SharedBunnyType) -> bool {
+        bunny.borrow().is_going()
+    }
+    #[rhai_fn(set = "power")]
+    pub fn set_power(bunny: &mut SharedBunnyType, on: bool) {
+        if on {
+            if bunny.borrow().is_going() {
+                println!("Still going...");
             } else {
-                if bunny.borrow().is_going() {
-                    bunny.borrow_mut().stop();
-                } else {
-                    println!("Already out of battery!");
-                }
+                bunny.borrow_mut().go();
+            }
+        } else {
+            if bunny.borrow().is_going() {
+                bunny.borrow_mut().stop();
+            } else {
+                println!("Already out of battery!");
             }
         }
-    ).register_get("speed", |bunny: &mut SharedBunnyType| {
+    }
+    #[rhai_fn(get = "speed")]
+    pub fn get_speed(bunny: &mut SharedBunnyType) -> i64 {
         if bunny.borrow().is_going() {
             bunny.borrow().get_speed()
         } else {
             0
         }
-    }).register_set_result("speed", |bunny: &mut SharedBunnyType, speed: i64| {
+    }
+    #[rhai_fn(set = "speed", return_raw)]
+    pub fn set_speed(bunny: &mut SharedBunnyType, speed: i64)
+            -> Result<Dynamic, Box<EvalAltResult>>
+    {
         if speed <= 0 {
             Err("Speed must be positive!".into())
-        } else if speed > 100 {
+        } else if speed > MAX_SPEED {
             Err("Bunny will be going too fast!".into())
         } else if !bunny.borrow().is_going() {
             Err("Bunny is not yet going!".into())
@@ -115,15 +130,20 @@ engine
             b.borrow_mut().set_speed(speed);
             Ok(().into())
         }
-    }).register_fn("turn_left", |bunny: &mut SharedBunnyType| {
+    }
+    pub fn turn_left(bunny: &mut SharedBunnyType) {
         if bunny.borrow().is_going() {
             bunny.borrow_mut().turn(true);
         }
-    }).register_fn("turn_right", |bunny: &mut SharedBunnyType| {
+    }
+    pub fn turn_right(bunny: &mut SharedBunnyType) {
         if bunny.borrow().is_going() {
             bunny.borrow_mut().turn(false);
         }
-    });
+    }
+}
+
+engine.load_package(exported_module!(bunny_api));
 ```
 
 ### Push Constant Command Object into Custom Scope
@@ -132,7 +152,9 @@ engine
 let bunny: SharedBunnyType = Rc::new(RefCell::(EnergizerBunny::new()));
 
 let mut scope = Scope::new();
-scope.push_constant("BUNNY", bunny.clone());
+
+// Add the command object into a custom Scope.
+scope.push_constant("Bunny", bunny.clone());
 
 engine.consume_with_scope(&mut scope, script)?;
 ```
@@ -140,11 +162,11 @@ engine.consume_with_scope(&mut scope, script)?;
 ### Use the Command API in Script
 
 ```rust
-// Access the command object via constant variable 'BUNNY'.
+// Access the command object via constant variable 'Bunny'.
 
-if !BUNNY.power { BUNNY.power = true; }
+if !Bunny.power { Bunny.power = true; }
 
-if BUNNY.speed > 50 { BUNNY.speed = 50; }
+if Bunny.speed > 50 { Bunny.speed = 50; }
 
-BUNNY.turn_left();
+Bunny.turn_left();
 ```

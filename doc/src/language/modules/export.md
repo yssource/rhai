@@ -3,27 +3,16 @@ Export Variables, Functions and Sub-Modules in Module
 
 {{#include ../../links.md}}
 
-A _module_ is a single script (or pre-compiled [`AST`]) containing global variables, functions and sub-modules.
 
-A module can be created from a script via the `Module::eval_ast_as_new` method. When given an [`AST`],
-it is first evaluated, then the following items are exposed as members of the new module:
-
-* Global variables - essentially all variables that remain in the [`Scope`] at the end of a script run - that are exported. Variables not exported (via the `export` statement) remain hidden.
-
-* Functions not specifically marked `private`.
-
-* Global modules that remain in the [`Scope`] at the end of a script run.
-
-
-Global Variables
-----------------
+Export Global Variables
+----------------------
 
 The `export` statement, which can only be at global level, exposes selected variables as members of a module.
 
 Variables not exported are _private_ and hidden. They are merely used to initialize the module,
 but cannot be accessed from outside.
 
-Everything exported from a module is **constant** (**read-only**).
+Everything exported from a module is **constant** (i.e. read-only).
 
 ```rust
 // This is a module script.
@@ -45,8 +34,8 @@ export x as answer;     // the variable 'x' is exported under the alias 'answer'
 ```
 
 
-Functions
----------
+Export Functions
+----------------
 
 All functions are automatically exported, _unless_ it is explicitly opt-out with the [`private`] prefix.
 

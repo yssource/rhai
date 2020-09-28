@@ -93,7 +93,12 @@ pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use syntax::{EvalContext, Expression};
 pub use token::Position;
+
+#[cfg(feature = "internals")]
 pub use utils::calc_fn_hash;
+
+#[cfg(not(feature = "internals"))]
+pub(crate) use utils::calc_fn_hash;
 
 pub use rhai_codegen::*;
 
@@ -118,8 +123,6 @@ pub use parser::FLOAT;
 pub use module::ModuleResolver;
 
 /// Module containing all built-in _module resolvers_ available to Rhai.
-///
-/// Not available under the `no_module` feature.
 #[cfg(not(feature = "no_module"))]
 pub mod module_resolvers {
     pub use crate::module::resolvers::*;

@@ -64,6 +64,12 @@ let bunny: Rc<RefCell<EnergizerBunny>> = Rc::new(RefCell::(EnergizerBunny::new()
 
 ### Register Control API
 
+The trick to building a Control API is to clone the shared API object and
+move it into each function registration as a closure.
+
+It is not possible to use a [plugin module] to achieve this, so each function must
+be registered one after another.
+
 ```rust
 // Notice 'move' is used to move the shared API object into the closure.
 let b = bunny.clone();

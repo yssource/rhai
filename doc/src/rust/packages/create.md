@@ -34,9 +34,11 @@ Macro Parameters
 ```rust
 // Import necessary types and traits.
 use rhai::{
-    def_package,
-    packages::Package,
-    packages::{ArithmeticPackage, BasicArrayPackage, BasicMapPackage, LogicPackage}
+    def_package,            // 'def_package!' macro
+    packages::Package,      // 'Package' trait
+    packages::{             // pre-defined packages
+        ArithmeticPackage, BasicArrayPackage, BasicMapPackage, LogicPackage
+    }
 };
 
 // Define the package 'MyPackage'.

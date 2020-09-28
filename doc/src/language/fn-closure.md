@@ -23,31 +23,9 @@ Therefore, similar to closures in many languages, these captured shared values p
 reference counting, and may be read or modified even after the variables that hold them
 go out of scope and no longer exist.
 
-Use the `is_shared` function to check whether a particular value is a shared value.
+Use the `Dynamic::is_shared` function to check whether a particular value is a shared value.
 
 Automatic currying can be turned off via the [`no_closure`] feature.
-
-
-Actual Implementation
----------------------
-
-The actual implementation de-sugars to:
-
-1. Keeping track of what variables are accessed inside the anonymous function,
-
-2. If a variable is not defined within the anonymous function's scope, it is looked up _outside_ the function and
-   in the current execution scope - where the anonymous function is created.
-
-3. The variable is added to the parameters list of the anonymous function, at the front.
-
-4. The variable is then converted into a **reference-counted shared value**.
-
-   An [anonymous function] which captures an external variable is the only way to create a reference-counted shared value in Rhai.
-
-5. The shared value is then [curried][currying] into the [function pointer] itself, essentially carrying a reference to that shared value
-   and inserting it into future calls of the function.
-
-   This process is called _Automatic Currying_, and is the mechanism through which Rhai simulates normal closures.
 
 
 Examples
@@ -56,9 +34,13 @@ Examples
 ```rust
 let x = 1;                          // a normal variable
 
+x.is_shared() == false;
+
 let f = |y| x + y;                  // variable 'x' is auto-curried (captured) into 'f'
 
 x.is_shared() == true;              // 'x' is now a shared value!
+
+f.call(2) == 3;                     // 1 + 2 == 3
 
 x = 40;                             // changing 'x'...
 
@@ -117,6 +99,8 @@ will occur and the script will terminate with an error.
 ```rust
 let x = 20;
 
+x.is_shared() == false;             // 'x' is not shared, so no data race is possible
+
 let f = |a| this += x + a;          // 'x' is captured in this closure
 
 x.is_shared() == true;              // now 'x' is shared
@@ -151,6 +135,26 @@ x.call(f, 2);
 
 TL;DR
 -----
+
+### Q: How is it actually implemented?
+
+The actual implementation of closures de-sugars to:
+
+1. Keeping track of what variables are accessed inside the anonymous function,
+
+2. If a variable is not defined within the anonymous function's scope, it is looked up _outside_ the function and
+   in the current execution scope - where the anonymous function is created.
+
+3. The variable is added to the parameters list of the anonymous function, at the front.
+
+4. The variable is then converted into a **reference-counted shared value**.
+
+   An [anonymous function] which captures an external variable is the only way to create a reference-counted shared value in Rhai.
+
+5. The shared value is then [curried][currying] into the [function pointer] itself, essentially carrying a reference to that shared value
+   and inserting it into future calls of the function.
+
+   This process is called _Automatic Currying_, and is the mechanism through which Rhai simulates normal closures.
 
 ### Q: Why are closures implemented as automatic currying?
 

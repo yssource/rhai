@@ -39,6 +39,9 @@ pub enum EvalAltResult {
     /// An error has occurred inside a called function.
     /// Wrapped values are the name of the function and the interior error.
     ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
+    /// An error has occurred while loading a module.
+    /// Wrapped value are the name of the module and the interior error.
+    ErrorInModule(String, Box<EvalAltResult>, Position),
     /// Access to `this` that is not bound.
     ErrorUnboundThis(Position),
     /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
@@ -113,6 +116,7 @@ impl EvalAltResult {
 
             Self::ErrorParsing(p, _) => p.desc(),
             Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
+            Self::ErrorInModule(_, _, _) => "Error in module",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorUnboundThis(_) => "'this' is not bound",
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
@@ -178,8 +182,12 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
             Self::ErrorInFunctionCall(s, err, _) => {
-                write!(f, "Error in call to function '{}' : {}", s, err)?
+                write!(f, "Error in call to function '{}': {}", s, err)?
             }
+            Self::ErrorInModule(s, err, _) if s.is_empty() => {
+                write!(f, "Error in module: {}", err)?
+            }
+            Self::ErrorInModule(s, err, _) => write!(f, "Error in module '{}': {}", s, err)?,
 
             Self::ErrorFunctionNotFound(s, _)
             | Self::ErrorVariableNotFound(s, _)
@@ -280,6 +288,7 @@ impl EvalAltResult {
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
+            | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)
@@ -321,6 +330,7 @@ impl EvalAltResult {
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
             | Self::ErrorInFunctionCall(_, _, pos)
+            | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorCharMismatch(pos)

@@ -4,6 +4,9 @@ Rhai Release Notes
 Version 0.19.0
 ==============
 
+The major new feature for this version is _Plugins_ support, powered by procedural macros.
+Plugins make it extremely easy to develop and register Rust functions with an `Engine`.
+
 Bug fixes
 ---------
 
@@ -17,17 +20,23 @@ Breaking changes
 ----------------
 
 * `Engine::register_set_result` and `Engine::register_indexer_set_result` now take a function that returns `Result<(), Box<EvalAltResult>>`.
-* `Engine::register_indexer_XXX` and `Module::set_indexer_XXX` panic when the type is `Arrary`, `Map` or `String`.
+* `Engine::register_indexer_XXX` and `Module::set_indexer_XXX` panic when the type is `Array`, `Map` or `String`.
+* `EvalAltResult` has a new variant `ErrorInModule` which holds errors when loading an external module.
+* `Module::eval_ast_as_new` now takes an extra boolean parameter, indicating whether to encapsulate the entire module into a separate namespace.
+* Functions in `FileModuleResolver` loaded modules now can cross-call each other in addition to functions in the global namespace. For the old behavior, use `MergingFileModuleResolver` instead.
+* New `EvalAltResult::ErrorInModule` variant capturing errors when loading a module from a script file.
 
 New features
 ------------
 
 * Plugins support via procedural macros.
 * Scripted functions are allowed in packages.
-* `parse_int` and `parse_float` functions.
+* `parse_int` and `parse_float` functions for parsing numbers; `split` function for splitting strings.
 * `AST::iter_functions` and `Module::iter_script_fn_info` to iterate functions.
-* Functions iteration functions now take `FnMut` instead of `Fn`.
+* Functions iteration functions for `AST` and `Module` now take `FnMut` instead of `Fn`.
 * New `FileModuleResolver` that encapsulates the entire `AST` of the module script, allowing function cross-calling. The old version is renamed `MergingFileModuleResolver`.
+* `+` and `-` operators for timestamps to increment/decrement by seconds.
+
 
 Version 0.18.3
 ==============

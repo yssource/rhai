@@ -10,8 +10,8 @@ This scenario is especially common when simulating object-oriented programming (
 // Define object
 let obj = #{
     data: 42,
-    increment: Fn("inc_obj"),   // use function pointers to
-    decrement: Fn("dec_obj"),   // refer to method functions
+    increment: Fn("inc_obj"),       // use function pointers to
+    decrement: Fn("dec_obj"),       // refer to method functions
     print: Fn("print_obj")
 };
 
