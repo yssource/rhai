@@ -31,19 +31,20 @@ let mut scope = Scope::new();
 scope
     .push("y", 42_i64)
     .push("z", 999_i64)
+    .push_constant("MY_NUMBER", 123_i64)            // constants can also be added
     .set_value("s", "hello, world!".to_string());   //'set_value' adds a variable when one doesn't exist
-                                                    // remember to use 'String', not '&str'
+                                                    //   remember to use 'String', not '&str'
 
 // First invocation
 engine.eval_with_scope::<()>(&mut scope, r"
-    let x = 4 + 5 - y + z + s.len;
+    let x = 4 + 5 - y + z + MY_NUMBER + s.len;
     y = 1;
 ")?;
 
 // Second invocation using the same state
 let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
 
-println!("result: {}", result);                     // prints 979
+println!("result: {}", result);                     // prints 1102
 
 // Variable y is changed in the script - read it with 'get_value'
 assert_eq!(scope.get_value::<i64>("y").expect("variable y should exist"), 1);

@@ -43,10 +43,12 @@ This aspect is very similar to JavaScript before ES6 modules.
 // Compile a script into AST
 let ast1 = engine.compile(
     r#"
-        fn get_message() { "Hello!" }   // greeting message
+        fn get_message() {
+            "Hello!"                // greeting message
+        }
 
         fn say_hello() {
-            print(get_message());       // prints message
+            print(get_message());   // prints message
         }
 
         say_hello();

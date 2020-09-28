@@ -44,10 +44,13 @@ Representation of Numbers
 ------------------------
 
 JSON numbers are all floating-point while Rhai supports integers (`INT`) and floating-point (`FLOAT`) if
-the [`no_float`] feature is not used.  Most common generators of JSON data distinguish between
-integer and floating-point values by always serializing a floating-point number with a decimal point
-(i.e. `123.0` instead of `123` which is assumed to be an integer).  This style can be used successfully
-with Rhai [object maps].
+the [`no_float`] feature is not used.
+
+Most common generators of JSON data distinguish between integer and floating-point values by always
+serializing a floating-point number with a decimal point (i.e. `123.0` instead of `123` which is
+assumed to be an integer).
+
+This style can be used successfully with Rhai [object maps].
 
 
 Parse JSON with Sub-Objects
@@ -68,9 +71,10 @@ A JSON object hash starting with `#{` is handled transparently by `Engine::parse
 // JSON with sub-object 'b'.
 let json = r#"{"a":1, "b":{"x":true, "y":false}}"#;
 
-let new_json = json.replace("{" "#{");
+// Our JSON text does not contain the '{' character, so off we go!
+let new_json = json.replace("{", "#{");
 
-// The leading '{' will also be replaced to '#{', but parse_json can handle this.
+// The leading '{' will also be replaced to '#{', but 'parse_json' handles this just fine.
 let map = engine.parse_json(&new_json, false)?;
 
 map.len() == 2;       // 'map' contains two properties: 'a' and 'b'

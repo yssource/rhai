@@ -11,9 +11,9 @@ Creating them is accomplished via the `Func` trait which contains `create_from_s
 (as well as its companion method `create_from_ast`):
 
 ```rust
-use rhai::{Engine, Func};                       // use 'Func' for 'create_from_script'
+use rhai::{Engine, Func};                   // use 'Func' for 'create_from_script'
 
-let engine = Engine::new();                     // create a new 'Engine' just for this
+let engine = Engine::new();                 // create a new 'Engine' just for this
 
 let script = "fn calc(x, y) { x + y.len < 42 }";
 
@@ -25,14 +25,14 @@ let script = "fn calc(x, y) { x + y.len < 42 }";
 let func = Func::<(i64, String), bool>::create_from_script(
 //                ^^^^^^^^^^^^^ function parameter types in tuple
 
-                engine,                         // the 'Engine' is consumed into the closure
-                script,                         // the script, notice number of parameters must match
-                "calc"                          // the entry-point function name
+                engine,                     // the 'Engine' is consumed into the closure
+                script,                     // the script, notice number of parameters must match
+                "calc"                      // the entry-point function name
 )?;
 
-func(123, "hello".to_string())? == false;       // call the closure
+func(123, "hello".to_string())? == false;   // call the closure
 
-schedule_callback(func);                        // pass it as a callback to another function
+schedule_callback(func);                    // pass it as a callback to another function
 
 // Although there is nothing you can't do by manually writing out the closure yourself...
 let engine = Engine::new();

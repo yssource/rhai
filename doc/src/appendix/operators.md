@@ -40,13 +40,13 @@ Symbols
 | ------------ | ------------------------ |
 | `:`          | property value separator |
 | `::`         | module path separator    |
-| `#`          | _Reserved_               |
-| `=>`         | _Reserved_               |
-| `->`         | _Reserved_               |
-| `<-`         | _Reserved_               |
-| `===`        | _Reserved_               |
-| `!==`        | _Reserved_               |
-| `:=`         | _Reserved_               |
-| `::<` .. `>` | _Reserved_               |
-| `@`          | _Reserved_               |
-| `(*` .. `*)` | _Reserved_               |
+| `#`          | _reserved_               |
+| `=>`         | _reserved_               |
+| `->`         | _reserved_               |
+| `<-`         | _reserved_               |
+| `===`        | _reserved_               |
+| `!==`        | _reserved_               |
+| `:=`         | _reserved_               |
+| `::<` .. `>` | _reserved_               |
+| `@`          | _reserved_               |
+| `(*` .. `*)` | _reserved_               |

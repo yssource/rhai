@@ -61,8 +61,8 @@ hello.call(0);              // error: function not found - 'hello_world (i64)'
 Global Namespace Only
 --------------------
 
-Because of their dynamic nature, function pointers cannot refer to functions in a _module_ [namespace][function namespace]
-(i.e. functions in [`import`]-ed modules).  They can only refer to functions within the global [namespace][function namespace].
+Because of their dynamic nature, function pointers cannot refer to functions in [`import`]-ed [modules].
+They can only refer to functions within the global [namespace][function namespace].
 See [function namespaces] for more details.
 
 ```rust

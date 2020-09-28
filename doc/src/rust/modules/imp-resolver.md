@@ -11,8 +11,14 @@ A module resolver must implement the trait [`rhai::ModuleResolver`][traits],
 which contains only one function: `resolve`.
 
 When Rhai prepares to load a module, `ModuleResolver::resolve` is called with the name
-of the _module path_ (i.e. the path specified in the [`import`] statement). Upon success, it should
-return a [`Module`]; if the module cannot be load, return `EvalAltResult::ErrorModuleNotFound`.
+of the _module path_ (i.e. the path specified in the [`import`] statement).
+
+* Upon success, it should return a [`Module`].
+
+* If the path does not resolve to a valid module, return `EvalAltResult::ErrorModuleNotFound`.
+
+* If the module failed to load, return `EvalAltResult::ErrorInModule`.
+
 
 Example
 -------
@@ -35,9 +41,12 @@ impl ModuleResolver for MyModuleResolver {
         // Check module path.
         if is_valid_module_path(path) {
             // Load the custom module.
-            let module: Module = load_secret_module(path);
-            Ok(module)
+            load_secret_module(path).map_err(|err|
+                // Return EvalAltResult::ErrorInModule upon loading error
+                EvalAltResult::ErrorInModule(err.to_string(), pos).into()
+            )
         } else {
+            // Return EvalAltResult::ErrorModuleNotFound if the path is invalid
             Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
         }
     }
@@ -50,7 +59,7 @@ engine.set_module_resolver(Some(MyModuleResolver {}));
 
 engine.consume(r#"
     import "hello" as foo;  // this 'import' statement will call
-                            // 'MyModuleResolver::resolve' with "hello" as path
+                            // 'MyModuleResolver::resolve' with "hello" as `path`
     foo:bar();
 "#)?;
 ```

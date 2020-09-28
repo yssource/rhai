@@ -10,25 +10,23 @@ If an [object map]'s property holds a [function pointer], the property can simpl
 a normal method in method-call syntax.  This is a _short-hand_ to avoid the more verbose syntax
 of using the `call` function keyword.
 
-When a property holding a [function pointer] (which incudes [closures]) is called like a method,
+When a property holding a [function pointer] or a [closure] is called like a method,
 what happens next depends on whether the target function is a native Rust function or
 a script-defined function.
 
-If it is a registered native Rust method function, it is called directly.
+* If it is a registered native Rust function, it is called directly in _method-call_ style with the [object map] inserted as the first argument.
 
-If it is a script-defined function, the `this` variable within the function body is bound
-to the [object map] before the function is called.  There is no way to simulate this behavior
-via a normal function-call syntax because all scripted function arguments are passed by value.
+* If it is a script-defined function, the `this` variable within the function body is bound to the [object map] before the function is called.
 
 ```rust
 let obj = #{
                 data: 40,
-                action: || this.data += x    // 'action' holds a function pointer which is a closure
+                action: || this.data += x    // 'action' holds a closure
            };
 
-obj.action(2);                               // Calls the function pointer with `this` bound to 'obj'
+obj.action(2);                               // calls the function pointer with `this` bound to 'obj'
 
-obj.call(obj.action, 2);                     // The above de-sugars to this
+obj.call(obj.action, 2);                     // <- the above de-sugars to this
 
 obj.data == 42;
 

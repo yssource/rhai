@@ -22,18 +22,37 @@ For the complete `Module` API, refer to the [documentation](https://docs.rs/rhai
 Make the `Module` Available to the `Engine`
 ------------------------------------------
 
-In order to _use_ a custom module, there must be a [module resolver], which serves the module when
-loaded via `import` statements.
+`Engine::load_package` supports loading a [module] as a [package].
+
+Since it acts as a [package], all functions will be registered into the _global_ namespace
+and can be accessed without _module qualifiers_.
+
+```rust
+use rhai::{Engine, Module};
+
+let mut module = Module::new();             // new module
+module.set_fn_1("inc", |x: i64| Ok(x+1));   // use the 'set_fn_XXX' API to add functions
+
+// Load the module into the Engine as a new package.
+let mut engine = Engine::new();
+engine.load_package(module);
+
+engine.eval::<i64>("inc(41)")? == 42;       // no need to import module
+```
+
+
+Make the `Module` Dynamically Loadable
+-------------------------------------
+
+In order to dynamically load a custom module, there must be a [module resolver] which serves
+the module when loaded via `import` statements.
 
 The easiest way is to use, for example, the [`StaticModuleResolver`][module resolver] to hold such
 a custom module.
 
 ```rust
-use rhai::{Engine, Scope, Module, i64};
+use rhai::{Engine, Scope, Module};
 use rhai::module_resolvers::StaticModuleResolver;
-
-let mut engine = Engine::new();
-let mut scope = Scope::new();
 
 let mut module = Module::new();             // new module
 module.set_var("answer", 41_i64);           // variable 'answer' under module
@@ -47,11 +66,12 @@ let mut resolver = StaticModuleResolver::new();
 resolver.insert("question", module);
 
 // Set the module resolver into the 'Engine'
+let mut engine = Engine::new();
 engine.set_module_resolver(Some(resolver));
 
 // Use module-qualified variables
-engine.eval::<i64>(&scope, r#"import "question" as q; q::answer + 1"#)? == 42;
+engine.eval::<i64>(r#"import "question" as q; q::answer + 1"#)? == 42;
 
 // Call module-qualified functions
-engine.eval::<i64>(&scope, r#"import "question" as q; q::inc(q::answer)"#)? == 42;
+engine.eval::<i64>(r#"import "question" as q; q::inc(q::answer)"#)? == 42;
 ```
