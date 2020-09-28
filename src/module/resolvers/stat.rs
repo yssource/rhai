@@ -49,8 +49,7 @@ impl StaticModuleResolver {
 
 impl StaticModuleResolver {
     /// Add a module keyed by its path.
-    pub fn insert<S: Into<String>>(&mut self, path: S, mut module: Module) {
-        module.index_all_sub_modules();
+    pub fn insert<S: Into<String>>(&mut self, path: S, module: Module) {
         self.0.insert(path.into(), module);
     }
     /// Remove a module given its path.
