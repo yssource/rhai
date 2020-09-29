@@ -290,7 +290,7 @@ mod generate_tests {
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
+                    Token().into()
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
@@ -335,7 +335,7 @@ mod generate_tests {
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
+                    Token().into()
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
@@ -412,7 +412,7 @@ mod generate_tests {
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
+                    Token().into()
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
@@ -459,7 +459,7 @@ mod generate_tests {
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
+                    Token().into()
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
@@ -505,7 +505,7 @@ mod generate_tests {
                     }
                 }
                 pub fn token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(Token())
+                    Token().into()
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()

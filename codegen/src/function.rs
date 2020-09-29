@@ -580,7 +580,7 @@ impl ExportedFn {
         );
         quote! {
             pub fn #callable_fn_name() -> CallableFunction {
-                CallableFunction::from_plugin(#token_name())
+                #token_name().into()
             }
         }
     }

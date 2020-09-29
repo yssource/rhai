@@ -199,10 +199,10 @@ pub type FnAny =
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
-#[cfg(feature = "sync")]
-pub type SharedPluginFunction = Arc<dyn PluginFunction + Send + Sync>;
 #[cfg(not(feature = "sync"))]
-pub type SharedPluginFunction = Rc<dyn PluginFunction>;
+pub type FnPlugin = dyn PluginFunction;
+#[cfg(feature = "sync")]
+pub type FnPlugin = dyn PluginFunction + Send + Sync;
 
 /// A standard callback function.
 #[cfg(not(feature = "sync"))]
@@ -222,7 +222,7 @@ pub enum CallableFunction {
     /// An iterator function.
     Iterator(IteratorFn),
     /// A plugin-defined function,
-    Plugin(SharedPluginFunction),
+    Plugin(Shared<FnPlugin>),
     /// A script-defined function.
     #[cfg(not(feature = "no_function"))]
     Script(Shared<ScriptFnDef>),
@@ -389,9 +389,9 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the `CallableFunction` is not `Plugin`.
-    pub fn get_plugin_fn<'s>(&'s self) -> SharedPluginFunction {
+    pub fn get_plugin_fn<'s>(&'s self) -> &FnPlugin {
         match self {
-            Self::Plugin(f) => f.clone(),
+            Self::Plugin(f) => f.as_ref(),
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
 
             #[cfg(not(feature = "no_function"))]
@@ -406,17 +406,9 @@ impl CallableFunction {
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
     }
-
-    #[cfg(feature = "sync")]
     /// Create a new `CallableFunction::Plugin`.
-    pub fn from_plugin(plugin: impl PluginFunction + 'static + Send + Sync) -> Self {
-        Self::Plugin(Arc::new(plugin))
-    }
-
-    #[cfg(not(feature = "sync"))]
-    /// Create a new `CallableFunction::Plugin`.
-    pub fn from_plugin(plugin: impl PluginFunction + 'static) -> Self {
-        Self::Plugin(Rc::new(plugin))
+    pub fn from_plugin(func: impl PluginFunction + 'static + SendSync) -> Self {
+        Self::Plugin((Box::new(func) as Box<FnPlugin>).into())
     }
 }
 
@@ -443,5 +435,17 @@ impl From<Shared<ScriptFnDef>> for CallableFunction {
 
         #[cfg(not(feature = "no_function"))]
         Self::Script(_func)
+    }
+}
+
+impl<T: PluginFunction + 'static + SendSync> From<T> for CallableFunction {
+    fn from(func: T) -> Self {
+        Self::from_plugin(func)
+    }
+}
+
+impl From<Shared<FnPlugin>> for CallableFunction {
+    fn from(func: Shared<FnPlugin>) -> Self {
+        Self::Plugin(func.into())
     }
 }

@@ -90,7 +90,7 @@ pub trait RegisterPlugin<PL: crate::plugin::Plugin> {
     ///                    std::any::TypeId::of::<NUMBER>(),
     ///                    std::any::TypeId::of::<NUMBER>(),
     ///                    std::any::TypeId::of::<NUMBER>()],
-    ///                  CallableFunction::from_plugin(DistanceFunction()));
+    ///                  DistanceFunction().into());
     ///         let mut r = StaticModuleResolver::new();
     ///         r.insert("Math::Advanced".to_string(), m);
     ///         engine.set_module_resolver(Some(r));

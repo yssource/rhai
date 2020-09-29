@@ -296,7 +296,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnAccess::Public, &[],
-                             CallableFunction::from_plugin(get_mystic_number_token()));
+                             get_mystic_number_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -320,7 +320,7 @@ mod generate_tests {
                     }
                 }
                 pub fn get_mystic_number_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(get_mystic_number_token())
+                    get_mystic_number_token().into()
                 }
                 pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
                     get_mystic_number_token().input_types()
@@ -358,7 +358,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_one_to", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_one_to_token()));
+                             add_one_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -383,7 +383,7 @@ mod generate_tests {
                     }
                 }
                 pub fn add_one_to_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(add_one_to_token())
+                    add_one_to_token().into()
                 }
                 pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
                     add_one_to_token().input_types()
@@ -432,10 +432,10 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_n", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_one_to_token()));
+                             add_one_to_token().into());
                     m.set_fn("add_n", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                           core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_n_to_token()));
+                             add_n_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -460,7 +460,7 @@ mod generate_tests {
                     }
                 }
                 pub fn add_one_to_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(add_one_to_token())
+                    add_one_to_token().into()
                 }
                 pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
                     add_one_to_token().input_types()
@@ -490,7 +490,7 @@ mod generate_tests {
                     }
                 }
                 pub fn add_n_to_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(add_n_to_token())
+                    add_n_to_token().into()
                 }
                 pub fn add_n_to_token_input_types() -> Box<[TypeId]> {
                     add_n_to_token().input_types()
@@ -529,7 +529,7 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_together_token()));
+                             add_together_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -556,7 +556,7 @@ mod generate_tests {
                     }
                 }
                 pub fn add_together_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(add_together_token())
+                    add_together_token().into()
                 }
                 pub fn add_together_token_input_types() -> Box<[TypeId]> {
                     add_together_token().input_types()
@@ -596,13 +596,13 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_together_token()));
+                             add_together_token().into());
                     m.set_fn("+", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_together_token()));
+                             add_together_token().into());
                     m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
                                                                  core::any::TypeId::of::<INT>()],
-                             CallableFunction::from_plugin(add_together_token()));
+                             add_together_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -629,7 +629,7 @@ mod generate_tests {
                     }
                 }
                 pub fn add_together_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(add_together_token())
+                    add_together_token().into()
                 }
                 pub fn add_together_token_input_types() -> Box<[TypeId]> {
                     add_together_token().input_types()
@@ -844,7 +844,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnAccess::Public, &[],
-                             CallableFunction::from_plugin(get_mystic_number_token()));
+                             get_mystic_number_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -868,7 +868,7 @@ mod generate_tests {
                     }
                 }
                 pub fn get_mystic_number_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(get_mystic_number_token())
+                    get_mystic_number_token().into()
                 }
                 pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
                     get_mystic_number_token().input_types()
@@ -937,7 +937,7 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("print_out_to", FnAccess::Public,
                              &[core::any::TypeId::of::<ImmutableString>()],
-                             CallableFunction::from_plugin(print_out_to_token()));
+                             print_out_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -962,7 +962,7 @@ mod generate_tests {
                     }
                 }
                 pub fn print_out_to_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(print_out_to_token())
+                    print_out_to_token().into()
                 }
                 pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
                     print_out_to_token().input_types()
@@ -1001,7 +1001,7 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("print_out_to", FnAccess::Public,
                              &[core::any::TypeId::of::<ImmutableString>()],
-                             CallableFunction::from_plugin(print_out_to_token()));
+                             print_out_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1026,7 +1026,7 @@ mod generate_tests {
                     }
                 }
                 pub fn print_out_to_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(print_out_to_token())
+                    print_out_to_token().into()
                 }
                 pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
                     print_out_to_token().input_types()
@@ -1065,7 +1065,7 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("increment", FnAccess::Public,
                              &[core::any::TypeId::of::<FLOAT>()],
-                             CallableFunction::from_plugin(increment_token()));
+                             increment_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1090,7 +1090,7 @@ mod generate_tests {
                     }
                 }
                 pub fn increment_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(increment_token())
+                    increment_token().into()
                 }
                 pub fn increment_token_input_types() -> Box<[TypeId]> {
                     increment_token().input_types()
@@ -1132,7 +1132,7 @@ mod generate_tests {
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnAccess::Public,
                                  &[core::any::TypeId::of::<FLOAT>()],
-                                 CallableFunction::from_plugin(increment_token()));
+                                 increment_token().into());
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
@@ -1157,7 +1157,7 @@ mod generate_tests {
                         }
                     }
                     pub fn increment_token_callable() -> CallableFunction {
-                        CallableFunction::from_plugin(increment_token())
+                        increment_token().into()
                     }
                     pub fn increment_token_input_types() -> Box<[TypeId]> {
                         increment_token().input_types()
@@ -1219,7 +1219,7 @@ mod generate_tests {
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnAccess::Public,
                                  &[core::any::TypeId::of::<FLOAT>()],
-                                 CallableFunction::from_plugin(increment_token()));
+                                 increment_token().into());
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
@@ -1244,7 +1244,7 @@ mod generate_tests {
                         }
                     }
                     pub fn increment_token_callable() -> CallableFunction {
-                        CallableFunction::from_plugin(increment_token())
+                        increment_token().into()
                     }
                     pub fn increment_token_input_types() -> Box<[TypeId]> {
                         increment_token().input_types()
@@ -1304,7 +1304,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get$square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(int_foo_token()));
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1329,7 +1329,7 @@ mod generate_tests {
                     }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(int_foo_token())
+                    int_foo_token().into()
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
@@ -1368,9 +1368,9 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(int_foo_token()));
+                             int_foo_token().into());
                     m.set_fn("get$square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(int_foo_token()));
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1395,7 +1395,7 @@ mod generate_tests {
                     }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(int_foo_token())
+                    int_foo_token().into()
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
@@ -1436,7 +1436,7 @@ mod generate_tests {
                     m.set_fn("set$squared", FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(int_foo_token()));
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1462,7 +1462,7 @@ mod generate_tests {
                     }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(int_foo_token())
+                    int_foo_token().into()
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
@@ -1503,11 +1503,11 @@ mod generate_tests {
                     m.set_fn("set_sq", FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(int_foo_token()));
+                             int_foo_token().into());
                     m.set_fn("set$squared", FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(int_foo_token()));
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1533,7 +1533,7 @@ mod generate_tests {
                     }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(int_foo_token())
+                    int_foo_token().into()
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
@@ -1574,7 +1574,7 @@ mod generate_tests {
                     m.set_fn("index$get$", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(get_by_index_token()));
+                             get_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1601,7 +1601,7 @@ mod generate_tests {
                     }
                 }
                 pub fn get_by_index_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(get_by_index_token())
+                    get_by_index_token().into()
                 }
                 pub fn get_by_index_token_input_types() -> Box<[TypeId]> {
                     get_by_index_token().input_types()
@@ -1642,11 +1642,11 @@ mod generate_tests {
                     m.set_fn("get", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(get_by_index_token()));
+                             get_by_index_token().into());
                     m.set_fn("index$get$", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
-                             CallableFunction::from_plugin(get_by_index_token()));
+                             get_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1673,7 +1673,7 @@ mod generate_tests {
                     }
                 }
                 pub fn get_by_index_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(get_by_index_token())
+                    get_by_index_token().into()
                 }
                 pub fn get_by_index_token_input_types() -> Box<[TypeId]> {
                     get_by_index_token().input_types()
@@ -1715,7 +1715,7 @@ mod generate_tests {
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
-                             CallableFunction::from_plugin(set_by_index_token()));
+                             set_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1744,7 +1744,7 @@ mod generate_tests {
                     }
                 }
                 pub fn set_by_index_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(set_by_index_token())
+                    set_by_index_token().into()
                 }
                 pub fn set_by_index_token_input_types() -> Box<[TypeId]> {
                     set_by_index_token().input_types()
@@ -1786,12 +1786,12 @@ mod generate_tests {
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
-                             CallableFunction::from_plugin(set_by_index_token()));
+                             set_by_index_token().into());
                     m.set_fn("index$set$", FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
-                             CallableFunction::from_plugin(set_by_index_token()));
+                             set_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1820,7 +1820,7 @@ mod generate_tests {
                     }
                 }
                 pub fn set_by_index_token_callable() -> CallableFunction {
-                    CallableFunction::from_plugin(set_by_index_token())
+                    set_by_index_token().into()
                 }
                 pub fn set_by_index_token_input_types() -> Box<[TypeId]> {
                     set_by_index_token().input_types()
