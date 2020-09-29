@@ -65,7 +65,7 @@ anything that implements `AsMut<Dynamic>` (such as a simple array or a `Vec<Dyna
 ```rust
 let result = engine.call_fn_dynamic(
                         &mut scope,         // scope to use
-                        ast.into(),         // get 'Module' from 'AST'
+                        &ast,               // AST containing the functions
                         "hello",            // function entry-point
                         None,               // 'this' pointer, if any
                         [ String::from("abc").into(), 123_i64.into() ]      // arguments
@@ -85,7 +85,7 @@ let mut value: Dynamic = 1_i64.into();
 
 let result = engine.call_fn_dynamic(
                         &mut scope,
-                        ast.into(),
+                        &ast,
                         "action",
                         Some(&mut value),   // binding the 'this' pointer
                         [ 41_i64.into() ]

@@ -1571,14 +1571,14 @@ impl Engine {
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
-        lib: &Module,
+        lib: impl AsRef<Module>,
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> FuncReturn<Dynamic> {
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        self.call_fn_dynamic_raw(scope, lib, name, &mut this_ptr, args.as_mut())
+        self.call_fn_dynamic_raw(scope, lib.as_ref(), name, &mut this_ptr, args.as_mut())
     }
 
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
