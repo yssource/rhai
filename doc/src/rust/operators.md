@@ -6,16 +6,23 @@ Operator Overloading
 In Rhai, a lot of functionalities are actually implemented as functions, including basic operations
 such as arithmetic calculations.
 
-For example, in the expression "`a + b`", the `+` operator is _not_ built in, but calls a function named "`+`" instead!
+For example, in the expression "`a + b`", the `+` operator calls a function named "`+`"!
 
 ```rust
 let x = a + b;
+
 let x = +(a, b);        // <- the above is equivalent to this function call
 ```
 
 Similarly, comparison operators including `==`, `!=` etc. are all implemented as functions,
-with the stark exception of `&&` and `||`. Because they [_short-circuit_]({{rootUrl}}/language/logic.md#boolean-operators),
-`&&` and `||` are handled specially and _not_ via a function; as a result, overriding them has no effect at all.
+with the stark exception of `&&` and `||`.
+
+
+`&&` and `||` Cannot Be Overloaded
+---------------------------------
+
+Because they [_short-circuit_]({{rootUrl}}/language/logic.md#boolean-operators), `&&` and `||` are
+handled specially and _not_ via a function; as a result, overriding them has no effect at all.
 
 
 Overload Operator via Rust Function

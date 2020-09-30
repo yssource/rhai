@@ -46,15 +46,22 @@ struct Config {
 ### Make Shared Object
 
 ```rust
-let config: Rc<RefCell<Config>> = Rc::new(RefCell::new(Default::default()));
+pub type SharedConfig = Rc<RefCell<Config>>;
+```
+
+Note: Use `Arc<Mutex<T>>` or `Arc<RwLock<T>>` when using the [`sync`] feature because the function
+must then be `Send + Sync`.
+
+```rust
+let config: SharedConfig = Rc::new(RefCell::new(Default::default()));
 ```
 
 ### Register Config API
 
 The trick to building a Config API is to clone the shared configuration object and
-move it into each function registration as a closure.
+move it into each function registration via a closure.
 
-It is not possible to use a [plugin module] to achieve this, so each function must
+Therefore, it is not possible to use a [plugin module] to achieve this, and each function must
 be registered one after another.
 
 ```rust

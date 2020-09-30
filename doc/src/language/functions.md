@@ -42,19 +42,6 @@ add2(42) == 44;
 ```
 
 
-No Access to External Scope
---------------------------
-
-Functions are not _closures_. They do not capture the calling environment and can only access their own parameters.
-They cannot access variables external to the function itself.
-
-```rust
-let x = 42;
-
-fn foo() { x }      // <- syntax error: variable 'x' doesn't exist
-```
-
-
 Global Definitions Only
 ----------------------
 
@@ -77,24 +64,52 @@ fn do_addition(x) {
 ```
 
 
-Use Before Definition
---------------------
+No Access to External Scope
+--------------------------
+
+Functions are not _closures_. They do not capture the calling environment
+and can only access their own parameters.
+They cannot access variables external to the function itself.
+
+```rust
+let x = 42;
+
+fn foo() { x }          // <- syntax error: variable 'x' doesn't exist
+```
+
+
+But Can Call Other Functions
+---------------------------
+
+All functions in the same [`AST`] can call each other.
+
+```rust
+fn foo(x) { x + 1 }     // function defined in the global namespace
+
+fn bar(x) { foo(x) }    // OK! function 'foo' can be called
+```
+
+
+Use Before Definition Allowed
+----------------------------
 
 Unlike C/C++, functions in Rhai can be defined _anywhere_ at global level.
+
 A function does not need to be defined prior to being used in a script;
 a statement in the script can freely call a function defined afterwards.
 
 This is similar to Rust and many other modern languages, such as JavaScript's `function` keyword.
 
 
-Arguments Passed by Value
-------------------------
+Arguments are Passed by Value
+----------------------------
 
-Functions defined in script always take [`Dynamic`] parameters (i.e. the parameter can be of any type).
+Functions defined in script always take [`Dynamic`] parameters (i.e. they can be of any types).
 Therefore, functions with the same name and same _number_ of parameters are equivalent.
 
-It is important to remember that all arguments are passed by _value_, so all Rhai script-defined functions
-are _pure_ (i.e. they never modify their arguments).
+All arguments are passed by _value_, so all Rhai script-defined functions are _pure_
+(i.e. they never modify their arguments).
+
 Any update to an argument will **not** be reflected back to the caller.
 
 ```rust
@@ -113,8 +128,8 @@ x == 500;           // 'x' is NOT changed!
 `this` - Simulating an Object Method
 -----------------------------------
 
-Functions can also be called in method-call style.  When this is the case, the keyword '`this`'
-binds to the object in the method call and can be changed.
+Script-defined functions can also be called in method-call style.
+When this happens, the keyword '`this`' binds to the object in the method call and can be changed.
 
 ```rust
 fn change() {       // not that the object does not need a parameter

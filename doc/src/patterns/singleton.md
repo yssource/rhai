@@ -41,7 +41,7 @@ wrapping the system in a shared, interior-mutated object.
 This is the other way which involves directly exposing the data structures of the external system
 as a name singleton object in the scripting space.
 
-Use this when the API is complex and clearly object-based.
+Use this when the API is complex but has a clear object structure.
 
 For a relatively simple API that is action-based and not object-based,
 use the [Control Layer]({{rootUrl}}/patterns/control.md) pattern instead.
@@ -68,13 +68,16 @@ impl EnergizerBunny {
 ### Wrap Command Object Type as Shared
 
 ```rust
-let SharedBunnyType = Rc<RefCell<EnergizerBunny>>;
+pub type SharedBunny = Rc<RefCell<EnergizerBunny>>;
 ```
+
+Note: Use `Arc<Mutex<T>>` or `Arc<RwLock<T>>` when using the [`sync`] feature because the function
+must then be `Send + Sync`.
 
 ### Register the Custom Type
 
 ```rust
-engine.register_type_with_name::<SharedBunnyType>("EnergizerBunny");
+engine.register_type_with_name::<SharedBunny>("EnergizerBunny");
 ```
 
 ### Develop a Plugin with Methods and Getters/Setters
@@ -82,18 +85,18 @@ engine.register_type_with_name::<SharedBunnyType>("EnergizerBunny");
 The easiest way to develop a complete set of API for a [custom type] is via a [plugin module].
 
 ```rust
-use rhai::plugins::*;
+use rhai::plugin::*;
 
 #[export_module]
 pub mod bunny_api {
     pub const MAX_SPEED: i64 = 100;
 
     #[rhai_fn(get = "power")]
-    pub fn get_power(bunny: &mut SharedBunnyType) -> bool {
+    pub fn get_power(bunny: &mut SharedBunny) -> bool {
         bunny.borrow().is_going()
     }
     #[rhai_fn(set = "power")]
-    pub fn set_power(bunny: &mut SharedBunnyType, on: bool) {
+    pub fn set_power(bunny: &mut SharedBunny, on: bool) {
         if on {
             if bunny.borrow().is_going() {
                 println!("Still going...");
@@ -109,7 +112,7 @@ pub mod bunny_api {
         }
     }
     #[rhai_fn(get = "speed")]
-    pub fn get_speed(bunny: &mut SharedBunnyType) -> i64 {
+    pub fn get_speed(bunny: &mut SharedBunny) -> i64 {
         if bunny.borrow().is_going() {
             bunny.borrow().get_speed()
         } else {
@@ -117,7 +120,7 @@ pub mod bunny_api {
         }
     }
     #[rhai_fn(set = "speed", return_raw)]
-    pub fn set_speed(bunny: &mut SharedBunnyType, speed: i64)
+    pub fn set_speed(bunny: &mut SharedBunny, speed: i64)
             -> Result<Dynamic, Box<EvalAltResult>>
     {
         if speed <= 0 {
@@ -131,12 +134,12 @@ pub mod bunny_api {
             Ok(().into())
         }
     }
-    pub fn turn_left(bunny: &mut SharedBunnyType) {
+    pub fn turn_left(bunny: &mut SharedBunny) {
         if bunny.borrow().is_going() {
             bunny.borrow_mut().turn(true);
         }
     }
-    pub fn turn_right(bunny: &mut SharedBunnyType) {
+    pub fn turn_right(bunny: &mut SharedBunny) {
         if bunny.borrow().is_going() {
             bunny.borrow_mut().turn(false);
         }
@@ -149,7 +152,7 @@ engine.load_package(exported_module!(bunny_api));
 ### Push Constant Command Object into Custom Scope
 
 ```rust
-let bunny: SharedBunnyType = Rc::new(RefCell::(EnergizerBunny::new()));
+let bunny: SharedBunny = Rc::new(RefCell::(EnergizerBunny::new()));
 
 let mut scope = Scope::new();
 

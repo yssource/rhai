@@ -4,6 +4,20 @@ Export a Rust Module to Rhai
 {{#include ../links.md}}
 
 
+Prelude
+-------
+
+When using the plugins system, the entire `rhai::plugin` module must be imported as a prelude
+because code generated will these imports.
+
+```rust
+use rhai::plugin::*;
+```
+
+
+`#[export_module]` and `exported_module!`
+----------------------------------------
+
 When applied to a Rust module, the `#[export_module]` attribute generates the necessary
 code and metadata to allow Rhai access to its public (i.e. marked `pub`) functions, constants
 and sub-modules.
@@ -14,18 +28,11 @@ and is custom fit to each exported item.
 This Rust module can then either be loaded into an [`Engine`] as a normal [module] or
 registered as a [custom package]. This is done by using the `exported_module!` macro.
 
-
-`#[export_module]` and `exported_module!`
-----------------------------------------
-
-Apply `#[export_module]` onto a Rust module to register automatically construct a Rhai [module],
-which can then be loaded into an [`Engine`].
-
 All `pub` functions become registered functions, all `pub` constants become [module] constant variables,
 and all sub-modules become Rhai sub-modules.
 
 ```rust
-use rhai::plugins::*;       // a "prelude" import for macros
+use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
@@ -117,7 +124,7 @@ Operators (which require function names that are not valid for Rust) can also be
 Registering the same function name with the same parameter types will cause a parsing error.
 
 ```rust
-use rhai::plugins::*;       // a "prelude" import for macros
+use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
@@ -147,7 +154,7 @@ Functions can be marked as [getters/setters] and [indexers] for [custom types] v
 attribute, which is applied on a function level.
 
 ```rust
-use rhai::plugins::*;       // a "prelude" import for macros
+use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
@@ -188,7 +195,7 @@ This is especially useful for the `name = "..."`, `get = "..."` and `set = "..."
 to give multiple alternative names to the same function.
 
 ```rust
-use rhai::plugins::*;       // a "prelude" import for macros
+use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
@@ -221,7 +228,7 @@ A syntax error is generated if the function with `#[rhai_fn(return_raw)]` does n
 have the appropriate return type.
 
 ```rust
-use rhai::plugins::*;       // a "prelude" import for macros
+use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
 mod my_module {

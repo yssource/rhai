@@ -35,7 +35,7 @@ but only through exposing an abstract API primarily made up of functions.
 
 Use this when the API is relatively simple and clean, and the number of functions is small enough.
 
-For a complex API involving lots of functions, or an API that is object-based,
+For a complex API involving lots of functions, or an API that has a clear object structure,
 use the [Singleton Command Object]({{rootUrl}}/patterns/singleton.md) pattern instead.
 
 
@@ -59,15 +59,22 @@ impl EnergizerBunny {
 ### Wrap API in Shared Object
 
 ```rust
-let bunny: Rc<RefCell<EnergizerBunny>> = Rc::new(RefCell::(EnergizerBunny::new()));
+pub type SharedBunny = Rc<RefCell<EnergizerBunny>>;
+```
+
+Note: Use `Arc<Mutex<T>>` or `Arc<RwLock<T>>` when using the [`sync`] feature because the function
+must then be `Send + Sync`.
+
+```rust
+let bunny: SharedBunny = Rc::new(RefCell::(EnergizerBunny::new()));
 ```
 
 ### Register Control API
 
 The trick to building a Control API is to clone the shared API object and
-move it into each function registration as a closure.
+move it into each function registration via a closure.
 
-It is not possible to use a [plugin module] to achieve this, so each function must
+Therefore, it is not possible to use a [plugin module] to achieve this, and each function must
 be registered one after another.
 
 ```rust

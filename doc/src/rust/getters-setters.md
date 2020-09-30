@@ -11,7 +11,7 @@ Getters and setters are disabled when the [`no_object`] feature is used.
 
 | `Engine` API          | Description                                       |       Return Value of Function        |
 | --------------------- | ------------------------------------------------- | :-----------------------------------: |
-| `register_get`        | register a getter                                 |                 _any_                 |
+| `register_get`        | register a getter                                 |           _any_ `T: Clone`            |
 | `register_set`        | register a setter                                 |                _none_                 |
 | `register_get_set`    | short-hand to register both a getter and a setter |                _none_                 |
 | `register_get_result` | register a getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |

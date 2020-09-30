@@ -3,7 +3,8 @@ Load a Plugin Module as a Package
 
 {{#include ../../links.md}}
 
-[Plugin modules] can be loaded as a package just like a normal [module].
+[Plugin modules] can be loaded as a package just like a normal [module]
+via the `exported_module!` macro.
 
 ```rust
 use rhai::Engine;
