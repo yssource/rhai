@@ -628,7 +628,7 @@ impl ExportedFn {
                         arg_type.span()=> &mut args[0usize].write_lock::<#arg_type>().unwrap());
                     unpack_stmts.push(
                         syn::parse2::<syn::Stmt>(quote! {
-                            let #var: &mut _ = #downcast_span;
+                            let #var = #downcast_span;
                         })
                         .unwrap(),
                     );
@@ -757,7 +757,7 @@ impl ExportedFn {
                 }
 
                 fn is_method_call(&self) -> bool { #is_method_call }
-                fn is_varadic(&self) -> bool { false }
+                fn is_variadic(&self) -> bool { false }
                 fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(#type_name()) }
                 fn input_types(&self) -> Box<[TypeId]> {
                     new_vec![#(#input_type_exprs),*].into_boxed_slice()

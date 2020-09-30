@@ -221,7 +221,7 @@ pub enum CallableFunction {
     Method(Shared<FnAny>),
     /// An iterator function.
     Iterator(IteratorFn),
-    /// A plugin-defined function,
+    /// A plugin function,
     Plugin(Shared<FnPlugin>),
     /// A script-defined function.
     #[cfg(not(feature = "no_function"))]
@@ -300,7 +300,7 @@ impl CallableFunction {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => false,
         }
     }
-    /// Is this a plugin-defined function?
+    /// Is this a plugin function?
     pub fn is_plugin_fn(&self) -> bool {
         match self {
             Self::Plugin(_) => true,

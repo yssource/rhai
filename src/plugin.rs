@@ -1,42 +1,38 @@
-//! Module defining plugins in Rhai for use by plugin authors.
+//! Module defining macros for developing _plugins_.
 
-pub use crate::{
-    fn_native::CallableFunction, stdlib::any::TypeId, stdlib::boxed::Box, stdlib::format,
-    stdlib::mem, stdlib::string::ToString, stdlib::vec as new_vec, stdlib::vec::Vec, Dynamic,
-    Engine, EvalAltResult, FnAccess, ImmutableString, Module, RegisterResultFn,
-};
+pub use crate::any::Dynamic;
+pub use crate::engine::Engine;
+pub use crate::fn_native::CallableFunction;
+pub use crate::fn_register::{RegisterFn, RegisterResultFn};
+pub use crate::module::Module;
+pub use crate::parser::FnAccess;
+pub use crate::result::EvalAltResult;
+pub use crate::utils::ImmutableString;
+
+pub use crate::stdlib::{any::TypeId, boxed::Box, format, mem, vec as new_vec};
 
 #[cfg(not(features = "no_module"))]
 pub use rhai_codegen::*;
 #[cfg(features = "no_module")]
 pub use rhai_codegen::{export_fn, register_exported_fn};
 
-#[cfg(features = "sync")]
-/// Represents an externally-written plugin for the Rhai interpreter.
+/// Trait implemented by a _plugin function_.
+/// This trait should not be used directly.
 ///
-/// This trait should not be used directly. Use the `#[plugin]` procedural attribute instead.
-pub trait Plugin: Send {
-    fn register_contents(self, engine: &mut Engine);
-}
-
-#[cfg(not(features = "sync"))]
-/// Represents an externally-written plugin for the Rhai interpreter.
-///
-/// This trait should not be used directly. Use the `#[plugin]` procedural attribute instead.
-pub trait Plugin: Send + Sync {
-    fn register_contents(self, engine: &mut Engine);
-}
-
-/// Represents a function that is statically defined within a plugin.
-///
-/// This trait should not be used directly. Use the `#[plugin]` procedural attribute instead.
+/// Use the `#[export_module]` and `#[export_fn]` procedural attributes instead.
 pub trait PluginFunction {
-    fn is_method_call(&self) -> bool;
-    fn is_varadic(&self) -> bool;
-
+    /// Call the plugin function with the arguments provided.
     fn call(&self, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>;
 
+    /// Is this plugin function a method?
+    fn is_method_call(&self) -> bool;
+
+    /// Is this plugin function variadic?
+    fn is_variadic(&self) -> bool;
+
+    /// Convert a plugin function into a boxed trait object.
     fn clone_boxed(&self) -> Box<dyn PluginFunction>;
 
+    /// Return a boxed slice of type ID's of the function's parameters.
     fn input_types(&self) -> Box<[TypeId]>;
 }

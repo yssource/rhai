@@ -311,7 +311,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(get_mystic_number_token())
                     }
@@ -374,7 +374,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_one_to_token())
                     }
@@ -451,7 +451,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_one_to_token())
                     }
@@ -480,7 +480,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_n_to_token())
                     }
@@ -546,7 +546,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_together_token())
                     }
@@ -619,7 +619,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(add_together_token())
                     }
@@ -859,7 +859,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(get_mystic_number_token())
                     }
@@ -953,7 +953,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(print_out_to_token())
                     }
@@ -1017,7 +1017,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(print_out_to_token())
                     }
@@ -1076,12 +1076,12 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<FLOAT>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                         Ok(Dynamic::from(increment(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(increment_token())
                     }
@@ -1143,12 +1143,12 @@ mod generate_tests {
                         ) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
-                            let arg0: &mut _ = &mut args[0usize].write_lock::<FLOAT>().unwrap();
+                            let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                             Ok(Dynamic::from(increment(arg0)))
                         }
 
                         fn is_method_call(&self) -> bool { true }
-                        fn is_varadic(&self) -> bool { false }
+                        fn is_variadic(&self) -> bool { false }
                         fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                             Box::new(increment_token())
                         }
@@ -1230,12 +1230,12 @@ mod generate_tests {
                         ) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
-                            let arg0: &mut _ = &mut args[0usize].write_lock::<FLOAT>().unwrap();
+                            let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                             Ok(Dynamic::from(increment(arg0)))
                         }
 
                         fn is_method_call(&self) -> bool { true }
-                        fn is_varadic(&self) -> bool { false }
+                        fn is_variadic(&self) -> bool { false }
                         fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                             Box::new(increment_token())
                         }
@@ -1315,12 +1315,12 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(int_foo_token())
                     }
@@ -1381,12 +1381,12 @@ mod generate_tests {
                     ) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(int_foo_token())
                     }
@@ -1448,12 +1448,12 @@ mod generate_tests {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(int_foo_token())
                     }
@@ -1519,12 +1519,12 @@ mod generate_tests {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<u64>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(int_foo_token())
                     }
@@ -1586,12 +1586,12 @@ mod generate_tests {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(get_by_index(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(get_by_index_token())
                     }
@@ -1658,12 +1658,12 @@ mod generate_tests {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(get_by_index(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(get_by_index_token())
                     }
@@ -1728,12 +1728,12 @@ mod generate_tests {
                                             "wrong arg count: {} != {}", args.len(), 3usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(set_by_index(arg0, arg1, arg2)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(set_by_index_token())
                     }
@@ -1804,12 +1804,12 @@ mod generate_tests {
                                             "wrong arg count: {} != {}", args.len(), 3usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<MyCollection>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(set_by_index(arg0, arg1, arg2)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> {
                         Box::new(set_by_index_token())
                     }

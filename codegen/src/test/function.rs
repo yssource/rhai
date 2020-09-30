@@ -283,7 +283,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![].into_boxed_slice()
@@ -328,7 +328,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>()].into_boxed_slice()
@@ -369,7 +369,7 @@ mod generate_tests {
                 }
 
                 fn is_method_call(&self) -> bool { false }
-                fn is_varadic(&self) -> bool { false }
+                fn is_variadic(&self) -> bool { false }
                 fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(MyType()) }
                 fn input_types(&self) -> Box<[TypeId]> {
                     new_vec![TypeId::of::<usize>()].into_boxed_slice()
@@ -404,7 +404,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>(),
@@ -446,12 +446,12 @@ mod generate_tests {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<usize>();
-                        let arg0: &mut _ = &mut args[0usize].write_lock::<usize>().unwrap();
+                        let arg0 = &mut args[0usize].write_lock::<usize>().unwrap();
                         Ok(Dynamic::from(increment(arg0, arg1)))
                     }
 
                     fn is_method_call(&self) -> bool { true }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>(),
@@ -498,7 +498,7 @@ mod generate_tests {
                     }
 
                     fn is_method_call(&self) -> bool { false }
-                    fn is_varadic(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
                     fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
