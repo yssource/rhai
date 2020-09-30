@@ -154,6 +154,25 @@ impl Module {
         }
     }
 
+    /// Is the module empty?
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let module = Module::new();
+    /// assert!(module.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.functions.is_empty()
+            && self.all_functions.is_empty()
+            && self.variables.is_empty()
+            && self.all_variables.is_empty()
+            && self.modules.is_empty()
+            && self.type_iterators.is_empty()
+    }
+
     /// Clone the module, optionally skipping the index.
     fn do_clone(&self, clone_index: bool) -> Self {
         Self {
@@ -1078,10 +1097,18 @@ impl Module {
     /// Combine another module into this module.
     /// The other module is consumed to merge into this module.
     pub fn combine(&mut self, other: Self) -> &mut Self {
-        self.modules.extend(other.modules.into_iter());
-        self.variables.extend(other.variables.into_iter());
-        self.functions.extend(other.functions.into_iter());
-        self.type_iterators.extend(other.type_iterators.into_iter());
+        if !other.modules.is_empty() {
+            self.modules.extend(other.modules.into_iter());
+        }
+        if !other.variables.is_empty() {
+            self.variables.extend(other.variables.into_iter());
+        }
+        if !other.functions.is_empty() {
+            self.functions.extend(other.functions.into_iter());
+        }
+        if !other.type_iterators.is_empty() {
+            self.type_iterators.extend(other.type_iterators.into_iter());
+        }
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
@@ -1092,13 +1119,20 @@ impl Module {
     /// The other module is consumed to merge into this module.
     /// Sub-modules are flattened onto the root module, with higher level overriding lower level.
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
-        other.modules.into_iter().for_each(|(_, m)| {
-            self.combine_flatten(m);
-        });
-
-        self.variables.extend(other.variables.into_iter());
-        self.functions.extend(other.functions.into_iter());
-        self.type_iterators.extend(other.type_iterators.into_iter());
+        if !other.modules.is_empty() {
+            other.modules.into_iter().for_each(|(_, m)| {
+                self.combine_flatten(m);
+            });
+        }
+        if !other.variables.is_empty() {
+            self.variables.extend(other.variables.into_iter());
+        }
+        if !other.functions.is_empty() {
+            self.functions.extend(other.functions.into_iter());
+        }
+        if !other.type_iterators.is_empty() {
+            self.type_iterators.extend(other.type_iterators.into_iter());
+        }
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
@@ -1117,36 +1151,42 @@ impl Module {
         mut _filter: &mut impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
-        for (k, v) in &other.modules {
-            let mut m = Self::new();
-            m.merge_filtered(v, _filter);
-            self.modules.insert(k.clone(), m);
+        if !other.modules.is_empty() {
+            for (k, v) in &other.modules {
+                let mut m = Self::new();
+                m.merge_filtered(v, _filter);
+                self.modules.insert(k.clone(), m);
+            }
+        }
+        #[cfg(feature = "no_function")]
+        if !other.modules.is_empty() {
+            self.modules
+                .extend(other.modules.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
+        if !other.variables.is_empty() {
+            self.variables
+                .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
+        if !other.functions.is_empty() {
+            self.functions.extend(
+                other
+                    .functions
+                    .iter()
+                    .filter(|(_, (_, _, _, _, v))| match v {
+                        #[cfg(not(feature = "no_function"))]
+                        CallableFunction::Script(f) => {
+                            _filter(f.access, f.name.as_str(), f.params.len())
+                        }
+                        _ => true,
+                    })
+                    .map(|(&k, v)| (k, v.clone())),
+            );
         }
 
-        #[cfg(feature = "no_function")]
-        self.modules
-            .extend(other.modules.iter().map(|(k, v)| (k.clone(), v.clone())));
-
-        self.variables
-            .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
-
-        self.functions.extend(
-            other
-                .functions
-                .iter()
-                .filter(|(_, (_, _, _, _, v))| match v {
-                    #[cfg(not(feature = "no_function"))]
-                    CallableFunction::Script(f) => {
-                        _filter(f.access, f.name.as_str(), f.params.len())
-                    }
-                    _ => true,
-                })
-                .map(|(&k, v)| (k, v.clone())),
-        );
-
-        self.type_iterators
-            .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
-
+        if !other.type_iterators.is_empty() {
+            self.type_iterators
+                .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
+        }
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
@@ -1280,13 +1320,21 @@ impl Module {
                         name,
                         num_args,
                         move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-                            let mut lib_merged = lib.clone();
-                            lib_merged.merge(&ast_lib);
+                            let mut lib_merged;
+
+                            let unified_lib = if lib.is_empty() {
+                                // In the special case of the main script not defining any function
+                                &ast_lib
+                            } else {
+                                lib_merged = lib.clone();
+                                lib_merged.merge(&ast_lib);
+                                &lib_merged
+                            };
 
                             engine
                                 .call_fn_dynamic_raw(
                                     &mut Scope::new(),
-                                    &lib_merged,
+                                    &unified_lib,
                                     &fn_name,
                                     &mut None,
                                     args,
