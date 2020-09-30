@@ -9,7 +9,7 @@ pub use crate::parser::FnAccess;
 pub use crate::result::EvalAltResult;
 pub use crate::utils::ImmutableString;
 
-pub use crate::stdlib::{any::TypeId, boxed::Box, format, mem, vec as new_vec};
+pub use crate::stdlib::{any::TypeId, boxed::Box, format, mem, string::ToString, vec as new_vec};
 
 #[cfg(not(features = "no_module"))]
 pub use rhai_codegen::*;
