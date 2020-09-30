@@ -106,7 +106,7 @@ mod test;
 ///
 /// # Usage
 ///
-/// ```,no_run
+/// ```,ignore
 /// use rhai::plugin::*;
 ///
 /// #[export_fn]
@@ -138,7 +138,7 @@ pub fn export_fn(
 ///
 /// # Usage
 ///
-/// ```,no_run
+/// ```,ignore
 /// use rhai::plugin::*;
 ///
 /// #[export_module]
@@ -168,7 +168,7 @@ pub fn export_module(
 ///
 /// # Usage
 ///
-/// ```,no_run
+/// ```,ignore
 /// use rhai::plugin::*;
 ///
 /// #[export_module]
@@ -203,7 +203,7 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 ///
 /// # Usage
 ///
-/// ```,no_run
+/// ```,ignore
 /// use rhai::plugin::*;
 ///
 /// #[export_module]
@@ -232,7 +232,7 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
 ///
 /// # Usage
 ///
-/// ```,no_run
+/// ```,ignore
 /// use rhai::plugin::*;
 ///
 /// #[export_fn]
@@ -262,7 +262,7 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
 ///
 /// # Usage
 ///
-/// ```,no_run
+/// ```,ignore
 /// use rhai::plugin::*;
 ///
 /// #[export_fn]
