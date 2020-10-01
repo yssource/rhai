@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
-use crate::parser::{FnAccess, FnAccess::Public};
+use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::token::{Position, Token};
 use crate::utils::{ImmutableString, StaticVec, StraightHasherBuilder};
@@ -85,7 +85,7 @@ impl fmt::Debug for Module {
             "Module(\n    modules: {}\n    vars: {}\n    functions: {}\n)",
             self.modules
                 .keys()
-                .map(|k| k.as_str())
+                .map(String::as_str)
                 .collect::<Vec<_>>()
                 .join(", "),
             self.variables
@@ -382,10 +382,7 @@ impl Module {
         } else if public_only {
             self.functions
                 .get(&hash_fn)
-                .map(|(_, access, _, _, _)| match access {
-                    FnAccess::Public => true,
-                    FnAccess::Private => false,
-                })
+                .map(|(_, access, _, _, _)| access.is_public())
                 .unwrap_or(false)
         } else {
             self.functions.contains_key(&hash_fn)
@@ -506,7 +503,7 @@ impl Module {
         };
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -562,7 +559,7 @@ impl Module {
         let arg_types = [];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -592,7 +589,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -622,7 +619,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -679,7 +676,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -715,7 +712,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -825,7 +822,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -867,7 +864,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -924,7 +921,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             FN_IDX_SET,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -1012,7 +1009,7 @@ impl Module {
         ];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -1061,7 +1058,7 @@ impl Module {
         ];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -1152,11 +1149,11 @@ impl Module {
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
         if !other.modules.is_empty() {
-            for (k, v) in &other.modules {
+            other.modules.iter().for_each(|(k, v)| {
                 let mut m = Self::new();
                 m.merge_filtered(v, _filter);
                 self.modules.insert(k.clone(), m);
-            }
+            });
         }
         #[cfg(feature = "no_function")]
         if !other.modules.is_empty() {
@@ -1244,13 +1241,14 @@ impl Module {
     }
 
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_script_fn_info(&self, mut action: impl FnMut(FnAccess, &str, usize)) {
+    pub fn iter_script_fn_info(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
         self.functions
-            .iter()
-            .for_each(|(_, (_, _, _, _, v))| match v {
-                CallableFunction::Script(f) => action(f.access, f.name.as_str(), f.params.len()),
-                _ => (),
-            });
+            .values()
+            .filter(|(_, _, _, _, v)| v.is_script())
+            .map(|(_, _, _, _, v)| {
+                let f = v.get_fn_def();
+                (f.access, f.name.as_str(), f.params.len())
+            })
     }
 
     /// Create a new `Module` by evaluating an `AST`.
@@ -1310,9 +1308,9 @@ impl Module {
 
         #[cfg(not(feature = "no_function"))]
         if merge_namespaces {
-            ast.iter_functions(|access, name, num_args| match access {
-                FnAccess::Private => (),
-                FnAccess::Public => {
+            ast.iter_functions()
+                .filter(|(access, _, _)| access.is_public())
+                .for_each(|(_, name, num_args)| {
                     let fn_name = name.to_string();
                     let ast_lib = ast.lib().clone();
 
@@ -1349,8 +1347,7 @@ impl Module {
                                 })
                         },
                     );
-                }
-            });
+                });
         } else {
             module.merge(ast.lib());
         }
@@ -1369,71 +1366,63 @@ impl Module {
             variables: &mut Vec<(u64, Dynamic)>,
             functions: &mut Vec<(u64, CallableFunction)>,
         ) {
-            for (name, m) in &module.modules {
+            module.modules.iter().for_each(|(name, m)| {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
                 index_module(m, qualifiers, variables, functions);
                 qualifiers.pop();
-            }
+            });
 
             // Index all variables
-            for (var_name, value) in &module.variables {
+            module.variables.iter().for_each(|(var_name, value)| {
                 // Qualifiers + variable name
                 let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0, empty());
                 variables.push((hash_var, value.clone()));
-            }
+            });
             // Index all Rust functions
-            for (&_hash, (name, access, _num_args, params, func)) in module.functions.iter() {
-                match access {
-                    // Private functions are not exported
-                    FnAccess::Private => continue,
-                    FnAccess::Public => (),
-                }
+            module
+                .functions
+                .iter()
+                .filter(|(_, (_, access, _, _, _))| access.is_public())
+                .for_each(|(&_hash, (name, _, _num_args, params, func))| {
+                    if let Some(params) = params {
+                        // Qualified Rust functions are indexed in two steps:
+                        // 1) Calculate a hash in a similar manner to script-defined functions,
+                        //    i.e. qualifiers + function name + number of arguments.
+                        let hash_qualified_script =
+                            calc_fn_hash(qualifiers.iter().cloned(), name, params.len(), empty());
+                        // 2) Calculate a second hash with no qualifiers, empty function name,
+                        //    zero number of arguments, and the actual list of argument `TypeId`'.s
+                        let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
+                        // 3) The final hash is the XOR of the two hashes.
+                        let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
 
-                #[cfg(not(feature = "no_function"))]
-                if params.is_none() {
-                    let hash_qualified_script = if qualifiers.is_empty() {
-                        _hash
-                    } else {
-                        // Qualifiers + function name + number of arguments.
-                        calc_fn_hash(qualifiers.iter().map(|&v| v), &name, *_num_args, empty())
-                    };
-                    functions.push((hash_qualified_script, func.clone()));
-                    continue;
-                }
-
-                if let Some(params) = params {
-                    // Qualified Rust functions are indexed in two steps:
-                    // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + number of arguments.
-                    let hash_qualified_script =
-                        calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
-                    // 2) Calculate a second hash with no qualifiers, empty function name,
-                    //    zero number of arguments, and the actual list of argument `TypeId`'.s
-                    let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
-                    // 3) The final hash is the XOR of the two hashes.
-                    let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
-
-                    functions.push((hash_qualified_fn, func.clone()));
-                }
-            }
+                        functions.push((hash_qualified_fn, func.clone()));
+                    } else if cfg!(not(feature = "no_function")) {
+                        let hash_qualified_script = if qualifiers.is_empty() {
+                            _hash
+                        } else {
+                            // Qualifiers + function name + number of arguments.
+                            calc_fn_hash(qualifiers.iter().map(|&v| v), &name, *_num_args, empty())
+                        };
+                        functions.push((hash_qualified_script, func.clone()));
+                    }
+                });
         }
 
-        if self.indexed {
-            return;
+        if !self.indexed {
+            let mut qualifiers: Vec<_> = Default::default();
+            let mut variables: Vec<_> = Default::default();
+            let mut functions: Vec<_> = Default::default();
+
+            qualifiers.push("root");
+
+            index_module(self, &mut qualifiers, &mut variables, &mut functions);
+
+            self.all_variables = variables.into_iter().collect();
+            self.all_functions = functions.into_iter().collect();
+            self.indexed = true;
         }
-
-        let mut qualifiers: Vec<_> = Default::default();
-        let mut variables: Vec<_> = Default::default();
-        let mut functions: Vec<_> = Default::default();
-
-        qualifiers.push("root");
-
-        index_module(self, &mut qualifiers, &mut variables, &mut functions);
-
-        self.all_variables = variables.into_iter().collect();
-        self.all_functions = functions.into_iter().collect();
-        self.indexed = true;
     }
 
     /// Does a type iterator exist in the module?

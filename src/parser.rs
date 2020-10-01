@@ -301,8 +301,8 @@ impl AST {
 
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_functions(&self, action: impl FnMut(FnAccess, &str, usize)) {
-        self.1.iter_script_fn_info(action);
+    pub fn iter_functions(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
+        self.1.iter_script_fn_info()
     }
 
     /// Clear all function definitions in the `AST`.
@@ -340,10 +340,10 @@ impl AsRef<Module> for AST {
 /// A type representing the access mode of a scripted function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnAccess {
-    /// Private function.
-    Private,
     /// Public function.
     Public,
+    /// Private function.
+    Private,
 }
 
 impl fmt::Display for FnAccess {
@@ -351,6 +351,23 @@ impl fmt::Display for FnAccess {
         match self {
             Self::Private => write!(f, "private"),
             Self::Public => write!(f, "public"),
+        }
+    }
+}
+
+impl FnAccess {
+    /// Is this access mode private?
+    pub fn is_private(self) -> bool {
+        match self {
+            Self::Public => false,
+            Self::Private => true,
+        }
+    }
+    /// Is this access mode public?
+    pub fn is_public(self) -> bool {
+        match self {
+            Self::Public => true,
+            Self::Private => false,
         }
     }
 }

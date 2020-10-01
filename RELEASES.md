@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 0.20.0
+==============
+
+Breaking changes
+----------------
+
+* `AST::iter_functions` and `Module::iter_script_fn_info` now return an iterator instead of taking a closure.
+
+
 Version 0.19.0
 ==============
 
