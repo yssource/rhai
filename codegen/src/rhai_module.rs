@@ -126,7 +126,7 @@ pub(crate) fn generate_body(
             set_fn_stmts.push(
                 syn::parse2::<syn::Stmt>(quote! {
                     m.set_fn(#fn_literal, FnAccess::Public, &[#(#fn_input_types),*],
-                             CallableFunction::from_plugin(#fn_token_name()));
+                             #fn_token_name().into());
                 })
                 .unwrap(),
             );

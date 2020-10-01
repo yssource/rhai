@@ -29,7 +29,7 @@ To register the plugin function, simply call `register_exported_fn!`.  The name 
 any text string, so it is possible to register _overloaded_ functions as well as operators.
 
 ```rust
-use rhai::plugins::*;       // import macros
+use rhai::plugin::*;        // import macros
 
 #[export_fn]
 fn increment(num: &mut i64) {
@@ -55,7 +55,7 @@ A syntax error is generated if the function with `#[rhai_fn(return_raw)]` does n
 have the appropriate return type.
 
 ```rust
-use rhai::plugins::*;       // import macros
+use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_fn]
 #[rhai_fn(return_raw)]

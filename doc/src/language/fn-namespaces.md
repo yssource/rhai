@@ -15,10 +15,10 @@ forming a new, combined, group of functions.
 
 In general, there are two types of _namespaces_ where functions are looked up:
 
-| Namespace | Source                                                                 | Lookup method                     |         How Many         |
-| --------- | ---------------------------------------------------------------------- | --------------------------------- | :----------------------: |
-| Global    | `Engine::register_XXX` API, [`AST`] being evaluated, [packages] loaded | simple function name              |           one            |
-| Module    | [`Module`]                                                             | namespace-qualified function name | as many as [`import`]-ed |
+| Namespace | Source                                                                                | Lookup method                  | Sub-modules? | Variables? |
+| --------- | ------------------------------------------------------------------------------------- | ------------------------------ | :----------: | :--------: |
+| Global    | 1) `Engine::register_XXX` API<br/>2) [`AST`] being evaluated<br/>3) [packages] loaded | simple function name           |   ignored    |  ignored   |
+| Module    | [`Module`]                                                                            | module-qualified function name |     yes      |    yes     |
 
 
 Global Namespace

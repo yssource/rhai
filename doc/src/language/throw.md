@@ -16,8 +16,9 @@ if some_bad_condition_has_happened {
 throw;              // defaults to empty exception text: ""
 ```
 
-Exceptions thrown via `throw` in the script can be captured by matching `Err(Box<EvalAltResult::ErrorRuntime(` _reason_ `,` _position_ `)>)`
-with the exception text captured by the first parameter.
+Exceptions thrown via `throw` in the script can be captured in Rust by matching
+`Err(Box<EvalAltResult::ErrorRuntime(reason, position)>)` with the exception text
+captured by `reason`.
 
 ```rust
 let result = engine.eval::<i64>(r#"

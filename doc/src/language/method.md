@@ -39,8 +39,8 @@ array[0].update();  // <- call in method-call style will update 'a'
 **IMPORTANT: Rhai does NOT support normal references (i.e. `&T`) as parameters.**
 
 
-Number of Parameters
---------------------
+Number of Parameters in Methods
+------------------------------
 
 Native Rust methods registered with an [`Engine`] take _one additional parameter_ more than
 an equivalent method coded in script, where the object is accessed via the `this` pointer instead.
@@ -53,15 +53,43 @@ The following table illustrates the differences:
 |  Rhai script  |    _N_     | `this` (of type `&mut T`) |       `Fn(x: U, y: V)`        |
 
 
-`&mut` is Efficient, Except for `ImmutableString`
------------------------------------------------
+`&mut` is Efficient, Except for `&mut ImmutableString`
+----------------------------------------------------
 
 Using a `&mut` first parameter is highly encouraged when using types that are expensive to clone,
 even when the intention is not to mutate that argument, because it avoids cloning that argument value.
 
-For example, the `len` method of an [array] has the signature: `Fn(&mut Array) -> INT`.
-The array itself is not modified in any way, but using a `&mut` parameter avoids a cloning that would
-otherwise have happened if the signature were `Fn(Array) -> INT`.
+Even when a function is never intended to be a method - for example an operator,
+it is still sometimes beneficial to make it method-like (i.e. with a first `&mut` parameter)
+if the first parameter is not modified.
+
+For types that are expensive to clone (remember, all function calls are passed cloned
+copies of argument values), this may result in a significant performance boost.
 
 For primary types that are cheap to clone (e.g. those that implement `Copy`), including `ImmutableString`,
 this is not necessary.
+
+```rust
+// This is a type that is very expensive to clone.
+#[derive(Debug, Clone)]
+struct VeryComplexType { ... }
+
+// Calculate some value by adding 'VeryComplexType' with an integer number.
+fn do_add(obj: &VeryComplexType, offset: i64) -> i64 {
+    ...
+}
+
+engine
+    .register_type::<VeryComplexType>()
+    .register_fn("+", add_pure /* or  add_method*/);
+
+// Very expensive to call, as the 'VeryComplexType' is cloned before each call.
+fn add_pure(obj: VeryComplexType, offset: i64) -> i64 {
+    do_add(obj, offset)
+}
+
+// Efficient to call, as only a reference to the 'VeryComplexType' is passed.
+fn add_method(obj: &mut VeryComplexType, offset: i64) -> i64 {
+    do_add(obj, offset)
+}
+```

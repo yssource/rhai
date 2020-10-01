@@ -6,11 +6,11 @@ members = [
 
 [package]
 name = "rhai"
-version = "0.18.3"
+version = "0.19.0"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"
-homepage = "https://github.com/jonathandturner/rhai"
+homepage = "https://schungx.github.io/rhai"
 repository = "https://github.com/jonathandturner/rhai"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -27,7 +27,6 @@ smallvec = { version = "1.4.2", default-features = false }
 rhai_codegen = { version = "0.1", path = "codegen" }
 
 [features]
-#default = ["unchecked", "sync", "no_optimize", "no_float", "only_i32", "no_index", "no_object", "no_function", "no_module"]
 default = []
 unchecked = []      # unchecked arithmetic
 sync = []           # restrict to only types that implement Send + Sync

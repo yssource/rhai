@@ -60,7 +60,7 @@ def_package!(rhai:MyPackage:"My own personal super package", module, {
 Create a Custom Package from a Plugin Module
 -------------------------------------------
 
-By far the easiest way to create a custom module is to call `rhai::plugins::combine_with_exported_module!`
+By far the easiest way to create a custom module is to call `rhai::plugin::combine_with_exported_module!`
 from within `rhai::def_package!` which simply merges in all the functions defined within a [plugin module].
 
 In fact, this exactly is how Rhai's built-in packages, such as `BasicMathPackage`, are implemented.
@@ -113,8 +113,8 @@ def_package!(rhai:MyPackage:"My own personal super package", module, {
     //
     // The sub-module 'my_sub_module' is flattened and its functions registered at the top level.
     //
-    // The text string name in the middle parameter can be anything and is reserved for future use;
-    // it is recommended to be an ID string that uniquely identifies the module.
+    // The text string name in the second parameter can be anything and is reserved for future use;
+    // it is recommended to be an ID string that uniquely identifies the plugin module.
     //
     // The constant variable, 'MY_NUMBER', is ignored.
     //

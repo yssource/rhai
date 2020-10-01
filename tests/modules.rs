@@ -237,6 +237,9 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
             fn add_len(x, y) {
                 x + len(y)
             }
+            fn cross_call(x) {
+                calc(x)
+            }
             private fn hidden() {
                 throw "you shouldn't see me!";
             }
@@ -283,6 +286,10 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(
         engine.eval::<INT>(r#"import "testing" as ttt; ttt::calc(999)"#)?,
+        1000
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"import "testing" as ttt; ttt::cross_call(999)"#)?,
         1000
     );
     assert_eq!(

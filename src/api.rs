@@ -1504,7 +1504,7 @@ impl Engine {
         let mut arg_values = args.into_vec();
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        let result = self.call_fn_dynamic_raw(scope, ast, name, &mut None, args.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast.lib(), name, &mut None, args.as_mut())?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1578,7 +1578,7 @@ impl Engine {
     ) -> FuncReturn<Dynamic> {
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        self.call_fn_dynamic_raw(scope, lib, name, &mut this_ptr, args.as_mut())
+        self.call_fn_dynamic_raw(scope, lib.as_ref(), name, &mut this_ptr, args.as_mut())
     }
 
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
@@ -1593,12 +1593,11 @@ impl Engine {
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
-        lib: impl AsRef<Module>,
+        lib: &Module,
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut [&mut Dynamic],
     ) -> FuncReturn<Dynamic> {
-        let lib = lib.as_ref();
         let fn_def = get_script_function_by_signature(lib, name, args.len(), true)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 

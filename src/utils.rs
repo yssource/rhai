@@ -61,7 +61,8 @@ impl BuildHasher for StraightHasherBuilder {
     }
 }
 
-/// Calculate a `u64` hash key from a module-qualified function name and parameter types.
+/// [INTERNALS] Calculate a `u64` hash key from a module-qualified function name and parameter types.
+/// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via `TypeId` values from an iterator.

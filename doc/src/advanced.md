@@ -13,8 +13,6 @@ This section covers advanced features such as:
 
 * [Script optimization].
 
-* [Domain-Specific Languages][DSL].
-
 * Low-level [function registration API]({{rootUrl}}/rust/register-raw.md)
 
-* The dreaded (or beloved for those with twisted tastes) [`eval`] statement.
+* [Domain-Specific Languages][DSL].

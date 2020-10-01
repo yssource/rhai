@@ -15,9 +15,10 @@ Built-in methods
 The following standard methods (mostly defined in the [`BasicFnPackage`][packages] but excluded if
 using a [raw `Engine`]) operate on [strings]:
 
-| Function                   | Parameter(s) | Description                                                           |
-| -------------------------- | ------------ | --------------------------------------------------------------------- |
-| `name` method and property | _none_       | returns the name of the function encapsulated by the function pointer |
+| Function                   | Parameter(s) | Description                                                                  |
+| -------------------------- | ------------ | ---------------------------------------------------------------------------- |
+| `name` method and property | _none_       | returns the name of the function encapsulated by the function pointer        |
+| `call`                     | _arguments_  | calls the function matching the function pointer's name with the _arguments_ |
 
 
 Examples
@@ -143,7 +144,9 @@ to a function call while binding the object in the method call to the `this` poi
 To achieve this, pass the `FnPtr` value as the _first_ argument to `call`:
 
 ```rust
-fn add(x) { this += x; }    // define function which uses 'this'
+fn add(x) {                 // define function which uses 'this'
+    this += x;
+}
 
 let func = Fn("add");       // function pointer to 'add'
 

@@ -49,8 +49,8 @@ f.call!(41);            // <- syntax error: capturing is not allowed in method-c
 No Mutations
 ------------
 
-Variables in the calling scope are captured as copies.
-Changes to them do not reflect back to the calling scope.
+Variables in the calling scope are captured as cloned copies.
+Changes to them do **not** reflect back to the calling scope.
 
 Rhai functions remain _pure_ in the sense that they can never mutate their environment.
 

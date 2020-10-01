@@ -35,13 +35,12 @@ engine.register_raw_fn(
         // Therefore, get a '&mut' reference to the first argument _last_.
         // Alternatively, use `args.split_first_mut()` etc. to split the slice first.
 
-        let y: i64 = *args[1].read_lock::<i64>()            // get a reference to the second argument
-                             .unwrap();                     // then copying it because it is a primary type
+        let y = *args[1].read_lock::<i64>().unwrap();       // get a reference to the second argument
+                                                            // then copy it because it is a primary type
 
-        let y: i64 = std::mem::take(args[1]).cast::<i64>(); // alternatively, directly 'consume' it
+        let y = std::mem::take(args[1]).cast::<i64>();      // alternatively, directly 'consume' it
 
-        let x: &mut i64 = args[0].write_lock::<i64>()       // get a '&mut' reference to the
-                                 .unwrap();                 // first argument
+        let x = args[0].write_lock::<i64>().unwrap();       // get a '&mut' reference to the first argument
 
         *x += y;                                            // perform the action
 
@@ -51,7 +50,7 @@ engine.register_raw_fn(
 
 // The above is the same as (in fact, internally they are equivalent):
 
-engine.register_fn("increment_by", |x: &mut i64, y: i64| x += y);
+engine.register_fn("increment_by", |x: &mut i64, y: i64| *x += y);
 ```
 
 
@@ -153,7 +152,8 @@ is a _shared value_ created by [capturing][automatic currying] variables from [c
 Shared values are implemented as `Rc<RefCell<Dynamic>>` (`Arc<RwLock<Dynamic>>` under [`sync`]).
 
 If the value is _not_ a shared value, or if running under [`no_closure`] where there is
-no [capturing][automatic currying], this API de-sugars to a simple `downcast_ref` and `downcast_mut`.
+no [capturing][automatic currying], this API de-sugars to a simple `Dynamic::downcast_ref` and
+`Dynamic::downcast_mut`.
 
 If the value is a shared value, then it is first locked and the returned lock guard
 then allows access to the underlying value in the specified type.
@@ -171,9 +171,9 @@ to partition the slice:
 let (first, rest) = args.split_first_mut().unwrap();
 
 // Mutable reference to the first parameter
-let this_ptr: &mut A = &mut *first.write_lock::<A>().unwrap();
+let this_ptr = &mut *first.write_lock::<A>().unwrap();
 
 // Immutable reference to the second value parameter
 // This can be mutable but there is no point because the parameter is passed by value
-let value_ref: &B = &*rest[0].read_lock::<B>().unwrap();
+let value_ref = &*rest[0].read_lock::<B>().unwrap();
 ```

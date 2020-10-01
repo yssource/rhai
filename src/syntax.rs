@@ -17,11 +17,6 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::rc::Rc;
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::Arc;
-
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
 pub type FnCustomSyntaxEval = dyn Fn(
@@ -175,10 +170,7 @@ impl Engine {
 
         let syntax = CustomSyntax {
             segments,
-            #[cfg(not(feature = "sync"))]
-            func: Rc::new(func),
-            #[cfg(feature = "sync")]
-            func: Arc::new(func),
+            func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
             scope_delta,
         };
 

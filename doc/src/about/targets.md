@@ -10,3 +10,9 @@ The following targets and builds are support by Rhai:
 * WebAssembly ([WASM])
 
 * [`no-std`]
+
+
+Minimum Rust Version
+--------------------
+
+The minimum version of Rust required to compile Rhai is `1.45.0`.

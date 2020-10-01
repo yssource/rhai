@@ -15,7 +15,7 @@ Indexers are disabled when the [`no_index`] feature is used.
 
 | `Engine` API                  | Description                                              |       Return Value of Function        |
 | ----------------------------- | -------------------------------------------------------- | :-----------------------------------: |
-| `register_indexer_get`        | register an index getter                                 |                 _any_                 |
+| `register_indexer_get`        | register an index getter                                 |           _any_ `T: Clone`            |
 | `register_indexer_set`        | register an index setter                                 |                _none_                 |
 | `register_indexer_get_set`    | short-hand to register both an index getter and a setter |                _none_                 |
 | `register_indexer_get_result` | register an index getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |

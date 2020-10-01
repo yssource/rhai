@@ -1,17 +1,14 @@
+//! This crate contains procedural macros to make creating Rhai plugin-modules much easier.
 //!
-//! This crate contains procedural macros to make creating Rhai modules much easier.
-//!
-//! # Exporting a Macro to Rhai
+//! # Export an Entire Rust Module to a Rhai `Module`
 //!
 //! ```
 //! use rhai::{EvalAltResult, FLOAT};
 //! use rhai::plugin::*;
 //! use rhai::module_resolvers::*;
 //!
-//! #[rhai::export_module]
-//! pub mod advanced_math {
-//!     use rhai::FLOAT;
-//!
+//! #[export_module]
+//! mod advanced_math {
 //!     pub const MYSTIC_NUMBER: FLOAT = 42.0 as FLOAT;
 //!
 //!     pub fn euclidean_distance(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
@@ -35,15 +32,15 @@
 //! }
 //! ```
 //!
-//! # Exporting a Function to a Rhai Module
+//! # Register a Rust Function with a Rhai `Module`
 //!
 //! ```
 //! use rhai::{EvalAltResult, FLOAT, Module, RegisterFn};
 //! use rhai::plugin::*;
 //! use rhai::module_resolvers::*;
 //!
-//! #[rhai::export_fn]
-//! pub fn distance_function(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
+//! #[export_fn]
+//! fn distance_function(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
 //!     ((y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0)).sqrt()
 //! }
 //!
@@ -66,7 +63,7 @@
 //! }
 //! ```
 //!
-//! # Exporting a Function to an Engine
+//! # Register a Plugin Function with an `Engine`
 //!
 //! ```
 //! use rhai::{EvalAltResult, FLOAT, Module, RegisterFn};
@@ -105,6 +102,18 @@ mod rhai_module;
 #[cfg(test)]
 mod test;
 
+/// Attribute, when put on a Rust function, turns it into a _plugin function_.
+///
+/// # Usage
+///
+/// ```,ignore
+/// use rhai::plugin::*;
+///
+/// #[export_fn]
+/// fn my_plugin_function(...) {
+///   ...
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn export_fn(
     args: proc_macro::TokenStream,
@@ -125,6 +134,18 @@ pub fn export_fn(
     proc_macro::TokenStream::from(output)
 }
 
+/// Attribute, when put on a Rust module, turns it into a _plugin module_.
+///
+/// # Usage
+///
+/// ```,ignore
+/// use rhai::plugin::*;
+///
+/// #[export_module]
+/// mod my_plugin_module {
+///   ...
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn export_module(
     args: proc_macro::TokenStream,
@@ -143,6 +164,20 @@ pub fn export_module(
     proc_macro::TokenStream::from(tokens)
 }
 
+/// Macro to generate a Rhai `Module` from a _plugin module_.
+///
+/// # Usage
+///
+/// ```,ignore
+/// use rhai::plugin::*;
+///
+/// #[export_module]
+/// mod my_plugin_module {
+///   ...
+/// }
+///
+/// let module = exported_module!(my_plugin_module);
+/// ```
 #[proc_macro]
 pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let module_path = parse_macro_input!(module_path as syn::Path);
@@ -152,6 +187,34 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
     proc_macro::TokenStream::from(tokens)
 }
 
+/// Macro to combine a _plugin module_ into an existing module.
+///
+/// Functions and variables in the plugin module overrides any existing similarly-named
+/// functions and variables in the target module.
+///
+/// This call is intended to be used within the `def_package!` macro to define a custom
+/// package based on a plugin module.
+///
+/// All sub-modules, if any, in the plugin module are _flattened_ and their functions/variables
+/// registered at the top level because packages require so.
+///
+/// The text string name in the second parameter can be anything and is reserved for future use;
+/// it is recommended to be an ID string that uniquely identifies the plugin module.
+///
+/// # Usage
+///
+/// ```,ignore
+/// use rhai::plugin::*;
+///
+/// #[export_module]
+/// mod my_plugin_module {
+///   ...
+/// }
+///
+/// let mut module = Module::new();
+///
+/// combine_with_exported_module!(&mut module, "my_plugin_module_ID", my_plugin_module);
+/// ```
 #[proc_macro]
 pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (module_expr, _export_name, module_path) = match crate::register::parse_register_macro(args)
@@ -165,6 +228,22 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
     proc_macro::TokenStream::from(tokens)
 }
 
+/// Macro to register a _plugin function_ into an `Engine`.
+///
+/// # Usage
+///
+/// ```,ignore
+/// use rhai::plugin::*;
+///
+/// #[export_fn]
+/// fn my_plugin_function(...) {
+///   ...
+/// }
+///
+/// let mut engine = Engine::new();
+///
+/// register_exported_fn!(engine, "calc", my_plugin_function);
+/// ```
 #[proc_macro]
 pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (engine_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
@@ -179,6 +258,22 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
     proc_macro::TokenStream::from(tokens)
 }
 
+/// Macro to register a _plugin function_ into a Rhai `Module`.
+///
+/// # Usage
+///
+/// ```,ignore
+/// use rhai::plugin::*;
+///
+/// #[export_fn]
+/// fn my_plugin_function(...) {
+///   ...
+/// }
+///
+/// let mut module = Module::new();
+///
+/// set_exported_fn!(module, "calc", my_plugin_function);
+/// ```
 #[proc_macro]
 pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (module_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)

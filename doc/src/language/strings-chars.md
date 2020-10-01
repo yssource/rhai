@@ -29,7 +29,15 @@ Modifying an `ImmutableString` causes it first to be cloned, and then the modifi
 `ImmutableString` should be used in place of `String` for function parameters because using
 `String` is very inefficient (the `String` argument is cloned during every call).
 
-A alternative is to use `&str` which maps straight to `ImmutableString`.
+A alternative is to use `&str` which de-sugars to `ImmutableString`.
+
+```rust
+fn slow(s: String) -> i64 { ... }               // string is cloned each call
+
+fn fast1(s: ImmutableString) -> i64 { ... }     // cloning 'ImmutableString' is cheap
+
+fn fast2(s: &str) -> i64 { ... }                // de-sugars to above
+```
 
 
 String and Character Literals

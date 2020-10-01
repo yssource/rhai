@@ -12,8 +12,13 @@ Like C, `continue` can be used to skip to the next iteration, by-passing all fol
 To loop through a number sequence (with or without steps), use the `range` function to
 return a numeric iterator.
 
+
+Iterate Through Strings
+-----------------------
+
+Iterating through a [string] yields characters.
+
 ```rust
-// Iterate through string, yielding characters
 let s = "hello, world!";
 
 for ch in s {
@@ -23,8 +28,15 @@ for ch in s {
 
     if x == '@' { break; }      // break out of for loop
 }
+```
 
-// Iterate through array
+
+Iterate Through Arrays
+----------------------
+
+Iterating through an [array] yields cloned _copies_ of each element.
+
+```rust
 let array = [1, 3, 5, 7, 9, 42];
 
 for x in array {
@@ -34,8 +46,17 @@ for x in array {
 
     if x == 42 { break; }       // break out of for loop
 }
+```
 
-// The 'range' function allows iterating from first to last-1
+
+Iterate Through Numeric Ranges
+-----------------------------
+
+The `range` function allows iterating through a range of numbers
+(not including the last number).
+
+```rust
+// Iterate starting from 0 and stopping at 49.
 for x in range(0, 50) {
     if x > 10 { continue; }     // skip to the next iteration
 
@@ -44,7 +65,7 @@ for x in range(0, 50) {
     if x == 42 { break; }       // break out of for loop
 }
 
-// The 'range' function also takes a step
+// The 'range' function also takes a step.
 for x in range(0, 50, 3) {      // step by 3
     if x > 10 { continue; }     // skip to the next iteration
 
@@ -52,8 +73,18 @@ for x in range(0, 50, 3) {      // step by 3
 
     if x == 42 { break; }       // break out of for loop
 }
+```
 
-// Iterate through object map
+
+Iterate Through Object Maps
+--------------------------
+
+Two functions, `keys` and `values`, return [arrays] containing cloned _copies_
+of all property names and values of an [object map], respectively.
+
+These [arrays] can be iterated.
+
+```rust
 let map = #{a:1, b:3, c:5, d:7, e:9};
 
 // Property names are returned in unsorted, random order

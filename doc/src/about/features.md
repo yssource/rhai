@@ -14,8 +14,8 @@ Easy
 
 * Easily [call a script-defined function]({{rootUrl}}/engine/call-fn.md) from Rust.
 
-* Very few additional dependencies (right now only [`smallvec`](https://crates.io/crates/smallvec/));
-  for [`no-std`] builds, a number of additional dependencies are pulled in to provide for functionalities that used to be in `std`.
+* Very few additional dependencies - right now only [`smallvec`](https://crates.io/crates/smallvec/) plus crates for procedural macros;
+  for [`no-std`] and `WASM` builds, a number of additional dependencies are pulled in to provide for missing functionalities.
 
 Fast
 ----
