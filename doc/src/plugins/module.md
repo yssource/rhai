@@ -15,8 +15,8 @@ use rhai::plugin::*;
 ```
 
 
-`#[export_module]` and `exported_module!`
-----------------------------------------
+`#[export_module]`
+------------------
 
 When applied to a Rust module, the `#[export_module]` attribute generates the necessary
 code and metadata to allow Rhai access to its public (i.e. marked `pub`) functions, constants
@@ -25,11 +25,16 @@ and sub-modules.
 This code is exactly what would need to be written by hand to achieve the same goal,
 and is custom fit to each exported item.
 
-This Rust module can then either be loaded into an [`Engine`] as a normal [module] or
-registered as a [custom package]. This is done by using the `exported_module!` macro.
-
 All `pub` functions become registered functions, all `pub` constants become [module] constant variables,
 and all sub-modules become Rhai sub-modules.
+
+This Rust module can then either be loaded into an [`Engine`] as a normal [module] or
+registered as a [package]. This is done by using the `exported_module!` macro.
+
+The macro `combine_with_exported_module!` can also be used to _combine_ all the functions
+and variables into an existing module, _flattening_ the namespace - i.e. all sub-modules
+are eliminated and their contents promoted to the top level.  This is typical for
+developing [custom packages].
 
 ```rust
 use rhai::plugin::*;        // a "prelude" import for macros
@@ -57,7 +62,7 @@ mod my_module {
         42
     }
 
-    // This sub-module is ignored when loaded as a package.
+    // Sub-modules are ignored when the Module is loaded as a package.
     pub mod my_sub_module {
         // This function is ignored when loaded as a package.
         // Otherwise it is a valid registered function under a sub-module.
@@ -65,16 +70,32 @@ mod my_module {
             "hello".to_string()
         }
     }
+
+    // Sub-modules are commonly used to put feature gates on a group of
+    // functions because feature gates cannot be put on function definitions.
+    // This is currently a limitation of the plugin procedural macros.
+    #[cfg(feature = "advanced_functions")]
+    pub mod advanced {
+        // This function is ignored when loaded as a package.
+        // Otherwise it is a valid registered function under a sub-module
+        // which only exists when the 'advanced_functions' feature is used.
+        pub fn advanced_calc(input: i64) -> i64 {
+            input * 2
+        }
+    }
 }
 ```
 
-The simplest way to load this into an [`Engine`] is to use the `load_package` method on the exported module:
+### Use `Engine::load_package`
+
+The simplest way to load this into an [`Engine`] is to first use the `exported_module!` macro
+to turn it into a normal Rhai [module], then use the `Engine::load_package` method on it:
 
 ```rust
 fn main() {
     let mut engine = Engine::new();
 
-    // The macro call creates the Rhai module.
+    // The macro call creates a Rhai module from the plugin module.
     let module = exported_module!(my_module);
 
     // A module can simply be loaded, registering all public functions.
@@ -102,9 +123,76 @@ x == 43;
 Notice that, when using a [module] as a [package], only functions registered at the _top level_
 can be accessed.  Variables as well as sub-modules are ignored.
 
-Using this directly as a Rhai module is almost the same, except that a [module resolver] must
-be used to serve the module, and the module is loaded via `import` statements.
+### Use as loadable `Module`
+
+Using this directly as a dynamically-loadable Rhai [module] is almost the same, except that a
+[module resolver] must be used to serve the module, and the module is loaded via `import` statements.
+
 See the [module] section for more information.
+
+### Use as custom package
+
+Finally the plugin module can also be used to develop a [custom package],
+using `combine_with_exported_module!`:
+
+```rust
+def_package!(rhai:MyPackage:"My own personal super package", module, {
+    combine_with_exported_module!(module, "my_module_ID", my_module));
+});
+```
+
+`combine_with_exported_module!` automatically _flattens_ the module namespace so that all
+functions in sub-modules are promoted to the top level.  This is convenient for [custom packages].
+
+
+Sub-Modules and Feature Gates
+----------------------------
+
+Sub-modules in a plugin module definition are turned into valid sub-modules in the resultant
+Rhai `Module`.
+
+They are also commonly used to put _feature gates_ or _compile-time gates_ on a group of functions,
+because currently attributes do not work on individual function definitions due to a limitation of
+the procedural macros system.
+
+This is especially convenient when using the `combine_with_exported_module!` macro to develop
+[custom packages] because selected groups of functions can easily be included or excluded based on
+different combinations of feature flags instead of having to manually include/exclude every
+single function.
+
+```rust
+#[export_module]
+mod my_module {
+    // Always available
+    pub fn func0() {}
+
+    // The following sub-module is only available under 'feature1'
+    #[cfg(feature = "feature1")]
+    pub mod feature1 {
+        fn func1() {}
+        fn func2() {}
+        fn func3() {}
+    }
+
+    // The following sub-module is only available under 'feature2'
+    #[cfg(feature = "feature2")]
+    pub mod feature2 {
+        fn func4() {}
+        fn func5() {}
+        fn func6() {}
+    }
+}
+
+// Registered functions:
+//   func0 - always available
+//   func1 - available under 'feature1'
+//   func2 - available under 'feature1'
+//   func3 - available under 'feature1'
+//   func4 - available under 'feature2'
+//   func5 - available under 'feature2'
+//   func6 - available under 'feature2'
+combine_with_exported_module!(module, "my_module_ID", my_module);
+```
 
 
 Function Overloading and Operators
