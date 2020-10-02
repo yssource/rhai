@@ -1312,11 +1312,13 @@ impl Module {
 
         #[cfg(not(feature = "no_function"))]
         if merge_namespaces {
+            let ast_lib: Shared<Module> = ast.lib().clone().into();
+
             ast.iter_functions()
                 .filter(|(access, _, _)| access.is_public())
                 .for_each(|(_, name, num_args)| {
                     let fn_name = name.to_string();
-                    let ast_lib = ast.lib().clone();
+                    let ast_lib = ast_lib.clone();
 
                     module.set_raw_fn_as_scripted(
                         name,
