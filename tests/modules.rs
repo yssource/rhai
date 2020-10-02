@@ -362,6 +362,7 @@ fn test_module_str() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_function"))]
 #[test]
 fn test_module_ast_namespace() -> Result<(), Box<EvalAltResult>> {
     let script = r#"
