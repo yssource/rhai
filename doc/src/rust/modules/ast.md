@@ -27,8 +27,12 @@ functions exposed by the module and the namespace that they can access:
 
 | `merge_namespaces` value | Description                                      |      Namespace      | Performance | Call global functions | Call functions in same module |
 | :----------------------: | ------------------------------------------------ | :-----------------: | :---------: | :-------------------: | :---------------------------: |
-|          `true`          | encapsulate entire `AST` into each function call | module, then global |   slower    |          yes          |              yes              |
+|          `true`          | encapsulate entire `AST` into each function call | module, then global |  2x slower  |          yes          |              yes              |
 |         `false`          | register each function independently             |     global only     |    fast     |          yes          |              no               |
+
+If the ultimate intention is to load the [module] directly into an [`Engine`] via `Engine::load_package`,
+set `merge_namespaces` to `false` because there will not be any _module_ namespace as `Engine::load_package`
+flattens everything into the _global_ namespace anyway.
 
 
 Examples
@@ -78,7 +82,9 @@ let ast = engine.compile(r#"
 // a copy of the entire 'AST' into each function, allowing functions in the module script
 // to cross-call each other.
 //
-// This incurs additional overhead, avoidable by setting 'merge_namespaces' to false.
+// This incurs additional overhead, avoidable by setting 'merge_namespaces' to false
+// which makes function calls 2x faster but at the expense of not being able to cross-call
+// functions in the same module script.
 let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
 
 // 'module' now contains:

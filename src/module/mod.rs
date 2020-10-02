@@ -1260,8 +1260,12 @@ impl Module {
     ///   defined in the module, are _merged_ into a _unified_ namespace before each call.
     ///   Therefore, all functions will be found, at the expense of some performance.
     ///
-    /// * If `false`, each function is registered independently and cannot cross-call
-    ///   each other. Functions are searched in the global namespace.
+    /// * If `false`, each function is registered independently and cannot cross-call each other.
+    ///   Functions are searched in the global namespace.
+    ///   This is roughly 2x faster than the `true` case.
+    ///
+    /// Set `merge_namespaces` to `false` if the ultimate intention is to load the module
+    /// via `Engine::load_package` because it does not create any module namespace.
     ///
     /// # Examples
     ///

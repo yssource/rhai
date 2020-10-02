@@ -361,3 +361,40 @@ fn test_module_str() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_module_ast_namespace() -> Result<(), Box<EvalAltResult>> {
+    let script = r#"
+        fn foo(x) { x + 1 }
+        fn bar(x) { foo(x) }
+    "#;
+
+    let mut engine = Engine::new();
+
+    let ast = engine.compile(script)?;
+
+    let module = Module::eval_ast_as_new(Default::default(), &ast, true, &engine)?;
+
+    let mut resolver = StaticModuleResolver::new();
+    resolver.insert("testing", module);
+    engine.set_module_resolver(Some(resolver));
+
+    assert_eq!(
+        engine.eval::<INT>(r#"import "testing" as t; t::foo(41)"#)?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"import "testing" as t; t::bar(41)"#)?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"fn foo(x) { x - 1 } import "testing" as t; t::foo(41)"#)?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"fn foo(x) { x - 1 } import "testing" as t; t::bar(41)"#)?,
+        42
+    );
+
+    Ok(())
+}
