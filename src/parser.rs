@@ -592,7 +592,7 @@ pub enum Stmt {
     ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
     /// import expr as module
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, Option<(String, Position)>, Position)>),
+    Import(Box<(Expr, Option<(ImmutableString, Position)>, Position)>),
     /// expr id as name, ...
     #[cfg(not(feature = "no_module"))]
     Export(
@@ -2753,7 +2753,7 @@ fn parse_import(
 
     Ok(Stmt::Import(Box::new((
         expr,
-        Some((name, settings.pos)),
+        Some((name.into(), settings.pos)),
         token_pos,
     ))))
 }

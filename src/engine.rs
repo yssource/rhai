@@ -36,7 +36,6 @@ use crate::utils::ImmutableString;
 use crate::any::DynamicWriteLock;
 
 use crate::stdlib::{
-    borrow::Cow,
     boxed::Box,
     collections::{HashMap, HashSet},
     fmt, format,
@@ -70,7 +69,11 @@ pub type Map = HashMap<ImmutableString, Dynamic>;
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-pub type Imports<'a> = Vec<(Cow<'a, str>, Module)>;
+//
+// Note - We cannot use &str or Cow<str> here because `eval` may load a module
+//        and the module name will live beyond the AST of the eval script text.
+//        The best we can do is a shared reference.
+pub type Imports = Vec<(ImmutableString, Module)>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
@@ -1826,7 +1829,7 @@ impl Engine {
 
                         if let Some((name, _)) = alias {
                             module.index_all_sub_modules();
-                            mods.push((name.clone().into(), module));
+                            mods.push((name.clone(), module));
                         }
 
                         state.modules += 1;
