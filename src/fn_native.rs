@@ -351,10 +351,10 @@ impl CallableFunction {
     ///
     /// Panics if the `CallableFunction` is not `Script`.
     #[cfg(not(feature = "no_function"))]
-    pub fn get_shared_fn_def(&self) -> Shared<ScriptFnDef> {
+    pub fn get_shared_fn_def(&self) -> &Shared<ScriptFnDef> {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => unreachable!(),
-            Self::Script(f) => f.clone(),
+            Self::Script(f) => f,
         }
     }
     /// Get a reference to a script-defined function definition.

@@ -301,8 +301,10 @@ impl AST {
 
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_functions(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
-        self.1.iter_script_fn_info()
+    pub fn iter_functions<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
+        self.1.iter_script_fn()
     }
 
     /// Clear all function definitions in the `AST`.

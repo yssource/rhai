@@ -18,9 +18,6 @@ use crate::utils::StaticVec;
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 use crate::any::Variant;
 
-#[cfg(not(feature = "no_function"))]
-use crate::parser::ScriptFnDef;
-
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
 
@@ -315,24 +312,6 @@ impl State {
     #[inline(always)]
     pub fn new() -> Self {
         Default::default()
-    }
-}
-
-/// Get a script-defined function definition from a module.
-#[cfg(not(feature = "no_function"))]
-pub fn get_script_function_by_signature<'a>(
-    module: &'a Module,
-    name: &str,
-    params: usize,
-    pub_only: bool,
-) -> Option<&'a ScriptFnDef> {
-    // Qualifiers (none) + function name + number of arguments.
-    let hash_script = calc_fn_hash(empty(), name, params, empty());
-    let func = module.get_fn(hash_script, pub_only)?;
-    if func.is_script() {
-        Some(func.get_fn_def())
-    } else {
-        None
     }
 }
 

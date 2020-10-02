@@ -516,19 +516,19 @@ impl Module {
     pub(crate) fn set_raw_fn_as_scripted(
         &mut self,
         name: impl Into<String>,
-        num_args: usize,
+        num_params: usize,
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<Dynamic> + SendSync + 'static,
     ) -> u64 {
         // None + function name + number of arguments.
         let name = name.into();
-        let hash_script = calc_fn_hash(empty(), &name, num_args, empty());
+        let hash_script = calc_fn_hash(empty(), &name, num_params, empty());
         let f = move |engine: &Engine, lib: &Module, args: &mut FnCallArgs| func(engine, lib, args);
         self.functions.insert(
             hash_script,
             (
                 name,
                 FnAccess::Public,
-                num_args,
+                num_params,
                 None,
                 CallableFunction::from_pure(Box::new(f)),
             ),
@@ -1082,6 +1082,24 @@ impl Module {
         }
     }
 
+    /// Get a script-defined function definition from a module.
+    #[cfg(not(feature = "no_function"))]
+    pub fn get_script_function_by_signature(
+        &self,
+        name: &str,
+        num_params: usize,
+        pub_only: bool,
+    ) -> Option<&ScriptFnDef> {
+        // Qualifiers (none) + function name + number of arguments.
+        let hash_script = calc_fn_hash(empty(), name, num_params, empty());
+        let func = self.get_fn(hash_script, pub_only)?;
+        if func.is_script() {
+            Some(func.get_fn_def())
+        } else {
+            None
+        }
+    }
+
     /// Get a modules-qualified function.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
@@ -1232,22 +1250,17 @@ impl Module {
 
     /// Get an iterator over all script-defined functions in the module.
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_script_fn<'a>(&'a self) -> impl Iterator<Item = Shared<ScriptFnDef>> + 'a {
+    pub fn iter_script_fn<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
         self.functions
             .values()
             .map(|(_, _, _, _, f)| f)
             .filter(|f| f.is_script())
-            .map(|f| f.get_shared_fn_def())
-    }
-
-    #[cfg(not(feature = "no_function"))]
-    pub fn iter_script_fn_info(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
-        self.functions
-            .values()
-            .filter(|(_, _, _, _, v)| v.is_script())
-            .map(|(_, _, _, _, v)| {
-                let f = v.get_fn_def();
-                (f.access, f.name.as_str(), f.params.len())
+            .map(CallableFunction::get_shared_fn_def)
+            .map(|f| {
+                let func = f.clone();
+                (f.access, f.name.as_str(), f.params.len(), func)
             })
     }
 
@@ -1315,14 +1328,13 @@ impl Module {
             let ast_lib: Shared<Module> = ast.lib().clone().into();
 
             ast.iter_functions()
-                .filter(|(access, _, _)| access.is_public())
-                .for_each(|(_, name, num_args)| {
-                    let fn_name = name.to_string();
+                .filter(|(access, _, _, _)| access.is_public())
+                .for_each(|(_, name, num_params, func)| {
                     let ast_lib = ast_lib.clone();
 
                     module.set_raw_fn_as_scripted(
                         name,
-                        num_args,
+                        num_params,
                         move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
                             let mut lib_merged;
 
@@ -1336,12 +1348,16 @@ impl Module {
                             };
 
                             engine
-                                .call_fn_dynamic_raw(
-                                    &mut Scope::new(),
-                                    &unified_lib,
-                                    &fn_name,
+                                .call_script_fn(
+                                    &mut Default::default(),
+                                    &mut Default::default(),
+                                    &mut Default::default(),
+                                    unified_lib,
                                     &mut None,
+                                    &func.name,
+                                    func.as_ref(),
                                     args,
+                                    0,
                                 )
                                 .map_err(|err| {
                                     // Wrap the error in a module-error
@@ -1390,7 +1406,7 @@ impl Module {
                 .functions
                 .iter()
                 .filter(|(_, (_, access, _, _, _))| access.is_public())
-                .for_each(|(&_hash, (name, _, _num_args, params, func))| {
+                .for_each(|(&_hash, (name, _, _num_params, params, func))| {
                     if let Some(params) = params {
                         // Qualified Rust functions are indexed in two steps:
                         // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1409,7 +1425,12 @@ impl Module {
                             _hash
                         } else {
                             // Qualifiers + function name + number of arguments.
-                            calc_fn_hash(qualifiers.iter().map(|&v| v), &name, *_num_args, empty())
+                            calc_fn_hash(
+                                qualifiers.iter().map(|&v| v),
+                                &name,
+                                *_num_params,
+                                empty(),
+                            )
                         };
                         functions.push((hash_qualified_script, func.clone()));
                     }

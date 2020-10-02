@@ -7,7 +7,8 @@ Version 0.20.0
 Breaking changes
 ----------------
 
-* `AST::iter_functions` and `Module::iter_script_fn_info` now return an iterator instead of taking a closure.
+* `AST::iter_functions` now returns an iterator instead of taking a closure.
+* `Module::iter_script_fn_info` is removed and merged into `Module::iter_script_fn`.
 
 
 Version 0.19.0

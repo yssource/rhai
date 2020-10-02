@@ -28,10 +28,7 @@ use crate::{
 use crate::fn_register::{RegisterFn, RegisterResultFn};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{
-    engine::get_script_function_by_signature, fn_args::FuncArgs, fn_call::ensure_no_data_race,
-    utils::StaticVec,
-};
+use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, utils::StaticVec};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;
@@ -1598,7 +1595,8 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut [&mut Dynamic],
     ) -> FuncReturn<Dynamic> {
-        let fn_def = get_script_function_by_signature(lib, name, args.len(), true)
+        let fn_def = lib
+            .get_script_function_by_signature(name, args.len(), true)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 
         let mut state = State::new();
