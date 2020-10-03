@@ -12,6 +12,11 @@ Breaking changes
 * The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
 * `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
 
+New features
+------------
+
+* `is_def_var()` to detect if variable is defined and `is_def_fn()` to detect if script function is defined.
+
 
 Version 0.19.0
 ==============

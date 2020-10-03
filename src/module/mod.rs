@@ -454,6 +454,9 @@ impl Module {
     /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
     /// which is guaranteed to contain enough arguments of the correct types.
     ///
+    /// The function is assumed to be a _method_, meaning that the first argument should not be consumed.
+    /// All other arguments can be consumed.
+    ///
     /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
     /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
@@ -1299,8 +1302,8 @@ impl Module {
             .into_iter()
             .for_each(|ScopeEntry { value, alias, .. }| {
                 // Variables with an alias left in the scope become module variables
-                if alias.is_some() {
-                    module.variables.insert(*alias.unwrap(), value);
+                if let Some(alias) = alias {
+                    module.variables.insert(*alias, value);
                 }
             });
 

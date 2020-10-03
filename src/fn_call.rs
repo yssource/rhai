@@ -4,8 +4,8 @@ use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
-    KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_SHARED,
-    KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_FN,
+    KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -32,6 +32,9 @@ use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{Map, Target, FN_GET, FN_SET};
+
+#[cfg(not(feature = "no_closure"))]
+use crate::engine::KEYWORD_IS_SHARED;
 
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "no_function"))]
@@ -744,15 +747,18 @@ impl Engine {
                 .into(),
                 false,
             ))
-        } else if cfg!(not(feature = "no_closure"))
-            && _fn_name == KEYWORD_IS_SHARED
-            && idx.is_empty()
-        {
+        } else if {
+            #[cfg(not(feature = "no_closure"))]
+            {
+                _fn_name == KEYWORD_IS_SHARED && idx.is_empty()
+            }
+            #[cfg(feature = "no_closure")]
+            false
+        } {
             // is_shared call
             Ok((target.is_shared().into(), false))
         } else {
-            #[cfg(not(feature = "no_object"))]
-            let redirected;
+            let _redirected;
             let mut hash = hash_script;
 
             // Check if it is a map method call in OOP style
@@ -761,8 +767,8 @@ impl Engine {
                 if let Some(val) = map.get(_fn_name) {
                     if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                         // Remap the function name
-                        redirected = fn_ptr.get_fn_name().clone();
-                        _fn_name = &redirected;
+                        _redirected = fn_ptr.get_fn_name().clone();
+                        _fn_name = &_redirected;
                         // Add curried arguments
                         if !fn_ptr.curry().is_empty() {
                             fn_ptr
@@ -877,7 +883,8 @@ impl Engine {
         }
 
         // Handle is_shared()
-        if cfg!(not(feature = "no_closure")) && name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
+        #[cfg(not(feature = "no_closure"))]
+        if name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
             let expr = args_expr.get(0).unwrap();
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
@@ -914,6 +921,48 @@ impl Engine {
                     expr.position(),
                 )
                 .into();
+            }
+        }
+
+        // Handle is_def_var()
+        if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
+            let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
+
+            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+                let expr = args_expr.get(0).unwrap();
+                if let Ok(var_name) = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_str()
+                {
+                    return Ok(scope.contains(var_name).into());
+                }
+            }
+        }
+
+        // Handle is_def_fn()
+        if name == KEYWORD_IS_DEF_FN && args_expr.len() == 2 {
+            let hash_fn = calc_fn_hash(
+                empty(),
+                name,
+                2,
+                [TypeId::of::<ImmutableString>(), TypeId::of::<INT>()]
+                    .iter()
+                    .cloned(),
+            );
+
+            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+                let fn_name_expr = args_expr.get(0).unwrap();
+                let num_params_expr = args_expr.get(1).unwrap();
+
+                if let (Ok(fn_name), Ok(num_params)) = (
+                    self.eval_expr(scope, mods, state, lib, this_ptr, fn_name_expr, level)?
+                        .as_str(),
+                    self.eval_expr(scope, mods, state, lib, this_ptr, num_params_expr, level)?
+                        .as_int(),
+                ) {
+                    let hash = calc_fn_hash(empty(), fn_name, num_params as usize, empty());
+                    return Ok(lib.contains_fn(hash, false).into());
+                }
             }
         }
 

@@ -101,6 +101,21 @@ a statement in the script can freely call a function defined afterwards.
 This is similar to Rust and many other modern languages, such as JavaScript's `function` keyword.
 
 
+`is_def_fn`
+-----------
+
+Use `is_def_fn` to detect if a function is defined (and therefore callable), based on its name
+and the number of parameters.
+
+```rust
+fn foo(x) { x + 1 }
+
+is_def_fn("foo", 1) == true;
+
+is_def_fn("bar", 1) == false;
+```
+
+
 Arguments are Passed by Value
 ----------------------------
 
