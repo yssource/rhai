@@ -11,6 +11,7 @@ Breaking changes
 * `Module::iter_script_fn_info` is removed and merged into `Module::iter_script_fn`.
 * The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
 * `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
+* `EvalAltResult::ErrorCharMismatch` is renamed to `EvalAltResult::ErrorMismatchDataType`.
 
 New features
 ------------

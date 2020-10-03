@@ -229,24 +229,32 @@ impl Target<'_> {
         }
     }
     /// Update the value of the `Target`.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
-    pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_value(
+        &mut self,
+        new_val: Dynamic,
+        target_pos: Position,
+        new_pos: Position,
+    ) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val,
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => {
-                return EvalAltResult::ErrorAssignmentToUnknownLHS(Position::none()).into();
+                return EvalAltResult::ErrorAssignmentToUnknownLHS(target_pos).into();
             }
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
                 let mut s = string.write_lock::<ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
-                let new_ch = new_val
-                    .as_char()
-                    .map_err(|_| EvalAltResult::ErrorCharMismatch(Position::none()))?;
+                let new_ch = new_val.as_char().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        err.to_string(),
+                        "char".to_string(),
+                        new_pos,
+                    ))
+                })?;
 
                 let mut chars = s.chars().collect::<StaticVec<_>>();
                 let ch = chars[*index];
@@ -413,56 +421,7 @@ impl fmt::Debug for Engine {
 
 impl Default for Engine {
     fn default() -> Self {
-        // Create the new scripting Engine
-        let mut engine = Self {
-            id: None,
-
-            packages: Default::default(),
-            global_module: Default::default(),
-
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
-            module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
-            module_resolver: None,
-
-            type_names: None,
-            disabled_symbols: None,
-            custom_keywords: None,
-            custom_syntax: None,
-
-            // default print/debug implementations
-            print: Box::new(default_print),
-            debug: Box::new(default_print),
-
-            // progress callback
-            progress: None,
-
-            // optimization level
-            optimization_level: if cfg!(feature = "no_optimize") {
-                OptimizationLevel::None
-            } else {
-                OptimizationLevel::Simple
-            },
-
-            #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
-                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: MAX_EXPR_DEPTH,
-                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-                max_operations: 0,
-                max_modules: usize::MAX,
-                max_string_size: 0,
-                max_array_size: 0,
-                max_map_size: 0,
-            },
-        };
-
-        engine.load_package(StandardPackage::new().get());
-
-        engine
+        Self::new()
     }
 }
 
@@ -628,7 +587,56 @@ pub fn search_scope_only<'s, 'a>(
 impl Engine {
     /// Create a new `Engine`
     pub fn new() -> Self {
-        Default::default()
+        // Create the new scripting Engine
+        let mut engine = Self {
+            id: None,
+
+            packages: Default::default(),
+            global_module: Default::default(),
+
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
+            module_resolver: None,
+
+            type_names: None,
+            disabled_symbols: None,
+            custom_keywords: None,
+            custom_syntax: None,
+
+            // default print/debug implementations
+            print: Box::new(default_print),
+            debug: Box::new(default_print),
+
+            // progress callback
+            progress: None,
+
+            // optimization level
+            optimization_level: if cfg!(feature = "no_optimize") {
+                OptimizationLevel::None
+            } else {
+                OptimizationLevel::Simple
+            },
+
+            #[cfg(not(feature = "unchecked"))]
+            limits: Limits {
+                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+                max_expr_depth: MAX_EXPR_DEPTH,
+                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
+                max_operations: 0,
+                max_modules: usize::MAX,
+                max_string_size: 0,
+                max_array_size: 0,
+                max_map_size: 0,
+            },
+        };
+
+        engine.load_package(StandardPackage::new().get());
+
+        engine
     }
 
     /// Create a new `Engine` with minimal built-in functions.
@@ -686,6 +694,7 @@ impl Engine {
         chain_type: ChainType,
         level: usize,
         new_val: Option<Dynamic>,
+        new_pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
             panic!();
@@ -718,7 +727,7 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
-                            new_val,
+                            new_val, new_pos,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
@@ -732,10 +741,7 @@ impl Engine {
                         {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                obj_ptr
-                                    .set_value(new_val.unwrap())
-                                    .map_err(|err| err.new_position(rhs.position()))?;
-
+                                obj_ptr.set_value(new_val.unwrap(), rhs.position(), new_pos)?;
                                 None
                             }
                             Err(err) => match *err {
@@ -799,8 +805,7 @@ impl Engine {
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
-                        val.set_value(new_val.unwrap())
-                            .map_err(|err| err.new_position(rhs.position()))?;
+                        val.set_value(new_val.unwrap(), rhs.position(), new_pos)?;
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
@@ -868,7 +873,7 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
-                            new_val,
+                            new_val, new_pos,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
@@ -902,6 +907,7 @@ impl Engine {
                                         next_chain,
                                         level,
                                         new_val,
+                                        new_pos,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -941,7 +947,7 @@ impl Engine {
 
                                 self.eval_dot_index_chain_helper(
                                     state, lib, this_ptr, target, expr, idx_values, next_chain,
-                                    level, new_val,
+                                    level, new_val, new_pos,
                                 )
                                 .map_err(|err| err.new_position(*pos))
                             }
@@ -972,6 +978,7 @@ impl Engine {
         expr: &Expr,
         level: usize,
         new_val: Option<Dynamic>,
+        new_pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let ((dot_lhs, dot_rhs, op_pos), chain_type) = match expr {
             Expr::Index(x) => (x.as_ref(), ChainType::Index),
@@ -1007,7 +1014,8 @@ impl Engine {
 
                 let obj_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
-                    state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
+                    state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level,
+                    new_val, new_pos,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.new_position(*op_pos))
@@ -1022,6 +1030,7 @@ impl Engine {
                 let obj_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
                     state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
+                    new_pos,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.new_position(*op_pos))
@@ -1409,9 +1418,9 @@ impl Engine {
                 let mut rhs_val =
                     self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
 
-                let _new_val = Some(if op.is_empty() {
+                let (_new_val, _new_pos) = if op.is_empty() {
                     // Normal assignment
-                    rhs_val
+                    (Some(rhs_val), rhs_expr.position())
                 } else {
                     // Op-assignment - always map to `lhs = lhs op rhs`
                     let op = &op[..op.len() - 1]; // extract operator without =
@@ -1419,12 +1428,16 @@ impl Engine {
                         &mut self.eval_expr(scope, mods, state, lib, this_ptr, lhs_expr, level)?,
                         &mut rhs_val,
                     ];
-                    self.exec_fn_call(
-                        state, lib, op, 0, args, false, false, false, None, &None, level,
-                    )
-                    .map(|(v, _)| v)
-                    .map_err(|err| err.new_position(*op_pos))?
-                });
+
+                    let result = self
+                        .exec_fn_call(
+                            state, lib, op, 0, args, false, false, false, None, &None, level,
+                        )
+                        .map(|(v, _)| v)
+                        .map_err(|err| err.new_position(*op_pos))?;
+
+                    (Some(result), rhs_expr.position())
+                };
 
                 match lhs_expr {
                     // name op= rhs
@@ -1433,7 +1446,7 @@ impl Engine {
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val, _new_pos,
                         )?;
                         Ok(Default::default())
                     }
@@ -1441,7 +1454,7 @@ impl Engine {
                     #[cfg(not(feature = "no_object"))]
                     Expr::Dot(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val, _new_pos,
                         )?;
                         Ok(Default::default())
                     }
@@ -1458,15 +1471,31 @@ impl Engine {
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(_) => {
-                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
-            }
+            Expr::Index(_) => self.eval_dot_index_chain(
+                scope,
+                mods,
+                state,
+                lib,
+                this_ptr,
+                expr,
+                level,
+                None,
+                Position::none(),
+            ),
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_) => {
-                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
-            }
+            Expr::Dot(_) => self.eval_dot_index_chain(
+                scope,
+                mods,
+                state,
+                lib,
+                this_ptr,
+                expr,
+                level,
+                None,
+                Position::none(),
+            ),
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(

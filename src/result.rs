@@ -46,8 +46,9 @@ pub enum EvalAltResult {
     ErrorUnboundThis(Position),
     /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
     ErrorBooleanArgMismatch(String, Position),
-    /// Non-character value encountered where a character is required.
-    ErrorCharMismatch(Position),
+    /// Data is not of the required type.
+    /// Wrapped values are the type requested and type of the actual result.
+    ErrorMismatchDataType(String, String, Position),
     /// Array access out-of-bounds.
     /// Wrapped values are the current number of elements in the array and the index number.
     ErrorArrayBounds(usize, INT, Position),
@@ -120,7 +121,7 @@ impl EvalAltResult {
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorUnboundThis(_) => "'this' is not bound",
             Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
-            Self::ErrorCharMismatch(_) => "Character expected",
+            Self::ErrorMismatchDataType(_, _, _) => "Data type is incorrect",
             Self::ErrorNumericIndexExpr(_) => {
                 "Indexing into an array or string expects an integer index"
             }
@@ -215,7 +216,10 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorAssignmentToConstant(s, _) => write!(f, "{}: '{}'", desc, s)?,
             Self::ErrorMismatchOutputType(r, s, _) => {
-                write!(f, "{} (expecting {}): {}", desc, s, r)?
+                write!(f, "Output type is incorrect: {} (expecting {})", r, s)?
+            }
+            Self::ErrorMismatchDataType(r, s, _) => {
+                write!(f, "Data type is incorrect: {} (expecting {})", r, s)?
             }
             Self::ErrorArithmetic(s, _) => f.write_str(s)?,
 
@@ -225,7 +229,6 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorBooleanArgMismatch(op, _) => {
                 write!(f, "{} operator expects boolean operands", op)?
             }
-            Self::ErrorCharMismatch(_) => write!(f, "string indexing expects a character value")?,
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 write!(f, "{}: {} < 0", desc, index)?
             }
@@ -291,7 +294,7 @@ impl EvalAltResult {
             | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
-            | Self::ErrorCharMismatch(pos)
+            | Self::ErrorMismatchDataType(_, _, pos)
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
@@ -333,7 +336,7 @@ impl EvalAltResult {
             | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
             | Self::ErrorBooleanArgMismatch(_, pos)
-            | Self::ErrorCharMismatch(pos)
+            | Self::ErrorMismatchDataType(_, _, pos)
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)

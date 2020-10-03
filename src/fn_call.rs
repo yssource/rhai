@@ -614,7 +614,7 @@ impl Engine {
         mods: &mut Imports,
         state: &mut State,
         lib: &Module,
-        script_expr: &Dynamic,
+        script: &str,
         _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -627,14 +627,6 @@ impl Engine {
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
         }
-
-        let script = script_expr.as_str().map_err(|typ| {
-            EvalAltResult::ErrorMismatchOutputType(
-                self.map_type_name(type_name::<ImmutableString>()).into(),
-                typ.into(),
-                Position::none(),
-            )
-        })?;
 
         // Compile the script text
         // No optimizations because we only run it once
@@ -804,7 +796,7 @@ impl Engine {
         // Feed the changed temp value back
         if updated && !is_ref && !is_value {
             let new_val = target.as_mut().clone();
-            target.set_value(new_val)?;
+            target.set_value(new_val, Position::none(), Position::none())?;
         }
 
         Ok((result, updated))
@@ -828,6 +820,15 @@ impl Engine {
         capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        fn make_type_err<T>(engine: &Engine, typ: &str, pos: Position) -> Box<EvalAltResult> {
+            EvalAltResult::ErrorMismatchDataType(
+                typ.into(),
+                engine.map_type_name(type_name::<T>()).into(),
+                pos,
+            )
+            .into()
+        }
+
         // Handle Fn()
         if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
@@ -839,14 +840,7 @@ impl Engine {
 
                 return arg_value
                     .take_immutable_string()
-                    .map_err(|typ| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            self.map_type_name(type_name::<ImmutableString>()).into(),
-                            typ.into(),
-                            expr.position(),
-                        )
-                        .into()
-                    })
+                    .map_err(|typ| make_type_err::<ImmutableString>(self, typ, expr.position()))
                     .and_then(|s| FnPtr::try_from(s))
                     .map(Into::<Dynamic>::into)
                     .map_err(|err| err.new_position(expr.position()));
@@ -856,18 +850,17 @@ impl Engine {
         // Handle curry()
         if name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
             let expr = args_expr.get(0).unwrap();
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+            let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
-            if !fn_ptr.is::<FnPtr>() {
-                return EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name(type_name::<FnPtr>()).into(),
-                    self.map_type_name(fn_ptr.type_name()).into(),
+            if !arg_value.is::<FnPtr>() {
+                return Err(make_type_err::<FnPtr>(
+                    self,
+                    self.map_type_name(arg_value.type_name()),
                     expr.position(),
-                )
-                .into();
+                ));
             }
 
-            let (fn_name, fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+            let (fn_name, fn_curry) = arg_value.cast::<FnPtr>().take_data();
 
             let curry: StaticVec<_> = args_expr
                 .iter()
@@ -902,10 +895,10 @@ impl Engine {
             && !self.has_override(lib, 0, hash_script, pub_only)
         {
             let expr = args_expr.get(0).unwrap();
-            let fn_name = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+            let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
-            if fn_name.is::<FnPtr>() {
-                let fn_ptr = fn_name.cast::<FnPtr>();
+            if arg_value.is::<FnPtr>() {
+                let fn_ptr = arg_value.cast::<FnPtr>();
                 curry = fn_ptr.curry().iter().cloned().collect();
                 // Redirect function name
                 redirected = fn_ptr.take_data().0;
@@ -915,12 +908,11 @@ impl Engine {
                 // Recalculate hash
                 hash_script = calc_fn_hash(empty(), name, curry.len() + args_expr.len(), empty());
             } else {
-                return EvalAltResult::ErrorMismatchOutputType(
-                    self.map_type_name(type_name::<FnPtr>()).into(),
-                    fn_name.type_name().into(),
+                return Err(make_type_err::<FnPtr>(
+                    self,
+                    self.map_type_name(arg_value.type_name()),
                     expr.position(),
-                )
-                .into();
+                ));
             }
         }
 
@@ -930,10 +922,13 @@ impl Engine {
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 let expr = args_expr.get(0).unwrap();
-                if let Ok(var_name) = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                let var_name = arg_value
                     .as_str()
-                {
+                    .map_err(|err| make_type_err::<ImmutableString>(self, err, expr.position()))?;
+                if var_name.is_empty() {
+                    return Ok(false.into());
+                } else {
                     return Ok(scope.contains(var_name).into());
                 }
             }
@@ -954,12 +949,21 @@ impl Engine {
                 let fn_name_expr = args_expr.get(0).unwrap();
                 let num_params_expr = args_expr.get(1).unwrap();
 
-                if let (Ok(fn_name), Ok(num_params)) = (
-                    self.eval_expr(scope, mods, state, lib, this_ptr, fn_name_expr, level)?
-                        .as_str(),
-                    self.eval_expr(scope, mods, state, lib, this_ptr, num_params_expr, level)?
-                        .as_int(),
-                ) {
+                let arg0_value =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, fn_name_expr, level)?;
+                let arg1_value =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, num_params_expr, level)?;
+
+                let fn_name = arg0_value.as_str().map_err(|err| {
+                    make_type_err::<ImmutableString>(self, err, fn_name_expr.position())
+                })?;
+                let num_params = arg1_value
+                    .as_int()
+                    .map_err(|err| make_type_err::<INT>(self, err, num_params_expr.position()))?;
+
+                if fn_name.is_empty() || num_params < 0 {
+                    return Ok(false.into());
+                } else {
                     let hash = calc_fn_hash(empty(), fn_name, num_params as usize, empty());
                     return Ok(lib.contains_fn(hash, false).into());
                 }
@@ -974,10 +978,16 @@ impl Engine {
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let expr = args_expr.get(0).unwrap();
-                let script = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                let result = self
-                    .eval_script_expr(scope, mods, state, lib, &script, level + 1)
-                    .map_err(|err| err.new_position(expr.position()));
+                let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                let script = arg_value
+                    .as_str()
+                    .map_err(|typ| make_type_err::<ImmutableString>(self, typ, expr.position()))?;
+                let result = if !script.is_empty() {
+                    self.eval_script_expr(scope, mods, state, lib, script, level + 1)
+                        .map_err(|err| err.new_position(expr.position()))
+                } else {
+                    Ok(().into())
+                };
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
