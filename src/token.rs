@@ -147,7 +147,7 @@ impl fmt::Debug for Position {
     }
 }
 
-/// [INTERNALS] A Rhai language token.
+/// _[INTERNALS]_ A Rhai language token.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -709,7 +709,7 @@ impl From<Token> for String {
     }
 }
 
-/// [INTERNALS] State of the tokenizer.
+/// _[INTERNALS]_ State of the tokenizer.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -729,7 +729,7 @@ pub struct TokenizeState {
     pub include_comments: bool,
 }
 
-/// [INTERNALS] Trait that encapsulates a peekable character input stream.
+/// _[INTERNALS]_ Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -743,7 +743,7 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-/// [INTERNALS] Parse a string literal wrapped by `enclosing_char`.
+/// _[INTERNALS]_ Parse a string literal wrapped by `enclosing_char`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -931,7 +931,7 @@ fn scan_comment(
     }
 }
 
-/// [INTERNALS] Get the next token from the `InputStream`.
+/// _[INTERNALS]_ Get the next token from the `InputStream`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING

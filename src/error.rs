@@ -10,7 +10,7 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-/// [INTERNALS] Error encountered when tokenizing the script text.
+/// _[INTERNALS]_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING

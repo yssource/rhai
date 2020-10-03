@@ -91,7 +91,8 @@ impl AST {
         &self.0
     }
 
-    /// [INTERNALS] Get the statements.
+    /// _[INTERNALS]_ Get the statements.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
     pub fn statements(&self) -> &[Stmt] {
@@ -109,7 +110,8 @@ impl AST {
         &self.1
     }
 
-    /// [INTERNALS] Get the internal `Module` containing all script-defined functions.
+    /// _[INTERNALS]_ Get the internal `Module` containing all script-defined functions.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
     pub fn lib(&self) -> &Module {
@@ -374,7 +376,7 @@ impl FnAccess {
     }
 }
 
-/// [INTERNALS] A type containing information on a scripted function.
+/// _[INTERNALS]_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -416,7 +418,7 @@ impl fmt::Display for ScriptFnDef {
     }
 }
 
-/// [INTERNALS] A type encapsulating the mode of a `return`/`throw` statement.
+/// _[INTERNALS]_ A type encapsulating the mode of a `return`/`throw` statement.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -561,7 +563,7 @@ impl ParseSettings {
     }
 }
 
-/// [INTERNALS] A Rhai statement.
+/// _[INTERNALS]_ A Rhai statement.
 /// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -721,7 +723,7 @@ impl Stmt {
     }
 }
 
-/// [INTERNALS] A type wrapping a custom syntax definition.
+/// _[INTERNALS]_ A type wrapping a custom syntax definition.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -742,7 +744,7 @@ impl Hash for CustomExpr {
     }
 }
 
-/// [INTERNALS] A type wrapping a floating-point number.
+/// _[INTERNALS]_ A type wrapping a floating-point number.
 /// Exported under the `internals` feature only.
 ///
 /// This type is mainly used to provide a standard `Hash` implementation
@@ -763,7 +765,7 @@ impl Hash for FloatWrapper {
     }
 }
 
-/// [INTERNALS] An expression sub-tree.
+/// _[INTERNALS]_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),

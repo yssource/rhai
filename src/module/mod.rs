@@ -1457,7 +1457,7 @@ impl Module {
     }
 }
 
-/// [INTERNALS] A chain of module names to qualify a variable or function call.
+/// _[INTERNALS]_ A chain of module names to qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
 /// A `u64` hash key is cached for quick search purposes.
