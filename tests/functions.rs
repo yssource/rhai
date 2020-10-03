@@ -173,3 +173,29 @@ fn test_function_captures() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_function_is_def() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(engine.eval::<bool>(
+        r#"
+            fn foo(x) { x + 1 }
+            is_def_fn("foo", 1)
+    "#
+    )?);
+    assert!(!engine.eval::<bool>(
+        r#"
+            fn foo(x) { x + 1 }
+            is_def_fn("bar", 1)
+    "#
+    )?);
+    assert!(!engine.eval::<bool>(
+        r#"
+            fn foo(x) { x + 1 }
+            is_def_fn("foo", 0)
+    "#
+    )?);
+
+    Ok(())
+}
