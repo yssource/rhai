@@ -265,7 +265,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
 
     engine.set_module_resolver(Some(resolver1));
 
-    let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
     let mut resolver2 = StaticModuleResolver::new();
     resolver2.insert("testing", module);
@@ -374,7 +374,7 @@ fn test_module_ast_namespace() -> Result<(), Box<EvalAltResult>> {
 
     let ast = engine.compile(script)?;
 
-    let module = Module::eval_ast_as_new(Default::default(), &ast, true, &engine)?;
+    let module = Module::eval_ast_as_new(Default::default(), &ast, &engine)?;
 
     let mut resolver = StaticModuleResolver::new();
     resolver.insert("testing", module);

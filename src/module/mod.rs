@@ -1266,19 +1266,10 @@ impl Module {
 
     /// Create a new `Module` by evaluating an `AST`.
     ///
-    /// ### `merge_namespaces` parameter
-    ///
-    /// * If `true`, the entire `AST` is encapsulated into each function, allowing functions
-    ///   to cross-call each other.  Functions in the global namespace, plus all functions
-    ///   defined in the module, are _merged_ into a _unified_ namespace before each call.
-    ///   Therefore, all functions will be found, at the expense of some performance.
-    ///
-    /// * If `false`, each function is registered independently and cannot cross-call each other.
-    ///   Functions are searched in the global namespace.
-    ///   This is roughly 2x faster than the `true` case.
-    ///
-    /// Set `merge_namespaces` to `false` if the ultimate intention is to load the module
-    /// via `Engine::load_package` because it does not create any module namespace.
+    /// The entire `AST` is encapsulated into each function, allowing functions
+    /// to cross-call each other.  Functions in the global namespace, plus all functions
+    /// defined in the module, are _merged_ into a _unified_ namespace before each call.
+    /// Therefore, all functions will be found.
     ///
     /// # Examples
     ///
@@ -1288,19 +1279,14 @@ impl Module {
     ///
     /// let engine = Engine::new();
     /// let ast = engine.compile("let answer = 42; export answer;")?;
-    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
+    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
     /// assert!(module.contains_var("answer"));
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn eval_ast_as_new(
-        mut scope: Scope,
-        ast: &AST,
-        merge_namespaces: bool,
-        engine: &Engine,
-    ) -> FuncReturn<Self> {
+    pub fn eval_ast_as_new(mut scope: Scope, ast: &AST, engine: &Engine) -> FuncReturn<Self> {
         let mut mods = Imports::new();
 
         // Run the script
@@ -1324,7 +1310,7 @@ impl Module {
         });
 
         #[cfg(not(feature = "no_function"))]
-        if merge_namespaces {
+        {
             let ast_lib: Shared<Module> = ast.lib().clone().into();
 
             ast.iter_functions()
@@ -1370,8 +1356,6 @@ impl Module {
                         },
                     );
                 });
-        } else {
-            module.merge(ast.lib());
         }
 
         Ok(module)

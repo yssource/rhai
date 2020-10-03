@@ -9,6 +9,8 @@ Breaking changes
 
 * `AST::iter_functions` now returns an iterator instead of taking a closure.
 * `Module::iter_script_fn_info` is removed and merged into `Module::iter_script_fn`.
+* The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
+* `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
 
 
 Version 0.19.0

@@ -153,7 +153,7 @@ impl ModuleResolver for FileModuleResolver {
             let c = self.cache.read().unwrap();
 
             if let Some(ast) = c.get(&file_path) {
-                module = Module::eval_ast_as_new(scope, ast, true, engine).map_err(|err| {
+                module = Module::eval_ast_as_new(scope, ast, engine).map_err(|err| {
                     Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
                 })?;
                 None
@@ -163,7 +163,7 @@ impl ModuleResolver for FileModuleResolver {
                     Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
                 })?;
 
-                module = Module::eval_ast_as_new(scope, &ast, true, engine).map_err(|err| {
+                module = Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| {
                     Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
                 })?;
                 Some(ast)

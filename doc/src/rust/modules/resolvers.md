@@ -56,53 +56,6 @@ The base directory can be changed via the `FileModuleResolver::new_with_path` co
 `FileModuleResolver::create_module` loads a script file and returns a module.
 
 
-`GlobalFileModuleResolver`
--------------------------
-
-A simpler but more efficient version of `FileModuleResolver`, intended for short utility modules.
-Not available for [`no_std`] or [WASM] builds.
-Loads a script file (based off the current directory) with `.rhai` extension.
-
-All functions are assumed **independent** and _cannot_ cross-call each other.
-Functions are searched _only_ in the _global_ namespace.
-
-```rust
-------------------
-| my_module.rhai |
-------------------
-
-private fn inner_message() { "hello! from module!" }
-
-fn greet_inner() {
-    print(inner_message());     // cross-calling a module function!
-                                // there will be trouble because each function
-                                // in the module is supposed to be independent
-                                // of each other
-}
-
-fn greet() {
-    print(main_message());      // function is searched in global namespace
-}
-
--------------
-| main.rhai |
--------------
-
-fn main_message() { "hi! from main!" }
-
-import "my_module" as m;
-
-m::greet_inner();               // <- function not found: 'inner_message'
-
-m::greet();                     // works because 'main_message' exists in
-                                // the global namespace
-```
-
-The base directory can be changed via the `FileModuleResolver::new_with_path` constructor function.
-
-`GlobalFileModuleResolver::create_module` loads a script file and returns a module.
-
-
 `StaticModuleResolver`
 ---------------------
 
