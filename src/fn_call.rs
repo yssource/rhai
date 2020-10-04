@@ -670,7 +670,6 @@ impl Engine {
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         let is_ref = target.is_ref();
-        let is_value = target.is_value();
 
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
@@ -793,10 +792,9 @@ impl Engine {
             )
         }?;
 
-        // Feed the changed temp value back
-        if updated && !is_ref && !is_value {
-            let new_val = target.as_mut().clone();
-            target.set_value(new_val, Position::none(), Position::none())?;
+        // Propagate the changed value back to the source if necessary
+        if updated {
+            target.propagate_changed_value();
         }
 
         Ok((result, updated))

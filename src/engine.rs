@@ -150,6 +150,7 @@ pub enum Target<'a> {
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl Target<'_> {
     /// Is the `Target` a reference pointing to other data?
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_ref(&self) -> bool {
         match self {
@@ -163,6 +164,7 @@ impl Target<'_> {
         }
     }
     /// Is the `Target` an owned value?
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_value(&self) -> bool {
         match self {
@@ -176,6 +178,7 @@ impl Target<'_> {
         }
     }
     /// Is the `Target` a shared value?
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self {
@@ -226,6 +229,19 @@ impl Target<'_> {
             Self::Value(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref mut r) => r,
+        }
+    }
+    /// Propagate a changed value back to the original source.
+    /// This has no effect except for string indexing.
+    pub fn propagate_changed_value(&mut self) {
+        match self {
+            Self::Ref(_) | Self::LockGuard(_) | Self::Value(_) => (),
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar(_, _, ch) => {
+                let new_val = ch.clone();
+                self.set_value(new_val, Position::none(), Position::none())
+                    .unwrap();
+            }
         }
     }
     /// Update the value of the `Target`.
