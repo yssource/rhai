@@ -1103,24 +1103,6 @@ impl Module {
         }
     }
 
-    /// Get a script-defined function definition from a module.
-    #[cfg(not(feature = "no_function"))]
-    pub fn get_script_function_by_signature(
-        &self,
-        name: &str,
-        num_params: usize,
-        pub_only: bool,
-    ) -> Option<&ScriptFnDef> {
-        // Qualifiers (none) + function name + number of arguments.
-        let hash_script = calc_fn_hash(empty(), name, num_params, empty());
-        let func = self.get_fn(hash_script, pub_only)?;
-        if func.is_script() {
-            Some(func.get_fn_def())
-        } else {
-            None
-        }
-    }
-
     /// Get a modules-qualified function.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///

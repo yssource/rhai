@@ -1596,7 +1596,7 @@ impl Engine {
         args: &mut [&mut Dynamic],
     ) -> FuncReturn<Dynamic> {
         let fn_def = lib
-            .get_script_function_by_signature(name, args.len(), true)
+            .get_script_fn(name, args.len(), true)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 
         let mut state = State::new();
