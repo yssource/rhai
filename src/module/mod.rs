@@ -1228,17 +1228,13 @@ impl Module {
         self
     }
 
-    /// Get the number of variables in the module.
-    pub fn num_var(&self) -> usize {
-        self.variables.len()
-    }
-    /// Get the number of functions in the module.
-    pub fn num_fn(&self) -> usize {
-        self.variables.len()
-    }
-    /// Get the number of type iterators in the module.
-    pub fn num_iter(&self) -> usize {
-        self.variables.len()
+    /// Get the number of variables, functions and type iterators in the module.
+    pub fn count(&self) -> (usize, usize, usize) {
+        (
+            self.variables.len(),
+            self.variables.len(),
+            self.variables.len(),
+        )
     }
 
     /// Get an iterator to the variables in the module.
@@ -1252,8 +1248,14 @@ impl Module {
     }
 
     /// Get an iterator over all script-defined functions in the module.
+    ///
+    /// Function metadata includes:
+    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
+    /// 2) Function name (as string slice).
+    /// 3) Number of parameters.
+    /// 4) Shared reference to function definition `ScriptFnDef`.
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_script_fn<'a>(
+    pub(crate) fn iter_script_fn<'a>(
         &'a self,
     ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
         self.functions
@@ -1265,6 +1267,38 @@ impl Module {
                 let func = f.clone();
                 (f.access, f.name.as_str(), f.params.len(), func)
             })
+    }
+
+    /// Get an iterator over all script-defined functions in the module.
+    ///
+    /// Function metadata includes:
+    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
+    /// 2) Function name (as string slice).
+    /// 3) Number of parameters.
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(not(feature = "internals"))]
+    pub fn iter_script_fn_info(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
+        self.functions
+            .values()
+            .filter(|(_, _, _, _, f)| f.is_script())
+            .map(|(name, access, num_params, _, _)| (*access, name.as_str(), *num_params))
+    }
+
+    /// Get an iterator over all script-defined functions in the module.
+    ///
+    /// Function metadata includes:
+    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
+    /// 2) Function name (as string slice).
+    /// 3) Number of parameters.
+    /// 4) _[INTERNALS]_ Shared reference to function definition `ScriptFnDef`.
+    ///    Exported under the internals feature only.
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn iter_script_fn_info(
+        &self,
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> {
+        self.iter_script_fn()
     }
 
     /// Create a new `Module` by evaluating an `AST`.

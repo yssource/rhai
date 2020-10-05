@@ -663,7 +663,7 @@ impl Engine {
         )?;
 
         // If new functions are defined within the eval string, it is an error
-        if ast.lib().num_fn() != 0 {
+        if ast.lib().count().0 != 0 {
             return Err(ParseErrorType::WrongFnDefinition.into());
         }
 
