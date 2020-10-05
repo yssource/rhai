@@ -605,8 +605,10 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             let ((name, _, _, pos), _, _, args, def_value) = x.as_mut();
 
             // First search for script-defined functions (can override built-in)
-            let has_script_fn = cfg!(not(feature = "no_function"))
-                && state.lib.get_script_fn(name, args.len(), false).is_some();
+            #[cfg(not(feature = "no_function"))]
+            let has_script_fn = state.lib.get_script_fn(name, args.len(), false).is_some();
+            #[cfg(feature = "no_function")]
+            let has_script_fn = false;
 
             if !has_script_fn {
                 let mut arg_values: StaticVec<_> = args.iter().map(Expr::get_constant_value).collect();

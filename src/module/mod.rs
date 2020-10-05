@@ -295,6 +295,7 @@ impl Module {
     }
 
     /// Get a script-defined function in the module based on name and number of parameters.
+    #[cfg(not(feature = "no_function"))]
     pub fn get_script_fn(
         &self,
         name: &str,
