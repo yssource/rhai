@@ -7,7 +7,7 @@ use crate::fn_native::{Callback, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, ReturnType, Stmt};
+use crate::parser::{Expr, ReturnType, Stmt, INT};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -33,6 +33,7 @@ use crate::utils::ImmutableString;
 use crate::any::DynamicWriteLock;
 
 use crate::stdlib::{
+    any::type_name,
     boxed::Box,
     collections::{HashMap, HashSet},
     fmt, format,
@@ -243,7 +244,7 @@ impl Target<'_> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let new_val = ch.clone();
-                self.set_value(new_val, Position::none(), Position::none())
+                self.set_value((new_val, Position::none()), Position::none())
                     .unwrap();
             }
         }
@@ -251,15 +252,14 @@ impl Target<'_> {
     /// Update the value of the `Target`.
     pub fn set_value(
         &mut self,
-        new_val: Dynamic,
+        new_val: (Dynamic, Position),
         target_pos: Position,
-        new_pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
         match self {
-            Self::Ref(r) => **r = new_val,
+            Self::Ref(r) => **r = new_val.0,
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
-            Self::LockGuard((r, _)) => **r = new_val,
+            Self::LockGuard((r, _)) => **r = new_val.0,
             Self::Value(_) => {
                 return EvalAltResult::ErrorAssignmentToUnknownLHS(target_pos).into();
             }
@@ -268,11 +268,11 @@ impl Target<'_> {
                 let mut s = string.write_lock::<ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
-                let new_ch = new_val.as_char().map_err(|err| {
+                let new_ch = new_val.0.as_char().map_err(|err| {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
                         err.to_string(),
                         "char".to_string(),
-                        new_pos,
+                        new_val.1,
                     ))
                 })?;
 
@@ -713,8 +713,7 @@ impl Engine {
         idx_values: &mut StaticVec<Dynamic>,
         chain_type: ChainType,
         level: usize,
-        new_val: Option<Dynamic>,
-        new_pos: Position,
+        new_val: Option<(Dynamic, Position)>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
             panic!();
@@ -747,7 +746,7 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
-                            new_val, new_pos,
+                            new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
@@ -761,7 +760,7 @@ impl Engine {
                         {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                obj_ptr.set_value(new_val.unwrap(), rhs.position(), new_pos)?;
+                                obj_ptr.set_value(new_val.unwrap(), rhs.position())?;
                                 None
                             }
                             Err(err) => match *err {
@@ -777,7 +776,7 @@ impl Engine {
                         if let Some(mut new_val) = _call_setter {
                             let val = target.as_mut();
                             let val_type_name = val.type_name();
-                            let args = &mut [val, &mut idx_val2, &mut new_val];
+                            let args = &mut [val, &mut idx_val2, &mut new_val.0];
 
                             self.exec_fn_call(
                                 state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, &None,
@@ -825,7 +824,7 @@ impl Engine {
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
-                        val.set_value(new_val.unwrap(), rhs.position(), new_pos)?;
+                        val.set_value(new_val.unwrap(), rhs.position())?;
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
@@ -842,7 +841,7 @@ impl Engine {
                     Expr::Property(x) if new_val.is_some() => {
                         let ((_, _, setter), pos) = x.as_ref();
                         let mut new_val = new_val;
-                        let mut args = [target.as_mut(), new_val.as_mut().unwrap()];
+                        let mut args = [target.as_mut(), &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
                             state, lib, setter, 0, &mut args, is_ref, true, false, None, &None,
                             level,
@@ -893,7 +892,7 @@ impl Engine {
 
                         self.eval_dot_index_chain_helper(
                             state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
-                            new_val, new_pos,
+                            new_val,
                         )
                         .map_err(|err| err.new_position(*pos))
                     }
@@ -927,7 +926,6 @@ impl Engine {
                                         next_chain,
                                         level,
                                         new_val,
-                                        new_pos,
                                     )
                                     .map_err(|err| err.new_position(*pos))?;
 
@@ -967,7 +965,7 @@ impl Engine {
 
                                 self.eval_dot_index_chain_helper(
                                     state, lib, this_ptr, target, expr, idx_values, next_chain,
-                                    level, new_val, new_pos,
+                                    level, new_val,
                                 )
                                 .map_err(|err| err.new_position(*pos))
                             }
@@ -997,8 +995,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-        new_val: Option<Dynamic>,
-        new_pos: Position,
+        new_val: Option<(Dynamic, Position)>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let ((dot_lhs, dot_rhs, op_pos), chain_type) = match expr {
             Expr::Index(x) => (x.as_ref(), ChainType::Index),
@@ -1034,8 +1031,7 @@ impl Engine {
 
                 let obj_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
-                    state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level,
-                    new_val, new_pos,
+                    state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.new_position(*op_pos))
@@ -1050,7 +1046,6 @@ impl Engine {
                 let obj_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
                     state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
-                    new_pos,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.new_position(*op_pos))
@@ -1159,7 +1154,7 @@ impl Engine {
                 // val_array[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
+                    .map_err(|err| self.make_type_mismatch_err::<INT>(err, idx_pos))?;
 
                 let arr_len = arr.len();
 
@@ -1178,15 +1173,15 @@ impl Engine {
             Dynamic(Union::Map(map)) => {
                 // val_map[idx]
                 Ok(if _create {
-                    let index = idx
-                        .take_immutable_string()
-                        .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
+                    let index = idx.take_immutable_string().map_err(|err| {
+                        self.make_type_mismatch_err::<ImmutableString>(err, idx_pos)
+                    })?;
 
                     map.entry(index).or_insert_with(Default::default).into()
                 } else {
-                    let index = idx
-                        .read_lock::<ImmutableString>()
-                        .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
+                    let index = idx.read_lock::<ImmutableString>().ok_or_else(|| {
+                        self.make_type_mismatch_err::<ImmutableString>("", idx_pos)
+                    })?;
 
                     map.get_mut(&*index)
                         .map(Target::from)
@@ -1200,7 +1195,7 @@ impl Engine {
                 let chars_len = s.chars().count();
                 let index = idx
                     .as_int()
-                    .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
+                    .map_err(|err| self.make_type_mismatch_err::<INT>(err, idx_pos))?;
 
                 if index >= 0 {
                     let offset = index as usize;
@@ -1438,9 +1433,9 @@ impl Engine {
                 let mut rhs_val =
                     self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
 
-                let (_new_val, _new_pos) = if op.is_empty() {
+                let _new_val = if op.is_empty() {
                     // Normal assignment
-                    (Some(rhs_val), rhs_expr.position())
+                    Some((rhs_val, rhs_expr.position()))
                 } else {
                     // Op-assignment - always map to `lhs = lhs op rhs`
                     let op = &op[..op.len() - 1]; // extract operator without =
@@ -1456,7 +1451,7 @@ impl Engine {
                         .map(|(v, _)| v)
                         .map_err(|err| err.new_position(*op_pos))?;
 
-                    (Some(result), rhs_expr.position())
+                    Some((result, rhs_expr.position()))
                 };
 
                 match lhs_expr {
@@ -1466,7 +1461,7 @@ impl Engine {
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val, _new_pos,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
                         Ok(Default::default())
                     }
@@ -1474,7 +1469,7 @@ impl Engine {
                     #[cfg(not(feature = "no_object"))]
                     Expr::Dot(_) => {
                         self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val, _new_pos,
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
                         Ok(Default::default())
                     }
@@ -1491,31 +1486,15 @@ impl Engine {
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(_) => self.eval_dot_index_chain(
-                scope,
-                mods,
-                state,
-                lib,
-                this_ptr,
-                expr,
-                level,
-                None,
-                Position::none(),
-            ),
+            Expr::Index(_) => {
+                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
+            }
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_) => self.eval_dot_index_chain(
-                scope,
-                mods,
-                state,
-                lib,
-                this_ptr,
-                expr,
-                level,
-                None,
-                Position::none(),
-            ),
+            Expr::Dot(_) => {
+                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
+            }
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(
@@ -1562,16 +1541,12 @@ impl Engine {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
-                    })?
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
                     && // Short-circuit using &&
                 self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
-                    })?)
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
                 .into())
             }
 
@@ -1580,16 +1555,12 @@ impl Engine {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
-                    })?
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
                     || // Short-circuit using ||
                 self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
-                    })?)
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
                 .into())
             }
 
@@ -1671,7 +1642,7 @@ impl Engine {
 
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
-                    .map_err(|_| EvalAltResult::ErrorLogicGuard(expr.position()).into())
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
                     .and_then(|guard_val| {
                         if guard_val {
                             self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
@@ -1704,7 +1675,9 @@ impl Engine {
                         }
                     }
                     Ok(false) => return Ok(Default::default()),
-                    Err(_) => return EvalAltResult::ErrorLogicGuard(expr.position()).into(),
+                    Err(err) => {
+                        return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
+                    }
                 }
             },
 
@@ -1873,7 +1846,7 @@ impl Engine {
                         )
                     }
                 } else {
-                    EvalAltResult::ErrorImportExpr(expr.position()).into()
+                    Err(self.make_type_mismatch_err::<ImmutableString>("", expr.position()))
                 }
             }
 
@@ -2067,5 +2040,15 @@ impl Engine {
             .as_ref()
             .and_then(|t| t.get(name).map(String::as_str))
             .unwrap_or_else(|| map_std_type_name(name))
+    }
+
+    /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
+    pub fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
+        EvalAltResult::ErrorMismatchDataType(
+            typ.into(),
+            self.map_type_name(type_name::<T>()).into(),
+            pos,
+        )
+        .into()
     }
 }

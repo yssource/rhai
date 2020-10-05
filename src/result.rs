@@ -34,21 +34,26 @@ pub enum EvalAltResult {
     #[cfg(not(target_arch = "wasm32"))]
     ErrorReadingScriptFile(PathBuf, Position, std::io::Error),
 
-    /// Call to an unknown function. Wrapped value is the signature of the function.
+    /// Usage of an unknown variable. Wrapped value is the variable name.
+    ErrorVariableNotFound(String, Position),
+    /// Call to an unknown function. Wrapped value is the function signature.
     ErrorFunctionNotFound(String, Position),
     /// An error has occurred inside a called function.
-    /// Wrapped values are the name of the function and the interior error.
+    /// Wrapped values are the function name and the interior error.
     ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
+    /// Usage of an unknown module. Wrapped value is the module name.
+    ErrorModuleNotFound(String, Position),
     /// An error has occurred while loading a module.
-    /// Wrapped value are the name of the module and the interior error.
+    /// Wrapped value are the module name and the interior error.
     ErrorInModule(String, Box<EvalAltResult>, Position),
     /// Access to `this` that is not bound.
     ErrorUnboundThis(Position),
-    /// Non-boolean operand encountered for boolean operator. Wrapped value is the operator.
-    ErrorBooleanArgMismatch(String, Position),
     /// Data is not of the required type.
     /// Wrapped values are the type requested and type of the actual result.
     ErrorMismatchDataType(String, String, Position),
+    /// Returned type is not the same as the required output type.
+    /// Wrapped values are the type requested and type of the actual result.
+    ErrorMismatchOutputType(String, String, Position),
     /// Array access out-of-bounds.
     /// Wrapped values are the current number of elements in the array and the index number.
     ErrorArrayBounds(usize, INT, Position),
@@ -56,33 +61,19 @@ pub enum EvalAltResult {
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, INT, Position),
     /// Trying to index into a type that is not an array, an object map, or a string, and has no indexer function defined.
+    /// Wrapped value is the type name.
     ErrorIndexingType(String, Position),
-    /// Trying to index into an array or string with an index that is not `i64`.
-    ErrorNumericIndexExpr(Position),
-    /// Trying to index into a map with an index that is not `String`.
-    ErrorStringIndexExpr(Position),
-    /// Trying to import with an expression that is not `String`.
-    ErrorImportExpr(Position),
     /// Invalid arguments for `in` operator.
     ErrorInExpr(Position),
-    /// The guard expression in an `if` or `while` statement does not return a boolean value.
-    ErrorLogicGuard(Position),
     /// The `for` statement encounters a type that is not an iterator.
     ErrorFor(Position),
-    /// Usage of an unknown variable. Wrapped value is the name of the variable.
-    ErrorVariableNotFound(String, Position),
-    /// Usage of an unknown module. Wrapped value is the name of the module.
-    ErrorModuleNotFound(String, Position),
-    /// Data race detected when accessing a variable. Wrapped value is the name of the variable.
+    /// Data race detected when accessing a variable. Wrapped value is the variable name.
     ErrorDataRace(String, Position),
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     ErrorAssignmentToUnknownLHS(Position),
-    /// Assignment to a constant variable.
+    /// Assignment to a constant variable. Wrapped value is the variable name.
     ErrorAssignmentToConstant(String, Position),
-    /// Returned type is not the same as the required output type.
-    /// Wrapped values are the type requested and type of the actual result.
-    ErrorMismatchOutputType(String, String, Position),
-    /// Inappropriate member access.
+    /// Inappropriate property access. Wrapped value is the property name.
     ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
     ErrorArithmetic(String, Position),
@@ -92,7 +83,7 @@ pub enum EvalAltResult {
     ErrorTooManyModules(Position),
     /// Call stack over maximum limit.
     ErrorStackOverflow(Position),
-    /// Data value over maximum size limit. Wrapped values are the data type, maximum size and current size.
+    /// Data value over maximum size limit. Wrapped values are the type name, maximum size and current size.
     ErrorDataTooLarge(String, usize, usize, Position),
     /// The script is prematurely terminated.
     ErrorTerminated(Position),
@@ -120,16 +111,10 @@ impl EvalAltResult {
             Self::ErrorInModule(_, _, _) => "Error in module",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorUnboundThis(_) => "'this' is not bound",
-            Self::ErrorBooleanArgMismatch(_, _) => "Boolean operator expects boolean operands",
             Self::ErrorMismatchDataType(_, _, _) => "Data type is incorrect",
-            Self::ErrorNumericIndexExpr(_) => {
-                "Indexing into an array or string expects an integer index"
-            }
-            Self::ErrorStringIndexExpr(_) => "Indexing into an object map expects a string index",
             Self::ErrorIndexingType(_, _) => {
                 "Indexing can only be performed on an array, an object map, a string, or a type with an indexer function defined"
             }
-            Self::ErrorImportExpr(_) => "Importing a module expects a string path",
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 "Array access expects non-negative index"
             }
@@ -140,7 +125,6 @@ impl EvalAltResult {
             }
             Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
-            Self::ErrorLogicGuard(_) => "Boolean value expected",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorModuleNotFound(_, _) => "Module not found",
@@ -198,11 +182,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{}", s)?,
 
             Self::ErrorIndexingType(_, _)
-            | Self::ErrorNumericIndexExpr(_)
-            | Self::ErrorStringIndexExpr(_)
             | Self::ErrorUnboundThis(_)
-            | Self::ErrorImportExpr(_)
-            | Self::ErrorLogicGuard(_)
             | Self::ErrorFor(_)
             | Self::ErrorAssignmentToUnknownLHS(_)
             | Self::ErrorInExpr(_)
@@ -218,6 +198,9 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorMismatchOutputType(r, s, _) => {
                 write!(f, "Output type is incorrect: {} (expecting {})", r, s)?
             }
+            Self::ErrorMismatchDataType(r, s, _) if r.is_empty() => {
+                write!(f, "Data type is incorrect, expecting {}", s)?
+            }
             Self::ErrorMismatchDataType(r, s, _) => {
                 write!(f, "Data type is incorrect: {} (expecting {})", r, s)?
             }
@@ -226,9 +209,6 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorLoopBreak(_, _) => f.write_str(desc)?,
             Self::Return(_, _) => f.write_str(desc)?,
 
-            Self::ErrorBooleanArgMismatch(op, _) => {
-                write!(f, "{} operator expects boolean operands", op)?
-            }
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
                 write!(f, "{}: {} < 0", desc, index)?
             }
@@ -293,15 +273,10 @@ impl EvalAltResult {
             | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
-            | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorMismatchDataType(_, _, pos)
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
-            | Self::ErrorNumericIndexExpr(pos)
-            | Self::ErrorStringIndexExpr(pos)
-            | Self::ErrorImportExpr(pos)
-            | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
@@ -335,15 +310,10 @@ impl EvalAltResult {
             | Self::ErrorInFunctionCall(_, _, pos)
             | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
-            | Self::ErrorBooleanArgMismatch(_, pos)
             | Self::ErrorMismatchDataType(_, _, pos)
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
-            | Self::ErrorNumericIndexExpr(pos)
-            | Self::ErrorStringIndexExpr(pos)
-            | Self::ErrorImportExpr(pos)
-            | Self::ErrorLogicGuard(pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)

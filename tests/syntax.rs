@@ -35,9 +35,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
                 if !engine
                     .eval_expression_tree(context, scope, expr)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("do-while".into(), expr.position())
-                    })?
+                    .map_err(|err| engine.make_type_mismatch_err::<bool>(err, expr.position()))?
                 {
                     break;
                 }

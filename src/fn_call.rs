@@ -844,15 +844,6 @@ impl Engine {
         capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        fn make_type_err<T>(engine: &Engine, typ: &str, pos: Position) -> Box<EvalAltResult> {
-            EvalAltResult::ErrorMismatchDataType(
-                typ.into(),
-                engine.map_type_name(type_name::<T>()).into(),
-                pos,
-            )
-            .into()
-        }
-
         // Handle Fn()
         if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
@@ -864,7 +855,9 @@ impl Engine {
 
                 return arg_value
                     .take_immutable_string()
-                    .map_err(|typ| make_type_err::<ImmutableString>(self, typ, expr.position()))
+                    .map_err(|typ| {
+                        self.make_type_mismatch_err::<ImmutableString>(typ, expr.position())
+                    })
                     .and_then(|s| FnPtr::try_from(s))
                     .map(Into::<Dynamic>::into)
                     .map_err(|err| err.new_position(expr.position()));
@@ -877,8 +870,7 @@ impl Engine {
             let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
             if !arg_value.is::<FnPtr>() {
-                return Err(make_type_err::<FnPtr>(
-                    self,
+                return Err(self.make_type_mismatch_err::<FnPtr>(
                     self.map_type_name(arg_value.type_name()),
                     expr.position(),
                 ));
@@ -932,8 +924,7 @@ impl Engine {
                 // Recalculate hash
                 hash_script = calc_fn_hash(empty(), name, curry.len() + args_expr.len(), empty());
             } else {
-                return Err(make_type_err::<FnPtr>(
-                    self,
+                return Err(self.make_type_mismatch_err::<FnPtr>(
                     self.map_type_name(arg_value.type_name()),
                     expr.position(),
                 ));
@@ -947,9 +938,9 @@ impl Engine {
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 let expr = args_expr.get(0).unwrap();
                 let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                let var_name = arg_value
-                    .as_str()
-                    .map_err(|err| make_type_err::<ImmutableString>(self, err, expr.position()))?;
+                let var_name = arg_value.as_str().map_err(|err| {
+                    self.make_type_mismatch_err::<ImmutableString>(err, expr.position())
+                })?;
                 if var_name.is_empty() {
                     return Ok(false.into());
                 } else {
@@ -979,11 +970,11 @@ impl Engine {
                     self.eval_expr(scope, mods, state, lib, this_ptr, num_params_expr, level)?;
 
                 let fn_name = arg0_value.as_str().map_err(|err| {
-                    make_type_err::<ImmutableString>(self, err, fn_name_expr.position())
+                    self.make_type_mismatch_err::<ImmutableString>(err, fn_name_expr.position())
                 })?;
-                let num_params = arg1_value
-                    .as_int()
-                    .map_err(|err| make_type_err::<INT>(self, err, num_params_expr.position()))?;
+                let num_params = arg1_value.as_int().map_err(|err| {
+                    self.make_type_mismatch_err::<INT>(err, num_params_expr.position())
+                })?;
 
                 if fn_name.is_empty() || num_params < 0 {
                     return Ok(false.into());
@@ -1003,9 +994,9 @@ impl Engine {
                 let prev_len = scope.len();
                 let expr = args_expr.get(0).unwrap();
                 let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                let script = arg_value
-                    .as_str()
-                    .map_err(|typ| make_type_err::<ImmutableString>(self, typ, expr.position()))?;
+                let script = arg_value.as_str().map_err(|typ| {
+                    self.make_type_mismatch_err::<ImmutableString>(typ, expr.position())
+                })?;
                 let result = if !script.is_empty() {
                     self.eval_script_expr(scope, mods, state, lib, script, level + 1)
                         .map_err(|err| err.new_position(expr.position()))
