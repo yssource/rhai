@@ -61,17 +61,63 @@ For fixed script texts, the constant values can be provided in a user-defined [`
 to the [`Engine`] for use in compilation and evaluation.
 
 
-Watch Out for Function Calls
----------------------------
+Eager Operator Evaluations
+-------------------------
 
 Beware, however, that most operators are actually function calls, and those functions can be overridden,
-so they are not optimized away:
+so whether they are optimized away depends on the situation:
+
+* If the operands are not _constant_ values, it is not optimized.
+
+* If the operator is [overloaded][operator overloading], it is not optimized because the overloading function may not be _pure_
+  (i.e. may cause side-effects when called).
+
+* If the operator is not _binary_, it is not optimized. Only binary operators are built-in to Rhai.
+
+* If the operands are not of the same type, it is not optimized.
+
+* If the operator is not _built-in_ (see list of [built-in operators]), it is not optimized.
+
+* If the operator is a binary built-in operator for a [standard type][standard types], it is called and replaced by a constant result.
+
+Rhai guarantees that no external function will be run (in order not to trigger side-effects) during the
+optimization process (unless the optimization level is set to [`OptimizationLevel::Full`]).
 
 ```rust
-const DECISION = 1;
+const DECISION = 1;         // this is an integer, one of the standard types
 
-if DECISION == 1 {          // NOT optimized away because you can define
-    :                       // your own '==' function to override the built-in default!
+if DECISION == 1 {          // this is optimized into 'true'
+    :
+} else if DECISION == 2 {   // this is optimized into 'false'
+    :
+} else if DECISION == 3 {   // this is optimized into 'false'
+    :
+} else {
+    :
+}
+```
+
+Because of the eager evaluation of operators for [standard types], many constant expressions will be evaluated
+and replaced by the result.
+
+```rust
+let x = (1+2)*3-4/5%6;      // will be replaced by 'let x = 9'
+
+let y = (1>2) || (3<=4);    // will be replaced by 'let y = true'
+```
+
+For operators that are not optimized away due to one of the above reasons, the function calls
+are simply left behind:
+
+```rust
+// Assume 'new_state' returns some custom type that is NOT one of the standard types.
+// Also assume that the '==; operator is defined for that custom type.
+const DECISION_1 = new_state(1);
+const DECISION_2 = new_state(2);
+const DECISION_3 = new_state(3);
+
+if DECISION == 1 {          // NOT optimized away because the operator is not built-in
+    :                       // and may cause side-effects if called!
     :
 } else if DECISION == 2 {   // same here, NOT optimized away
     :
@@ -81,29 +127,5 @@ if DECISION == 1 {          // NOT optimized away because you can define
     :
 }
 ```
-
-because no operator functions will be run (in order not to trigger side-effects) during the optimization process
-(unless the optimization level is set to [`OptimizationLevel::Full`]).
-
-So, instead, do this:
-
-```rust
-const DECISION_1 = true;
-const DECISION_2 = false;
-const DECISION_3 = false;
-
-if DECISION_1 {
-    :                       // this branch is kept and promoted to the parent level
-} else if DECISION_2 {
-    :                       // this branch is eliminated
-} else if DECISION_3 {
-    :                       // this branch is eliminated
-} else {
-    :                       // this branch is eliminated
-}
-```
-
-In general, boolean constants are most effective for the optimizer to automatically prune
-large `if`-`else` branches because they do not depend on operators.
 
 Alternatively, turn the optimizer to [`OptimizationLevel::Full`].

@@ -294,6 +294,23 @@ impl Module {
         hash_script
     }
 
+    /// Get a script-defined function in the module based on name and number of parameters.
+    pub fn get_script_fn(
+        &self,
+        name: &str,
+        num_params: usize,
+        public_only: bool,
+    ) -> Option<&Shared<ScriptFnDef>> {
+        self.functions
+            .values()
+            .find(|(fn_name, access, num, _, _)| {
+                (!public_only || *access == FnAccess::Public)
+                    && *num == num_params
+                    && fn_name == name
+            })
+            .map(|(_, _, _, _, f)| f.get_shared_fn_def())
+    }
+
     /// Does a sub-module exist in the module?
     ///
     /// # Examples

@@ -439,7 +439,33 @@ impl Engine {
     }
 
     // Has a system function an override?
-    fn has_override(&self, lib: &Module, hash_fn: u64, hash_script: u64, pub_only: bool) -> bool {
+    pub(crate) fn has_override_by_name_and_arguments(
+        &self,
+        lib: &Module,
+        name: &str,
+        arg_types: &[TypeId],
+        pub_only: bool,
+    ) -> bool {
+        let arg_len = if arg_types.is_empty() {
+            usize::MAX
+        } else {
+            arg_types.len()
+        };
+
+        let hash_fn = calc_fn_hash(empty(), name, arg_len, arg_types.iter().cloned());
+        let hash_script = calc_fn_hash(empty(), name, arg_types.len(), empty());
+
+        self.has_override(lib, hash_fn, hash_script, pub_only)
+    }
+
+    // Has a system function an override?
+    pub(crate) fn has_override(
+        &self,
+        lib: &Module,
+        hash_fn: u64,
+        hash_script: u64,
+        pub_only: bool,
+    ) -> bool {
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
 
         // First check script-defined functions

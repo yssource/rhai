@@ -16,7 +16,9 @@ Breaking changes
 New features
 ------------
 
-* `is_def_var()` to detect if variable is defined and `is_def_fn()` to detect if script function is defined.
+* `OptimizationLevel::Simple` now eagerly evaluates built-in binary operators of primary types (if not overloaded).
+* Added `is_def_var()` to detect if variable is defined and `is_def_fn()` to detect if script function is defined.
+* Added `Module::get_script_fn` to get a scripted function in a module, if any, based on name and number of parameters.
 
 
 Version 0.19.0
