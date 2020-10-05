@@ -3,7 +3,8 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
+    KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::fn_call::run_builtin_binary_op;
 use crate::fn_native::FnPtr;
@@ -385,7 +386,13 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 /// Optimize an expression.
 fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     // These keywords are handled specially
-    const DONT_EVAL_KEYWORDS: [&str; 3] = [KEYWORD_PRINT, KEYWORD_DEBUG, KEYWORD_EVAL];
+    const DONT_EVAL_KEYWORDS: &[&str] = &[
+        KEYWORD_PRINT,
+        KEYWORD_DEBUG,
+        KEYWORD_EVAL,
+        KEYWORD_IS_DEF_FN,
+        KEYWORD_IS_DEF_VAR,
+    ];
 
     match expr {
         // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
