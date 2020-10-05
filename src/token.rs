@@ -1391,6 +1391,8 @@ fn get_next_token_inner(
 
             ('@', _) => return Some((Token::Reserved("@".into()), start_pos)),
 
+            ('$', _) => return Some((Token::Reserved("$".into()), start_pos)),
+
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),

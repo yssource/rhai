@@ -26,8 +26,8 @@ more control over what a script can (or cannot) do.
 | `no_closure`        |    no     | disables [capturing][automatic currying] external variables in [anonymous functions] to simulate _closures_, or [capturing the calling scope]({{rootUrl}}/language/fn-capture.md) in function calls         |
 | `no_std`            |    no     | builds for `no-std` (implies `no_closure`). Notice that additional dependencies will be pulled in to replace `std` features                                                                                 |
 | `serde`             |    yes    | enables serialization/deserialization via `serde`. Notice that the [`serde`](https://crates.io/crates/serde) crate will be pulled in together with its dependencies                                         |
-| `internals`         |    yes    | exposes internal data structures (e.g. [`AST`] nodes). Beware that Rhai internals are volatile and may change from version to version                                                                       |
 | `unicode-xid-ident` |    no     | allows [Unicode Standard Annex #31](http://www.unicode.org/reports/tr31/) as identifiers                                                                                                                    |
+| `internals`         |    yes    | exposes internal data structures (e.g. [`AST`] nodes). Beware that Rhai internals are volatile and may change from version to version                                                                       |
 
 
 Example
