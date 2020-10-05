@@ -233,9 +233,13 @@ impl Target<'_> {
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
+    #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn propagate_changed_value(&mut self) {
         match self {
-            Self::Ref(_) | Self::LockGuard(_) | Self::Value(_) => (),
+            Self::Ref(_) | Self::Value(_) => (),
+            #[cfg(not(feature = "no_closure"))]
+            Self::LockGuard(_) => (),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let new_val = ch.clone();
