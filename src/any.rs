@@ -572,6 +572,12 @@ impl Dynamic {
                 .clone()
                 .into();
         }
+        if TypeId::of::<T>() == TypeId::of::<&str>() {
+            return <dyn Any>::downcast_ref::<&str>(&value)
+                .unwrap()
+                .to_string()
+                .into();
+        }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return ().into();
         }
