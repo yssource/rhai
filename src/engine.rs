@@ -1454,8 +1454,9 @@ impl Engine {
                     Some((result, rhs_expr.position()))
                 };
 
+                // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
-                    // name op= rhs
+                    // name op= rhs (handled above)
                     Expr::Variable(_) => unreachable!(),
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
@@ -1473,12 +1474,8 @@ impl Engine {
                         )?;
                         Ok(Default::default())
                     }
-                    // Error assignment to constant
-                    expr if expr.is_constant() => EvalAltResult::ErrorAssignmentToConstant(
-                        expr.get_constant_str(),
-                        expr.position(),
-                    )
-                    .into(),
+                    // Constant expression (should be caught during parsing)
+                    expr if expr.is_constant() => unreachable!(),
                     // Syntax error
                     expr => EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into(),
                 }

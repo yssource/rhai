@@ -585,7 +585,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         => {
             let ((name, _, _, pos), _, _, args, _) = x.as_mut();
 
-            let arg_values: StaticVec<_> = args.iter().map(Expr::get_constant_value).collect();
+            let arg_values: StaticVec<_> = args.iter().map(|e| e.get_constant_value().unwrap()).collect();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
@@ -618,7 +618,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             let has_script_fn = false;
 
             if !has_script_fn {
-                let mut arg_values: StaticVec<_> = args.iter().map(Expr::get_constant_value).collect();
+                let mut arg_values: StaticVec<_> = args.iter().map(|e| e.get_constant_value().unwrap()).collect();
 
                 // Save the typename of the first argument if it is `type_of()`
                 // This is to avoid `call_args` being passed into the closure

@@ -12,13 +12,17 @@ use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::{make_getter, make_setter, Map};
+
 #[cfg(not(feature = "no_function"))]
 use crate::engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY};
 
-#[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter};
-
 use crate::stdlib::{
+    any::TypeId,
     borrow::Cow,
     boxed::Box,
     char,
@@ -847,14 +851,40 @@ impl Default for Expr {
 }
 
 impl Expr {
+    /// Get the type of an expression.
+    ///
+    /// Returns `None` if the expression's result type is not constant.
+    pub fn get_type_id(&self) -> Option<TypeId> {
+        Some(match self {
+            Self::Expr(x) => return x.get_type_id(),
+
+            Self::IntegerConstant(_) => TypeId::of::<INT>(),
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_) => TypeId::of::<FLOAT>(),
+            Self::CharConstant(_) => TypeId::of::<char>(),
+            Self::StringConstant(_) => TypeId::of::<ImmutableString>(),
+            Self::FnPointer(_) => TypeId::of::<FnPtr>(),
+            Self::True(_) | Self::False(_) | Self::In(_) | Self::And(_) | Self::Or(_) => {
+                TypeId::of::<bool>()
+            }
+            Self::Unit(_) => TypeId::of::<()>(),
+
+            #[cfg(not(feature = "no_index"))]
+            Self::Array(_) => TypeId::of::<Array>(),
+
+            #[cfg(not(feature = "no_object"))]
+            Self::Map(_) => TypeId::of::<Map>(),
+
+            _ => return None,
+        })
+    }
+
     /// Get the `Dynamic` value of a constant expression.
     ///
-    /// # Panics
-    ///
-    /// Panics when the expression is not constant.
-    pub fn get_constant_value(&self) -> Dynamic {
-        match self {
-            Self::Expr(x) => x.get_constant_value(),
+    /// Returns `None` if the expression is not constant.
+    pub fn get_constant_value(&self) -> Option<Dynamic> {
+        Some(match self {
+            Self::Expr(x) => return x.get_constant_value(),
 
             Self::IntegerConstant(x) => x.0.into(),
             #[cfg(not(feature = "no_float"))]
@@ -871,45 +901,22 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x) if x.0.iter().all(Self::is_constant) => Dynamic(Union::Array(Box::new(
-                x.0.iter().map(Self::get_constant_value).collect::<Vec<_>>(),
+                x.0.iter()
+                    .map(|v| v.get_constant_value().unwrap())
+                    .collect(),
             ))),
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x) if x.0.iter().all(|(_, v)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
                     x.0.iter()
-                        .map(|((k, _), v)| (k.clone(), v.get_constant_value()))
-                        .collect::<HashMap<_, _>>(),
+                        .map(|((k, _), v)| (k.clone(), v.get_constant_value().unwrap()))
+                        .collect(),
                 )))
             }
 
-            _ => unreachable!("cannot get value of non-constant expression"),
-        }
-    }
-
-    /// Get the display value of a constant expression.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the expression is not constant.
-    pub fn get_constant_str(&self) -> String {
-        match self {
-            Self::Expr(x) => x.get_constant_str(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.0.to_string(),
-
-            Self::IntegerConstant(x) => x.0.to_string(),
-            Self::CharConstant(x) => x.0.to_string(),
-            Self::StringConstant(_) => "string".to_string(),
-            Self::True(_) => "true".to_string(),
-            Self::False(_) => "false".to_string(),
-            Self::Unit(_) => "()".to_string(),
-
-            Self::Array(x) if x.0.iter().all(Self::is_constant) => "array".to_string(),
-
-            _ => unreachable!("cannot get value of non-constant expression"),
-        }
+            _ => return None,
+        })
     }
 
     /// Get the `Position` of the expression.
