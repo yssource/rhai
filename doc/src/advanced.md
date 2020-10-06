@@ -11,8 +11,6 @@ This section covers advanced features such as:
 
 * [`serde`] integration.
 
-* [Script optimization].
-
 * Low-level [function registration API]({{rootUrl}}/rust/register-raw.md)
 
 * [Domain-Specific Languages][DSL].

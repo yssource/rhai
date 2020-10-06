@@ -4,6 +4,12 @@ Import a Module
 {{#include ../../links.md}}
 
 
+Before a module can be used (via an `import` statement) in a script, there must be a [module resolver]
+registered into the [`Engine`], the default being the `FileModuleResolver`.
+
+See the section on [_Module Resolvers_][module resolver] for more details.
+
+
 `import` Statement
 -----------------
 

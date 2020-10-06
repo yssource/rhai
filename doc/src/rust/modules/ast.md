@@ -10,9 +10,12 @@ Create a Module from an AST
 A _module_ can be created from a single script (or pre-compiled [`AST`]) containing global variables,
 functions and sub-modules via the `Module::eval_ast_as_new` method.
 
+See the section on [_Exporting Variables, Functions and Sub-Modules_][`export`] for details on how to prepare
+a Rhai script for this purpose as well as to control which functions/variables to export.
+
 When given an [`AST`], it is first evaluated, then the following items are exposed as members of the new module:
 
-* Global variables - essentially all variables that remain in the [`Scope`] at the end of a script run - that are exported. Variables not exported (via the `export` statement) remain hidden.
+* Global variables - all variables exported via the `export` statement (those not exported remain hidden).
 
 * Functions not specifically marked `private`.
 

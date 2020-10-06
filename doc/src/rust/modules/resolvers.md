@@ -5,6 +5,8 @@ Module Resolvers
 
 When encountering an [`import`] statement, Rhai attempts to _resolve_ the module based on the path string.
 
+See the section on [_Importing Modules_][`import`] for more details.
+
 _Module Resolvers_ are service types that implement the [`ModuleResolver`][traits] trait.
 
 
