@@ -1,8 +1,7 @@
-use rhai::{packages::*, Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, INT};
 
 fn main() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new_raw();
-    engine.load_package(ArithmeticPackage::new().get());
+    let engine = Engine::new();
 
     let result = engine.eval::<INT>("40 + 2")?;
 
