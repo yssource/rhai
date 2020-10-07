@@ -131,7 +131,7 @@ It should simply be passed straight-through the the [`Engine`].
 ### Access Arguments
 
 The most important argument is `inputs` where the matched identifiers (`$ident$`), expressions/statements (`$expr$`)
-and statement blocks (`$block$) are provided.
+and statement blocks (`$block$`) are provided.
 
 To access a particular argument, use the following patterns:
 
