@@ -29,8 +29,8 @@ Key Concepts
 
 * The lowest layer script is compiled into a base [`AST`].
 
-* Higher layer scripts are also compiled into [`AST`] and _merged_ into the base using `AST::merge`,
-  overriding any existing functions.
+* Higher layer scripts are also compiled into [`AST`] and _combined_ into the base using `AST::combine`
+  (or the `+=` operator), overriding any existing functions.
 
 
 Examples
@@ -83,7 +83,7 @@ fn baz() { print("hey!"); }
 fn foo(x) { x + 42 }
 ```
 
-Load and merge them sequentially:
+Load and combine them sequentially:
 
 ```rust
 let engine = Engine::new();
@@ -91,17 +91,17 @@ let engine = Engine::new();
 // Compile the baseline default implementations.
 let mut ast = engine.compile_file("default.rhai".into())?;
 
-// Merge in the first layer.
+// Combine the first layer.
 let lowest = engine.compile_file("lowest.rhai".into())?;
-ast = ast.merge(&lowest);
+ast += lowest;
 
-// Merge in the second layer.
+// Combine the second layer.
 let middle = engine.compile_file("middle.rhai".into())?;
-ast = ast.merge(&middle);
+ast += lowest;
 
-// Merge in the third layer.
+// Combine the third layer.
 let highest = engine.compile_file("highest.rhai".into())?;
-ast = ast.merge(&highest);
+ast += lowest;
 
 // Now, 'ast' contains the following functions:
 //

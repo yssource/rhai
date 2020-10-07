@@ -31,7 +31,7 @@ use crate::stdlib::{
     hash::{Hash, Hasher},
     iter::empty,
     num::NonZeroUsize,
-    ops::Add,
+    ops::{Add, AddAssign},
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -152,7 +152,7 @@ impl AST {
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second `AST` is simply appended to the end of the first _without any processing_.
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
     /// Of course, if the first `AST` uses a `return` statement at the end, then
     /// the second `AST` will essentially be dead code.
@@ -202,10 +202,62 @@ impl AST {
         self.merge_filtered(other, |_, _, _| true)
     }
 
+    /// Combine one `AST` with another.  The second `AST` is consumed.
+    ///
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
+    /// Of course, if the first `AST` uses a `return` statement at the end, then
+    /// the second `AST` will essentially be dead code.
+    ///
+    /// All script-defined functions in the second `AST` overwrite similarly-named functions
+    /// in the first `AST` with the same number of parameters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let mut ast1 = engine.compile(r#"
+    ///                     fn foo(x) { 42 + x }
+    ///                     foo(1)
+    ///                 "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 foo("!")
+    ///             "#)?;
+    ///
+    /// ast1.combine(ast2);    // Combine 'ast2' into 'ast1'
+    ///
+    /// // Notice that using the '+=' operator also works:
+    /// // ast1 += ast2;
+    ///
+    /// // 'ast1' is essentially:
+    /// //
+    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
+    /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
+    /// //                              //    but it is no longer the return value
+    /// //    foo("!")                  // returns "hello!"
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<String>(&ast1)?, "hello!");
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn combine(&mut self, other: Self) -> &mut Self {
+        self.combine_filtered(other, |_, _, _| true)
+    }
+
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second `AST` is simply appended to the end of the first _without any processing_.
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
     /// Of course, if the first `AST` uses a `return` statement at the end, then
     /// the second `AST` will essentially be dead code.
@@ -277,6 +329,72 @@ impl AST {
         Self::new(ast, functions)
     }
 
+    /// Combine one `AST` with another.  The second `AST` is consumed.
+    ///
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
+    /// Of course, if the first `AST` uses a `return` statement at the end, then
+    /// the second `AST` will essentially be dead code.
+    ///
+    /// All script-defined functions in the second `AST` are first selected based on a filter
+    /// predicate, then overwrite similarly-named functions in the first `AST` with the
+    /// same number of parameters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let mut ast1 = engine.compile(r#"
+    ///                     fn foo(x) { 42 + x }
+    ///                     foo(1)
+    ///                 "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 fn error() { 0 }
+    ///                 foo("!")
+    ///             "#)?;
+    ///
+    /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// ast1.combine_filtered(ast2, |_, name, params| name == "error" && params == 0);
+    ///
+    /// // 'ast1' is essentially:
+    /// //
+    /// //    fn foo(n) { 42 + n }      // <- definition of 'ast1::foo' is not overwritten
+    /// //                              //    because 'ast2::foo' is filtered away
+    /// //    foo(1)                    // <- notice this will be 43 instead of "hello1",
+    /// //                              //    but it is no longer the return value
+    /// //    fn error() { 0 }          // <- this function passes the filter and is merged
+    /// //    foo("!")                  // <- returns "42!"
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<String>(&ast1)?, "42!");
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn combine_filtered(
+        &mut self,
+        other: Self,
+        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
+    ) -> &mut Self {
+        let Self(ref mut statements, ref mut functions) = self;
+
+        if !other.0.is_empty() {
+            statements.extend(other.0.into_iter());
+        }
+
+        functions.merge_filtered(&other.1, &mut filter);
+
+        self
+    }
+
     /// Filter out the functions, retaining only some based on a filter predicate.
     ///
     /// # Example
@@ -330,6 +448,20 @@ impl Add<Self> for &AST {
 
     fn add(self, rhs: Self) -> Self::Output {
         self.merge(rhs)
+    }
+}
+
+impl Add<&Self> for &AST {
+    type Output = AST;
+
+    fn add(self, rhs: &Self) -> Self::Output {
+        self.merge(rhs)
+    }
+}
+
+impl AddAssign<AST> for &mut AST {
+    fn add_assign(&mut self, rhs: AST) {
+        self.combine(rhs);
     }
 }
 

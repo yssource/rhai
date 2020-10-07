@@ -155,7 +155,7 @@ fn main() {
                 }
 
                 // Merge the AST into the main
-                main_ast = main_ast.merge(&ast);
+                main_ast += ast.clone();
 
                 // Evaluate
                 engine.eval_ast_with_scope::<Dynamic>(&mut scope, &main_ast)
