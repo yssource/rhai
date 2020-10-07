@@ -21,7 +21,7 @@ use crate::stdlib::{
     boxed::Box,
     fmt,
     ops::{Deref, DerefMut},
-    string::String,
+    string::{String, ToString},
 };
 
 #[cfg(not(feature = "no_closure"))]
@@ -531,7 +531,7 @@ impl Dynamic {
     /// assert_eq!(result.type_name(), "i64");
     /// assert_eq!(result.to_string(), "42");
     ///
-    /// let result = Dynamic::from("hello".to_string());
+    /// let result = Dynamic::from("hello");
     /// assert_eq!(result.type_name(), "string");
     /// assert_eq!(result.to_string(), "hello");
     ///
