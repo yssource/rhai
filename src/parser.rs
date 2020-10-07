@@ -459,7 +459,7 @@ impl Add<&Self> for &AST {
     }
 }
 
-impl AddAssign<AST> for &mut AST {
+impl AddAssign<AST> for AST {
     fn add_assign(&mut self, rhs: AST) {
         self.combine(rhs);
     }

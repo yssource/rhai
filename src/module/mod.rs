@@ -33,7 +33,7 @@ use crate::stdlib::{
     fmt, format,
     iter::empty,
     num::NonZeroUsize,
-    ops::{Deref, DerefMut},
+    ops::{Add, AddAssign, Deref, DerefMut},
     string::{String, ToString},
     vec::Vec,
 };
@@ -1543,6 +1543,38 @@ impl fmt::Display for ModuleRef {
 impl From<StaticVec<(String, Position)>> for ModuleRef {
     fn from(modules: StaticVec<(String, Position)>) -> Self {
         Self(modules, None)
+    }
+}
+
+impl Add<Module> for Module {
+    type Output = Self;
+
+    fn add(self, rhs: Module) -> Self::Output {
+        let mut module = self.clone();
+        module.merge(&rhs);
+        module
+    }
+}
+
+impl Add<&Module> for Module {
+    type Output = Self;
+
+    fn add(self, rhs: &Module) -> Self::Output {
+        let mut module = self.clone();
+        module.merge(rhs);
+        module
+    }
+}
+
+impl AddAssign<Module> for Module {
+    fn add_assign(&mut self, rhs: Module) {
+        self.combine(rhs);
+    }
+}
+
+impl AddAssign<&Module> for Module {
+    fn add_assign(&mut self, rhs: &Module) {
+        self.merge(rhs);
     }
 }
 

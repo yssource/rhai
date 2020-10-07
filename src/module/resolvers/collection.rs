@@ -3,7 +3,7 @@ use crate::module::{Module, ModuleResolver};
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
-use crate::stdlib::{boxed::Box, vec::Vec};
+use crate::stdlib::{boxed::Box, ops::AddAssign, vec::Vec};
 
 /// Module resolution service that holds a collection of module resolves,
 /// to be searched in sequential order.
@@ -45,9 +45,6 @@ impl ModuleResolversCollection {
     pub fn new() -> Self {
         Default::default()
     }
-}
-
-impl ModuleResolversCollection {
     /// Add a module keyed by its path.
     pub fn push(&mut self, resolver: impl ModuleResolver + 'static) {
         self.0.push(Box::new(resolver));
@@ -56,9 +53,28 @@ impl ModuleResolversCollection {
     pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
         self.0.iter().map(|v| v.as_ref())
     }
+    /// Get a mutable iterator of all the modules.
+    pub fn into_iter(self) -> impl Iterator<Item = Box<dyn ModuleResolver>> {
+        self.0.into_iter()
+    }
     /// Remove all module resolvers.
     pub fn clear(&mut self) {
         self.0.clear();
+    }
+    /// Is this `ModuleResolversCollection` empty?
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    /// Get the number of module resolvers in this `ModuleResolversCollection`.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Add another `ModuleResolversCollection` to the end of this collection.
+    /// The other `ModuleResolversCollection` is consumed.
+    pub fn append(&mut self, other: Self) {
+        if !other.is_empty() {
+            self.0.extend(other.0.into_iter());
+        }
     }
 }
 
@@ -81,5 +97,11 @@ impl ModuleResolver for ModuleResolversCollection {
         }
 
         EvalAltResult::ErrorModuleNotFound(path.into(), pos).into()
+    }
+}
+
+impl<M: ModuleResolver + 'static> AddAssign<M> for ModuleResolversCollection {
+    fn add_assign(&mut self, rhs: M) {
+        self.push(rhs);
     }
 }
