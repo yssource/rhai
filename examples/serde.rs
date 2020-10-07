@@ -56,7 +56,7 @@ mod example {
         let result: Dynamic = engine
             .eval(
                 r#"
-                    ##{
+                    #{
                         a: 42,
                         b: [ "hello", "world" ],
                         c: true,
