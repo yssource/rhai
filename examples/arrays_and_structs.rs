@@ -20,10 +20,10 @@ impl TestStruct {
 fn main() {
     let mut engine = Engine::new();
 
-    engine.register_type::<TestStruct>();
-
-    engine.register_fn("update", TestStruct::update);
-    engine.register_fn("new_ts", TestStruct::new);
+    engine
+        .register_type::<TestStruct>()
+        .register_fn("update", TestStruct::update)
+        .register_fn("new_ts", TestStruct::new);
 
     println!(
         "{:?}",
