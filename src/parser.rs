@@ -12,13 +12,17 @@ use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::{StaticVec, StraightHasherBuilder};
 
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::{make_getter, make_setter, Map};
+
 #[cfg(not(feature = "no_function"))]
 use crate::engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY};
 
-#[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter};
-
 use crate::stdlib::{
+    any::TypeId,
     borrow::Cow,
     boxed::Box,
     char,
@@ -91,7 +95,8 @@ impl AST {
         &self.0
     }
 
-    /// [INTERNALS] Get the statements.
+    /// _[INTERNALS]_ Get the statements.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
     pub fn statements(&self) -> &[Stmt] {
@@ -109,7 +114,8 @@ impl AST {
         &self.1
     }
 
-    /// [INTERNALS] Get the internal `Module` containing all script-defined functions.
+    /// _[INTERNALS]_ Get the internal `Module` containing all script-defined functions.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
     pub fn lib(&self) -> &Module {
@@ -301,8 +307,10 @@ impl AST {
 
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_functions(&self, action: impl FnMut(FnAccess, &str, usize)) {
-        self.1.iter_script_fn_info(action);
+    pub fn iter_functions<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
+        self.1.iter_script_fn()
     }
 
     /// Clear all function definitions in the `AST`.
@@ -340,10 +348,10 @@ impl AsRef<Module> for AST {
 /// A type representing the access mode of a scripted function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnAccess {
-    /// Private function.
-    Private,
     /// Public function.
     Public,
+    /// Private function.
+    Private,
 }
 
 impl fmt::Display for FnAccess {
@@ -355,7 +363,24 @@ impl fmt::Display for FnAccess {
     }
 }
 
-/// [INTERNALS] A type containing information on a scripted function.
+impl FnAccess {
+    /// Is this access mode private?
+    pub fn is_private(self) -> bool {
+        match self {
+            Self::Public => false,
+            Self::Private => true,
+        }
+    }
+    /// Is this access mode public?
+    pub fn is_public(self) -> bool {
+        match self {
+            Self::Public => true,
+            Self::Private => false,
+        }
+    }
+}
+
+/// _[INTERNALS]_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -397,7 +422,7 @@ impl fmt::Display for ScriptFnDef {
     }
 }
 
-/// [INTERNALS] A type encapsulating the mode of a `return`/`throw` statement.
+/// _[INTERNALS]_ A type encapsulating the mode of a `return`/`throw` statement.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -542,7 +567,7 @@ impl ParseSettings {
     }
 }
 
-/// [INTERNALS] A Rhai statement.
+/// _[INTERNALS]_ A Rhai statement.
 /// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -575,7 +600,7 @@ pub enum Stmt {
     ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
     /// import expr as module
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, Option<(String, Position)>, Position)>),
+    Import(Box<(Expr, Option<(ImmutableString, Position)>, Position)>),
     /// expr id as name, ...
     #[cfg(not(feature = "no_module"))]
     Export(
@@ -702,7 +727,7 @@ impl Stmt {
     }
 }
 
-/// [INTERNALS] A type wrapping a custom syntax definition.
+/// _[INTERNALS]_ A type wrapping a custom syntax definition.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -723,7 +748,7 @@ impl Hash for CustomExpr {
     }
 }
 
-/// [INTERNALS] A type wrapping a floating-point number.
+/// _[INTERNALS]_ A type wrapping a floating-point number.
 /// Exported under the `internals` feature only.
 ///
 /// This type is mainly used to provide a standard `Hash` implementation
@@ -744,7 +769,7 @@ impl Hash for FloatWrapper {
     }
 }
 
-/// [INTERNALS] An expression sub-tree.
+/// _[INTERNALS]_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
 /// Each variant is at most one pointer in size (for speed),
@@ -826,14 +851,40 @@ impl Default for Expr {
 }
 
 impl Expr {
+    /// Get the type of an expression.
+    ///
+    /// Returns `None` if the expression's result type is not constant.
+    pub fn get_type_id(&self) -> Option<TypeId> {
+        Some(match self {
+            Self::Expr(x) => return x.get_type_id(),
+
+            Self::IntegerConstant(_) => TypeId::of::<INT>(),
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_) => TypeId::of::<FLOAT>(),
+            Self::CharConstant(_) => TypeId::of::<char>(),
+            Self::StringConstant(_) => TypeId::of::<ImmutableString>(),
+            Self::FnPointer(_) => TypeId::of::<FnPtr>(),
+            Self::True(_) | Self::False(_) | Self::In(_) | Self::And(_) | Self::Or(_) => {
+                TypeId::of::<bool>()
+            }
+            Self::Unit(_) => TypeId::of::<()>(),
+
+            #[cfg(not(feature = "no_index"))]
+            Self::Array(_) => TypeId::of::<Array>(),
+
+            #[cfg(not(feature = "no_object"))]
+            Self::Map(_) => TypeId::of::<Map>(),
+
+            _ => return None,
+        })
+    }
+
     /// Get the `Dynamic` value of a constant expression.
     ///
-    /// # Panics
-    ///
-    /// Panics when the expression is not constant.
-    pub fn get_constant_value(&self) -> Dynamic {
-        match self {
-            Self::Expr(x) => x.get_constant_value(),
+    /// Returns `None` if the expression is not constant.
+    pub fn get_constant_value(&self) -> Option<Dynamic> {
+        Some(match self {
+            Self::Expr(x) => return x.get_constant_value(),
 
             Self::IntegerConstant(x) => x.0.into(),
             #[cfg(not(feature = "no_float"))]
@@ -850,45 +901,22 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x) if x.0.iter().all(Self::is_constant) => Dynamic(Union::Array(Box::new(
-                x.0.iter().map(Self::get_constant_value).collect::<Vec<_>>(),
+                x.0.iter()
+                    .map(|v| v.get_constant_value().unwrap())
+                    .collect(),
             ))),
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x) if x.0.iter().all(|(_, v)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
                     x.0.iter()
-                        .map(|((k, _), v)| (k.clone(), v.get_constant_value()))
-                        .collect::<HashMap<_, _>>(),
+                        .map(|((k, _), v)| (k.clone(), v.get_constant_value().unwrap()))
+                        .collect(),
                 )))
             }
 
-            _ => unreachable!("cannot get value of non-constant expression"),
-        }
-    }
-
-    /// Get the display value of a constant expression.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the expression is not constant.
-    pub fn get_constant_str(&self) -> String {
-        match self {
-            Self::Expr(x) => x.get_constant_str(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.0.to_string(),
-
-            Self::IntegerConstant(x) => x.0.to_string(),
-            Self::CharConstant(x) => x.0.to_string(),
-            Self::StringConstant(_) => "string".to_string(),
-            Self::True(_) => "true".to_string(),
-            Self::False(_) => "false".to_string(),
-            Self::Unit(_) => "()".to_string(),
-
-            Self::Array(x) if x.0.iter().all(Self::is_constant) => "array".to_string(),
-
-            _ => unreachable!("cannot get value of non-constant expression"),
-        }
+            _ => return None,
+        })
     }
 
     /// Get the `Position` of the expression.
@@ -2736,7 +2764,7 @@ fn parse_import(
 
     Ok(Stmt::Import(Box::new((
         expr,
-        Some((name, settings.pos)),
+        Some((name.into(), settings.pos)),
         token_pos,
     ))))
 }

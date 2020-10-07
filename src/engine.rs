@@ -7,7 +7,7 @@ use crate::fn_native::{Callback, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, ReturnType, Stmt};
+use crate::parser::{Expr, ReturnType, Stmt, INT};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -17,9 +17,6 @@ use crate::utils::StaticVec;
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 use crate::any::Variant;
-
-#[cfg(not(feature = "no_function"))]
-use crate::parser::ScriptFnDef;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
@@ -36,7 +33,7 @@ use crate::utils::ImmutableString;
 use crate::any::DynamicWriteLock;
 
 use crate::stdlib::{
-    borrow::Cow,
+    any::type_name,
     boxed::Box,
     collections::{HashMap, HashSet},
     fmt, format,
@@ -64,13 +61,17 @@ pub type Array = Vec<Dynamic>;
 #[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<ImmutableString, Dynamic>;
 
-/// [INTERNALS] A stack of imported modules.
+/// _[INTERNALS]_ A stack of imported modules.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-pub type Imports<'a> = Vec<(Cow<'a, str>, Module)>;
+//
+// Note - We cannot use &str or Cow<str> here because `eval` may load a module
+//        and the module name will live beyond the AST of the eval script text.
+//        The best we can do is a shared reference.
+pub type Imports = Vec<(ImmutableString, Module)>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
@@ -99,7 +100,10 @@ pub const KEYWORD_EVAL: &str = "eval";
 pub const KEYWORD_FN_PTR: &str = "Fn";
 pub const KEYWORD_FN_PTR_CALL: &str = "call";
 pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
+#[cfg(not(feature = "no_closure"))]
 pub const KEYWORD_IS_SHARED: &str = "is_shared";
+pub const KEYWORD_IS_DEF_VAR: &str = "is_def_var";
+pub const KEYWORD_IS_DEF_FN: &str = "is_def_fn";
 pub const KEYWORD_THIS: &str = "this";
 pub const FN_TO_STRING: &str = "to_string";
 #[cfg(not(feature = "no_object"))]
@@ -147,6 +151,7 @@ pub enum Target<'a> {
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl Target<'_> {
     /// Is the `Target` a reference pointing to other data?
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_ref(&self) -> bool {
         match self {
@@ -160,6 +165,7 @@ impl Target<'_> {
         }
     }
     /// Is the `Target` an owned value?
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_value(&self) -> bool {
         match self {
@@ -173,6 +179,7 @@ impl Target<'_> {
         }
     }
     /// Is the `Target` a shared value?
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self {
@@ -225,25 +232,49 @@ impl Target<'_> {
             Self::StringChar(_, _, ref mut r) => r,
         }
     }
-    /// Update the value of the `Target`.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
-    pub fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
+    /// Propagate a changed value back to the original source.
+    /// This has no effect except for string indexing.
+    #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
+    pub fn propagate_changed_value(&mut self) {
         match self {
-            Self::Ref(r) => **r = new_val,
+            Self::Ref(_) | Self::Value(_) => (),
+            #[cfg(not(feature = "no_closure"))]
+            Self::LockGuard(_) => (),
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar(_, _, ch) => {
+                let new_val = ch.clone();
+                self.set_value((new_val, Position::none()), Position::none())
+                    .unwrap();
+            }
+        }
+    }
+    /// Update the value of the `Target`.
+    pub fn set_value(
+        &mut self,
+        new_val: (Dynamic, Position),
+        target_pos: Position,
+    ) -> Result<(), Box<EvalAltResult>> {
+        match self {
+            Self::Ref(r) => **r = new_val.0,
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
-            Self::LockGuard((r, _)) => **r = new_val,
+            Self::LockGuard((r, _)) => **r = new_val.0,
             Self::Value(_) => {
-                return EvalAltResult::ErrorAssignmentToUnknownLHS(Position::none()).into();
+                return EvalAltResult::ErrorAssignmentToUnknownLHS(target_pos).into();
             }
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
                 let mut s = string.write_lock::<ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
-                let new_ch = new_val
-                    .as_char()
-                    .map_err(|_| EvalAltResult::ErrorCharMismatch(Position::none()))?;
+                let new_ch = new_val.0.as_char().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        err.to_string(),
+                        "char".to_string(),
+                        new_val.1,
+                    ))
+                })?;
 
                 let mut chars = s.chars().collect::<StaticVec<_>>();
                 let ch = chars[*index];
@@ -286,7 +317,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// [INTERNALS] A type that holds all the current states of the Engine.
+/// _[INTERNALS]_ A type that holds all the current states of the Engine.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -315,25 +346,7 @@ impl State {
     }
 }
 
-/// Get a script-defined function definition from a module.
-#[cfg(not(feature = "no_function"))]
-pub fn get_script_function_by_signature<'a>(
-    module: &'a Module,
-    name: &str,
-    params: usize,
-    pub_only: bool,
-) -> Option<&'a ScriptFnDef> {
-    // Qualifiers (none) + function name + number of arguments.
-    let hash_script = calc_fn_hash(empty(), name, params, empty());
-    let func = module.get_fn(hash_script, pub_only)?;
-    if func.is_script() {
-        Some(func.get_fn_def())
-    } else {
-        None
-    }
-}
-
-/// [INTERNALS] A type containing all the limits imposed by the `Engine`.
+/// _[INTERNALS]_ A type containing all the limits imposed by the `Engine`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -428,56 +441,7 @@ impl fmt::Debug for Engine {
 
 impl Default for Engine {
     fn default() -> Self {
-        // Create the new scripting Engine
-        let mut engine = Self {
-            id: None,
-
-            packages: Default::default(),
-            global_module: Default::default(),
-
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
-            module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
-            module_resolver: None,
-
-            type_names: None,
-            disabled_symbols: None,
-            custom_keywords: None,
-            custom_syntax: None,
-
-            // default print/debug implementations
-            print: Box::new(default_print),
-            debug: Box::new(default_print),
-
-            // progress callback
-            progress: None,
-
-            // optimization level
-            optimization_level: if cfg!(feature = "no_optimize") {
-                OptimizationLevel::None
-            } else {
-                OptimizationLevel::Simple
-            },
-
-            #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
-                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: MAX_EXPR_DEPTH,
-                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-                max_operations: 0,
-                max_modules: usize::MAX,
-                max_string_size: 0,
-                max_array_size: 0,
-                max_map_size: 0,
-            },
-        };
-
-        engine.load_package(StandardPackage::new().get());
-
-        engine
+        Self::new()
     }
 }
 
@@ -643,7 +607,56 @@ pub fn search_scope_only<'s, 'a>(
 impl Engine {
     /// Create a new `Engine`
     pub fn new() -> Self {
-        Default::default()
+        // Create the new scripting Engine
+        let mut engine = Self {
+            id: None,
+
+            packages: Default::default(),
+            global_module: Default::default(),
+
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(not(feature = "no_std"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
+            module_resolver: None,
+
+            type_names: None,
+            disabled_symbols: None,
+            custom_keywords: None,
+            custom_syntax: None,
+
+            // default print/debug implementations
+            print: Box::new(default_print),
+            debug: Box::new(default_print),
+
+            // progress callback
+            progress: None,
+
+            // optimization level
+            optimization_level: if cfg!(feature = "no_optimize") {
+                OptimizationLevel::None
+            } else {
+                OptimizationLevel::Simple
+            },
+
+            #[cfg(not(feature = "unchecked"))]
+            limits: Limits {
+                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+                max_expr_depth: MAX_EXPR_DEPTH,
+                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
+                max_operations: 0,
+                max_modules: usize::MAX,
+                max_string_size: 0,
+                max_array_size: 0,
+                max_map_size: 0,
+            },
+        };
+
+        engine.load_package(StandardPackage::new().get());
+
+        engine
     }
 
     /// Create a new `Engine` with minimal built-in functions.
@@ -700,7 +713,7 @@ impl Engine {
         idx_values: &mut StaticVec<Dynamic>,
         chain_type: ChainType,
         level: usize,
-        new_val: Option<Dynamic>,
+        new_val: Option<(Dynamic, Position)>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
             panic!();
@@ -747,10 +760,7 @@ impl Engine {
                         {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                obj_ptr
-                                    .set_value(new_val.unwrap())
-                                    .map_err(|err| err.new_position(rhs.position()))?;
-
+                                obj_ptr.set_value(new_val.unwrap(), rhs.position())?;
                                 None
                             }
                             Err(err) => match *err {
@@ -766,7 +776,7 @@ impl Engine {
                         if let Some(mut new_val) = _call_setter {
                             let val = target.as_mut();
                             let val_type_name = val.type_name();
-                            let args = &mut [val, &mut idx_val2, &mut new_val];
+                            let args = &mut [val, &mut idx_val2, &mut new_val.0];
 
                             self.exec_fn_call(
                                 state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, &None,
@@ -814,8 +824,7 @@ impl Engine {
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
-                        val.set_value(new_val.unwrap())
-                            .map_err(|err| err.new_position(rhs.position()))?;
+                        val.set_value(new_val.unwrap(), rhs.position())?;
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
@@ -832,7 +841,7 @@ impl Engine {
                     Expr::Property(x) if new_val.is_some() => {
                         let ((_, _, setter), pos) = x.as_ref();
                         let mut new_val = new_val;
-                        let mut args = [target.as_mut(), new_val.as_mut().unwrap()];
+                        let mut args = [target.as_mut(), &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
                             state, lib, setter, 0, &mut args, is_ref, true, false, None, &None,
                             level,
@@ -986,7 +995,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-        new_val: Option<Dynamic>,
+        new_val: Option<(Dynamic, Position)>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let ((dot_lhs, dot_rhs, op_pos), chain_type) = match expr {
             Expr::Index(x) => (x.as_ref(), ChainType::Index),
@@ -1145,7 +1154,7 @@ impl Engine {
                 // val_array[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
+                    .map_err(|err| self.make_type_mismatch_err::<INT>(err, idx_pos))?;
 
                 let arr_len = arr.len();
 
@@ -1164,15 +1173,15 @@ impl Engine {
             Dynamic(Union::Map(map)) => {
                 // val_map[idx]
                 Ok(if _create {
-                    let index = idx
-                        .take_immutable_string()
-                        .map_err(|_| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
+                    let index = idx.take_immutable_string().map_err(|err| {
+                        self.make_type_mismatch_err::<ImmutableString>(err, idx_pos)
+                    })?;
 
                     map.entry(index).or_insert_with(Default::default).into()
                 } else {
-                    let index = idx
-                        .read_lock::<ImmutableString>()
-                        .ok_or_else(|| EvalAltResult::ErrorStringIndexExpr(idx_pos))?;
+                    let index = idx.read_lock::<ImmutableString>().ok_or_else(|| {
+                        self.make_type_mismatch_err::<ImmutableString>("", idx_pos)
+                    })?;
 
                     map.get_mut(&*index)
                         .map(Target::from)
@@ -1186,7 +1195,7 @@ impl Engine {
                 let chars_len = s.chars().count();
                 let index = idx
                     .as_int()
-                    .map_err(|_| EvalAltResult::ErrorNumericIndexExpr(idx_pos))?;
+                    .map_err(|err| self.make_type_mismatch_err::<INT>(err, idx_pos))?;
 
                 if index >= 0 {
                     let offset = index as usize;
@@ -1424,9 +1433,9 @@ impl Engine {
                 let mut rhs_val =
                     self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
 
-                let _new_val = Some(if op.is_empty() {
+                let _new_val = if op.is_empty() {
                     // Normal assignment
-                    rhs_val
+                    Some((rhs_val, rhs_expr.position()))
                 } else {
                     // Op-assignment - always map to `lhs = lhs op rhs`
                     let op = &op[..op.len() - 1]; // extract operator without =
@@ -1434,15 +1443,20 @@ impl Engine {
                         &mut self.eval_expr(scope, mods, state, lib, this_ptr, lhs_expr, level)?,
                         &mut rhs_val,
                     ];
-                    self.exec_fn_call(
-                        state, lib, op, 0, args, false, false, false, None, &None, level,
-                    )
-                    .map(|(v, _)| v)
-                    .map_err(|err| err.new_position(*op_pos))?
-                });
 
+                    let result = self
+                        .exec_fn_call(
+                            state, lib, op, 0, args, false, false, false, None, &None, level,
+                        )
+                        .map(|(v, _)| v)
+                        .map_err(|err| err.new_position(*op_pos))?;
+
+                    Some((result, rhs_expr.position()))
+                };
+
+                // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
-                    // name op= rhs
+                    // name op= rhs (handled above)
                     Expr::Variable(_) => unreachable!(),
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
@@ -1460,12 +1474,8 @@ impl Engine {
                         )?;
                         Ok(Default::default())
                     }
-                    // Error assignment to constant
-                    expr if expr.is_constant() => EvalAltResult::ErrorAssignmentToConstant(
-                        expr.get_constant_str(),
-                        expr.position(),
-                    )
-                    .into(),
+                    // Constant expression (should be caught during parsing)
+                    expr if expr.is_constant() => unreachable!(),
                     // Syntax error
                     expr => EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into(),
                 }
@@ -1528,16 +1538,12 @@ impl Engine {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("AND".into(), lhs.position())
-                    })?
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
                     && // Short-circuit using &&
                 self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("AND".into(), rhs.position())
-                    })?)
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
                 .into())
             }
 
@@ -1546,16 +1552,12 @@ impl Engine {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("OR".into(), lhs.position())
-                    })?
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
                     || // Short-circuit using ||
                 self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
                     .as_bool()
-                    .map_err(|_| {
-                        EvalAltResult::ErrorBooleanArgMismatch("OR".into(), rhs.position())
-                    })?)
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
                 .into())
             }
 
@@ -1637,7 +1639,7 @@ impl Engine {
 
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
-                    .map_err(|_| EvalAltResult::ErrorLogicGuard(expr.position()).into())
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
                     .and_then(|guard_val| {
                         if guard_val {
                             self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
@@ -1670,7 +1672,9 @@ impl Engine {
                         }
                     }
                     Ok(false) => return Ok(Default::default()),
-                    Err(_) => return EvalAltResult::ErrorLogicGuard(expr.position()).into(),
+                    Err(err) => {
+                        return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
+                    }
                 }
             },
 
@@ -1826,7 +1830,7 @@ impl Engine {
 
                         if let Some((name, _)) = alias {
                             module.index_all_sub_modules();
-                            mods.push((name.clone().into(), module));
+                            mods.push((name.clone(), module));
                         }
 
                         state.modules += 1;
@@ -1839,7 +1843,7 @@ impl Engine {
                         )
                     }
                 } else {
-                    EvalAltResult::ErrorImportExpr(expr.position()).into()
+                    Err(self.make_type_mismatch_err::<ImmutableString>("", expr.position()))
                 }
             }
 
@@ -2033,5 +2037,15 @@ impl Engine {
             .as_ref()
             .and_then(|t| t.get(name).map(String::as_str))
             .unwrap_or_else(|| map_std_type_name(name))
+    }
+
+    /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
+    pub fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
+        EvalAltResult::ErrorMismatchDataType(
+            typ.into(),
+            self.map_type_name(type_name::<T>()).into(),
+            pos,
+        )
+        .into()
     }
 }

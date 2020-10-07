@@ -16,11 +16,11 @@ The final, optimized [`AST`] is then used for evaluations.
 // Compile master script to AST
 let master_ast = engine.compile(
 r"
-    if SCENARIO_1 {
+    if SCENARIO == 1 {
         do_work();
-    } else if SCENARIO_2 {
+    } else if SCENARIO == 2 {
         do_something();
-    } else if SCENARIO_3 {
+    } else if SCENARIO == 3 {
         do_something_else();
     } else {
         do_nothing();
@@ -29,9 +29,7 @@ r"
 
 // Create a new 'Scope' - put constants in it to aid optimization
 let mut scope = Scope::new();
-scope.push_constant("SCENARIO_1", true);
-scope.push_constant("SCENARIO_2", false);
-scope.push_constant("SCENARIO_3", false);
+scope.push_constant("SCENARIO", 1_i64);
 
 // Re-optimize the AST
 let new_ast = engine.optimize_ast(&scope, master_ast.clone(), OptimizationLevel::Simple);

@@ -47,6 +47,7 @@ mod test {
 macro_rules! gen_unary_functions {
     ($op_name:ident = $op_fn:ident ( $($arg_type:ident),+ ) -> $return_type:ident) => {
         mod $op_name { $(
+            #[allow(non_snake_case)]
             pub mod $arg_type {
                 use super::super::*;
 

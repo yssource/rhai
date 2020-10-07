@@ -3,8 +3,10 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
+    KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
+use crate::fn_call::run_builtin_binary_op;
 use crate::fn_native::FnPtr;
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
@@ -384,7 +386,13 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 /// Optimize an expression.
 fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     // These keywords are handled specially
-    const DONT_EVAL_KEYWORDS: [&str; 3] = [KEYWORD_PRINT, KEYWORD_DEBUG, KEYWORD_EVAL];
+    const DONT_EVAL_KEYWORDS: &[&str] = &[
+        KEYWORD_PRINT,
+        KEYWORD_DEBUG,
+        KEYWORD_EVAL,
+        KEYWORD_IS_DEF_FN,
+        KEYWORD_IS_DEF_VAR,
+    ];
 
     match expr {
         // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
@@ -568,58 +576,77 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             }
         }
 
+        // Call built-in functions
+        Expr::FnCall(mut x)
+                if x.1.is_none() // Non-qualified
+                && state.optimization_level == OptimizationLevel::Simple // simple optimizations
+                && x.3.len() == 2 // binary call
+                && x.3.iter().all(Expr::is_constant) // all arguments are constants
+        => {
+            let ((name, _, _, pos), _, _, args, _) = x.as_mut();
+
+            let arg_values: StaticVec<_> = args.iter().map(|e| e.get_constant_value().unwrap()).collect();
+            let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
+
+            // Search for overloaded operators (can override built-in).
+            if !state.engine.has_override_by_name_and_arguments(state.lib, name, arg_types.as_ref(), false) {
+                if let Some(expr) = run_builtin_binary_op(name, &arg_values[0], &arg_values[1])
+                                        .ok().flatten()
+                                        .and_then(|result| map_dynamic_to_expr(result, *pos))
+                {
+                    state.set_dirty();
+                    return expr;
+                }
+            }
+
+            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+            Expr::FnCall(x)
+        }
+
         // Eagerly call functions
         Expr::FnCall(mut x)
                 if x.1.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
-                && x.3.iter().all(|expr| expr.is_constant()) // all arguments are constants
+                && x.3.iter().all(Expr::is_constant) // all arguments are constants
         => {
             let ((name, _, _, pos), _, _, args, def_value) = x.as_mut();
 
-            // First search in functions lib (can override built-in)
-            // Cater for both normal function call style and method call style (one additional arguments)
-            let has_script_fn = cfg!(not(feature = "no_function")) && state.lib.iter_fn().find(|(_, _, _, _,f)| {
-                if !f.is_script() { return false; }
-                let fn_def = f.get_fn_def();
-                fn_def.name == name && (args.len()..=args.len() + 1).contains(&fn_def.params.len())
-            }).is_some();
+            // First search for script-defined functions (can override built-in)
+            #[cfg(not(feature = "no_function"))]
+            let has_script_fn = state.lib.get_script_fn(name, args.len(), false).is_some();
+            #[cfg(feature = "no_function")]
+            let has_script_fn = false;
 
-            if has_script_fn {
-                // A script-defined function overrides the built-in function - do not make the call
-                x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
-                return Expr::FnCall(x);
+            if !has_script_fn {
+                let mut arg_values: StaticVec<_> = args.iter().map(|e| e.get_constant_value().unwrap()).collect();
+
+                // Save the typename of the first argument if it is `type_of()`
+                // This is to avoid `call_args` being passed into the closure
+                let arg_for_type_of = if name == KEYWORD_TYPE_OF && arg_values.len() == 1 {
+                    state.engine.map_type_name(arg_values[0].type_name())
+                } else {
+                    ""
+                };
+
+                if let Some(expr) = call_fn_with_constant_arguments(&state, name, arg_values.as_mut())
+                                        .or_else(|| {
+                                            if !arg_for_type_of.is_empty() {
+                                                // Handle `type_of()`
+                                                Some(arg_for_type_of.to_string().into())
+                                            } else {
+                                                // Otherwise use the default value, if any
+                                                def_value.map(|v| v.into())
+                                            }
+                                        })
+                                        .and_then(|result| map_dynamic_to_expr(result, *pos))
+                {
+                    state.set_dirty();
+                    return expr;
+                }
             }
 
-            let mut arg_values: StaticVec<_> = args.iter().map(Expr::get_constant_value).collect();
-
-            // Save the typename of the first argument if it is `type_of()`
-            // This is to avoid `call_args` being passed into the closure
-            let arg_for_type_of = if name == KEYWORD_TYPE_OF && arg_values.len() == 1 {
-                state.engine.map_type_name(arg_values[0].type_name())
-            } else {
-                ""
-            };
-
-            call_fn_with_constant_arguments(&state, name, arg_values.as_mut())
-                .or_else(|| {
-                    if !arg_for_type_of.is_empty() {
-                        // Handle `type_of()`
-                        Some(arg_for_type_of.to_string().into())
-                    } else {
-                        // Otherwise use the default value, if any
-                        def_value.map(|v| v.into())
-                    }
-                })
-                .and_then(|result| map_dynamic_to_expr(result, *pos))
-                .map(|expr| {
-                    state.set_dirty();
-                    expr
-                })
-                .unwrap_or_else(|| {
-                    // Optimize function call arguments
-                    x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
-                    Expr::FnCall(x)
-                })
+            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+            Expr::FnCall(x)
         }
 
         // id(args ..) -> optimize function call arguments

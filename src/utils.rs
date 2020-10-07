@@ -61,7 +61,7 @@ impl BuildHasher for StraightHasherBuilder {
     }
 }
 
-/// [INTERNALS] Calculate a `u64` hash key from a module-qualified function name and parameter types.
+/// _[INTERNALS]_ Calculate a `u64` hash key from a module-qualified function name and parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -89,7 +89,7 @@ pub fn calc_fn_hash<'a>(
     s.finish()
 }
 
-/// [INTERNALS] Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
+/// _[INTERNALS]_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
 /// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
 /// Exported under the `internals` feature only.
 pub type StaticVec<T> = SmallVec<[T; 4]>;

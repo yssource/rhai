@@ -1,7 +1,7 @@
-Advanced Patterns
-=================
+Usage Patterns
+==============
 
 {{#include ../links.md}}
 
 
-Leverage the full power and flexibility of Rhai in advanced scenarios.
+Leverage the full power and flexibility of Rhai in different scenarios.

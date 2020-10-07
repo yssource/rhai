@@ -74,8 +74,8 @@ impl fmt::Debug for CustomSyntax {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'a, 'b: 'a, 's, 'm, 't, 'd: 't> {
-    pub(crate) mods: &'a mut Imports<'b>,
+pub struct EvalContext<'a, 's, 'm, 't, 'd: 't> {
+    pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
     pub(crate) lib: &'m Module,
     pub(crate) this_ptr: &'t mut Option<&'d mut Dynamic>,

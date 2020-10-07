@@ -10,25 +10,19 @@ Create a Module from an AST
 A _module_ can be created from a single script (or pre-compiled [`AST`]) containing global variables,
 functions and sub-modules via the `Module::eval_ast_as_new` method.
 
+See the section on [_Exporting Variables, Functions and Sub-Modules_][`export`] for details on how to prepare
+a Rhai script for this purpose as well as to control which functions/variables to export.
+
 When given an [`AST`], it is first evaluated, then the following items are exposed as members of the new module:
 
-* Global variables - essentially all variables that remain in the [`Scope`] at the end of a script run - that are exported. Variables not exported (via the `export` statement) remain hidden.
+* Global variables - all variables exported via the `export` statement (those not exported remain hidden).
 
 * Functions not specifically marked `private`.
 
 * Global modules that remain in the [`Scope`] at the end of a script run.
 
-
-`merge_namespaces` Parameter
----------------------------
-
-The parameter `merge_namespaces` in `Module::eval_ast_as_new` determines the exact behavior of
-functions exposed by the module and the namespace that they can access:
-
-| `merge_namespaces` value | Description                                      |      Namespace      | Performance | Call global functions | Call functions in same module |
-| :----------------------: | ------------------------------------------------ | :-----------------: | :---------: | :-------------------: | :---------------------------: |
-|          `true`          | encapsulate entire `AST` into each function call | module, then global |   slower    |          yes          |              yes              |
-|         `false`          | register each function independently             |     global only     |    fast     |          yes          |              no               |
+`Module::eval_ast_as_new` encapsulates the entire `AST` into each function call, merging the module namespace
+with the global namespace.  Therefore, functions defined within the same module script can cross-call each other.
 
 
 Examples
@@ -73,13 +67,9 @@ let ast = engine.compile(r#"
 "#)?;
 
 // Convert the 'AST' into a module, using the 'Engine' to evaluate it first
-//
-// The second parameter ('merge_namespaces'), when set to true, will encapsulate
-// a copy of the entire 'AST' into each function, allowing functions in the module script
-// to cross-call each other.
-//
-// This incurs additional overhead, avoidable by setting 'merge_namespaces' to false.
-let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
+// A copy of the entire 'AST' is encapsulated into each function,
+// allowing functions in the module script to cross-call each other.
+let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
 // 'module' now contains:
 //   - sub-module: 'foobar' (renamed from 'extra')

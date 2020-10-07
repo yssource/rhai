@@ -204,9 +204,9 @@ impl Module {
 
     pub fn exported_name(&self) -> Option<Cow<str>> {
         if let Some(ref s) = self.params.name {
-            Some(Cow::Borrowed(s))
+            Some(s.into())
         } else {
-            self.module_name().map(|m| Cow::Owned(m.to_string()))
+            self.module_name().map(|m| m.to_string().into())
         }
     }
 

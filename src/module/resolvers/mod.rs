@@ -17,14 +17,6 @@ mod file;
 #[cfg(not(target_arch = "wasm32"))]
 pub use file::FileModuleResolver;
 
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-mod global_file;
-
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-pub use global_file::GlobalFileModuleResolver;
-
 mod stat;
 pub use stat::StaticModuleResolver;
 

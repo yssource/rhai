@@ -2,8 +2,11 @@
 
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
+
+#[cfg(not(feature = "no_closure"))]
+use crate::engine::KEYWORD_IS_SHARED;
 
 use crate::error::LexError;
 use crate::parser::INT;
@@ -144,7 +147,7 @@ impl fmt::Debug for Position {
     }
 }
 
-/// [INTERNALS] A Rhai language token.
+/// _[INTERNALS]_ A Rhai language token.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -507,9 +510,11 @@ impl Token {
             | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_SHARED | KEYWORD_THIS => {
-                Reserved(syntax.into())
-            }
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR
+            | KEYWORD_IS_DEF_FN | KEYWORD_THIS => Reserved(syntax.into()),
+
+            #[cfg(not(feature = "no_closure"))]
+            KEYWORD_IS_SHARED => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -704,7 +709,7 @@ impl From<Token> for String {
     }
 }
 
-/// [INTERNALS] State of the tokenizer.
+/// _[INTERNALS]_ State of the tokenizer.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -724,7 +729,7 @@ pub struct TokenizeState {
     pub include_comments: bool,
 }
 
-/// [INTERNALS] Trait that encapsulates a peekable character input stream.
+/// _[INTERNALS]_ Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -738,7 +743,7 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-/// [INTERNALS] Parse a string literal wrapped by `enclosing_char`.
+/// _[INTERNALS]_ Parse a string literal wrapped by `enclosing_char`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -926,7 +931,7 @@ fn scan_comment(
     }
 }
 
-/// [INTERNALS] Get the next token from the `InputStream`.
+/// _[INTERNALS]_ Get the next token from the `InputStream`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -1386,6 +1391,8 @@ fn get_next_token_inner(
 
             ('@', _) => return Some((Token::Reserved("@".into()), start_pos)),
 
+            ('$', _) => return Some((Token::Reserved("$".into()), start_pos)),
+
             ('\0', _) => unreachable!(),
 
             (ch, _) if ch.is_whitespace() => (),
@@ -1455,7 +1462,9 @@ pub fn is_keyword_function(name: &str) -> bool {
         #[cfg(not(feature = "no_closure"))]
         KEYWORD_IS_SHARED => true,
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
+        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR | KEYWORD_IS_DEF_FN => {
+            true
+        }
         _ => false,
     }
 }
@@ -1465,7 +1474,8 @@ pub fn is_keyword_function(name: &str) -> bool {
 #[inline(always)]
 pub fn can_override_keyword(name: &str) -> bool {
     match name {
-        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR => true,
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
+        | KEYWORD_IS_DEF_VAR | KEYWORD_IS_DEF_FN => true,
         _ => false,
     }
 }

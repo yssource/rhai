@@ -5,6 +5,8 @@ Module Resolvers
 
 When encountering an [`import`] statement, Rhai attempts to _resolve_ the module based on the path string.
 
+See the section on [_Importing Modules_][`import`] for more details.
+
 _Module Resolvers_ are service types that implement the [`ModuleResolver`][traits] trait.
 
 
@@ -32,75 +34,97 @@ are _merged_ into a _unified_ namespace.
 | my_module.rhai |
 ------------------
 
+// This function overrides any in the main script.
 private fn inner_message() { "hello! from module!" }
 
-fn greet(callback) { print(callback.call()); }
+fn greet() {
+    print(inner_message());     // call function in module script
+}
+
+fn greet_main() {
+    print(main_message());      // call function not in module script
+}
 
 -------------
 | main.rhai |
 -------------
 
-fn main_message() { "hi! from main!" }
+// This function is overridden by the module script.
+fn inner_message() { "hi! from main!" }
+
+// This function is found by the module script.
+fn main_message() { "main here!" }
 
 import "my_module" as m;
 
-m::greet(|| "hello, " + "world!");  // works - anonymous function in global
+m::greet();                     // prints "hello! from module!"
 
-m::greet(|| inner_message());       // works - function in module
-
-m::greet(|| main_message());        // works - function in global
+m::greet_main();                // prints "main here!"
 ```
 
-The base directory can be changed via the `FileModuleResolver::new_with_path` constructor function.
+### Simulating virtual functions
 
-`FileModuleResolver::create_module` loads a script file and returns a module.
+When calling a namespace-qualified function defined within a module, other functions defined within
+the same module script override any similar-named functions (with the same number of parameters)
+defined in the global namespace.  This is to ensure that a module acts as a self-contained unit and
+functions defined in the calling script do not override module code.
 
+In some situations, however, it is actually beneficial to do it in reverse: have module code call functions
+defined in the calling script (i.e. in the global namespace) if they exist, and only call those defined
+in the module script if none are found.
 
-`GlobalFileModuleResolver`
--------------------------
-
-A simpler but more efficient version of `FileModuleResolver`, intended for short utility modules.
-Not available for [`no_std`] or [WASM] builds.
-Loads a script file (based off the current directory) with `.rhai` extension.
-
-All functions are assumed **independent** and _cannot_ cross-call each other.
-Functions are searched _only_ in the _global_ namespace.
+One such situation is the need to provide a _default implementation_ to a simulated _virtual_ function:
 
 ```rust
 ------------------
 | my_module.rhai |
 ------------------
 
-private fn inner_message() { "hello! from module!" }
+// Do not do this (it will override the main script):
+// fn message() { "hello! from module!" }
 
-fn greet_inner() {
-    print(inner_message());     // cross-calling a module function!
-                                // there will be trouble because each function
-                                // in the module is supposed to be independent
-                                // of each other
-}
+// This function acts as the default implementation.
+private fn default_message() { "hello! from module!" }
 
+// This function depends on a 'virtual' function 'message'
+// which is not defined in the module script.
 fn greet() {
-    print(main_message());      // function is searched in global namespace
+    if is_def_fn("message", 0) {    // 'is_def_fn' detects if 'message' is defined.
+        print(message());
+    } else {
+        print(default_message());
+    }
 }
 
 -------------
 | main.rhai |
 -------------
 
-fn main_message() { "hi! from main!" }
+// The main script defines 'message' which is needed by the module script.
+fn message() { "hi! from main!" }
 
 import "my_module" as m;
 
-m::greet_inner();               // <- function not found: 'inner_message'
+m::greet();                         // prints "hi! from main!"
 
-m::greet();                     // works because 'main_message' exists in
-                                // the global namespace
+--------------
+| main2.rhai |
+--------------
+
+// The main script does not define 'message' which is needed by the module script.
+
+import "my_module" as m;
+
+m::greet();                         // prints "hello! from module!"
 ```
+
+### Changing the base directory
 
 The base directory can be changed via the `FileModuleResolver::new_with_path` constructor function.
 
-`GlobalFileModuleResolver::create_module` loads a script file and returns a module.
+### Returning a module instead
+
+`FileModuleResolver::create_module` loads a script file and returns a module with the standard behavior.
 
 
 `StaticModuleResolver`

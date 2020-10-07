@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ImmutableString, RegisterFn, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, RegisterFn, Scope, INT};
 
 #[test]
 fn test_string() -> Result<(), Box<EvalAltResult>> {
@@ -45,6 +45,21 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_float"))]
     assert_eq!(engine.eval::<String>(r#""foo" + 123.4556"#)?, "foo123.4556");
+
+    Ok(())
+}
+
+#[test]
+fn test_string_dynamic() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+    let mut scope = Scope::new();
+    scope.push("x", Dynamic::from("foo"));
+    scope.push("y", String::from("foo"));
+    scope.push("z", "foo");
+
+    assert!(engine.eval_with_scope::<bool>(&mut scope, r#"x == "foo""#)?);
+    assert!(engine.eval_with_scope::<bool>(&mut scope, r#"y == "foo""#)?);
+    assert!(engine.eval_with_scope::<bool>(&mut scope, r#"z == "foo""#)?);
 
     Ok(())
 }

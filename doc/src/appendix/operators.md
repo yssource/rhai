@@ -7,46 +7,62 @@ Operators and Symbols
 Operators
 ---------
 
-|     Operator      | Description                    | Binary? | Binding direction |
-| :---------------: | ------------------------------ | :-----: | :---------------: |
-|        `+`        | add                            |   yes   |       left        |
-|        `-`        | subtract, Minus                | yes/no  |       left        |
-|        `*`        | multiply                       |   yes   |       left        |
-|        `/`        | divide                         |   yes   |       left        |
-|        `%`        | modulo                         |   yes   |       left        |
-|        `~`        | power                          |   yes   |       left        |
-|       `>>`        | right bit-shift                |   yes   |       left        |
-|       `<<`        | left bit-shift                 |   yes   |       left        |
-|        `&`        | bit-wise _And_, boolean _And_  |   yes   |       left        |
-|  <code>\|</code>  | bit-wise _Or_, boolean _Or_    |   yes   |       left        |
-|        `^`        | bit-wise _Xor_, boolean _Xor_  |   yes   |       left        |
-|       `==`        | equals to                      |   yes   |       left        |
-|       `~=`        | not equals to                  |   yes   |       left        |
-|        `>`        | greater than                   |   yes   |       left        |
-|       `>=`        | greater than or equals to      |   yes   |       left        |
-|        `<`        | less than                      |   yes   |       left        |
-|       `<=`        | less than or equals to         |   yes   |       left        |
-|       `&&`        | boolean _And_ (short-circuits) |   yes   |       left        |
-| <code>\|\|</code> | boolean _Or_ (short-circuits)  |   yes   |       left        |
-|        `!`        | boolean _Not_                  |   no    |       left        |
-|    `[` .. `]`     | indexing                       |   yes   |       right       |
-|        `.`        | property access, method call   |   yes   |       right       |
+|                                          Operator                                           | Description                            |  Binary?   | Binding direction |
+| :-----------------------------------------------------------------------------------------: | -------------------------------------- | :--------: | :---------------: |
+|                                             `+`                                             | add                                    |    yes     |       left        |
+|                                             `-`                                             | 1) subtract<br/>2) negative            | yes<br/>no |  left<br/>right   |
+|                                             `*`                                             | multiply                               |    yes     |       left        |
+|                                             `/`                                             | divide                                 |    yes     |       left        |
+|                                             `%`                                             | modulo                                 |    yes     |       left        |
+|                                             `~`                                             | power                                  |    yes     |       left        |
+|                                            `>>`                                             | right bit-shift                        |    yes     |       left        |
+|                                            `<<`                                             | left bit-shift                         |    yes     |       left        |
+|                                             `&`                                             | 1) bit-wise _And_<br/>2) boolean _And_ |    yes     |       left        |
+|                                       <code>\|</code>                                       | 1) bit-wise _Or_<br/>2) boolean _Or_   |    yes     |       left        |
+|                                             `^`                                             | 1) bit-wise _Xor_<br/>2) boolean _Xor_ |    yes     |       left        |
+| `=`, `+=`, `-=`, `*=`, `/=`,<br/>`~=`, `%=`, `<<=`, `>>=`, `&=`,<br/><code>\|=</code>, `^=` | assignments                            |    yes     |       right       |
+|                                            `==`                                             | equals to                              |    yes     |       left        |
+|                                            `~=`                                             | not equals to                          |    yes     |       left        |
+|                                             `>`                                             | greater than                           |    yes     |       left        |
+|                                            `>=`                                             | greater than or equals to              |    yes     |       left        |
+|                                             `<`                                             | less than                              |    yes     |       left        |
+|                                            `<=`                                             | less than or equals to                 |    yes     |       left        |
+|                                            `&&`                                             | boolean _And_ (short-circuits)         |    yes     |       left        |
+|                                      <code>\|\|</code>                                      | boolean _Or_ (short-circuits)          |    yes     |       left        |
+|                                             `!`                                             | boolean _Not_                          |     no     |       left        |
+|                                         `[` .. `]`                                          | indexing                               |    yes     |       right       |
+|                                             `.`                                             | 1) property access<br/>2) method call  |    yes     |       right       |
 
 
-Symbols
--------
+Symbols and Patterns
+--------------------
 
-| Symbol       | Description              |
-| ------------ | ------------------------ |
-| `:`          | property value separator |
-| `::`         | module path separator    |
-| `#`          | _reserved_               |
-| `=>`         | _reserved_               |
-| `->`         | _reserved_               |
-| `<-`         | _reserved_               |
-| `===`        | _reserved_               |
-| `!==`        | _reserved_               |
-| `:=`         | _reserved_               |
-| `::<` .. `>` | _reserved_               |
-| `@`          | _reserved_               |
-| `(*` .. `*)` | _reserved_               |
+| Symbol                             |         Name         | Description                           |
+| ---------------------------------- | :------------------: | ------------------------------------- |
+| `;`                                |      semicolon       | statement separator                   |
+| `,`                                |        comma         | list separator                        |
+| `:`                                |        colon         | [object map] property value separator |
+| `::`                               |         path         | module path separator                 |
+| `#{` .. `}`                        |       hash map       | [object map] literal                  |
+| `"` .. `"`                         |     double quote     | [string]                              |
+| `'` .. `'`                         |     single quote     | [character][string]                   |
+| `\`                                |        escape        | escape character literal              |
+| `(` .. `)`                         |     parentheses      | expression grouping                   |
+| `{` .. `}`                         |        braces        | block statement                       |
+| <code>\|</code> .. <code>\|</code> |        pipes         | closure                               |
+| `[` .. `]`                         |       brackets       | [array] literal                       |
+| `!`                                |         bang         | function call in calling scope        |
+| `//`                               |       comment        | line comment                          |
+| `/*` .. `*/`                       |       comment        | block comment                         |
+| `(*` .. `*)`                       |       comment        | _reserved_                            |
+| `<` .. `>`                         |   angular brackets   | _reserved_                            |
+| `#`                                |         hash         | _reserved_                            |
+| `@`                                |          at          | _reserved_                            |
+| `$`                                |        dollar        | _reserved_                            |
+| `=>`                               |     double arrow     | _reserved_                            |
+| `->`                               |        arrow         | _reserved_                            |
+| `<-`                               |      left arrow      | _reserved_                            |
+| `===`                              |   strict equals to   | _reserved_                            |
+| `!==`                              | strict not equals to | _reserved_                            |
+| `:=`                               |      assignment      | _reserved_                            |
+| `::<` .. `>`                       |      turbofish       | _reserved_                            |

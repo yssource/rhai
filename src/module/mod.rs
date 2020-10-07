@@ -5,7 +5,7 @@ use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
-use crate::parser::{FnAccess, FnAccess::Public};
+use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::token::{Position, Token};
 use crate::utils::{ImmutableString, StaticVec, StraightHasherBuilder};
@@ -85,7 +85,7 @@ impl fmt::Debug for Module {
             "Module(\n    modules: {}\n    vars: {}\n    functions: {}\n)",
             self.modules
                 .keys()
-                .map(|k| k.as_str())
+                .map(String::as_str)
                 .collect::<Vec<_>>()
                 .join(", "),
             self.variables
@@ -294,6 +294,24 @@ impl Module {
         hash_script
     }
 
+    /// Get a script-defined function in the module based on name and number of parameters.
+    #[cfg(not(feature = "no_function"))]
+    pub fn get_script_fn(
+        &self,
+        name: &str,
+        num_params: usize,
+        public_only: bool,
+    ) -> Option<&Shared<ScriptFnDef>> {
+        self.functions
+            .values()
+            .find(|(fn_name, access, num, _, _)| {
+                (!public_only || *access == FnAccess::Public)
+                    && *num == num_params
+                    && fn_name == name
+            })
+            .map(|(_, _, _, _, f)| f.get_shared_fn_def())
+    }
+
     /// Does a sub-module exist in the module?
     ///
     /// # Examples
@@ -382,10 +400,7 @@ impl Module {
         } else if public_only {
             self.functions
                 .get(&hash_fn)
-                .map(|(_, access, _, _, _)| match access {
-                    FnAccess::Public => true,
-                    FnAccess::Private => false,
-                })
+                .map(|(_, access, _, _, _)| access.is_public())
                 .unwrap_or(false)
         } else {
             self.functions.contains_key(&hash_fn)
@@ -457,6 +472,9 @@ impl Module {
     /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
     /// which is guaranteed to contain enough arguments of the correct types.
     ///
+    /// The function is assumed to be a _method_, meaning that the first argument should not be consumed.
+    /// All other arguments can be consumed.
+    ///
     /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
     /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
@@ -506,7 +524,7 @@ impl Module {
         };
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -519,19 +537,19 @@ impl Module {
     pub(crate) fn set_raw_fn_as_scripted(
         &mut self,
         name: impl Into<String>,
-        num_args: usize,
+        num_params: usize,
         func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<Dynamic> + SendSync + 'static,
     ) -> u64 {
         // None + function name + number of arguments.
         let name = name.into();
-        let hash_script = calc_fn_hash(empty(), &name, num_args, empty());
+        let hash_script = calc_fn_hash(empty(), &name, num_params, empty());
         let f = move |engine: &Engine, lib: &Module, args: &mut FnCallArgs| func(engine, lib, args);
         self.functions.insert(
             hash_script,
             (
                 name,
                 FnAccess::Public,
-                num_args,
+                num_params,
                 None,
                 CallableFunction::from_pure(Box::new(f)),
             ),
@@ -562,7 +580,7 @@ impl Module {
         let arg_types = [];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -592,7 +610,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -622,7 +640,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -679,7 +697,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -715,7 +733,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -825,7 +843,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -867,7 +885,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -924,7 +942,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             FN_IDX_SET,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -1012,7 +1030,7 @@ impl Module {
         ];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -1061,7 +1079,7 @@ impl Module {
         ];
         self.set_fn(
             name,
-            Public,
+            FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -1152,11 +1170,11 @@ impl Module {
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
         if !other.modules.is_empty() {
-            for (k, v) in &other.modules {
+            other.modules.iter().for_each(|(k, v)| {
                 let mut m = Self::new();
                 m.merge_filtered(v, _filter);
                 self.modules.insert(k.clone(), m);
-            }
+            });
         }
         #[cfg(feature = "no_function")]
         if !other.modules.is_empty() {
@@ -1210,17 +1228,13 @@ impl Module {
         self
     }
 
-    /// Get the number of variables in the module.
-    pub fn num_var(&self) -> usize {
-        self.variables.len()
-    }
-    /// Get the number of functions in the module.
-    pub fn num_fn(&self) -> usize {
-        self.variables.len()
-    }
-    /// Get the number of type iterators in the module.
-    pub fn num_iter(&self) -> usize {
-        self.variables.len()
+    /// Get the number of variables, functions and type iterators in the module.
+    pub fn count(&self) -> (usize, usize, usize) {
+        (
+            self.variables.len(),
+            self.variables.len(),
+            self.variables.len(),
+        )
     }
 
     /// Get an iterator to the variables in the module.
@@ -1234,36 +1248,65 @@ impl Module {
     }
 
     /// Get an iterator over all script-defined functions in the module.
+    ///
+    /// Function metadata includes:
+    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
+    /// 2) Function name (as string slice).
+    /// 3) Number of parameters.
+    /// 4) Shared reference to function definition `ScriptFnDef`.
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_script_fn<'a>(&'a self) -> impl Iterator<Item = Shared<ScriptFnDef>> + 'a {
+    pub(crate) fn iter_script_fn<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
         self.functions
             .values()
             .map(|(_, _, _, _, f)| f)
             .filter(|f| f.is_script())
-            .map(|f| f.get_shared_fn_def())
+            .map(CallableFunction::get_shared_fn_def)
+            .map(|f| {
+                let func = f.clone();
+                (f.access, f.name.as_str(), f.params.len(), func)
+            })
     }
 
+    /// Get an iterator over all script-defined functions in the module.
+    ///
+    /// Function metadata includes:
+    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
+    /// 2) Function name (as string slice).
+    /// 3) Number of parameters.
     #[cfg(not(feature = "no_function"))]
-    pub fn iter_script_fn_info(&self, mut action: impl FnMut(FnAccess, &str, usize)) {
+    #[cfg(not(feature = "internals"))]
+    pub fn iter_script_fn_info(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
         self.functions
-            .iter()
-            .for_each(|(_, (_, _, _, _, v))| match v {
-                CallableFunction::Script(f) => action(f.access, f.name.as_str(), f.params.len()),
-                _ => (),
-            });
+            .values()
+            .filter(|(_, _, _, _, f)| f.is_script())
+            .map(|(name, access, num_params, _, _)| (*access, name.as_str(), *num_params))
+    }
+
+    /// Get an iterator over all script-defined functions in the module.
+    ///
+    /// Function metadata includes:
+    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
+    /// 2) Function name (as string slice).
+    /// 3) Number of parameters.
+    /// 4) _[INTERNALS]_ Shared reference to function definition `ScriptFnDef`.
+    ///    Exported under the internals feature only.
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn iter_script_fn_info(
+        &self,
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> {
+        self.iter_script_fn()
     }
 
     /// Create a new `Module` by evaluating an `AST`.
     ///
-    /// ### `merge_namespaces` parameter
-    ///
-    /// * If `true`, the entire `AST` is encapsulated into each function, allowing functions
-    ///   to cross-call each other.  Functions in the global namespace, plus all functions
-    ///   defined in the module, are _merged_ into a _unified_ namespace before each call.
-    ///   Therefore, all functions will be found, at the expense of some performance.
-    ///
-    /// * If `false`, each function is registered independently and cannot cross-call
-    ///   each other. Functions are searched in the global namespace.
+    /// The entire `AST` is encapsulated into each function, allowing functions
+    /// to cross-call each other.  Functions in the global namespace, plus all functions
+    /// defined in the module, are _merged_ into a _unified_ namespace before each call.
+    /// Therefore, all functions will be found.
     ///
     /// # Examples
     ///
@@ -1273,19 +1316,14 @@ impl Module {
     ///
     /// let engine = Engine::new();
     /// let ast = engine.compile("let answer = 42; export answer;")?;
-    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, true, &engine)?;
+    /// let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
     /// assert!(module.contains_var("answer"));
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn eval_ast_as_new(
-        mut scope: Scope,
-        ast: &AST,
-        merge_namespaces: bool,
-        engine: &Engine,
-    ) -> FuncReturn<Self> {
+    pub fn eval_ast_as_new(mut scope: Scope, ast: &AST, engine: &Engine) -> FuncReturn<Self> {
         let mut mods = Imports::new();
 
         // Run the script
@@ -1298,8 +1336,8 @@ impl Module {
             .into_iter()
             .for_each(|ScopeEntry { value, alias, .. }| {
                 // Variables with an alias left in the scope become module variables
-                if alias.is_some() {
-                    module.variables.insert(*alias.unwrap(), value);
+                if let Some(alias) = alias {
+                    module.variables.insert(*alias, value);
                 }
             });
 
@@ -1309,16 +1347,17 @@ impl Module {
         });
 
         #[cfg(not(feature = "no_function"))]
-        if merge_namespaces {
-            ast.iter_functions(|access, name, num_args| match access {
-                FnAccess::Private => (),
-                FnAccess::Public => {
-                    let fn_name = name.to_string();
-                    let ast_lib = ast.lib().clone();
+        {
+            let ast_lib: Shared<Module> = ast.lib().clone().into();
+
+            ast.iter_functions()
+                .filter(|(access, _, _, _)| access.is_public())
+                .for_each(|(_, name, num_params, func)| {
+                    let ast_lib = ast_lib.clone();
 
                     module.set_raw_fn_as_scripted(
                         name,
-                        num_args,
+                        num_params,
                         move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
                             let mut lib_merged;
 
@@ -1332,12 +1371,16 @@ impl Module {
                             };
 
                             engine
-                                .call_fn_dynamic_raw(
-                                    &mut Scope::new(),
-                                    &unified_lib,
-                                    &fn_name,
+                                .call_script_fn(
+                                    &mut Default::default(),
+                                    &mut Default::default(),
+                                    &mut Default::default(),
+                                    unified_lib,
                                     &mut None,
+                                    &func.name,
+                                    func.as_ref(),
                                     args,
+                                    0,
                                 )
                                 .map_err(|err| {
                                     // Wrap the error in a module-error
@@ -1349,10 +1392,7 @@ impl Module {
                                 })
                         },
                     );
-                }
-            });
-        } else {
-            module.merge(ast.lib());
+                });
         }
 
         Ok(module)
@@ -1369,71 +1409,68 @@ impl Module {
             variables: &mut Vec<(u64, Dynamic)>,
             functions: &mut Vec<(u64, CallableFunction)>,
         ) {
-            for (name, m) in &module.modules {
+            module.modules.iter().for_each(|(name, m)| {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
                 index_module(m, qualifiers, variables, functions);
                 qualifiers.pop();
-            }
+            });
 
             // Index all variables
-            for (var_name, value) in &module.variables {
+            module.variables.iter().for_each(|(var_name, value)| {
                 // Qualifiers + variable name
                 let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0, empty());
                 variables.push((hash_var, value.clone()));
-            }
+            });
             // Index all Rust functions
-            for (&_hash, (name, access, _num_args, params, func)) in module.functions.iter() {
-                match access {
-                    // Private functions are not exported
-                    FnAccess::Private => continue,
-                    FnAccess::Public => (),
-                }
+            module
+                .functions
+                .iter()
+                .filter(|(_, (_, access, _, _, _))| access.is_public())
+                .for_each(|(&_hash, (name, _, _num_params, params, func))| {
+                    if let Some(params) = params {
+                        // Qualified Rust functions are indexed in two steps:
+                        // 1) Calculate a hash in a similar manner to script-defined functions,
+                        //    i.e. qualifiers + function name + number of arguments.
+                        let hash_qualified_script =
+                            calc_fn_hash(qualifiers.iter().cloned(), name, params.len(), empty());
+                        // 2) Calculate a second hash with no qualifiers, empty function name,
+                        //    zero number of arguments, and the actual list of argument `TypeId`'.s
+                        let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
+                        // 3) The final hash is the XOR of the two hashes.
+                        let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
 
-                #[cfg(not(feature = "no_function"))]
-                if params.is_none() {
-                    let hash_qualified_script = if qualifiers.is_empty() {
-                        _hash
-                    } else {
-                        // Qualifiers + function name + number of arguments.
-                        calc_fn_hash(qualifiers.iter().map(|&v| v), &name, *_num_args, empty())
-                    };
-                    functions.push((hash_qualified_script, func.clone()));
-                    continue;
-                }
-
-                if let Some(params) = params {
-                    // Qualified Rust functions are indexed in two steps:
-                    // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + number of arguments.
-                    let hash_qualified_script =
-                        calc_fn_hash(qualifiers.iter().map(|&v| v), name, params.len(), empty());
-                    // 2) Calculate a second hash with no qualifiers, empty function name,
-                    //    zero number of arguments, and the actual list of argument `TypeId`'.s
-                    let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
-                    // 3) The final hash is the XOR of the two hashes.
-                    let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
-
-                    functions.push((hash_qualified_fn, func.clone()));
-                }
-            }
+                        functions.push((hash_qualified_fn, func.clone()));
+                    } else if cfg!(not(feature = "no_function")) {
+                        let hash_qualified_script = if qualifiers.is_empty() {
+                            _hash
+                        } else {
+                            // Qualifiers + function name + number of arguments.
+                            calc_fn_hash(
+                                qualifiers.iter().map(|&v| v),
+                                &name,
+                                *_num_params,
+                                empty(),
+                            )
+                        };
+                        functions.push((hash_qualified_script, func.clone()));
+                    }
+                });
         }
 
-        if self.indexed {
-            return;
+        if !self.indexed {
+            let mut qualifiers: Vec<_> = Default::default();
+            let mut variables: Vec<_> = Default::default();
+            let mut functions: Vec<_> = Default::default();
+
+            qualifiers.push("root");
+
+            index_module(self, &mut qualifiers, &mut variables, &mut functions);
+
+            self.all_variables = variables.into_iter().collect();
+            self.all_functions = functions.into_iter().collect();
+            self.indexed = true;
         }
-
-        let mut qualifiers: Vec<_> = Default::default();
-        let mut variables: Vec<_> = Default::default();
-        let mut functions: Vec<_> = Default::default();
-
-        qualifiers.push("root");
-
-        index_module(self, &mut qualifiers, &mut variables, &mut functions);
-
-        self.all_variables = variables.into_iter().collect();
-        self.all_functions = functions.into_iter().collect();
-        self.indexed = true;
     }
 
     /// Does a type iterator exist in the module?
@@ -1454,7 +1491,7 @@ impl Module {
     }
 }
 
-/// [INTERNALS] A chain of module names to qualify a variable or function call.
+/// _[INTERNALS]_ A chain of module names to qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
 /// A `u64` hash key is cached for quick search purposes.

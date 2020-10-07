@@ -1,6 +1,27 @@
 Rhai Release Notes
 ==================
 
+Version 0.20.0
+==============
+
+Breaking changes
+----------------
+
+* `AST::iter_functions` now returns an iterator instead of taking a closure.
+* `Module::get_script_function_by_signature` renamed to `Module::get_script_fn` and returns `&<Shared<ScriptFnDef>>`.
+* `Module::num_fn`, `Module::num_var` and `Module::num_iter` are removed and merged into `Module::count`.
+* The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
+* `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
+* The following `EvalAltResult` variants are removed and merged into `EvalAltResult::ErrorMismatchDataType`: `ErrorCharMismatch`, `ErrorNumericIndexExpr`, `ErrorStringIndexExpr`, `ErrorImportExpr`, `ErrorLogicGuard`, `ErrorBooleanArgMismatch`
+
+New features
+------------
+
+* `OptimizationLevel::Simple` now eagerly evaluates built-in binary operators of primary types (if not overloaded).
+* Added `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
+* `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
+
+
 Version 0.19.0
 ==============
 

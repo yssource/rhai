@@ -178,7 +178,7 @@ macro_rules! def_register {
     (imp $abi:ident : $($par:ident => $arg:expr => $mark:ty => $param:ty => $let:stmt => $clone:expr),*) => {
     //   ^ function ABI type
     //                  ^ function parameter generic type name (A, B, C etc.)
-//                                    ^ call argument(like A, *B, &mut C etc)
+    //                                ^ call argument(like A, *B, &mut C etc)
     //                                            ^ function parameter marker type (T, Ref<T> or Mut<T>)
     //                                                         ^ function parameter actual type (T, &T or &mut T)
     //                                                                      ^ argument let statement

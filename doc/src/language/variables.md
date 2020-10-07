@@ -37,6 +37,8 @@ If none is provided, it defaults to [`()`].
 
 A variable defined within a statement block is _local_ to that block.
 
+Use `is_def_var` to detect if a variable is defined.
+
 ```rust
 let x;              // ok - value is '()'
 let x = 3;          // ok
@@ -57,4 +59,10 @@ X == 123;
     x == 999;       // access to local 'x'
 }
 x == 42;            // the parent block's 'x' is not changed
+
+is_def_var("x") == true;
+
+is_def_var("_x") == true;
+
+is_def_var("y") == false;
 ```

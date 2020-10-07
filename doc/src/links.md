@@ -100,10 +100,11 @@
 [function namespaces]: {{rootUrl}}/language/fn-namespaces.md
 [anonymous function]: {{rootUrl}}/language/fn-anon.md
 [anonymous functions]: {{rootUrl}}/language/fn-anon.md
+[operator overloading]: {{rootUrl}}/rust/operators.md
 
-[`Module`]: {{rootUrl}}/language/modules/index.md
-[module]: {{rootUrl}}/language/modules/index.md
-[modules]: {{rootUrl}}/language/modules/index.md
+[`Module`]: {{rootUrl}}/rust/modules/index.md
+[module]: {{rootUrl}}/rust/modules/index.md
+[modules]: {{rootUrl}}/rust/modules/index.md
 [module resolver]: {{rootUrl}}/rust/modules/resolvers.md
 [`export`]: {{rootUrl}}/language/modules/export.md
 [`import`]: {{rootUrl}}/language/modules/import.md

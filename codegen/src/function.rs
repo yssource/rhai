@@ -403,9 +403,9 @@ impl ExportedFn {
 
     pub(crate) fn exported_name<'n>(&'n self) -> Cow<'n, str> {
         if let Some(ref name) = self.params.name {
-            Cow::Borrowed(name.last().unwrap().as_str())
+            name.last().unwrap().as_str().into()
         } else {
-            Cow::Owned(self.signature.ident.to_string())
+            self.signature.ident.to_string().into()
         }
     }
 

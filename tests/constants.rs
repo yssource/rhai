@@ -21,3 +21,29 @@ fn test_constant() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_var_is_def() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(engine.eval::<bool>(
+        r#"
+            let x = 42;
+            is_def_var("x")
+    "#
+    )?);
+    assert!(!engine.eval::<bool>(
+        r#"
+            let x = 42;
+            is_def_var("y")
+    "#
+    )?);
+    assert!(engine.eval::<bool>(
+        r#"
+            const x = 42;
+            is_def_var("x")
+    "#
+    )?);
+
+    Ok(())
+}
