@@ -443,25 +443,17 @@ impl AST {
     }
 }
 
-impl Add<Self> for &AST {
+impl<A: AsRef<AST>> Add<A> for &AST {
     type Output = AST;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        self.merge(rhs)
+    fn add(self, rhs: A) -> Self::Output {
+        self.merge(rhs.as_ref())
     }
 }
 
-impl Add<&Self> for &AST {
-    type Output = AST;
-
-    fn add(self, rhs: &Self) -> Self::Output {
-        self.merge(rhs)
-    }
-}
-
-impl AddAssign<AST> for AST {
-    fn add_assign(&mut self, rhs: AST) {
-        self.combine(rhs);
+impl<A: Into<AST>> AddAssign<A> for AST {
+    fn add_assign(&mut self, rhs: A) {
+        self.combine(rhs.into());
     }
 }
 

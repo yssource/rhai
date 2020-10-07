@@ -1546,35 +1546,28 @@ impl From<StaticVec<(String, Position)>> for ModuleRef {
     }
 }
 
-impl Add<Module> for Module {
-    type Output = Self;
+impl<M: AsRef<Module>> Add<M> for &Module {
+    type Output = Module;
 
-    fn add(self, rhs: Module) -> Self::Output {
+    fn add(self, rhs: M) -> Self::Output {
         let mut module = self.clone();
-        module.merge(&rhs);
+        module.merge(rhs.as_ref());
         module
     }
 }
 
-impl Add<&Module> for Module {
+impl<M: AsRef<Module>> Add<M> for Module {
     type Output = Self;
 
-    fn add(self, rhs: &Module) -> Self::Output {
-        let mut module = self.clone();
-        module.merge(rhs);
-        module
+    fn add(mut self, rhs: M) -> Self::Output {
+        self.merge(rhs.as_ref());
+        self
     }
 }
 
-impl AddAssign<Module> for Module {
-    fn add_assign(&mut self, rhs: Module) {
-        self.combine(rhs);
-    }
-}
-
-impl AddAssign<&Module> for Module {
-    fn add_assign(&mut self, rhs: &Module) {
-        self.merge(rhs);
+impl<M: Into<Module>> AddAssign<M> for Module {
+    fn add_assign(&mut self, rhs: M) {
+        self.combine(rhs.into());
     }
 }
 
