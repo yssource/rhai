@@ -61,6 +61,10 @@ Documentation
 
 See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai scripting engine and language.
 
+To build _The Book_, first install [`mdbook`](https://github.com/rust-lang/mdBook)
+and [`mdbook-tera`](https://github.com/avitex/mdbook-tera) (for templating).
+Running `mdbook build` builds it.
+
 Playground
 ----------
 
