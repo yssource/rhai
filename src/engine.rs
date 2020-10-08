@@ -75,7 +75,7 @@ pub type Imports = Vec<(ImmutableString, Module)>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
-pub const MAX_CALL_STACK_DEPTH: usize = 16;
+pub const MAX_CALL_STACK_DEPTH: usize = 12;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
 pub const MAX_EXPR_DEPTH: usize = 32;

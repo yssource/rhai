@@ -26,6 +26,7 @@ Enhancements
 ------------
 
 * Many one-liners and few-liners are now marked `#[inline]` or `[inline(always)]`, just in case it helps when LTO is not turned on.
+* Default call stack depth for `debug` builds is reduced to 12 (from 16).
 
 
 Version 0.19.0
