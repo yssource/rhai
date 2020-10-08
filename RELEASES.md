@@ -22,6 +22,11 @@ New features
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
 * `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
 
+Enhancements
+------------
+
+* Many one-liners and few-liners are now marked `#[inline]` or `[inline(always)]`, just in case it helps when LTO is not turned on.
+
 
 Version 0.19.0
 ==============

@@ -44,16 +44,19 @@ pub enum OptimizationLevel {
 
 impl OptimizationLevel {
     /// Is the `OptimizationLevel` None.
+    #[inline(always)]
     pub fn is_none(self) -> bool {
         self == Self::None
     }
     /// Is the `OptimizationLevel` Simple.
     #[cfg(not(feature = "no_optimize"))]
+    #[inline(always)]
     pub fn is_simple(self) -> bool {
         self == Self::Simple
     }
     /// Is the `OptimizationLevel` Full.
     #[cfg(not(feature = "no_optimize"))]
+    #[inline(always)]
     pub fn is_full(self) -> bool {
         self == Self::Full
     }
@@ -75,6 +78,7 @@ struct State<'a> {
 
 impl<'a> State<'a> {
     /// Create a new State.
+    #[inline(always)]
     pub fn new(engine: &'a Engine, lib: &'a Module, level: OptimizationLevel) -> Self {
         Self {
             changed: false,
@@ -85,30 +89,37 @@ impl<'a> State<'a> {
         }
     }
     /// Reset the state from dirty to clean.
+    #[inline(always)]
     pub fn reset(&mut self) {
         self.changed = false;
     }
     /// Set the AST state to be dirty (i.e. changed).
+    #[inline(always)]
     pub fn set_dirty(&mut self) {
         self.changed = true;
     }
     /// Is the AST dirty (i.e. changed)?
+    #[inline(always)]
     pub fn is_dirty(&self) -> bool {
         self.changed
     }
     /// Does a constant exist?
+    #[inline(always)]
     pub fn contains_constant(&self, name: &str) -> bool {
         self.constants.iter().any(|(n, _)| n == name)
     }
     /// Prune the list of constants back to a specified size.
+    #[inline(always)]
     pub fn restore_constants(&mut self, len: usize) {
         self.constants.truncate(len)
     }
     /// Add a new constant to the list.
+    #[inline(always)]
     pub fn push_constant(&mut self, name: &str, value: Expr) {
         self.constants.push((name.into(), value))
     }
     /// Look up a constant from the list.
+    #[inline]
     pub fn find_constant(&self, name: &str) -> Option<&Expr> {
         for (n, expr) in self.constants.iter().rev() {
             if n == name {

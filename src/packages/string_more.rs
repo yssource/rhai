@@ -23,13 +23,11 @@ macro_rules! gen_concat_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "+")]
-                #[inline]
                 pub fn append_func(x: &str, y: $arg_type) -> String {
                     format!("{}{}", x, y)
                 }
 
                 #[rhai_fn(name = "+")]
-                #[inline]
                 pub fn prepend_func(x: &mut $arg_type, y: &str) -> String {
                     format!("{}{}", x, y)
                 }
@@ -133,34 +131,28 @@ gen_concat_functions!(float => f32, f64);
 #[export_module]
 mod string_functions {
     #[rhai_fn(name = "+")]
-    #[inline(always)]
     pub fn add_append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
         s
     }
     #[rhai_fn(name = "+")]
-    #[inline(always)]
     pub fn add_prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
         s
     }
 
     #[rhai_fn(name = "+=")]
-    #[inline(always)]
     pub fn append_char(s: &mut ImmutableString, ch: char) {
         *s += ch;
     }
     #[rhai_fn(name = "+=")]
-    #[inline(always)]
     pub fn append_string(s: &mut ImmutableString, add: ImmutableString) {
         *s += &add;
     }
 
     #[rhai_fn(name = "len", get = "len")]
-    #[inline(always)]
     pub fn len(s: &str) -> INT {
         s.chars().count() as INT
     }
 
-    #[inline(always)]
     pub fn clear(s: &mut ImmutableString) {
         s.make_mut().clear();
     }
@@ -183,11 +175,9 @@ mod string_functions {
     }
 
     #[rhai_fn(name = "contains")]
-    #[inline(always)]
     pub fn contains_char(s: &str, ch: char) -> bool {
         s.contains(ch)
     }
-    #[inline(always)]
     pub fn contains(s: &str, find: ImmutableString) -> bool {
         s.contains(find.as_str())
     }
@@ -263,7 +253,6 @@ mod string_functions {
             .into()
     }
     #[rhai_fn(name = "sub_string")]
-    #[inline(always)]
     pub fn sub_string_starting_from(s: &str, start: INT) -> ImmutableString {
         let len = s.len() as INT;
         sub_string(s, start, len)
@@ -296,28 +285,23 @@ mod string_functions {
         copy.extend(chars.iter().skip(offset).take(len));
     }
     #[rhai_fn(name = "crop")]
-    #[inline(always)]
     pub fn crop_string_starting_from(s: &mut ImmutableString, start: INT) {
         crop(s, start, s.len() as INT);
     }
 
     #[rhai_fn(name = "replace")]
-    #[inline(always)]
     pub fn replace(s: &mut ImmutableString, find: ImmutableString, sub: ImmutableString) {
         *s = s.replace(find.as_str(), sub.as_str()).into();
     }
     #[rhai_fn(name = "replace")]
-    #[inline(always)]
     pub fn replace_string_with_char(s: &mut ImmutableString, find: ImmutableString, sub: char) {
         *s = s.replace(find.as_str(), &sub.to_string()).into();
     }
     #[rhai_fn(name = "replace")]
-    #[inline(always)]
     pub fn replace_char_with_string(s: &mut ImmutableString, find: char, sub: ImmutableString) {
         *s = s.replace(&find.to_string(), sub.as_str()).into();
     }
     #[rhai_fn(name = "replace")]
-    #[inline(always)]
     pub fn replace_char(s: &mut ImmutableString, find: char, sub: char) {
         *s = s.replace(&find.to_string(), &sub.to_string()).into();
     }
@@ -327,24 +311,20 @@ mod string_functions {
         use crate::engine::Array;
 
         #[rhai_fn(name = "+")]
-        #[inline]
         pub fn append(x: &str, y: Array) -> String {
             format!("{}{:?}", x, y)
         }
         #[rhai_fn(name = "+")]
-        #[inline]
         pub fn prepend(x: &mut Array, y: &str) -> String {
             format!("{:?}{}", x, y)
         }
 
-        #[inline(always)]
         pub fn split(s: &str, delimiter: ImmutableString) -> Array {
             s.split(delimiter.as_str())
                 .map(Into::<Dynamic>::into)
                 .collect()
         }
         #[rhai_fn(name = "split")]
-        #[inline(always)]
         pub fn split_char(s: &str, delimiter: char) -> Array {
             s.split(delimiter).map(Into::<Dynamic>::into).collect()
         }
@@ -355,12 +335,10 @@ mod string_functions {
         use crate::engine::Map;
 
         #[rhai_fn(name = "+")]
-        #[inline]
         pub fn append(x: &str, y: Map) -> String {
             format!("{}#{:?}", x, y)
         }
         #[rhai_fn(name = "+")]
-        #[inline]
         pub fn prepend(x: &mut Map, y: &str) -> String {
             format!("#{:?}{}", x, y)
         }

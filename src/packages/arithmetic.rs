@@ -28,7 +28,6 @@ macro_rules! gen_arithmetic_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "+", return_raw)]
-                #[inline]
                 pub fn add(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_add(y).ok_or_else(|| make_err(format!("Addition overflow: {} + {}", x, y))).map(Dynamic::from)
@@ -37,7 +36,6 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "-", return_raw)]
-                #[inline]
                 pub fn subtract(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_sub(y).ok_or_else(|| make_err(format!("Subtraction overflow: {} - {}", x, y))).map(Dynamic::from)
@@ -46,7 +44,6 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "*", return_raw)]
-                #[inline]
                 pub fn multiply(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_mul(y).ok_or_else(|| make_err(format!("Multiplication overflow: {} * {}", x, y))).map(Dynamic::from)
@@ -55,7 +52,6 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "/", return_raw)]
-                #[inline]
                 pub fn divide(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         // Detect division by zero
@@ -69,7 +65,6 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "%", return_raw)]
-                #[inline]
                 pub fn modulo(x: $arg_type, y: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_rem(y).ok_or_else(|| make_err(format!("Modulo division by zero or overflow: {} % {}", x, y))).map(Dynamic::from)
@@ -78,7 +73,6 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "~", return_raw)]
-                #[inline]
                 pub fn power(x: INT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
@@ -94,7 +88,6 @@ macro_rules! gen_arithmetic_functions {
                 }
 
                 #[rhai_fn(name = "<<", return_raw)]
-                #[inline]
                 pub fn shift_left(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
@@ -109,7 +102,6 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = ">>", return_raw)]
-                #[inline]
                 pub fn shift_right(x: $arg_type, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
@@ -124,17 +116,14 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "&")]
-                #[inline(always)]
                 pub fn binary_and(x: $arg_type, y: $arg_type) -> $arg_type {
                     x & y
                 }
                 #[rhai_fn(name = "|")]
-                #[inline(always)]
                 pub fn binary_or(x: $arg_type, y: $arg_type) -> $arg_type {
                     x | y
                 }
                 #[rhai_fn(name = "^")]
-                #[inline(always)]
                 pub fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
                     x ^ y
                 }
@@ -151,7 +140,6 @@ macro_rules! gen_signed_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "-", return_raw)]
-                #[inline]
                 pub fn neg(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_neg().ok_or_else(|| make_err(format!("Negation overflow: -{}", x))).map(Dynamic::from)
@@ -160,7 +148,6 @@ macro_rules! gen_signed_functions {
                     }
                 }
                 #[rhai_fn(return_raw)]
-                #[inline]
                 pub fn abs(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_abs().ok_or_else(|| make_err(format!("Negation overflow: -{}", x))).map(Dynamic::from)
@@ -168,7 +155,6 @@ macro_rules! gen_signed_functions {
                         Ok(Dynamic::from(x.abs()))
                     }
                 }
-                #[inline]
                 pub fn sign(x: $arg_type) -> INT {
                     if x == 0 {
                         0
@@ -239,40 +225,32 @@ gen_signed_functions!(signed_num_128 => i128);
 #[export_module]
 mod f32_functions {
     #[rhai_fn(name = "+")]
-    #[inline(always)]
     pub fn add(x: f32, y: f32) -> f32 {
         x + y
     }
     #[rhai_fn(name = "-")]
-    #[inline(always)]
     pub fn subtract(x: f32, y: f32) -> f32 {
         x - y
     }
     #[rhai_fn(name = "*")]
-    #[inline(always)]
     pub fn multiply(x: f32, y: f32) -> f32 {
         x * y
     }
     #[rhai_fn(name = "/")]
-    #[inline(always)]
     pub fn divide(x: f32, y: f32) -> f32 {
         x / y
     }
     #[rhai_fn(name = "%")]
-    #[inline(always)]
     pub fn modulo(x: f32, y: f32) -> f32 {
         x % y
     }
     #[rhai_fn(name = "-")]
-    #[inline(always)]
     pub fn neg(x: f32) -> f32 {
         -x
     }
-    #[inline(always)]
     pub fn abs(x: f32) -> f32 {
         x.abs()
     }
-    #[inline]
     pub fn sign(x: f32) -> INT {
         if x == 0.0 {
             0
@@ -283,12 +261,10 @@ mod f32_functions {
         }
     }
     #[rhai_fn(name = "~", return_raw)]
-    #[inline(always)]
     pub fn pow_f_f(x: f32, y: f32) -> Result<Dynamic, Box<EvalAltResult>> {
         Ok(Dynamic::from(x.powf(y)))
     }
     #[rhai_fn(name = "~", return_raw)]
-    #[inline]
     pub fn pow_f_i(x: f32, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
             Err(make_err(format!(
@@ -305,15 +281,12 @@ mod f32_functions {
 #[export_module]
 mod f64_functions {
     #[rhai_fn(name = "-")]
-    #[inline(always)]
     pub fn neg(x: f64) -> f64 {
         -x
     }
-    #[inline(always)]
     pub fn abs(x: f64) -> f64 {
         x.abs()
     }
-    #[inline]
     pub fn sign(x: f64) -> INT {
         if x == 0.0 {
             0
@@ -324,7 +297,6 @@ mod f64_functions {
         }
     }
     #[rhai_fn(name = "~", return_raw)]
-    #[inline]
     pub fn pow_f_i(x: FLOAT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
             Err(make_err(format!(

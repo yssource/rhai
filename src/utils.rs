@@ -32,9 +32,11 @@ use smallvec::SmallVec;
 pub struct StraightHasher(u64);
 
 impl Hasher for StraightHasher {
+    #[inline(always)]
     fn finish(&self) -> u64 {
         self.0
     }
+    #[inline(always)]
     fn write(&mut self, bytes: &[u8]) {
         let mut key = [0_u8; 8];
         key.copy_from_slice(&bytes[..8]); // Panics if fewer than 8 bytes
@@ -44,6 +46,7 @@ impl Hasher for StraightHasher {
 
 impl StraightHasher {
     /// Create a `StraightHasher`.
+    #[inline(always)]
     pub fn new() -> Self {
         Self(0)
     }
@@ -56,6 +59,7 @@ pub struct StraightHasherBuilder;
 impl BuildHasher for StraightHasherBuilder {
     type Hasher = StraightHasher;
 
+    #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
         StraightHasher::new()
     }
@@ -132,47 +136,55 @@ pub struct ImmutableString(Shared<String>);
 impl Deref for ImmutableString {
     type Target = String;
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl AsRef<String> for ImmutableString {
+    #[inline(always)]
     fn as_ref(&self) -> &String {
         &self.0
     }
 }
 
 impl Borrow<String> for ImmutableString {
+    #[inline(always)]
     fn borrow(&self) -> &String {
         &self.0
     }
 }
 
 impl Borrow<str> for ImmutableString {
+    #[inline(always)]
     fn borrow(&self) -> &str {
         self.0.as_str()
     }
 }
 
 impl From<&str> for ImmutableString {
+    #[inline(always)]
     fn from(value: &str) -> Self {
         Self(value.to_string().into())
     }
 }
 impl From<String> for ImmutableString {
+    #[inline(always)]
     fn from(value: String) -> Self {
         Self(value.into())
     }
 }
 
 impl From<Box<String>> for ImmutableString {
+    #[inline(always)]
     fn from(value: Box<String>) -> Self {
         Self(value.into())
     }
 }
 
 impl From<ImmutableString> for String {
+    #[inline(always)]
     fn from(value: ImmutableString) -> Self {
         value.into_owned()
     }
@@ -181,42 +193,49 @@ impl From<ImmutableString> for String {
 impl FromStr for ImmutableString {
     type Err = ();
 
+    #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.to_string().into()))
     }
 }
 
 impl FromIterator<char> for ImmutableString {
+    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<String>().into())
     }
 }
 
 impl<'a> FromIterator<&'a char> for ImmutableString {
+    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = &'a char>>(iter: T) -> Self {
         Self(iter.into_iter().cloned().collect::<String>().into())
     }
 }
 
 impl<'a> FromIterator<&'a str> for ImmutableString {
+    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<String>().into())
     }
 }
 
 impl<'a> FromIterator<String> for ImmutableString {
+    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<String>().into())
     }
 }
 
 impl fmt::Display for ImmutableString {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self.0.as_str(), f)
     }
 }
 
 impl fmt::Debug for ImmutableString {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self.0.as_str(), f)
     }
@@ -225,6 +244,7 @@ impl fmt::Debug for ImmutableString {
 impl Add for ImmutableString {
     type Output = Self;
 
+    #[inline]
     fn add(mut self, rhs: Self) -> Self::Output {
         if rhs.is_empty() {
             self
@@ -240,6 +260,7 @@ impl Add for ImmutableString {
 impl Add for &ImmutableString {
     type Output = ImmutableString;
 
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         if rhs.is_empty() {
             self.clone()
@@ -254,6 +275,7 @@ impl Add for &ImmutableString {
 }
 
 impl AddAssign<&ImmutableString> for ImmutableString {
+    #[inline]
     fn add_assign(&mut self, rhs: &ImmutableString) {
         if !rhs.is_empty() {
             if self.is_empty() {
@@ -266,6 +288,7 @@ impl AddAssign<&ImmutableString> for ImmutableString {
 }
 
 impl AddAssign<ImmutableString> for ImmutableString {
+    #[inline]
     fn add_assign(&mut self, rhs: ImmutableString) {
         if !rhs.is_empty() {
             if self.is_empty() {
@@ -280,6 +303,7 @@ impl AddAssign<ImmutableString> for ImmutableString {
 impl Add<&str> for ImmutableString {
     type Output = Self;
 
+    #[inline]
     fn add(mut self, rhs: &str) -> Self::Output {
         if rhs.is_empty() {
             self
@@ -293,6 +317,7 @@ impl Add<&str> for ImmutableString {
 impl Add<&str> for &ImmutableString {
     type Output = ImmutableString;
 
+    #[inline]
     fn add(self, rhs: &str) -> Self::Output {
         if rhs.is_empty() {
             self.clone()
@@ -305,6 +330,7 @@ impl Add<&str> for &ImmutableString {
 }
 
 impl AddAssign<&str> for ImmutableString {
+    #[inline(always)]
     fn add_assign(&mut self, rhs: &str) {
         if !rhs.is_empty() {
             self.make_mut().push_str(rhs);
@@ -315,6 +341,7 @@ impl AddAssign<&str> for ImmutableString {
 impl Add<String> for ImmutableString {
     type Output = Self;
 
+    #[inline]
     fn add(mut self, rhs: String) -> Self::Output {
         if rhs.is_empty() {
             self
@@ -330,6 +357,7 @@ impl Add<String> for ImmutableString {
 impl Add<String> for &ImmutableString {
     type Output = ImmutableString;
 
+    #[inline]
     fn add(self, rhs: String) -> Self::Output {
         if rhs.is_empty() {
             self.clone()
@@ -346,6 +374,7 @@ impl Add<String> for &ImmutableString {
 impl Add<char> for ImmutableString {
     type Output = Self;
 
+    #[inline(always)]
     fn add(mut self, rhs: char) -> Self::Output {
         self.make_mut().push(rhs);
         self
@@ -355,6 +384,7 @@ impl Add<char> for ImmutableString {
 impl Add<char> for &ImmutableString {
     type Output = ImmutableString;
 
+    #[inline(always)]
     fn add(self, rhs: char) -> Self::Output {
         let mut s = self.clone();
         s.make_mut().push(rhs);
@@ -363,42 +393,49 @@ impl Add<char> for &ImmutableString {
 }
 
 impl AddAssign<char> for ImmutableString {
+    #[inline(always)]
     fn add_assign(&mut self, rhs: char) {
         self.make_mut().push(rhs);
     }
 }
 
 impl<S: AsRef<str>> PartialEq<S> for ImmutableString {
+    #[inline(always)]
     fn eq(&self, other: &S) -> bool {
         self.as_str().eq(other.as_ref())
     }
 }
 
 impl PartialEq<ImmutableString> for str {
+    #[inline(always)]
     fn eq(&self, other: &ImmutableString) -> bool {
         self.eq(other.as_str())
     }
 }
 
 impl PartialEq<ImmutableString> for String {
+    #[inline(always)]
     fn eq(&self, other: &ImmutableString) -> bool {
         self.eq(other.as_str())
     }
 }
 
 impl<S: AsRef<str>> PartialOrd<S> for ImmutableString {
+    #[inline(always)]
     fn partial_cmp(&self, other: &S) -> Option<Ordering> {
         self.as_str().partial_cmp(other.as_ref())
     }
 }
 
 impl PartialOrd<ImmutableString> for str {
+    #[inline(always)]
     fn partial_cmp(&self, other: &ImmutableString) -> Option<Ordering> {
         self.partial_cmp(other.as_str())
     }
 }
 
 impl PartialOrd<ImmutableString> for String {
+    #[inline(always)]
     fn partial_cmp(&self, other: &ImmutableString) -> Option<Ordering> {
         self.as_str().partial_cmp(other.as_str())
     }
@@ -407,12 +444,14 @@ impl PartialOrd<ImmutableString> for String {
 impl ImmutableString {
     /// Consume the `ImmutableString` and convert it into a `String`.
     /// If there are other references to the same string, a cloned copy is returned.
+    #[inline(always)]
     pub fn into_owned(mut self) -> String {
         self.make_mut(); // Make sure it is unique reference
         shared_take(self.0) // Should succeed
     }
     /// Make sure that the `ImmutableString` is unique (i.e. no other outstanding references).
     /// Then return a mutable reference to the `String`.
+    #[inline(always)]
     pub fn make_mut(&mut self) -> &mut String {
         shared_make_mut(&mut self.0)
     }

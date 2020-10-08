@@ -439,6 +439,7 @@ impl Engine {
     }
 
     // Has a system function an override?
+    #[inline]
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         lib: &Module,
@@ -459,6 +460,7 @@ impl Engine {
     }
 
     // Has a system function an override?
+    #[inline(always)]
     pub(crate) fn has_override(
         &self,
         lib: &Module,

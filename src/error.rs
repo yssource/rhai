@@ -60,6 +60,7 @@ impl fmt::Display for LexError {
 
 impl LexError {
     /// Convert a `LexError` into a `ParseError`.
+    #[inline(always)]
     pub fn into_err(&self, pos: Position) -> ParseError {
         ParseError(Box::new(self.into()), pos)
     }
@@ -157,6 +158,7 @@ pub enum ParseErrorType {
 
 impl ParseErrorType {
     /// Make a `ParseError` using the current type and position.
+    #[inline(always)]
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
         ParseError(Box::new(self), pos)
     }
@@ -247,6 +249,7 @@ impl fmt::Display for ParseErrorType {
 }
 
 impl From<&LexError> for ParseErrorType {
+    #[inline(always)]
     fn from(err: &LexError) -> Self {
         match err {
             LexError::StringTooLong(max) => {
@@ -264,6 +267,7 @@ pub struct ParseError(pub Box<ParseErrorType>, pub Position);
 impl Error for ParseError {}
 
 impl fmt::Display for ParseError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)?;
 
@@ -277,12 +281,14 @@ impl fmt::Display for ParseError {
 }
 
 impl From<ParseErrorType> for Box<EvalAltResult> {
+    #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
         Box::new(EvalAltResult::ErrorParsing(err, Position::none()))
     }
 }
 
 impl From<ParseError> for Box<EvalAltResult> {
+    #[inline(always)]
     fn from(err: ParseError) -> Self {
         Box::new(EvalAltResult::ErrorParsing(*err.0, err.1))
     }

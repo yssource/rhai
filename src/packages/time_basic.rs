@@ -26,7 +26,6 @@ def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
 
 #[export_module]
 mod time_functions {
-    #[inline(always)]
     pub fn timestamp() -> Instant {
         Instant::now()
     }
@@ -212,32 +211,26 @@ mod time_functions {
     }
 
     #[rhai_fn(name = "==")]
-    #[inline(always)]
     pub fn eq(x: Instant, y: Instant) -> bool {
         x == y
     }
     #[rhai_fn(name = "!=")]
-    #[inline(always)]
     pub fn ne(x: Instant, y: Instant) -> bool {
         x != y
     }
     #[rhai_fn(name = "<")]
-    #[inline(always)]
     pub fn lt(x: Instant, y: Instant) -> bool {
         x < y
     }
     #[rhai_fn(name = "<=")]
-    #[inline(always)]
     pub fn lte(x: Instant, y: Instant) -> bool {
         x <= y
     }
     #[rhai_fn(name = ">")]
-    #[inline(always)]
     pub fn gt(x: Instant, y: Instant) -> bool {
         x > y
     }
     #[rhai_fn(name = ">=")]
-    #[inline(always)]
     pub fn gte(x: Instant, y: Instant) -> bool {
         x >= y
     }

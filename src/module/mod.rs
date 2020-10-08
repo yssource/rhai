@@ -103,6 +103,7 @@ impl fmt::Debug for Module {
 }
 
 impl Clone for Module {
+    #[inline(always)]
     fn clone(&self) -> Self {
         // Only clone the index at the top level
         Self {
@@ -115,6 +116,7 @@ impl Clone for Module {
 }
 
 impl AsRef<Module> for Module {
+    #[inline(always)]
     fn as_ref(&self) -> &Module {
         self
     }
@@ -132,6 +134,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
+    #[inline(always)]
     pub fn new() -> Self {
         Default::default()
     }
@@ -147,6 +150,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
+    #[inline(always)]
     pub fn new_with_capacity(capacity: usize) -> Self {
         Self {
             functions: HashMap::with_capacity_and_hasher(capacity, StraightHasherBuilder),
@@ -164,6 +168,7 @@ impl Module {
     /// let module = Module::new();
     /// assert!(module.is_empty());
     /// ```
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.functions.is_empty()
             && self.all_functions.is_empty()
@@ -174,6 +179,7 @@ impl Module {
     }
 
     /// Clone the module, optionally skipping the index.
+    #[inline(always)]
     fn do_clone(&self, clone_index: bool) -> Self {
         Self {
             modules: if clone_index {
@@ -202,6 +208,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert!(module.contains_var("answer"));
     /// ```
+    #[inline(always)]
     pub fn contains_var(&self, name: &str) -> bool {
         self.variables.contains_key(name)
     }
@@ -217,6 +224,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
+    #[inline(always)]
     pub fn get_var_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.get_var(name).and_then(Dynamic::try_cast::<T>)
     }
@@ -232,6 +240,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var("answer").unwrap().cast::<i64>(), 42);
     /// ```
+    #[inline(always)]
     pub fn get_var(&self, name: &str) -> Option<Dynamic> {
         self.variables.get(name).cloned()
     }
@@ -249,6 +258,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
+    #[inline(always)]
     pub fn set_var(&mut self, name: impl Into<String>, value: impl Variant + Clone) -> &mut Self {
         self.variables.insert(name.into(), Dynamic::from(value));
         self.indexed = false;
@@ -259,6 +269,7 @@ impl Module {
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    #[inline(always)]
     pub(crate) fn get_qualified_var_mut(
         &mut self,
         hash_var: u64,
@@ -276,6 +287,7 @@ impl Module {
     ///
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
+    #[inline]
     pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) -> u64 {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
@@ -296,6 +308,7 @@ impl Module {
 
     /// Get a script-defined function in the module based on name and number of parameters.
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn get_script_fn(
         &self,
         name: &str,
@@ -324,6 +337,7 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.contains_sub_module("question"));
     /// ```
+    #[inline(always)]
     pub fn contains_sub_module(&self, name: &str) -> bool {
         self.modules.contains_key(name)
     }
@@ -340,6 +354,7 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
+    #[inline(always)]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
         self.modules.get(name)
     }
@@ -356,6 +371,7 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.get_sub_module_mut("question").is_some());
     /// ```
+    #[inline(always)]
     pub fn get_sub_module_mut(&mut self, name: &str) -> Option<&mut Module> {
         self.modules.get_mut(name)
     }
@@ -374,6 +390,7 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
+    #[inline(always)]
     pub fn set_sub_module(&mut self, name: impl Into<String>, sub_module: Module) -> &mut Self {
         self.modules.insert(name.into(), sub_module.into());
         self.indexed = false;
@@ -394,6 +411,7 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn contains_fn(&self, hash_fn: u64, public_only: bool) -> bool {
         if hash_fn == 0 {
             false
@@ -513,6 +531,7 @@ impl Module {
     ///
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_raw_fn<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -534,6 +553,7 @@ impl Module {
     /// are not determined), but the implementation is in Rust.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
+    #[inline]
     pub(crate) fn set_raw_fn_as_scripted(
         &mut self,
         name: impl Into<String>,
@@ -571,6 +591,7 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -599,6 +620,7 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -629,6 +651,7 @@ impl Module {
     /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -660,6 +683,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline]
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -683,6 +707,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -719,6 +744,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -757,6 +783,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline]
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -787,6 +814,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline]
     pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
@@ -823,6 +851,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_3<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -865,6 +894,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_3_mut<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -914,6 +944,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline]
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B, C) -> FuncReturn<()> + SendSync + 'static,
@@ -977,6 +1008,7 @@ impl Module {
     /// assert!(module.contains_fn(hash_set, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline]
     pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         getter: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
@@ -1003,6 +1035,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_4<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1052,6 +1085,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
+    #[inline]
     pub fn set_fn_4_mut<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1089,6 +1123,7 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
+    #[inline(always)]
     pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&CallableFunction> {
         if hash_fn == 0 {
             None
@@ -1108,12 +1143,14 @@ impl Module {
     ///
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
+    #[inline(always)]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
         self.all_functions.get(&hash_qualified_fn)
     }
 
     /// Combine another module into this module.
     /// The other module is consumed to merge into this module.
+    #[inline]
     pub fn combine(&mut self, other: Self) -> &mut Self {
         if !other.modules.is_empty() {
             self.modules.extend(other.modules.into_iter());
@@ -1136,6 +1173,7 @@ impl Module {
     /// Combine another module into this module.
     /// The other module is consumed to merge into this module.
     /// Sub-modules are flattened onto the root module, with higher level overriding lower level.
+    #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
         if !other.modules.is_empty() {
             other.modules.into_iter().for_each(|(_, m)| {
@@ -1158,6 +1196,7 @@ impl Module {
     }
 
     /// Merge another module into this module.
+    #[inline(always)]
     pub fn merge(&mut self, other: &Self) -> &mut Self {
         self.merge_filtered(other, &mut |_, _, _| true)
     }
@@ -1213,6 +1252,7 @@ impl Module {
 
     /// Filter out the functions, retaining only some based on a filter predicate.
     #[cfg(not(feature = "no_function"))]
+    #[inline]
     pub(crate) fn retain_functions(
         &mut self,
         mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
@@ -1229,6 +1269,7 @@ impl Module {
     }
 
     /// Get the number of variables, functions and type iterators in the module.
+    #[inline(always)]
     pub fn count(&self) -> (usize, usize, usize) {
         (
             self.variables.len(),
@@ -1238,11 +1279,13 @@ impl Module {
     }
 
     /// Get an iterator to the variables in the module.
+    #[inline(always)]
     pub fn iter_var(&self) -> impl Iterator<Item = (&String, &Dynamic)> {
         self.variables.iter()
     }
 
     /// Get an iterator to the functions in the module.
+    #[inline(always)]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
         self.functions.values()
     }
@@ -1255,6 +1298,7 @@ impl Module {
     /// 3) Number of parameters.
     /// 4) Shared reference to function definition `ScriptFnDef`.
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub(crate) fn iter_script_fn<'a>(
         &'a self,
     ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
@@ -1277,6 +1321,7 @@ impl Module {
     /// 3) Number of parameters.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "internals"))]
+    #[inline(always)]
     pub fn iter_script_fn_info(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
         self.functions
             .values()

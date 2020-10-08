@@ -19,6 +19,7 @@ macro_rules! impl_args {
     ($($p:ident),*) => {
         impl<$($p: Variant + Clone),*> FuncArgs for ($($p,)*)
         {
+            #[inline]
             fn into_vec(self) -> StaticVec<Dynamic> {
                 let ($($p,)*) = self;
 

@@ -78,22 +78,27 @@ pub struct FnPtr(ImmutableString, Vec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
+    #[inline(always)]
     pub(crate) fn new_unchecked<S: Into<ImmutableString>>(name: S, curry: Vec<Dynamic>) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
+    #[inline(always)]
     pub fn fn_name(&self) -> &str {
         self.get_fn_name().as_ref()
     }
     /// Get the name of the function.
+    #[inline(always)]
     pub(crate) fn get_fn_name(&self) -> &ImmutableString {
         &self.0
     }
     /// Get the underlying data of the function pointer.
+    #[inline(always)]
     pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.
+    #[inline(always)]
     pub fn curry(&self) -> &[Dynamic] {
         &self.1
     }
@@ -153,6 +158,7 @@ impl FnPtr {
 }
 
 impl fmt::Display for FnPtr {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Fn({})", self.0)
     }
@@ -161,6 +167,7 @@ impl fmt::Display for FnPtr {
 impl TryFrom<ImmutableString> for FnPtr {
     type Error = Box<EvalAltResult>;
 
+    #[inline(always)]
     fn try_from(value: ImmutableString) -> Result<Self, Self::Error> {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
@@ -173,6 +180,7 @@ impl TryFrom<ImmutableString> for FnPtr {
 impl TryFrom<String> for FnPtr {
     type Error = Box<EvalAltResult>;
 
+    #[inline(always)]
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let s: ImmutableString = value.into();
         Self::try_from(s)
@@ -182,6 +190,7 @@ impl TryFrom<String> for FnPtr {
 impl TryFrom<&str> for FnPtr {
     type Error = Box<EvalAltResult>;
 
+    #[inline(always)]
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let s: ImmutableString = value.into();
         Self::try_from(s)
@@ -399,26 +408,31 @@ impl CallableFunction {
         }
     }
     /// Create a new `CallableFunction::Pure`.
+    #[inline(always)]
     pub fn from_pure(func: Box<FnAny>) -> Self {
         Self::Pure(func.into())
     }
     /// Create a new `CallableFunction::Method`.
+    #[inline(always)]
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
     }
     /// Create a new `CallableFunction::Plugin`.
+    #[inline(always)]
     pub fn from_plugin(func: impl PluginFunction + 'static + SendSync) -> Self {
         Self::Plugin((Box::new(func) as Box<FnPlugin>).into())
     }
 }
 
 impl From<IteratorFn> for CallableFunction {
+    #[inline(always)]
     fn from(func: IteratorFn) -> Self {
         Self::Iterator(func)
     }
 }
 
 impl From<ScriptFnDef> for CallableFunction {
+    #[inline(always)]
     fn from(_func: ScriptFnDef) -> Self {
         #[cfg(feature = "no_function")]
         unreachable!();
@@ -429,6 +443,7 @@ impl From<ScriptFnDef> for CallableFunction {
 }
 
 impl From<Shared<ScriptFnDef>> for CallableFunction {
+    #[inline(always)]
     fn from(_func: Shared<ScriptFnDef>) -> Self {
         #[cfg(feature = "no_function")]
         unreachable!();
@@ -439,12 +454,14 @@ impl From<Shared<ScriptFnDef>> for CallableFunction {
 }
 
 impl<T: PluginFunction + 'static + SendSync> From<T> for CallableFunction {
+    #[inline(always)]
     fn from(func: T) -> Self {
         Self::from_plugin(func)
     }
 }
 
 impl From<Shared<FnPlugin>> for CallableFunction {
+    #[inline(always)]
     fn from(func: Shared<FnPlugin>) -> Self {
         Self::Plugin(func.into())
     }

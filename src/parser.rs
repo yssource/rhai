@@ -85,12 +85,14 @@ pub struct AST(
 
 impl AST {
     /// Create a new `AST`.
+    #[inline(always)]
     pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
         Self(statements, lib)
     }
 
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
+    #[inline(always)]
     pub(crate) fn statements(&self) -> &[Stmt] {
         &self.0
     }
@@ -99,17 +101,20 @@ impl AST {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
+    #[inline(always)]
     pub fn statements(&self) -> &[Stmt] {
         &self.0
     }
 
     /// Get a mutable reference to the statements.
+    #[inline(always)]
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
         &mut self.0
     }
 
     /// Get the internal `Module` containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
+    #[inline(always)]
     pub(crate) fn lib(&self) -> &Module {
         &self.1
     }
@@ -118,6 +123,7 @@ impl AST {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
+    #[inline(always)]
     pub fn lib(&self) -> &Module {
         &self.1
     }
@@ -126,6 +132,7 @@ impl AST {
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
+    #[inline(always)]
     pub fn clone_functions_only(&self) -> Self {
         self.clone_functions_only_filtered(|_, _, _| true)
     }
@@ -134,6 +141,7 @@ impl AST {
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
+    #[inline(always)]
     pub fn clone_functions_only_filtered(
         &self,
         mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
@@ -145,6 +153,7 @@ impl AST {
 
     /// Clone the `AST`'s script statements into a new `AST`.
     /// No functions are cloned.
+    #[inline(always)]
     pub fn clone_statements_only(&self) -> Self {
         Self(self.0.clone(), Default::default())
     }
@@ -198,6 +207,7 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn merge(&self, other: &Self) -> Self {
         self.merge_filtered(other, |_, _, _| true)
     }
@@ -250,6 +260,7 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn combine(&mut self, other: Self) -> &mut Self {
         self.combine_filtered(other, |_, _, _| true)
     }
@@ -305,6 +316,7 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub fn merge_filtered(
         &self,
         other: &Self,
@@ -379,6 +391,7 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn combine_filtered(
         &mut self,
         other: Self,
@@ -419,12 +432,14 @@ impl AST {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn retain_functions(&mut self, filter: impl FnMut(FnAccess, &str, usize) -> bool) {
         self.1.retain_functions(filter);
     }
 
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn iter_functions<'a>(
         &'a self,
     ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
@@ -433,11 +448,13 @@ impl AST {
 
     /// Clear all function definitions in the `AST`.
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn clear_functions(&mut self) {
         self.1 = Default::default();
     }
 
     /// Clear all statements in the `AST`, leaving only function definitions.
+    #[inline(always)]
     pub fn clear_statements(&mut self) {
         self.0 = vec![];
     }
@@ -446,24 +463,28 @@ impl AST {
 impl<A: AsRef<AST>> Add<A> for &AST {
     type Output = AST;
 
+    #[inline(always)]
     fn add(self, rhs: A) -> Self::Output {
         self.merge(rhs.as_ref())
     }
 }
 
 impl<A: Into<AST>> AddAssign<A> for AST {
+    #[inline(always)]
     fn add_assign(&mut self, rhs: A) {
         self.combine(rhs.into());
     }
 }
 
 impl AsRef<[Stmt]> for AST {
+    #[inline(always)]
     fn as_ref(&self) -> &[Stmt] {
         self.statements()
     }
 }
 
 impl AsRef<Module> for AST {
+    #[inline(always)]
     fn as_ref(&self) -> &Module {
         self.lib()
     }
@@ -479,6 +500,7 @@ pub enum FnAccess {
 }
 
 impl fmt::Display for FnAccess {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Private => write!(f, "private"),
@@ -489,6 +511,7 @@ impl fmt::Display for FnAccess {
 
 impl FnAccess {
     /// Is this access mode private?
+    #[inline(always)]
     pub fn is_private(self) -> bool {
         match self {
             Self::Public => false,
@@ -496,6 +519,7 @@ impl FnAccess {
         }
     }
     /// Is this access mode public?
+    #[inline(always)]
     pub fn is_public(self) -> bool {
         match self {
             Self::Public => true,
@@ -587,6 +611,7 @@ struct ParseState<'e> {
 
 impl<'e> ParseState<'e> {
     /// Create a new `ParseState`.
+    #[inline(always)]
     pub fn new(
         engine: &'e Engine,
         #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
@@ -614,6 +639,7 @@ impl<'e> ParseState<'e> {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `stack`.
+    #[inline]
     fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let index = self
             .stack
@@ -639,6 +665,7 @@ impl<'e> ParseState<'e> {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `ParseState`.
+    #[inline(always)]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
@@ -672,6 +699,7 @@ struct ParseSettings {
 
 impl ParseSettings {
     /// Create a new `ParseSettings` with one higher expression level.
+    #[inline(always)]
     pub fn level_up(&self) -> Self {
         Self {
             level: self.level + 1,
@@ -680,6 +708,7 @@ impl ParseSettings {
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
+    #[inline]
     pub fn ensure_level_within_max_limit(&self, limit: usize) -> Result<(), ParseError> {
         if limit == 0 {
             Ok(())
@@ -739,6 +768,7 @@ pub enum Stmt {
 }
 
 impl Default for Stmt {
+    #[inline(always)]
     fn default() -> Self {
         Self::Noop(Default::default())
     }
@@ -861,12 +891,14 @@ impl Stmt {
 pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
 
 impl fmt::Debug for CustomExpr {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
 impl Hash for CustomExpr {
+    #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
@@ -887,6 +919,7 @@ pub struct FloatWrapper(pub FLOAT, pub Position);
 
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
+    #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.0.to_le_bytes());
         self.1.hash(state);
@@ -969,6 +1002,7 @@ pub enum Expr {
 }
 
 impl Default for Expr {
+    #[inline(always)]
     fn default() -> Self {
         Self::Unit(Default::default())
     }
@@ -1216,6 +1250,7 @@ impl Expr {
 
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
+    #[inline]
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
@@ -3611,6 +3646,7 @@ impl Engine {
     }
 
     /// Run the parser on an input stream, returning an AST.
+    #[inline(always)]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,

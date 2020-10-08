@@ -14,19 +14,15 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
 
 #[export_module]
 mod map_functions {
-    #[inline(always)]
     pub fn has(map: &mut Map, prop: ImmutableString) -> bool {
         map.contains_key(&prop)
     }
-    #[inline(always)]
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT
     }
-    #[inline(always)]
     pub fn clear(map: &mut Map) {
         map.clear();
     }
-    #[inline(always)]
     pub fn remove(x: &mut Map, name: ImmutableString) -> Dynamic {
         x.remove(&name).unwrap_or_else(|| ().into())
     }

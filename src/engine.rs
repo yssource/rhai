@@ -440,6 +440,7 @@ impl fmt::Debug for Engine {
 }
 
 impl Default for Engine {
+    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }
@@ -606,6 +607,7 @@ pub fn search_scope_only<'s, 'a>(
 
 impl Engine {
     /// Create a new `Engine`
+    #[inline(always)]
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
@@ -661,6 +663,7 @@ impl Engine {
 
     /// Create a new `Engine` with minimal built-in functions.
     /// Use the `load_package` method to load additional packages of functions.
+    #[inline(always)]
     pub fn new_raw() -> Self {
         Self {
             id: None,
@@ -2040,6 +2043,7 @@ impl Engine {
     }
 
     /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
+    #[inline(always)]
     pub fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(
             typ.into(),

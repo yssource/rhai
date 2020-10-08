@@ -29,7 +29,6 @@ macro_rules! gen_array_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "push", name = "+=")]
-                #[inline(always)]
                 pub fn push(list: &mut Array, item: $arg_type) {
                     list.push(Dynamic::from(item));
                 }
@@ -89,22 +88,18 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 #[export_module]
 mod array_functions {
     #[rhai_fn(name = "len", get = "len")]
-    #[inline(always)]
     pub fn len(list: &mut Array) -> INT {
         list.len() as INT
     }
     #[rhai_fn(name = "append", name = "+=")]
-    #[inline(always)]
     pub fn append(x: &mut Array, y: Array) {
         x.extend(y);
     }
     #[rhai_fn(name = "+")]
-    #[inline]
     pub fn concat(mut x: Array, y: Array) -> Array {
         x.extend(y);
         x
     }
-    #[inline]
     pub fn pop(list: &mut Array) -> Dynamic {
         list.pop().unwrap_or_else(|| ().into())
     }
@@ -122,7 +117,6 @@ mod array_functions {
             list.remove(len as usize)
         }
     }
-    #[inline(always)]
     pub fn clear(list: &mut Array) {
         list.clear();
     }
@@ -133,7 +127,6 @@ mod array_functions {
             list.clear();
         }
     }
-    #[inline(always)]
     pub fn reverse(list: &mut Array) {
         list.reverse();
     }

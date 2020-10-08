@@ -31,7 +31,6 @@ macro_rules! gen_conversion_functions {
             use super::super::*;
 
             #[export_fn]
-            #[inline(always)]
             pub fn $func_name(x: $arg_type) -> $result_type {
                 x as $result_type
             }
@@ -86,51 +85,39 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 mod trig_functions {
     use crate::parser::FLOAT;
 
-    #[inline(always)]
     pub fn sin(x: FLOAT) -> FLOAT {
         x.to_radians().sin()
     }
-    #[inline(always)]
     pub fn cos(x: FLOAT) -> FLOAT {
         x.to_radians().cos()
     }
-    #[inline(always)]
     pub fn tan(x: FLOAT) -> FLOAT {
         x.to_radians().tan()
     }
-    #[inline(always)]
     pub fn sinh(x: FLOAT) -> FLOAT {
         x.to_radians().sinh()
     }
-    #[inline(always)]
     pub fn cosh(x: FLOAT) -> FLOAT {
         x.to_radians().cosh()
     }
-    #[inline(always)]
     pub fn tanh(x: FLOAT) -> FLOAT {
         x.to_radians().tanh()
     }
-    #[inline(always)]
     pub fn asin(x: FLOAT) -> FLOAT {
         x.asin().to_degrees()
     }
-    #[inline(always)]
     pub fn acos(x: FLOAT) -> FLOAT {
         x.acos().to_degrees()
     }
-    #[inline(always)]
     pub fn atan(x: FLOAT) -> FLOAT {
         x.atan().to_degrees()
     }
-    #[inline(always)]
     pub fn asinh(x: FLOAT) -> FLOAT {
         x.asinh().to_degrees()
     }
-    #[inline(always)]
     pub fn acosh(x: FLOAT) -> FLOAT {
         x.acosh().to_degrees()
     }
-    #[inline(always)]
     pub fn atanh(x: FLOAT) -> FLOAT {
         x.atanh().to_degrees()
     }
@@ -141,68 +128,54 @@ mod trig_functions {
 mod float_functions {
     use crate::parser::FLOAT;
 
-    #[inline(always)]
     pub fn sqrt(x: FLOAT) -> FLOAT {
         x.sqrt()
     }
-    #[inline(always)]
     pub fn exp(x: FLOAT) -> FLOAT {
         x.exp()
     }
-    #[inline(always)]
     pub fn ln(x: FLOAT) -> FLOAT {
         x.ln()
     }
-    #[inline(always)]
     pub fn log(x: FLOAT, base: FLOAT) -> FLOAT {
         x.log(base)
     }
-    #[inline(always)]
     pub fn log10(x: FLOAT) -> FLOAT {
         x.log10()
     }
     #[rhai_fn(name = "floor", get = "floor")]
-    #[inline(always)]
     pub fn floor(x: FLOAT) -> FLOAT {
         x.floor()
     }
     #[rhai_fn(name = "ceiling", get = "ceiling")]
-    #[inline(always)]
     pub fn ceiling(x: FLOAT) -> FLOAT {
         x.ceil()
     }
     #[rhai_fn(name = "round", get = "round")]
-    #[inline(always)]
     pub fn round(x: FLOAT) -> FLOAT {
         x.ceil()
     }
     #[rhai_fn(name = "int", get = "int")]
-    #[inline(always)]
     pub fn int(x: FLOAT) -> FLOAT {
         x.trunc()
     }
     #[rhai_fn(name = "fraction", get = "fraction")]
-    #[inline(always)]
     pub fn fraction(x: FLOAT) -> FLOAT {
         x.fract()
     }
     #[rhai_fn(name = "is_nan", get = "is_nan")]
-    #[inline(always)]
     pub fn is_nan(x: FLOAT) -> bool {
         x.is_nan()
     }
     #[rhai_fn(name = "is_finite", get = "is_finite")]
-    #[inline(always)]
     pub fn is_finite(x: FLOAT) -> bool {
         x.is_finite()
     }
     #[rhai_fn(name = "is_infinite", get = "is_infinite")]
-    #[inline(always)]
     pub fn is_infinite(x: FLOAT) -> bool {
         x.is_infinite()
     }
     #[rhai_fn(name = "to_int", return_raw)]
-    #[inline]
     pub fn f32_to_int(x: f32) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
             EvalAltResult::ErrorArithmetic(
@@ -215,7 +188,6 @@ mod float_functions {
         }
     }
     #[rhai_fn(name = "to_int", return_raw)]
-    #[inline]
     pub fn f64_to_int(x: f64) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
             EvalAltResult::ErrorArithmetic(
@@ -229,7 +201,6 @@ mod float_functions {
     }
 
     #[rhai_fn(return_raw)]
-    #[inline]
     pub fn parse_float(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
         s.trim()
             .parse::<FLOAT>()
@@ -291,7 +262,6 @@ fn parse_int_radix(s: &str, radix: INT) -> Result<Dynamic, Box<EvalAltResult>> {
 }
 
 #[export_fn(return_raw)]
-#[inline(always)]
 fn parse_int(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
     parse_int_radix(s, 10)
 }
