@@ -15,6 +15,17 @@ pub enum EntryType {
     Constant,
 }
 
+impl EntryType {
+    /// Is this entry constant?
+    #[inline(always)]
+    pub fn is_constant(&self) -> bool {
+        match self {
+            Self::Normal => false,
+            Self::Constant => true,
+        }
+    }
+}
+
 /// An entry in the Scope.
 #[derive(Debug, Clone)]
 pub struct Entry<'a> {
@@ -447,31 +458,35 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push("x", 42_i64);
-    /// my_scope.push("foo", "hello".to_string());
+    /// my_scope.push_constant("foo", "hello".to_string());
     ///
     /// let mut iter = my_scope.iter();
     ///
-    /// let (name, value) = iter.next().unwrap();
+    /// let (name, constant, value) = iter.next().unwrap();
     /// assert_eq!(name, "x");
+    /// assert!(!constant);
     /// assert_eq!(value.cast::<i64>(), 42);
     ///
-    /// let (name, value) = iter.next().unwrap();
+    /// let (name, constant, value) = iter.next().unwrap();
     /// assert_eq!(name, "foo");
+    /// assert!(constant);
     /// assert_eq!(value.cast::<String>(), "hello");
     /// ```
     #[inline(always)]
-    pub fn iter(&self) -> impl Iterator<Item = (&str, Dynamic)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.iter_raw()
-            .map(|(name, value)| (name, value.flatten_clone()))
+            .map(|(name, constant, value)| (name, constant, value.flatten_clone()))
     }
 
     /// Get an iterator to entries in the Scope.
     /// Shared values are not expanded.
     #[inline(always)]
-    pub fn iter_raw(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
-        self.0
-            .iter()
-            .map(|Entry { name, value, .. }| (name.as_ref(), value))
+    pub fn iter_raw(&self) -> impl Iterator<Item = (&str, bool, &Dynamic)> {
+        self.0.iter().map(
+            |Entry {
+                 name, typ, value, ..
+             }| { (name.as_ref(), typ.is_constant(), value) },
+        )
     }
 }
 
