@@ -9,9 +9,9 @@ use crate::engine::{
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
-use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
+use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::utils::StaticVec;
-use crate::token::is_valid_identifier;
+use crate::token::{is_valid_identifier, Position};
 
 #[cfg(not(feature = "no_function"))]
 use crate::parser::ReturnType;
@@ -62,6 +62,7 @@ impl OptimizationLevel {
 }
 
 /// Mutable state throughout an optimization pass.
+#[derive(Debug, Clone)]
 struct State<'a> {
     /// Has the AST been changed during this pass?
     changed: bool,
@@ -406,11 +407,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
-        KEYWORD_PRINT,
-        KEYWORD_DEBUG,
-        KEYWORD_EVAL,
-        KEYWORD_IS_DEF_FN,
-        KEYWORD_IS_DEF_VAR,
+        KEYWORD_PRINT,          // side effects
+        KEYWORD_DEBUG,          // side effects
+        KEYWORD_EVAL,           // arbitrary scripts
+        KEYWORD_IS_DEF_FN,      // functions collection is volatile
+        KEYWORD_IS_DEF_VAR,     // variables scope is volatile
     ];
 
     match expr {
@@ -572,7 +573,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         },
 
         // Do not call some special keywords
-        Expr::FnCall(mut x) if DONT_EVAL_KEYWORDS.contains(&(x.0).0.as_ref())=> {
+        Expr::FnCall(mut x) if DONT_EVAL_KEYWORDS.contains(&(x.0).0.as_ref()) => {
             x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
             Expr::FnCall(x)
         }
@@ -700,13 +701,14 @@ fn optimize(
     // Add constants from the scope into the state
     scope
         .to_iter()
-        .filter(|ScopeEntry { typ, expr, .. }| {
-            // Get all the constants with definite constant expressions
-            *typ == ScopeEntryType::Constant
-                && expr.as_ref().map(|v| v.is_constant()).unwrap_or(false)
-        })
-        .for_each(|ScopeEntry { name, expr, .. }| {
-            state.push_constant(name.as_ref(), expr.as_ref().unwrap().as_ref().clone())
+        // Get all the constants that can be made into a constant literal.
+        .filter(|ScopeEntry { typ, .. }| typ.is_constant())
+        .for_each(|ScopeEntry { name, expr, value, .. }| {
+            if let Some(val) = expr.as_ref().map(|expr| expr.as_ref().clone()).or_else(
+                || map_dynamic_to_expr(value.clone(), Position::none())
+            ) {
+                state.push_constant(name.as_ref(), val);
+            }
         });
 
     let orig_constants_len = state.constants.len();
