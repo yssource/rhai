@@ -17,6 +17,7 @@ Breaking changes
 New features
 ------------
 
+* `const` statements can now take any expression (or none at all) instead of only constant values.
 * `OptimizationLevel::Simple` now eagerly evaluates built-in binary operators of primary types (if not overloaded).
 * Added `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.

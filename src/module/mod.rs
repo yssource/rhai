@@ -1285,6 +1285,7 @@ impl Module {
     }
 
     /// Get an iterator to the functions in the module.
+    #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
         self.functions.values()

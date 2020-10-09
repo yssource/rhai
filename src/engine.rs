@@ -1800,18 +1800,18 @@ impl Engine {
             }
 
             // Const statement
-            Stmt::Const(x) if x.1.is_constant() => {
+            Stmt::Const(x) => {
                 let ((var_name, _), expr, _) = x.as_ref();
-                let val = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
-                    .flatten();
+                let val = if let Some(expr) = expr { self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten()
+                } else {
+                    ().into()
+                };
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                 scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
                 Ok(Default::default())
             }
-
-            // Const expression not constant
-            Stmt::Const(_) => unreachable!(),
 
             // Import statement
             #[cfg(not(feature = "no_module"))]

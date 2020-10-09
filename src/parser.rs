@@ -740,7 +740,7 @@ pub enum Stmt {
     /// let id = expr
     Let(Box<((String, Position), Option<Expr>, Position)>),
     /// const id = expr
-    Const(Box<((String, Position), Expr, Position)>),
+    Const(Box<((String, Position), Option<Expr>, Position)>),
     /// { stmt; ... }
     Block(Box<(StaticVec<Stmt>, Position)>),
     /// expr
@@ -1161,6 +1161,48 @@ impl Expr {
             Self::Variable(_) => true,
 
             _ => self.is_constant(),
+        }
+    }
+
+    /// Is the expression the unit `()` literal?
+    #[inline(always)]
+    pub fn is_unit(&self) -> bool {
+        match self {
+            Self::Unit(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Is the expression a simple constant literal?
+    pub fn is_literal(&self) -> bool {
+        match self {
+            Self::Expr(x) => x.is_literal(),
+
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_) => true,
+
+            Self::IntegerConstant(_)
+            | Self::CharConstant(_)
+            | Self::StringConstant(_)
+            | Self::FnPointer(_)
+            | Self::True(_)
+            | Self::False(_)
+            | Self::Unit(_) => true,
+
+            // An array literal is literal if all items are literals
+            Self::Array(x) => x.0.iter().all(Self::is_literal),
+
+            // An map literal is literal if all items are literals
+            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_literal),
+
+            // Check in expression
+            Self::In(x) => match (&x.0, &x.1) {
+                (Self::StringConstant(_), Self::StringConstant(_))
+                | (Self::CharConstant(_), Self::StringConstant(_)) => true,
+                _ => false,
+            },
+
+            _ => false,
         }
     }
 
@@ -2843,45 +2885,23 @@ fn parse_let(
     };
 
     // let name = ...
-    if match_token(input, Token::Equals)? {
+    let init_value = if match_token(input, Token::Equals)? {
         // let name = expr
-        let init_value = parse_expr(input, state, lib, settings.level_up())?;
-
-        match var_type {
-            // let name = expr
-            ScopeEntryType::Normal => {
-                state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new((
-                    (name, pos),
-                    Some(init_value),
-                    token_pos,
-                ))))
-            }
-            // const name = { expr:constant }
-            ScopeEntryType::Constant if init_value.is_constant() => {
-                state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
-            }
-            // const name = expr: error
-            ScopeEntryType::Constant => {
-                Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
-            }
-        }
+        Some(parse_expr(input, state, lib, settings.level_up())?)
     } else {
-        // let name
-        match var_type {
-            ScopeEntryType::Normal => {
-                state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(((name, pos), None, token_pos))))
-            }
-            ScopeEntryType::Constant => {
-                state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new((
-                    (name, pos),
-                    Expr::Unit(pos),
-                    token_pos,
-                ))))
-            }
+        None
+    };
+
+    match var_type {
+        // let name = expr
+        ScopeEntryType::Normal => {
+            state.stack.push((name.clone(), ScopeEntryType::Normal));
+            Ok(Stmt::Let(Box::new(((name, pos), init_value, token_pos))))
+        }
+        // const name = { expr:constant }
+        ScopeEntryType::Constant => {
+            state.stack.push((name.clone(), ScopeEntryType::Constant));
+            Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
         }
     }
 }

@@ -3,15 +3,15 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
     KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::fn_call::run_builtin_binary_op;
-use crate::fn_native::FnPtr;
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, EntryType as ScopeEntryType, Scope};
 use crate::utils::StaticVec;
+use crate::token::is_valid_identifier;
 
 #[cfg(not(feature = "no_function"))]
 use crate::parser::ReturnType;
@@ -21,7 +21,6 @@ use crate::parser::CustomExpr;
 
 use crate::stdlib::{
     boxed::Box,
-    convert::TryFrom,
     iter::empty,
     string::{String, ToString},
     vec,
@@ -282,12 +281,24 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             let mut result: Vec<_> =
                 x.0.into_iter()
                     .map(|stmt| match stmt {
-                        // Add constant into the state
-                        Stmt::Const(v) => {
-                            let ((name, pos), expr, _) = *v;
-                            state.push_constant(&name, expr);
-                            state.set_dirty();
-                            Stmt::Noop(pos) // No need to keep constants
+                        // Add constant literals into the state
+                        Stmt::Const(mut v) => {
+                            if let Some(expr) = v.1 {
+                                let expr = optimize_expr(expr, state);
+
+                                if expr.is_literal() {
+                                    state.set_dirty();
+                                    state.push_constant(&v.0.0, expr);
+                                    Stmt::Noop(pos) // No need to keep constants
+                                } else {
+                                    v.1 = Some(expr);
+                                    Stmt::Const(v)
+                                }
+                            } else {
+                                state.set_dirty();
+                                state.push_constant(&v.0.0, Expr::Unit(v.0.1));
+                                Stmt::Noop(pos) // No need to keep constants
+                            }
                         }
                         // Optimize the statement
                         _ => optimize_stmt(stmt, state, preserve_result),
@@ -310,8 +321,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 
             while let Some(expr) = result.pop() {
                 match expr {
-                    Stmt::Let(x) if x.1.is_none() => removed = true,
-                    Stmt::Let(x) if x.1.is_some() => removed = x.1.unwrap().is_pure(),
+                    Stmt::Let(x) => removed = x.1.as_ref().map(Expr::is_pure).unwrap_or(true),
                     #[cfg(not(feature = "no_module"))]
                     Stmt::Import(x) => removed = x.0.is_pure(),
                     _ => {
@@ -345,9 +355,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 }
 
                 match stmt {
-                    Stmt::ReturnWithVal(_) | Stmt::Break(_) => {
-                        dead_code = true;
-                    }
+                    Stmt::ReturnWithVal(_) | Stmt::Break(_) => dead_code = true,
                     _ => (),
                 }
 
@@ -569,30 +577,13 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             Expr::FnCall(x)
         }
 
-        // Fn("...")
-        Expr::FnCall(x)
-                if x.1.is_none()
-                && (x.0).0 == KEYWORD_FN_PTR
-                && x.3.len() == 1
-                && matches!(x.3[0], Expr::StringConstant(_))
-        => {
-            if let Expr::StringConstant(s) = &x.3[0] {
-                if let Ok(fn_ptr) = FnPtr::try_from(s.0.as_str()) {
-                    Expr::FnPointer(Box::new((fn_ptr.take_data().0, s.1)))
-                } else {
-                    Expr::FnCall(x)
-                }
-            } else {
-                unreachable!()
-            }
-        }
-
-        // Call built-in functions
+        // Call built-in operators
         Expr::FnCall(mut x)
                 if x.1.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
                 && x.3.len() == 2 // binary call
                 && x.3.iter().all(Expr::is_constant) // all arguments are constants
+                && !is_valid_identifier(x.0.0.chars()) // cannot be scripted
         => {
             let ((name, _, _, pos), _, _, args, _) = x.as_mut();
 
@@ -733,12 +724,28 @@ fn optimize(
             .into_iter()
             .enumerate()
             .map(|(i, stmt)| {
-                match &stmt {
-                    Stmt::Const(v) => {
+                match stmt {
+                    Stmt::Const(mut v) => {
                         // Load constants
-                        let ((name, _), expr, _) = v.as_ref();
-                        state.push_constant(&name, expr.clone());
-                        stmt // Keep it in the global scope
+                        if let Some(expr) = v.1 {
+                            let expr = optimize_expr(expr, &mut state);
+                        
+                            if expr.is_literal() {
+                                state.push_constant(&v.0.0, expr.clone());
+                            }
+
+                            v.1 = if expr.is_unit() {
+                                state.set_dirty();
+                                None
+                            } else {
+                                Some(expr)
+                            };
+                        } else {
+                            state.push_constant(&v.0.0, Expr::Unit(v.0.1));
+                        }
+
+                        // Keep it in the global scope
+                        Stmt::Const(v)
                     }
                     _ => {
                         // Keep all variable declarations at this level

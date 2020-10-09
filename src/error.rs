@@ -100,8 +100,6 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_object` feature.
     DuplicatedProperty(String),
-    /// Invalid expression assigned to constant. Wrapped value is the name of the constant.
-    ForbiddenConstantExpr(String),
     /// Missing a property name for custom types and maps.
     ///
     /// Never appears under the `no_object` feature.
@@ -174,7 +172,6 @@ impl ParseErrorType {
             Self::MalformedInExpr(_) => "Invalid 'in' expression",
             Self::MalformedCapture(_) => "Invalid capturing",
             Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
-            Self::ForbiddenConstantExpr(_) => "Expecting a constant",
             Self::PropertyExpected => "Expecting name of a property",
             Self::VariableExpected => "Expecting name of a variable",
             Self::Reserved(_) => "Invalid use of reserved keyword",
@@ -200,9 +197,6 @@ impl fmt::Display for ParseErrorType {
         match self {
             Self::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
                 f.write_str(if s.is_empty() { self.desc() } else { s })
-            }
-            Self::ForbiddenConstantExpr(s) => {
-                write!(f, "Expecting a constant to assign to '{}'", s)
             }
             Self::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s),
 
