@@ -3,15 +3,15 @@
 use crate::any::Dynamic;
 use crate::calc_fn_hash;
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
-    KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, Scope};
-use crate::utils::StaticVec;
 use crate::token::{is_valid_identifier, Position};
+use crate::utils::StaticVec;
 
 #[cfg(not(feature = "no_function"))]
 use crate::parser::ReturnType;
@@ -289,7 +289,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 
                                 if expr.is_literal() {
                                     state.set_dirty();
-                                    state.push_constant(&v.0.0, expr);
+                                    state.push_constant(&(v.0).0, expr);
                                     Stmt::Noop(pos) // No need to keep constants
                                 } else {
                                     v.1 = Some(expr);
@@ -297,7 +297,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                                 }
                             } else {
                                 state.set_dirty();
-                                state.push_constant(&v.0.0, Expr::Unit(v.0.1));
+                                state.push_constant(&(v.0).0, Expr::Unit((v.0).1));
                                 Stmt::Noop(pos) // No need to keep constants
                             }
                         }
@@ -407,11 +407,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
-        KEYWORD_PRINT,          // side effects
-        KEYWORD_DEBUG,          // side effects
-        KEYWORD_EVAL,           // arbitrary scripts
-        KEYWORD_IS_DEF_FN,      // functions collection is volatile
-        KEYWORD_IS_DEF_VAR,     // variables scope is volatile
+        KEYWORD_PRINT,      // side effects
+        KEYWORD_DEBUG,      // side effects
+        KEYWORD_EVAL,       // arbitrary scripts
+        KEYWORD_IS_DEF_FN,  // functions collection is volatile
+        KEYWORD_IS_DEF_VAR, // variables scope is volatile
     ];
 
     match expr {
@@ -584,7 +584,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
                 && x.3.len() == 2 // binary call
                 && x.3.iter().all(Expr::is_constant) // all arguments are constants
-                && !is_valid_identifier(x.0.0.chars()) // cannot be scripted
+                && !is_valid_identifier((x.0).0.chars()) // cannot be scripted
         => {
             let ((name, _, _, pos), _, _, args, _) = x.as_mut();
 
@@ -703,13 +703,19 @@ fn optimize(
         .to_iter()
         // Get all the constants that can be made into a constant literal.
         .filter(|ScopeEntry { typ, .. }| typ.is_constant())
-        .for_each(|ScopeEntry { name, expr, value, .. }| {
-            if let Some(val) = expr.as_ref().map(|expr| expr.as_ref().clone()).or_else(
-                || map_dynamic_to_expr(value.clone(), Position::none())
-            ) {
-                state.push_constant(name.as_ref(), val);
-            }
-        });
+        .for_each(
+            |ScopeEntry {
+                 name, expr, value, ..
+             }| {
+                if let Some(val) = expr
+                    .as_ref()
+                    .map(|expr| expr.as_ref().clone())
+                    .or_else(|| map_dynamic_to_expr(value.clone(), Position::none()))
+                {
+                    state.push_constant(name.as_ref(), val);
+                }
+            },
+        );
 
     let orig_constants_len = state.constants.len();
 
@@ -731,9 +737,9 @@ fn optimize(
                         // Load constants
                         if let Some(expr) = v.1 {
                             let expr = optimize_expr(expr, &mut state);
-                        
+
                             if expr.is_literal() {
-                                state.push_constant(&v.0.0, expr.clone());
+                                state.push_constant(&(v.0).0, expr.clone());
                             }
 
                             v.1 = if expr.is_unit() {
@@ -743,7 +749,7 @@ fn optimize(
                                 Some(expr)
                             };
                         } else {
-                            state.push_constant(&v.0.0, Expr::Unit(v.0.1));
+                            state.push_constant(&(v.0).0, Expr::Unit((v.0).1));
                         }
 
                         // Keep it in the global scope
