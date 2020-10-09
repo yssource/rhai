@@ -49,11 +49,29 @@ f.call(2) == 42;                    // the value of 'x' is 40 because 'x' is sha
 // The above de-sugars into this:
 fn anon$1001(x, y) { x + y }        // parameter 'x' is inserted
 
-make_shared(x);                     // convert variable 'x' into a shared value
+$make_shared(x);                    // convert variable 'x' into a shared value
 
 let f = Fn("anon$1001").curry(x);   // shared 'x' is curried
 
 f.call(2) == 42;
+```
+
+
+Constants are Not Captured
+--------------------------
+
+Constants are never shared.  Their values are simply cloned.
+
+```rust
+const x = 42;                       // constant variable 'x'
+
+let f = |y| x += y;                 // constant 'x' is cloned and not captured
+
+x.is_shared() == false;             // 'x' is not shared
+
+f.call(10);                         // the cloned copy of 'x' is changed
+
+x == 42;                            // 'x' is not changed
 ```
 
 
@@ -64,7 +82,7 @@ The example below is a typical tutorial sample for many languages to illustrate 
 that may accompany capturing external scope variables in closures.
 
 It prints `9`, `9`, `9`, ... `9`, `9`, not `0`, `1`, `2`, ... `8`, `9`, because there is
-ever only one captured variable, and all ten closures capture the _same_ variable.
+ever only _one_ captured variable, and all ten closures capture the _same_ variable.
 
 ```rust
 let funcs = [];
@@ -78,7 +96,7 @@ funcs.len() == 10;                  // 10 closures stored in the array
 funcs[0].type_of() == "Fn";         // make sure these are closures
 
 for f in funcs {
-    f.call();                       // all the references to 'i' are the same variable!
+    f.call();                       // all references to 'i' are the same variable!
 }
 ```
 
