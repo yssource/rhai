@@ -1780,36 +1780,23 @@ impl Engine {
 
             Stmt::ReturnWithVal(_) => unreachable!(),
 
-            // Let statement
-            Stmt::Let(x) if x.1.is_some() => {
+            // Let/const statement
+            Stmt::Let(x) | Stmt::Const(x) => {
                 let ((var_name, _), expr, _) = x.as_ref();
-                let expr = expr.as_ref().unwrap();
-                let val = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten();
-                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
-                scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
-                Ok(Default::default())
-            }
+                let entry_type = match stmt {
+                    Stmt::Let(_) => ScopeEntryType::Normal,
+                    Stmt::Const(_) => ScopeEntryType::Constant,
+                    _ => unreachable!(),
+                };
 
-            Stmt::Let(x) => {
-                let ((var_name, _), _, _) = x.as_ref();
-                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
-                scope.push(var_name, ());
-                Ok(Default::default())
-            }
-
-            // Const statement
-            Stmt::Const(x) => {
-                let ((var_name, _), expr, _) = x.as_ref();
-                let val = if let Some(expr) = expr { self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten()
+                let val = if let Some(expr) = expr {
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .flatten()
                 } else {
                     ().into()
                 };
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
-                scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
+                scope.push_dynamic_value(var_name, entry_type, val, false);
                 Ok(Default::default())
             }
 
