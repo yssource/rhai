@@ -114,15 +114,19 @@ fn main() {
             }
             "exit" | "quit" => break, // quit
             "scope" => {
-                scope.iter_raw().enumerate().for_each(|(i, (name, value))| {
-                    println!(
-                        "[{}] {}{} = {:?}",
-                        i + 1,
-                        name,
-                        if value.is_shared() { " (shared)" } else { "" },
-                        *value.read_lock::<Dynamic>().unwrap(),
-                    )
-                });
+                scope
+                    .iter_raw()
+                    .enumerate()
+                    .for_each(|(i, (name, constant, value))| {
+                        println!(
+                            "[{}] {}{}{} = {:?}",
+                            i + 1,
+                            if constant { "const " } else { "" },
+                            name,
+                            if value.is_shared() { " (shared)" } else { "" },
+                            *value.read_lock::<Dynamic>().unwrap(),
+                        )
+                    });
                 continue;
             }
             "astu" => {
