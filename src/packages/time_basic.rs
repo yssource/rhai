@@ -34,7 +34,11 @@ mod time_functions {
     pub fn elapsed(timestamp: &mut Instant) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
         {
-            Ok((timestamp.elapsed().as_secs_f64() as FLOAT).into())
+            if *timestamp <= Instant::now() {
+                Ok((timestamp.elapsed().as_secs_f64() as FLOAT).into())
+            } else {
+                Err(make_arithmetic_err("Time-stamp is later than now"))
+            }
         }
 
         #[cfg(feature = "no_float")]
@@ -46,6 +50,8 @@ mod time_functions {
                     "Integer overflow for timestamp.elapsed: {}",
                     seconds
                 )))
+            } else if *timestamp <= Instant::now() {
+                Err(make_arithmetic_err("Time-stamp is later than now"))
             } else {
                 Ok((seconds as INT).into())
             }

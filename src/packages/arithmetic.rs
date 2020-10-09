@@ -16,8 +16,8 @@ use num_traits::float::Float;
 use crate::stdlib::{format, string::String};
 
 #[inline(always)]
-pub fn make_err(msg: String) -> Box<EvalAltResult> {
-    EvalAltResult::ErrorArithmetic(msg, Position::none()).into()
+pub fn make_err(msg: impl Into<String>) -> Box<EvalAltResult> {
+    EvalAltResult::ErrorArithmetic(msg.into(), Position::none()).into()
 }
 
 macro_rules! gen_arithmetic_functions {
