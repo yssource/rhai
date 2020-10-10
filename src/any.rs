@@ -541,6 +541,8 @@ impl Dynamic {
     /// ```
     #[inline(always)]
     pub fn from<T: Variant + Clone>(value: T) -> Self {
+        // Coded this way in order to maximally leverage potentials for dead-code removal.
+
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return <dyn Any>::downcast_ref::<INT>(&value)
                 .unwrap()
@@ -677,6 +679,8 @@ impl Dynamic {
     /// ```
     #[inline(always)]
     pub fn try_cast<T: Variant>(self) -> Option<T> {
+        // Coded this way in order to maximally leverage potentials for dead-code removal.
+
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
@@ -964,6 +968,8 @@ impl Dynamic {
     /// Returns `None` if the cast fails, or if the value is shared.
     #[inline(always)]
     pub(crate) fn downcast_ref<T: Variant + Clone>(&self) -> Option<&T> {
+        // Coded this way in order to maximally leverage potentials for dead-code removal.
+
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match &self.0 {
                 Union::Int(value) => <dyn Any>::downcast_ref::<T>(value),
@@ -1052,6 +1058,8 @@ impl Dynamic {
     /// Returns `None` if the cast fails, or if the value is shared.
     #[inline(always)]
     pub(crate) fn downcast_mut<T: Variant + Clone>(&mut self) -> Option<&mut T> {
+        // Coded this way in order to maximally leverage potentials for dead-code removal.
+
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match &mut self.0 {
                 Union::Int(value) => <dyn Any>::downcast_mut::<T>(value),

@@ -9,7 +9,7 @@ use crate::parser::Expr;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position, Token};
-use crate::utils::StaticVec;
+use crate::StaticVec;
 
 use crate::stdlib::{
     boxed::Box,
@@ -36,6 +36,7 @@ pub type FnCustomSyntaxEval = dyn Fn(&Engine, &mut EvalContext, &mut Scope, &[Ex
 pub struct Expression<'a>(&'a Expr);
 
 impl<'a> From<&'a Expr> for Expression<'a> {
+    #[inline(always)]
     fn from(expr: &'a Expr) -> Self {
         Self(expr)
     }
@@ -43,6 +44,7 @@ impl<'a> From<&'a Expr> for Expression<'a> {
 
 impl Expression<'_> {
     /// If this expression is a variable name, return it.  Otherwise `None`.
+    #[inline(always)]
     pub fn get_variable_name(&self) -> Option<&str> {
         match self.0 {
             Expr::Variable(x) => Some((x.0).0.as_str()),
@@ -50,10 +52,12 @@ impl Expression<'_> {
         }
     }
     /// Get the expression.
+    #[inline(always)]
     pub(crate) fn expr(&self) -> &Expr {
         &self.0
     }
     /// Get the position of this expression.
+    #[inline(always)]
     pub fn position(&self) -> Position {
         self.0.position()
     }
@@ -67,6 +71,7 @@ pub struct CustomSyntax {
 }
 
 impl fmt::Debug for CustomSyntax {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.segments, f)
     }
@@ -191,6 +196,7 @@ impl Engine {
     /// ## WARNING - Low Level API
     ///
     /// This function is very low level.  It evaluates an expression from an AST.
+    #[inline(always)]
     pub fn eval_expression_tree(
         &self,
         context: &mut EvalContext,

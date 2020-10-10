@@ -10,8 +10,8 @@ Each Function is a Separate Compilation Unit
 This means that individual functions can be separated, exported, re-grouped, imported,
 and generally mix-'n-match-ed with other completely unrelated scripts.
 
-For example, the `AST::merge` method allows merging all functions in one [`AST`] into another,
-forming a new, combined, group of functions.
+For example, the `AST::merge` and `AST::combine` methods (or the equivalent `+` and `+=` operators)
+allow combining all functions in one [`AST`] into another, forming a new, unified, group of functions.
 
 In general, there are two types of _namespaces_ where functions are looked up:
 
@@ -58,10 +58,10 @@ let ast1 = engine.compile(
 // Compile another script with an overriding function
 let ast2 = engine.compile(r#"fn get_message() { "Boo!" }"#)?;
 
-// Merge the two AST's
-let ast = ast1.merge(ast2);         // 'message' will be overwritten
+// Combine the two AST's
+ast1 += ast2;                       // 'message' will be overwritten
 
-engine.consume_ast(&ast)?;          // prints 'Boo!'
+engine.consume_ast(&ast1)?;         // prints 'Boo!'
 ```
 
 Therefore, care must be taken when _cross-calling_ functions to make sure that the correct

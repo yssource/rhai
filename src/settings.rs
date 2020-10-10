@@ -21,6 +21,7 @@ impl Engine {
     ///
     /// When searching for functions, packages loaded later are preferred.
     /// In other words, loaded packages are searched in reverse order.
+    #[inline(always)]
     pub fn load_package(&mut self, package: impl Into<PackageLibrary>) -> &mut Self {
         // Push the package to the top - packages are searched in reverse order
         self.packages.push(package.into());
@@ -31,6 +32,7 @@ impl Engine {
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
+    #[inline(always)]
     pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) -> &mut Self {
         self.optimization_level = optimization_level;
         self
@@ -41,6 +43,7 @@ impl Engine {
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
+    #[inline(always)]
     pub fn optimization_level(&self) -> OptimizationLevel {
         self.optimization_level
     }
@@ -48,6 +51,7 @@ impl Engine {
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn set_max_call_levels(&mut self, levels: usize) -> &mut Self {
         self.limits.max_call_stack_depth = levels;
         self
@@ -55,6 +59,7 @@ impl Engine {
 
     /// The maximum levels of function calls allowed for a script.
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn max_call_levels(&self) -> usize {
         self.limits.max_call_stack_depth
     }
@@ -62,6 +67,7 @@ impl Engine {
     /// Set the maximum number of operations allowed for a script to run to avoid
     /// consuming too much resources (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn set_max_operations(&mut self, operations: u64) -> &mut Self {
         self.limits.max_operations = if operations == u64::MAX {
             0
@@ -73,12 +79,14 @@ impl Engine {
 
     /// The maximum number of operations allowed for a script to run (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn max_operations(&self) -> u64 {
         self.limits.max_operations
     }
 
     /// Set the maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn set_max_modules(&mut self, modules: usize) -> &mut Self {
         self.limits.max_modules = modules;
         self
@@ -86,12 +94,14 @@ impl Engine {
 
     /// The maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn max_modules(&self) -> usize {
         self.limits.max_modules
     }
 
     /// Set the depth limits for expressions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn set_max_expr_depths(
         &mut self,
         max_expr_depth: usize,
@@ -112,18 +122,21 @@ impl Engine {
 
     /// The depth limit for expressions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn max_expr_depth(&self) -> usize {
         self.limits.max_expr_depth
     }
 
     /// The depth limit for expressions in functions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn max_function_expr_depth(&self) -> usize {
         self.limits.max_function_expr_depth
     }
 
     /// Set the maximum length of strings (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn set_max_string_size(&mut self, max_size: usize) -> &mut Self {
         self.limits.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
         self
@@ -131,6 +144,7 @@ impl Engine {
 
     /// The maximum length of strings (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     pub fn max_string_size(&self) -> usize {
         self.limits.max_string_size
     }
@@ -138,6 +152,7 @@ impl Engine {
     /// Set the maximum length of arrays (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
     pub fn set_max_array_size(&mut self, max_size: usize) -> &mut Self {
         self.limits.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
         self
@@ -146,6 +161,7 @@ impl Engine {
     /// The maximum length of arrays (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
     pub fn max_array_size(&self) -> usize {
         self.limits.max_array_size
     }
@@ -153,6 +169,7 @@ impl Engine {
     /// Set the maximum length of object maps (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn set_max_map_size(&mut self, max_size: usize) -> &mut Self {
         self.limits.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
         self
@@ -161,6 +178,7 @@ impl Engine {
     /// The maximum length of object maps (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn max_map_size(&self) -> usize {
         self.limits.max_map_size
     }
@@ -169,6 +187,7 @@ impl Engine {
     ///
     /// Not available under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
     pub fn set_module_resolver(
         &mut self,
         resolver: Option<impl ModuleResolver + 'static>,
@@ -213,6 +232,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn disable_symbol(&mut self, symbol: &str) -> &mut Self {
         if self.disabled_symbols.is_none() {
             self.disabled_symbols = Some(Default::default());

@@ -15,12 +15,10 @@ print(x * 2);       // prints 84
 x = 123;            // <- syntax error: cannot assign to constant
 ```
 
-Unlike variables which need not have initial values (default to [`()`]),
-constants must be assigned one, and it must be a [_literal value_](../appendix/literals.md),
-not an expression.
-
 ```rust
-const x = 40 + 2;   // <- syntax error: cannot assign expression to constant
+const x;            // 'x' is a constant '()'
+
+const x = 40 + 2;   // 'x' is a constant 42
 ```
 
 
@@ -33,9 +31,7 @@ running with that [`Scope`].
 When added to a custom [`Scope`], a constant can hold any value, not just a literal value.
 
 It is very useful to have a constant value hold a [custom type], which essentially acts
-as a [_singleton_](../patterns/singleton.md).  The singleton object can be modified via its
-registered API - being a constant only prevents it from being re-assigned or operated upon by Rhai;
-mutating it via a Rust function is still allowed.
+as a [_singleton_](../patterns/singleton.md).
 
 ```rust
 use rhai::{Engine, Scope};
@@ -58,3 +54,11 @@ engine.consume_with_scope(&mut scope, r"
     print(MY_NUMBER.value);                                 // prints 42
 ")?;
 ```
+
+
+Constants Can be Modified, Just Not Reassigned
+---------------------------------------------
+
+A custom type stored as a constant can be modified via its registered API -
+being a constant only prevents it from being re-assigned or operated upon by Rhai;
+mutating it via a Rust function is still allowed.

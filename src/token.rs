@@ -10,7 +10,7 @@ use crate::engine::KEYWORD_IS_SHARED;
 
 use crate::error::LexError;
 use crate::parser::INT;
-use crate::utils::StaticVec;
+use crate::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -55,6 +55,7 @@ impl Position {
     /// # Panics
     ///
     /// Panics if `line` is zero.
+    #[inline(always)]
     pub fn new(line: u16, position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
 
@@ -65,6 +66,7 @@ impl Position {
     }
 
     /// Get the line number (1-based), or `None` if there is no position.
+    #[inline(always)]
     pub fn line(&self) -> Option<usize> {
         if self.is_none() {
             None
@@ -74,6 +76,7 @@ impl Position {
     }
 
     /// Get the character position (1-based), or `None` if at beginning of a line.
+    #[inline(always)]
     pub fn position(&self) -> Option<usize> {
         if self.is_none() || self.pos == 0 {
             None
@@ -83,6 +86,7 @@ impl Position {
     }
 
     /// Advance by one character position.
+    #[inline(always)]
     pub(crate) fn advance(&mut self) {
         assert!(!self.is_none(), "cannot advance Position::none");
 
@@ -97,6 +101,7 @@ impl Position {
     /// # Panics
     ///
     /// Panics if already at beginning of a line - cannot rewind to a previous line.
+    #[inline(always)]
     pub(crate) fn rewind(&mut self) {
         assert!(!self.is_none(), "cannot rewind Position::none");
         assert!(self.pos > 0, "cannot rewind at position 0");
@@ -104,6 +109,7 @@ impl Position {
     }
 
     /// Advance to the next line.
+    #[inline(always)]
     pub(crate) fn new_line(&mut self) {
         assert!(!self.is_none(), "cannot advance Position::none");
 
@@ -115,23 +121,27 @@ impl Position {
     }
 
     /// Create a `Position` representing no position.
+    #[inline(always)]
     pub fn none() -> Self {
         Self { line: 0, pos: 0 }
     }
 
     /// Is there no `Position`?
+    #[inline(always)]
     pub fn is_none(&self) -> bool {
         self.line == 0 && self.pos == 0
     }
 }
 
 impl Default for Position {
+    #[inline(always)]
     fn default() -> Self {
         Self::new(1, 0)
     }
 }
 
 impl fmt::Display for Position {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_none() {
             write!(f, "none")
@@ -142,6 +152,7 @@ impl fmt::Display for Position {
 }
 
 impl fmt::Debug for Position {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.line, self.pos)
     }
@@ -521,6 +532,7 @@ impl Token {
     }
 
     // Is this token EOF?
+    #[inline(always)]
     pub fn is_eof(&self) -> bool {
         use Token::*;
 
@@ -677,6 +689,7 @@ impl Token {
     }
 
     /// Is this token a reserved symbol?
+    #[inline(always)]
     pub fn is_reserved(&self) -> bool {
         match self {
             Self::Reserved(_) => true,
@@ -695,6 +708,7 @@ impl Token {
     }
 
     /// Is this token a custom keyword?
+    #[inline(always)]
     pub fn is_custom(&self) -> bool {
         match self {
             Self::Custom(_) => true,
@@ -704,6 +718,7 @@ impl Token {
 }
 
 impl From<Token> for String {
+    #[inline(always)]
     fn from(token: Token) -> Self {
         token.syntax().into()
     }
@@ -879,6 +894,7 @@ pub fn parse_string_literal(
 }
 
 /// Consume the next character.
+#[inline(always)]
 fn eat_next(stream: &mut impl InputStream, pos: &mut Position) -> Option<char> {
     pos.advance();
     stream.get_next()
@@ -937,6 +953,7 @@ fn scan_comment(
 /// ## WARNING
 ///
 /// This type is volatile and may change.
+#[inline]
 pub fn get_next_token(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -953,6 +970,7 @@ pub fn get_next_token(
 }
 
 /// Test if the given character is a hex character.
+#[inline(always)]
 fn is_hex_char(c: char) -> bool {
     match c {
         'a'..='f' => true,
@@ -963,6 +981,7 @@ fn is_hex_char(c: char) -> bool {
 }
 
 /// Test if the given character is an octal character.
+#[inline(always)]
 fn is_octal_char(c: char) -> bool {
     match c {
         '0'..='7' => true,
@@ -971,6 +990,7 @@ fn is_octal_char(c: char) -> bool {
 }
 
 /// Test if the given character is a binary character.
+#[inline(always)]
 fn is_binary_char(c: char) -> bool {
     match c {
         '0' | '1' => true,
@@ -1533,6 +1553,7 @@ pub struct MultiInputsStream<'a> {
 
 impl InputStream for MultiInputsStream<'_> {
     /// Buffer a character.
+    #[inline(always)]
     fn unread(&mut self, ch: char) {
         self.buf = Some(ch);
     }
@@ -1692,6 +1713,7 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
 }
 
 /// Tokenize an input text stream.
+#[inline]
 pub fn lex<'a, 'e>(
     input: &'a [&'a str],
     map: Option<Box<dyn Fn(Token) -> Token>>,

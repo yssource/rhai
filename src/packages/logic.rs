@@ -9,32 +9,26 @@ macro_rules! gen_cmp_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "<")]
-                #[inline(always)]
                 pub fn lt(x: $arg_type, y: $arg_type) -> bool {
                     x < y
                 }
                 #[rhai_fn(name = "<=")]
-                #[inline(always)]
                 pub fn lte(x: $arg_type, y: $arg_type) -> bool {
                     x <= y
                 }
                 #[rhai_fn(name = ">")]
-                #[inline(always)]
                 pub fn gt(x: $arg_type, y: $arg_type) -> bool {
                     x > y
                 }
                 #[rhai_fn(name = ">=")]
-                #[inline(always)]
                 pub fn gte(x: $arg_type, y: $arg_type) -> bool {
                     x >= y
                 }
                 #[rhai_fn(name = "==")]
-                #[inline(always)]
                 pub fn eq(x: $arg_type, y: $arg_type) -> bool {
                     x == y
                 }
                 #[rhai_fn(name = "!=")]
-                #[inline(always)]
                 pub fn ne(x: $arg_type, y: $arg_type) -> bool {
                     x != y
                 }
@@ -67,7 +61,6 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
 
 // Logic operators
 #[export_fn]
-#[inline(always)]
 fn not(x: bool) -> bool {
     !x
 }

@@ -1,6 +1,9 @@
 #![cfg(feature = "serde")]
 
-use rhai::{de::from_dynamic, ser::to_dynamic, Dynamic, Engine, EvalAltResult, INT};
+use rhai::{
+    serde::{from_dynamic, to_dynamic},
+    Dynamic, Engine, EvalAltResult, INT,
+};
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(feature = "no_index"))]
@@ -139,12 +142,10 @@ fn test_serde_ser_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         assert!(content.is_empty());
     }
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantNewtype(123))?.cast::<Map>();
-        let content = map.remove("VariantNewtype").unwrap();
-        assert!(map.is_empty());
-        assert_eq!(Ok(123), content.as_int());
-    }
+    let mut map = to_dynamic(MyEnum::VariantNewtype(123))?.cast::<Map>();
+    let content = map.remove("VariantNewtype").unwrap();
+    assert!(map.is_empty());
+    assert_eq!(Ok(123), content.as_int());
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -156,20 +157,16 @@ fn test_serde_ser_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         assert_eq!(Ok(456), content[1].as_int());
     }
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantEmptyStruct {})?.cast::<Map>();
-        let map_inner = map.remove("VariantEmptyStruct").unwrap().cast::<Map>();
-        assert!(map.is_empty());
-        assert!(map_inner.is_empty());
-    }
+    let mut map = to_dynamic(MyEnum::VariantEmptyStruct {})?.cast::<Map>();
+    let map_inner = map.remove("VariantEmptyStruct").unwrap().cast::<Map>();
+    assert!(map.is_empty());
+    assert!(map_inner.is_empty());
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantStruct { a: 123 })?.cast::<Map>();
-        let mut map_inner = map.remove("VariantStruct").unwrap().cast::<Map>();
-        assert!(map.is_empty());
-        assert_eq!(Ok(123), map_inner.remove("a").unwrap().as_int());
-        assert!(map_inner.is_empty());
-    }
+    let mut map = to_dynamic(MyEnum::VariantStruct { a: 123 })?.cast::<Map>();
+    let mut map_inner = map.remove("VariantStruct").unwrap().cast::<Map>();
+    assert!(map.is_empty());
+    assert_eq!(Ok(123), map_inner.remove("a").unwrap().as_int());
+    assert!(map_inner.is_empty());
 
     Ok(())
 }
@@ -217,11 +214,9 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         },
     }
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantUnit)?.cast::<Map>();
-        assert_eq!(Ok("VariantUnit"), map.remove("tag").unwrap().as_str());
-        assert!(map.is_empty());
-    }
+    let mut map = to_dynamic(MyEnum::VariantUnit)?.cast::<Map>();
+    assert_eq!(Ok("VariantUnit"), map.remove("tag").unwrap().as_str());
+    assert!(map.is_empty());
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -232,13 +227,11 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         assert!(content.is_empty());
     }
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantNewtype(123))?.cast::<Map>();
-        assert_eq!(Ok("VariantNewtype"), map.remove("tag").unwrap().as_str());
-        let content = map.remove("content").unwrap();
-        assert!(map.is_empty());
-        assert_eq!(Ok(123), content.as_int());
-    }
+    let mut map = to_dynamic(MyEnum::VariantNewtype(123))?.cast::<Map>();
+    assert_eq!(Ok("VariantNewtype"), map.remove("tag").unwrap().as_str());
+    let content = map.remove("content").unwrap();
+    assert!(map.is_empty());
+    assert_eq!(Ok(123), content.as_int());
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -251,25 +244,21 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         assert_eq!(Ok(456), content[1].as_int());
     }
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantEmptyStruct {})?.cast::<Map>();
-        assert_eq!(
-            Ok("VariantEmptyStruct"),
-            map.remove("tag").unwrap().as_str()
-        );
-        let map_inner = map.remove("content").unwrap().cast::<Map>();
-        assert!(map.is_empty());
-        assert!(map_inner.is_empty());
-    }
+    let mut map = to_dynamic(MyEnum::VariantEmptyStruct {})?.cast::<Map>();
+    assert_eq!(
+        Ok("VariantEmptyStruct"),
+        map.remove("tag").unwrap().as_str()
+    );
+    let map_inner = map.remove("content").unwrap().cast::<Map>();
+    assert!(map.is_empty());
+    assert!(map_inner.is_empty());
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantStruct { a: 123 })?.cast::<Map>();
-        assert_eq!(Ok("VariantStruct"), map.remove("tag").unwrap().as_str());
-        let mut map_inner = map.remove("content").unwrap().cast::<Map>();
-        assert!(map.is_empty());
-        assert_eq!(Ok(123), map_inner.remove("a").unwrap().as_int());
-        assert!(map_inner.is_empty());
-    }
+    let mut map = to_dynamic(MyEnum::VariantStruct { a: 123 })?.cast::<Map>();
+    assert_eq!(Ok("VariantStruct"), map.remove("tag").unwrap().as_str());
+    let mut map_inner = map.remove("content").unwrap().cast::<Map>();
+    assert!(map.is_empty());
+    assert_eq!(Ok(123), map_inner.remove("a").unwrap().as_int());
+    assert!(map_inner.is_empty());
 
     Ok(())
 }
@@ -285,22 +274,16 @@ fn test_serde_ser_untagged_enum() -> Result<(), Box<EvalAltResult>> {
         VariantStruct2 { b: i32 },
     }
 
-    {
-        let map = to_dynamic(MyEnum::VariantEmptyStruct {})?.cast::<Map>();
-        assert!(map.is_empty());
-    }
+    let map = to_dynamic(MyEnum::VariantEmptyStruct {})?.cast::<Map>();
+    assert!(map.is_empty());
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantStruct1 { a: 123 })?.cast::<Map>();
-        assert_eq!(Ok(123), map.remove("a").unwrap().as_int());
-        assert!(map.is_empty());
-    }
+    let mut map = to_dynamic(MyEnum::VariantStruct1 { a: 123 })?.cast::<Map>();
+    assert_eq!(Ok(123), map.remove("a").unwrap().as_int());
+    assert!(map.is_empty());
 
-    {
-        let mut map = to_dynamic(MyEnum::VariantStruct2 { b: 123 })?.cast::<Map>();
-        assert_eq!(Ok(123), map.remove("b").unwrap().as_int());
-        assert!(map.is_empty());
-    }
+    let mut map = to_dynamic(MyEnum::VariantStruct2 { b: 123 })?.cast::<Map>();
+    assert_eq!(Ok(123), map.remove("b").unwrap().as_int());
+    assert!(map.is_empty());
 
     Ok(())
 }
@@ -433,15 +416,11 @@ fn test_serde_de_unit_enum() -> Result<(), Box<EvalAltResult>> {
         VariantBar,
     }
 
-    {
-        let d = Dynamic::from("VariantFoo".to_string());
-        assert_eq!(MyEnum::VariantFoo, from_dynamic(&d)?);
-    }
+    let d = Dynamic::from("VariantFoo".to_string());
+    assert_eq!(MyEnum::VariantFoo, from_dynamic(&d)?);
 
-    {
-        let d = Dynamic::from("VariantBar".to_string());
-        assert_eq!(MyEnum::VariantBar, from_dynamic(&d)?);
-    }
+    let d = Dynamic::from("VariantBar".to_string());
+    assert_eq!(MyEnum::VariantBar, from_dynamic(&d)?);
 
     Ok(())
 }
@@ -464,10 +443,8 @@ fn test_serde_de_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         },
     }
 
-    {
-        let d = Dynamic::from("VariantUnit".to_string());
-        assert_eq!(MyEnum::VariantUnit, from_dynamic(&d).unwrap());
-    }
+    let d = Dynamic::from("VariantUnit".to_string());
+    assert_eq!(MyEnum::VariantUnit, from_dynamic(&d).unwrap());
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -480,14 +457,12 @@ fn test_serde_de_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         );
     }
 
-    {
-        let mut map_outer = Map::new();
-        map_outer.insert("VariantNewtype".into(), (123 as INT).into());
-        assert_eq!(
-            MyEnum::VariantNewtype(123),
-            from_dynamic(&map_outer.into()).unwrap()
-        );
-    }
+    let mut map_outer = Map::new();
+    map_outer.insert("VariantNewtype".into(), (123 as INT).into());
+    assert_eq!(
+        MyEnum::VariantNewtype(123),
+        from_dynamic(&map_outer.into()).unwrap()
+    );
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -500,26 +475,22 @@ fn test_serde_de_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         );
     }
 
-    {
-        let map_inner = Map::new();
-        let mut map_outer = Map::new();
-        map_outer.insert("VariantEmptyStruct".into(), map_inner.into());
-        assert_eq!(
-            MyEnum::VariantEmptyStruct {},
-            from_dynamic(&map_outer.into()).unwrap()
-        );
-    }
+    let map_inner = Map::new();
+    let mut map_outer = Map::new();
+    map_outer.insert("VariantEmptyStruct".into(), map_inner.into());
+    assert_eq!(
+        MyEnum::VariantEmptyStruct {},
+        from_dynamic(&map_outer.into()).unwrap()
+    );
 
-    {
-        let mut map_inner = Map::new();
-        map_inner.insert("a".into(), (123 as INT).into());
-        let mut map_outer = Map::new();
-        map_outer.insert("VariantStruct".into(), map_inner.into());
-        assert_eq!(
-            MyEnum::VariantStruct { a: 123 },
-            from_dynamic(&map_outer.into()).unwrap()
-        );
-    }
+    let mut map_inner = Map::new();
+    map_inner.insert("a".into(), (123 as INT).into());
+    let mut map_outer = Map::new();
+    map_outer.insert("VariantStruct".into(), map_inner.into());
+    assert_eq!(
+        MyEnum::VariantStruct { a: 123 },
+        from_dynamic(&map_outer.into()).unwrap()
+    );
 
     Ok(())
 }
@@ -534,24 +505,20 @@ fn test_serde_de_internally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         VariantStruct { a: i32 },
     }
 
-    {
-        let mut map = Map::new();
-        map.insert("tag".into(), "VariantStruct".into());
-        map.insert("a".into(), (123 as INT).into());
-        assert_eq!(
-            MyEnum::VariantStruct { a: 123 },
-            from_dynamic(&map.into()).unwrap()
-        );
-    }
+    let mut map = Map::new();
+    map.insert("tag".into(), "VariantStruct".into());
+    map.insert("a".into(), (123 as INT).into());
+    assert_eq!(
+        MyEnum::VariantStruct { a: 123 },
+        from_dynamic(&map.into()).unwrap()
+    );
 
-    {
-        let mut map = Map::new();
-        map.insert("tag".into(), "VariantEmptyStruct".into());
-        assert_eq!(
-            MyEnum::VariantEmptyStruct {},
-            from_dynamic(&map.into()).unwrap()
-        );
-    }
+    let mut map = Map::new();
+    map.insert("tag".into(), "VariantEmptyStruct".into());
+    assert_eq!(
+        MyEnum::VariantEmptyStruct {},
+        from_dynamic(&map.into()).unwrap()
+    );
 
     Ok(())
 }
@@ -574,14 +541,12 @@ fn test_serde_de_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         },
     }
 
-    {
-        let mut map_outer = Map::new();
-        map_outer.insert("tag".into(), "VariantUnit".into());
-        assert_eq!(
-            MyEnum::VariantUnit,
-            from_dynamic(&map_outer.into()).unwrap()
-        );
-    }
+    let mut map_outer = Map::new();
+    map_outer.insert("tag".into(), "VariantUnit".into());
+    assert_eq!(
+        MyEnum::VariantUnit,
+        from_dynamic(&map_outer.into()).unwrap()
+    );
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -595,15 +560,13 @@ fn test_serde_de_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         );
     }
 
-    {
-        let mut map_outer = Map::new();
-        map_outer.insert("tag".into(), "VariantNewtype".into());
-        map_outer.insert("content".into(), (123 as INT).into());
-        assert_eq!(
-            MyEnum::VariantNewtype(123),
-            from_dynamic(&map_outer.into()).unwrap()
-        );
-    }
+    let mut map_outer = Map::new();
+    map_outer.insert("tag".into(), "VariantNewtype".into());
+    map_outer.insert("content".into(), (123 as INT).into());
+    assert_eq!(
+        MyEnum::VariantNewtype(123),
+        from_dynamic(&map_outer.into()).unwrap()
+    );
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -617,28 +580,24 @@ fn test_serde_de_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         );
     }
 
-    {
-        let map_inner = Map::new();
-        let mut map_outer = Map::new();
-        map_outer.insert("tag".into(), "VariantEmptyStruct".into());
-        map_outer.insert("content".into(), map_inner.into());
-        assert_eq!(
-            MyEnum::VariantEmptyStruct {},
-            from_dynamic(&map_outer.into()).unwrap()
-        );
-    }
+    let map_inner = Map::new();
+    let mut map_outer = Map::new();
+    map_outer.insert("tag".into(), "VariantEmptyStruct".into());
+    map_outer.insert("content".into(), map_inner.into());
+    assert_eq!(
+        MyEnum::VariantEmptyStruct {},
+        from_dynamic(&map_outer.into()).unwrap()
+    );
 
-    {
-        let mut map_inner = Map::new();
-        map_inner.insert("a".into(), (123 as INT).into());
-        let mut map_outer = Map::new();
-        map_outer.insert("tag".into(), "VariantStruct".into());
-        map_outer.insert("content".into(), map_inner.into());
-        assert_eq!(
-            MyEnum::VariantStruct { a: 123 },
-            from_dynamic(&map_outer.into()).unwrap()
-        );
-    }
+    let mut map_inner = Map::new();
+    map_inner.insert("a".into(), (123 as INT).into());
+    let mut map_outer = Map::new();
+    map_outer.insert("tag".into(), "VariantStruct".into());
+    map_outer.insert("content".into(), map_inner.into());
+    assert_eq!(
+        MyEnum::VariantStruct { a: 123 },
+        from_dynamic(&map_outer.into()).unwrap()
+    );
 
     Ok(())
 }
@@ -654,31 +613,25 @@ fn test_serde_de_untagged_enum() -> Result<(), Box<EvalAltResult>> {
         VariantStruct2 { b: i32 },
     }
 
-    {
-        let map = Map::new();
-        assert_eq!(
-            MyEnum::VariantEmptyStruct {},
-            from_dynamic(&map.into()).unwrap()
-        );
-    }
+    let map = Map::new();
+    assert_eq!(
+        MyEnum::VariantEmptyStruct {},
+        from_dynamic(&map.into()).unwrap()
+    );
 
-    {
-        let mut map = Map::new();
-        map.insert("a".into(), (123 as INT).into());
-        assert_eq!(
-            MyEnum::VariantStruct1 { a: 123 },
-            from_dynamic(&map.into()).unwrap()
-        );
-    }
+    let mut map = Map::new();
+    map.insert("a".into(), (123 as INT).into());
+    assert_eq!(
+        MyEnum::VariantStruct1 { a: 123 },
+        from_dynamic(&map.into()).unwrap()
+    );
 
-    {
-        let mut map = Map::new();
-        map.insert("b".into(), (123 as INT).into());
-        assert_eq!(
-            MyEnum::VariantStruct2 { b: 123 },
-            from_dynamic(&map.into()).unwrap()
-        );
-    }
+    let mut map = Map::new();
+    map.insert("b".into(), (123 as INT).into());
+    assert_eq!(
+        MyEnum::VariantStruct2 { b: 123 },
+        from_dynamic(&map.into()).unwrap()
+    );
 
     Ok(())
 }

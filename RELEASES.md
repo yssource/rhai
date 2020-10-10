@@ -13,13 +13,23 @@ Breaking changes
 * The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
 * `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
 * The following `EvalAltResult` variants are removed and merged into `EvalAltResult::ErrorMismatchDataType`: `ErrorCharMismatch`, `ErrorNumericIndexExpr`, `ErrorStringIndexExpr`, `ErrorImportExpr`, `ErrorLogicGuard`, `ErrorBooleanArgMismatch`
+* `Scope::iter_raw` returns an iterator with an additional field indicating whether the variable is constant or not.
+* `rhai::ser` and `rhai::de` namespaces are merged into `rhai::serde`.
 
 New features
 ------------
 
+* `const` statements can now take any expression (or none at all) instead of only constant values.
 * `OptimizationLevel::Simple` now eagerly evaluates built-in binary operators of primary types (if not overloaded).
 * Added `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
+* `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
+
+Enhancements
+------------
+
+* Many one-liners and few-liners are now marked `#[inline]` or `[inline(always)]`, just in case it helps when LTO is not turned on.
+* Default call stack depth for `debug` builds is reduced to 12 (from 16).
 
 
 Version 0.19.0

@@ -13,7 +13,7 @@ fn main() {
 
 #[cfg(feature = "serde")]
 mod example {
-    use rhai::{de::from_dynamic, ser::to_dynamic};
+    use rhai::serde::{from_dynamic, to_dynamic};
     use rhai::{Dynamic, Engine, Map};
     use serde::{Deserialize, Serialize};
 
@@ -56,7 +56,7 @@ mod example {
         let result: Dynamic = engine
             .eval(
                 r#"
-                    ##{
+                    #{
                         a: 42,
                         b: [ "hello", "world" ],
                         c: true,

@@ -23,14 +23,6 @@ use serde::de::{EnumAccess, VariantAccess};
 
 use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-use crate::stdlib::time::Instant;
-
-#[cfg(not(feature = "no_std"))]
-#[cfg(target_arch = "wasm32")]
-use instant::Instant;
-
 /// Deserializer for `Dynamic` which is kept as a reference.
 ///
 /// The reference is necessary because the deserialized type may hold references
@@ -86,7 +78,7 @@ impl<'de> DynamicDeserializer<'de> {
 /// # #[cfg(not(feature = "no_object"))]
 /// # {
 /// use rhai::{Dynamic, Array, Map, INT};
-/// use rhai::de::from_dynamic;
+/// use rhai::serde::from_dynamic;
 /// use serde::Deserialize;
 ///
 /// #[derive(Debug, Deserialize, PartialEq)]

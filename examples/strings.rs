@@ -29,17 +29,17 @@ fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new_raw();
 
     // Register string functions
-    engine.register_fn("trim", trim_string);
-    engine.register_fn("len", count_string_bytes);
-    engine.register_fn("index_of", find_substring);
-
-    // Register string functions using closures
-    engine.register_fn("display", |label: &str, x: INT| {
-        println!("{}: {}", label, x)
-    });
-    engine.register_fn("display", |label: ImmutableString, x: &str| {
-        println!(r#"{}: "{}""#, label, x) // Quote the input string
-    });
+    engine
+        .register_fn("trim", trim_string)
+        .register_fn("len", count_string_bytes)
+        .register_fn("index_of", find_substring)
+        .register_fn("display", |label: &str, x: INT| {
+            // Register string functions using closures
+            println!("{}: {}", label, x)
+        })
+        .register_fn("display", |label: ImmutableString, x: &str| {
+            println!(r#"{}: "{}""#, label, x) // Quote the input string
+        });
 
     let mut scope = Scope::new();
     let mut input = String::new();

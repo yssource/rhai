@@ -19,10 +19,10 @@ impl TestStruct {
 fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.register_type::<TestStruct>();
-
-    engine.register_fn("update", TestStruct::update);
-    engine.register_fn("new_ts", TestStruct::new);
+    engine
+        .register_type::<TestStruct>()
+        .register_fn("update", TestStruct::update)
+        .register_fn("new_ts", TestStruct::new);
 
     let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
 

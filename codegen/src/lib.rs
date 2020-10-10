@@ -106,13 +106,23 @@ mod test;
 ///
 /// # Usage
 ///
-/// ```,ignore
+/// ```
+/// # use rhai::{Engine, EvalAltResult};
 /// use rhai::plugin::*;
 ///
 /// #[export_fn]
-/// fn my_plugin_function(...) {
-///   ...
+/// fn my_plugin_function(x: i64) -> i64 {
+///     x * 2
 /// }
+///
+/// # fn main() -> Result<(), Box<EvalAltResult>> {
+/// let mut engine = Engine::new();
+///
+/// register_exported_fn!(engine, "func", my_plugin_function);
+///
+/// assert_eq!(engine.eval::<i64>("func(21)")?, 42);
+/// # Ok(())
+/// # }
 /// ```
 #[proc_macro_attribute]
 pub fn export_fn(
@@ -138,13 +148,26 @@ pub fn export_fn(
 ///
 /// # Usage
 ///
-/// ```,ignore
+/// ```
+/// # use rhai::{Engine, Module, EvalAltResult};
 /// use rhai::plugin::*;
 ///
 /// #[export_module]
 /// mod my_plugin_module {
-///   ...
+///     pub fn foo(x: i64) -> i64 { x * 2 }
+///     pub fn bar() -> i64 { 21 }
 /// }
+///
+/// # fn main() -> Result<(), Box<EvalAltResult>> {
+/// let mut engine = Engine::new();
+///
+/// let module = exported_module!(my_plugin_module);
+///
+/// engine.load_package(module);
+///
+/// assert_eq!(engine.eval::<i64>("foo(bar())")?, 42);
+/// # Ok(())
+/// # }
 /// ```
 #[proc_macro_attribute]
 pub fn export_module(
@@ -164,19 +187,30 @@ pub fn export_module(
     proc_macro::TokenStream::from(tokens)
 }
 
-/// Macro to generate a Rhai `Module` from a _plugin module_.
+/// Macro to generate a Rhai `Module` from a _plugin module_ defined via `#[export_module]`.
 ///
 /// # Usage
 ///
-/// ```,ignore
+/// ```
+/// # use rhai::{Engine, Module, EvalAltResult};
 /// use rhai::plugin::*;
 ///
 /// #[export_module]
 /// mod my_plugin_module {
-///   ...
+///     pub fn foo(x: i64) -> i64 { x * 2 }
+///     pub fn bar() -> i64 { 21 }
 /// }
 ///
+/// # fn main() -> Result<(), Box<EvalAltResult>> {
+/// let mut engine = Engine::new();
+///
 /// let module = exported_module!(my_plugin_module);
+///
+/// engine.load_package(module);
+///
+/// assert_eq!(engine.eval::<i64>("foo(bar())")?, 42);
+/// # Ok(())
+/// # }
 /// ```
 #[proc_macro]
 pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -203,17 +237,27 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 ///
 /// # Usage
 ///
-/// ```,ignore
+/// ```
+/// # use rhai::{Engine, Module, EvalAltResult};
 /// use rhai::plugin::*;
 ///
 /// #[export_module]
 /// mod my_plugin_module {
-///   ...
+///     pub fn foo(x: i64) -> i64 { x * 2 }
+///     pub fn bar() -> i64 { 21 }
 /// }
 ///
-/// let mut module = Module::new();
+/// # fn main() -> Result<(), Box<EvalAltResult>> {
+/// let mut engine = Engine::new();
 ///
+/// let mut module = Module::new();
 /// combine_with_exported_module!(&mut module, "my_plugin_module_ID", my_plugin_module);
+///
+/// engine.load_package(module);
+///
+/// assert_eq!(engine.eval::<i64>("foo(bar())")?, 42);
+/// # Ok(())
+/// # }
 /// ```
 #[proc_macro]
 pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -228,21 +272,27 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
     proc_macro::TokenStream::from(tokens)
 }
 
-/// Macro to register a _plugin function_ into an `Engine`.
+/// Macro to register a _plugin function_ (defined via `#[export_fn]`) into an `Engine`.
 ///
 /// # Usage
 ///
-/// ```,ignore
+/// ```
+/// # use rhai::{Engine, EvalAltResult};
 /// use rhai::plugin::*;
 ///
 /// #[export_fn]
-/// fn my_plugin_function(...) {
-///   ...
+/// fn my_plugin_function(x: i64) -> i64 {
+///     x * 2
 /// }
 ///
+/// # fn main() -> Result<(), Box<EvalAltResult>> {
 /// let mut engine = Engine::new();
 ///
-/// register_exported_fn!(engine, "calc", my_plugin_function);
+/// register_exported_fn!(engine, "func", my_plugin_function);
+///
+/// assert_eq!(engine.eval::<i64>("func(21)")?, 42);
+/// # Ok(())
+/// # }
 /// ```
 #[proc_macro]
 pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -262,17 +312,26 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
 ///
 /// # Usage
 ///
-/// ```,ignore
+/// ```
+/// # use rhai::{Engine, EvalAltResult};
 /// use rhai::plugin::*;
 ///
 /// #[export_fn]
-/// fn my_plugin_function(...) {
-///   ...
+/// fn my_plugin_function(x: i64) -> i64 {
+///     x * 2
 /// }
 ///
-/// let mut module = Module::new();
+/// # fn main() -> Result<(), Box<EvalAltResult>> {
+/// let mut engine = Engine::new();
 ///
-/// set_exported_fn!(module, "calc", my_plugin_function);
+/// let mut module = Module::new();
+/// set_exported_fn!(module, "func", my_plugin_function);
+///
+/// engine.load_package(module);
+///
+/// assert_eq!(engine.eval::<i64>("func(21)")?, 42);
+/// # Ok(())
+/// # }
 /// ```
 #[proc_macro]
 pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {

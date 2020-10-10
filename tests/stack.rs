@@ -10,10 +10,10 @@ fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             r"
                 fn foo(n) { if n <= 1 { 0 } else { n + foo(n-1) } }
-                foo(8)
+                foo(7)
     ",
         )?,
-        35
+        27
     );
 
     #[cfg(not(feature = "unchecked"))]

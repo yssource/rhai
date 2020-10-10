@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_optimize"))]
 
-use rhai::{Engine, EvalAltResult, OptimizationLevel, INT};
+use rhai::{Engine, EvalAltResult, OptimizationLevel, RegisterFn, INT};
 
 #[test]
 fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
@@ -27,6 +27,23 @@ fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
 
     engine.set_optimization_level(OptimizationLevel::Full);
     run_test(&mut engine)?;
+
+    // Override == operator
+    engine.register_fn("==", |_x: INT, _y: INT| false);
+
+    engine.set_optimization_level(OptimizationLevel::Simple);
+
+    assert_eq!(
+        engine.eval::<INT>(r"if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
+        123
+    );
+
+    engine.set_optimization_level(OptimizationLevel::Full);
+
+    assert_eq!(
+        engine.eval::<INT>(r"if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
+        123
+    );
 
     Ok(())
 }

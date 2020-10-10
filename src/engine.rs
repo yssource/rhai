@@ -1,7 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::any::{map_std_type_name, Dynamic, Union};
-use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr};
 use crate::module::{Module, ModuleRef};
@@ -13,7 +12,7 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::{CustomSyntax, EvalContext};
 use crate::token::Position;
-use crate::utils::StaticVec;
+use crate::{calc_fn_hash, StaticVec};
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 use crate::any::Variant;
@@ -75,7 +74,7 @@ pub type Imports = Vec<(ImmutableString, Module)>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
-pub const MAX_CALL_STACK_DEPTH: usize = 16;
+pub const MAX_CALL_STACK_DEPTH: usize = 12;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
 pub const MAX_EXPR_DEPTH: usize = 32;
@@ -440,6 +439,7 @@ impl fmt::Debug for Engine {
 }
 
 impl Default for Engine {
+    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }
@@ -606,6 +606,7 @@ pub fn search_scope_only<'s, 'a>(
 
 impl Engine {
     /// Create a new `Engine`
+    #[inline(always)]
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
@@ -661,6 +662,7 @@ impl Engine {
 
     /// Create a new `Engine` with minimal built-in functions.
     /// Use the `load_package` method to load additional packages of functions.
+    #[inline(always)]
     pub fn new_raw() -> Self {
         Self {
             id: None,
@@ -1777,38 +1779,25 @@ impl Engine {
 
             Stmt::ReturnWithVal(_) => unreachable!(),
 
-            // Let statement
-            Stmt::Let(x) if x.1.is_some() => {
+            // Let/const statement
+            Stmt::Let(x) | Stmt::Const(x) => {
                 let ((var_name, _), expr, _) = x.as_ref();
-                let expr = expr.as_ref().unwrap();
-                let val = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten();
+                let entry_type = match stmt {
+                    Stmt::Let(_) => ScopeEntryType::Normal,
+                    Stmt::Const(_) => ScopeEntryType::Constant,
+                    _ => unreachable!(),
+                };
+
+                let val = if let Some(expr) = expr {
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .flatten()
+                } else {
+                    ().into()
+                };
                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
-                scope.push_dynamic_value(var_name, ScopeEntryType::Normal, val, false);
+                scope.push_dynamic_value(var_name, entry_type, val, false);
                 Ok(Default::default())
             }
-
-            Stmt::Let(x) => {
-                let ((var_name, _), _, _) = x.as_ref();
-                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
-                scope.push(var_name, ());
-                Ok(Default::default())
-            }
-
-            // Const statement
-            Stmt::Const(x) if x.1.is_constant() => {
-                let ((var_name, _), expr, _) = x.as_ref();
-                let val = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
-                    .flatten();
-                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
-                scope.push_dynamic_value(var_name, ScopeEntryType::Constant, val, true);
-                Ok(Default::default())
-            }
-
-            // Const expression not constant
-            Stmt::Const(_) => unreachable!(),
 
             // Import statement
             #[cfg(not(feature = "no_module"))]
@@ -2040,6 +2029,7 @@ impl Engine {
     }
 
     /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
+    #[inline(always)]
     pub fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(
             typ.into(),

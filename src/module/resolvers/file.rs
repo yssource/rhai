@@ -48,6 +48,7 @@ pub struct FileModuleResolver {
 }
 
 impl Default for FileModuleResolver {
+    #[inline(always)]
     fn default() -> Self {
         Self::new_with_path(PathBuf::default())
     }
@@ -69,6 +70,7 @@ impl FileModuleResolver {
     /// let mut engine = Engine::new();
     /// engine.set_module_resolver(Some(resolver));
     /// ```
+    #[inline(always)]
     pub fn new_with_path<P: Into<PathBuf>>(path: P) -> Self {
         Self::new_with_path_and_extension(path, "rhai")
     }
@@ -90,6 +92,7 @@ impl FileModuleResolver {
     /// let mut engine = Engine::new();
     /// engine.set_module_resolver(Some(resolver));
     /// ```
+    #[inline(always)]
     pub fn new_with_path_and_extension<P: Into<PathBuf>, E: Into<String>>(
         path: P,
         extension: E,
@@ -116,11 +119,13 @@ impl FileModuleResolver {
     /// let mut engine = Engine::new();
     /// engine.set_module_resolver(Some(resolver));
     /// ```
+    #[inline(always)]
     pub fn new() -> Self {
         Default::default()
     }
 
     /// Create a `Module` from a file path.
+    #[inline(always)]
     pub fn create_module<P: Into<PathBuf>>(
         &self,
         engine: &Engine,

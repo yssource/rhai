@@ -1,7 +1,6 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
-use crate::calc_fn_hash;
 use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::{FnPtr, Shared};
@@ -10,7 +9,8 @@ use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
-use crate::utils::{StaticVec, StraightHasherBuilder};
+use crate::utils::StraightHasherBuilder;
+use crate::{calc_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
@@ -31,7 +31,7 @@ use crate::stdlib::{
     hash::{Hash, Hasher},
     iter::empty,
     num::NonZeroUsize,
-    ops::Add,
+    ops::{Add, AddAssign},
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -85,12 +85,14 @@ pub struct AST(
 
 impl AST {
     /// Create a new `AST`.
+    #[inline(always)]
     pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
         Self(statements, lib)
     }
 
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
+    #[inline(always)]
     pub(crate) fn statements(&self) -> &[Stmt] {
         &self.0
     }
@@ -99,17 +101,20 @@ impl AST {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
+    #[inline(always)]
     pub fn statements(&self) -> &[Stmt] {
         &self.0
     }
 
     /// Get a mutable reference to the statements.
+    #[inline(always)]
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
         &mut self.0
     }
 
     /// Get the internal `Module` containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
+    #[inline(always)]
     pub(crate) fn lib(&self) -> &Module {
         &self.1
     }
@@ -118,6 +123,7 @@ impl AST {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
+    #[inline(always)]
     pub fn lib(&self) -> &Module {
         &self.1
     }
@@ -126,6 +132,7 @@ impl AST {
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
+    #[inline(always)]
     pub fn clone_functions_only(&self) -> Self {
         self.clone_functions_only_filtered(|_, _, _| true)
     }
@@ -134,6 +141,7 @@ impl AST {
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
+    #[inline(always)]
     pub fn clone_functions_only_filtered(
         &self,
         mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
@@ -145,6 +153,7 @@ impl AST {
 
     /// Clone the `AST`'s script statements into a new `AST`.
     /// No functions are cloned.
+    #[inline(always)]
     pub fn clone_statements_only(&self) -> Self {
         Self(self.0.clone(), Default::default())
     }
@@ -152,7 +161,7 @@ impl AST {
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second `AST` is simply appended to the end of the first _without any processing_.
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
     /// Of course, if the first `AST` uses a `return` statement at the end, then
     /// the second `AST` will essentially be dead code.
@@ -198,14 +207,68 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn merge(&self, other: &Self) -> Self {
         self.merge_filtered(other, |_, _, _| true)
+    }
+
+    /// Combine one `AST` with another.  The second `AST` is consumed.
+    ///
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
+    /// Of course, if the first `AST` uses a `return` statement at the end, then
+    /// the second `AST` will essentially be dead code.
+    ///
+    /// All script-defined functions in the second `AST` overwrite similarly-named functions
+    /// in the first `AST` with the same number of parameters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let mut ast1 = engine.compile(r#"
+    ///                     fn foo(x) { 42 + x }
+    ///                     foo(1)
+    ///                 "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 foo("!")
+    ///             "#)?;
+    ///
+    /// ast1.combine(ast2);    // Combine 'ast2' into 'ast1'
+    ///
+    /// // Notice that using the '+=' operator also works:
+    /// // ast1 += ast2;
+    ///
+    /// // 'ast1' is essentially:
+    /// //
+    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
+    /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
+    /// //                              //    but it is no longer the return value
+    /// //    foo("!")                  // returns "hello!"
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<String>(&ast1)?, "hello!");
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline(always)]
+    pub fn combine(&mut self, other: Self) -> &mut Self {
+        self.combine_filtered(other, |_, _, _| true)
     }
 
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// The second `AST` is simply appended to the end of the first _without any processing_.
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
     /// Of course, if the first `AST` uses a `return` statement at the end, then
     /// the second `AST` will essentially be dead code.
@@ -253,6 +316,7 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub fn merge_filtered(
         &self,
         other: &Self,
@@ -275,6 +339,73 @@ impl AST {
         functions.merge_filtered(&other.1, &mut filter);
 
         Self::new(ast, functions)
+    }
+
+    /// Combine one `AST` with another.  The second `AST` is consumed.
+    ///
+    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
+    /// Of course, if the first `AST` uses a `return` statement at the end, then
+    /// the second `AST` will essentially be dead code.
+    ///
+    /// All script-defined functions in the second `AST` are first selected based on a filter
+    /// predicate, then overwrite similarly-named functions in the first `AST` with the
+    /// same number of parameters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::Engine;
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let mut ast1 = engine.compile(r#"
+    ///                     fn foo(x) { 42 + x }
+    ///                     foo(1)
+    ///                 "#)?;
+    ///
+    /// let ast2 = engine.compile(r#"
+    ///                 fn foo(n) { "hello" + n }
+    ///                 fn error() { 0 }
+    ///                 foo("!")
+    ///             "#)?;
+    ///
+    /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// ast1.combine_filtered(ast2, |_, name, params| name == "error" && params == 0);
+    ///
+    /// // 'ast1' is essentially:
+    /// //
+    /// //    fn foo(n) { 42 + n }      // <- definition of 'ast1::foo' is not overwritten
+    /// //                              //    because 'ast2::foo' is filtered away
+    /// //    foo(1)                    // <- notice this will be 43 instead of "hello1",
+    /// //                              //    but it is no longer the return value
+    /// //    fn error() { 0 }          // <- this function passes the filter and is merged
+    /// //    foo("!")                  // <- returns "42!"
+    ///
+    /// // Evaluate it
+    /// assert_eq!(engine.eval_ast::<String>(&ast1)?, "42!");
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline(always)]
+    pub fn combine_filtered(
+        &mut self,
+        other: Self,
+        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
+    ) -> &mut Self {
+        let Self(ref mut statements, ref mut functions) = self;
+
+        if !other.0.is_empty() {
+            statements.extend(other.0.into_iter());
+        }
+
+        functions.merge_filtered(&other.1, &mut filter);
+
+        self
     }
 
     /// Filter out the functions, retaining only some based on a filter predicate.
@@ -301,12 +432,14 @@ impl AST {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn retain_functions(&mut self, filter: impl FnMut(FnAccess, &str, usize) -> bool) {
         self.1.retain_functions(filter);
     }
 
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn iter_functions<'a>(
         &'a self,
     ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
@@ -315,31 +448,43 @@ impl AST {
 
     /// Clear all function definitions in the `AST`.
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn clear_functions(&mut self) {
         self.1 = Default::default();
     }
 
     /// Clear all statements in the `AST`, leaving only function definitions.
+    #[inline(always)]
     pub fn clear_statements(&mut self) {
         self.0 = vec![];
     }
 }
 
-impl Add<Self> for &AST {
+impl<A: AsRef<AST>> Add<A> for &AST {
     type Output = AST;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        self.merge(rhs)
+    #[inline(always)]
+    fn add(self, rhs: A) -> Self::Output {
+        self.merge(rhs.as_ref())
+    }
+}
+
+impl<A: Into<AST>> AddAssign<A> for AST {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: A) {
+        self.combine(rhs.into());
     }
 }
 
 impl AsRef<[Stmt]> for AST {
+    #[inline(always)]
     fn as_ref(&self) -> &[Stmt] {
         self.statements()
     }
 }
 
 impl AsRef<Module> for AST {
+    #[inline(always)]
     fn as_ref(&self) -> &Module {
         self.lib()
     }
@@ -355,6 +500,7 @@ pub enum FnAccess {
 }
 
 impl fmt::Display for FnAccess {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Private => write!(f, "private"),
@@ -365,6 +511,7 @@ impl fmt::Display for FnAccess {
 
 impl FnAccess {
     /// Is this access mode private?
+    #[inline(always)]
     pub fn is_private(self) -> bool {
         match self {
             Self::Public => false,
@@ -372,6 +519,7 @@ impl FnAccess {
         }
     }
     /// Is this access mode public?
+    #[inline(always)]
     pub fn is_public(self) -> bool {
         match self {
             Self::Public => true,
@@ -463,6 +611,7 @@ struct ParseState<'e> {
 
 impl<'e> ParseState<'e> {
     /// Create a new `ParseState`.
+    #[inline(always)]
     pub fn new(
         engine: &'e Engine,
         #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
@@ -490,6 +639,7 @@ impl<'e> ParseState<'e> {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `stack`.
+    #[inline]
     fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let index = self
             .stack
@@ -515,6 +665,7 @@ impl<'e> ParseState<'e> {
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
     /// Return `None` when the variable name is not found in the `ParseState`.
+    #[inline(always)]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
@@ -548,6 +699,7 @@ struct ParseSettings {
 
 impl ParseSettings {
     /// Create a new `ParseSettings` with one higher expression level.
+    #[inline(always)]
     pub fn level_up(&self) -> Self {
         Self {
             level: self.level + 1,
@@ -556,6 +708,7 @@ impl ParseSettings {
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
+    #[inline]
     pub fn ensure_level_within_max_limit(&self, limit: usize) -> Result<(), ParseError> {
         if limit == 0 {
             Ok(())
@@ -587,7 +740,7 @@ pub enum Stmt {
     /// let id = expr
     Let(Box<((String, Position), Option<Expr>, Position)>),
     /// const id = expr
-    Const(Box<((String, Position), Expr, Position)>),
+    Const(Box<((String, Position), Option<Expr>, Position)>),
     /// { stmt; ... }
     Block(Box<(StaticVec<Stmt>, Position)>),
     /// expr
@@ -615,6 +768,7 @@ pub enum Stmt {
 }
 
 impl Default for Stmt {
+    #[inline(always)]
     fn default() -> Self {
         Self::Noop(Default::default())
     }
@@ -737,12 +891,14 @@ impl Stmt {
 pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
 
 impl fmt::Debug for CustomExpr {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
 impl Hash for CustomExpr {
+    #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
@@ -763,6 +919,7 @@ pub struct FloatWrapper(pub FLOAT, pub Position);
 
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
+    #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.0.to_le_bytes());
         self.1.hash(state);
@@ -845,6 +1002,7 @@ pub enum Expr {
 }
 
 impl Default for Expr {
+    #[inline(always)]
     fn default() -> Self {
         Self::Unit(Default::default())
     }
@@ -1006,6 +1164,48 @@ impl Expr {
         }
     }
 
+    /// Is the expression the unit `()` literal?
+    #[inline(always)]
+    pub fn is_unit(&self) -> bool {
+        match self {
+            Self::Unit(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Is the expression a simple constant literal?
+    pub fn is_literal(&self) -> bool {
+        match self {
+            Self::Expr(x) => x.is_literal(),
+
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(_) => true,
+
+            Self::IntegerConstant(_)
+            | Self::CharConstant(_)
+            | Self::StringConstant(_)
+            | Self::FnPointer(_)
+            | Self::True(_)
+            | Self::False(_)
+            | Self::Unit(_) => true,
+
+            // An array literal is literal if all items are literals
+            Self::Array(x) => x.0.iter().all(Self::is_literal),
+
+            // An map literal is literal if all items are literals
+            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_literal),
+
+            // Check in expression
+            Self::In(x) => match (&x.0, &x.1) {
+                (Self::StringConstant(_), Self::StringConstant(_))
+                | (Self::CharConstant(_), Self::StringConstant(_)) => true,
+                _ => false,
+            },
+
+            _ => false,
+        }
+    }
+
     /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
@@ -1092,6 +1292,7 @@ impl Expr {
 
     /// Convert a `Variable` into a `Property`.  All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
+    #[inline]
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
@@ -2684,45 +2885,23 @@ fn parse_let(
     };
 
     // let name = ...
-    if match_token(input, Token::Equals)? {
+    let init_value = if match_token(input, Token::Equals)? {
         // let name = expr
-        let init_value = parse_expr(input, state, lib, settings.level_up())?;
-
-        match var_type {
-            // let name = expr
-            ScopeEntryType::Normal => {
-                state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new((
-                    (name, pos),
-                    Some(init_value),
-                    token_pos,
-                ))))
-            }
-            // const name = { expr:constant }
-            ScopeEntryType::Constant if init_value.is_constant() => {
-                state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
-            }
-            // const name = expr: error
-            ScopeEntryType::Constant => {
-                Err(PERR::ForbiddenConstantExpr(name).into_err(init_value.position()))
-            }
-        }
+        Some(parse_expr(input, state, lib, settings.level_up())?)
     } else {
-        // let name
-        match var_type {
-            ScopeEntryType::Normal => {
-                state.stack.push((name.clone(), ScopeEntryType::Normal));
-                Ok(Stmt::Let(Box::new(((name, pos), None, token_pos))))
-            }
-            ScopeEntryType::Constant => {
-                state.stack.push((name.clone(), ScopeEntryType::Constant));
-                Ok(Stmt::Const(Box::new((
-                    (name, pos),
-                    Expr::Unit(pos),
-                    token_pos,
-                ))))
-            }
+        None
+    };
+
+    match var_type {
+        // let name = expr
+        ScopeEntryType::Normal => {
+            state.stack.push((name.clone(), ScopeEntryType::Normal));
+            Ok(Stmt::Let(Box::new(((name, pos), init_value, token_pos))))
+        }
+        // const name = { expr:constant }
+        ScopeEntryType::Constant => {
+            state.stack.push((name.clone(), ScopeEntryType::Constant));
+            Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
         }
     }
 }
@@ -3487,6 +3666,7 @@ impl Engine {
     }
 
     /// Run the parser on an input stream, returning an AST.
+    #[inline(always)]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,

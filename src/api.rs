@@ -28,7 +28,7 @@ use crate::{
 use crate::fn_register::{RegisterFn, RegisterResultFn};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, utils::StaticVec};
+use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, StaticVec};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;
@@ -64,6 +64,7 @@ impl Engine {
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated(note = "this function is volatile and may change")]
+    #[inline(always)]
     pub fn register_raw_fn<T: Variant + Clone>(
         &mut self,
         name: &str,
@@ -111,6 +112,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn register_type<T: Variant + Clone>(&mut self) -> &mut Self {
         self.register_type_with_name::<T>(type_name::<T>())
     }
@@ -159,6 +161,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
         if self.type_names.is_none() {
             self.type_names = Some(Default::default());
@@ -173,6 +176,7 @@ impl Engine {
 
     /// Register an iterator adapter for a type with the `Engine`.
     /// This is an advanced feature.
+    #[inline(always)]
     pub fn register_iterator<T: Variant + Clone>(&mut self, f: IteratorFn) -> &mut Self {
         self.global_module.set_iter(TypeId::of::<T>(), f);
         self
@@ -214,6 +218,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn register_get<T, U>(
         &mut self,
         name: &str,
@@ -265,6 +270,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn register_get_result<T: Variant + Clone>(
         &mut self,
         name: &str,
@@ -310,6 +316,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn register_set<T, U>(
         &mut self,
         name: &str,
@@ -363,6 +370,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn register_set_result<T, U>(
         &mut self,
         name: &str,
@@ -417,6 +425,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn register_get_set<T, U>(
         &mut self,
         name: &str,
@@ -472,6 +481,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
     pub fn register_indexer_get<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
@@ -543,6 +553,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
     pub fn register_indexer_get_result<T, X>(
         &mut self,
         callback: impl Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
@@ -610,6 +621,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
     pub fn register_indexer_set<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X, U) + SendSync + 'static,
@@ -682,6 +694,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
     pub fn register_indexer_set_result<T, X, U>(
         &mut self,
         callback: impl Fn(&mut T, X, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
@@ -752,6 +765,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
     pub fn register_indexer_get_set<T, X, U>(
         &mut self,
         getter: impl Fn(&mut T, X) -> U + SendSync + 'static,
@@ -785,6 +799,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_with_scope(&Scope::new(), script)
     }
@@ -827,6 +842,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
@@ -877,6 +893,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn compile_scripts_with_scope(
         &self,
         scope: &Scope,
@@ -886,6 +903,7 @@ impl Engine {
     }
 
     /// Join a list of strings and compile into an `AST` using own scope at a specific optimization level.
+    #[inline(always)]
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
@@ -899,6 +917,7 @@ impl Engine {
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
+    #[inline]
     fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
         let mut f = File::open(path.clone()).map_err(|err| {
             EvalAltResult::ErrorReadingScriptFile(path.clone(), Position::none(), err)
@@ -935,6 +954,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
+    #[inline(always)]
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
@@ -972,6 +992,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
+    #[inline(always)]
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
@@ -1081,6 +1102,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
@@ -1124,6 +1146,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub fn compile_expression_with_scope(
         &self,
         scope: &Scope,
@@ -1154,6 +1177,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
+    #[inline(always)]
     pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
@@ -1179,6 +1203,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
+    #[inline(always)]
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1201,6 +1226,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
         self.eval_with_scope(&mut Scope::new(), script)
     }
@@ -1227,6 +1253,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub fn eval_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1254,6 +1281,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn eval_expression<T: Variant + Clone>(
         &self,
         script: &str,
@@ -1279,6 +1307,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub fn eval_expression_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1311,6 +1340,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
         self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
@@ -1344,6 +1374,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub fn eval_ast_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1365,6 +1396,7 @@ impl Engine {
     }
 
     /// Evaluate an `AST` with own scope.
+    #[inline]
     pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
@@ -1389,6 +1421,7 @@ impl Engine {
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
+    #[inline(always)]
     pub fn consume_file(&self, path: PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
@@ -1397,6 +1430,7 @@ impl Engine {
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
+    #[inline(always)]
     pub fn consume_file_with_scope(
         &self,
         scope: &mut Scope,
@@ -1407,12 +1441,14 @@ impl Engine {
 
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    #[inline(always)]
     pub fn consume(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
         self.consume_with_scope(&mut Scope::new(), script)
     }
 
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    #[inline]
     pub fn consume_with_scope(
         &self,
         scope: &mut Scope,
@@ -1426,12 +1462,14 @@ impl Engine {
 
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    #[inline(always)]
     pub fn consume_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
         self.consume_ast_with_scope(&mut Scope::new(), ast)
     }
 
     /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    #[inline]
     pub fn consume_ast_with_scope(
         &self,
         scope: &mut Scope,
@@ -1491,6 +1529,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
+    #[inline]
     pub fn call_fn<A: FuncArgs, T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1565,6 +1604,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
@@ -1587,6 +1627,7 @@ impl Engine {
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[cfg(not(feature = "no_function"))]
+    #[inline]
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
@@ -1624,6 +1665,7 @@ impl Engine {
     /// compiled just once. Before evaluation, constants are passed into the `Engine` via an external scope
     /// (i.e. with `scope.push_constant(...)`). Then, the `AST is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
+    #[inline]
     pub fn optimize_ast(
         &self,
         scope: &Scope,
@@ -1678,6 +1720,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn on_progress(
         &mut self,
         callback: impl Fn(&u64) -> bool + SendSync + 'static,
@@ -1710,6 +1753,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
         self.print = Box::new(callback);
         self
@@ -1739,6 +1783,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
     pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
         self.debug = Box::new(callback);
         self

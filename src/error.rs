@@ -60,6 +60,7 @@ impl fmt::Display for LexError {
 
 impl LexError {
     /// Convert a `LexError` into a `ParseError`.
+    #[inline(always)]
     pub fn into_err(&self, pos: Position) -> ParseError {
         ParseError(Box::new(self.into()), pos)
     }
@@ -99,8 +100,6 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_object` feature.
     DuplicatedProperty(String),
-    /// Invalid expression assigned to constant. Wrapped value is the name of the constant.
-    ForbiddenConstantExpr(String),
     /// Missing a property name for custom types and maps.
     ///
     /// Never appears under the `no_object` feature.
@@ -157,6 +156,7 @@ pub enum ParseErrorType {
 
 impl ParseErrorType {
     /// Make a `ParseError` using the current type and position.
+    #[inline(always)]
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
         ParseError(Box::new(self), pos)
     }
@@ -172,7 +172,6 @@ impl ParseErrorType {
             Self::MalformedInExpr(_) => "Invalid 'in' expression",
             Self::MalformedCapture(_) => "Invalid capturing",
             Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
-            Self::ForbiddenConstantExpr(_) => "Expecting a constant",
             Self::PropertyExpected => "Expecting name of a property",
             Self::VariableExpected => "Expecting name of a variable",
             Self::Reserved(_) => "Invalid use of reserved keyword",
@@ -198,9 +197,6 @@ impl fmt::Display for ParseErrorType {
         match self {
             Self::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
                 f.write_str(if s.is_empty() { self.desc() } else { s })
-            }
-            Self::ForbiddenConstantExpr(s) => {
-                write!(f, "Expecting a constant to assign to '{}'", s)
             }
             Self::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s),
 
@@ -247,6 +243,7 @@ impl fmt::Display for ParseErrorType {
 }
 
 impl From<&LexError> for ParseErrorType {
+    #[inline(always)]
     fn from(err: &LexError) -> Self {
         match err {
             LexError::StringTooLong(max) => {
@@ -264,6 +261,7 @@ pub struct ParseError(pub Box<ParseErrorType>, pub Position);
 impl Error for ParseError {}
 
 impl fmt::Display for ParseError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)?;
 
@@ -277,12 +275,14 @@ impl fmt::Display for ParseError {
 }
 
 impl From<ParseErrorType> for Box<EvalAltResult> {
+    #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
         Box::new(EvalAltResult::ErrorParsing(err, Position::none()))
     }
 }
 
 impl From<ParseError> for Box<EvalAltResult> {
+    #[inline(always)]
     fn from(err: ParseError) -> Self {
         Box::new(EvalAltResult::ErrorParsing(*err.0, err.1))
     }
