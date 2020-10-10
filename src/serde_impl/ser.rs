@@ -55,7 +55,7 @@ impl DynamicSerializer {
 /// # #[cfg(not(feature = "no_float"))]
 /// # {
 /// use rhai::{Dynamic, Array, Map, INT};
-/// use rhai::ser::to_dynamic;
+/// use rhai::serde::to_dynamic;
 /// use serde::Serialize;
 ///
 /// #[derive(Debug, serde::Serialize, PartialEq)]

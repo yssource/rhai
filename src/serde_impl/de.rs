@@ -78,7 +78,7 @@ impl<'de> DynamicDeserializer<'de> {
 /// # #[cfg(not(feature = "no_object"))]
 /// # {
 /// use rhai::{Dynamic, Array, Map, INT};
-/// use rhai::de::from_dynamic;
+/// use rhai::serde::from_dynamic;
 /// use serde::Deserialize;
 ///
 /// #[derive(Debug, Deserialize, PartialEq)]

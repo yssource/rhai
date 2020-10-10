@@ -14,6 +14,7 @@ Breaking changes
 * `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
 * The following `EvalAltResult` variants are removed and merged into `EvalAltResult::ErrorMismatchDataType`: `ErrorCharMismatch`, `ErrorNumericIndexExpr`, `ErrorStringIndexExpr`, `ErrorImportExpr`, `ErrorLogicGuard`, `ErrorBooleanArgMismatch`
 * `Scope::iter_raw` returns an iterator with an additional field indicating whether the variable is constant or not.
+* `rhai::ser` and `rhai::de` namespaces are merged into `rhai::serde`.
 
 New features
 ------------

@@ -14,12 +14,12 @@ A [`Dynamic`] can be seamlessly converted to and from a type that implements
 Serialization
 -------------
 
-The function `rhai::ser::to_dynamic` automatically converts any Rust type that implements
+The function `rhai::serde::to_dynamic` automatically converts any Rust type that implements
 [`serde::Serialize`](https://docs.serde.rs/serde/trait.Serialize.html) into a [`Dynamic`].
 
 This is usually not necessary because using [`Dynamic::from`][`Dynamic`] is much easier and is essentially
 the same thing.  The only difference is treatment for integer values.  `Dynamic::from` will keep the different
-integer types intact, while `rhai::ser::to_dynamic` will convert them all into [`INT`][standard types]
+integer types intact, while `rhai::serde::to_dynamic` will convert them all into [`INT`][standard types]
 (i.e. the system integer type which is `i64` or `i32` depending on the [`only_i32`] feature).
 
 In particular, Rust `struct`'s (or any type that is marked as a `serde` map) are converted into [object maps]
@@ -27,11 +27,11 @@ while Rust `Vec`'s (or any type that is marked as a `serde` sequence) are conver
 
 While it is also simple to serialize a Rust type to `JSON` via `serde`,
 then use [`Engine::parse_json`]({{rootUrl}}/language/json.md) to convert it into an [object map],
-`rhai::ser::to_dynamic` serializes it to [`Dynamic`] directly via `serde` without going through the `JSON` step.
+`rhai::serde::to_dynamic` serializes it to [`Dynamic`] directly via `serde` without going through the `JSON` step.
 
 ```rust
 use rhai::{Dynamic, Map};
-use rhai::ser::to_dynamic;
+use rhai::serde::to_dynamic;
 
 #[derive(Debug, serde::Serialize)]
 struct Point {
@@ -64,7 +64,7 @@ map.is::<Map>() == true;
 Deserialization
 ---------------
 
-The function `rhai::de::from_dynamic` automatically converts a [`Dynamic`] value into any Rust type
+The function `rhai::serde::from_dynamic` automatically converts a [`Dynamic`] value into any Rust type
 that implements [`serde::Deserialize`](https://docs.serde.rs/serde/trait.Deserialize.html).
 
 In particular, [object maps] are converted into Rust `struct`'s (or any type that is marked as
@@ -73,7 +73,7 @@ as a `serde` sequence).
 
 ```rust
 use rhai::{Engine, Dynamic};
-use rhai::de::from_dynamic;
+use rhai::serde::from_dynamic;
 
 #[derive(Debug, serde::Deserialize)]
 struct Point {
