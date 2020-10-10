@@ -56,6 +56,10 @@ Symbols and Patterns
 | `/*` .. `*/`                       |       comment        | block comment                         |
 | `(*` .. `*)`                       |       comment        | _reserved_                            |
 | `<` .. `>`                         |   angular brackets   | _reserved_                            |
+| `++`                               |      increment       | _reserved_                            |
+| `--`                               |      decrement       | _reserved_                            |
+| `..`                               |        range         | _reserved_                            |
+| `...`                              |        range         | _reserved_                            |
 | `#`                                |         hash         | _reserved_                            |
 | `@`                                |          at          | _reserved_                            |
 | `$`                                |        dollar        | _reserved_                            |

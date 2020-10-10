@@ -1205,6 +1205,10 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::PlusAssign, start_pos));
             }
+            ('+', '+') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("++".into()), start_pos));
+            }
             ('+', _) if !state.non_unary => return Some((Token::UnaryPlus, start_pos)),
             ('+', _) => return Some((Token::Plus, start_pos)),
 
@@ -1217,6 +1221,10 @@ fn get_next_token_inner(
             ('-', '>') => {
                 eat_next(stream, pos);
                 return Some((Token::Reserved("->".into()), start_pos));
+            }
+            ('-', '-') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("--".into()), start_pos));
             }
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
@@ -1282,12 +1290,22 @@ fn get_next_token_inner(
 
             (';', _) => return Some((Token::SemiColon, start_pos)),
             (',', _) => return Some((Token::Comma, start_pos)),
+
+            ('.', '.') => {
+                eat_next(stream, pos);
+
+                if stream.peek_next() == Some('.') {
+                    eat_next(stream, pos);
+                    return Some((Token::Reserved("...".into()), start_pos));
+                } else {
+                    return Some((Token::Reserved("..".into()), start_pos));
+                }
+            }
             ('.', _) => return Some((Token::Period, start_pos)),
 
             ('=', '=') => {
                 eat_next(stream, pos);
 
-                // Warn against `===`
                 if stream.peek_next() == Some('=') {
                     eat_next(stream, pos);
                     return Some((Token::Reserved("===".into()), start_pos));
