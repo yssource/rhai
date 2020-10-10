@@ -1,7 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::any::{map_std_type_name, Dynamic, Union};
-use crate::calc_fn_hash;
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr};
 use crate::module::{Module, ModuleRef};
@@ -13,7 +12,7 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::{CustomSyntax, EvalContext};
 use crate::token::Position;
-use crate::utils::StaticVec;
+use crate::{calc_fn_hash, StaticVec};
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 use crate::any::Variant;

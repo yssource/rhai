@@ -28,7 +28,7 @@ use crate::{
 use crate::fn_register::{RegisterFn, RegisterResultFn};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, utils::StaticVec};
+use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, StaticVec};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;

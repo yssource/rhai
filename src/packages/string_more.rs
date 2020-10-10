@@ -6,7 +6,7 @@ use crate::engine::Engine;
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
-use crate::utils::StaticVec;
+use crate::StaticVec;
 
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};

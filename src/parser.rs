@@ -1,7 +1,6 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
-use crate::calc_fn_hash;
 use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::{FnPtr, Shared};
@@ -10,7 +9,8 @@ use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
-use crate::utils::{StaticVec, StraightHasherBuilder};
+use crate::utils::StraightHasherBuilder;
+use crate::{calc_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;

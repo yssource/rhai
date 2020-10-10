@@ -2,7 +2,7 @@
 
 use crate::fn_native::{CallableFunction, IteratorFn, Shared};
 use crate::module::Module;
-use crate::utils::StaticVec;
+use crate::StaticVec;
 
 use crate::stdlib::any::TypeId;
 

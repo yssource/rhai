@@ -10,7 +10,7 @@ use crate::engine::KEYWORD_IS_SHARED;
 
 use crate::error::LexError;
 use crate::parser::INT;
-use crate::utils::StaticVec;
+use crate::StaticVec;
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;

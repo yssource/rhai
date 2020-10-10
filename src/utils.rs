@@ -21,8 +21,6 @@ use crate::stdlib::collections::hash_map::DefaultHasher;
 #[cfg(feature = "no_std")]
 use ahash::AHasher;
 
-use smallvec::SmallVec;
-
 /// A hasher that only takes one single `u64` and returns it as a hash key.
 ///
 /// # Panics
@@ -92,11 +90,6 @@ pub fn calc_fn_hash<'a>(
     params.for_each(|t| t.hash(&mut s));
     s.finish()
 }
-
-/// _[INTERNALS]_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
-/// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
-/// Exported under the `internals` feature only.
-pub type StaticVec<T> = SmallVec<[T; 4]>;
 
 /// The system immutable string type.
 ///

@@ -1,6 +1,6 @@
 //! # Rhai - embedded scripting for Rust
 //!
-//! Rhai is a tiny, simple and very fast embedded scripting language for Rust
+//! Rhai is a tiny, simple and fast embedded scripting language for Rust
 //! that gives you a safe and easy way to add scripting to your applications.
 //! It provides a familiar syntax based on JavaScript and Rust and a simple Rust interface.
 //! Here is a quick example.
@@ -74,7 +74,7 @@ pub mod plugin;
 mod result;
 mod scope;
 #[cfg(feature = "serde")]
-mod serde;
+mod serde_impl;
 mod settings;
 mod stdlib;
 mod syntax;
@@ -124,21 +124,14 @@ pub use module::ModuleResolver;
 
 /// Module containing all built-in _module resolvers_ available to Rhai.
 #[cfg(not(feature = "no_module"))]
-pub mod module_resolvers {
-    pub use crate::module::resolvers::*;
-}
+pub use crate::module::resolvers as module_resolvers;
 
-/// _[SERDE]_ Serialization support for [`serde`](https://crates.io/crates/serde).
+/// _[SERDE]_ Serialization and deserialization support for [`serde`](https://crates.io/crates/serde).
 /// Exported under the `serde` feature.
 #[cfg(feature = "serde")]
-pub mod ser {
-    pub use crate::serde::ser::to_dynamic;
-}
-/// _[SERDE]_ Deserialization support for [`serde`](https://crates.io/crates/serde).
-/// Exported under the `serde` feature.
-#[cfg(feature = "serde")]
-pub mod de {
-    pub use crate::serde::de::from_dynamic;
+pub mod serde {
+    pub use super::serde_impl::de::from_dynamic;
+    pub use super::serde_impl::ser::to_dynamic;
 }
 
 #[cfg(not(feature = "no_optimize"))]
@@ -166,6 +159,14 @@ pub use engine::{Imports, Limits, State as EvalState};
 #[deprecated(note = "this type is volatile and may change")]
 pub use module::ModuleRef;
 
+/// _[INTERNALS]_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
+/// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
+/// Exported under the `internals` feature only.
+#[cfg(not(feature = "internals"))]
+type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
+
+/// _[INTERNALS]_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
+/// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
+/// Exported under the `internals` feature only.
 #[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
-pub use utils::StaticVec;
+pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;

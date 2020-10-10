@@ -9,7 +9,7 @@ use crate::parser::Expr;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position, Token};
-use crate::utils::StaticVec;
+use crate::StaticVec;
 
 use crate::stdlib::{
     boxed::Box,

@@ -1,7 +1,6 @@
 //! Implement function-calling mechanism for `Engine`.
 
 use crate::any::Dynamic;
-use crate::calc_fn_hash;
 use crate::engine::{
     search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
     KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_FN,
@@ -16,7 +15,7 @@ use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::stdlib::ops::Deref;
 use crate::token::Position;
-use crate::utils::StaticVec;
+use crate::{calc_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::{

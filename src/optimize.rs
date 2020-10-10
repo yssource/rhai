@@ -1,7 +1,6 @@
 //! Module implementing the AST optimizer.
 
 use crate::any::Dynamic;
-use crate::calc_fn_hash;
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
     KEYWORD_TYPE_OF,
@@ -11,7 +10,7 @@ use crate::module::Module;
 use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::token::{is_valid_identifier, Position};
-use crate::utils::StaticVec;
+use crate::{calc_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::parser::ReturnType;

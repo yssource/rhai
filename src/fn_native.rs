@@ -10,7 +10,7 @@ use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_function"))]
-use crate::{calc_fn_hash, module::FuncReturn, utils::StaticVec};
+use crate::{calc_fn_hash, module::FuncReturn, StaticVec};
 
 use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, string::String, vec::Vec};
 

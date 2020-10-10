@@ -1,14 +1,14 @@
 //! Module defining external-loaded modules for Rhai.
 
 use crate::any::{Dynamic, Variant};
-use crate::calc_fn_hash;
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::token::{Position, Token};
-use crate::utils::{ImmutableString, StaticVec, StraightHasherBuilder};
+use crate::utils::{ImmutableString, StraightHasherBuilder};
+use crate::{calc_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::{fn_native::Shared, parser::ScriptFnDef};
