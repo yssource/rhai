@@ -1239,8 +1239,28 @@ pub fn run_builtin_binary_op(
     use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
+    let second_type = y.type_id();
 
-    if y.type_id() != args_type {
+    if second_type != args_type {
+        if args_type == TypeId::of::<char>() && second_type == TypeId::of::<ImmutableString>() {
+            let x = x.clone().cast::<char>();
+            let y = &*y.read_lock::<ImmutableString>().unwrap();
+
+            match op {
+                "+" => return Ok(Some(format!("{}{}", x, y).into())),
+                _ => (),
+            }
+        } else if args_type == TypeId::of::<ImmutableString>()
+            && second_type == TypeId::of::<char>()
+        {
+            let x = &*x.read_lock::<ImmutableString>().unwrap();
+            let y = y.clone().cast::<char>();
+
+            match op {
+                "+" => return Ok(Some((x + y).into())),
+                _ => (),
+            }
+        }
         return Ok(None);
     }
 
@@ -1317,6 +1337,7 @@ pub fn run_builtin_binary_op(
         let y = y.clone().cast::<char>();
 
         match op {
+            "+" => return Ok(Some(format!("{}{}", x, y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             ">" => return Ok(Some((x > y).into())),
@@ -1367,8 +1388,19 @@ pub fn run_builtin_op_assignment(
     use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
+    let second_type = y.type_id();
 
-    if y.type_id() != args_type {
+    if second_type != args_type {
+        if args_type == TypeId::of::<ImmutableString>() && second_type == TypeId::of::<char>() {
+            let y = y.read_lock::<char>().unwrap().deref().clone();
+            let mut x = x.write_lock::<ImmutableString>().unwrap();
+
+            match op {
+                "+=" => return Ok(Some(*x += y)),
+                _ => (),
+            }
+        }
+
         return Ok(None);
     }
 
@@ -1415,6 +1447,14 @@ pub fn run_builtin_op_assignment(
         match op {
             "&=" => return Ok(Some(*x = *x && y)),
             "|=" => return Ok(Some(*x = *x || y)),
+            _ => (),
+        }
+    } else if args_type == TypeId::of::<char>() {
+        let y = y.read_lock::<char>().unwrap().deref().clone();
+        let mut x = x.write_lock::<Dynamic>().unwrap();
+
+        match op {
+            "+=" => return Ok(Some(*x = format!("{}{}", *x, y).into())),
             _ => (),
         }
     } else if args_type == TypeId::of::<ImmutableString>() {
