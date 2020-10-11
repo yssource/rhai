@@ -7,11 +7,11 @@ To use custom types for [`print`] and [`debug`], or convert its value into a [st
 it is necessary that the following functions be registered (assuming the custom type
 is `T : Display + Debug`):
 
-| Function    | Signature                                                     | Typical implementation                | Usage                                                                                    |
-| ----------- | ------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `to_string` | <code>\|s: &mut T\| -> ImmutableString</code>                 | `s.to_string().into()`                | converts the custom type into a [string]                                                 |
-| `print`     | <code>\|s: &mut T\| -> ImmutableString</code>                 | `s.to_string().into()`                | converts the custom type into a [string] for the [`print`] statement                     |
-| `debug`     | <code>\|s: &mut T\| -> ImmutableString</code>                 | `format!("{:?}", s).into()`           | converts the custom type into a [string] for the [`debug`] statement                     |
-| `+`         | <code>\|s1: ImmutableString, s: T\| -> ImmutableString</code> | `s1 + s`                              | appends the custom type to another [string], for `print("Answer: " + type);` usage       |
-| `+`         | <code>\|s: T, s2: ImmutableString\| -> ImmutableString</code> | `s.to_string().push_str(&s2).into();` | appends another [string] to the custom type, for `print(type + " is the answer");` usage |
-| `+=`        | <code>\|s1: &mut ImmutableString, s: T\|</code>               | `s1 += s.to_string()`                 | appends the custom type to an existing [string], for `s += type;` usage                  |
+| Function    | Signature                                      | Typical implementation       | Usage                                                                |
+| ----------- | ---------------------------------------------- | ---------------------------- | -------------------------------------------------------------------- |
+| `to_string` | <code>\|x: &mut T\| -> String</code>           | `x.to_string()`              | converts the custom type into a [string]                             |
+| `print`     | <code>\|x: &mut T\| -> String</code>           | `x.to_string()`              | converts the custom type into a [string] for the [`print`] statement |
+| `debug`     | <code>\|x: &mut T\| -> String</code>           | `format!("{:?}", x)`         | converts the custom type into a [string] for the [`debug`] statement |
+| `+`         | <code>\|s: &str, x: T\| -> String</code>       | `format!("{}{}", s, x)`      | concatenates the custom type with another [string]                   |
+| `+`         | <code>\|x: &mut T, s: &str\| -> String</code>  | `x.to_string().push_str(s);` | concatenates another [string] with the custom type                   |
+| `+=`        | <code>\|s: &mut ImmutableString, x: T\|</code> | `s += x.to_string()`         | appends the custom type to an existing [string]                      |

@@ -83,7 +83,7 @@ mod r#unsafe;
 mod utils;
 
 pub use any::Dynamic;
-pub use engine::Engine;
+pub use engine::{Engine, EvalContext};
 pub use error::{ParseError, ParseErrorType};
 pub use fn_native::{FnPtr, IteratorFn};
 pub use fn_register::{RegisterFn, RegisterResultFn};
@@ -91,7 +91,7 @@ pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
-pub use syntax::{EvalContext, Expression};
+pub use syntax::Expression;
 pub use token::Position;
 
 #[cfg(feature = "internals")]

@@ -106,6 +106,7 @@
 [module]: {{rootUrl}}/rust/modules/index.md
 [modules]: {{rootUrl}}/rust/modules/index.md
 [module resolver]: {{rootUrl}}/rust/modules/resolvers.md
+[variable resolver]: {{rootUrl}}/engine/var.md
 [`export`]: {{rootUrl}}/language/modules/export.md
 [`import`]: {{rootUrl}}/language/modules/import.md
 

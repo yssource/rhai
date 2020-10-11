@@ -2,9 +2,9 @@
 
 use crate::any::Dynamic;
 use crate::engine::{
-    search_imports, search_namespace, search_scope_only, Engine, Imports, State, KEYWORD_DEBUG,
-    KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_FN,
-    KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    search_imports, Engine, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
+    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
+    KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
@@ -861,7 +861,7 @@ impl Engine {
                     })
                     .and_then(|s| FnPtr::try_from(s))
                     .map(Into::<Dynamic>::into)
-                    .map_err(|err| err.new_position(expr.position()));
+                    .map_err(|err| err.fill_position(expr.position()));
             }
         }
 
@@ -1000,7 +1000,7 @@ impl Engine {
                 })?;
                 let result = if !script.is_empty() {
                     self.eval_script_expr(scope, mods, state, lib, script, level + 1)
-                        .map_err(|err| err.new_position(expr.position()))
+                        .map_err(|err| err.fill_position(expr.position()))
                 } else {
                     Ok(().into())
                 };
@@ -1040,18 +1040,21 @@ impl Engine {
                         .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
                         .collect::<Result<_, _>>()?;
 
-                    let (target, _, _, pos) = search_namespace(scope, mods, state, this_ptr, lhs)?;
+                    let (target, _, _, pos) =
+                        self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                     self.inc_operations(state)
-                        .map_err(|err| err.new_position(pos))?;
+                        .map_err(|err| err.fill_position(pos))?;
 
-                    args = if target.is_shared() {
-                        arg_values.insert(0, target.flatten_clone());
+                    args = if target.is_shared() || target.is_value() {
+                        arg_values.insert(0, target.take_or_clone().flatten());
                         arg_values.iter_mut().collect()
                     } else {
-                        // Turn it into a method call only if the object is not shared
+                        // Turn it into a method call only if the object is not shared and not a simple value
                         is_ref = true;
-                        once(target).chain(arg_values.iter_mut()).collect()
+                        once(target.take_ref().unwrap())
+                            .chain(arg_values.iter_mut())
+                            .collect()
                     };
                 }
                 // func(..., ...)
@@ -1121,16 +1124,23 @@ impl Engine {
                         .collect::<Result<_, _>>()?;
 
                     // Get target reference to first argument
+                    let var_expr = args_expr.get(0).unwrap();
                     let (target, _, _, pos) =
-                        search_scope_only(scope, state, this_ptr, args_expr.get(0).unwrap())?;
+                        self.search_scope_only(scope, mods, state, lib, this_ptr, var_expr)?;
 
                     self.inc_operations(state)
-                        .map_err(|err| err.new_position(pos))?;
+                        .map_err(|err| err.fill_position(pos))?;
 
-                    let (first, rest) = arg_values.split_first_mut().unwrap();
-                    first_arg_value = Some(first);
-
-                    args = once(target).chain(rest.iter_mut()).collect();
+                    if target.is_shared() || target.is_value() {
+                        arg_values[0] = target.take_or_clone().flatten();
+                        args = arg_values.iter_mut().collect();
+                    } else {
+                        let (first, rest) = arg_values.split_first_mut().unwrap();
+                        first_arg_value = Some(first);
+                        args = once(target.take_ref().unwrap())
+                            .chain(rest.iter_mut())
+                            .collect();
+                    }
                 }
                 // func(..., ...) or func(mod::x, ...)
                 _ => {
@@ -1239,8 +1249,28 @@ pub fn run_builtin_binary_op(
     use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
+    let second_type = y.type_id();
 
-    if y.type_id() != args_type {
+    if second_type != args_type {
+        if args_type == TypeId::of::<char>() && second_type == TypeId::of::<ImmutableString>() {
+            let x = x.clone().cast::<char>();
+            let y = &*y.read_lock::<ImmutableString>().unwrap();
+
+            match op {
+                "+" => return Ok(Some(format!("{}{}", x, y).into())),
+                _ => (),
+            }
+        } else if args_type == TypeId::of::<ImmutableString>()
+            && second_type == TypeId::of::<char>()
+        {
+            let x = &*x.read_lock::<ImmutableString>().unwrap();
+            let y = y.clone().cast::<char>();
+
+            match op {
+                "+" => return Ok(Some((x + y).into())),
+                _ => (),
+            }
+        }
         return Ok(None);
     }
 
@@ -1317,6 +1347,7 @@ pub fn run_builtin_binary_op(
         let y = y.clone().cast::<char>();
 
         match op {
+            "+" => return Ok(Some(format!("{}{}", x, y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             ">" => return Ok(Some((x > y).into())),
@@ -1367,8 +1398,19 @@ pub fn run_builtin_op_assignment(
     use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
     let args_type = x.type_id();
+    let second_type = y.type_id();
 
-    if y.type_id() != args_type {
+    if second_type != args_type {
+        if args_type == TypeId::of::<ImmutableString>() && second_type == TypeId::of::<char>() {
+            let y = y.read_lock::<char>().unwrap().deref().clone();
+            let mut x = x.write_lock::<ImmutableString>().unwrap();
+
+            match op {
+                "+=" => return Ok(Some(*x += y)),
+                _ => (),
+            }
+        }
+
         return Ok(None);
     }
 
@@ -1415,6 +1457,14 @@ pub fn run_builtin_op_assignment(
         match op {
             "&=" => return Ok(Some(*x = *x && y)),
             "|=" => return Ok(Some(*x = *x || y)),
+            _ => (),
+        }
+    } else if args_type == TypeId::of::<char>() {
+        let y = y.read_lock::<char>().unwrap().deref().clone();
+        let mut x = x.write_lock::<Dynamic>().unwrap();
+
+        match op {
+            "+=" => return Ok(Some(*x = format!("{}{}", *x, y).into())),
             _ => (),
         }
     } else if args_type == TypeId::of::<ImmutableString>() {

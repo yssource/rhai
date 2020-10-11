@@ -43,7 +43,7 @@ macro_rules! reg_functions {
 }
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
-    reg_functions!(lib += basic; INT, bool, char, FnPtr);
+    reg_functions!(lib += basic; INT, bool,  FnPtr);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
@@ -137,15 +137,6 @@ mod string_functions {
     #[rhai_fn(name = "+")]
     pub fn add_prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
         s
-    }
-
-    #[rhai_fn(name = "+=")]
-    pub fn append_char(s: &mut ImmutableString, ch: char) {
-        *s += ch;
-    }
-    #[rhai_fn(name = "+=")]
-    pub fn append_string(s: &mut ImmutableString, add: ImmutableString) {
-        *s += &add;
     }
 
     #[rhai_fn(name = "len", get = "len")]

@@ -1,11 +1,12 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::any::Dynamic;
-use crate::engine::Engine;
+use crate::engine::{Engine, EvalContext};
 use crate::module::Module;
 use crate::parser::{FnAccess, ScriptFnDef};
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
+use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 
@@ -219,6 +220,21 @@ pub type Callback<T, R> = Box<dyn Fn(&T) -> R + 'static>;
 /// A standard callback function.
 #[cfg(feature = "sync")]
 pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
+
+/// A standard callback function.
+#[cfg(not(feature = "sync"))]
+pub type OnVarCallback = Box<
+    dyn Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+        + 'static,
+>;
+/// A standard callback function.
+#[cfg(feature = "sync")]
+pub type OnVarCallback = Box<
+    dyn Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+        + Send
+        + Sync
+        + 'static,
+>;
 
 /// A type encapsulating a function callable by Rhai.
 #[derive(Clone)]

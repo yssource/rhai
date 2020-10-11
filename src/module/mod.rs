@@ -1430,11 +1430,12 @@ impl Module {
                                 )
                                 .map_err(|err| {
                                     // Wrap the error in a module-error
-                                    Box::new(EvalAltResult::ErrorInModule(
+                                    EvalAltResult::ErrorInModule(
                                         "".to_string(),
                                         err,
                                         Position::none(),
-                                    ))
+                                    )
+                                    .into()
                                 })
                         },
                     );

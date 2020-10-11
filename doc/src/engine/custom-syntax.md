@@ -114,13 +114,17 @@ Any custom syntax must include an _implementation_ of it.
 
 The function signature of an implementation is:
 
-> `Fn(engine: &Engine, context: &mut EvalContext, scope: &mut Scope, inputs: &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>`
+> `Fn(scope: &mut Scope, context: &mut EvalContext, inputs: &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>`
 
 where:
 
-* `engine: &Engine` - reference to the current [`Engine`].
-* `context: &mut EvalContext` - mutable reference to the current evaluation _context_; **do not touch**.
 * `scope: &mut Scope` - mutable reference to the current [`Scope`]; variables can be added to it.
+
+* `context: &mut EvalContext` - mutable reference to the current evaluation _context_ (**do not touch**) which exposes the following fields:
+  * `context.engine(): &Engine` - reference to the current [`Engine`].
+  * `context.namespace(): &Module` - reference to the current _global namespace_ (as a [module]) containing all script-defined functions.
+  * `context.call_level(): usize` - the current nesting level of function calls.
+
 * `inputs: &[Expression]` - a list of input expression trees.
 
 #### WARNING - Lark's Vomit
@@ -143,11 +147,12 @@ To access a particular argument, use the following patterns:
 
 ### Evaluate an Expression Tree
 
-Use the `engine::eval_expression_tree` method to evaluate an expression tree.
+Use the `EvalContext::eval_expression_tree` method to evaluate an arbitrary expression tree
+within the current evaluation context.
 
 ```rust
 let expr = inputs.get(0).unwrap();
-let result = engine.eval_expression_tree(context, scope, expr)?;
+let result = context.eval_expression_tree(scope, expr)?;
 ```
 
 ### Declare Variables
@@ -157,15 +162,15 @@ New variables maybe declared (usually with a variable name that is passed in via
 It can simply be pushed into the [`Scope`].
 
 However, beware that all new variables must be declared _prior_ to evaluating any expression tree.
-In other words, any `Scope::push` calls must come _before_ any `Engine::eval_expression_tree` calls.
+In other words, any `Scope::push` calls must come _before_ any `EvalContext::eval_expression_tree` calls.
 
 ```rust
 let var_name = inputs[0].get_variable_name().unwrap().to_string();
 let expr = inputs.get(1).unwrap();
 
-scope.push(var_name, 0 as INT);     // do this BEFORE 'engine.eval_expression_tree'!
+scope.push(var_name, 0 as INT);     // do this BEFORE 'context.eval_expression_tree'!
 
-let result = engine.eval_expression_tree(context, scope, expr)?;
+let result = context.eval_expression_tree(context, scope, expr)?;
 ```
 
 
@@ -182,28 +187,30 @@ The syntax is passed simply as a slice of `&str`.
 ```rust
 // Custom syntax implementation
 fn implementation_func(
-    engine: &Engine,
-    context: &mut EvalContext,
     scope: &mut Scope,
+    context: &mut EvalContext,
     inputs: &[Expression]
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let var_name = inputs[0].get_variable_name().unwrap().to_string();
     let stmt = inputs.get(1).unwrap();
     let condition = inputs.get(2).unwrap();
 
-    // Push one new variable into the 'scope' BEFORE 'eval_expression_tree'
+    // Push one new variable into the 'scope' BEFORE 'context.eval_expression_tree'
     scope.push(var_name, 0 as INT);
 
     loop {
         // Evaluate the statement block
-        engine.eval_expression_tree(context, scope, stmt)?;
+        context.eval_expression_tree(scope, stmt)?;
 
         // Evaluate the condition expression
-        let stop = !engine.eval_expression_tree(context, scope, condition)?
-                          .as_bool()
-                          .map_err(|_| EvalAltResult::ErrorBooleanArgMismatch(
-                              "do-while".into(), expr.position()
-                           ))?;
+        let stop = !context.eval_expression_tree(scope, condition)?
+                            .as_bool().map_err(|err| Box::new(
+                                EvalAltResult::ErrorMismatchDataType(
+                                    "bool".to_string(),
+                                    err.to_string(),
+                                    condition.position(),
+                                )
+                            ))?;
 
         if stop {
             break;
