@@ -16,7 +16,7 @@ To do so, provide a closure to the [`Engine`] via the [`Engine::on_var`] method:
 let mut engine = Engine::new();
 
 // Register a variable resolver.
-engine.on_var(|name, index, engine, scope, lib| {
+engine.on_var(|name, index, scope, context| {
     match name {
         "MYSTIC_NUMBER" => Ok(Some((42 as INT).into())),
         // Override a variable - make it not found even if it exists!
@@ -50,26 +50,23 @@ Function Signature
 
 The function signature passed to `Engine::on_var` takes the following form:
 
-> `Fn(name: &str, index: Option<usize>, scope: &Scope, context: &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static`
+> `Fn(name: &str, index: usize, scope: &Scope, context: &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static`
 
 where:
 
 * `name: &str` - variable name.
 
-* `index: Option<usize>` - an offset from the bottom of the current [`Scope`] that the variable is supposed to reside.
+* `index: usize` - an offset from the bottom of the current [`Scope`] that the variable is supposed to reside.
   Offsets start from 1, with 1 meaning the last variable in the current [`Scope`].  Essentially the correct variable is at position `scope.len() - index`.
-  Notice that, if there was an [`eval`] statement before the current statement, new variables may have been introduced and this index may be incorrect.
-  Therefore, this index is for reference only.  It should not be relied upon.
 
-  If `index` is `None`, then there is no pre-calculated offset position and a search through the current [`Scope`] must be performed.
+  If `index` is zero, then there is no pre-calculated offset position and a search through the current [`Scope`] must be performed.
 
 * `scope : &Scope` - reference to the current [`Scope`] containing all variables up to the current evaluation position.
 
 * `context: &EvalContext` - reference to the current evaluation _context_, which exposes the following fields:
   * `context.engine(): &Engine` - reference to the current [`Engine`].
-  * `context.namespace(): &Module` - reference to the current _global namespace_ containing all script-defined functions.
+  * `context.namespace(): &Module` - reference to the current _global namespace_ (as a [module]) containing all script-defined functions.
   * `context.call_level(): usize` - the current nesting level of function calls.
 
 The return value is `Result<Option<Dynamic>, Box<EvalAltResult>>` where `Ok(None)` indicates that the normal
 variable resolution process should continue.
-

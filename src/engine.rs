@@ -745,7 +745,7 @@ impl Engine {
                 this_ptr,
                 level: 0,
             };
-            if let Some(result) = resolve_var(name, index.map(|v| v.get()), scope, &context)
+            if let Some(result) = resolve_var(name, index.map_or(0, |v| v.get()), scope, &context)
                 .map_err(|err| err.fill_position(*pos))?
             {
                 return Ok((result.into(), name, ScopeEntryType::Constant, *pos));

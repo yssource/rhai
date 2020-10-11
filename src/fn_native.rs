@@ -224,13 +224,13 @@ pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
 /// A standard callback function.
 #[cfg(not(feature = "sync"))]
 pub type OnVarCallback = Box<
-    dyn Fn(&str, Option<usize>, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+    dyn Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
         + 'static,
 >;
 /// A standard callback function.
 #[cfg(feature = "sync")]
 pub type OnVarCallback = Box<
-    dyn Fn(&str, Option<usize>, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+    dyn Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
         + Send
         + Sync
         + 'static,

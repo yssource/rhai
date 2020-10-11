@@ -1721,12 +1721,7 @@ impl Engine {
     #[inline(always)]
     pub fn on_var(
         &mut self,
-        callback: impl Fn(
-                &str,
-                Option<usize>,
-                &Scope,
-                &EvalContext,
-            ) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+        callback: impl Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
             + SendSync
             + 'static,
     ) -> &mut Self {

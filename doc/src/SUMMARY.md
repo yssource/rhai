@@ -121,6 +121,7 @@ The Rhai Scripting Language
    5. [Multi-Layer Functions](patterns/multi-layer.md)
    6. [One Engine Instance Per Call](patterns/parallel.md)
    7. [Scriptable Event Handler with State](patterns/events.md)
+   8. [Dynamic Constants Provider](patterns/dynamic-const.md)
 9. [Advanced Topics](advanced.md)
    1. [Capture Scope for Function Call](language/fn-capture.md)
    2. [Low-Level API](rust/register-raw.md)

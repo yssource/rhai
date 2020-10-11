@@ -122,7 +122,7 @@ where:
 
 * `context: &mut EvalContext` - mutable reference to the current evaluation _context_ (**do not touch**) which exposes the following fields:
   * `context.engine(): &Engine` - reference to the current [`Engine`].
-  * `context.namespace(): &Module` - reference to the current _global namespace_ containing all script-defined functions.
+  * `context.namespace(): &Module` - reference to the current _global namespace_ (as a [module]) containing all script-defined functions.
   * `context.call_level(): usize` - the current nesting level of function calls.
 
 * `inputs: &[Expression]` - a list of input expression trees.
