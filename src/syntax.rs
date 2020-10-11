@@ -1,10 +1,9 @@
 //! Module implementing custom syntax for `Engine`.
 
 use crate::any::Dynamic;
-use crate::engine::{Engine, Imports, State, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::{Engine, EvalContext, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError};
 use crate::fn_native::{SendSync, Shared};
-use crate::module::Module;
 use crate::parser::Expr;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
@@ -19,15 +18,11 @@ use crate::stdlib::{
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
-pub type FnCustomSyntaxEval = dyn Fn(
-    &Engine,
-    &mut EvalContext,
-    &mut Scope,
-    &[Expression],
-) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnCustomSyntaxEval =
+    dyn Fn(&mut Scope, &mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>;
 /// A general expression evaluation trait object.
 #[cfg(feature = "sync")]
-pub type FnCustomSyntaxEval = dyn Fn(&Engine, &mut EvalContext, &mut Scope, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
+pub type FnCustomSyntaxEval = dyn Fn(&mut Scope, &mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
     + Send
     + Sync;
 
@@ -63,6 +58,30 @@ impl Expression<'_> {
     }
 }
 
+impl EvalContext<'_, '_, '_, '_, '_, '_> {
+    /// Evaluate an expression tree.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.  It evaluates an expression from an AST.
+    #[inline(always)]
+    pub fn eval_expression_tree(
+        &mut self,
+        scope: &mut Scope,
+        expr: &Expression,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.engine.eval_expr(
+            scope,
+            self.mods,
+            self.state,
+            self.lib,
+            self.this_ptr,
+            expr.expr(),
+            self.level,
+        )
+    }
+}
+
 #[derive(Clone)]
 pub struct CustomSyntax {
     pub segments: StaticVec<String>,
@@ -77,27 +96,17 @@ impl fmt::Debug for CustomSyntax {
     }
 }
 
-/// Context of a script evaluation process.
-#[derive(Debug)]
-pub struct EvalContext<'a, 's, 'm, 't, 'd: 't> {
-    pub(crate) mods: &'a mut Imports,
-    pub(crate) state: &'s mut State,
-    pub(crate) lib: &'m Module,
-    pub(crate) this_ptr: &'t mut Option<&'d mut Dynamic>,
-    pub(crate) level: usize,
-}
-
 impl Engine {
+    /// Register a custom syntax with the `Engine`.
+    ///
+    /// * `keywords` holds a slice of strings that define the custom syntax.  
+    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).  
+    /// * `func` is the implementation function.
     pub fn register_custom_syntax<S: AsRef<str> + ToString>(
         &mut self,
         keywords: &[S],
-        scope_delta: isize,
-        func: impl Fn(
-                &Engine,
-                &mut EvalContext,
-                &mut Scope,
-                &[Expression],
-            ) -> Result<Dynamic, Box<EvalAltResult>>
+        new_vars: isize,
+        func: impl Fn(&mut Scope, &mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
             + 'static,
     ) -> Result<&mut Self, ParseError> {
@@ -176,7 +185,7 @@ impl Engine {
         let syntax = CustomSyntax {
             segments,
             func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
-            scope_delta,
+            scope_delta: new_vars,
         };
 
         if self.custom_syntax.is_none() {
@@ -189,28 +198,5 @@ impl Engine {
             .insert(key, syntax.into());
 
         Ok(self)
-    }
-
-    /// Evaluate an expression tree.
-    ///
-    /// ## WARNING - Low Level API
-    ///
-    /// This function is very low level.  It evaluates an expression from an AST.
-    #[inline(always)]
-    pub fn eval_expression_tree(
-        &self,
-        context: &mut EvalContext,
-        scope: &mut Scope,
-        expr: &Expression,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.eval_expr(
-            scope,
-            context.mods,
-            context.state,
-            context.lib,
-            context.this_ptr,
-            expr.expr(),
-            context.level,
-        )
     }
 }

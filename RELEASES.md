@@ -16,10 +16,12 @@ Breaking changes
 * `Scope::iter_raw` returns an iterator with an additional field indicating whether the variable is constant or not.
 * `rhai::ser` and `rhai::de` namespaces are merged into `rhai::serde`.
 * New reserved symbols: `++`, `--`, `..`, `...`.
+* Callback signature for custom syntax implementation function is changed to allow for more flexibility.
 
 New features
 ------------
 
+* New `Engine::on_var` to register a _variable resolver_.
 * `const` statements can now take any expression (or none at all) instead of only constant values.
 * `OptimizationLevel::Simple` now eagerly evaluates built-in binary operators of primary types (if not overloaded).
 * Added `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.

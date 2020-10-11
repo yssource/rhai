@@ -9,7 +9,7 @@ fn test_unary_minus() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_function"))]
     assert_eq!(engine.eval::<INT>("fn neg(x) { -x } neg(5)")?, -5);
 
-    assert_eq!(engine.eval::<INT>("5 - -+++--+-5")?, 0);
+    assert_eq!(engine.eval::<INT>("5 - -+ + + - -+-5")?, 0);
 
     Ok(())
 }

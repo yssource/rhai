@@ -1,7 +1,7 @@
 //! Module that defines the extern API of `Engine`.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::{Engine, Imports, State};
+use crate::engine::{Engine, EvalContext, Imports, State};
 use crate::error::ParseError;
 use crate::fn_native::{IteratorFn, SendSync};
 use crate::module::{FuncReturn, Module};
@@ -1684,6 +1684,54 @@ impl Engine {
 
         let stmt = mem::take(ast.statements_mut());
         optimize_into_ast(self, scope, stmt, lib, optimization_level)
+    }
+
+    /// Provide a callback that will be invoked before each variable access.
+    ///
+    /// ## Return Value of Callback
+    ///
+    /// Return `Ok(None)` to continue with normal variable access.  
+    /// Return `Ok(Some(Dynamic))` as the variable's value.
+    ///
+    /// ## Errors in Callback
+    ///
+    /// Return `Err(...)` if there is an error.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register a variable resolver.
+    /// engine.on_var(|name, _, _, _| {
+    ///     match name {
+    ///         "MYSTIC_NUMBER" => Ok(Some(42_i64.into())),
+    ///         _ => Ok(None)
+    ///     }
+    /// });
+    ///
+    /// engine.eval::<i64>("MYSTIC_NUMBER")?;
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline(always)]
+    pub fn on_var(
+        &mut self,
+        callback: impl Fn(
+                &str,
+                Option<usize>,
+                &Scope,
+                &EvalContext,
+            ) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+            + SendSync
+            + 'static,
+    ) -> &mut Self {
+        self.resolve_var = Some(Box::new(callback));
+        self
     }
 
     /// Register a callback for script evaluation progress.

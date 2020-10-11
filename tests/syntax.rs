@@ -22,21 +22,28 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             "do", "|", "$ident$", "|", "->", "$block$", "while", "$expr$",
         ],
         1,
-        |engine: &Engine, context: &mut EvalContext, scope: &mut Scope, inputs: &[Expression]| {
+        |scope: &mut Scope, context: &mut EvalContext, inputs: &[Expression]| {
             let var_name = inputs[0].get_variable_name().unwrap().to_string();
             let stmt = inputs.get(1).unwrap();
-            let expr = inputs.get(2).unwrap();
+            let condition = inputs.get(2).unwrap();
 
             scope.push(var_name, 0 as INT);
 
             loop {
-                engine.eval_expression_tree(context, scope, stmt)?;
+                context.eval_expression_tree(scope, stmt)?;
 
-                if !engine
-                    .eval_expression_tree(context, scope, expr)?
+                let stop = !context
+                    .eval_expression_tree(scope, condition)?
                     .as_bool()
-                    .map_err(|err| engine.make_type_mismatch_err::<bool>(err, expr.position()))?
-                {
+                    .map_err(|err| {
+                        Box::new(EvalAltResult::ErrorMismatchDataType(
+                            "bool".to_string(),
+                            err.to_string(),
+                            condition.position(),
+                        ))
+                    })?;
+
+                if stop {
                     break;
                 }
             }
@@ -61,7 +68,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     // The first symbol must be an identifier
     assert_eq!(
         *engine
-            .register_custom_syntax(&["!"], 0, |_, _, _, _| Ok(().into()))
+            .register_custom_syntax(&["!"], 0, |_, _, _| Ok(().into()))
             .expect_err("should error")
             .0,
         ParseErrorType::BadInput("Improper symbol for custom syntax: '!'".to_string())
