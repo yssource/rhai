@@ -50,10 +50,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "no_function"))]
-use crate::stdlib::{collections::HashSet, string::String};
-
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
@@ -144,29 +140,6 @@ impl Drop for ArgBackup<'_> {
             "MutBackup::restore has not been called prior to existing this scope"
         );
     }
-}
-
-// Add captured variables into scope
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "no_function"))]
-fn add_captured_variables_into_scope<'s>(
-    externals: &HashSet<String>,
-    captured: Scope<'s>,
-    scope: &mut Scope<'s>,
-) {
-    captured
-        .into_iter()
-        .filter(|ScopeEntry { name, .. }| externals.contains(name.as_ref()))
-        .for_each(
-            |ScopeEntry {
-                 name, typ, value, ..
-             }| {
-                match typ {
-                    ScopeEntryType::Normal => scope.push(name, value),
-                    ScopeEntryType::Constant => scope.push_constant(name, value),
-                };
-            },
-        );
 }
 
 #[inline(always)]
@@ -483,6 +456,8 @@ impl Engine {
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
+    /// Capture `Scope` is consumed by this function.
+    ///
     /// ## WARNING
     ///
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
@@ -498,7 +473,7 @@ impl Engine {
         is_ref: bool,
         _is_method: bool,
         pub_only: bool,
-        _capture: Option<Scope>,
+        _capture: Option<&mut Scope>, // `Scope` is consumed.
         def_val: &Option<Dynamic>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -574,10 +549,29 @@ impl Engine {
                     let scope = &mut Scope::new();
                     let mods = &mut Imports::new();
 
-                    // Add captured variables into scope
+                    // Move captured variables into scope
                     #[cfg(not(feature = "no_closure"))]
                     if let Some(captured) = _capture {
-                        add_captured_variables_into_scope(&func.externals, captured, scope);
+                        captured
+                            .iter_mut()
+                            .filter(|ScopeEntry { name, .. }| {
+                                func.externals.contains(name.as_ref())
+                            })
+                            .for_each(
+                                |ScopeEntry {
+                                     name, typ, value, ..
+                                 }| {
+                                    // Consume the scope values.
+                                    match typ {
+                                        ScopeEntryType::Normal => {
+                                            scope.push(name.clone(), mem::take(value))
+                                        }
+                                        ScopeEntryType::Constant => {
+                                            scope.push_constant(name.clone(), mem::take(value))
+                                        }
+                                    };
+                                },
+                            );
                     }
 
                     let result = if _is_method {
@@ -1019,11 +1013,13 @@ impl Engine {
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
         let mut is_ref = false;
-        let capture = if cfg!(not(feature = "no_closure")) && capture && !scope.is_empty() {
-            Some(scope.flatten_clone())
+        let mut capture_scope = if cfg!(not(feature = "no_closure")) && capture && !scope.is_empty()
+        {
+            Some(scope.clone_visible())
         } else {
             None
         };
+        let capture = capture_scope.as_mut();
 
         if args_expr.is_empty() && curry.is_empty() {
             // No arguments
@@ -1189,20 +1185,12 @@ impl Engine {
                 let args = args.as_mut();
                 let func = f.get_fn_def();
 
-                let scope = &mut Scope::new();
+                let new_scope = &mut Scope::new();
                 let mods = &mut Imports::new();
 
-                // Add captured variables into scope
-                #[cfg(not(feature = "no_closure"))]
-                if _capture && !scope.is_empty() {
-                    add_captured_variables_into_scope(
-                        &func.externals,
-                        scope.flatten_clone(),
-                        scope,
-                    );
-                }
-
-                self.call_script_fn(scope, mods, state, lib, &mut None, name, func, args, level)
+                self.call_script_fn(
+                    new_scope, mods, state, lib, &mut None, name, func, args, level,
+                )
             }
             Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut()),
             Some(f) if f.is_native() => {
