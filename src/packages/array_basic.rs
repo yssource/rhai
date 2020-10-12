@@ -7,9 +7,8 @@ use crate::engine::{Array, Engine};
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
-
-#[cfg(not(feature = "unchecked"))]
-use crate::{result::EvalAltResult, token::Position};
+use crate::result::EvalAltResult;
+use crate::token::Position;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
