@@ -5,6 +5,9 @@ use crate::error::ParseErrorType;
 use crate::parser::INT;
 use crate::token::Position;
 
+#[cfg(not(feature = "no_function"))]
+use crate::engine::is_anonymous_fn;
+
 use crate::stdlib::{
     boxed::Box,
     error::Error,
@@ -166,6 +169,10 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
+            #[cfg(not(feature = "no_function"))]
+            Self::ErrorInFunctionCall(s, err, _) if is_anonymous_fn(s) => {
+                write!(f, "Error in call to closure: {}", err)?
+            }
             Self::ErrorInFunctionCall(s, err, _) => {
                 write!(f, "Error in call to function '{}': {}", s, err)?
             }

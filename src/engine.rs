@@ -502,6 +502,13 @@ pub fn make_setter(id: &str) -> String {
     format!("{}{}", FN_SET, id)
 }
 
+/// Is this function an anonymous function?
+#[cfg(not(feature = "no_function"))]
+#[inline(always)]
+pub fn is_anonymous_fn(fn_name: &str) -> bool {
+    fn_name.starts_with(FN_ANONYMOUS)
+}
+
 /// Print/debug to stdout
 fn default_print(_s: &str) {
     #[cfg(not(feature = "no_std"))]

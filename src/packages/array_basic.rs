@@ -14,10 +14,7 @@ use crate::{result::EvalAltResult, token::Position};
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
 
-use crate::stdlib::{any::TypeId, boxed::Box};
-
-#[cfg(not(feature = "unchecked"))]
-use crate::stdlib::string::ToString;
+use crate::stdlib::{any::TypeId, boxed::Box, string::ToString};
 
 pub type Unit = ();
 
@@ -74,6 +71,10 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 
     #[cfg(not(feature = "no_object"))]
     reg_functions!(lib += map; Map);
+
+    lib.set_raw_fn("map", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], map);
+    lib.set_raw_fn("filter", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], filter);
+    lib.set_raw_fn("reduce", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], reduce);
 
     // Merge in the module at the end to override `+=` for arrays
     combine_with_exported_module!(lib, "array", array_functions);
@@ -163,6 +164,109 @@ fn pad<T: Variant + Clone>(
         }
     }
     Ok(())
+}
+
+fn map(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Array, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let mapper = args[1].read_lock::<FnPtr>().unwrap();
+
+    let mut array = Array::with_capacity(list.len());
+
+    for (i, item) in list.iter().enumerate() {
+        array.push(
+            mapper
+                .call_dynamic(engine, lib, None, [item.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                        mapper.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "map".to_string(),
+                        err,
+                        Position::none(),
+                    ))
+                })?,
+        );
+    }
+
+    Ok(array)
+}
+
+fn filter(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Array, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let filter = args[1].read_lock::<FnPtr>().unwrap();
+
+    let mut array = Array::with_capacity(list.len());
+
+    for (i, item) in list.iter().enumerate() {
+        if filter
+            .call_dynamic(engine, lib, None, [item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                }
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "filter".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?
+            .as_bool()
+            .unwrap_or(false)
+        {
+            array.push(item.clone());
+        }
+    }
+
+    Ok(array)
+}
+
+fn reduce(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let reducer = args[1].read_lock::<FnPtr>().unwrap();
+
+    let mut result: Dynamic = ().into();
+
+    for (i, item) in list.iter().enumerate() {
+        result = reducer
+            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
+                    engine,
+                    lib,
+                    None,
+                    [result, item.clone(), (i as INT).into()],
+                ),
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "reduce".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?;
+    }
+
+    Ok(result)
 }
 
 gen_array_functions!(basic => INT, bool, char, ImmutableString, FnPtr, Array, Unit);
