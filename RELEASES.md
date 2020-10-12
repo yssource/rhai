@@ -4,6 +4,8 @@ Rhai Release Notes
 Version 0.20.0
 ==============
 
+This version adds a variable resolver with the ability to short-circuit variable access.
+
 Breaking changes
 ----------------
 
@@ -17,6 +19,7 @@ Breaking changes
 * `rhai::ser` and `rhai::de` namespaces are merged into `rhai::serde`.
 * New reserved symbols: `++`, `--`, `..`, `...`.
 * Callback signature for custom syntax implementation function is changed to allow for more flexibility.
+* Default call stack depth for `debug` builds is reduced to 12 (from 16).
 
 New features
 ------------
@@ -24,15 +27,15 @@ New features
 * New `Engine::on_var` to register a _variable resolver_.
 * `const` statements can now take any expression (or none at all) instead of only constant values.
 * `OptimizationLevel::Simple` now eagerly evaluates built-in binary operators of primary types (if not overloaded).
-* Added `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
+* `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
 * `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
+* `map`, `filter` and `reduce` functions for arrays.
 
 Enhancements
 ------------
 
 * Many one-liners and few-liners are now marked `#[inline]` or `[inline(always)]`, just in case it helps when LTO is not turned on.
-* Default call stack depth for `debug` builds is reduced to 12 (from 16).
 
 
 Version 0.19.0

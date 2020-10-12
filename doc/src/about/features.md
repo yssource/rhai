@@ -17,6 +17,8 @@ Easy
 * Very few additional dependencies - right now only [`smallvec`](https://crates.io/crates/smallvec/) plus crates for procedural macros;
   for [`no-std`] and `WASM` builds, a number of additional dependencies are pulled in to provide for missing functionalities.
 
+* [Plugins] system powered by procedural macros simplifies custom API development.
+
 Fast
 ----
 
@@ -40,6 +42,8 @@ Dynamic
 * [Closures] that can capture shared variables.
 
 * Some support for [object-oriented programming (OOP)][OOP].
+
+* Hook into variables access via [variable resolver].
 
 Safe
 ----
@@ -66,9 +70,6 @@ Flexible
 
 * Supports [most build targets](targets.md) including `no-std` and [WASM].
 
-* [Plugins] system powered by procedural macros simplifies custom API development.
-
 * Surgically [disable keywords and operators] to restrict the language.
 
-* Use as a [DSL] by [disabling keywords/operators][disable keywords and operators], [custom operators]
-  and extending the language with [custom syntax].
+* Use as a [DSL] by defining [custom operators] and/or extending the language with [custom syntax].

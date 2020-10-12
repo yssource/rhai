@@ -10,7 +10,7 @@ It doesn't attempt to be a new language. For example:
 
 * No traits...  so it is also not Rust. Do your Rusty stuff in Rust.
 
-* No structures/records - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
+* No structures/records/tuples - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
 
   There is, however, a built-in [object map] type which is adequate for most uses.
   It is possible to simulate [object-oriented programming (OOP)][OOP] by storing [function pointers]
@@ -32,7 +32,7 @@ It doesn't attempt to be a new language. For example:
   integrate with native Rust applications.
 
 * No formal language grammar - Rhai uses a hand-coded lexer, a hand-coded top-down recursive-descent parser
-  for statements and a Pratt parser for expressions.
+  for statements, and a hand-coded Pratt parser for expressions.
   
   This lack of formalism allows the parser itself to be exposed as a service in order to support
   [disabling keywords/operators][disable keywords and operators], adding [custom operators],
@@ -43,8 +43,8 @@ Do Not Write The Next 4D VR Game in Rhai
 ---------------------------------------
 
 Due to this intended usage, Rhai deliberately keeps the language simple and small by omitting
-advanced language features such as classes, inheritance, first-class functions, closures,
-concurrency, byte-codes VM, JIT etc.
+advanced language features such as classes, inheritance, interfaces, generics,
+first-class functions/closures, pattern matching, concurrency, byte-codes VM, JIT etc.
 
 Avoid the temptation to write full-fledge application logic entirely in Rhai -
 that use case is best fulfilled by more complete languages such as JavaScript or Lua.

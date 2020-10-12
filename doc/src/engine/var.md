@@ -10,7 +10,7 @@ searches the [`Scope`] that is passed into the `Engine::eval` call.
 There is a built-in facility for advanced users to _hook_ into the variable
 resolution service and to override its default behavior.
 
-To do so, provide a closure to the [`Engine`] via the [`Engine::on_var`] method:
+To do so, provide a closure to the [`Engine`] via the `Engine::on_var` method:
 
 ```rust
 let mut engine = Engine::new();
@@ -45,6 +45,18 @@ a variable resolver. Then these variables can be assigned to and their updated v
 the script is evaluated.
 
 
+Benefits of Using a Variable Resolver
+------------------------------------
+
+1. Avoid having to maintain a custom [`Scope`] with all variables regardless of need (because a script may not use them all).
+
+2. _Short-circuit_ variable access, essentially overriding standard behavior.
+
+3. _Lazy-load_ variables when they are accessed, not up-front. This benefits when the number of variables is very large, when they are timing-dependent, or when they are expensive to load.
+
+4. Rename system variables on a script-by-script basis without having to construct different [`Scope`]'s.
+
+
 Function Signature
 ------------------
 
@@ -61,12 +73,20 @@ where:
 
   If `index` is zero, then there is no pre-calculated offset position and a search through the current [`Scope`] must be performed.
 
-* `scope : &Scope` - reference to the current [`Scope`] containing all variables up to the current evaluation position.
+* `scope: &Scope` - reference to the current [`Scope`] containing all variables up to the current evaluation position.
 
 * `context: &EvalContext` - reference to the current evaluation _context_, which exposes the following fields:
   * `context.engine(): &Engine` - reference to the current [`Engine`].
   * `context.namespace(): &Module` - reference to the current _global namespace_ (as a [module]) containing all script-defined functions.
   * `context.call_level(): usize` - the current nesting level of function calls.
 
-The return value is `Result<Option<Dynamic>, Box<EvalAltResult>>` where `Ok(None)` indicates that the normal
-variable resolution process should continue.
+### Return Value
+
+The return value is `Result<Option<Dynamic>, Box<EvalAltResult>>` where:
+
+* `Ok(None)` - normal variable resolution process should continue, meaning to continue searching through the [`Scope`].
+
+* `Ok(Some(Dynamic))` - wrapped [`Dynamic`] is taken as the value of the variable, which is treated as a constant.
+
+* `Err(Box<EvalAltResult>)` - error is reflected back to the [`Engine`].
+  Normally this is `EvalAltResult::ErrorVariableNotFound` to indicate that the variable does not exist, but it can be any error.
