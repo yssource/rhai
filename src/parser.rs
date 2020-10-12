@@ -1949,7 +1949,17 @@ fn parse_primary(
         settings.pos = token_pos;
 
         root_expr = match (root_expr, token) {
-            // Function call
+            // Qualified function call with !
+            #[cfg(not(feature = "no_closure"))]
+            (Expr::Variable(x), Token::Bang) if x.1.is_some() => {
+                return Err(if !match_token(input, Token::LeftParen)? {
+                    LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
+                } else {
+                    PERR::BadInput("'!' cannot be used to call module functions".to_string())
+                        .into_err(token_pos)
+                });
+            }
+            // Function call with !
             #[cfg(not(feature = "no_closure"))]
             (Expr::Variable(x), Token::Bang) => {
                 if !match_token(input, Token::LeftParen)? {
