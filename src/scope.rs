@@ -488,12 +488,6 @@ impl<'a> Scope<'a> {
              }| { (name.as_ref(), typ.is_constant(), value) },
         )
     }
-
-    /// Get a mutable iterator to entries in the Scope.
-    #[inline(always)]
-    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut Entry<'a>> {
-        self.0.iter_mut()
-    }
 }
 
 impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, EntryType, Dynamic)> for Scope<'a> {

@@ -456,8 +456,6 @@ impl Engine {
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
     ///
-    /// Capture `Scope` is consumed by this function.
-    ///
     /// ## WARNING
     ///
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
@@ -473,7 +471,7 @@ impl Engine {
         is_ref: bool,
         _is_method: bool,
         pub_only: bool,
-        _capture: Option<&mut Scope>, // `Scope` is consumed.
+        _capture: Option<Scope>,
         def_val: &Option<Dynamic>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -553,7 +551,7 @@ impl Engine {
                     #[cfg(not(feature = "no_closure"))]
                     if let Some(captured) = _capture {
                         captured
-                            .iter_mut()
+                            .into_iter()
                             .filter(|ScopeEntry { name, .. }| {
                                 func.externals.contains(name.as_ref())
                             })
@@ -563,11 +561,9 @@ impl Engine {
                                  }| {
                                     // Consume the scope values.
                                     match typ {
-                                        ScopeEntryType::Normal => {
-                                            scope.push(name.clone(), mem::take(value))
-                                        }
+                                        ScopeEntryType::Normal => scope.push(name, value),
                                         ScopeEntryType::Constant => {
-                                            scope.push_constant(name.clone(), mem::take(value))
+                                            scope.push_constant(name, value)
                                         }
                                     };
                                 },
@@ -1013,13 +1009,11 @@ impl Engine {
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
         let mut is_ref = false;
-        let mut capture_scope = if cfg!(not(feature = "no_closure")) && capture && !scope.is_empty()
-        {
+        let capture = if cfg!(not(feature = "no_closure")) && capture && !scope.is_empty() {
             Some(scope.clone_visible())
         } else {
             None
         };
-        let capture = capture_scope.as_mut();
 
         if args_expr.is_empty() && curry.is_empty() {
             // No arguments
