@@ -37,6 +37,7 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     iter::{empty, once},
+    num::NonZeroUsize,
     ops::DerefMut,
     string::{String, ToString},
     vec::Vec,
@@ -250,8 +251,8 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => (),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
-                let new_val = ch.clone();
-                self.set_value((new_val, Position::none()), Position::none())
+                let char_value = ch.clone();
+                self.set_value((char_value, Position::none()), Position::none())
                     .unwrap();
             }
         }
@@ -284,10 +285,9 @@ impl<'a> Target<'a> {
                 })?;
 
                 let mut chars = s.chars().collect::<StaticVec<_>>();
-                let ch = chars[*index];
 
                 // See if changed - if so, update the String
-                if ch != new_ch {
+                if chars[*index] != new_ch {
                     chars[*index] = new_ch;
                     *s = chars.iter().collect::<String>().into();
                 }
@@ -502,6 +502,13 @@ pub fn make_setter(id: &str) -> String {
     format!("{}{}", FN_SET, id)
 }
 
+/// Is this function an anonymous function?
+#[cfg(not(feature = "no_function"))]
+#[inline(always)]
+pub fn is_anonymous_fn(fn_name: &str) -> bool {
+    fn_name.starts_with(FN_ANONYMOUS)
+}
+
 /// Print/debug to stdout
 fn default_print(_s: &str) {
     #[cfg(not(feature = "no_std"))]
@@ -520,13 +527,13 @@ pub fn search_imports<'s>(
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
-        None
+        0
     } else {
-        modules.index()
+        modules.index().map_or(0, NonZeroUsize::get)
     };
 
-    Ok(if let Some(index) = index {
-        let offset = mods.len() - index.get();
+    Ok(if index > 0 {
+        let offset = mods.len() - index;
         &mods.get(offset).unwrap().1
     } else {
         mods.iter()
@@ -548,13 +555,13 @@ pub fn search_imports_mut<'s>(
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
-        None
+        0
     } else {
-        modules.index()
+        modules.index().map_or(0, NonZeroUsize::get)
     };
 
-    Ok(if let Some(index) = index {
-        let offset = mods.len() - index.get();
+    Ok(if index > 0 {
+        let offset = mods.len() - index;
         &mut mods.get_mut(offset).unwrap().1
     } else {
         mods.iter_mut()
@@ -684,19 +691,15 @@ impl Engine {
                 // Qualified variable
                 ((name, pos), Some(modules), hash_var, _) => {
                     let module = search_imports_mut(mods, state, modules)?;
-                    let target =
-                        module
-                            .get_qualified_var_mut(*hash_var)
-                            .map_err(|err| match *err {
-                                EvalAltResult::ErrorVariableNotFound(_, _) => {
-                                    EvalAltResult::ErrorVariableNotFound(
-                                        format!("{}{}", modules, name),
-                                        *pos,
-                                    )
-                                    .into()
-                                }
-                                _ => err.fill_position(*pos),
-                            })?;
+                    let target = module.get_qualified_var_mut(*hash_var).map_err(|mut err| {
+                        match *err {
+                            EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
+                                *err_name = format!("{}{}", modules, name);
+                            }
+                            _ => (),
+                        }
+                        err.fill_position(*pos)
+                    })?;
 
                     // Module variables are constant
                     Ok((target.into(), name, ScopeEntryType::Constant, *pos))
@@ -733,7 +736,11 @@ impl Engine {
         }
 
         // Check if it is directly indexed
-        let index = if state.always_search { None } else { *index };
+        let index = if state.always_search {
+            0
+        } else {
+            index.map_or(0, NonZeroUsize::get)
+        };
 
         // Check the variable resolver, if any
         if let Some(ref resolve_var) = self.resolve_var {
@@ -745,15 +752,15 @@ impl Engine {
                 this_ptr,
                 level: 0,
             };
-            if let Some(result) = resolve_var(name, index.map_or(0, |v| v.get()), scope, &context)
-                .map_err(|err| err.fill_position(*pos))?
+            if let Some(result) =
+                resolve_var(name, index, scope, &context).map_err(|err| err.fill_position(*pos))?
             {
                 return Ok((result.into(), name, ScopeEntryType::Constant, *pos));
             }
         }
 
-        let index = if let Some(index) = index {
-            scope.len() - index.get()
+        let index = if index > 0 {
+            scope.len() - index
         } else {
             // Find the variable in the scope
             scope
@@ -1604,10 +1611,10 @@ impl Engine {
 
             // Module-qualified function call
             Expr::FnCall(x) if x.1.is_some() => {
-                let ((name, _, capture, pos), modules, hash, args_expr, def_val) = x.as_ref();
+                let ((name, _, _, pos), modules, hash, args_expr, def_val) = x.as_ref();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, modules, name, args_expr, *def_val, *hash,
-                    *capture, level,
+                    level,
                 )
                 .map_err(|err| err.fill_position(*pos))
             }

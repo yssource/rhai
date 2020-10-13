@@ -623,7 +623,9 @@ impl Token {
 
             Plus | Minus => 150,
 
-            Divide | Multiply | PowerOf | Modulo => 180,
+            Divide | Multiply => 180,
+
+            PowerOf | Modulo => 190,
 
             LeftShift | RightShift => 210,
 

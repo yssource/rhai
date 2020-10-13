@@ -63,14 +63,14 @@ The function signature passed to `Engine::register_raw_fn` takes the following f
 
 where:
 
-* `T : Variant + Clone` - return type of the function.
+* `T: Variant + Clone` - return type of the function.
 
-* `engine : &Engine` - the current [`Engine`], with all configurations and settings.
+* `engine: &Engine` - the current [`Engine`], with all configurations and settings.
 
-* `lib : &Module` - the current global library of script-defined functions, as a [`Module`].
+* `lib: &Module` - the current global library of script-defined functions, as a [`Module`].
   This is sometimes useful for calling a script-defined function within the same evaluation context using [`Engine::call_fn`][`call_fn`].
 
-* `args : &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
+* `args: &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
   The slice is guaranteed to contain enough arguments _of the correct types_.
 
 Remember, in Rhai, all arguments _except_ the _first_ one are always passed by _value_ (i.e. cloned).

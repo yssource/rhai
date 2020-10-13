@@ -288,7 +288,7 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(&mut self, fn_def: ScriptFnDef) -> u64 {
+    pub(crate) fn set_script_fn(&mut self, fn_def: Shared<ScriptFnDef>) -> u64 {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
         let hash_script = calc_fn_hash(empty(), &fn_def.name, num_params, empty());
@@ -554,6 +554,7 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn set_raw_fn_as_scripted(
         &mut self,
         name: impl Into<String>,
@@ -1392,53 +1393,18 @@ impl Module {
             module.modules.insert(alias.to_string(), m);
         });
 
+        // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
         {
             let ast_lib: Shared<Module> = ast.lib().clone().into();
 
             ast.iter_functions()
-                .filter(|(access, _, _, _)| access.is_public())
-                .for_each(|(_, name, num_params, func)| {
-                    let ast_lib = ast_lib.clone();
-
-                    module.set_raw_fn_as_scripted(
-                        name,
-                        num_params,
-                        move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
-                            let mut lib_merged;
-
-                            let unified_lib = if lib.is_empty() {
-                                // In the special case of the main script not defining any function
-                                &ast_lib
-                            } else {
-                                lib_merged = lib.clone();
-                                lib_merged.merge(&ast_lib);
-                                &lib_merged
-                            };
-
-                            engine
-                                .call_script_fn(
-                                    &mut Default::default(),
-                                    &mut Default::default(),
-                                    &mut Default::default(),
-                                    unified_lib,
-                                    &mut None,
-                                    &func.name,
-                                    func.as_ref(),
-                                    args,
-                                    0,
-                                )
-                                .map_err(|err| {
-                                    // Wrap the error in a module-error
-                                    EvalAltResult::ErrorInModule(
-                                        "".to_string(),
-                                        err,
-                                        Position::none(),
-                                    )
-                                    .into()
-                                })
-                        },
-                    );
+                .filter(|(access, _, _, _)| !access.is_private())
+                .for_each(|(_, _, _, func)| {
+                    // Encapsulate AST environment
+                    let mut func = func.as_ref().clone();
+                    func.lib = Some(ast_lib.clone());
+                    module.set_script_fn(func.into());
                 });
         }
 

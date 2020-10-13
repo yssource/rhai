@@ -50,10 +50,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "no_function"))]
-use crate::stdlib::{collections::HashSet, string::String};
-
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
@@ -144,29 +140,6 @@ impl Drop for ArgBackup<'_> {
             "MutBackup::restore has not been called prior to existing this scope"
         );
     }
-}
-
-// Add captured variables into scope
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "no_function"))]
-fn add_captured_variables_into_scope<'s>(
-    externals: &HashSet<String>,
-    captured: Scope<'s>,
-    scope: &mut Scope<'s>,
-) {
-    captured
-        .into_iter()
-        .filter(|ScopeEntry { name, .. }| externals.contains(name.as_ref()))
-        .for_each(
-            |ScopeEntry {
-                 name, typ, value, ..
-             }| {
-                match typ {
-                    ScopeEntryType::Normal => scope.push(name, value),
-                    ScopeEntryType::Constant => scope.push_constant(name, value),
-                };
-            },
-        );
 }
 
 #[inline(always)]
@@ -411,9 +384,27 @@ impl Engine {
                 }),
         );
 
+        // Merge in encapsulated environment, if any
+        let mut lib_merged;
+
+        let unified_lib = if let Some(ref env_lib) = fn_def.lib {
+            if !lib.is_empty() {
+                // In the special case of the main script not defining any function
+                env_lib
+            } else {
+                lib_merged = lib.clone();
+                lib_merged.merge(env_lib);
+                &lib_merged
+            }
+        } else {
+            lib
+        };
+
         // Evaluate the function at one higher level of call depth
+        let stmt = &fn_def.body;
+
         let result = self
-            .eval_stmt(scope, mods, state, lib, this_ptr, &fn_def.body, level + 1)
+            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level + 1)
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
@@ -574,10 +565,27 @@ impl Engine {
                     let scope = &mut Scope::new();
                     let mods = &mut Imports::new();
 
-                    // Add captured variables into scope
+                    // Move captured variables into scope
                     #[cfg(not(feature = "no_closure"))]
                     if let Some(captured) = _capture {
-                        add_captured_variables_into_scope(&func.externals, captured, scope);
+                        captured
+                            .into_iter()
+                            .filter(|ScopeEntry { name, .. }| {
+                                func.externals.contains(name.as_ref())
+                            })
+                            .for_each(
+                                |ScopeEntry {
+                                     name, typ, value, ..
+                                 }| {
+                                    // Consume the scope values.
+                                    match typ {
+                                        ScopeEntryType::Normal => scope.push(name, value),
+                                        ScopeEntryType::Constant => {
+                                            scope.push_constant(name, value)
+                                        }
+                                    };
+                                },
+                            );
                     }
 
                     let result = if _is_method {
@@ -1020,7 +1028,7 @@ impl Engine {
         let mut args: StaticVec<_>;
         let mut is_ref = false;
         let capture = if cfg!(not(feature = "no_closure")) && capture && !scope.is_empty() {
-            Some(scope.flatten_clone())
+            Some(scope.clone_visible())
         } else {
             None
         };
@@ -1092,7 +1100,6 @@ impl Engine {
         args_expr: &[Expr],
         def_val: Option<bool>,
         hash_script: u64,
-        _capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let modules = modules.as_ref().unwrap();
@@ -1189,20 +1196,12 @@ impl Engine {
                 let args = args.as_mut();
                 let func = f.get_fn_def();
 
-                let scope = &mut Scope::new();
+                let new_scope = &mut Scope::new();
                 let mods = &mut Imports::new();
 
-                // Add captured variables into scope
-                #[cfg(not(feature = "no_closure"))]
-                if _capture && !scope.is_empty() {
-                    add_captured_variables_into_scope(
-                        &func.externals,
-                        scope.flatten_clone(),
-                        scope,
-                    );
-                }
-
-                self.call_script_fn(scope, mods, state, lib, &mut None, name, func, args, level)
+                self.call_script_fn(
+                    new_scope, mods, state, lib, &mut None, name, func, args, level,
+                )
             }
             Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut()),
             Some(f) if f.is_native() => {

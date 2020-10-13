@@ -112,3 +112,125 @@ fn test_array_with_structs() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_closure"))]
+#[test]
+fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = [1, 2, 3];
+                let y = x.filter(|v| v > 2);
+                y[0]
+            "
+        )?,
+        3
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = [1, 2, 3];
+                let y = x.filter(|v, i| v > i);
+                y.len()
+            "
+        )?,
+        3
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = [1, 2, 3];
+                let y = x.map(|v| v * 2);
+                y[2]
+            "
+        )?,
+        6
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = [1, 2, 3];
+                let y = x.map(|v, i| v * i);
+                y[2]
+            "
+        )?,
+        6
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = [1, 2, 3];
+                x.reduce(|sum, v| if sum.type_of() == "()" { v * v } else { sum + v * v })
+            "#
+        )?,
+        14
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = [1, 2, 3];
+                x.reduce(|sum, v, i| { if i == 0 { sum = 10 } sum + v * v })
+            "#
+        )?,
+        24
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = [1, 2, 3];
+                x.reduce_rev(|sum, v| if sum.type_of() == "()" { v * v } else { sum + v * v })
+            "#
+        )?,
+        14
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = [1, 2, 3];
+                x.reduce_rev(|sum, v, i| { if i == 2 { sum = 10 } sum + v * v })
+            "#
+        )?,
+        24
+    );
+
+    assert!(engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.some(|v| v > 1)
+        "#
+    )?);
+
+    assert!(engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.some(|v, i| v * i == 0)
+        "#
+    )?);
+
+    assert!(!engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.all(|v| v > 1)
+        "#
+    )?);
+
+    assert!(engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.all(|v, i| v > i)
+        "#
+    )?);
+
+    Ok(())
+}

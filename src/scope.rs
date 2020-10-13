@@ -420,7 +420,7 @@ impl<'a> Scope<'a> {
     /// Clone the Scope, keeping only the last instances of each variable name.
     /// Shadowed variables are omitted in the copy.
     #[inline]
-    pub(crate) fn flatten_clone(&self) -> Self {
+    pub(crate) fn clone_visible(&self) -> Self {
         let mut entries: Vec<Entry> = Default::default();
 
         self.0.iter().rev().for_each(|entry| {

@@ -549,6 +549,8 @@ pub struct ScriptFnDef {
     pub body: Stmt,
     /// Position of the function definition.
     pub pos: Position,
+    /// Encapsulated running environment, if any.
+    pub lib: Option<Shared<Module>>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -1949,7 +1951,17 @@ fn parse_primary(
         settings.pos = token_pos;
 
         root_expr = match (root_expr, token) {
-            // Function call
+            // Qualified function call with !
+            #[cfg(not(feature = "no_closure"))]
+            (Expr::Variable(x), Token::Bang) if x.1.is_some() => {
+                return Err(if !match_token(input, Token::LeftParen)? {
+                    LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
+                } else {
+                    PERR::BadInput("'!' cannot be used to call module functions".to_string())
+                        .into_err(token_pos)
+                });
+            }
+            // Function call with !
             #[cfg(not(feature = "no_closure"))]
             (Expr::Variable(x), Token::Bang) => {
                 if !match_token(input, Token::LeftParen)? {
@@ -3363,6 +3375,7 @@ fn parse_fn(
         externals,
         body,
         pos: settings.pos,
+        lib: None,
     })
 }
 
@@ -3540,6 +3553,7 @@ fn parse_anon_fn(
         externals: Default::default(),
         body,
         pos: settings.pos,
+        lib: None,
     };
 
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));

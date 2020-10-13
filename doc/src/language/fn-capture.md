@@ -43,6 +43,12 @@ let f = Fn("foo");
 call!(f, 41) == 42;     // must use function-call style
 
 f.call!(41);            // <- syntax error: capturing is not allowed in method-call style
+
+// Capturing is not available for module functions
+
+import "hello" as h;
+
+h::greet!();            // <- syntax error: capturing is not allowed in namespace-qualified calls
 ```
 
 

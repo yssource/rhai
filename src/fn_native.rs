@@ -9,14 +9,11 @@ use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
+use crate::{calc_fn_hash, StaticVec};
 
-#[cfg(not(feature = "no_function"))]
-use crate::{calc_fn_hash, module::FuncReturn, StaticVec};
-
-use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, string::String, vec::Vec};
-
-#[cfg(not(feature = "no_function"))]
-use crate::stdlib::{iter::empty, mem};
+use crate::stdlib::{
+    boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String, vec::Vec,
+};
 
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::rc::Rc;
@@ -114,14 +111,13 @@ impl FnPtr {
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
-    #[cfg(not(feature = "no_function"))]
     pub fn call_dynamic(
         &self,
         engine: &Engine,
         lib: impl AsRef<Module>,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> FuncReturn<Dynamic> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args_data = self
             .1
             .iter()
