@@ -619,7 +619,7 @@ impl Token {
 
             In => 110,
 
-            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 10,
+            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 130,
 
             Plus | Minus => 150,
 
