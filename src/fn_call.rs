@@ -384,9 +384,27 @@ impl Engine {
                 }),
         );
 
+        // Merge in encapsulated environment, if any
+        let mut lib_merged;
+
+        let unified_lib = if let Some(ref env_lib) = fn_def.lib {
+            if !lib.is_empty() {
+                // In the special case of the main script not defining any function
+                env_lib
+            } else {
+                lib_merged = lib.clone();
+                lib_merged.merge(env_lib);
+                &lib_merged
+            }
+        } else {
+            lib
+        };
+
         // Evaluate the function at one higher level of call depth
+        let stmt = &fn_def.body;
+
         let result = self
-            .eval_stmt(scope, mods, state, lib, this_ptr, &fn_def.body, level + 1)
+            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level + 1)
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
@@ -1082,7 +1100,6 @@ impl Engine {
         args_expr: &[Expr],
         def_val: Option<bool>,
         hash_script: u64,
-        _capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let modules = modules.as_ref().unwrap();

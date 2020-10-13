@@ -823,6 +823,7 @@ pub fn optimize_into_ast(
                         #[cfg(not(feature = "no_closure"))]
                         externals: fn_def.externals.clone(),
                         pos: fn_def.pos,
+                        lib: None,
                     }
                     .into()
                 })
@@ -862,7 +863,7 @@ pub fn optimize_into_ast(
                 });
         } else {
             _functions.into_iter().for_each(|fn_def| {
-                module.set_script_fn(fn_def);
+                module.set_script_fn(fn_def.into());
             });
         }
 

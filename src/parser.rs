@@ -549,6 +549,8 @@ pub struct ScriptFnDef {
     pub body: Stmt,
     /// Position of the function definition.
     pub pos: Position,
+    /// Encapsulated running environment, if any.
+    pub lib: Option<Shared<Module>>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -3373,6 +3375,7 @@ fn parse_fn(
         externals,
         body,
         pos: settings.pos,
+        lib: None,
     })
 }
 
@@ -3550,6 +3553,7 @@ fn parse_anon_fn(
         externals: Default::default(),
         body,
         pos: settings.pos,
+        lib: None,
     };
 
     let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));

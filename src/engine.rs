@@ -1611,10 +1611,10 @@ impl Engine {
 
             // Module-qualified function call
             Expr::FnCall(x) if x.1.is_some() => {
-                let ((name, _, capture, pos), modules, hash, args_expr, def_val) = x.as_ref();
+                let ((name, _, _, pos), modules, hash, args_expr, def_val) = x.as_ref();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, modules, name, args_expr, *def_val, *hash,
-                    *capture, level,
+                    level,
                 )
                 .map_err(|err| err.fill_position(*pos))
             }
