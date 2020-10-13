@@ -60,6 +60,7 @@ Symbols and Patterns
 | `--`                               |      decrement       | _reserved_                            |
 | `..`                               |        range         | _reserved_                            |
 | `...`                              |        range         | _reserved_                            |
+| `**`                               |    exponentiation    | _reserved_                            |
 | `#`                                |         hash         | _reserved_                            |
 | `@`                                |          at          | _reserved_                            |
 | `$`                                |        dollar        | _reserved_                            |

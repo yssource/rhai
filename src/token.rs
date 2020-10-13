@@ -1231,6 +1231,10 @@ fn get_next_token_inner(
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
+            ('*', '*') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("**".into()), start_pos));
+            }
             ('*', ')') => {
                 eat_next(stream, pos);
                 return Some((Token::Reserved("*)".into()), start_pos));
