@@ -13,7 +13,7 @@ use crate::token::Position;
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
 
-use crate::stdlib::{any::TypeId, boxed::Box, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, cmp::Ordering, string::ToString};
 
 pub type Unit = ();
 
@@ -74,6 +74,10 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     lib.set_raw_fn("map", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], map);
     lib.set_raw_fn("filter", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], filter);
     lib.set_raw_fn("reduce", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], reduce);
+    lib.set_raw_fn("reduce_rev", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], reduce_rev);
+    lib.set_raw_fn("some", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], some);
+    lib.set_raw_fn("all", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], all);
+    lib.set_raw_fn("sort", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], sort);
 
     // Merge in the module at the end to override `+=` for arrays
     combine_with_exported_module!(lib, "array", array_functions);
@@ -129,6 +133,25 @@ mod array_functions {
     }
     pub fn reverse(list: &mut Array) {
         list.reverse();
+    }
+    pub fn splice(list: &mut Array, start: INT, len: INT, replace: Array) {
+        let start = if start < 0 {
+            0
+        } else if start as usize >= list.len() {
+            list.len() - 1
+        } else {
+            start as usize
+        };
+
+        let len = if len < 0 {
+            0
+        } else if len as usize > list.len() - start {
+            list.len() - start
+        } else {
+            len as usize
+        };
+
+        list.splice(start..start + len, replace.into_iter());
     }
 }
 
@@ -234,6 +257,74 @@ fn filter(
     Ok(array)
 }
 
+fn some(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<bool, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let filter = args[1].read_lock::<FnPtr>().unwrap();
+
+    for (i, item) in list.iter().enumerate() {
+        if filter
+            .call_dynamic(engine, lib, None, [item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                }
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "filter".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?
+            .as_bool()
+            .unwrap_or(false)
+        {
+            return Ok(true.into());
+        }
+    }
+
+    Ok(false.into())
+}
+
+fn all(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<bool, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let filter = args[1].read_lock::<FnPtr>().unwrap();
+
+    for (i, item) in list.iter().enumerate() {
+        if !filter
+            .call_dynamic(engine, lib, None, [item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                }
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "filter".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?
+            .as_bool()
+            .unwrap_or(false)
+        {
+            return Ok(false.into());
+        }
+    }
+
+    Ok(true.into())
+}
+
 fn reduce(
     engine: &Engine,
     lib: &Module,
@@ -266,6 +357,79 @@ fn reduce(
     }
 
     Ok(result)
+}
+
+fn reduce_rev(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let reducer = args[1].read_lock::<FnPtr>().unwrap();
+
+    let mut result: Dynamic = ().into();
+
+    for (i, item) in list.iter().enumerate().rev() {
+        result = reducer
+            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
+                    engine,
+                    lib,
+                    None,
+                    [result, item.clone(), (i as INT).into()],
+                ),
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "reduce".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?;
+    }
+
+    Ok(result)
+}
+
+fn sort(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    let comparer = args[1].read_lock::<FnPtr>().unwrap().clone();
+    let mut list = args[0].write_lock::<Array>().unwrap();
+
+    list.sort_by(|x, y| {
+        comparer
+            .call_dynamic(engine, lib, None, [x.clone(), y.clone()])
+            .ok()
+            .and_then(|v| v.as_int().ok())
+            .map(|v| {
+                if v > 0 {
+                    Ordering::Greater
+                } else if v < 0 {
+                    Ordering::Less
+                } else {
+                    Ordering::Equal
+                }
+            })
+            .unwrap_or_else(|| {
+                let x_type_id = x.type_id();
+                let y_type_id = y.type_id();
+
+                if x_type_id > y_type_id {
+                    Ordering::Greater
+                } else if x_type_id < y_type_id {
+                    Ordering::Less
+                } else {
+                    Ordering::Equal
+                }
+            })
+    });
+
+    Ok(().into())
 }
 
 gen_array_functions!(basic => INT, bool, char, ImmutableString, FnPtr, Array, Unit);

@@ -168,7 +168,7 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             r#"
                 let x = [1, 2, 3];
-                x.reduce(|sum, v| if sum.type_of() == "()" { v } else { sum + v * v })
+                x.reduce(|sum, v| if sum.type_of() == "()" { v * v } else { sum + v * v })
             "#
         )?,
         14
@@ -178,10 +178,59 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             r#"
                 let x = [1, 2, 3];
-                x.reduce(|sum, v, i| { if i==0 { sum = 10 } sum + v * v })
+                x.reduce(|sum, v, i| { if i == 0 { sum = 10 } sum + v * v })
             "#
         )?,
         24
     );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = [1, 2, 3];
+                x.reduce_rev(|sum, v| if sum.type_of() == "()" { v * v } else { sum + v * v })
+            "#
+        )?,
+        14
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = [1, 2, 3];
+                x.reduce_rev(|sum, v, i| { if i == 2 { sum = 10 } sum + v * v })
+            "#
+        )?,
+        24
+    );
+
+    assert!(engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.some(|v| v > 1)
+        "#
+    )?);
+
+    assert!(engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.some(|v, i| v * i == 0)
+        "#
+    )?);
+
+    assert!(!engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.all(|v| v > 1)
+        "#
+    )?);
+
+    assert!(engine.eval::<bool>(
+        r#"
+            let x = [1, 2, 3];
+            x.all(|v, i| v > i)
+        "#
+    )?);
+
     Ok(())
 }

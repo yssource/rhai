@@ -20,6 +20,7 @@ Breaking changes
 * New reserved symbols: `++`, `--`, `..`, `...`.
 * Callback signature for custom syntax implementation function is changed to allow for more flexibility.
 * Default call stack depth for `debug` builds is reduced to 12 (from 16).
+* Precedence for `~` and `%` is raised.
 
 New features
 ------------
@@ -30,7 +31,7 @@ New features
 * `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
 * `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
-* `map`, `filter` and `reduce` functions for arrays.
+* `map`, `filter`, `reduce`, `reduce_rev`, `some`, `all`, `splice` and `sort` functions for arrays.
 
 Enhancements
 ------------
