@@ -84,7 +84,11 @@ Operator Precedence
 
 All operators in Rhai has a _precedence_ indicating how tightly they bind.
 
-The following _precedence table_ show the built-in precedence of standard Rhai operators:
+A higher precedence binds more tightly than a lower precedence, so `*` and `/` binds before `+` and `-` etc.
+
+When registering a custom operator, the operator's precedence must also be provided.
+
+The following _precedence table_ shows the built-in precedence of standard Rhai operators:
 
 | Category            |                                        Operators                                        | Precedence (0-255) |
 | ------------------- | :-------------------------------------------------------------------------------------: | :----------------: |
@@ -92,15 +96,11 @@ The following _precedence table_ show the built-in precedence of standard Rhai o
 | Logic and bit masks |                        <code>\|\|</code>,  <code>\|</code>, `^`                         |         30         |
 | Logic and bit masks |                                        `&`, `&&`                                        |         60         |
 | Comparisons         |                                       `==`, `!=`                                        |         90         |
-| Comparisons         |                                  `>`, `>=`, `<`, `<=`                                   |        110         |
-|                     |                                          `in`                                           |        130         |
+|                     |                                          `in`                                           |        110         |
+| Comparisons         |                                  `>`, `>=`, `<`, `<=`                                   |        130         |
 | Arithmetic          |                                        `+`, `-`                                         |        150         |
 | Arithmetic          |                                      `*`, `/`, `%`                                      |        180         |
 | Arithmetic          |                                           `~`                                           |        190         |
 | Bit-shifts          |                                       `<<`, `>>`                                        |        210         |
 | Object              |                                 `.` _(binds to right)_                                  |        240         |
-| _Others_            |                                                                                         |         0          |
-
-A higher precedence binds more tightly than a lower precedence, so `*` and `/` binds before `+` and `-` etc.
-
-When registering a custom operator, the operator's precedence must also be provided.
+| Unary operators     |                         unary `+`, `-`, `!` _(binds to right)_                          |        255         |

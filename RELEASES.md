@@ -20,7 +20,7 @@ Breaking changes
 * New reserved symbols: `++`, `--`, `..`, `...`.
 * Callback signature for custom syntax implementation function is changed to allow for more flexibility.
 * Default call stack depth for `debug` builds is reduced to 12 (from 16).
-* Precedence for `~` and `%` is raised.
+* Precedence for `~` is raised, while `in` is moved below logic comparison operators.
 
 New features
 ------------
