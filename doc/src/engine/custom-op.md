@@ -95,8 +95,8 @@ The following _precedence table_ show the built-in precedence of standard Rhai o
 | Comparisons         |                                  `>`, `>=`, `<`, `<=`                                   |        110         |
 |                     |                                          `in`                                           |        130         |
 | Arithmetic          |                                        `+`, `-`                                         |        150         |
-| Arithmetic          |                                        `*`, `/`                                         |        180         |
-| Arithmetic          |                                        `~`, `%`                                         |        190         |
+| Arithmetic          |                                      `*`, `/`, `%`                                      |        180         |
+| Arithmetic          |                                           `~`                                           |        190         |
 | Bit-shifts          |                                       `<<`, `>>`                                        |        210         |
 | Object              |                                 `.` _(binds to right)_                                  |        240         |
 | _Others_            |                                                                                         |         0          |
