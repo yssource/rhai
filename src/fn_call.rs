@@ -193,11 +193,9 @@ impl Engine {
         // Search for the native function
         // First search registered functions (can override packages)
         // Then search packages
-        let func = self
-            .global_module
-            .get_fn(hash_fn, pub_only)
-            .or_else(|| lib.get_fn(hash_fn, pub_only))
-            .or_else(|| self.packages.get_fn(hash_fn, pub_only));
+        let func = //lib.get_fn(hash_fn, pub_only)
+            self.global_module.get_fn(hash_fn, pub_only)
+                .or_else(|| self.packages.get_fn(hash_fn, pub_only));
 
         if let Some(func) = func {
             assert!(func.is_native());
@@ -462,9 +460,9 @@ impl Engine {
 
         // First check script-defined functions
         lib.contains_fn(hash_script, pub_only)
-            || lib.contains_fn(hash_fn, pub_only)
+            //|| lib.contains_fn(hash_fn, pub_only)
             // Then check registered functions
-            || self.global_module.contains_fn(hash_script, pub_only)
+            //|| self.global_module.contains_fn(hash_script, pub_only)
             || self.global_module.contains_fn(hash_fn, pub_only)
             // Then check packages
             || self.packages.contains_fn(hash_script, pub_only)
@@ -547,15 +545,14 @@ impl Engine {
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if self.global_module.contains_fn(hash_script, pub_only)
-                || lib.contains_fn(hash_script, pub_only)
+            _ if lib.contains_fn(hash_script, pub_only)
+                //|| self.global_module.contains_fn(hash_script, pub_only)
                 || self.packages.contains_fn(hash_script, pub_only) =>
             {
                 // Get function
-                let func = self
-                    .global_module
+                let func = lib
                     .get_fn(hash_script, pub_only)
-                    .or_else(|| lib.get_fn(hash_script, pub_only))
+                    //.or_else(|| self.global_module.get_fn(hash_script, pub_only))
                     .or_else(|| self.packages.get_fn(hash_script, pub_only))
                     .unwrap();
 

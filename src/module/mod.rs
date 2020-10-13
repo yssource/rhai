@@ -549,36 +549,6 @@ impl Module {
         )
     }
 
-    /// Set a raw function but with a signature that is a scripted function (meaning that the types
-    /// are not determined), but the implementation is in Rust.
-    #[cfg(not(feature = "no_function"))]
-    #[cfg(not(feature = "no_module"))]
-    #[inline]
-    #[allow(dead_code)]
-    pub(crate) fn set_raw_fn_as_scripted(
-        &mut self,
-        name: impl Into<String>,
-        num_params: usize,
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<Dynamic> + SendSync + 'static,
-    ) -> u64 {
-        // None + function name + number of arguments.
-        let name = name.into();
-        let hash_script = calc_fn_hash(empty(), &name, num_params, empty());
-        let f = move |engine: &Engine, lib: &Module, args: &mut FnCallArgs| func(engine, lib, args);
-        self.functions.insert(
-            hash_script,
-            (
-                name,
-                FnAccess::Public,
-                num_params,
-                None,
-                CallableFunction::from_pure(Box::new(f)),
-            ),
-        );
-        self.indexed = false;
-        hash_script
-    }
-
     /// Set a Rust function taking no parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
