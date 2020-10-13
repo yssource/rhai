@@ -30,30 +30,32 @@ Built-in Functions
 
 The following methods (mostly defined in the [`BasicArrayPackage`][packages] but excluded if using a [raw `Engine`]) operate on arrays:
 
-| Function                  | Parameter(s)                                                                                                                     | Description                                                                                                                                                                                                                          |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `push`                    | element to insert                                                                                                                | inserts an element at the end                                                                                                                                                                                                        |
-| `append`                  | array to append                                                                                                                  | concatenates the second array to the end of the first                                                                                                                                                                                |
-| `+=` operator             | 1) array<br/>2) element to insert (not another array)                                                                            | inserts an element at the end                                                                                                                                                                                                        |
-| `+=` operator             | 1) array<br/>2) array to append                                                                                                  | concatenates the second array to the end of the first                                                                                                                                                                                |
-| `+` operator              | 1) first array<br/>2) second array                                                                                               | concatenates the first array with the second                                                                                                                                                                                         |
-| `insert`                  | 1) element to insert<br/>2) position (beginning if <= 0, end if >= length)                                                       | inserts an element at a certain index                                                                                                                                                                                                |
-| `pop`                     | _none_                                                                                                                           | removes the last element and returns it ([`()`] if empty)                                                                                                                                                                            |
-| `shift`                   | _none_                                                                                                                           | removes the first element and returns it ([`()`] if empty)                                                                                                                                                                           |
-| `remove`                  | index                                                                                                                            | removes an element at a particular index and returns it ([`()`] if the index is not valid)                                                                                                                                           |
-| `reverse`                 | _none_                                                                                                                           | reverses the array                                                                                                                                                                                                                   |
-| `len` method and property | _none_                                                                                                                           | returns the number of elements                                                                                                                                                                                                       |
-| `pad`                     | 1) target length<br/>2) element to pad                                                                                           | pads the array with an element to at least a specified length                                                                                                                                                                        |
-| `clear`                   | _none_                                                                                                                           | empties the array                                                                                                                                                                                                                    |
-| `truncate`                | target length                                                                                                                    | cuts off the array at exactly a specified length (discarding all subsequent elements)                                                                                                                                                |
-| `splice`                  | 1) start position (beginning if <= 0, end if >= length),<br/>2) number of items to remove (none if <= 0),<br/>3) array to insert | replaces a portion of the array with another (not necessarily of the same length as the replaced portion)                                                                                                                            |
-| `filter`                  | [function pointer] to predicate (can be a [closure])                                                                             | constructs a new array with all items that returns `true` when called with the predicate function:<br/>1st parameter: array item,<br/>2nd parameter: offset index (optional)                                                         |
-| `map`                     | [function pointer] to conversion function (can be a [closure])                                                                   | constructs a new array with all items mapped to the result of applying the conversion function:<br/>1st parameter: array item,<br/>2nd parameter: offset index (optional)                                                            |
-| `reduce`                  | [function pointer] to accumulator function (can be a [closure])                                                                  | constructs a new array with all items accumulated by the accumulator function:<br/>1st parameter: accumulated value ([`()`] initially),<br/>2nd parameter: array item,<br/>3rd parameter: offset index (optional)                    |
-| `reduce_rev`              | [function pointer] to accumulator function (can be a [closure])                                                                  | constructs a new array with all items (in reverse order) accumulated by the accumulator function:<br/>1st parameter: accumulated value ([`()`] initially),<br/>2nd parameter: array item,<br/>3rd parameter: offset index (optional) |
-| `some`                    | [function pointer] to predicate (can be a [closure])                                                                             | returns `true` if any item returns `true` when called with the predicate function:<br/>1st parameter: array item,<br/>2nd parameter: offset index (optional)                                                                         |
-| `all`                     | [function pointer] to predicate (can be a [closure])                                                                             | returns `true` if all item returns `true` when called with the predicate function:<br/>1st parameter: array item,<br/>2nd parameter: offset index (optional)                                                                         |
-| `sort`                    | [function pointer] to a comparison function (can be a [closure])                                                                 | sorts the array with a comparison function:<br/>1st parameter: first item,<br/>2nd parameter: second item                                                                                                                            |
+| Function                  | Parameter(s)                                                                                                                | Description                                                                                                                                                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `push`                    | element to insert                                                                                                           | inserts an element at the end                                                                                                                                                                                               |
+| `append`                  | array to append                                                                                                             | concatenates the second array to the end of the first                                                                                                                                                                       |
+| `+=` operator             | 1) array<br/>2) element to insert (not another array)                                                                       | inserts an element at the end                                                                                                                                                                                               |
+| `+=` operator             | 1) array<br/>2) array to append                                                                                             | concatenates the second array to the end of the first                                                                                                                                                                       |
+| `+` operator              | 1) first array<br/>2) second array                                                                                          | concatenates the first array with the second                                                                                                                                                                                |
+| `insert`                  | 1) element to insert<br/>2) position, beginning if < 0, end if > length                                                     | inserts an element at a certain index                                                                                                                                                                                       |
+| `pop`                     | _none_                                                                                                                      | removes the last element and returns it ([`()`] if empty)                                                                                                                                                                   |
+| `shift`                   | _none_                                                                                                                      | removes the first element and returns it ([`()`] if empty)                                                                                                                                                                  |
+| `extract`                 | 1) start position, beginning if < 0, end if > length,<br/>2) number of items to extract, none if < 0 _(optional)_           | extracts a portion of the array into a new array                                                                                                                                                                            |
+| `remove`                  | index                                                                                                                       | removes an element at a particular index and returns it ([`()`] if the index is not valid)                                                                                                                                  |
+| `reverse`                 | _none_                                                                                                                      | reverses the array                                                                                                                                                                                                          |
+| `len` method and property | _none_                                                                                                                      | returns the number of elements                                                                                                                                                                                              |
+| `pad`                     | 1) target length<br/>2) element to pad                                                                                      | pads the array with an element to at least a specified length                                                                                                                                                               |
+| `clear`                   | _none_                                                                                                                      | empties the array                                                                                                                                                                                                           |
+| `truncate`                | target length                                                                                                               | cuts off the array at exactly a specified length (discarding all subsequent elements)                                                                                                                                       |
+| `chop`                    | target length                                                                                                               | cuts off the head of the array, leaving the tail at exactly a specified length                                                                                                                                              |
+| `splice`                  | 1) start position, beginning if < 0, end if > length,<br/>2) number of items to remove, none if < 0,<br/>3) array to insert | replaces a portion of the array with another (not necessarily of the same length as the replaced portion)                                                                                                                   |
+| `filter`                  | [function pointer] to predicate (can be a [closure])                                                                        | constructs a new array with all items that returns `true` when called with the predicate function:<br/>1st parameter: array item,<br/>2nd parameter: offset index _(optional)_                                              |
+| `map`                     | [function pointer] to conversion function (can be a [closure])                                                              | constructs a new array with all items mapped to the result of applying the conversion function:<br/>1st parameter: array item,<br/>2nd parameter: offset index _(optional)_                                                 |
+| `reduce`                  | [function pointer] to accumulator function (can be a [closure])                                                             | reduces the array into a single value via the accumulator function:<br/>1st parameter: accumulated value ([`()`] initially),<br/>2nd parameter: array item,<br/>3rd parameter: offset index _(optional)_                    |
+| `reduce_rev`              | [function pointer] to accumulator function (can be a [closure])                                                             | reduces the array (in reverse order) into a single value via the accumulator function:<br/>1st parameter: accumulated value ([`()`] initially),<br/>2nd parameter: array item,<br/>3rd parameter: offset index _(optional)_ |
+| `some`                    | [function pointer] to predicate (can be a [closure])                                                                        | returns `true` if any item returns `true` when called with the predicate function:<br/>1st parameter: array item,<br/>2nd parameter: offset index _(optional)_                                                              |
+| `all`                     | [function pointer] to predicate (can be a [closure])                                                                        | returns `true` if all item returns `true` when called with the predicate function:<br/>1st parameter: array item,<br/>2nd parameter: offset index _(optional)_                                                              |
+| `sort`                    | [function pointer] to a comparison function (can be a [closure])                                                            | sorts the array with a comparison function:<br/>1st parameter: first item,<br/>2nd parameter: second item,<br/>return value: `INT` < 0 if first < second, > 0 if first > second, 0 if first == second                       |
 
 
 Use Custom Types With Arrays
@@ -71,12 +73,13 @@ Examples
 --------
 
 ```rust
-let y = [2, 3];             // array literal with 2 elements
+let y = [2, 3];             // y == [2, 3]
 
-let y = [2, 3,];            // trailing comma is OK
+let y = [2, 3,];            // y == [2, 3]
 
-y.insert(0, 1);             // insert element at the beginning
-y.insert(999, 4);           // insert element at the end
+y.insert(0, 1);             // y == [1, 2, 3]
+
+y.insert(999, 4);           // y == [1, 2, 3, 4]
 
 y.len == 4;
 
@@ -89,71 +92,69 @@ y[3] == 4;
 (42 in y) == false;         // 'in' uses the '==' operator (which users can override)
                             // to check if the target item exists in the array
 
-y[1] = 42;                  // array elements can be reassigned
+y[1] = 42;                  // y == [1, 42, 3, 4]
 
 (42 in y) == true;
 
-y.remove(2) == 3;           // remove element
+y.remove(2) == 3;           // y == [1, 42, 4]
 
 y.len == 3;
 
 y[2] == 4;                  // elements after the removed element are shifted
 
 ts.list = y;                // arrays can be assigned completely (by value copy)
-let foo = ts.list[1];
-foo == 42;
 
-let foo = [1, 2, 3][0];
-foo == 1;
+ts.list[1] == 42;
+
+[1, 2, 3][0] == 1;          // indexing on array literal
 
 fn abc() {
     [42, 43, 44]            // a function returning an array
 }
 
-let foo = abc()[0];
-foo == 42;
+abc()[0] == 42;
 
-let foo = y[0];
-foo == 1;
+y.push(4);                  // y == [1, 42, 4, 4]
 
-y.push(4);                  // 4 elements
-y += 5;                     // 5 elements
+y += 5;                     // y == [1, 42, 4, 4, 5]
 
 y.len == 5;
 
-let first = y.shift();      // remove the first element, 4 elements remaining
-first == 1;
+y.shift() == 1;             // y == [42, 4, 4, 5]
 
-let last = y.pop();         // remove the last element, 3 elements remaining
-last == 5;
+y.chop(3);                  // y == [4, 4, 5]
 
 y.len == 3;
+
+y.pop() == 5;               // y == [4, 4]
+
+y.len == 2;
 
 for item in y {             // arrays can be iterated with a 'for' statement
     print(item);
 }
 
-y.pad(10, "hello");         // pad the array up to 10 elements
+y.pad(6, "hello");          // y == [4, 4, "hello", "hello", "hello", "hello"]
 
-y.len == 10;
+y.len == 6;
 
-y.truncate(5);              // truncate the array to 5 elements
+y.truncate(4);              // y == [4, 4, "hello", "hello"]
 
-y.len == 5;
+y.len == 4;
 
-y.clear();                  // empty the array
+y.clear();                  // y == []
 
 y.len == 0;
 
 let a = [42, 123, 99];
 
-a.map(|v| v + 1);           // [43, 124, 100]
+a.map(|v| v + 1);           // returns [43, 124, 100]
 
-a.map(|v, i| v + i);        // [42, 124, 101]
+a.map(|v, i| v + i);        // returns [42, 124, 101]
 
-a.filter(|v| v > 50);       // [123, 99]
+a.filter(|v| v > 50);       // returns [123, 99]
 
-a.filter(|v, i| i == 1);    // [123]
+a.filter(|v, i| i == 1);    // returns [123]
 
 a.reduce(|sum, v| {
     // Detect the initial value of '()'
@@ -170,22 +171,20 @@ a.reduce_rev(|sum, v| {
 ) == 264;
 
 a.reduce_rev(|sum, v, i| {
-    if i == 0 { v } else { sum + v }
+    if i == 2 { v } else { sum + v }
 ) == 264;
 
-a.some(|v| v > 50) == true;
+a.some(|v| v > 50);         // returns true
 
-a.some(|v, i| v < i) == false;
+a.some(|v, i| v < i);       // returns false
 
-a.all(|v| v > 50) == false;
+a.all(|v| v > 50);          // returns false
 
-a.all(|v, i| v > i) == true;
+a.all(|v, i| v > i);        // returns true
 
-a.splice(1, 1, [1, 3, 2]);
+a.splice(1, 1, [1, 3, 2]);  // a == [42, 1, 3, 2, 99]
 
-a == [42, 1, 3, 2, 99];
+a.extract(1, 3);            // returns [1, 3, 2]
 
-a.sort(|x, y| x -  y);
-
-a == [1, 2, 3, 42, 99];
+a.sort(|x, y| x -  y);      // a == [1, 2, 3, 42, 99]
 ```

@@ -31,7 +31,7 @@ New features
 * `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
 * `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
-* `map`, `filter`, `reduce`, `reduce_rev`, `some`, `all`, `splice` and `sort` functions for arrays.
+* `map`, `filter`, `reduce`, `reduce_rev`, `some`, `all`, `extract`, `splice`, `chop` and `sort` functions for arrays.
 
 Enhancements
 ------------

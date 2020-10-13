@@ -131,6 +131,14 @@ mod array_functions {
             list.clear();
         }
     }
+    pub fn chop(list: &mut Array, len: INT) {
+        if len as usize >= list.len() {
+        } else if len >= 0 {
+            list.drain(0..list.len() - len as usize);
+        } else {
+            list.clear();
+        }
+    }
     pub fn reverse(list: &mut Array) {
         list.reverse();
     }
@@ -152,6 +160,37 @@ mod array_functions {
         };
 
         list.splice(start..start + len, replace.into_iter());
+    }
+    pub fn extract(list: &mut Array, start: INT, len: INT) -> Array {
+        let start = if start < 0 {
+            0
+        } else if start as usize >= list.len() {
+            list.len() - 1
+        } else {
+            start as usize
+        };
+
+        let len = if len < 0 {
+            0
+        } else if len as usize > list.len() - start {
+            list.len() - start
+        } else {
+            len as usize
+        };
+
+        list[start..start + len].iter().cloned().collect()
+    }
+    #[rhai_fn(name = "extract")]
+    pub fn extract_tail(list: &mut Array, start: INT) -> Array {
+        let start = if start < 0 {
+            0
+        } else if start as usize >= list.len() {
+            list.len() - 1
+        } else {
+            start as usize
+        };
+
+        list[start..].iter().cloned().collect()
     }
 }
 
