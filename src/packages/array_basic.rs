@@ -74,9 +74,12 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     lib.set_raw_fn("map", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], map);
     lib.set_raw_fn("filter", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], filter);
     lib.set_raw_fn("reduce", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], reduce);
+    lib.set_raw_fn("reduce", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>(), TypeId::of::<FnPtr>()], reduce_with_initial);
     lib.set_raw_fn("reduce_rev", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], reduce_rev);
+    lib.set_raw_fn("reduce_rev", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>(), TypeId::of::<FnPtr>()], reduce_rev_with_initial);
     lib.set_raw_fn("some", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], some);
     lib.set_raw_fn("all", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], all);
+    lib.set_raw_fn("none", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], none);
     lib.set_raw_fn("sort", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], sort);
 
     // Merge in the module at the end to override `+=` for arrays
@@ -364,6 +367,40 @@ fn all(
     Ok(true.into())
 }
 
+fn none(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<bool, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let filter = args[1].read_lock::<FnPtr>().unwrap();
+
+    for (i, item) in list.iter().enumerate() {
+        if filter
+            .call_dynamic(engine, lib, None, [item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                }
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "filter".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?
+            .as_bool()
+            .unwrap_or(false)
+        {
+            return Ok(false.into());
+        }
+    }
+
+    Ok(true.into())
+}
+
 fn reduce(
     engine: &Engine,
     lib: &Module,
@@ -398,6 +435,47 @@ fn reduce(
     Ok(result)
 }
 
+fn reduce_with_initial(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let reducer = args[1].read_lock::<FnPtr>().unwrap();
+    let initial = args[2].read_lock::<FnPtr>().unwrap();
+
+    let mut result = initial.call_dynamic(engine, lib, None, []).map_err(|err| {
+        Box::new(EvalAltResult::ErrorInFunctionCall(
+            "reduce".to_string(),
+            err,
+            Position::none(),
+        ))
+    })?;
+
+    for (i, item) in list.iter().enumerate() {
+        result = reducer
+            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
+                    engine,
+                    lib,
+                    None,
+                    [result, item.clone(), (i as INT).into()],
+                ),
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "reduce".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?;
+    }
+
+    Ok(result)
+}
+
 fn reduce_rev(
     engine: &Engine,
     lib: &Module,
@@ -407,6 +485,47 @@ fn reduce_rev(
     let reducer = args[1].read_lock::<FnPtr>().unwrap();
 
     let mut result: Dynamic = ().into();
+
+    for (i, item) in list.iter().enumerate().rev() {
+        result = reducer
+            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
+                    engine,
+                    lib,
+                    None,
+                    [result, item.clone(), (i as INT).into()],
+                ),
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "reduce".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?;
+    }
+
+    Ok(result)
+}
+
+fn reduce_rev_with_initial(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    let list = args[0].read_lock::<Array>().unwrap();
+    let reducer = args[1].read_lock::<FnPtr>().unwrap();
+    let initial = args[2].read_lock::<FnPtr>().unwrap();
+
+    let mut result = initial.call_dynamic(engine, lib, None, []).map_err(|err| {
+        Box::new(EvalAltResult::ErrorInFunctionCall(
+            "reduce".to_string(),
+            err,
+            Position::none(),
+        ))
+    })?;
 
     for (i, item) in list.iter().enumerate().rev() {
         result = reducer
