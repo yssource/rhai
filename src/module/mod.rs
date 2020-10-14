@@ -1468,6 +1468,24 @@ impl Module {
         self
     }
 
+    /// Set a type iterator into the module.
+    pub fn set_iterable<T: Variant + Clone + IntoIterator<Item = U>, U: Variant + Clone>(
+        &mut self,
+    ) -> &mut Self {
+        self.set_iter(TypeId::of::<T>(), |obj: Dynamic| {
+            Box::new(obj.cast::<T>().into_iter().map(Dynamic::from))
+        })
+    }
+
+    /// Set an iterator type into the module as a type iterator.
+    pub fn set_iterator<T: Variant + Clone + Iterator<Item = U>, U: Variant + Clone>(
+        &mut self,
+    ) -> &mut Self {
+        self.set_iter(TypeId::of::<T>(), |obj: Dynamic| {
+            Box::new(obj.cast::<T>().map(Dynamic::from))
+        })
+    }
+
     /// Get the specified type iterator.
     pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.type_iterators.get(&id).cloned()

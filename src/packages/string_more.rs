@@ -108,9 +108,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     // Register string iterator
     lib.set_iter(
         TypeId::of::<ImmutableString>(),
-        |arr| Box::new(
-            arr.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into)
-        ) as Box<dyn Iterator<Item = Dynamic>>,
+        |s: Dynamic| Box::new(s.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into))
     );
 });
 

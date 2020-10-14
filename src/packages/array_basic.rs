@@ -86,10 +86,7 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     combine_with_exported_module!(lib, "array", array_functions);
 
     // Register array iterator
-    lib.set_iter(
-        TypeId::of::<Array>(),
-        |arr| Box::new(arr.cast::<Array>().into_iter()) as Box<dyn Iterator<Item = Dynamic>>,
-    );
+    lib.set_iterable::<Array, Dynamic>();
 });
 
 #[export_module]

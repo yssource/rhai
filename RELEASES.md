@@ -12,6 +12,7 @@ Breaking changes
 * `AST::iter_functions` now returns an iterator instead of taking a closure.
 * `Module::get_script_function_by_signature` renamed to `Module::get_script_fn` and returns `&<Shared<ScriptFnDef>>`.
 * `Module::num_fn`, `Module::num_var` and `Module::num_iter` are removed and merged into `Module::count`.
+* `Module::set_iter` is renamed to `Module::set_iter_raw`.
 * The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
 * `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
 * The following `EvalAltResult` variants are removed and merged into `EvalAltResult::ErrorMismatchDataType`: `ErrorCharMismatch`, `ErrorNumericIndexExpr`, `ErrorStringIndexExpr`, `ErrorImportExpr`, `ErrorLogicGuard`, `ErrorBooleanArgMismatch`
@@ -32,6 +33,7 @@ New features
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
 * `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
 * `map`, `filter`, `reduce`, `reduce_rev`, `some`, `all`, `extract`, `splice`, `chop` and `sort` functions for arrays.
+* New `Module::set_iter`, `Module::set_iterable` and `Module::set_iterator` to define type iterators more easily. `Engine::register_iterator` is changed to use the simpler version.
 
 Enhancements
 ------------

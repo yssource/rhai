@@ -1782,21 +1782,22 @@ impl Engine {
             // For loop
             Stmt::For(x) => {
                 let (name, expr, stmt, _) = x.as_ref();
-                let iter_type = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                let tid = iter_type.type_id();
+                let iter_obj = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                let iter_type = iter_obj.type_id();
 
-                if let Some(func) = self
+                let func = self
                     .global_module
-                    .get_iter(tid)
-                    .or_else(|| self.packages.get_iter(tid))
-                {
+                    .get_iter(iter_type)
+                    .or_else(|| self.packages.get_iter(iter_type));
+
+                if let Some(func) = func {
                     // Add the loop variable
                     let var_name = unsafe_cast_var_name_to_lifetime(name, &state);
                     scope.push(var_name, ());
                     let index = scope.len() - 1;
                     state.scope_level += 1;
 
-                    for iter_value in func(iter_type) {
+                    for iter_value in func(iter_obj) {
                         let (loop_var, _) = scope.get_mut(index);
 
                         let value = iter_value.flatten();

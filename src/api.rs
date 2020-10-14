@@ -3,7 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, EvalContext, Imports, State};
 use crate::error::ParseError;
-use crate::fn_native::{IteratorFn, SendSync};
+use crate::fn_native::SendSync;
 use crate::module::{FuncReturn, Module};
 use crate::optimize::OptimizationLevel;
 use crate::parser::AST;
@@ -174,11 +174,13 @@ impl Engine {
         self
     }
 
-    /// Register an iterator adapter for a type with the `Engine`.
+    /// Register an iterator adapter for an iterable type with the `Engine`.
     /// This is an advanced feature.
     #[inline(always)]
-    pub fn register_iterator<T: Variant + Clone>(&mut self, f: IteratorFn) -> &mut Self {
-        self.global_module.set_iter(TypeId::of::<T>(), f);
+    pub fn register_iterator<T: Variant + Clone + IntoIterator<Item = U>, U: Variant + Clone>(
+        &mut self,
+    ) -> &mut Self {
+        self.global_module.set_iterable::<T, U>();
         self
     }
 
