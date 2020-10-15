@@ -129,6 +129,54 @@ pub enum ChainType {
     Dot,
 }
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+#[derive(Debug, Clone)]
+pub enum IndexChainValue {
+    None,
+    FnCallArgs(StaticVec<Dynamic>),
+    Value(Dynamic),
+}
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+impl IndexChainValue {
+    /// Return the `Dynamic` value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not `IndexChainValue::Value`.
+    pub fn as_value(self) -> Dynamic {
+        match self {
+            Self::None | Self::FnCallArgs(_) => panic!("expecting IndexChainValue::Value"),
+            Self::Value(value) => value,
+        }
+    }
+    /// Return the `StaticVec<Dynamic>` value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not `IndexChainValue::FnCallArgs`.
+    pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
+        match self {
+            Self::None | Self::Value(_) => panic!("expecting IndexChainValue::FnCallArgs"),
+            Self::FnCallArgs(value) => value,
+        }
+    }
+}
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+impl From<StaticVec<Dynamic>> for IndexChainValue {
+    fn from(value: StaticVec<Dynamic>) -> Self {
+        Self::FnCallArgs(value)
+    }
+}
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+impl From<Dynamic> for IndexChainValue {
+    fn from(value: Dynamic) -> Self {
+        Self::Value(value)
+    }
+}
+
 /// A type that encapsulates a mutation target for an expression with side effects.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug)]
@@ -790,7 +838,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         rhs: &Expr,
-        idx_values: &mut StaticVec<Dynamic>,
+        mut idx_values: StaticVec<IndexChainValue>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<(Dynamic, Position)>,
@@ -820,6 +868,7 @@ impl Engine {
                     Expr::Dot(x) | Expr::Index(x) => {
                         let (idx, expr, pos) = x.as_ref();
                         let idx_pos = idx.position();
+                        let idx_val = idx_val.as_value();
                         let obj_ptr = &mut self.get_indexed_mut(
                             state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
@@ -832,6 +881,7 @@ impl Engine {
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
+                        let idx_val = idx_val.as_value();
                         let mut idx_val2 = idx_val.clone();
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
@@ -876,9 +926,11 @@ impl Engine {
                         Ok(Default::default())
                     }
                     // xxx[rhs]
-                    _ => self
-                        .get_indexed_mut(state, lib, target, idx_val, pos, false, true, level)
-                        .map(|v| (v.take_or_clone(), false)),
+                    _ => {
+                        let idx_val = idx_val.as_value();
+                        self.get_indexed_mut(state, lib, target, idx_val, pos, false, true, level)
+                            .map(|v| (v.take_or_clone(), false))
+                    }
                 }
             }
 
@@ -889,9 +941,9 @@ impl Engine {
                     Expr::FnCall(x) if x.1.is_none() => {
                         let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
                         let def_val = def_val.map(Into::<Dynamic>::into);
+                        let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            state, lib, name, *hash, target, idx_val, &def_val, *native, false,
-                            level,
+                            state, lib, name, *hash, target, args, &def_val, *native, false, level,
                         )
                         .map_err(|err| err.fill_position(*pos))
                     }
@@ -956,10 +1008,11 @@ impl Engine {
                             Expr::FnCall(x) if x.1.is_none() => {
                                 let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
                                 let def_val = def_val.map(Into::<Dynamic>::into);
+                                let args = idx_val.as_fn_call_args();
                                 let (val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, idx_val, &def_val,
-                                        *native, false, level,
+                                        state, lib, name, *hash, target, args, &def_val, *native,
+                                        false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
                                 val.into()
@@ -1034,10 +1087,11 @@ impl Engine {
                             Expr::FnCall(x) if x.1.is_none() => {
                                 let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
                                 let def_val = def_val.map(Into::<Dynamic>::into);
+                                let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, idx_val, &def_val,
-                                        *native, false, level,
+                                        state, lib, name, *hash, target, args, &def_val, *native,
+                                        false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
                                 let val = &mut val;
@@ -1083,10 +1137,19 @@ impl Engine {
             _ => unreachable!(),
         };
 
-        let idx_values = &mut StaticVec::new();
+        let mut idx_values = StaticVec::new();
 
         self.eval_indexed_chain(
-            scope, mods, state, lib, this_ptr, dot_rhs, chain_type, idx_values, 0, level,
+            scope,
+            mods,
+            state,
+            lib,
+            this_ptr,
+            dot_rhs,
+            chain_type,
+            &mut idx_values,
+            0,
+            level,
         )?;
 
         match dot_lhs {
@@ -1133,11 +1196,8 @@ impl Engine {
         }
     }
 
-    /// Evaluate a chain of indexes and store the results in a list.
-    /// The first few results are stored in the array `list` which is of fixed length.
-    /// Any spill-overs are stored in `more`, which is dynamic.
-    /// The fixed length array is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
-    /// The total number of values is returned.
+    /// Evaluate a chain of indexes and store the results in a StaticVec.
+    /// StaticVec is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_indexed_chain(
         &self,
@@ -1148,7 +1208,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         chain_type: ChainType,
-        idx_values: &mut StaticVec<Dynamic>,
+        idx_values: &mut StaticVec<IndexChainValue>,
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
@@ -1162,31 +1222,30 @@ impl Engine {
                         .map(|arg_expr| {
                             self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                         })
-                        .collect::<Result<StaticVec<Dynamic>, _>>()?;
+                        .collect::<Result<StaticVec<_>, _>>()?;
 
-                idx_values.push(Dynamic::from(arg_values));
+                idx_values.push(arg_values.into());
             }
             Expr::FnCall(_) => unreachable!(),
-            Expr::Property(_) => idx_values.push(().into()), // Store a placeholder - no need to copy the property name
+            Expr::Property(_) => idx_values.push(IndexChainValue::None),
             Expr::Index(x) | Expr::Dot(x) => {
                 let (lhs, rhs, _) = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
-                    Expr::Property(_) => Default::default(), // Store a placeholder in case of a property
+                    Expr::Property(_) => IndexChainValue::None,
                     Expr::FnCall(x) if chain_type == ChainType::Dot && x.1.is_none() => {
-                        let arg_values = x
-                            .3
-                            .iter()
+                        x.3.iter()
                             .map(|arg_expr| {
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                             })
-                            .collect::<Result<StaticVec<Dynamic>, _>>()?;
-
-                        Dynamic::from(arg_values)
+                            .collect::<Result<StaticVec<Dynamic>, _>>()?
+                            .into()
                     }
                     Expr::FnCall(_) => unreachable!(),
-                    _ => self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?,
+                    _ => self
+                        .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
+                        .into(),
                 };
 
                 // Push in reverse order
@@ -1201,7 +1260,10 @@ impl Engine {
 
                 idx_values.push(lhs_val);
             }
-            _ => idx_values.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?),
+            _ => idx_values.push(
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .into(),
+            ),
         }
 
         Ok(())
