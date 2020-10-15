@@ -114,7 +114,8 @@ Any custom syntax must include an _implementation_ of it.
 
 The function signature of an implementation is:
 
-> `Fn(scope: &mut Scope, context: &mut EvalContext, inputs: &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>`
+> `Fn(scope: &mut Scope, context: &mut EvalContext, inputs: &[Expression])`  
+> `-> Result<Dynamic, Box<EvalAltResult>>`
 
 where:
 

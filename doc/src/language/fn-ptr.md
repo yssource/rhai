@@ -13,7 +13,7 @@ Built-in methods
 ----------------
 
 The following standard methods (mostly defined in the [`BasicFnPackage`][packages] but excluded if
-using a [raw `Engine`]) operate on [strings]:
+using a [raw `Engine`]) operate on function pointers:
 
 | Function                   | Parameter(s) | Description                                                                  |
 | -------------------------- | ------------ | ---------------------------------------------------------------------------- |
@@ -64,7 +64,7 @@ Global Namespace Only
 
 Because of their dynamic nature, function pointers cannot refer to functions in [`import`]-ed [modules].
 They can only refer to functions within the global [namespace][function namespace].
-See [function namespaces] for more details.
+See _[Function Namespaces]_ for more details.
 
 ```rust
 import "foo" as f;          // assume there is 'f::do_work()'
@@ -135,13 +135,13 @@ map[func].call(42);
 ```
 
 
-Binding the `this` Pointer
--------------------------
+Bind the `this` Pointer
+----------------------
 
-When `call` is called as a _method_ but not on a `FnPtr` value, it is possible to dynamically dispatch
+When `call` is called as a _method_ but not on a function pointer, it is possible to dynamically dispatch
 to a function call while binding the object in the method call to the `this` pointer of the function.
 
-To achieve this, pass the `FnPtr` value as the _first_ argument to `call`:
+To achieve this, pass the function pointer as the _first_ argument to `call`:
 
 ```rust
 fn add(x) {                 // define function which uses 'this'
@@ -167,3 +167,52 @@ Beware that this only works for _method-call_ style.  Normal function-call style
 the `this` pointer (for syntactic reasons).
 
 Therefore, obviously, binding the `this` pointer is unsupported under [`no_object`].
+
+
+Call a Function Pointer in Rust
+------------------------------
+
+It is completely normal to register a Rust function with an [`Engine`] that takes parameters
+whose types are function pointers.  The Rust type in question is `rhai::FnPtr`.
+
+A function pointer in Rhai is essentially syntactic sugar wrapping the _name_ of a function
+to call in script.  Therefore, the script's [`AST`] is required to call a function pointer,
+as well as the entire _execution context_ that the script is running in.
+
+For a rust function taking a function pointer as parameter, the [Low-Level API](../rust/register-raw.md)
+must be used to register the function.
+
+Essentially, use the low-level `Engine::register_raw_fn` method to register the function.
+`FnPtr::call_dynamic` is used to actually call the function pointer, passing to it the
+current scripting [`Engine`], collection of script-defined functions, the `this` pointer,
+and other necessary arguments.
+
+```rust
+use rhai::{Engine, Module, Dynamic, FnPtr};
+
+let mut engine = Engine::new();
+
+// Define Rust function in required low-level API signature
+fn call_fn_ptr_with_value(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic])
+    -> Result<Dynamic, Box<EvalAltResult>>
+{
+    // 'args' is guaranteed to contain enough arguments of the correct types
+    let fp = std::mem::take(args[1]).cast::<FnPtr>();       // 2nd argument - function pointer
+    let value = args[2].clone();                            // 3rd argument - function argument
+    let this_ptr = args.get_mut(0).unwrap();                // 1st argument - this pointer
+
+    // Use 'FnPtr::call_dynamic' to call the function pointer.
+    // Beware, private script-defined functions will not be found.
+    fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+}
+
+// Register a Rust function using the low-level API
+engine.register_raw_fn("super_call",
+    &[ // parameter types
+        std::any::TypeId::of::<i64>(),
+        std::any::TypeId::of::<FnPtr>(),
+        std::any::TypeId::of::<i64>()
+    ],
+    call_fn_ptr_with_value
+);
+```
