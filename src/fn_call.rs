@@ -886,20 +886,18 @@ impl Engine {
                 ));
             }
 
-            let (fn_name, fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
-
-            let mut curry = fn_curry.clone();
+            let (fn_name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
 
             // Append the new curried arguments to the existing list.
             args_expr
                 .iter()
                 .skip(1)
                 .try_for_each(|expr| -> Result<(), Box<EvalAltResult>> {
-                    curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
+                    fn_curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
                     Ok(())
                 })?;
 
-            return Ok(FnPtr::new_unchecked(fn_name, curry).into());
+            return Ok(FnPtr::new_unchecked(fn_name, fn_curry).into());
         }
 
         // Handle is_shared()
