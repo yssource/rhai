@@ -38,7 +38,7 @@ pub(crate) fn generate_body(
         if itemmod.skipped() {
             continue;
         }
-        let module_name: &syn::Ident = itemmod.module_name().unwrap();
+        let module_name = itemmod.module_name().unwrap();
         let exported_name: syn::LitStr = if let Some(name) = itemmod.exported_name() {
             syn::LitStr::new(&name, proc_macro2::Span::call_site())
         } else {

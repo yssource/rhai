@@ -261,7 +261,7 @@ impl Parse for ExportedFn {
                                 ref elem,
                                 ..
                             }) => match flatten_type_groups(elem.as_ref()) {
-                                &syn::Type::Path(ref p) if p.path == str_type_path => false,
+                                syn::Type::Path(ref p) if p.path == str_type_path => false,
                                 _ => {
                                     return Err(syn::Error::new(
                                         ty.span(),
@@ -296,7 +296,7 @@ impl Parse for ExportedFn {
                     ref elem,
                     ..
                 }) => {
-                    matches!(flatten_type_groups(elem.as_ref()), &syn::Type::Path(ref p) if p.path == str_type_path)
+                    matches!(flatten_type_groups(elem.as_ref()), syn::Type::Path(ref p) if p.path == str_type_path)
                 }
                 syn::Type::Verbatim(_) => false,
                 _ => true,
@@ -632,8 +632,8 @@ impl ExportedFn {
             let var = syn::Ident::new("arg0", proc_macro2::Span::call_site());
             match first_arg {
                 syn::FnArg::Typed(pattern) => {
-                    let arg_type: &syn::Type = match flatten_type_groups(pattern.ty.as_ref()) {
-                        &syn::Type::Reference(syn::TypeReference { ref elem, .. }) => elem.as_ref(),
+                    let arg_type = match flatten_type_groups(pattern.ty.as_ref()) {
+                        syn::Type::Reference(syn::TypeReference { ref elem, .. }) => elem.as_ref(),
                         p => p,
                     };
                     let downcast_span = quote_spanned!(
@@ -670,14 +670,14 @@ impl ExportedFn {
             let is_ref;
             match arg {
                 syn::FnArg::Typed(pattern) => {
-                    let arg_type: &syn::Type = pattern.ty.as_ref();
+                    let arg_type = pattern.ty.as_ref();
                     let downcast_span = match flatten_type_groups(pattern.ty.as_ref()) {
-                        &syn::Type::Reference(syn::TypeReference {
+                        syn::Type::Reference(syn::TypeReference {
                             mutability: None,
                             ref elem,
                             ..
                         }) => match flatten_type_groups(elem.as_ref()) {
-                            &syn::Type::Path(ref p) if p.path == str_type_path => {
+                            syn::Type::Path(ref p) if p.path == str_type_path => {
                                 is_string = true;
                                 is_ref = true;
                                 quote_spanned!(arg_type.span()=>
@@ -685,7 +685,7 @@ impl ExportedFn {
                             }
                             _ => panic!("internal error: why wasn't this found earlier!?"),
                         },
-                        &syn::Type::Path(ref p) if p.path == string_type_path => {
+                        syn::Type::Path(ref p) if p.path == string_type_path => {
                             is_string = true;
                             is_ref = false;
                             quote_spanned!(arg_type.span()=>
