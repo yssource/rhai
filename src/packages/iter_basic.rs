@@ -1,17 +1,9 @@
 use crate::any::Variant;
 use crate::def_package;
-use crate::module::{FuncReturn, Module};
+use crate::module::FuncReturn;
 use crate::parser::INT;
 
 use crate::stdlib::ops::{Add, Range};
-
-// Register range function
-fn reg_range<T: Variant + Clone>(lib: &mut Module)
-where
-    Range<T>: Iterator<Item = T>,
-{
-    lib.set_iterator::<Range<T>, T>();
-}
 
 fn get_range<T: Variant + Clone>(from: T, to: T) -> FuncReturn<Range<T>> {
     Ok(from..to)
@@ -42,15 +34,6 @@ where
     }
 }
 
-fn reg_step<T>(lib: &mut Module)
-where
-    for<'a> &'a T: Add<&'a T, Output = T>,
-    T: Variant + Clone + PartialOrd,
-    StepRange<T>: Iterator<Item = T>,
-{
-    lib.set_iterator::<StepRange<T>, T>();
-}
-
 fn get_step_range<T>(from: T, to: T, step: T) -> FuncReturn<StepRange<T>>
 where
     for<'a> &'a T: Add<&'a T, Output = T>,
@@ -60,14 +43,15 @@ where
 }
 
 def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
-    reg_range::<INT>(lib);
+    lib.set_iterator::<Range<INT>>();
+
     lib.set_fn_2("range", get_range::<INT>);
 
     if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         macro_rules! reg_range {
             ($lib:expr, $x:expr, $( $y:ty ),*) => (
                 $(
-                    reg_range::<$y>($lib);
+                    $lib.set_iterator::<Range<$y>>();
                     $lib.set_fn_2($x, get_range::<$y>);
                 )*
             )
@@ -80,14 +64,14 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
         }
     }
 
-    reg_step::<INT>(lib);
+    lib.set_iterator::<StepRange<INT>>();
     lib.set_fn_3("range", get_step_range::<INT>);
 
     if cfg!(not(feature = "only_i32")) && cfg!(not(feature = "only_i64")) {
         macro_rules! reg_step {
             ($lib:expr, $x:expr, $( $y:ty ),*) => (
                 $(
-                    reg_step::<$y>($lib);
+                    $lib.set_iterator::<StepRange<$y>>();
                     $lib.set_fn_3($x, get_step_range::<$y>);
                 )*
             )

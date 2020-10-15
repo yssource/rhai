@@ -86,7 +86,7 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     combine_with_exported_module!(lib, "array", array_functions);
 
     // Register array iterator
-    lib.set_iterable::<Array, Dynamic>();
+    lib.set_iterable::<Array>();
 });
 
 #[export_module]

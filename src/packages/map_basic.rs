@@ -6,7 +6,8 @@ use crate::engine::Map;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
 
-use crate::stdlib::vec::Vec;
+#[cfg(not(feature = "no_index"))]
+use crate::engine::Array;
 
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     combine_with_exported_module!(lib, "map", map_functions);
@@ -47,10 +48,10 @@ mod map_functions {
 
     #[cfg(not(feature = "no_index"))]
     pub mod indexing {
-        pub fn keys(map: &mut Map) -> Vec<Dynamic> {
+        pub fn keys(map: &mut Map) -> Array {
             map.iter().map(|(k, _)| k.clone().into()).collect()
         }
-        pub fn values(map: &mut Map) -> Vec<Dynamic> {
+        pub fn values(map: &mut Map) -> Array {
             map.iter().map(|(_, v)| v.clone()).collect()
         }
     }

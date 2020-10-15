@@ -1469,18 +1469,22 @@ impl Module {
     }
 
     /// Set a type iterator into the module.
-    pub fn set_iterable<T: Variant + Clone + IntoIterator<Item = U>, U: Variant + Clone>(
-        &mut self,
-    ) -> &mut Self {
+    pub fn set_iterable<T>(&mut self) -> &mut Self
+    where
+        T: Variant + Clone + IntoIterator,
+        <T as IntoIterator>::Item: Variant + Clone,
+    {
         self.set_iter(TypeId::of::<T>(), |obj: Dynamic| {
             Box::new(obj.cast::<T>().into_iter().map(Dynamic::from))
         })
     }
 
     /// Set an iterator type into the module as a type iterator.
-    pub fn set_iterator<T: Variant + Clone + Iterator<Item = U>, U: Variant + Clone>(
-        &mut self,
-    ) -> &mut Self {
+    pub fn set_iterator<T>(&mut self) -> &mut Self
+    where
+        T: Variant + Clone + Iterator,
+        <T as Iterator>::Item: Variant + Clone,
+    {
         self.set_iter(TypeId::of::<T>(), |obj: Dynamic| {
             Box::new(obj.cast::<T>().map(Dynamic::from))
         })

@@ -177,10 +177,12 @@ impl Engine {
     /// Register an iterator adapter for an iterable type with the `Engine`.
     /// This is an advanced feature.
     #[inline(always)]
-    pub fn register_iterator<T: Variant + Clone + IntoIterator<Item = U>, U: Variant + Clone>(
-        &mut self,
-    ) -> &mut Self {
-        self.global_module.set_iterable::<T, U>();
+    pub fn register_iterator<T>(&mut self) -> &mut Self
+    where
+        T: Variant + Clone + Iterator,
+        <T as Iterator>::Item: Variant + Clone,
+    {
+        self.global_module.set_iterable::<T>();
         self
     }
 
