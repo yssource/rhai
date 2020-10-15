@@ -61,10 +61,10 @@ fn test_for_object() -> Result<(), Box<EvalAltResult>> {
         let keys = "";
         let map = #{a: 1, b: 2, c: 3};
 
-        for key in keys(map) {
+        for key in map.keys() {
             keys += key;
         }
-        for value in values(map) {
+        for value in map.values() {
             sum += value;
         }
 
