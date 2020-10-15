@@ -16,7 +16,6 @@ use quote::{quote, quote_spanned};
 use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
-use crate::rhai_module::flatten_type_groups;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Index {
@@ -48,10 +47,10 @@ impl FnSpecialAccess {
         match self {
             FnSpecialAccess::None => None,
             FnSpecialAccess::Property(Property::Get(ref g)) => {
-                Some((format!("get${}", g.to_string()), g.to_string(), g.span()))
+                Some((format!("{}{}", FN_GET, g), g.to_string(), g.span()))
             }
             FnSpecialAccess::Property(Property::Set(ref s)) => {
-                Some((format!("set${}", s.to_string()), s.to_string(), s.span()))
+                Some((format!("{}{}", FN_SET, s), s.to_string(), s.span()))
             }
             FnSpecialAccess::Index(Index::Get) => Some((
                 FN_IDX_GET.to_string(),
@@ -67,6 +66,14 @@ impl FnSpecialAccess {
     }
 }
 
+pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
+    match ty {
+        syn::Type::Group(syn::TypeGroup { ref elem, .. })
+        | syn::Type::Paren(syn::TypeParen { ref elem, .. }) => flatten_type_groups(elem.as_ref()),
+        _ => ty,
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
     pub name: Option<Vec<String>>,
@@ -76,6 +83,8 @@ pub(crate) struct ExportedFnParams {
     pub special: FnSpecialAccess,
 }
 
+pub const FN_GET: &str = "get$";
+pub const FN_SET: &str = "set$";
 pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
 
@@ -130,34 +139,22 @@ impl ExportedParams for ExportedFnParams {
                         "use attribute 'index_set' instead",
                     ))
                 }
-                ("name", Some(s)) if s.value().starts_with("get$") => {
+                ("name", Some(s)) if s.value().starts_with(FN_GET) => {
                     return Err(syn::Error::new(
                         item_span,
                         format!(
                             "use attribute 'getter = \"{}\"' instead",
-                            &s.value()["get$".len()..]
+                            &s.value()[FN_GET.len()..]
                         ),
                     ))
                 }
-                ("name", Some(s)) if s.value().starts_with("set$") => {
+                ("name", Some(s)) if s.value().starts_with(FN_SET) => {
                     return Err(syn::Error::new(
                         item_span,
                         format!(
                             "use attribute 'setter = \"{}\"' instead",
-                            &s.value()["set$".len()..]
+                            &s.value()[FN_SET.len()..]
                         ),
-                    ))
-                }
-                ("name", Some(s)) if s.value().contains('$') => {
-                    return Err(syn::Error::new(
-                        s.span(),
-                        "Rhai function names may not contain dollar sign",
-                    ))
-                }
-                ("name", Some(s)) if s.value().contains('.') => {
-                    return Err(syn::Error::new(
-                        s.span(),
-                        "Rhai function names may not contain dot",
                     ))
                 }
                 ("name", Some(s)) => name.push(s.value()),
@@ -225,6 +222,7 @@ pub(crate) struct ExportedFn {
     entire_span: proc_macro2::Span,
     signature: syn::Signature,
     is_public: bool,
+    return_dynamic: bool,
     mut_receiver: bool,
     params: ExportedFnParams,
 }
@@ -234,6 +232,10 @@ impl Parse for ExportedFn {
         let fn_all: syn::ItemFn = input.parse()?;
         let entire_span = fn_all.span();
         let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
+
+        let dynamic_type_path1 = syn::parse2::<syn::Path>(quote! { Dynamic }).unwrap();
+        let dynamic_type_path2 = syn::parse2::<syn::Path>(quote! { rhai::Dynamic }).unwrap();
+        let mut return_dynamic = false;
 
         // #[cfg] attributes are not allowed on functions due to what is generated for them
         crate::attrs::deny_cfg_attr(&fn_all.attrs)?;
@@ -250,11 +252,11 @@ impl Parse for ExportedFn {
                     }) => true,
                     syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
                         match flatten_type_groups(ty.as_ref()) {
-                            &syn::Type::Reference(syn::TypeReference {
+                            syn::Type::Reference(syn::TypeReference {
                                 mutability: Some(_),
                                 ..
                             }) => true,
-                            &syn::Type::Reference(syn::TypeReference {
+                            syn::Type::Reference(syn::TypeReference {
                                 mutability: None,
                                 ref elem,
                                 ..
@@ -285,18 +287,18 @@ impl Parse for ExportedFn {
                 _ => panic!("internal error: receiver argument outside of first position!?"),
             };
             let is_ok = match flatten_type_groups(ty.as_ref()) {
-                &syn::Type::Reference(syn::TypeReference {
+                syn::Type::Reference(syn::TypeReference {
                     mutability: Some(_),
                     ..
                 }) => false,
-                &syn::Type::Reference(syn::TypeReference {
+                syn::Type::Reference(syn::TypeReference {
                     mutability: None,
                     ref elem,
                     ..
                 }) => {
                     matches!(flatten_type_groups(elem.as_ref()), &syn::Type::Path(ref p) if p.path == str_type_path)
                 }
-                &syn::Type::Verbatim(_) => false,
+                syn::Type::Verbatim(_) => false,
                 _ => true,
             };
             if !is_ok {
@@ -308,20 +310,25 @@ impl Parse for ExportedFn {
             }
         }
 
-        // No returning references or pointers.
+        // Check return type.
         if let syn::ReturnType::Type(_, ref rtype) = fn_all.sig.output {
-            match rtype.as_ref() {
-                &syn::Type::Ptr(_) => {
+            match flatten_type_groups(rtype.as_ref()) {
+                syn::Type::Ptr(_) => {
                     return Err(syn::Error::new(
                         fn_all.sig.output.span(),
-                        "cannot return a pointer to Rhai",
+                        "Rhai functions cannot return pointers",
                     ))
                 }
-                &syn::Type::Reference(_) => {
+                syn::Type::Reference(_) => {
                     return Err(syn::Error::new(
                         fn_all.sig.output.span(),
-                        "cannot return a reference to Rhai",
+                        "Rhai functions cannot return references",
                     ))
+                }
+                syn::Type::Path(p)
+                    if p.path == dynamic_type_path1 || p.path == dynamic_type_path2 =>
+                {
+                    return_dynamic = true
                 }
                 _ => {}
             }
@@ -330,6 +337,7 @@ impl Parse for ExportedFn {
             entire_span,
             signature: fn_all.sig,
             is_public,
+            return_dynamic,
             mut_receiver,
             params: ExportedFnParams::default(),
         })
@@ -419,7 +427,7 @@ impl ExportedFn {
 
     pub(crate) fn return_type(&self) -> Option<&syn::Type> {
         if let syn::ReturnType::Type(_, ref rtype) = self.signature.output {
-            Some(rtype)
+            Some(flatten_type_groups(rtype))
         } else {
             None
         }
@@ -437,7 +445,7 @@ impl ExportedFn {
         {
             return Err(syn::Error::new(
                 self.signature.span(),
-                "return_raw functions must return Result<T>",
+                "return_raw functions must return Result<T, Box<EvalAltResult>>",
             ));
         }
 
@@ -467,7 +475,7 @@ impl ExportedFn {
             FnSpecialAccess::Property(Property::Set(_)) if self.return_type().is_some() => {
                 return Err(syn::Error::new(
                     self.signature.span(),
-                    "property setter must return no value",
+                    "property setter cannot return any value",
                 ))
             }
             // 4a. Index getters must take the subject and the accessed "index" as arguments.
@@ -495,7 +503,7 @@ impl ExportedFn {
             FnSpecialAccess::Index(Index::Set) if self.return_type().is_some() => {
                 return Err(syn::Error::new(
                     self.signature.span(),
-                    "index setter must return no value",
+                    "index setter cannot return a value",
                 ))
             }
             _ => {}
@@ -532,7 +540,7 @@ impl ExportedFn {
         dynamic_signature.ident =
             syn::Ident::new("dynamic_result_fn", proc_macro2::Span::call_site());
         dynamic_signature.output = syn::parse2::<syn::ReturnType>(quote! {
-            -> Result<Dynamic, EvalBox>
+            -> Result<Dynamic, Box<EvalAltResult>>
         })
         .unwrap();
         let arguments: Vec<syn::Ident> = dynamic_signature
@@ -555,18 +563,22 @@ impl ExportedFn {
             .return_type()
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
-        if !self.params.return_raw {
+        if self.params.return_raw {
             quote_spanned! { return_span=>
-                type EvalBox = Box<EvalAltResult>;
                 pub #dynamic_signature {
-                    Ok(Dynamic::from(super::#name(#(#arguments),*)))
+                    super::#name(#(#arguments),*)
+                }
+            }
+        } else if self.return_dynamic {
+            quote_spanned! { return_span=>
+                pub #dynamic_signature {
+                    Ok(super::#name(#(#arguments),*))
                 }
             }
         } else {
             quote_spanned! { return_span=>
-                type EvalBox = Box<EvalAltResult>;
                 pub #dynamic_signature {
-                    super::#name(#(#arguments),*)
+                    Ok(Dynamic::from(super::#name(#(#arguments),*)))
                 }
             }
         }
@@ -734,8 +746,14 @@ impl ExportedFn {
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
         let return_expr = if !self.params.return_raw {
-            quote_spanned! { return_span=>
-                Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
+            if self.return_dynamic {
+                quote_spanned! { return_span=>
+                    Ok(#sig_name(#(#unpack_exprs),*))
+                }
+            } else {
+                quote_spanned! { return_span=>
+                    Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
+                }
             }
         } else {
             quote_spanned! { return_span=>

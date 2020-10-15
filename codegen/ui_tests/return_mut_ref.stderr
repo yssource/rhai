@@ -1,4 +1,4 @@
-error: cannot return a reference to Rhai
+error: Rhai functions cannot return references
   --> $DIR/return_mut_ref.rs:12:38
    |
 12 | pub fn test_fn(input: &mut Clonable) -> &mut bool {

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use quote::{quote, ToTokens};
 
 use crate::attrs::ExportScope;
+use crate::function::flatten_type_groups;
 use crate::function::{ExportedFn, FnSpecialAccess};
 use crate::module::Module;
 
@@ -171,14 +172,6 @@ pub(crate) fn generate_body(
     quote! {
         #(#generate_call_content)*
         #(#gen_fn_tokens)*
-    }
-}
-
-pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
-    match ty {
-        syn::Type::Group(syn::TypeGroup { ref elem, .. })
-        | syn::Type::Paren(syn::TypeParen { ref elem, .. }) => flatten_type_groups(elem.as_ref()),
-        _ => ty,
     }
 }
 

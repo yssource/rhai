@@ -1,4 +1,4 @@
-error: cannot return a reference to Rhai
+error: Rhai functions cannot return pointers
   --> $DIR/return_shared_ref.rs:12:33
    |
 12 | pub fn test_fn(input: Clonable) -> &'static str {
