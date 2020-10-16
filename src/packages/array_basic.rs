@@ -79,7 +79,6 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     lib.set_raw_fn("reduce_rev", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>(), TypeId::of::<FnPtr>()], reduce_rev_with_initial);
     lib.set_raw_fn("some", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], some);
     lib.set_raw_fn("all", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], all);
-    lib.set_raw_fn("none", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], none);
     lib.set_raw_fn("sort", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], sort);
 
     // Merge in the module at the end to override `+=` for arrays
@@ -340,40 +339,6 @@ fn all(
 
     for (i, item) in list.iter().enumerate() {
         if !filter
-            .call_dynamic(engine, lib, None, [item.clone()])
-            .or_else(|err| match *err {
-                EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
-                }
-                _ => Err(err),
-            })
-            .map_err(|err| {
-                Box::new(EvalAltResult::ErrorInFunctionCall(
-                    "filter".to_string(),
-                    err,
-                    Position::none(),
-                ))
-            })?
-            .as_bool()
-            .unwrap_or(false)
-        {
-            return Ok(false.into());
-        }
-    }
-
-    Ok(true.into())
-}
-
-fn none(
-    engine: &Engine,
-    lib: &Module,
-    args: &mut [&mut Dynamic],
-) -> Result<bool, Box<EvalAltResult>> {
-    let list = args[0].read_lock::<Array>().unwrap();
-    let filter = args[1].read_lock::<FnPtr>().unwrap();
-
-    for (i, item) in list.iter().enumerate() {
-        if filter
             .call_dynamic(engine, lib, None, [item.clone()])
             .or_else(|err| match *err {
                 EvalAltResult::ErrorFunctionNotFound(_, _) => {
