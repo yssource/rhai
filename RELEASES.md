@@ -1,10 +1,11 @@
 Rhai Release Notes
 ==================
 
-Version 0.20.0
+Version 0.19.1
 ==============
 
-This version adds a variable resolver with the ability to short-circuit variable access.
+This version adds a variable resolver with the ability to short-circuit variable access,
+plus a whole bunch of array methods.
 
 Breaking changes
 ----------------
@@ -33,7 +34,7 @@ New features
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
 * `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
 * `map`, `filter`, `reduce`, `reduce_rev`, `some`, `all`, `extract`, `splice`, `chop` and `sort` functions for arrays.
-* New `Module::set_iter`, `Module::set_iterable` and `Module::set_iterator` to define type iterators more easily. `Engine::register_iterator` is changed to use the simpler version.
+* New `Module::set_iterable` and `Module::set_iterator` to define type iterators more easily. `Engine::register_iterator` is changed to use the simpler version.
 
 Enhancements
 ------------
