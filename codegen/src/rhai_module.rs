@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use quote::{quote, ToTokens};
 
 use crate::attrs::ExportScope;
+use crate::function::flatten_type_groups;
 use crate::function::{ExportedFn, FnSpecialAccess};
 use crate::module::Module;
 
@@ -37,7 +38,7 @@ pub(crate) fn generate_body(
         if itemmod.skipped() {
             continue;
         }
-        let module_name: &syn::Ident = itemmod.module_name().unwrap();
+        let module_name = itemmod.module_name().unwrap();
         let exported_name: syn::LitStr = if let Some(name) = itemmod.exported_name() {
             syn::LitStr::new(&name, proc_macro2::Span::call_site())
         } else {
@@ -171,14 +172,6 @@ pub(crate) fn generate_body(
     quote! {
         #(#generate_call_content)*
         #(#gen_fn_tokens)*
-    }
-}
-
-pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
-    match ty {
-        syn::Type::Group(syn::TypeGroup { ref elem, .. })
-        | syn::Type::Paren(syn::TypeParen { ref elem, .. }) => flatten_type_groups(elem.as_ref()),
-        _ => ty,
     }
 }
 

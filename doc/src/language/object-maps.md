@@ -126,15 +126,42 @@ y.remove("a") == 1;     // remove property
 y.len() == 2;
 y.has("a") == false;
 
-for name in keys(y) {   // get an array of all the property names via the 'keys' function
+for name in y.keys() {  // get an array of all the property names via 'keys'
     print(name);
 }
 
-for val in values(y) {  // get an array of all the property values via the 'values' function
+for val in y.values() { // get an array of all the property values via 'values'
     print(val);
 }
 
 y.clear();              // empty the object map
 
 y.len() == 0;
+```
+
+
+No Support for Property Getters
+------------------------------
+
+In order not to affect the speed of accessing properties in an object map, new property
+[getters][getters/setters] cannot be registered because they conflict with the syntax of
+property access.
+
+A property [getter][getters/setters] function registered via `Engine::register_get`, for example,
+for a `Map` will never be found - instead, the property will be looked up in the object map.
+
+Therefore, _method-call_ notation must be used for built-in properties:
+
+```rust
+map.len                 // access property 'len', returns '()' if not found
+
+map.len()               // returns the number of properties
+
+map.keys                // access property 'keys', returns '()' if not found
+
+map.keys()              // returns array of all property names
+
+map.values              // access property 'values', returns '()' if not found
+
+map.values()            // returns array of all property values
 ```

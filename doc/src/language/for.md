@@ -79,7 +79,7 @@ for x in range(0, 50, 3) {      // step by 3
 Iterate Through Object Maps
 --------------------------
 
-Two functions, `keys` and `values`, return [arrays] containing cloned _copies_
+Two methods, `keys` and `values`, return [arrays] containing cloned _copies_
 of all property names and values of an [object map], respectively.
 
 These [arrays] can be iterated.
@@ -88,7 +88,7 @@ These [arrays] can be iterated.
 let map = #{a:1, b:3, c:5, d:7, e:9};
 
 // Property names are returned in unsorted, random order
-for x in keys(map) {
+for x in map.keys() {
     if x > 10 { continue; }     // skip to the next iteration
 
     print(x);
@@ -97,7 +97,7 @@ for x in keys(map) {
 }
 
 // Property values are returned in unsorted, random order
-for val in values(map) {
+for val in map.values() {
     print(val);
 }
 ```

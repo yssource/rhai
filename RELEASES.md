@@ -1,10 +1,11 @@
 Rhai Release Notes
 ==================
 
-Version 0.20.0
+Version 0.19.1
 ==============
 
-This version adds a variable resolver with the ability to short-circuit variable access.
+This version adds a variable resolver with the ability to short-circuit variable access,
+plus a whole bunch of array methods.
 
 Breaking changes
 ----------------
@@ -12,6 +13,7 @@ Breaking changes
 * `AST::iter_functions` now returns an iterator instead of taking a closure.
 * `Module::get_script_function_by_signature` renamed to `Module::get_script_fn` and returns `&<Shared<ScriptFnDef>>`.
 * `Module::num_fn`, `Module::num_var` and `Module::num_iter` are removed and merged into `Module::count`.
+* `Module::set_iter` is renamed to `Module::set_iter_raw`.
 * The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
 * `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
 * The following `EvalAltResult` variants are removed and merged into `EvalAltResult::ErrorMismatchDataType`: `ErrorCharMismatch`, `ErrorNumericIndexExpr`, `ErrorStringIndexExpr`, `ErrorImportExpr`, `ErrorLogicGuard`, `ErrorBooleanArgMismatch`
@@ -20,7 +22,7 @@ Breaking changes
 * New reserved symbols: `++`, `--`, `..`, `...`.
 * Callback signature for custom syntax implementation function is changed to allow for more flexibility.
 * Default call stack depth for `debug` builds is reduced to 12 (from 16).
-* Precedence for `~` and `%` is raised.
+* Precedence for `~` is raised, while `in` is moved below logic comparison operators.
 
 New features
 ------------
@@ -31,7 +33,8 @@ New features
 * `is_def_var()` to detect if variable is defined, and `is_def_fn()` to detect if script function is defined.
 * `Dynamic::from(&str)` now constructs a `Dynamic` with a copy of the string as value.
 * `AST::combine` and `AST::combine_filtered` allows combining two `AST`'s without creating a new one.
-* `map`, `filter`, `reduce`, `reduce_rev`, `some`, `all`, `splice` and `sort` functions for arrays.
+* `map`, `filter`, `reduce`, `reduce_rev`, `some`, `all`, `extract`, `splice`, `chop` and `sort` functions for arrays.
+* New `Module::set_iterable` and `Module::set_iterator` to define type iterators more easily. `Engine::register_iterator` is changed to use the simpler version.
 
 Enhancements
 ------------

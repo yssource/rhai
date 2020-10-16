@@ -617,15 +617,15 @@ impl Token {
 
             EqualsTo | NotEqualsTo => 90,
 
-            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 110,
+            In => 110,
 
-            In => 130,
+            LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 130,
 
             Plus | Minus => 150,
 
-            Divide | Multiply => 180,
+            Divide | Multiply | Modulo => 180,
 
-            PowerOf | Modulo => 190,
+            PowerOf => 190,
 
             LeftShift | RightShift => 210,
 
@@ -1231,6 +1231,10 @@ fn get_next_token_inner(
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
+            ('*', '*') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved("**".into()), start_pos));
+            }
             ('*', ')') => {
                 eat_next(stream, pos);
                 return Some((Token::Reserved("*)".into()), start_pos));

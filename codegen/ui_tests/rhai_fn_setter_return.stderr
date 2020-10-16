@@ -1,4 +1,4 @@
-error: property setter must return no value
+error: property setter cannot return any value
   --> $DIR/rhai_fn_setter_return.rs:13:9
    |
 13 |     pub fn test_fn(input: &mut Point, value: f32) -> bool {

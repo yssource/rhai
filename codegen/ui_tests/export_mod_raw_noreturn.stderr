@@ -1,4 +1,4 @@
-error: return_raw functions must return Result<T>
+error: return_raw functions must return Result<T, Box<EvalAltResult>>
   --> $DIR/export_mod_raw_noreturn.rs:12:5
    |
 12 | pub fn test_fn(input: &mut Point) {

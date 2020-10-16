@@ -59,7 +59,8 @@ Function Signature
 
 The function signature passed to `Engine::register_raw_fn` takes the following form:
 
-> `Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>> + 'static`
+> `Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic])`  
+> `-> Result<T, Box<EvalAltResult>> + 'static`
 
 where:
 
@@ -117,7 +118,7 @@ engine.register_raw_fn(
         std::any::TypeId::of::<FnPtr>(),
         std::any::TypeId::of::<i64>(),
     ],
-    move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+    |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
         // 'args' is guaranteed to contain enough arguments of the correct types
 
         let fp = std::mem::take(args[1]).cast::<FnPtr>();       // 2nd argument - function pointer

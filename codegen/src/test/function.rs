@@ -88,7 +88,10 @@ mod function_tests {
         };
 
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err), "cannot return a reference to Rhai");
+        assert_eq!(
+            format!("{}", err),
+            "Rhai functions cannot return references"
+        );
     }
 
     #[test]
@@ -98,7 +101,7 @@ mod function_tests {
         };
 
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
-        assert_eq!(format!("{}", err), "cannot return a pointer to Rhai");
+        assert_eq!(format!("{}", err), "Rhai functions cannot return pointers");
     }
 
     #[test]
@@ -295,8 +298,7 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn() -> Result<Dynamic, EvalBox> {
+                pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(super::do_nothing()))
                 }
             }
@@ -340,9 +342,53 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, EvalBox> {
+                pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(super::do_something(x)))
+                }
+            }
+        };
+
+        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
+        assert_streams_eq(item_fn.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn return_dynamic() {
+        let input_tokens: TokenStream = quote! {
+            pub fn return_dynamic() -> (((rhai::Dynamic))) {
+                ().into()
+            }
+        };
+
+        let expected_tokens = quote! {
+            #[allow(unused)]
+            pub mod rhai_fn_return_dynamic {
+                use super::*;
+                struct Token();
+                impl PluginFunction for Token {
+                    fn call(&self,
+                            args: &mut [&mut Dynamic]
+                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 0usize,
+                                         "wrong arg count: {} != {}", args.len(), 0usize);
+                        Ok(return_dynamic())
+                    }
+
+                    fn is_method_call(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![].into_boxed_slice()
+                    }
+                }
+                pub fn token_callable() -> CallableFunction {
+                    Token().into()
+                }
+                pub fn token_input_types() -> Box<[TypeId]> {
+                    Token().input_types()
+                }
+                pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
+                    Ok(super::return_dynamic())
                 }
             }
         };
@@ -417,8 +463,7 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, EvalBox> {
+                pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(super::add_together(x, y)))
                 }
             }
@@ -464,8 +509,7 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, EvalBox> {
+                pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(super::increment(x, y)))
                 }
             }
@@ -510,8 +554,7 @@ mod generate_tests {
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                type EvalBox = Box<EvalAltResult>;
-                pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, EvalBox> {
+                pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(super::special_print(message)))
                 }
             }
