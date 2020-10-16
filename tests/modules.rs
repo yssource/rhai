@@ -407,7 +407,7 @@ fn test_module_ast_namespace2() -> Result<(), Box<EvalAltResult>> {
 
     const MODULE_TEXT: &str = r#"
         fn run_function(function) {
-            function.call()
+            call(function)
         }
     "#;
 
