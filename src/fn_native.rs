@@ -15,10 +15,10 @@ use crate::stdlib::{
     boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String, vec::Vec,
 };
 
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::rc::Rc;
 #[cfg(feature = "sync")]
-use crate::stdlib::sync::Arc;
+use crate::stdlib::sync::{Arc, RwLock};
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::{cell::RefCell, rc::Rc};
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -34,12 +34,19 @@ pub trait SendSync {}
 #[cfg(not(feature = "sync"))]
 impl<T> SendSync for T {}
 
-/// Immutable reference-counted container
+/// Immutable reference-counted container.
 #[cfg(not(feature = "sync"))]
 pub type Shared<T> = Rc<T>;
-/// Immutable reference-counted container
+/// Immutable reference-counted container.
 #[cfg(feature = "sync")]
 pub type Shared<T> = Arc<T>;
+
+/// Synchronized shared object.
+#[cfg(not(feature = "sync"))]
+pub type Locked<T> = RefCell<T>;
+/// Synchronized shared object.
+#[cfg(feature = "sync")]
+pub type Locked<T> = RwLock<T>;
 
 /// Consume a `Shared` resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.

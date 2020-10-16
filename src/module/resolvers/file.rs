@@ -1,16 +1,11 @@
 use crate::engine::Engine;
+use crate::fn_native::Locked;
 use crate::module::{Module, ModuleResolver};
 use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
 use crate::stdlib::{boxed::Box, collections::HashMap, path::PathBuf, string::String};
-
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::cell::RefCell;
-
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::RwLock;
 
 /// Module resolution service that loads module script files from the file system.
 ///
@@ -20,6 +15,12 @@ use crate::stdlib::sync::RwLock;
 /// allow specification of a base directory with module path used as a relative path offset
 /// to the base directory. The script file is then forced to be in a specified extension
 /// (default `.rhai`).
+///
+/// # Function Namespace
+///
+/// When a function within a script file module is loaded, all functions in the _global_ namespace
+/// plus all those defined within the same module are _merged_ into a _unified_ namespace before
+/// the call.  Therefore, functions in a module script can cross-call each other.
 ///
 /// # Examples
 ///
@@ -39,12 +40,7 @@ use crate::stdlib::sync::RwLock;
 pub struct FileModuleResolver {
     path: PathBuf,
     extension: String,
-
-    #[cfg(not(feature = "sync"))]
-    cache: RefCell<HashMap<PathBuf, AST>>,
-
-    #[cfg(feature = "sync")]
-    cache: RwLock<HashMap<PathBuf, AST>>,
+    cache: Locked<HashMap<PathBuf, AST>>,
 }
 
 impl Default for FileModuleResolver {

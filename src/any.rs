@@ -5,7 +5,7 @@ use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 
 #[cfg(not(feature = "no_closure"))]
-use crate::fn_native::{shared_try_take, Shared};
+use crate::fn_native::{shared_try_take, Locked, Shared};
 
 #[cfg(not(feature = "no_float"))]
 use crate::parser::FLOAT;
@@ -26,14 +26,11 @@ use crate::stdlib::{
 
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
-use crate::stdlib::{
-    cell::{Ref, RefCell, RefMut},
-    rc::Rc,
-};
+use crate::stdlib::cell::{Ref, RefMut};
 
 #[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
-use crate::stdlib::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::stdlib::sync::{RwLockReadGuard, RwLockWriteGuard};
 
 #[cfg(not(feature = "no_object"))]
 use crate::stdlib::collections::HashMap;
@@ -165,11 +162,7 @@ pub enum Union {
     Variant(Box<Box<dyn Variant>>),
 
     #[cfg(not(feature = "no_closure"))]
-    #[cfg(not(feature = "sync"))]
-    Shared(Shared<RefCell<Dynamic>>),
-    #[cfg(not(feature = "no_closure"))]
-    #[cfg(feature = "sync")]
-    Shared(Shared<RwLock<Dynamic>>),
+    Shared(Shared<Locked<Dynamic>>),
 }
 
 /// Underlying `Variant` read guard for `Dynamic`.
@@ -644,10 +637,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_closure"))]
         return match self.0 {
             Union::Shared(..) => self,
-            #[cfg(not(feature = "sync"))]
-            _ => Self(Union::Shared(Rc::new(RefCell::new(self)))),
-            #[cfg(feature = "sync")]
-            _ => Self(Union::Shared(Arc::new(RwLock::new(self)))),
+            _ => Self(Union::Shared(Locked::new(self).into())),
         };
 
         #[cfg(feature = "no_closure")]
@@ -859,15 +849,20 @@ impl Dynamic {
     pub fn flatten(self) -> Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell) => {
-                #[cfg(not(feature = "sync"))]
-                return shared_try_take(cell)
-                    .map_or_else(|c| c.borrow().clone(), RefCell::into_inner);
-
-                #[cfg(feature = "sync")]
-                return shared_try_take(cell)
-                    .map_or_else(|c| c.read().unwrap().clone(), |v| v.into_inner().unwrap());
-            }
+            Union::Shared(cell) => shared_try_take(cell).map_or_else(
+                |cell| {
+                    #[cfg(not(feature = "sync"))]
+                    return cell.borrow().clone();
+                    #[cfg(feature = "sync")]
+                    return cell.read().unwrap().clone();
+                },
+                |value| {
+                    #[cfg(not(feature = "sync"))]
+                    return value.into_inner();
+                    #[cfg(feature = "sync")]
+                    return value.into_inner().unwrap();
+                },
+            ),
             _ => self,
         }
     }
@@ -910,7 +905,6 @@ impl Dynamic {
             Union::Shared(ref cell) => {
                 #[cfg(not(feature = "sync"))]
                 let data = cell.borrow();
-
                 #[cfg(feature = "sync")]
                 let data = cell.read().unwrap();
 
@@ -944,7 +938,6 @@ impl Dynamic {
             Union::Shared(ref cell) => {
                 #[cfg(not(feature = "sync"))]
                 let data = cell.borrow_mut();
-
                 #[cfg(feature = "sync")]
                 let data = cell.write().unwrap();
 
