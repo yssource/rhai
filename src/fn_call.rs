@@ -347,7 +347,6 @@ impl Engine {
         state: &mut State,
         lib: &Module,
         this_ptr: &mut Option<&mut Dynamic>,
-        fn_name: &str,
         fn_def: &ScriptFnDef,
         args: &mut FnCallArgs,
         level: usize,
@@ -386,7 +385,7 @@ impl Engine {
         let mut lib_merged;
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
-            if !lib.is_empty() {
+            if lib.is_empty() {
                 // In the special case of the main script not defining any function
                 env_lib
             } else {
@@ -408,14 +407,18 @@ impl Engine {
                 EvalAltResult::Return(x, _) => Ok(x),
                 EvalAltResult::ErrorInFunctionCall(name, err, _) => {
                     EvalAltResult::ErrorInFunctionCall(
-                        format!("{} > {}", fn_name, name),
+                        format!("{} > {}", fn_def.name, name),
                         err,
                         Position::none(),
                     )
                     .into()
                 }
-                _ => EvalAltResult::ErrorInFunctionCall(fn_name.to_string(), err, Position::none())
-                    .into(),
+                _ => EvalAltResult::ErrorInFunctionCall(
+                    fn_def.name.to_string(),
+                    err,
+                    Position::none(),
+                )
+                .into(),
             });
 
         // Remove all local variables
@@ -594,7 +597,6 @@ impl Engine {
                             state,
                             lib,
                             &mut Some(*first),
-                            fn_name,
                             func,
                             rest,
                             _level,
@@ -605,9 +607,8 @@ impl Engine {
                         let mut backup: ArgBackup = Default::default();
                         backup.change_first_arg_to_copy(is_ref, args);
 
-                        let result = self.call_script_fn(
-                            scope, mods, state, lib, &mut None, fn_name, func, args, _level,
-                        );
+                        let result = self
+                            .call_script_fn(scope, mods, state, lib, &mut None, func, args, _level);
 
                         // Restore the original reference
                         backup.restore_first_arg(args);
@@ -1195,14 +1196,12 @@ impl Engine {
                 }
 
                 let args = args.as_mut();
-                let func = f.get_fn_def();
+                let fn_def = f.get_fn_def();
 
                 let new_scope = &mut Scope::new();
                 let mods = &mut Imports::new();
 
-                self.call_script_fn(
-                    new_scope, mods, state, lib, &mut None, name, func, args, level,
-                )
+                self.call_script_fn(new_scope, mods, state, lib, &mut None, fn_def, args, level)
             }
             Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut()),
             Some(f) if f.is_native() => {

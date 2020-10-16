@@ -399,3 +399,36 @@ fn test_module_ast_namespace() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[cfg(not(feature = "no_function"))]
+#[test]
+fn test_module_ast_namespace2() -> Result<(), Box<EvalAltResult>> {
+    use rhai::{Engine, Module, Scope};
+
+    const MODULE_TEXT: &str = r#"
+        fn run_function(function) {
+            function.call()
+        }
+    "#;
+
+    const SCRIPT: &str = r#"
+        import "test_module" as test;
+
+        fn foo() {
+            print("foo");
+        }
+
+        test::run_function(Fn("foo"));
+    "#;
+
+    let mut engine = Engine::new();
+    let module_ast = engine.compile(MODULE_TEXT)?;
+    let module = Module::eval_ast_as_new(Scope::new(), &module_ast, &engine)?;
+    let mut static_modules = rhai::module_resolvers::StaticModuleResolver::new();
+    static_modules.insert("test_module", module);
+    engine.set_module_resolver(Some(static_modules));
+
+    engine.consume(SCRIPT)?;
+
+    Ok(())
+}

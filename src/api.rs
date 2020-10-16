@@ -1652,9 +1652,7 @@ impl Engine {
             ensure_no_data_race(name, args, false)?;
         }
 
-        self.call_script_fn(
-            scope, &mut mods, &mut state, lib, this_ptr, name, fn_def, args, 0,
-        )
+        self.call_script_fn(scope, &mut mods, &mut state, lib, this_ptr, fn_def, args, 0)
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.
