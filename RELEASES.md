@@ -11,6 +11,10 @@ Breaking changes
 * `EvalAltResult::ErrorReadingScriptFile` is removed in favor of the new `EvalAltResult::ErrorSystem`.
 * `EvalAltResult::ErrorLoopBreak` is renamed to `EvalAltResult::LoopBreak`.
 
+Enhancements
+
+* Calling `eval` or `Fn` in method-call style, which is an error, is now caught during parsing.
+
 
 Version 0.19.2
 ==============

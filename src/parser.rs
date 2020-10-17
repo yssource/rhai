@@ -1,7 +1,9 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
-use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::{
+    Engine, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
+};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
@@ -2317,6 +2319,17 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
                 Expr::Index(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
+        }
+        // lhs.Fn() or lhs.eval()
+        (_, Expr::FnCall(x))
+            if x.3.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&(x.0).0.as_ref()) =>
+        {
+            return Err(PERR::BadInput(format!(
+                "'{}' should not be called in method style. Try {}(...);",
+                (x.0).0,
+                (x.0).0
+            ))
+            .into_err((x.0).3));
         }
         // lhs.func!(...)
         (_, Expr::FnCall(x)) if (x.0).2 => {

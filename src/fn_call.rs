@@ -524,27 +524,16 @@ impl Engine {
                 ))
             }
 
-            // Fn
-            KEYWORD_FN_PTR
-                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
-            {
-                EvalAltResult::ErrorRuntime(
-                    "'Fn' should not be called in method style. Try Fn(...);".into(),
-                    Position::none(),
-                )
-                .into()
-            }
-
-            // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL
-                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
-            {
-                EvalAltResult::ErrorRuntime(
-                    "'eval' should not be called in method style. Try eval(...);".into(),
-                    Position::none(),
-                )
-                .into()
-            }
+            // Fn/eval - reaching this point it must be a method-style call, mostly like redirected
+            //           by a function pointer so it isn't caught at parse time.
+            KEYWORD_FN_PTR | KEYWORD_EVAL if args.len() == 1 => EvalAltResult::ErrorRuntime(
+                format!(
+                    "'{}' should not be called in method style. Try {}(...);",
+                    fn_name, fn_name
+                ),
+                Position::none(),
+            )
+            .into(),
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
