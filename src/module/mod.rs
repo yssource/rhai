@@ -425,30 +425,6 @@ impl Module {
         }
     }
 
-    /// Does the particular Rust function exist in the module?
-    ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
-    /// It is also returned by the `set_fn_XXX` calls.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// module.set_fn_0("calc", || Ok(42_i64));
-    /// assert!(module.contains_fn_with_name("calc", true));
-    /// ```
-    #[inline]
-    #[allow(dead_code)]
-    pub(crate) fn contains_fn_with_name(&self, fn_name: &str, public_only: bool) -> bool {
-        self.functions
-            .values()
-            .filter(|(_, access, _, _, _)| !public_only || access.is_public())
-            .find(|(name, _, _, _, _)| name == fn_name)
-            .is_some()
-    }
-
     /// Set a Rust function into the module, returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
