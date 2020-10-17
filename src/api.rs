@@ -924,13 +924,19 @@ impl Engine {
     #[inline]
     fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
         let mut f = File::open(path.clone()).map_err(|err| {
-            EvalAltResult::ErrorReadingScriptFile(path.clone(), Position::none(), err)
+            EvalAltResult::ErrorSystem(
+                format!("Cannot open script file '{}'", path.to_string_lossy()),
+                err.into(),
+            )
         })?;
 
         let mut contents = String::new();
 
         f.read_to_string(&mut contents).map_err(|err| {
-            EvalAltResult::ErrorReadingScriptFile(path.clone(), Position::none(), err)
+            EvalAltResult::ErrorSystem(
+                format!("Cannot read script file '{}'", path.to_string_lossy()),
+                err.into(),
+            )
         })?;
 
         Ok(contents)

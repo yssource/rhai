@@ -1814,10 +1814,8 @@ impl Engine {
                         match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
                             Ok(_) => (),
                             Err(err) => match *err {
-                                EvalAltResult::ErrorLoopBreak(false, _) => (),
-                                EvalAltResult::ErrorLoopBreak(true, _) => {
-                                    return Ok(Default::default())
-                                }
+                                EvalAltResult::LoopBreak(false, _) => (),
+                                EvalAltResult::LoopBreak(true, _) => return Ok(Default::default()),
                                 _ => return Err(err),
                             },
                         }
@@ -1834,8 +1832,8 @@ impl Engine {
                 match self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
-                        EvalAltResult::ErrorLoopBreak(false, _) => (),
-                        EvalAltResult::ErrorLoopBreak(true, _) => return Ok(Default::default()),
+                        EvalAltResult::LoopBreak(false, _) => (),
+                        EvalAltResult::LoopBreak(true, _) => return Ok(Default::default()),
                         _ => return Err(err),
                     },
                 }
@@ -1875,8 +1873,8 @@ impl Engine {
                         match self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level) {
                             Ok(_) => (),
                             Err(err) => match *err {
-                                EvalAltResult::ErrorLoopBreak(false, _) => (),
-                                EvalAltResult::ErrorLoopBreak(true, _) => break,
+                                EvalAltResult::LoopBreak(false, _) => (),
+                                EvalAltResult::LoopBreak(true, _) => break,
                                 _ => return Err(err),
                             },
                         }
@@ -1891,10 +1889,10 @@ impl Engine {
             }
 
             // Continue statement
-            Stmt::Continue(pos) => EvalAltResult::ErrorLoopBreak(false, *pos).into(),
+            Stmt::Continue(pos) => EvalAltResult::LoopBreak(false, *pos).into(),
 
             // Break statement
-            Stmt::Break(pos) => EvalAltResult::ErrorLoopBreak(true, *pos).into(),
+            Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
 
             // Return value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {

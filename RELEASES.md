@@ -5,6 +5,12 @@ Rhai Release Notes
 Version 0.19.3
 ==============
 
+Breaking changes
+----------------
+
+* `EvalAltResult::ErrorReadingScriptFile` is removed in favor of the new `EvalAltResult::ErrorSystem`.
+* `EvalAltResult::ErrorLoopBreak` is renamed to `EvalAltResult::LoopBreak`.
+
 
 Version 0.19.2
 ==============
