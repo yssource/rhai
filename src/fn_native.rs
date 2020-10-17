@@ -11,9 +11,7 @@ use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 use crate::{calc_fn_hash, StaticVec};
 
-use crate::stdlib::{
-    boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String, vec::Vec,
-};
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String};
 
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::{Arc, RwLock};
@@ -79,12 +77,15 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
 #[derive(Debug, Clone, Default)]
-pub struct FnPtr(ImmutableString, Vec<Dynamic>);
+pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
-    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(name: S, curry: Vec<Dynamic>) -> Self {
+    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(
+        name: S,
+        curry: StaticVec<Dynamic>,
+    ) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
@@ -99,13 +100,13 @@ impl FnPtr {
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
-    pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
+    pub(crate) fn take_data(self) -> (ImmutableString, StaticVec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.
     #[inline(always)]
     pub fn curry(&self) -> &[Dynamic] {
-        &self.1
+        self.1.as_ref()
     }
 
     /// Call the function pointer with curried arguments (if any).
@@ -125,23 +126,23 @@ impl FnPtr {
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let arg_values = arg_values.as_mut();
+        let fn_name = self.fn_name();
+
         let mut args_data = self
-            .1
+            .curry()
             .iter()
             .cloned()
-            .chain(arg_values.as_mut().iter_mut().map(|v| mem::take(v)))
+            .chain(arg_values.iter_mut().map(mem::take))
             .collect::<StaticVec<_>>();
 
         let has_this = this_ptr.is_some();
-        let args_len = args_data.len();
         let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
+        let hash_script = calc_fn_hash(empty(), fn_name, args.len(), empty());
 
         if let Some(obj) = this_ptr {
             args.insert(0, obj);
         }
-
-        let fn_name = self.0.as_str();
-        let hash_script = calc_fn_hash(empty(), fn_name, args_len, empty());
 
         engine
             .exec_fn_call(

@@ -41,10 +41,7 @@ impl Expression<'_> {
     /// If this expression is a variable name, return it.  Otherwise `None`.
     #[inline(always)]
     pub fn get_variable_name(&self) -> Option<&str> {
-        match self.0 {
-            Expr::Variable(x) => Some((x.0).0.as_str()),
-            _ => None,
-        }
+        self.0.get_variable_access(true)
     }
     /// Get the expression.
     #[inline(always)]

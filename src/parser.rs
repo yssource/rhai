@@ -1079,6 +1079,14 @@ impl Expr {
         })
     }
 
+    /// Is the expression a simple variable access?
+    pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
+        match self {
+            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.0).0.as_str()),
+            _ => None,
+        }
+    }
+
     /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {

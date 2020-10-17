@@ -65,6 +65,13 @@ impl PackagesCollection {
     pub fn contains_fn(&self, hash: u64, public_only: bool) -> bool {
         self.0.iter().any(|p| p.contains_fn(hash, public_only))
     }
+    /// Does the specified function name exist in the `PackagesCollection`?
+    #[allow(dead_code)]
+    pub fn contains_fn_with_name(&self, fn_name: &str, public_only: bool) -> bool {
+        self.0
+            .iter()
+            .any(|p| p.contains_fn_with_name(fn_name, public_only))
+    }
     /// Get specified function via its hash key.
     pub fn get_fn(&self, hash: u64, public_only: bool) -> Option<&CallableFunction> {
         self.0

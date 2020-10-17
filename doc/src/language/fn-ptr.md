@@ -6,6 +6,8 @@ Function Pointers
 It is possible to store a _function pointer_ in a variable just like a normal value.
 In fact, internally a function pointer simply stores the _name_ of the function as a string.
 
+A function pointer is created via the `Fn` function, which takes a [string] parameter.
+
 Call a function pointer using the `call` method.
 
 

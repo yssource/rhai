@@ -1,6 +1,17 @@
 Rhai Release Notes
 ==================
 
+
+Version 0.19.3
+==============
+
+
+Version 0.19.2
+==============
+
+Bug fix on call module functions.
+
+
 Version 0.19.1
 ==============
 

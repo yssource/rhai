@@ -1479,7 +1479,7 @@ impl Engine {
             Expr::Stmt(x) => self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level),
 
             // var op= rhs
-            Expr::Assignment(x) if matches!(x.0, Expr::Variable(_)) => {
+            Expr::Assignment(x) if x.0.get_variable_access(false).is_some() => {
                 let (lhs_expr, op, rhs_expr, op_pos) = x.as_ref();
                 let mut rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
