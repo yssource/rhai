@@ -1,6 +1,34 @@
 Rhai Release Notes
 ==================
 
+
+Version 0.19.3
+==============
+
+Breaking changes
+----------------
+
+* `EvalAltResult::ErrorReadingScriptFile` is removed in favor of the new `EvalAltResult::ErrorSystem`.
+* `EvalAltResult::ErrorLoopBreak` is renamed to `EvalAltResult::LoopBreak`.
+* `Engine::register_raw_fn` and `FnPtr::call_dynamic` function signatures have changed.
+
+New features
+------------
+
+* The plugins system is enhanced to support functions taking a `NativeCallContext` as the first parameter.
+
+Enhancements
+------------
+
+* Calling `eval` or `Fn` in method-call style, which is an error, is now caught during parsing.
+
+
+Version 0.19.2
+==============
+
+Bug fix on call module functions.
+
+
 Version 0.19.1
 ==============
 

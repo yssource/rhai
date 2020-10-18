@@ -15,10 +15,6 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-use crate::stdlib::path::PathBuf;
-
 /// Evaluation result.
 ///
 /// All wrapped `Position` values represent the location in the script where the error occurs.
@@ -27,15 +23,11 @@ use crate::stdlib::path::PathBuf;
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum EvalAltResult {
+    /// System error. Wrapped values are the error message and the internal error.
+    ErrorSystem(String, Box<dyn Error>),
+
     /// Syntax error.
     ErrorParsing(ParseErrorType, Position),
-
-    /// Error reading from a script file. Wrapped value is the path of the script file.
-    ///
-    /// Never appears under the `no_std` feature.
-    #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
-    ErrorReadingScriptFile(PathBuf, Position, std::io::Error),
 
     /// Usage of an unknown variable. Wrapped value is the variable name.
     ErrorVariableNotFound(String, Position),
@@ -96,7 +88,7 @@ pub enum EvalAltResult {
     /// Breaking out of loops - not an error if within a loop.
     /// The wrapped value, if true, means breaking clean out of the loop (i.e. a `break` statement).
     /// The wrapped value, if false, means breaking the current context (i.e. a `continue` statement).
-    ErrorLoopBreak(bool, Position),
+    LoopBreak(bool, Position),
     /// Not an error: Value returned from a script via the `return` keyword.
     /// Wrapped value is the result value.
     Return(Dynamic, Position),
@@ -105,10 +97,8 @@ pub enum EvalAltResult {
 impl EvalAltResult {
     pub(crate) fn desc(&self) -> &str {
         match self {
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
-            Self::ErrorReadingScriptFile(_, _, _) => "Cannot read from script file",
-
+            #[allow(deprecated)]
+            Self::ErrorSystem(_, s) => s.description(),
             Self::ErrorParsing(p, _) => p.desc(),
             Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
             Self::ErrorInModule(_, _, _) => "Error in module",
@@ -146,8 +136,8 @@ impl EvalAltResult {
             Self::ErrorDataTooLarge(_, _, _, _) => "Data size exceeds maximum limit",
             Self::ErrorTerminated(_) => "Script terminated.",
             Self::ErrorRuntime(_, _) => "Runtime error",
-            Self::ErrorLoopBreak(true, _) => "Break statement not inside a loop",
-            Self::ErrorLoopBreak(false, _) => "Continue statement not inside a loop",
+            Self::LoopBreak(true, _) => "Break statement not inside a loop",
+            Self::LoopBreak(false, _) => "Continue statement not inside a loop",
             Self::Return(_, _) => "[Not Error] Function returns value",
         }
     }
@@ -161,11 +151,8 @@ impl fmt::Display for EvalAltResult {
         let pos = self.position();
 
         match self {
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
-            Self::ErrorReadingScriptFile(path, _, err) => {
-                write!(f, "{} '{}': {}", desc, path.display(), err)?
-            }
+            Self::ErrorSystem(s, _) if s.is_empty() => f.write_str(desc)?,
+            Self::ErrorSystem(s, _) => write!(f, "{}: {}", s, desc)?,
 
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
@@ -213,7 +200,7 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorArithmetic(s, _) => f.write_str(s)?,
 
-            Self::ErrorLoopBreak(_, _) => f.write_str(desc)?,
+            Self::LoopBreak(_, _) => f.write_str(desc)?,
             Self::Return(_, _) => f.write_str(desc)?,
 
             Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
@@ -258,6 +245,13 @@ impl fmt::Display for EvalAltResult {
     }
 }
 
+impl<T: AsRef<str>> From<T> for EvalAltResult {
+    #[inline(always)]
+    fn from(err: T) -> Self {
+        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
+    }
+}
+
 impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     #[inline(always)]
     fn from(err: T) -> Self {
@@ -272,9 +266,7 @@ impl EvalAltResult {
     /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
-            Self::ErrorReadingScriptFile(_, pos, _) => *pos,
+            Self::ErrorSystem(_, _) => Position::none(),
 
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
@@ -301,7 +293,7 @@ impl EvalAltResult {
             | Self::ErrorDataTooLarge(_, _, _, pos)
             | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
-            | Self::ErrorLoopBreak(_, pos)
+            | Self::LoopBreak(_, pos)
             | Self::Return(_, pos) => *pos,
         }
     }
@@ -309,9 +301,7 @@ impl EvalAltResult {
     /// Override the `Position` of this error.
     pub fn set_position(&mut self, new_position: Position) {
         match self {
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
-            Self::ErrorReadingScriptFile(_, pos, _) => *pos = new_position,
+            Self::ErrorSystem(_, _) => (),
 
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
@@ -338,7 +328,7 @@ impl EvalAltResult {
             | Self::ErrorDataTooLarge(_, _, _, pos)
             | Self::ErrorTerminated(pos)
             | Self::ErrorRuntime(_, pos)
-            | Self::ErrorLoopBreak(_, pos)
+            | Self::LoopBreak(_, pos)
             | Self::Return(_, pos) => *pos = new_position,
         }
     }

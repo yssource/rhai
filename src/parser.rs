@@ -16,7 +16,7 @@ use crate::{calc_fn_hash, StaticVec};
 use crate::engine::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, Map};
+use crate::engine::{make_getter, make_setter, Map, KEYWORD_EVAL, KEYWORD_FN_PTR};
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY};
@@ -601,13 +601,15 @@ struct ParseState<'e> {
     /// All consequent calls to `access_var` will not be affected
     #[cfg(not(feature = "no_closure"))]
     allow_capture: bool,
-    /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
+    /// Encapsulates a local stack with imported module names.
+    #[cfg(not(feature = "no_module"))]
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     max_expr_depth: usize,
     /// Maximum levels of expression nesting in functions.
     #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
     max_function_expr_depth: usize,
 }
 
@@ -617,19 +619,23 @@ impl<'e> ParseState<'e> {
     pub fn new(
         engine: &'e Engine,
         #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
-        #[cfg(not(feature = "unchecked"))] max_function_expr_depth: usize,
+        #[cfg(not(feature = "unchecked"))]
+        #[cfg(not(feature = "no_function"))]
+        max_function_expr_depth: usize,
     ) -> Self {
         Self {
             engine,
             #[cfg(not(feature = "unchecked"))]
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
+            #[cfg(not(feature = "no_function"))]
             max_function_expr_depth,
             #[cfg(not(feature = "no_closure"))]
             externals: Default::default(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             stack: Default::default(),
+            #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
     }
@@ -664,9 +670,16 @@ impl<'e> ParseState<'e> {
     }
 
     /// Find a module by name in the `ParseState`, searching in reverse.
-    /// The return value is the offset to be deducted from `Stack::len`,
+    ///
+    /// Returns the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return `None` when the variable name is not found in the `ParseState`.
+    ///
+    /// Returns `None` when the variable name is not found in the `ParseState`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when called under `no_module`.
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
@@ -1079,6 +1092,14 @@ impl Expr {
         })
     }
 
+    /// Is the expression a simple variable access?
+    pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
+        match self {
+            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.0).0.as_str()),
+            _ => None,
+        }
+    }
+
     /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {
@@ -1397,6 +1418,7 @@ fn parse_fn_call(
             eat_token(input, Token::RightParen);
 
             let hash_script = if let Some(modules) = modules.as_mut() {
+                #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].0));
 
                 // Rust functions are indexed in two steps:
@@ -1439,6 +1461,7 @@ fn parse_fn_call(
                 eat_token(input, Token::RightParen);
 
                 let hash_script = if let Some(modules) = modules.as_mut() {
+                    #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].0));
 
                     // Rust functions are indexed in two steps:
@@ -1686,11 +1709,10 @@ fn parse_array_literal(
 
     while !input.peek().unwrap().0.is_eof() {
         #[cfg(not(feature = "unchecked"))]
-        if state.engine.limits.max_array_size > 0 && arr.len() >= state.engine.limits.max_array_size
-        {
+        if state.engine.max_array_size() > 0 && arr.len() >= state.engine.max_array_size() {
             return Err(PERR::LiteralTooLarge(
                 "Size of array literal".to_string(),
-                state.engine.limits.max_array_size,
+                state.engine.max_array_size(),
             )
             .into_err(input.peek().unwrap().1));
         }
@@ -1794,10 +1816,10 @@ fn parse_map_literal(
         };
 
         #[cfg(not(feature = "unchecked"))]
-        if state.engine.limits.max_map_size > 0 && map.len() >= state.engine.limits.max_map_size {
+        if state.engine.max_map_size() > 0 && map.len() >= state.engine.max_map_size() {
             return Err(PERR::LiteralTooLarge(
                 "Number of properties in object map literal".to_string(),
-                state.engine.limits.max_map_size,
+                state.engine.max_map_size(),
             )
             .into_err(input.peek().unwrap().1));
         }
@@ -2025,6 +2047,8 @@ fn parse_primary(
 
             // Qualifiers + variable name
             *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
+
+            #[cfg(not(feature = "no_module"))]
             modules.set_index(state.find_module(&modules[0].0));
         }
         _ => (),
@@ -2309,6 +2333,17 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
                 Expr::Index(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
                 op_pos,
             )))
+        }
+        // lhs.Fn() or lhs.eval()
+        (_, Expr::FnCall(x))
+            if x.3.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&(x.0).0.as_ref()) =>
+        {
+            return Err(PERR::BadInput(format!(
+                "'{}' should not be called in method style. Try {}(...);",
+                (x.0).0,
+                (x.0).0
+            ))
+            .into_err((x.0).3));
         }
         // lhs.func!(...)
         (_, Expr::FnCall(x)) if (x.0).2 => {
@@ -3057,6 +3092,8 @@ fn parse_block(
 
     let mut statements = StaticVec::new();
     let prev_stack_len = state.stack.len();
+
+    #[cfg(not(feature = "no_module"))]
     let prev_mods_len = state.modules.len();
 
     while !match_token(input, Token::RightBrace)? {
@@ -3102,6 +3139,8 @@ fn parse_block(
     }
 
     state.stack.truncate(prev_stack_len);
+
+    #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
 
     Ok(Stmt::Block(Box::new((statements, settings.pos))))
@@ -3578,9 +3617,10 @@ impl Engine {
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_expr_depth,
+            self.max_expr_depth(),
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_function_expr_depth,
+            #[cfg(not(feature = "no_function"))]
+            self.max_function_expr_depth(),
         );
 
         let settings = ParseSettings {
@@ -3625,9 +3665,10 @@ impl Engine {
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_expr_depth,
+            self.max_expr_depth(),
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_function_expr_depth,
+            #[cfg(not(feature = "no_function"))]
+            self.max_function_expr_depth(),
         );
 
         while !input.peek().unwrap().0.is_eof() {

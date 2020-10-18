@@ -98,12 +98,12 @@ fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
                 TypeId::of::<FnPtr>(),
                 TypeId::of::<INT>(),
             ],
-            move |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+            move |context, args| {
                 let fp = std::mem::take(args[1]).cast::<FnPtr>();
                 let value = args[2].clone();
                 let this_ptr = args.get_mut(0).unwrap();
 
-                fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+                fp.call_dynamic(context, Some(this_ptr), [value])
             },
         );
 

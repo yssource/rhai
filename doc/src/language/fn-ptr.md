@@ -6,6 +6,8 @@ Function Pointers
 It is possible to store a _function pointer_ in a variable just like a normal value.
 In fact, internally a function pointer simply stores the _name_ of the function as a string.
 
+A function pointer is created via the `Fn` function, which takes a [string] parameter.
+
 Call a function pointer using the `call` method.
 
 
@@ -15,10 +17,11 @@ Built-in methods
 The following standard methods (mostly defined in the [`BasicFnPackage`][packages] but excluded if
 using a [raw `Engine`]) operate on function pointers:
 
-| Function                   | Parameter(s) | Description                                                                  |
-| -------------------------- | ------------ | ---------------------------------------------------------------------------- |
-| `name` method and property | _none_       | returns the name of the function encapsulated by the function pointer        |
-| `call`                     | _arguments_  | calls the function matching the function pointer's name with the _arguments_ |
+| Function                           | Parameter(s) | Description                                                                                      |
+| ---------------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
+| `name` method and property         | _none_       | returns the name of the function encapsulated by the function pointer                            |
+| `is_anonymous` method and property | _none_       | does the function pointer refer to an [anonymous function]? Not available under [`no_function`]. |
+| `call`                             | _arguments_  | calls the function matching the function pointer's name with the _arguments_                     |
 
 
 Examples
@@ -184,16 +187,15 @@ must be used to register the function.
 
 Essentially, use the low-level `Engine::register_raw_fn` method to register the function.
 `FnPtr::call_dynamic` is used to actually call the function pointer, passing to it the
-current scripting [`Engine`], collection of script-defined functions, the `this` pointer,
-and other necessary arguments.
+current _native call context_, the `this` pointer, and other necessary arguments.
 
 ```rust
-use rhai::{Engine, Module, Dynamic, FnPtr};
+use rhai::{Engine, Module, Dynamic, FnPtr, NativeCallContext};
 
 let mut engine = Engine::new();
 
 // Define Rust function in required low-level API signature
-fn call_fn_ptr_with_value(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic])
+fn call_fn_ptr_with_value(context: NativeCallContext, args: &mut [&mut Dynamic])
     -> Result<Dynamic, Box<EvalAltResult>>
 {
     // 'args' is guaranteed to contain enough arguments of the correct types
@@ -203,7 +205,7 @@ fn call_fn_ptr_with_value(engine: &Engine, lib: &Module, args: &mut [&mut Dynami
 
     // Use 'FnPtr::call_dynamic' to call the function pointer.
     // Beware, private script-defined functions will not be found.
-    fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+    fp.call_dynamic(context, Some(this_ptr), [value])
 }
 
 // Register a Rust function using the low-level API
@@ -215,4 +217,44 @@ engine.register_raw_fn("super_call",
     ],
     call_fn_ptr_with_value
 );
+```
+
+
+`NativeCallContext`
+------------------
+
+`FnPtr::call_dynamic` takes a parameter of type `NativeCallContext` which holds the _native call context_
+of the particular call to a registered Rust function.
+
+This type is normally provided by the [`Engine`] (e.g. when using [`Engine::register_fn_raw`](../rust/register-raw.md)).
+However, it may also be manually constructed from a tuple:
+
+```rust
+use rhai::{Engine, FnPtr};
+
+let engine = Engine::new();
+
+// Compile script to AST
+let mut ast = engine.compile(
+    r#"
+        let test = "hello";
+        |x| test + x                // this creates an closure
+    "#,
+)?;
+
+// Save the closure together with captured variables
+let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
+
+// Get rid of the script, retaining only functions
+ast.retain_functions(|_, _, _| true);
+
+// Create native call context via a tuple containing the Engine and the
+// set of script-defined functions (within the AST)
+let context = (&engine, ast.as_ref()).into();
+
+// 'f' captures: the engine, the AST, and the closure
+let f = move |x: i64| fn_ptr.call_dynamic(context, None, [x.into()]);
+
+// 'f' can be called like a normal function
+let result = f(42)?;
 ```

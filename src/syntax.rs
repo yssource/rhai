@@ -41,10 +41,7 @@ impl Expression<'_> {
     /// If this expression is a variable name, return it.  Otherwise `None`.
     #[inline(always)]
     pub fn get_variable_name(&self) -> Option<&str> {
-        match self.0 {
-            Expr::Variable(x) => Some((x.0).0.as_str()),
-            _ => None,
-        }
+        self.0.get_variable_access(true)
     }
     /// Get the expression.
     #[inline(always)]
@@ -70,14 +67,14 @@ impl EvalContext<'_, '_, '_, '_, '_, '_> {
         scope: &mut Scope,
         expr: &Expression,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.engine.eval_expr(
+        self.engine().eval_expr(
             scope,
             self.mods,
             self.state,
-            self.lib,
+            self.namespace(),
             self.this_ptr,
             expr.expr(),
-            self.level,
+            self.call_level(),
         )
     }
 }

@@ -40,7 +40,11 @@ fn test_stack_overflow_parsing() -> Result<(), Box<EvalAltResult>> {
          ParseErrorType::ExprTooDeep
     );
 
-    engine.set_max_expr_depths(100, 6);
+    engine.set_max_expr_depths(
+        100,
+        #[cfg(not(feature = "no_function"))]
+        6,
+    );
 
     engine.compile("1 + 2")?;
     engine.compile(

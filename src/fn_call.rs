@@ -206,9 +206,9 @@ impl Engine {
 
             // Run external function
             let result = if func.is_plugin_fn() {
-                func.get_plugin_fn().call(args)
+                func.get_plugin_fn().call((self, lib).into(), args)
             } else {
-                func.get_native_fn()(self, lib, args)
+                func.get_native_fn()((self, lib).into(), args)
             };
 
             // Restore the original reference
@@ -356,7 +356,7 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        if level > self.limits.max_call_stack_depth {
+        if level > self.max_call_levels() {
             return Err(Box::new(
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
@@ -524,23 +524,16 @@ impl Engine {
                 ))
             }
 
-            // Fn
-            KEYWORD_FN_PTR
+            // Fn/eval - reaching this point it must be a method-style call, mostly like redirected
+            //           by a function pointer so it isn't caught at parse time.
+            KEYWORD_FN_PTR | KEYWORD_EVAL
                 if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
             {
                 EvalAltResult::ErrorRuntime(
-                    "'Fn' should not be called in method style. Try Fn(...);".into(),
-                    Position::none(),
-                )
-                .into()
-            }
-
-            // eval - reaching this point it must be a method-style call
-            KEYWORD_EVAL
-                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
-            {
-                EvalAltResult::ErrorRuntime(
-                    "'eval' should not be called in method style. Try eval(...);".into(),
+                    format!(
+                        "'{}' should not be called in method style. Try {}(...);",
+                        fn_name, fn_name
+                    ),
                     Position::none(),
                 )
                 .into()
@@ -655,7 +648,7 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        if _level > self.limits.max_call_stack_depth {
+        if _level > self.max_call_levels() {
             return Err(Box::new(
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
@@ -711,16 +704,17 @@ impl Engine {
         let (result, updated) = if _fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
             // FnPtr call
             let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
-            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             // Redirect function name
             let fn_name = fn_ptr.fn_name();
+            let args_len = call_args.len() + fn_ptr.curry().len();
             // Recalculate hash
             let hash = if native {
                 0
             } else {
-                calc_fn_hash(empty(), fn_name, curry.len() + call_args.len(), empty())
+                calc_fn_hash(empty(), fn_name, args_len, empty())
             };
             // Arguments are passed as-is, adding the curried arguments
+            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             let mut arg_values = curry
                 .iter_mut()
                 .chain(call_args.iter_mut())
@@ -737,16 +731,17 @@ impl Engine {
         {
             // FnPtr call on object
             let fn_ptr = call_args.remove(0).cast::<FnPtr>();
-            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             // Redirect function name
-            let fn_name = fn_ptr.get_fn_name().clone();
+            let fn_name = fn_ptr.fn_name();
+            let args_len = call_args.len() + fn_ptr.curry().len();
             // Recalculate hash
             let hash = if native {
                 0
             } else {
-                calc_fn_hash(empty(), &fn_name, curry.len() + call_args.len(), empty())
+                calc_fn_hash(empty(), fn_name, args_len, empty())
             };
             // Replace the first argument with the object pointer, adding the curried arguments
+            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             let mut arg_values = once(obj)
                 .chain(curry.iter_mut())
                 .chain(call_args.iter_mut())
@@ -755,7 +750,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, &fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
+                state, lib, fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
             )
         } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
@@ -796,14 +791,12 @@ impl Engine {
                         _redirected = fn_ptr.get_fn_name().clone();
                         _fn_name = &_redirected;
                         // Add curried arguments
-                        if !fn_ptr.curry().is_empty() {
-                            fn_ptr
-                                .curry()
-                                .iter()
-                                .cloned()
-                                .enumerate()
-                                .for_each(|(i, v)| call_args.insert(i, v));
-                        }
+                        fn_ptr
+                            .curry()
+                            .iter()
+                            .cloned()
+                            .enumerate()
+                            .for_each(|(i, v)| call_args.insert(i, v));
                         // Recalculate the hash based on the new function name and new arguments
                         hash = if native {
                             0
@@ -861,35 +854,33 @@ impl Engine {
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 // Fn - only in function call style
-                let expr = args_expr.get(0).unwrap();
-                let arg_value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-
-                return arg_value
+                return self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
                     .take_immutable_string()
                     .map_err(|typ| {
-                        self.make_type_mismatch_err::<ImmutableString>(typ, expr.position())
+                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
                     })
                     .and_then(|s| FnPtr::try_from(s))
                     .map(Into::<Dynamic>::into)
-                    .map_err(|err| err.fill_position(expr.position()));
+                    .map_err(|err| err.fill_position(args_expr[0].position()));
             }
         }
 
         // Handle curry()
         if name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
-            let expr = args_expr.get(0).unwrap();
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             if !fn_ptr.is::<FnPtr>() {
                 return Err(self.make_type_mismatch_err::<FnPtr>(
                     self.map_type_name(fn_ptr.type_name()),
-                    expr.position(),
+                    args_expr[0].position(),
                 ));
             }
 
             let (fn_name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
 
             // Append the new curried arguments to the existing list.
+
             args_expr
                 .iter()
                 .skip(1)
@@ -904,8 +895,7 @@ impl Engine {
         // Handle is_shared()
         #[cfg(not(feature = "no_closure"))]
         if name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
-            let expr = args_expr.get(0).unwrap();
-            let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+            let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             return Ok(value.is_shared().into());
         }
@@ -913,25 +903,24 @@ impl Engine {
         // Handle call() - Redirect function call
         let redirected;
         let mut args_expr = args_expr.as_ref();
-        let mut curry: StaticVec<_> = Default::default();
+        let mut curry = StaticVec::new();
         let mut name = name;
 
         if name == KEYWORD_FN_PTR_CALL
             && args_expr.len() >= 1
             && !self.has_override(lib, 0, hash_script, pub_only)
         {
-            let expr = args_expr.get(0).unwrap();
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             if !fn_ptr.is::<FnPtr>() {
                 return Err(self.make_type_mismatch_err::<FnPtr>(
                     self.map_type_name(fn_ptr.type_name()),
-                    expr.position(),
+                    args_expr[0].position(),
                 ));
             }
 
             let fn_ptr = fn_ptr.cast::<FnPtr>();
-            curry = fn_ptr.curry().iter().cloned().collect();
+            curry.extend(fn_ptr.curry().iter().cloned());
 
             // Redirect function name
             redirected = fn_ptr.take_data().0;
@@ -941,7 +930,8 @@ impl Engine {
             args_expr = &args_expr.as_ref()[1..];
 
             // Recalculate hash
-            hash_script = calc_fn_hash(empty(), name, curry.len() + args_expr.len(), empty());
+            let args_len = args_expr.len() + curry.len();
+            hash_script = calc_fn_hash(empty(), name, args_len, empty());
         }
 
         // Handle is_def_var()
@@ -949,10 +939,10 @@ impl Engine {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
-                let expr = args_expr.get(0).unwrap();
-                let var_name = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                let var_name =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let var_name = var_name.as_str().map_err(|err| {
-                    self.make_type_mismatch_err::<ImmutableString>(err, expr.position())
+                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
                 })?;
                 if var_name.is_empty() {
                     return Ok(false.into());
@@ -974,18 +964,17 @@ impl Engine {
             );
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
-                let expr0 = args_expr.get(0).unwrap();
-                let expr1 = args_expr.get(1).unwrap();
-
-                let fn_name = self.eval_expr(scope, mods, state, lib, this_ptr, expr0, level)?;
-                let num_params = self.eval_expr(scope, mods, state, lib, this_ptr, expr1, level)?;
+                let fn_name =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                let num_params =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?;
 
                 let fn_name = fn_name.as_str().map_err(|err| {
-                    self.make_type_mismatch_err::<ImmutableString>(err, expr0.position())
+                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
                 })?;
-                let num_params = num_params
-                    .as_int()
-                    .map_err(|err| self.make_type_mismatch_err::<INT>(err, expr1.position()))?;
+                let num_params = num_params.as_int().map_err(|err| {
+                    self.make_type_mismatch_err::<INT>(err, args_expr[1].position())
+                })?;
 
                 if fn_name.is_empty() || num_params < 0 {
                     return Ok(false.into());
@@ -1003,14 +992,14 @@ impl Engine {
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 // eval - only in function call style
                 let prev_len = scope.len();
-                let expr = args_expr.get(0).unwrap();
-                let script = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                let script =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let script = script.as_str().map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, expr.position())
+                    self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
                 })?;
                 let result = if !script.is_empty() {
                     self.eval_script_expr(scope, mods, state, lib, script, level + 1)
-                        .map_err(|err| err.fill_position(expr.position()))
+                        .map_err(|err| err.fill_position(args_expr[0].position()))
                 } else {
                     Ok(().into())
                 };
@@ -1041,41 +1030,38 @@ impl Engine {
         } else {
             // If the first argument is a variable, and there is no curried arguments, convert to method-call style
             // in order to leverage potential &mut first argument and avoid cloning the value
-            match args_expr.get(0).unwrap() {
+            if args_expr[0].get_variable_access(false).is_some() && curry.is_empty() {
                 // func(x, ...) -> x.func(...)
-                lhs @ Expr::Variable(_) if curry.is_empty() => {
-                    arg_values = args_expr
-                        .iter()
-                        .skip(1)
-                        .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
-                        .collect::<Result<_, _>>()?;
+                arg_values = args_expr
+                    .iter()
+                    .skip(1)
+                    .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
+                    .collect::<Result<_, _>>()?;
 
-                    let (target, _, _, pos) =
-                        self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
+                let (target, _, _, pos) =
+                    self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                    self.inc_operations(state)
-                        .map_err(|err| err.fill_position(pos))?;
+                self.inc_operations(state)
+                    .map_err(|err| err.fill_position(pos))?;
 
-                    args = if target.is_shared() || target.is_value() {
-                        arg_values.insert(0, target.take_or_clone().flatten());
-                        arg_values.iter_mut().collect()
-                    } else {
-                        // Turn it into a method call only if the object is not shared and not a simple value
-                        is_ref = true;
-                        once(target.take_ref().unwrap())
-                            .chain(arg_values.iter_mut())
-                            .collect()
-                    };
-                }
+                args = if target.is_shared() || target.is_value() {
+                    arg_values.insert(0, target.take_or_clone().flatten());
+                    arg_values.iter_mut().collect()
+                } else {
+                    // Turn it into a method call only if the object is not shared and not a simple value
+                    is_ref = true;
+                    once(target.take_ref().unwrap())
+                        .chain(arg_values.iter_mut())
+                        .collect()
+                };
+            } else {
                 // func(..., ...)
-                _ => {
-                    arg_values = args_expr
-                        .iter()
-                        .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
-                        .collect::<Result<_, _>>()?;
+                arg_values = args_expr
+                    .iter()
+                    .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
+                    .collect::<Result<_, _>>()?;
 
-                    args = curry.iter_mut().chain(arg_values.iter_mut()).collect();
-                }
+                args = curry.iter_mut().chain(arg_values.iter_mut()).collect();
             }
         }
 
@@ -1116,50 +1102,46 @@ impl Engine {
             // See if the first argument is a variable (not module-qualified).
             // If so, convert to method-call style in order to leverage potential
             // &mut first argument and avoid cloning the value
-            match args_expr.get(0).unwrap() {
+            if args_expr[0].get_variable_access(true).is_some() {
                 // func(x, ...) -> x.func(...)
-                Expr::Variable(x) if x.1.is_none() => {
-                    arg_values = args_expr
-                        .iter()
-                        .enumerate()
-                        .map(|(i, expr)| {
-                            // Skip the first argument
-                            if i == 0 {
-                                Ok(Default::default())
-                            } else {
-                                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                            }
-                        })
-                        .collect::<Result<_, _>>()?;
+                arg_values = args_expr
+                    .iter()
+                    .enumerate()
+                    .map(|(i, expr)| {
+                        // Skip the first argument
+                        if i == 0 {
+                            Ok(Default::default())
+                        } else {
+                            self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                        }
+                    })
+                    .collect::<Result<_, _>>()?;
 
-                    // Get target reference to first argument
-                    let var_expr = args_expr.get(0).unwrap();
-                    let (target, _, _, pos) =
-                        self.search_scope_only(scope, mods, state, lib, this_ptr, var_expr)?;
+                // Get target reference to first argument
+                let (target, _, _, pos) =
+                    self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                    self.inc_operations(state)
-                        .map_err(|err| err.fill_position(pos))?;
+                self.inc_operations(state)
+                    .map_err(|err| err.fill_position(pos))?;
 
-                    if target.is_shared() || target.is_value() {
-                        arg_values[0] = target.take_or_clone().flatten();
-                        args = arg_values.iter_mut().collect();
-                    } else {
-                        let (first, rest) = arg_values.split_first_mut().unwrap();
-                        first_arg_value = Some(first);
-                        args = once(target.take_ref().unwrap())
-                            .chain(rest.iter_mut())
-                            .collect();
-                    }
-                }
-                // func(..., ...) or func(mod::x, ...)
-                _ => {
-                    arg_values = args_expr
-                        .iter()
-                        .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
-                        .collect::<Result<_, _>>()?;
-
+                if target.is_shared() || target.is_value() {
+                    arg_values[0] = target.take_or_clone().flatten();
                     args = arg_values.iter_mut().collect();
+                } else {
+                    let (first, rest) = arg_values.split_first_mut().unwrap();
+                    first_arg_value = Some(first);
+                    args = once(target.take_ref().unwrap())
+                        .chain(rest.iter_mut())
+                        .collect();
                 }
+            } else {
+                // func(..., ...) or func(mod::x, ...)
+                arg_values = args_expr
+                    .iter()
+                    .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
+                    .collect::<Result<_, _>>()?;
+
+                args = arg_values.iter_mut().collect();
             }
         }
 
@@ -1203,7 +1185,9 @@ impl Engine {
 
                 self.call_script_fn(new_scope, mods, state, lib, &mut None, fn_def, args, level)
             }
-            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().call(args.as_mut()),
+            Some(f) if f.is_plugin_fn() => {
+                f.get_plugin_fn().call((self, lib).into(), args.as_mut())
+            }
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1214,7 +1198,7 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn()(self, lib, args.as_mut())
+                f.get_native_fn()((self, lib).into(), args.as_mut())
             }
             Some(_) => unreachable!(),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),

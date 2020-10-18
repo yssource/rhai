@@ -18,8 +18,9 @@ The `Engine::register_raw_fn` method is marked _volatile_, meaning that it may b
 
 If this is acceptable, then using this method to register a Rust function opens up more opportunities.
 
-In particular, a reference to the current `Engine` instance is passed as an argument so the Rust function
-can also use `Engine` facilities (like evaluating a script).
+In particular, a the current _native call context_ (in form of the `NativeCallContext` type) is passed as an argument.
+`NativeCallContext` exposes the current [`Engine`], among others, so the Rust function can also use [`Engine`] facilities
+(such as evaluating a script).
 
 ```rust
 engine.register_raw_fn(
@@ -28,7 +29,7 @@ engine.register_raw_fn(
         std::any::TypeId::of::<i64>(),                      // type of first parameter
         std::any::TypeId::of::<i64>()                       // type of second parameter
     ],
-    |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {    // fixed function signature
+    |context, args| {                                       // fixed function signature
         // Arguments are guaranteed to be correct in number and of the correct types.
 
         // But remember this is Rust, so you can keep only one mutable reference at any one time!
@@ -59,17 +60,20 @@ Function Signature
 
 The function signature passed to `Engine::register_raw_fn` takes the following form:
 
-> `Fn(engine: &Engine, lib: &Module, args: &mut [&mut Dynamic])`  
+> `Fn(context: NativeCallContext, args: &mut [&mut Dynamic])`  
 > `-> Result<T, Box<EvalAltResult>> + 'static`
 
 where:
 
 * `T: Variant + Clone` - return type of the function.
 
-* `engine: &Engine` - the current [`Engine`], with all configurations and settings.
+* `context: NativeCallContext` - the current _native call context_, which exposes the following:
 
-* `lib: &Module` - the current global library of script-defined functions, as a [`Module`].
-  This is sometimes useful for calling a script-defined function within the same evaluation context using [`Engine::call_fn`][`call_fn`].
+  * `context.engine(): &Engine` - the current [`Engine`], with all configurations and settings.
+    This is sometimes useful for calling a script-defined function within the same evaluation context
+    using [`Engine::call_fn`][`call_fn`], or calling a [function pointer].
+
+  * `context.namespace(): &Module` - the global namespace of script-defined functions, as a [`Module`].
 
 * `args: &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
   The slice is guaranteed to contain enough arguments _of the correct types_.
@@ -106,7 +110,7 @@ then calls it within the same [`Engine`].  This way, a _callback_ function can b
 to a native Rust function.
 
 ```rust
-use rhai::{Engine, Module, Dynamic, FnPtr};
+use rhai::{Engine, FnPtr};
 
 let mut engine = Engine::new();
 
@@ -118,7 +122,7 @@ engine.register_raw_fn(
         std::any::TypeId::of::<FnPtr>(),
         std::any::TypeId::of::<i64>(),
     ],
-    |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+    |context, args| {
         // 'args' is guaranteed to contain enough arguments of the correct types
 
         let fp = std::mem::take(args[1]).cast::<FnPtr>();       // 2nd argument - function pointer
@@ -127,7 +131,7 @@ engine.register_raw_fn(
 
         // Use 'FnPtr::call_dynamic' to call the function pointer.
         // Beware, private script-defined functions will not be found.
-        fp.call_dynamic(engine, lib, Some(this_ptr), [value])
+        fp.call_dynamic(context, Some(this_ptr), [value])
     },
 );
 

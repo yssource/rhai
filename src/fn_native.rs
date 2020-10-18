@@ -11,14 +11,15 @@ use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 use crate::{calc_fn_hash, StaticVec};
 
-use crate::stdlib::{
-    boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String, vec::Vec,
-};
+#[cfg(not(feature = "no_function"))]
+use crate::engine::FN_ANONYMOUS;
 
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::rc::Rc;
+use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String};
+
 #[cfg(feature = "sync")]
-use crate::stdlib::sync::Arc;
+use crate::stdlib::sync::{Arc, RwLock};
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::{cell::RefCell, rc::Rc};
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -34,12 +35,48 @@ pub trait SendSync {}
 #[cfg(not(feature = "sync"))]
 impl<T> SendSync for T {}
 
-/// Immutable reference-counted container
+/// Immutable reference-counted container.
 #[cfg(not(feature = "sync"))]
 pub type Shared<T> = Rc<T>;
-/// Immutable reference-counted container
+/// Immutable reference-counted container.
 #[cfg(feature = "sync")]
 pub type Shared<T> = Arc<T>;
+
+/// Synchronized shared object.
+#[cfg(not(feature = "sync"))]
+pub type Locked<T> = RefCell<T>;
+/// Synchronized shared object.
+#[cfg(feature = "sync")]
+pub type Locked<T> = RwLock<T>;
+
+/// Context of native Rust function call.
+#[derive(Debug, Copy, Clone)]
+pub struct NativeCallContext<'e, 'm> {
+    engine: &'e Engine,
+    lib: &'m Module,
+}
+
+impl<'e, 'm> From<(&'e Engine, &'m Module)> for NativeCallContext<'e, 'm> {
+    fn from(value: (&'e Engine, &'m Module)) -> Self {
+        Self {
+            engine: value.0,
+            lib: value.1,
+        }
+    }
+}
+
+impl<'e, 'm> NativeCallContext<'e, 'm> {
+    /// The current `Engine`.
+    #[inline(always)]
+    pub fn engine(&self) -> &'e Engine {
+        self.engine
+    }
+    /// The global namespace containing definition of all script-defined functions.
+    #[inline(always)]
+    pub fn namespace(&self) -> &'m Module {
+        self.lib
+    }
+}
 
 /// Consume a `Shared` resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
@@ -72,12 +109,15 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
 #[derive(Debug, Clone, Default)]
-pub struct FnPtr(ImmutableString, Vec<Dynamic>);
+pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
-    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(name: S, curry: Vec<Dynamic>) -> Self {
+    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(
+        name: S,
+        curry: StaticVec<Dynamic>,
+    ) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
@@ -92,13 +132,19 @@ impl FnPtr {
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
-    pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
+    pub(crate) fn take_data(self) -> (ImmutableString, StaticVec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.
     #[inline(always)]
     pub fn curry(&self) -> &[Dynamic] {
-        &self.1
+        self.1.as_ref()
+    }
+    /// Does this function pointer refer to an anonymous function?
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
+    pub fn is_anonymous(&self) -> bool {
+        self.0.starts_with(FN_ANONYMOUS)
     }
 
     /// Call the function pointer with curried arguments (if any).
@@ -113,33 +159,33 @@ impl FnPtr {
     /// clone them _before_ calling this function.
     pub fn call_dynamic(
         &self,
-        engine: &Engine,
-        lib: impl AsRef<Module>,
+        context: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let arg_values = arg_values.as_mut();
+        let fn_name = self.fn_name();
+
         let mut args_data = self
-            .1
+            .curry()
             .iter()
             .cloned()
-            .chain(arg_values.as_mut().iter_mut().map(|v| mem::take(v)))
+            .chain(arg_values.iter_mut().map(mem::take))
             .collect::<StaticVec<_>>();
 
         let has_this = this_ptr.is_some();
-        let args_len = args_data.len();
         let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
+        let hash_script = calc_fn_hash(empty(), fn_name, args.len(), empty());
 
         if let Some(obj) = this_ptr {
             args.insert(0, obj);
         }
 
-        let fn_name = self.0.as_str();
-        let hash_script = calc_fn_hash(empty(), fn_name, args_len, empty());
-
-        engine
+        context
+            .engine()
             .exec_fn_call(
                 &mut Default::default(),
-                lib.as_ref(),
+                context.namespace(),
                 fn_name,
                 hash_script,
                 args.as_mut(),
@@ -196,11 +242,11 @@ impl TryFrom<&str> for FnPtr {
 
 /// A general function trail object.
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&Engine, &Module, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 /// A general function trail object.
 #[cfg(feature = "sync")]
 pub type FnAny =
-    dyn Fn(&Engine, &Module, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+    dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;

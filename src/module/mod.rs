@@ -1,8 +1,7 @@
 //! Module defining external-loaded modules for Rhai.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::Engine;
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, SendSync};
+use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, NativeCallContext, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
@@ -15,7 +14,7 @@ use crate::{fn_native::Shared, parser::ScriptFnDef};
 
 #[cfg(not(feature = "no_module"))]
 use crate::{
-    engine::Imports,
+    engine::{Engine, Imports},
     parser::AST,
     scope::{Entry as ScopeEntry, Scope},
 };
@@ -24,7 +23,11 @@ use crate::{
 use crate::engine::{Array, FN_IDX_GET, FN_IDX_SET};
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, Map};
+use crate::engine::{make_getter, make_setter};
+
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
+use crate::engine::Map;
 
 use crate::stdlib::{
     any::TypeId,
@@ -37,9 +40,6 @@ use crate::stdlib::{
     string::{String, ToString},
     vec::Vec,
 };
-
-/// Return type of module-level Rust function.
-pub type FuncReturn<T> = Result<T, Box<EvalAltResult>>;
 
 pub type FuncInfo = (
     String,
@@ -510,7 +510,7 @@ impl Module {
     ///                 // Pass parameter types via a slice with TypeId's
     ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>()],
     ///                 // Fixed closure signature
-    ///                 |engine, lib, args| {
+    ///                 |context, args| {
     ///                     // 'args' is guaranteed to be the right length and of the correct types
     ///
     ///                     // Get the second parameter by 'consuming' it
@@ -536,10 +536,12 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         arg_types: &[TypeId],
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(NativeCallContext, &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>>
+            + SendSync
+            + 'static,
     ) -> u64 {
-        let f = move |engine: &Engine, lib: &Module, args: &mut FnCallArgs| {
-            func(engine, lib, args).map(Dynamic::from)
+        let f = move |context: NativeCallContext, args: &mut [&mut Dynamic]| {
+            func(context, args).map(Dynamic::from)
         };
         self.set_fn(
             name,
@@ -566,9 +568,9 @@ impl Module {
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn() -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn() -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, _: &mut FnCallArgs| func().map(Dynamic::from);
+        let f = move |_: NativeCallContext, _: &mut FnCallArgs| func().map(Dynamic::from);
         let arg_types = [];
         self.set_fn(
             name,
@@ -595,9 +597,9 @@ impl Module {
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(A) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             func(cast_arg::<A>(&mut args[0])).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
@@ -626,9 +628,9 @@ impl Module {
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             func(&mut args[0].write_lock::<A>().unwrap()).map(Dynamic::from)
         };
         let arg_types = [TypeId::of::<A>()];
@@ -658,7 +660,7 @@ impl Module {
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(&mut A) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         self.set_fn_1_mut(make_getter(&name.into()), func)
     }
@@ -682,9 +684,9 @@ impl Module {
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(A, B) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let a = cast_arg::<A>(&mut args[0]);
             let b = cast_arg::<B>(&mut args[1]);
 
@@ -719,9 +721,9 @@ impl Module {
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[1]);
             let a = &mut args[0].write_lock::<A>().unwrap();
 
@@ -758,7 +760,7 @@ impl Module {
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(&mut A, B) -> FuncReturn<()> + SendSync + 'static,
+        func: impl Fn(&mut A, B) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         self.set_fn_2_mut(make_setter(&name.into()), func)
     }
@@ -788,7 +790,7 @@ impl Module {
     #[inline]
     pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        func: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -831,9 +833,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(A, B, C) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(A, B, C) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let a = cast_arg::<A>(&mut args[0]);
             let b = cast_arg::<B>(&mut args[1]);
             let c = cast_arg::<C>(&mut args[2]);
@@ -874,9 +876,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(&mut A, B, C) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(&mut A, B, C) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[2]);
             let c = cast_arg::<C>(&mut args[3]);
             let a = &mut args[0].write_lock::<A>().unwrap();
@@ -918,7 +920,7 @@ impl Module {
     #[inline]
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
-        func: impl Fn(&mut A, B, C) -> FuncReturn<()> + SendSync + 'static,
+        func: impl Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -934,7 +936,7 @@ impl Module {
             panic!("Cannot register indexer for strings.");
         }
 
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[1]);
             let c = cast_arg::<C>(&mut args[2]);
             let a = &mut args[0].write_lock::<A>().unwrap();
@@ -982,8 +984,8 @@ impl Module {
     #[inline]
     pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        getter: impl Fn(&mut A, B) -> FuncReturn<T> + SendSync + 'static,
-        setter: impl Fn(&mut A, B, T) -> FuncReturn<()> + SendSync + 'static,
+        getter: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
+        setter: impl Fn(&mut A, B, T) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> (u64, u64) {
         (
             self.set_indexer_get_fn(getter),
@@ -1016,9 +1018,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(A, B, C, D) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let a = cast_arg::<A>(&mut args[0]);
             let b = cast_arg::<B>(&mut args[1]);
             let c = cast_arg::<C>(&mut args[2]);
@@ -1066,9 +1068,9 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
-        func: impl Fn(&mut A, B, C, D) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(&mut A, B, C, D) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        let f = move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+        let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[1]);
             let c = cast_arg::<C>(&mut args[2]);
             let d = cast_arg::<D>(&mut args[3]);
@@ -1340,7 +1342,11 @@ impl Module {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn eval_ast_as_new(mut scope: Scope, ast: &AST, engine: &Engine) -> FuncReturn<Self> {
+    pub fn eval_ast_as_new(
+        mut scope: Scope,
+        ast: &AST,
+        engine: &Engine,
+    ) -> Result<Self, Box<EvalAltResult>> {
         let mut mods = Imports::new();
 
         // Run the script
@@ -1580,6 +1586,7 @@ impl ModuleRef {
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
         self.1
     }
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
         self.1 = index
     }

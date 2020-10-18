@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Module, ParseErrorType, RegisterFn, Scope, INT};
+use rhai::{Engine, EvalAltResult, FnPtr, ParseErrorType, RegisterFn, Scope, INT};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem::take;
@@ -16,9 +16,9 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
     engine.register_raw_fn(
         "call_with_arg",
         &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
-        |engine: &Engine, lib: &Module, args: &mut [&mut Dynamic]| {
+        |context, args| {
             let fn_ptr = std::mem::take(args[0]).cast::<FnPtr>();
-            fn_ptr.call_dynamic(engine, lib, None, [std::mem::take(args[1])])
+            fn_ptr.call_dynamic(context, None, [std::mem::take(args[1])])
         },
     );
 
@@ -135,10 +135,10 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
     engine.register_raw_fn(
         "custom_call",
         &[TypeId::of::<INT>(), TypeId::of::<FnPtr>()],
-        |engine: &Engine, module: &Module, args: &mut [&mut Dynamic]| {
+        |context, args| {
             let func = take(args[1]).cast::<FnPtr>();
 
-            func.call_dynamic(engine, module, None, [])
+            func.call_dynamic(context, None, [])
         },
     );
 
@@ -259,7 +259,6 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     let mut ast = engine.compile(
         r#"
             let test = "hello";
-
             |x| test + x
     "#,
     )?;
@@ -271,7 +270,7 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     ast.retain_functions(|_, _, _| true);
 
     // Closure 'f' captures: the engine, the AST, and the curried function pointer
-    let f = move |x: INT| fn_ptr.call_dynamic(&engine, ast, None, [x.into()]);
+    let f = move |x: INT| fn_ptr.call_dynamic((&engine, ast.as_ref()).into(), None, [x.into()]);
 
     assert_eq!(f(42)?.as_str(), Ok("hello42"));
 

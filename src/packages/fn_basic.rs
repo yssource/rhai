@@ -12,4 +12,12 @@ mod fn_ptr_functions {
     pub fn name(f: &mut FnPtr) -> ImmutableString {
         f.get_fn_name().clone()
     }
+
+    #[cfg(not(feature = "no_function"))]
+    pub mod anonymous {
+        #[rhai_fn(name = "is_anonymous", get = "is_anonymous")]
+        pub fn is_anonymous(f: &mut FnPtr) -> bool {
+            f.is_anonymous()
+        }
+    }
 }
