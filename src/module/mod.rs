@@ -1586,6 +1586,7 @@ impl ModuleRef {
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
         self.1
     }
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
         self.1 = index
     }

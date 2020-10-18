@@ -425,7 +425,7 @@ pub struct Limits {
     pub max_operations: u64,
     /// Maximum number of modules allowed to load.
     /// Not available under `no_module`.
-    #[cfg(not(feature = "no_modules"))]
+    #[cfg(not(feature = "no_module"))]
     pub max_modules: usize,
     /// Maximum length of a string (0 = unlimited).
     pub max_string_size: usize,
@@ -459,7 +459,7 @@ impl<'e, 'a, 's, 'm, 't, 'd> EvalContext<'e, 'a, 's, 'm, 't, 'd> {
     /// _[INTERNALS]_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
-    #[cfg(not(feature = "no_modules"))]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn imports(&self) -> &'a Imports {
         self.mods

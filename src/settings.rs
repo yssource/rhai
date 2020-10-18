@@ -86,6 +86,7 @@ impl Engine {
 
     /// Set the maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn set_max_modules(&mut self, modules: usize) -> &mut Self {
         self.limits_set.max_modules = modules;
@@ -94,6 +95,7 @@ impl Engine {
 
     /// The maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn max_modules(&self) -> usize {
         self.limits_set.max_modules

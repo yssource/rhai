@@ -679,19 +679,15 @@ impl<'e> ParseState<'e> {
     /// # Panics
     ///
     /// Panics when called under `no_module`.
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
-        #[cfg(feature = "no_module")]
-        unreachable!();
-
-        #[cfg(not(feature = "no_module"))]
-        return self
-            .modules
+        self.modules
             .iter()
             .rev()
             .enumerate()
             .find(|(_, n)| *n == name)
-            .and_then(|(i, _)| NonZeroUsize::new(i + 1));
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 }
 
@@ -1422,6 +1418,7 @@ fn parse_fn_call(
             eat_token(input, Token::RightParen);
 
             let hash_script = if let Some(modules) = modules.as_mut() {
+                #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].0));
 
                 // Rust functions are indexed in two steps:
@@ -1464,6 +1461,7 @@ fn parse_fn_call(
                 eat_token(input, Token::RightParen);
 
                 let hash_script = if let Some(modules) = modules.as_mut() {
+                    #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].0));
 
                     // Rust functions are indexed in two steps:
@@ -2049,6 +2047,8 @@ fn parse_primary(
 
             // Qualifiers + variable name
             *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
+
+            #[cfg(not(feature = "no_module"))]
             modules.set_index(state.find_module(&modules[0].0));
         }
         _ => (),
@@ -3092,6 +3092,8 @@ fn parse_block(
 
     let mut statements = StaticVec::new();
     let prev_stack_len = state.stack.len();
+
+    #[cfg(not(feature = "no_module"))]
     let prev_mods_len = state.modules.len();
 
     while !match_token(input, Token::RightBrace)? {
@@ -3137,6 +3139,8 @@ fn parse_block(
     }
 
     state.stack.truncate(prev_stack_len);
+
+    #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
 
     Ok(Stmt::Block(Box::new((statements, settings.pos))))
